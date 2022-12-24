@@ -309,6 +309,11 @@ impl AuthorityPerEpochStore {
             .insert(transaction.digest(), transaction.serializable_ref())?)
     }
 
+    #[cfg(test)]
+    pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
+        self.tables.transactions.remove(transaction).unwrap();
+    }
+
     pub fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,

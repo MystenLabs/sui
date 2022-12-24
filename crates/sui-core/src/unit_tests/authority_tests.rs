@@ -11,6 +11,7 @@ use crate::{
     test_utils::init_state_parameters_from_rng,
 };
 use bcs;
+use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -33,6 +34,7 @@ use sui_types::utils::to_sender_signed_transaction;
 
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
+use sui_macros::sim_test;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
 use sui_types::{
     base_types::dbg_addr,
@@ -1473,6 +1475,112 @@ async fn test_handle_move_transaction() {
         .unwrap();
     assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
+}
+
+#[sim_test]
+async fn test_conflicting_transactions() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient1 = dbg_addr(2);
+    let recipient2 = dbg_addr(3);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let tx1 = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient1,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+    );
+
+    let tx2 = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient2,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+    );
+
+    // repeatedly attempt to submit conflicting transactions at the same time, and verify that
+    // exactly one succeeds in every case.
+    //
+    // Note: I verified that this test fails immediately if we remove the acquire_locks() call in
+    // acquire_transaction_locks() and then add a sleep after we read the locks.
+    for _ in 0..100 {
+        let mut futures = FuturesUnordered::new();
+        futures.push(authority_state.handle_transaction(tx1.clone()));
+        futures.push(authority_state.handle_transaction(tx2.clone()));
+
+        let first = futures.next().await.unwrap();
+        let second = futures.next().await.unwrap();
+        assert!(futures.next().await.is_none());
+
+        // exactly one should fail.
+        assert!(first.is_ok() != second.is_ok());
+
+        let (ok, err) = if first.is_ok() {
+            (first.unwrap(), second.unwrap_err())
+        } else {
+            (second.unwrap(), first.unwrap_err())
+        };
+
+        assert!(matches!(err, SuiError::ObjectLockConflict { .. }));
+
+        let object_info = authority_state
+            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                object.id(),
+                None,
+            ))
+            .await
+            .unwrap();
+        let gas_info = authority_state
+            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                gas_object.id(),
+                None,
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            ok.signed_transaction.as_ref().unwrap().digest(),
+            object_info
+                .object_and_lock
+                .expect("object should exist")
+                .lock
+                .expect("object should be locked")
+                .digest()
+        );
+
+        assert_eq!(
+            ok.signed_transaction.as_ref().unwrap().digest(),
+            gas_info
+                .object_and_lock
+                .expect("gas should exist")
+                .lock
+                .expect("gas should be locked")
+                .digest()
+        );
+
+        authority_state.database.reset_locks_for_test(
+            &[*tx1.digest(), *tx2.digest()],
+            &[
+                gas_object.compute_object_reference(),
+                object.compute_object_reference(),
+            ],
+        );
+    }
 }
 
 #[tokio::test]

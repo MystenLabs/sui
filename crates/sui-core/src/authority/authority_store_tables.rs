@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::authority::authority_store::LockDetails;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
@@ -30,6 +31,15 @@ pub struct AuthorityPerpetualTables {
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
     pub(crate) objects: DBMap<ObjectKey, Object>,
+
+    /// This is a map between object references of currently active objects that can be mutated,
+    /// and the transaction that they are lock on for use by this specific authority. Where an object
+    /// lock exists for an object version, but no transaction has been seen using it the lock is set
+    /// to None. The safety of consistent broadcast depend on each honest authority never changing
+    /// the lock once it is set. After a certificate for this object is processed it can be
+    /// forgotten.
+    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
+    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -190,6 +200,9 @@ impl AuthorityPerpetualTables {
 }
 
 // These functions are used to initialize the DB tables
+fn owned_object_transaction_locks_table_default_config() -> DBOptions {
+    default_db_options(None, None).1
+}
 fn objects_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }

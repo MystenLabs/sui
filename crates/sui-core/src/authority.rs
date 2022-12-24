@@ -673,7 +673,7 @@ impl AuthorityState {
 
     #[instrument(level = "trace", skip_all)]
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.database.check_owned_locks(owned_object_refs).await
+        self.database.check_locks_exist(owned_object_refs)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -801,6 +801,11 @@ impl AuthorityState {
             &digest,
             (inner_temporary_store.clone(), signed_effects.clone()),
         )?;
+
+        // Insert an await in between write_execution_output and commit so that tests can observe
+        // and test the interruption.
+        #[cfg(any(test, msim))]
+        tokio::task::yield_now().await;
 
         self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)
             .await
