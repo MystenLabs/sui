@@ -84,7 +84,7 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(Self::path(parent_path), db_options, None)
+        Self::open_tables_transactional(Self::path(parent_path), db_options, None)
     }
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {

@@ -14,7 +14,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_storage::mutex_table::{LockGuard, MutexTable};
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
@@ -25,9 +24,6 @@ use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
 
-const NUM_SHARDS: usize = 4096;
-const SHARD_SIZE: usize = 128;
-
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
@@ -35,9 +31,6 @@ const SHARD_SIZE: usize = 128;
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct AuthorityStore {
-    /// Internal vector of locks to manage concurrent writes to the database
-    mutex_table: MutexTable<ObjectDigest>,
-
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -134,7 +127,6 @@ impl AuthorityStore {
         let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
 
         let store = Self {
-            mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
             epoch_store: epoch_tables.into(),
             path: path.into(),
@@ -251,13 +243,6 @@ impl AuthorityStore {
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         self.perpetual_tables.database_is_empty()
-    }
-
-    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<LockGuard> {
-        self.mutex_table
-            .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
-            .await
     }
 
     // Methods to read the store
@@ -939,18 +924,20 @@ impl AuthorityStore {
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
     ) -> SuiResult {
-        // Other writers may be attempting to acquire locks on the same objects, so a mutex is
+        // Other writers may be attempting to acquire locks on the same objects, so a transaction is
         // required.
-        // TODO: replace with optimistic transactions (i.e. set lock to tx if none)
-        let _mutexes = self.acquire_locks(owned_input_objects).await;
+        let transaction = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .transaction_with_snapshot()?;
 
         debug!(?tx_digest, ?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
 
-        let locks = self
-            .perpetual_tables
-            .owned_object_transaction_locks
-            .multi_get(owned_input_objects)?;
+        let locks = transaction.multi_get(
+            &self.perpetual_tables.owned_object_transaction_locks,
+            owned_input_objects,
+        )?;
 
         for ((i, lock), obj_ref) in locks.iter().enumerate().zip(owned_input_objects) {
             // The object / version must exist, and therefore lock initialized.
@@ -1005,14 +992,12 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
-            self.perpetual_tables
-                .owned_object_transaction_locks
-                .batch()
+            transaction
                 .insert_batch(
                     &self.perpetual_tables.owned_object_transaction_locks,
                     locks_to_write,
                 )?
-                .write()?;
+                .commit()?;
         }
 
         Ok(())
