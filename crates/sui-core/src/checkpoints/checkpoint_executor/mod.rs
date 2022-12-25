@@ -51,7 +51,7 @@ mod metrics;
 pub(crate) mod tests;
 
 const TASKS_PER_CORE: usize = 1;
-const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 2;
+const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 100;
 const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 type CheckpointExecutionBuffer = FuturesOrdered<

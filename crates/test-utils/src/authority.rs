@@ -8,12 +8,11 @@ use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_types::object::Object;
-
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::TEST_COMMITTEE_SIZE;
 use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
+use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -104,6 +103,45 @@ where
         handles.push(node);
     }
     handles
+}
+
+/// Spawn all authorities in the test committee into a separate tokio task.
+pub async fn spawn_test_authorities_with_fullnodes<I>(
+    objects: I,
+    config: &NetworkConfig,
+    fullnode_num: u8,
+) -> (Vec<SuiNodeHandle>, Vec<SuiNodeHandle>)
+where
+    I: IntoIterator<Item = Object> + Clone,
+{
+    let mut handles = Vec::new();
+    for validator in config.validator_configs() {
+        let registry_service = RegistryService::new(Registry::new());
+        let node = start_node(validator, registry_service).await;
+        let objects = objects.clone();
+
+        node.with_async(|node| async move {
+            let state = node.state();
+            for o in objects {
+                state.insert_genesis_object(o).await
+            }
+        })
+        .await;
+
+        handles.push(node);
+    }
+    let mut fullnode_handles = Vec::new();
+    for _ in 0..fullnode_num {
+        let registry_service = RegistryService::new(Registry::new());
+        let fullnode_config = config
+            .fullnode_config_builder()
+            .with_random_dir()
+            .build()
+            .unwrap();
+        let node = start_node(&fullnode_config, registry_service).await;
+        fullnode_handles.push(node);
+    }
+    (handles, fullnode_handles)
 }
 
 /// Get a network client to communicate with the consensus.

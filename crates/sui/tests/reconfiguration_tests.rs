@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::join_all;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +14,7 @@ use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
+use test_utils::network::wait_for_nodes_transition_to_epoch;
 
 #[tokio::test]
 async fn local_advance_epoch_tx_test() {
@@ -103,20 +103,7 @@ async fn basic_reconfig_end_to_end_test() {
         handle.with(|node| node.close_epoch().unwrap());
     }
     // Wait for all nodes to reach the next epoch.
-    let handles: Vec<_> = authorities
-        .iter()
-        .map(|handle| {
-            handle.with_async(|node| async {
-                loop {
-                    if node.state().epoch() == 1 {
-                        break;
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            })
-        })
-        .collect();
-    join_all(handles).await;
+    wait_for_nodes_transition_to_epoch(authorities.iter(), 1).await;
 }
 /*
 
