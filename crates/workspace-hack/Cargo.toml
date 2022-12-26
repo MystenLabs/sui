@@ -1082,7 +1082,7 @@ overload = { version = "0.1", default-features = false }
 owo-colors = { version = "3", default-features = false }
 p256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "sha2", "sha256", "std"] }
 parity-scale-codec = { version = "2", default-features = false, features = ["bitvec", "chain-error", "max-encoded-len", "parity-scale-codec-derive", "serde", "std"] }
-parity-scale-codec-derive = { version = "2", default-features = false, features = ["max-encoded-len"] }
+parity-scale-codec-derive = { version = "3", default-features = false, features = ["max-encoded-len"] }
 parking = { version = "2", default-features = false }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot-5ef9efb8ec2df382 = { package = "parking_lot", version = "0.12" }
