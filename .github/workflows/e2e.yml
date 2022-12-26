@@ -36,7 +36,7 @@ jobs:
       - name: Install Cypress
         run: pnpm explorer exec cypress install
       - name: Run e2e tests
-        uses: cypress-io/github-action@c5724eda82337bcff977ce14509f47052c12e04c # pin@v5
+        uses: cypress-io/github-action@19ae4d7502bfdedf2a3c47961e02ea209aad367b # pin@v5
         with:
           install: false
           start: pnpm dev:static
@@ -72,7 +72,7 @@ jobs:
 
       - name: Run Explorer e2e tests
         if: ${{ needs.diff.outputs.isExplorer == 'true' }}
-        uses: cypress-io/github-action@c5724eda82337bcff977ce14509f47052c12e04c # pin@v5
+        uses: cypress-io/github-action@19ae4d7502bfdedf2a3c47961e02ea209aad367b # pin@v5
         with:
           install: false
           start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev'
