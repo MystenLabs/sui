@@ -151,6 +151,10 @@ impl PeerHeights {
             .and_then(|digest| self.unprocessed_checkpoints.get(digest))
     }
 
+    pub fn highest_known_checkpoint_sequence_number(&self) -> Option<CheckpointSequenceNumber> {
+        self.heights.values().max().and_then(Clone::clone)
+    }
+
     pub fn update_peer_height(&mut self, peer_id: PeerId, checkpoint: Option<Checkpoint>) {
         use std::collections::hash_map::Entry;
 
@@ -486,6 +490,15 @@ where
             > highest_synced_checkpoint
                 .as_ref()
                 .map(|x| x.sequence_number())
+            // skip if we aren't connected to any peers that can help
+            && self
+                .peer_heights
+                .read()
+                .unwrap()
+                .highest_known_checkpoint_sequence_number()
+                > highest_synced_checkpoint
+                    .as_ref()
+                    .map(|x| x.sequence_number())
         {
             let task = sync_checkpoint_contents(
                 self.network.clone(),
