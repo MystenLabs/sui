@@ -80,6 +80,12 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_header_download_concurrency: Option<usize>,
 
+    /// Set the upper bound on the number of checkpoint contents to be downloaded concurrently.
+    ///
+    /// If unspecified, this will default to `100`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_download_concurrency: Option<usize>,
+
     /// Set the upper bound on the number of transactions to be downloaded concurrently from a
     /// single checkpoint.
     ///
@@ -113,6 +119,13 @@ impl StateSyncConfig {
 
         self.checkpoint_header_download_concurrency
             .unwrap_or(CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY)
+    }
+
+    pub fn checkpoint_content_download_concurrency(&self) -> usize {
+        const CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY: usize = 100;
+
+        self.checkpoint_content_download_concurrency
+            .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY)
     }
 
     pub fn transaction_download_concurrency(&self) -> usize {
