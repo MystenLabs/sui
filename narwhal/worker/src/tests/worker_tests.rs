@@ -11,15 +11,16 @@ use fastcrypto::{
     hash::Hash,
 };
 use futures::stream::FuturesOrdered;
-use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
+use primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::Registry;
 use std::time::Duration;
 use storage::NodeStorage;
 use store::rocks;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
+use tokio::sync::watch;
 use types::{
-    MockWorkerToPrimary, MockWorkerToWorker, TransactionsClient, WorkerBatchMessage,
-    WorkerToPrimaryServer, WorkerToWorkerClient,
+    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionsClient,
+    WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
 };
 
 // A test validator that rejects every transaction / batch
@@ -251,8 +252,7 @@ async fn get_network_peers_from_admin_server() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -276,7 +276,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -365,8 +365,8 @@ async fn get_network_peers_from_admin_server() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
+
+    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -390,7 +390,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure_2,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

@@ -1,25 +1,23 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
+use config::SharedWorkerCache;
 use crypto::PublicKey;
 use mysten_metrics::spawn_logged_monitored_task;
 use network::{CancelOnDropHandler, ReliableNetwork};
-use std::{collections::BTreeMap, sync::Arc};
-use tap::{TapFallible, TapOptional};
-use tokio::{sync::watch, task::JoinHandle};
+use tap::TapFallible;
+use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use types::{
     metered_channel::{Receiver, Sender},
-    Certificate, ReconfigureNotification, Round, WorkerReconfigureMessage,
+    Certificate, PreSubscribedBroadcastSender, ReconfigureNotification, Round,
+    WorkerReconfigureMessage,
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct StateHandler {
     /// The public key of this authority.
     name: PublicKey,
-    /// The committee information.
-    committee: SharedCommittee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
@@ -27,7 +25,7 @@ pub struct StateHandler {
     /// Receives notifications to reconfigure the system.
     rx_state_handler: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.
-    tx_reconfigure: watch::Sender<ReconfigureNotification>,
+    tx_shutdown: PreSubscribedBroadcastSender,
     /// A channel to update the committed rounds
     tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
@@ -38,11 +36,10 @@ impl StateHandler {
     #[must_use]
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_state_handler: Receiver<ReconfigureNotification>,
-        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        tx_shutdown: PreSubscribedBroadcastSender,
         tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
@@ -50,11 +47,10 @@ impl StateHandler {
             async move {
                 Self {
                     name,
-                    committee,
                     worker_cache,
                     rx_committed_certificates,
                     rx_state_handler,
-                    tx_reconfigure,
+                    tx_shutdown,
                     tx_commited_own_headers,
                     network,
                 }
@@ -89,38 +85,6 @@ impl StateHandler {
         }
     }
 
-    fn update_committee(&mut self, committee: Committee) {
-        // Update the worker cache.
-        self.worker_cache.swap(Arc::new(WorkerCache {
-            epoch: committee.epoch,
-            workers: committee
-                .keys()
-                .iter()
-                .map(|key| {
-                    (
-                        (*key).clone(),
-                        self.worker_cache
-                            .load()
-                            .workers
-                            .get(key)
-                            .tap_none(|| {
-                                warn!(
-                                    "Worker cache does not have a key for the new committee member"
-                                )
-                            })
-                            .unwrap_or(&WorkerIndex(BTreeMap::new()))
-                            .clone(),
-                    )
-                })
-                .collect(),
-        }));
-
-        // Update the committee.
-        self.committee.swap(Arc::new(committee));
-
-        tracing::debug!("Committee updated to {}", self.committee);
-    }
-
     fn notify_our_workers(
         &mut self,
         message: ReconfigureNotification,
@@ -153,26 +117,14 @@ impl StateHandler {
                     // Notify our workers
                     let notify_handlers = self.notify_our_workers(message.to_owned());
 
-                    let shutdown = match &message {
-                        ReconfigureNotification::NewEpoch(committee) => {
-                            self.update_committee(committee.to_owned());
 
-                            false
-                        },
-                        ReconfigureNotification::UpdateCommittee(committee) => {
-                            self.update_committee(committee.to_owned());
-
-                            false
-                        }
-                        ReconfigureNotification::Shutdown => true,
-                    };
 
                     // Notify all other tasks.
-                    self.tx_reconfigure
-                        .send(message)
-                        .expect("Reconfigure channel dropped");
+                    self.tx_shutdown
+                        .send()
+                        .expect("Shutdown channel dropped");
 
-                    warn!("Waiting to broadcast reconfigure message to workers");
+                    warn!("Waiting to broadcast shutdown message to workers");
 
                     // wait for all the workers to eventually receive the message
                     // TODO: this request will be removed https://mysten.atlassian.net/browse/SUI-984
@@ -183,20 +135,20 @@ impl StateHandler {
 
                     // Exit only when we are sure that all the other tasks received
                     // the shutdown message.
-                    if shutdown {
-                        // shutdown network as well
-                        let _ = self.network.shutdown().await.tap_err(|err|{
-                            error!("Error while shutting down network: {err}")
-                        });
 
-                        warn!("Network has shutdown");
+                    // shutdown network as well
+                    let _ = self.network.shutdown().await.tap_err(|err|{
+                        error!("Error while shutting down network: {err}")
+                    });
 
-                        self.tx_reconfigure.closed().await;
+                    warn!("Network has shutdown");
 
-                        warn!("All reconfiguration receivers dropped");
+                    // self.tx_shutdown.closed().await;
 
-                        return;
-                    }
+                    //warn!("All reconfiguration receivers dropped");
+
+                    return;
+
                 }
             }
         }

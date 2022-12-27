@@ -11,14 +11,16 @@ use consensus::{
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
-use primary::{NetworkModel, Primary, PrimaryChannelMetrics};
+use primary::{NetworkModel, Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 pub use storage::NodeStorage;
 use tokio::sync::oneshot;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info};
-use types::{metered_channel, Certificate, ReconfigureNotification, Round};
+use types::{
+    metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
+};
 use worker::{metrics::initialise_metrics, TransactionValidator, Worker};
 
 pub mod execution_state;
@@ -59,8 +61,7 @@ impl Node {
     where
         State: ExecutionState + Send + Sync + 'static,
     {
-        let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
-        let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+        let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
         // These gauge is porcelain: do not modify it without also modifying `primary::metrics::PrimaryChannelMetrics::replace_registered_new_certificates_metric`
         // This hack avoids a cyclic dependency in the initialization of consensus and primary
@@ -102,7 +103,7 @@ impl Node {
                 store,
                 parameters.clone(),
                 execution_state,
-                &tx_reconfigure,
+                tx_shutdown.subscribe_n(3),
                 rx_new_certificates,
                 tx_committed_certificates.clone(),
                 tx_consensus_round_updates,
@@ -133,7 +134,7 @@ impl Node {
             rx_consensus_round_updates,
             dag,
             network_model,
-            tx_reconfigure,
+            tx_shutdown,
             tx_committed_certificates,
             registry,
             Some(tx_executor_network),
@@ -152,7 +153,7 @@ impl Node {
         store: &NodeStorage,
         parameters: Parameters,
         execution_state: State,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<Round>,
@@ -197,7 +198,7 @@ impl Node {
             (**committee.load()).clone(),
             store.consensus_store.clone(),
             store.certificate_store.clone(),
-            tx_reconfigure.subscribe(),
+            shutdown_receivers.pop().unwrap(),
             rx_new_certificates,
             tx_committed_certificates,
             tx_consensus_round_updates,
@@ -215,7 +216,7 @@ impl Node {
             worker_cache,
             (**committee.load()).clone(),
             execution_state,
-            tx_reconfigure,
+            shutdown_receivers,
             rx_sequence,
             registry,
             restored_consensus_output,

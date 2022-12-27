@@ -7,7 +7,7 @@ use crate::{
     metrics::WorkerChannelMetrics,
     primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
-    TransactionValidator,
+    TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
 use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
@@ -28,17 +28,16 @@ use std::collections::HashMap;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
 use tap::TapFallible;
-use tokio::sync::watch::Receiver;
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::task::JoinHandle;
 use tonic::{Request, Response, Status};
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
     error::DagError,
     metered_channel::{channel_with_total, Sender},
-    Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
-    TransactionProto, Transactions, TransactionsServer, TxResponse, WorkerOurBatchMessage,
-    WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, Empty, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, Transaction, TransactionProto, Transactions, TransactionsServer,
+    TxResponse, WorkerOurBatchMessage, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -118,9 +117,8 @@ impl Worker {
             &channel_metrics.tx_others_batch_total,
         );
 
-        let initial_committee = (*(*(*committee).load()).clone()).clone();
-        let (tx_reconfigure, rx_reconfigure) =
-            watch::channel(ReconfigureNotification::NewEpoch(initial_committee));
+        let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+        let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
@@ -128,6 +126,7 @@ impl Worker {
             store: worker.store.clone(),
             validator: validator.clone(),
         });
+
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             name: worker.primary_name.clone(),
             id: worker.id,
@@ -136,7 +135,7 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
-            tx_reconfigure,
+            tx_shutdown,
             validator: validator.clone(),
         });
 
@@ -281,19 +280,23 @@ impl Worker {
         let admin_handles = network::admin::start_admin_server(
             network_admin_server_base_port,
             network.clone(),
-            rx_reconfigure.clone(),
+            shutdown_receivers.pop().unwrap(),
             None,
         );
 
         let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
-            rx_reconfigure.clone(),
+            shutdown_receivers.pop().unwrap(),
             rx_our_batch,
             rx_others_batch,
             network.clone(),
         );
         let client_flow_handles = worker.handle_clients_transactions(
-            rx_reconfigure.clone(),
+            vec![
+                shutdown_receivers.pop().unwrap(),
+                shutdown_receivers.pop().unwrap(),
+                shutdown_receivers.pop().unwrap(),
+            ],
             tx_our_batch,
             node_metrics,
             channel_metrics,
@@ -302,7 +305,8 @@ impl Worker {
             network.clone(),
         );
 
-        let network_shutdown_handle = Self::shutdown_network_listener(rx_reconfigure, network);
+        let network_shutdown_handle =
+            Self::shutdown_network_listener(shutdown_receivers.pop().unwrap(), network);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -329,20 +333,18 @@ impl Worker {
     // Spawns a task responsible for explicitly shutting down the network
     // when a shutdown signal has been sent to the node.
     fn shutdown_network_listener(
-        mut rx_reconfigure: Receiver<ReconfigureNotification>,
+        mut rx_shutdown: ConditionalBroadcastReceiver,
         network: Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
-                while let Ok(_result) = rx_reconfigure.changed().await {
-                    let message = rx_reconfigure.borrow().clone();
-                    if let ReconfigureNotification::Shutdown = message {
+                match rx_shutdown.receiver.recv().await {
+                    Ok(()) | Err(_) => {
                         let _ = network
                             .shutdown()
                             .await
                             .tap_err(|err| error!("Error while shutting down network: {err}"));
                         info!("Worker network server shutdown");
-                        return;
                     }
                 }
             },
@@ -370,7 +372,7 @@ impl Worker {
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         tx_our_batch: Sender<(
             WorkerOurBatchMessage,
             Option<tokio::sync::oneshot::Sender<()>>,
@@ -406,7 +408,11 @@ impl Worker {
             tx_batch_maker,
             validator,
         }
-        .spawn(address.clone(), rx_reconfigure.clone(), endpoint_metrics);
+        .spawn(
+            address.clone(),
+            shutdown_receivers.pop().unwrap(),
+            endpoint_metrics,
+        );
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -416,7 +422,7 @@ impl Worker {
             (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
-            rx_reconfigure.clone(),
+            shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
@@ -431,7 +437,7 @@ impl Worker {
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
-            rx_reconfigure,
+            shutdown_receivers.pop().unwrap(),
             /* rx_message */ rx_quorum_waiter,
             network,
         );
@@ -453,22 +459,15 @@ struct TxReceiverHandler<V> {
 }
 
 impl<V: TransactionValidator> TxReceiverHandler<V> {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
-        loop {
-            let result = rx_reconfigure.changed().await;
-            result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                break;
-            }
-        }
+    async fn wait_for_shutdown(mut tx_shutdown: ConditionalBroadcastReceiver) {
+        _ = tx_shutdown.receiver.recv().await;
     }
 
     #[must_use]
     fn spawn(
         self,
         address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         endpoint_metrics: WorkerEndpointMetrics,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -482,7 +481,7 @@ impl<V: TransactionValidator> TxReceiverHandler<V> {
                         .unwrap()
                         .serve() => (),
 
-                    () = Self::wait_for_shutdown(rx_reconfigure) => ()
+                    () = Self::wait_for_shutdown(rx_shutdown) => ()
                 }
             },
             "TxReceiverHandlerTask"
