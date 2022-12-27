@@ -508,6 +508,7 @@ where
                 self.checkpoint_event_sender.clone(),
                 self.metrics.clone(),
                 self.config.transaction_download_concurrency(),
+                self.config.checkpoint_content_download_concurrency(),
                 // The if condition should ensure that this is Some
                 highest_verified_checkpoint.unwrap(),
             );
@@ -794,6 +795,7 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     metrics: Metrics,
     transaction_download_concurrency: usize,
+    checkpoint_content_download_concurrency: usize,
     target_checkpoint: VerifiedCheckpoint,
 ) where
     S: WriteStore + Clone,
@@ -808,21 +810,29 @@ async fn sync_checkpoint_contents<S>(
         .map(|x| x.sequence_number().saturating_add(1))
         .unwrap_or(0);
 
-    for checkpoint in (start..=target_checkpoint.sequence_number()).map(|next| {
-        store
-            .get_checkpoint_by_sequence_number(next)
-            .expect("store operation should not fail")
-            .expect("BUG: store should have all checkpoints older than highest_verified_checkpoint")
-    }) {
-        match sync_one_checkpoint_contents(
-            network.clone(),
-            &store,
-            peer_heights.clone(),
-            transaction_download_concurrency,
-            checkpoint,
-        )
-        .await
-        {
+    let mut checkpoint_contents_stream = (start..=target_checkpoint.sequence_number())
+        .map(|next| {
+            store
+                .get_checkpoint_by_sequence_number(next)
+                .expect("store operation should not fail")
+                .expect(
+                    "BUG: store should have all checkpoints older than highest_verified_checkpoint",
+                )
+        })
+        .map(|checkpoint| {
+            sync_one_checkpoint_contents(
+                network.clone(),
+                &store,
+                peer_heights.clone(),
+                transaction_download_concurrency,
+                checkpoint,
+            )
+        })
+        .pipe(futures::stream::iter)
+        .buffered(checkpoint_content_download_concurrency);
+
+    while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
+        match maybe_checkpoint {
             Ok((checkpoint, num_txns)) => {
                 if let Some(highest_synced) = &highest_synced {
                     // if this fails, there is a bug in checkpoint construction (or the chain is
