@@ -52,12 +52,10 @@ impl PreSubscribedBroadcastSender {
     }
 
     pub fn subscribe(&mut self) -> ConditionalBroadcastReceiver {
-        self.receivers
-            .pop()
-            .unwrap_or_else(|| panic!("No remaining subscribers"))
+        self.receivers.pop().expect("No remaining subscribers ")
     }
 
-    pub fn subscribe_n(&mut self, n: i32) -> Vec<ConditionalBroadcastReceiver> {
+    pub fn subscribe_n(&mut self, n: u64) -> Vec<ConditionalBroadcastReceiver> {
         let mut output = Vec::new();
         for _ in 0..n {
             output.push(self.subscribe());
@@ -65,7 +63,7 @@ impl PreSubscribedBroadcastSender {
         output
     }
 
-    pub fn send(&mut self) -> Result<usize, SendError<()>> {
+    pub fn send(&self) -> Result<usize, SendError<()>> {
         self.sender.send(())
     }
 }
@@ -117,4 +115,26 @@ async fn test_pre_subscribed_broadcast() {
 
     // assert that both component a and b loops have exited, effectively shutting down
     assert_eq!(a.await.unwrap() + b.await.unwrap(), 3);
+}
+
+#[tokio::test]
+async fn test_conditional_broadcast_receiver() {
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(2);
+    let mut rx_shutdown = tx_shutdown.try_subscribe().unwrap();
+
+    let a = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = async{}, if true => {
+                    if rx_shutdown.received_signal().await {
+                        return 1
+                    }
+                }
+            }
+        }
+    });
+
+    assert!(tx_shutdown.send().is_ok());
+
+    assert_eq!(a.await.unwrap(), 1);
 }

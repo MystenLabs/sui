@@ -30,8 +30,8 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, CertificateDigest, Header, HeaderDigest, PrimaryToPrimaryClient,
-    ReconfigureNotification, RequestVoteRequest, Round, Vote,
+    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderDigest,
+    PrimaryToPrimaryClient, RequestVoteRequest, Round, Vote,
 };
 
 #[cfg(test)]
@@ -60,8 +60,8 @@ pub struct Core {
     /// The depth of the garbage collector.
     gc_depth: Round,
 
-    /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Receiver for certificates.
     rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
     /// Receives loopback certificates from the `CertificateFetcher`.
@@ -112,7 +112,7 @@ impl Core {
         rx_consensus_round_updates: watch::Receiver<Round>,
         rx_narwhal_round_updates: watch::Receiver<Round>,
         gc_depth: Round,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
         rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
         rx_headers: Receiver<Header>,
@@ -134,7 +134,7 @@ impl Core {
                     rx_consensus_round_updates,
                     rx_narwhal_round_updates,
                     gc_depth,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_certificates,
                     rx_certificates_loopback,
                     rx_headers,
@@ -653,9 +653,6 @@ impl Core {
     }
 
     async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
-        if certificate.epoch() > self.committee.epoch() {
-            self.try_update_committee().await;
-        }
         ensure!(
             self.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -676,28 +673,6 @@ impl Core {
         certificate
             .verify(&self.committee, self.worker_cache.clone())
             .map_err(DagError::from)
-    }
-
-    /// If a new committee is available, update our internal state.
-    async fn try_update_committee(&mut self) {
-        if self
-            .rx_reconfigure
-            .has_changed()
-            .expect("Reconfigure channel dropped")
-        {
-            let message = self.rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::NewEpoch(new_committee) = message {
-                self.change_epoch(new_committee).await;
-                // Mark the value as seen.
-                let _ = self.rx_reconfigure.borrow_and_update();
-            }
-        }
-    }
-
-    /// Update the committee and cleanup internal state.
-    async fn change_epoch(&mut self, committee: Committee) {
-        self.certificates_aggregators.clear();
-        self.committee = committee;
     }
 
     // Logs Core errors as appropriate.
@@ -754,8 +729,6 @@ impl Core {
                     }
                     self.cancel_proposed_header = Some(tx_cancel);
 
-                    self.try_update_committee().await;
-
                     let name = self.name.clone();
                     let committee = self.committee.clone();
                     let header_store = self.header_store.clone();
@@ -796,32 +769,9 @@ impl Core {
                     result.unwrap()  // propagate any panics
                 },
 
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.change_epoch(new_committee).await;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            // Update the committee.
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::Shutdown => {
-                            if self.cancel_proposed_header.is_some() {
-                                let cancel = std::mem::replace(
-                                    &mut self.cancel_proposed_header,
-                                    None
-                                );
-                                let _ = cancel.unwrap().send(());
-                            }
-                            return
-                        }
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-                    Ok(())
-                },
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
+                }
 
                 // Check whether the consensus round has changed, to clean up structures
                 Ok(()) = self.rx_consensus_round_updates.changed() => {

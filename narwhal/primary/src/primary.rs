@@ -56,10 +56,10 @@ use types::{
     metered_channel::{channel_with_total, Receiver, Sender},
     now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
-    HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse, PrimaryToPrimary,
-    PrimaryToPrimaryServer, ReconfigureNotification, RequestVoteRequest, RequestVoteResponse,
-    Round, Vote, VoteInfo, WorkerInfoResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerToPrimary, WorkerToPrimaryServer,
+    HeaderDigest, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, Vote, VoteInfo, WorkerInfoResponse, WorkerOthersBatchMessage,
+    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -68,6 +68,9 @@ pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
+
+/// The number of shutdown receivers to create on startup. We need one per component loop.
+pub const NUM_SHUTDOWN_RECEIVERS: u64 = 25;
 
 /// Maximum duration to fetch certificates from local storage.
 const FETCH_CERTIFICATES_MAX_HANDLER_TIME: Duration = Duration::from_secs(10);
@@ -100,7 +103,7 @@ impl Primary {
         rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
-        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        mut tx_shutdown: PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
@@ -362,7 +365,7 @@ impl Primary {
                 .network_admin_server
                 .primary_network_admin_server_port,
             network.clone(),
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             Some(tx_state_handler),
         );
 
@@ -383,7 +386,7 @@ impl Primary {
             rx_consensus_round_updates.clone(),
             rx_narwhal_round_updates,
             parameters.gc_depth,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_certificates,
             rx_certificates_loopback,
             rx_headers,
@@ -402,7 +405,7 @@ impl Primary {
             certificate_store.clone(),
             rx_consensus_round_updates,
             parameters.gc_depth,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_certificate_fetcher,
             tx_certificates_loopback,
             node_metrics.clone(),
@@ -420,7 +423,7 @@ impl Primary {
             parameters.max_header_delay,
             None,
             network_model,
-            tx_reconfigure.subscribe(),
+            tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
             tx_headers,
@@ -456,7 +459,7 @@ impl Primary {
                 name.clone(),
                 (**committee.load()).clone(),
                 worker_cache.clone(),
-                tx_reconfigure.subscribe(),
+                tx_shutdown.subscribe(),
                 rx_block_synchronizer_commands,
                 network.clone(),
                 payload_store.clone(),
@@ -466,6 +469,7 @@ impl Primary {
 
             // Retrieves a block's data by contacting the worker nodes that contain the
             // underlying batches and their transactions.
+            // TODO: (Laura) pass shutdown signal here
             let block_waiter = BlockWaiter::new(
                 name.clone(),
                 worker_cache.clone(),
@@ -474,6 +478,7 @@ impl Primary {
             );
 
             // Orchestrates the removal of blocks across the primary and worker nodes.
+            // TODO: (Laura) pass shutdown signal here
             let block_remover = BlockRemover::new(
                 name.clone(),
                 worker_cache.clone(),
@@ -505,11 +510,10 @@ impl Primary {
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
             name.clone(),
-            committee.clone(),
             worker_cache,
             rx_committed_certificates,
             rx_state_handler,
-            tx_reconfigure,
+            tx_shutdown,
             Some(tx_committed_own_headers),
             network,
         );

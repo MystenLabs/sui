@@ -5,6 +5,7 @@ use crate::{
     common::create_db_stores,
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
     synchronizer::Synchronizer,
+    NUM_SHUTDOWN_RECEIVERS,
 };
 use arc_swap::ArcSwap;
 use bincode::Options;
@@ -37,8 +38,8 @@ use tokio::sync::watch;
 
 use types::{
     error::DagError, now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    MockPrimaryToWorker, PayloadAvailabilityRequest, PrimaryToPrimary, PrimaryToWorkerServer,
-    ReconfigureNotification, RequestVoteRequest, Round,
+    MockPrimaryToWorker, PayloadAvailabilityRequest, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest, Round,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -79,8 +80,8 @@ async fn get_network_peers_from_admin_server() {
         .unwrap(),
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -104,7 +105,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -193,8 +194,7 @@ async fn get_network_peers_from_admin_server() {
         .unwrap(),
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
+    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -218,7 +218,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure_2,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

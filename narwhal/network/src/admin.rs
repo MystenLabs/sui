@@ -5,16 +5,15 @@ use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
 use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::info;
 use types::metered_channel::Sender;
-use types::ReconfigureNotification;
+use types::{ConditionalBroadcastReceiver, ReconfigureNotification};
 
 pub fn start_admin_server(
     port: u16,
     network: anemo::Network,
-    mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    mut tr_shutdown: ConditionalBroadcastReceiver,
     tx_state_handler: Option<Sender<ReconfigureNotification>>,
 ) -> Vec<JoinHandle<()>> {
     let mut router = Router::new()
@@ -43,14 +42,8 @@ pub fn start_admin_server(
     let mut handles = Vec::new();
     // Spawn a task to shutdown server.
     handles.push(spawn_monitored_task!(async move {
-        while (rx_reconfigure.changed().await).is_ok() {
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                handle.clone().shutdown();
-
-                return;
-            }
-        }
+        _ = tr_shutdown.receiver.recv().await;
+        handle.clone().shutdown();
     }));
 
     handles.push(spawn_logged_monitored_task!(

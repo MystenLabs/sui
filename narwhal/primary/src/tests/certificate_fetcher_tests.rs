@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::primary::NUM_SHUTDOWN_RECEIVERS;
 use crate::{
     certificate_fetcher::CertificateFetcher, core::Core, metrics::PrimaryMetrics,
     synchronizer::Synchronizer,
@@ -29,7 +30,7 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
-    PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
+    PreSubscribedBroadcastSender, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
     RequestVoteRequest, RequestVoteResponse, Round,
 };
 
@@ -146,8 +147,7 @@ async fn fetch_certificates_basic() {
     let fake_primary = fixture.authorities().nth(1).unwrap();
 
     // kept empty
-    let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(fixture.committee()));
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     // synchronizer to certificate fetcher
     let (tx_certificate_fetcher, rx_certificate_fetcher) = test_utils::test_channel!(1000);
     // certificates
@@ -214,7 +214,7 @@ async fn fetch_certificates_basic() {
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
         gc_depth,
-        rx_reconfigure.clone(),
+        tx_shutdown.subscribe(),
         rx_certificate_fetcher,
         tx_certificates_loopback,
         metrics.clone(),
@@ -232,7 +232,7 @@ async fn fetch_certificates_basic() {
         rx_consensus_round_updates,
         rx_narwhal_round_updates,
         gc_depth,
-        rx_reconfigure,
+        tx_shutdown.subscribe(),
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,

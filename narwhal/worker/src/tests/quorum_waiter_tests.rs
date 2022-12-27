@@ -2,7 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::NUM_SHUTDOWN_RECEIVERS;
 use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer};
+use types::PreSubscribedBroadcastSender;
 
 #[tokio::test]
 async fn wait_for_quorum() {
@@ -13,8 +15,7 @@ async fn wait_for_quorum() {
     let my_primary = fixture.authorities().next().unwrap().public_key();
     let myself = fixture.authorities().next().unwrap().worker(0);
 
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // setup network
     let network = test_network(myself.keypair(), &myself.info().worker_address);
@@ -24,7 +25,7 @@ async fn wait_for_quorum() {
         /* worker_id */ 0,
         committee.clone(),
         worker_cache.clone(),
-        rx_reconfiguration,
+        tx_shutdown.subscribe(),
         rx_message,
         network.clone(),
     );
@@ -71,8 +72,7 @@ async fn pipeline_for_quorum() {
     let my_primary = fixture.authorities().next().unwrap().public_key();
     let myself = fixture.authorities().next().unwrap().worker(0);
 
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // setup network
     let network = test_network(myself.keypair(), &myself.info().worker_address);
@@ -82,7 +82,7 @@ async fn pipeline_for_quorum() {
         /* worker_id */ 0,
         committee.clone(),
         worker_cache.clone(),
-        rx_reconfiguration,
+        tx_shutdown.subscribe(),
         rx_message,
         network.clone(),
     );

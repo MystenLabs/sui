@@ -120,20 +120,13 @@ fn get_registry() -> Result<Registry> {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
     };
-    let epoch_change = WorkerReconfigureMessage {
-        message: ReconfigureNotification::NewEpoch(committee.clone()),
-    };
-    let update_committee = WorkerReconfigureMessage {
-        message: ReconfigureNotification::NewEpoch(committee),
-    };
+
     let shutdown = WorkerReconfigureMessage {
         message: ReconfigureNotification::Shutdown,
     };
     tracer.trace_value(&mut samples, &our_batch)?;
     tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
-    tracer.trace_value(&mut samples, &epoch_change)?;
-    tracer.trace_value(&mut samples, &update_committee)?;
     tracer.trace_value(&mut samples, &shutdown)?;
 
     // 2. Trace the main entry point(s) + every enum separately.

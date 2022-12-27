@@ -18,8 +18,8 @@ use storage::CertificateStore;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConsensusStore,
-    ReconfigureNotification, Round, StoreResult, Timestamp,
+    metered_channel, Certificate, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
+    ConsensusStore, Round, StoreResult, Timestamp,
 };
 
 #[cfg(test)]
@@ -226,8 +226,8 @@ pub struct Consensus<ConsensusProtocol> {
     /// The committee information.
     committee: Committee,
 
-    /// Receive reconfiguration update.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
     rx_new_certificates: metered_channel::Receiver<Certificate>,
@@ -257,7 +257,7 @@ where
         committee: Committee,
         store: Arc<ConsensusStore>,
         cert_store: CertificateStore,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
         tx_consensus_round_updates: watch::Sender<Round>,
@@ -284,7 +284,7 @@ where
 
         let s = Self {
             committee,
-            rx_reconfigure,
+            rx_shutdown,
             rx_new_certificates,
             tx_committed_certificates,
             tx_consensus_round_updates,
@@ -297,17 +297,6 @@ where
         spawn_logged_monitored_task!(s.run(), "Consensus", INFO)
     }
 
-    fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
-        self.committee = new_committee.clone();
-        self.protocol.update_committee(new_committee)?;
-        self.tx_consensus_round_updates
-            .send(0)
-            .expect("Failed to reset last_committed_round!");
-
-        let genesis = Certificate::genesis(&self.committee);
-        Ok(ConsensusState::new(genesis, self.metrics.clone()))
-    }
-
     async fn run(self) {
         self.run_inner().await.expect("Failed to run consensus")
     }
@@ -316,30 +305,22 @@ where
         // Listen to incoming certificates.
         loop {
             tokio::select! {
+
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return Ok(())
+                }
+
                 Some(certificate) = self.rx_new_certificates.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
                     match certificate.epoch().cmp(&self.committee.epoch()) {
-                        Ordering::Greater => {
-                            let message = self.rx_reconfigure.borrow_and_update().clone();
-                            match message  {
-                                ReconfigureNotification::NewEpoch(new_committee) => {
-                                    self.state = self.change_epoch(new_committee)?;
-                                },
-                                ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                    self.committee = new_committee;
-                                }
-                                ReconfigureNotification::Shutdown => return Ok(()),
-                            }
-                            tracing::debug!("Committee updated to {}", self.committee);
+
+                        Ordering::Equal => {
+                            // we can proceed.
                         }
-                        Ordering::Less => {
-                            // We already updated committee but the core is slow.
+                        _ => {
                             tracing::debug!("Already moved to the next epoch");
                             continue
-                        },
-                        Ordering::Equal => {
-                            // Nothing to do, we can proceed.
                         }
                     }
 
@@ -409,21 +390,6 @@ where
                         .set(self.state.dag.len() as i64);
                 },
 
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.state = self.change_epoch(new_committee)?;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-                        }
-                        ReconfigureNotification::Shutdown => return Ok(())
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-                }
             }
         }
     }

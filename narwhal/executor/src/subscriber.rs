@@ -21,23 +21,20 @@ use mysten_metrics::spawn_logged_monitored_task;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use tokio::time::Instant;
-use tokio::{
-    sync::{oneshot, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag, ConsensusOutput,
-    ReconfigureNotification, Timestamp,
+    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag,
+    ConditionalBroadcastReceiver, ConsensusOutput, Timestamp,
 };
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
 /// forward the certificates to the Executor Core.
 pub struct Subscriber<Network> {
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// A channel to receive sequenced consensus messages.
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     /// The metrics handler
@@ -56,7 +53,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     network: oneshot::Receiver<anemo::Network>,
     worker_cache: SharedWorkerCache,
     committee: Committee,
-    tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+    mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
@@ -70,12 +67,16 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
     let (tx_notifier, rx_notifier) =
         metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_notifier);
 
-    let rx_reconfigure_notify = tx_reconfigure.subscribe();
-    let rx_reconfigure_subscriber = tx_reconfigure.subscribe();
+    let rx_shutdown_notify = shutdown_receivers
+        .pop()
+        .unwrap_or_else(|| panic!("Not enough shutdown receivers"));
+    let rx_shutdown_subscriber = shutdown_receivers
+        .pop()
+        .unwrap_or_else(|| panic!("Not enough shutdown receivers"));
 
     vec![
         spawn_logged_monitored_task!(
-            run_notify(state, rx_notifier, rx_reconfigure_notify),
+            run_notify(state, rx_notifier, rx_shutdown_notify),
             "SubscriberNotifyTask"
         ),
         spawn_logged_monitored_task!(
@@ -84,7 +85,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
                 network,
                 worker_cache,
                 committee,
-                rx_reconfigure_subscriber,
+                rx_shutdown_subscriber,
                 rx_sequence,
                 metrics,
                 restored_consensus_output,
@@ -98,7 +99,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
 async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
     state: State,
     mut tr_notify: metered_channel::Receiver<ConsensusOutput>,
-    mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    mut rx_shutdown: ConditionalBroadcastReceiver,
 ) {
     loop {
         tokio::select! {
@@ -106,14 +107,10 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
                 state.handle_consensus_output(message).await;
             }
 
-            // Check for reconfiguration.
-            result = rx_reconfigure.changed() => {
-                result.expect("Committee channel dropped");
-                let message = rx_reconfigure.borrow().clone();
-                if let ReconfigureNotification::Shutdown = message {
-                    return
-                }
+            _ = rx_shutdown.receiver.recv() => {
+                return
             }
+
         }
     }
 }
@@ -123,7 +120,7 @@ async fn create_and_run_subscriber(
     network: oneshot::Receiver<anemo::Network>,
     worker_cache: SharedWorkerCache,
     committee: Committee,
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    rx_shutdown: ConditionalBroadcastReceiver,
     rx_sequence: metered_channel::Receiver<CommittedSubDag>,
     metrics: Arc<ExecutorMetrics>,
     restored_consensus_output: Vec<CommittedSubDag>,
@@ -142,7 +139,7 @@ async fn create_and_run_subscriber(
         metrics: metrics.clone(),
     };
     let subscriber = Subscriber {
-        rx_reconfigure,
+        rx_shutdown,
         rx_sequence,
         metrics,
         fetcher,
@@ -200,14 +197,10 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
 
                 },
 
-                // Check for reconfiguration.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    if let ReconfigureNotification::Shutdown = message {
-                        return Ok(());
-                    }
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return Ok(())
                 }
+
             }
 
             self.metrics
