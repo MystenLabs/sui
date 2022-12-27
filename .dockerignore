@@ -1,8 +1,2 @@
-*~
-*.swp
-**/.terraform/
-target/
-**/*Dockerfile
-*.md
-build/
-storage/
+target
+.cargo-ycm

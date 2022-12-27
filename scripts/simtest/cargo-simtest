@@ -22,20 +22,20 @@ while true; do
   MANIFEST_DIR=$(pwd)
 done
 
-cd "$MANIFEST_DIR"
-if ! git diff --quiet Cargo.lock; then
-  echo "Please commit or revert your changes to Cargo.lock before running cargo simtest"
-  exit 1
-fi
-cd "$STARTING_DIR"
-
-cleanup () {
-  cd "$MANIFEST_DIR"
-  git checkout Cargo.lock > /dev/null
-  cd "$STARTING_DIR"
-}
-
-trap cleanup SIGINT
+# cd "$MANIFEST_DIR"
+# if ! git diff --quiet Cargo.lock; then
+#   echo "Please commit or revert your changes to Cargo.lock before running cargo simtest"
+#   exit 1
+# fi
+# cd "$STARTING_DIR"
+#
+# cleanup () {
+#   cd "$MANIFEST_DIR"
+#   git checkout Cargo.lock > /dev/null
+#   cd "$STARTING_DIR"
+# }
+#
+# trap cleanup SIGINT
 
 if [ -z "$MSIM_TEST_SEED" ]; then
   export MSIM_TEST_SEED=1
