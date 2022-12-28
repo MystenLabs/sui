@@ -16,7 +16,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 
-#[tokio::test]
+#[sim_test]
 async fn local_advance_epoch_tx_test() {
     // This test checks the following functionalities related to advance epoch transaction:
     // 1. The create_advance_epoch_tx_cert API in AuthorityState can properly sign an advance
@@ -43,7 +43,7 @@ async fn local_advance_epoch_tx_test() {
     advance_epoch_tx_test_impl(states, &certifier).await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn network_advance_epoch_tx_test() {
     // Same as local_advance_epoch_tx_test, but uses network clients.
     let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
@@ -95,7 +95,7 @@ async fn advance_epoch_tx_test_impl(
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn basic_reconfig_end_to_end_test() {
     let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
     // Close epoch on 3 (2f+1) validators.
