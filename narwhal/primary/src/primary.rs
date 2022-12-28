@@ -292,18 +292,33 @@ impl Primary {
             config
         };
 
-        let network = anemo::Network::bind(addr.clone())
-            .server_name("narwhal")
-            .private_key(network_signer.copy().private().0.to_bytes())
-            .config(anemo_config)
-            .outbound_request_layer(outbound_layer)
-            .start(service)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Address {} should be available for the primary Narwhal service",
-                    addr
-                )
-            });
+        let network;
+        let mut retries_left = 3;
+
+        loop {
+            let network_result = anemo::Network::bind(addr.clone())
+                .server_name("narwhal")
+                .private_key(network_signer.copy().private().0.to_bytes())
+                .config(anemo_config.clone())
+                .outbound_request_layer(outbound_layer.clone())
+                .start(service.clone());
+            match network_result {
+                Ok(n) => {
+                    network = n;
+                    break;
+                }
+                Err(_) => {
+                    retries_left -= 1;
+                    if retries_left <= 0 {
+                        panic!(
+                            "Address {} should be available for the primary Narwhal service",
+                            addr
+                        )
+                    }
+                }
+            }
+        }
+
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
         let mut peer_types = HashMap::new();
