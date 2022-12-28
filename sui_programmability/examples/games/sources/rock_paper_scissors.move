@@ -191,7 +191,7 @@ module games::rock_paper_scissors {
 
     /// The final accord to the game logic. After both secrets have been revealed,
     /// the game owner can choose a winner and release the prize.
-    public entry fun select_winner(game: Game, ctx: &mut TxContext) {
+    public entry fun select_winner(game: Game, ctx: &TxContext) {
         assert!(status(&game) == STATUS_REVEALED, 0);
 
         let Game {

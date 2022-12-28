@@ -352,7 +352,7 @@ module sui::sui_system {
     public entry fun report_validator(
         self: &mut SuiSystemState,
         validator_addr: address,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let sender = tx_context::sender(ctx);
         // Both the reporter and the reported have to be validators.
@@ -375,7 +375,7 @@ module sui::sui_system {
     public entry fun undo_report_validator(
         self: &mut SuiSystemState,
         validator_addr: address,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let sender = tx_context::sender(ctx);
 
