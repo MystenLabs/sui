@@ -280,6 +280,15 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         workers: Vec<NetworkPublicKey>,
     ) -> Batch {
         if let Some(payload) = self.try_fetch_locally(digest, worker_id).await {
+            let batch_fetch_duration = payload.metadata.created_at.elapsed().as_secs_f64();
+            self.metrics
+                .batch_execution_latency
+                .observe(batch_fetch_duration);
+            debug!(
+                "Batch {:?} took {} seconds to be fetched for execution since creation",
+                payload.digest(),
+                batch_fetch_duration
+            );
             return payload;
         }
         let _timer = self.metrics.subscriber_remote_fetch_latency.start_timer();
@@ -293,9 +302,15 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             stagger += Duration::from_millis(200);
         }
         let (batch, _, _) = futures::future::select_all(futures).await;
+        let batch_fetch_duration = batch.metadata.created_at.elapsed().as_secs_f64();
         self.metrics
             .batch_execution_latency
-            .observe(batch.metadata.created_at.elapsed().as_secs_f64());
+            .observe(batch_fetch_duration);
+        debug!(
+            "Batch {:?} took {} seconds to be fetched for execution since creation",
+            batch.digest(),
+            batch_fetch_duration
+        );
         batch
     }
 
