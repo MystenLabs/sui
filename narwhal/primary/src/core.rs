@@ -424,8 +424,7 @@ impl Core {
                     // Reliable broadcast will not return errors.
                     return Ok(())
                 },
-                result = rx_narwhal_round_updates.changed() => {
-                    result.unwrap();
+                _result = rx_narwhal_round_updates.changed() => {
                     narwhal_round = *rx_narwhal_round_updates.borrow();
                     if narwhal_round > certificate_round {
                         // Round has advanced. No longer need to broadcast this cert to
