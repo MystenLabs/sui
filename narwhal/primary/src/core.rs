@@ -420,11 +420,15 @@ impl Core {
         let mut join_all = futures::future::try_join_all(tasks);
         loop {
             tokio::select! {
-                _result = &mut join_all => {
+                _ = &mut join_all => {
                     // Reliable broadcast will not return errors.
                     return Ok(())
                 },
-                _result = rx_narwhal_round_updates.changed() => {
+                result = rx_narwhal_round_updates.changed() => {
+                    if result.is_err() {
+                        // this happens during reconfig when the other side hangs up.
+                        return Ok(());
+                    }
                     narwhal_round = *rx_narwhal_round_updates.borrow();
                     if narwhal_round > certificate_round {
                         // Round has advanced. No longer need to broadcast this cert to
