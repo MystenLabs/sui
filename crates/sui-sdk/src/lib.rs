@@ -17,7 +17,7 @@ use rpc_types::{SuiCertifiedTransaction, SuiParsedTransactionResponse, SuiTransa
 use serde_json::Value;
 pub use sui_json as json;
 
-use crate::apis::{CoinReadApi, EventApi, QuorumDriver, ReadApi};
+use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -47,6 +47,7 @@ pub struct SuiClient {
     coin_read_api: CoinReadApi,
     event_api: EventApi,
     quorum_driver: QuorumDriver,
+    governance_api: GovernanceApi,
 }
 
 pub(crate) struct RpcClient {
@@ -156,6 +157,7 @@ impl SuiClient {
         let event_api = EventApi::new(api.clone());
         let transaction_builder = TransactionBuilder(read_api.clone());
         let coin_read_api = CoinReadApi::new(api.clone());
+        let governance_api = GovernanceApi::new(api.clone());
 
         Ok(SuiClient {
             api,
@@ -164,6 +166,7 @@ impl SuiClient {
             coin_read_api,
             event_api,
             quorum_driver,
+            governance_api,
         })
     }
 
@@ -207,6 +210,9 @@ impl SuiClient {
     }
     pub fn quorum_driver(&self) -> &QuorumDriver {
         &self.quorum_driver
+    }
+    pub fn governance_api(&self) -> &GovernanceApi {
+        &self.governance_api
     }
 }
 

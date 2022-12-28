@@ -27,13 +27,15 @@ use sui_types::messages::{
     CommitteeInfoResponse, ExecuteTransactionRequestType, VerifiedTransaction,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 use futures::StreamExt;
 use sui_json_rpc::api::{
     CoinReadApiClient, EventReadApiClient, EventStreamingApiClient, RpcBcsApiClient,
     RpcFullNodeReadApiClient, RpcReadApiClient, TransactionExecutionApiClient,
 };
+use sui_types::governance::DelegatedStake;
+
 #[derive(Debug)]
 pub struct ReadApi {
     api: Arc<RpcClient>,
@@ -424,5 +426,43 @@ impl QuorumDriver {
                 ));
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GovernanceApi {
+    api: Arc<RpcClient>,
+}
+
+impl GovernanceApi {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
+
+    /// Return all [DelegatedStake].
+    pub async fn get_delegated_stakes(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiRpcResult<Vec<DelegatedStake>> {
+        Ok(self.api.http.get_delegated_stakes(owner).await?)
+    }
+
+    /// Return all validators available for stake delegation.
+    pub async fn get_validators(&self) -> SuiRpcResult<Vec<ValidatorMetadata>> {
+        Ok(self.api.http.get_validators().await?)
+    }
+
+    /// Return the committee information for the asked `epoch`.
+    /// `epoch`: The epoch of interest. If None, default to the latest epoch
+    pub async fn get_committee_info(
+        &self,
+        epoch: Option<EpochId>,
+    ) -> SuiRpcResult<CommitteeInfoResponse> {
+        Ok(self.api.http.get_committee_info(epoch).await?)
+    }
+
+    /// Return [SuiSystemState]
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+        Ok(self.api.http.get_sui_system_state().await?)
     }
 }
