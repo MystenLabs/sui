@@ -592,6 +592,90 @@ async fn test_transactional() {
 }
 
 #[tokio::test]
+async fn test_transaction_snapshot() {
+    let key = "key".to_string();
+    let path = temp_dir();
+    let opt = rocksdb::Options::default();
+    let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
+    let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
+
+    // transaction without set_snapshot succeeds when extraneous write occurs before transaction
+    // write.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    // write occurs after transaction is created but before first write
+    db.insert(&key, &"1".to_string()).unwrap();
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    tx1.commit().expect("failed to commit first transaction");
+    assert_eq!(db.get(&key).unwrap().unwrap(), "2".to_string());
+
+    // transaction without set_snapshot fails when extraneous write occurs after transaction
+    // write.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    db.insert(&key, &"1".to_string()).unwrap();
+    assert!(matches!(
+        tx1.commit(),
+        Err(TypedStoreError::TransactionWriteConflict)
+    ));
+    assert_eq!(db.get(&key).unwrap().unwrap(), "1".to_string());
+
+    // failed transaction with set_snapshot
+    let mut tx1 = db
+        .transaction_with_snapshot()
+        .expect("failed to initiate transaction");
+    // write occurs after transaction is created, so the conflict is detected
+    db.insert(&key, &"1".to_string()).unwrap();
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    assert!(matches!(
+        tx1.commit(),
+        Err(TypedStoreError::TransactionWriteConflict)
+    ));
+
+    let mut tx1 = db
+        .transaction_with_snapshot()
+        .expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    // no conflicting writes, should succeed this time.
+    tx1.commit().unwrap();
+
+    // when to transactions race, one will fail provided that neither commits before the other
+    // writes.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    tx2 = tx2
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    // which ever tx is committed first will succeed.
+    tx1.commit().expect("failed to commit");
+    assert!(matches!(
+        tx2.commit(),
+        Err(TypedStoreError::TransactionWriteConflict)
+    ));
+
+    // IMPORTANT: a race is still possible if one tx commits before the other writes.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    tx1.commit().expect("failed to commit");
+
+    tx2 = tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
+    tx2.commit().expect("failed to commit");
+}
+
+#[tokio::test]
 async fn test_transaction_read_your_write() {
     let key1 = "key1";
     let key2 = "key2";

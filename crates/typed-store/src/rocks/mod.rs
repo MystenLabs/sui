@@ -13,7 +13,8 @@ use bincode::Options;
 use collectable::TryExtend;
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
-    IteratorMode, MultiThreaded, Transaction, WriteBatch, WriteBatchWithTransaction,
+    ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, Transaction, WriteBatch,
+    WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -87,6 +88,49 @@ macro_rules! reopen {
             ),*
         )
     };
+}
+
+/// Repeatedly attempt an OptimisiticTransaction until it succeeds.
+/// Since many callsites (e.g. the consensus handler) cannot proceed in the case of failed writes,
+/// this will loop forever until the transaction succeeds.
+#[macro_export]
+macro_rules! do_transaction {
+    ($transaction:expr) => {{
+        use rand::{
+            distributions::{Distribution, Uniform},
+            rngs::ThreadRng,
+            Rng,
+        };
+        use tokio::time::{sleep, Duration};
+        use tracing::{error, info};
+
+        let mut retries = 0;
+        loop {
+            let status = $transaction;
+            match status {
+                Err(TypedStoreError::TransactionWriteConflict) => {
+                    retries += 1;
+                    // Randomized delay to help racing transactions get out of each other's way.
+                    let delay = {
+                        let mut rng = ThreadRng::default();
+                        Duration::from_millis(Uniform::new(0, 50).sample(&mut rng))
+                    };
+                    if retries > 10 {
+                        // TODO: monitoring needed?
+                        error!(?delay, ?retries, "excessive transaction retries...");
+                    } else {
+                        info!(
+                            ?delay,
+                            ?retries,
+                            "transaction write conflict detected, sleeping"
+                        );
+                    }
+                    sleep(delay).await;
+                }
+                _ => break status,
+            }
+        }
+    }};
 }
 
 /// Thin wrapper to unify interface across different db types
@@ -208,6 +252,22 @@ impl RocksDB {
     ) -> Result<Transaction<'_, rocksdb::OptimisticTransactionDB>, TypedStoreError> {
         match self {
             Self::OptimisticTransactionDB(db) => Ok(db.transaction()),
+            Self::DBWithThreadMode(_) => Err(TypedStoreError::RocksDBError(
+                "operation not supported".to_string(),
+            )),
+        }
+    }
+
+    pub fn transaction_with_snapshot(
+        &self,
+    ) -> Result<Transaction<'_, rocksdb::OptimisticTransactionDB>, TypedStoreError> {
+        match self {
+            Self::OptimisticTransactionDB(db) => {
+                let mut tx_opts = OptimisticTransactionOptions::new();
+                tx_opts.set_snapshot(true);
+
+                Ok(db.transaction_opt(&WriteOptions::default(), &tx_opts))
+            }
             Self::DBWithThreadMode(_) => Err(TypedStoreError::RocksDBError(
                 "operation not supported".to_string(),
             )),
@@ -636,6 +696,10 @@ impl<K, V> DBMap<K, V> {
         DBTransaction::new(&self.rocksdb)
     }
 
+    pub fn transaction_with_snapshot(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
+        DBTransaction::new_with_snapshot(&self.rocksdb)
+    }
+
     pub fn table_summary(&self) -> eyre::Result<TableSummary> {
         let mut num_keys = 0;
         let mut key_bytes_total = 0;
@@ -846,6 +910,13 @@ impl<'a> DBTransaction<'a> {
         })
     }
 
+    pub fn new_with_snapshot(db: &'a Arc<RocksDB>) -> Result<Self, TypedStoreError> {
+        Ok(Self {
+            rocksdb: db.clone(),
+            transaction: db.transaction_with_snapshot()?,
+        })
+    }
+
     pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
         self,
         db: &DBMap<K, V>,
@@ -981,7 +1052,12 @@ impl<'a> DBTransaction<'a> {
     }
 
     pub fn commit(self) -> Result<(), TypedStoreError> {
-        self.transaction.commit()?;
+        self.transaction.commit().map_err(|e| match e.kind() {
+            // empirically, this is what you get when there is a write conflict. it is not
+            // documented whether this is the only time you can get this error.
+            ErrorKind::Busy => TypedStoreError::TransactionWriteConflict,
+            _ => e.into(),
+        })?;
         Ok(())
     }
 }
