@@ -846,9 +846,10 @@ impl AuthorityStore {
         // Insert each output object into the stores
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.objects,
-            written
-                .iter()
-                .map(|(_, (obj_ref, new_object, _kind))| (ObjectKey::from(obj_ref), new_object)),
+            written.iter().map(|(_, (obj_ref, new_object, _kind))| {
+                trace!(tx_digest=?transaction_digest, ?obj_ref, "writing object");
+                (ObjectKey::from(obj_ref), new_object)
+            }),
         )?;
 
         let new_locks_to_init: Vec<_> = written
@@ -1293,14 +1294,17 @@ impl AuthorityStore {
             .epoch_store()
             .acquire_tx_lock(certificate.digest())
             .await;
-        self.epoch_store().set_assigned_shared_object_versions(
-            certificate.digest(),
-            &effects
-                .shared_objects
-                .iter()
-                .map(|(id, version, _)| (*id, *version))
-                .collect(),
-        )
+        self.epoch_store()
+            .set_assigned_shared_object_versions(
+                certificate,
+                &effects
+                    .shared_objects
+                    .iter()
+                    .map(|(id, version, _)| (*id, *version))
+                    .collect(),
+                self,
+            )
+            .await
     }
 
     pub fn get_transaction(
