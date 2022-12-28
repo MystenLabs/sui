@@ -155,7 +155,8 @@ where
     tracing::info!("Starting up narwhal");
 
     // Start Narwhal Primary with configuration
-    let mut narwhal_handles = Node::spawn_primary(
+    let mut narwhal_handles;
+    let primary_result = Node::spawn_primary(
         config.primary_keypair.copy(),
         config.network_keypair.copy(),
         Arc::new(ArcSwap::new(committee.clone())),
@@ -166,8 +167,11 @@ where
         execution_state,
         &registry,
     )
-    .await
-    .unwrap();
+    .await;
+    match primary_result {
+        Ok(n) => narwhal_handles = n,
+        Err(e) => panic!("Unable to start Narwhal Primary {:?}", e),
+    }
 
     // Start Narwhal Workers with configuration
     narwhal_handles.extend(Node::spawn_workers(
