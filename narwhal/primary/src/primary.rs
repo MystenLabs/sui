@@ -40,6 +40,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap},
     net::Ipv4Addr,
     sync::Arc,
+    thread::sleep,
     time::Duration,
 };
 use storage::{CertificateStore, PayloadToken, ProposerStore};
@@ -293,7 +294,7 @@ impl Primary {
         };
 
         let network;
-        let mut retries_left = 3;
+        let mut retries_left = 90;
 
         loop {
             let network_result = anemo::Network::bind(addr.clone())
@@ -309,12 +310,15 @@ impl Primary {
                 }
                 Err(_) => {
                     retries_left -= 1;
+
                     if retries_left <= 0 {
-                        panic!(
-                            "Address {} should be available for the primary Narwhal service",
-                            addr
-                        )
+                        panic!();
                     }
+                    error!(
+                        "Address {} should be available for the primary Narwhal service, retrying in one second",
+                        addr
+                    );
+                    sleep(Duration::from_secs(1));
                 }
             }
         }

@@ -25,7 +25,8 @@ use mysten_metrics::spawn_logged_monitored_task;
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
-use std::{net::Ipv4Addr, sync::Arc};
+use std::time::Duration;
+use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
 use store::Store;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
@@ -202,13 +203,35 @@ impl Worker {
             config
         };
 
-        let network = Network::bind(addr)
-            .server_name("narwhal")
-            .private_key(worker.keypair.copy().private().0.to_bytes())
-            .config(anemo_config)
-            .outbound_request_layer(outbound_layer)
-            .start(service)
-            .unwrap();
+        let network;
+        let mut retries_left = 90;
+
+        loop {
+            let network_result = anemo::Network::bind(addr.clone())
+                .server_name("narwhal")
+                .private_key(worker.keypair.copy().private().0.to_bytes())
+                .config(anemo_config.clone())
+                .outbound_request_layer(outbound_layer.clone())
+                .start(service.clone());
+            match network_result {
+                Ok(n) => {
+                    network = n;
+                    break;
+                }
+                Err(_) => {
+                    retries_left -= 1;
+
+                    if retries_left <= 0 {
+                        panic!();
+                    }
+                    error!(
+                        "Address {} should be available for the primary Narwhal service, retrying in one second",
+                        addr
+                    );
+                    sleep(Duration::from_secs(1));
+                }
+            }
+        }
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
