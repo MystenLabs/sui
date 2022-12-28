@@ -8,19 +8,18 @@ use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
-use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use sui_keys::key_derive::generate_new_key;
+use sui_keys::keypair_file::{
+    read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
+    write_keypair_to_file,
+};
 use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use tracing::info;
 
-use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{
-    get_authority_key_pair, AuthorityKeyPair, Ed25519SuiSignature, EncodeDecodeBase64,
-    NetworkKeyPair, SignatureScheme, SuiKeyPair, SuiSignatureInner,
-};
+use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -193,51 +192,4 @@ fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
         "Address, keypair and key scheme written to {}",
         path.to_str().unwrap()
     );
-}
-
-pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
-    keypair: &SuiKeyPair,
-    path: P,
-) -> anyhow::Result<()> {
-    let contents = keypair.encode_base64();
-    std::fs::write(path, contents)?;
-    Ok(())
-}
-
-pub fn write_authority_keypair_to_file<P: AsRef<std::path::Path>>(
-    keypair: &AuthorityKeyPair,
-    path: P,
-) -> anyhow::Result<()> {
-    let contents = keypair.encode_base64();
-    std::fs::write(path, contents)?;
-    Ok(())
-}
-
-pub fn read_authority_keypair_from_file<P: AsRef<std::path::Path>>(
-    path: P,
-) -> anyhow::Result<AuthorityKeyPair> {
-    let contents = std::fs::read_to_string(path)?;
-    AuthorityKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
-}
-
-pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<SuiKeyPair> {
-    let contents = std::fs::read_to_string(path)?;
-    SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
-}
-
-pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
-    path: P,
-) -> anyhow::Result<NetworkKeyPair> {
-    let value = std::fs::read_to_string(path)?;
-    let bytes = Base64::decode(value.as_str()).map_err(|e| anyhow::anyhow!(e))?;
-    if let Some(flag) = bytes.first() {
-        if flag == &Ed25519SuiSignature::SCHEME.flag() {
-            let priv_key_bytes = bytes
-                .get(1 + Ed25519PublicKey::LENGTH..)
-                .ok_or_else(|| anyhow!("Invalid length"))?;
-            let sk = Ed25519PrivateKey::from_bytes(priv_key_bytes)?;
-            return Ok(<Ed25519KeyPair as From<Ed25519PrivateKey>>::from(sk));
-        }
-    }
-    Err(anyhow!("Invalid bytes"))
 }
