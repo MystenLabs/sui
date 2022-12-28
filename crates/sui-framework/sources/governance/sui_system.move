@@ -17,6 +17,10 @@ module sui::sui_system {
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
     use std::option;
+    use std::vector;
+    use sui::epoch_time_lock::EpochTimeLock;
+    use sui::epoch_time_lock;
+    use sui::pay;
 
     friend sui::genesis;
 
@@ -262,12 +266,24 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         validator_set::request_add_delegation(
-            &mut self.validators, 
-            validator_address, 
+            &mut self.validators,
+            validator_address,
             coin::into_balance(delegate_stake),
             option::none(),
             ctx,
         );
+    }
+
+    /// Add delegated stake to a validator's staking pool using multiple coins.
+    public entry fun request_add_delegation_mul_coin(
+        self: &mut SuiSystemState,
+        delegate_stakes: vector<Coin<SUI>>,
+        stake_amount: option::Option<u64>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
+        validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::none(), ctx);
     }
 
     /// Add delegated stake to a validator's staking pool using a locked SUI coin.
@@ -279,6 +295,24 @@ module sui::sui_system {
     ) {
         let (balance, lock) = locked_coin::into_balance(delegate_stake);
         validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::some(lock), ctx);
+    }
+
+    /// Add delegated stake to a validator's staking pool using multiple locked SUI coins.
+    public entry fun request_add_delegation_mul_locked_coin(
+        self: &mut SuiSystemState,
+        delegate_stakes: vector<LockedCoin<SUI>>,
+        stake_amount: option::Option<u64>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let (balance, lock) = extract_locked_coin_balance(delegate_stakes, stake_amount, ctx);
+        validator_set::request_add_delegation(
+            &mut self.validators,
+            validator_address,
+            balance,
+            option::some(lock),
+            ctx
+        );
     }
 
     /// Withdraw some portion of a delegation from a validator's staking pool.
@@ -458,6 +492,61 @@ module sui::sui_system {
             *vec_map::get(&self.validator_report_records, &addr)
         } else {
             vec_set::empty()
+        }
+    }
+
+    /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
+    fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
+        let merged_coin = vector::pop_back(&mut coins);
+        pay::join_vec(&mut merged_coin, coins);
+
+        let total_balance = coin::into_balance(merged_coin);
+        // return the full amount if amount is not specified
+        if (option::is_some(&amount)) {
+            let amount = option::destroy_some(amount);
+            let balance = balance::split(&mut total_balance, amount);
+            // transfer back the remainder if non zero.
+            if (balance::value(&total_balance) > 0){
+                transfer::transfer(coin::from_balance(total_balance, ctx), tx_context::sender(ctx));
+            }else{
+                balance::destroy_zero(total_balance);
+            };
+            balance
+        }else {
+            total_balance
+        }
+    }
+
+    /// Extract required Balance from vector of LockedCoin<SUI>, transfer the remainder back to sender.
+    fun extract_locked_coin_balance(
+        coins: vector<LockedCoin<SUI>>,
+        amount: option::Option<u64>,
+        ctx: &mut TxContext
+    ): (Balance<SUI>, EpochTimeLock) {
+        let (total_balance, first_lock) = locked_coin::into_balance(vector::pop_back(&mut coins));
+        let (i, len) = (0, vector::length(&coins));
+        while (i < len) {
+            let (balance, lock) = locked_coin::into_balance(vector::pop_back(&mut coins));
+            // Make sure all time locks are the same
+            assert!(epoch_time_lock::epoch(&lock) == epoch_time_lock::epoch(&first_lock), 0);
+            epoch_time_lock::destroy_unchecked(lock);
+            balance::join(&mut total_balance, balance);
+            i = i + 1
+        };
+        vector::destroy_empty(coins);
+
+        // return the full amount if amount is not specified
+        if (option::is_some(&amount)){
+            let amount = option::destroy_some(amount);
+            let balance = balance::split(&mut total_balance, amount);
+            if (balance::value(&total_balance) > 0){
+                locked_coin::new_from_balance(total_balance, first_lock, tx_context::sender(ctx), ctx);
+            }else{
+                balance::destroy_zero(total_balance);
+            };
+            (balance, first_lock)
+        }else{
+            (total_balance, first_lock)
         }
     }
 
