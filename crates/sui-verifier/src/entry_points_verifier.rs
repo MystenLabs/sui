@@ -28,13 +28,13 @@ use crate::{format_signature_token, resolve_struct, verification_failure, INIT_F
 /// - The function must have the name specified by `INIT_FN_NAME`
 /// - The function must have `Visibility::Private`
 /// - The function can have at most two parameters:
-///   - mandatory &mut TxContext (see `is_tx_context`) in the last position
+///   - mandatory &mut TxContext or &TxContext (see `is_tx_context`) in the last position
 ///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the first
 ///   position
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true
-/// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
+/// - The function may have a &mut TxContext or &TxContext (see `is_tx_context`) parameter
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
@@ -140,7 +140,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         Ok(())
     } else {
         Err(format!(
-            "Expected last (and at most second) parameter for {}::{} to be &mut {}::{}::{}, but found {}",
+            "Expected last parameter for {0}::{1} to be &mut {2}::{3}::{4} or &{2}::{3}::{4}, but found {5}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,
@@ -254,7 +254,7 @@ fn is_primitive(
 
 pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
     match p {
-        SignatureToken::MutableReference(m) => match &**m {
+        SignatureToken::MutableReference(m) | SignatureToken::Reference(m) => match &**m {
             SignatureToken::Struct(idx) => {
                 let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
                 module_name == TX_CONTEXT_MODULE_NAME

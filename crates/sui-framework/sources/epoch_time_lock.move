@@ -18,13 +18,13 @@ module sui::epoch_time_lock {
     }
 
     /// Create a new epoch time lock with `epoch`. Aborts if the current epoch is less than the input epoch.
-    public fun new(epoch: u64, ctx: &mut TxContext) : EpochTimeLock {
+    public fun new(epoch: u64, ctx: &TxContext) : EpochTimeLock {
         assert!(tx_context::epoch(ctx) < epoch, EEpochAlreadyPassed);
         EpochTimeLock { epoch }
     }
 
     /// Destroys an epoch time lock. Aborts if the current epoch is less than the locked epoch.
-    public fun destroy(lock: EpochTimeLock, ctx: &mut TxContext) {
+    public fun destroy(lock: EpochTimeLock, ctx: &TxContext) {
         let EpochTimeLock { epoch } = lock;
         assert!(tx_context::epoch(ctx) >= epoch, EEpochNotYetEnded);
     }

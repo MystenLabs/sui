@@ -239,7 +239,7 @@ module sui::validator_set {
     public(friend) fun request_set_gas_price(
         self: &mut ValidatorSet,
         new_gas_price: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
@@ -249,7 +249,7 @@ module sui::validator_set {
     public(friend) fun request_set_commission_rate(
         self: &mut ValidatorSet,
         new_commission_rate: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);

@@ -53,7 +53,7 @@ module defi::shared_escrow {
     public entry fun exchange<T: key + store, ExchangeForT: key + store>(
         obj: ExchangeForT,
         escrow: &mut EscrowedObj<T, ExchangeForT>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         let escrowed_item = option::extract<T>(&mut escrow.escrowed);
@@ -67,7 +67,7 @@ module defi::shared_escrow {
     /// The `creator` can cancel the escrow and get back the escrowed item
     public entry fun cancel<T: key + store, ExchangeForT: key + store>(
         escrow: &mut EscrowedObj<T, ExchangeForT>,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) {
         assert!(&tx_context::sender(ctx) == &escrow.creator, EWrongOwner);
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
