@@ -91,10 +91,11 @@ impl CheckpointOutput for LogCheckpointOutput {
             summary.sequence_number, contents
         );
         info!(
-            "Creating checkpoint {:?} at sequence {}, previous digest {:?}, transactions count {}, content digest {:?}",
+            "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}",
             Hex::encode(summary.digest()),
+            summary.epoch,
             summary.sequence_number,
-            summary.previous_digest,
+            summary.previous_digest.map(Hex::encode),
             contents.size(),
             Hex::encode(summary.content_digest),
         );
