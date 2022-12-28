@@ -11,10 +11,15 @@ use sui_core::authority_aggregator::{
 };
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::test_utils::init_local_authorities;
+use sui_macros::sim_test;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
-use test_utils::authority::{spawn_test_authorities, test_authority_configs};
+use test_utils::{
+    authority::{spawn_test_authorities, test_authority_configs},
+    network::TestClusterBuilder,
+};
+use tokio::time::sleep;
 
 #[sim_test]
 async fn local_advance_epoch_tx_test() {
@@ -118,6 +123,25 @@ async fn basic_reconfig_end_to_end_test() {
         .collect();
     join_all(handles).await;
 }
+
+// This test just starts up a cluster that reconfigures itself under 0 load.
+#[sim_test]
+#[ignore] // test is flaky right now
+async fn test_passive_reconfig() {
+    let _test_cluster = TestClusterBuilder::new()
+        .with_checkpoints_per_epoch(10)
+        .build()
+        .await
+        .unwrap();
+
+    let duration_secs: u64 = std::env::var("RECONFIG_TEST_DURATION")
+        .ok()
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(30);
+
+    sleep(Duration::from_secs(duration_secs)).await;
+}
+
 /*
 
 use futures::future::join_all;
