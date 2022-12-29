@@ -83,6 +83,9 @@ impl SingleTxContext {
     pub fn gas(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("gas"), sender)
     }
+    pub fn genesis() -> Self {
+        Self::sui_transaction(ident_str!("genesis"), SuiAddress::ZERO)
+    }
     fn sui_transaction(ident: &IdentStr, sender: SuiAddress) -> Self {
         Self {
             package_id: SUI_FRAMEWORK_OBJECT_ID,

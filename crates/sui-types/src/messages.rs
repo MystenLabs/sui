@@ -41,6 +41,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
+use tap::Pipe;
 use tracing::debug;
 
 #[cfg(test)]
@@ -165,7 +166,23 @@ pub struct ChangeEpoch {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct GenesisTransaction {
-    pub objects: Vec<Object>,
+    pub objects: Vec<GenesisObject>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum GenesisObject {
+    RawObject {
+        data: crate::object::Data,
+        owner: crate::object::Owner,
+    },
+}
+
+impl GenesisObject {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            GenesisObject::RawObject { data, .. } => data.id(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -970,28 +987,41 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
+        ChangeEpoch {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
             storage_rebate,
-        }));
-        // For the ChangeEpoch transaction, we do not care about the sender and the gas.
-        let data = TransactionData::new(
-            kind,
-            SuiAddress::default(),
-            (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-            0,
-        );
-        let signed_data = SenderSignedData {
-            // Default intent
-            intent_message: IntentMessage::new(Intent::default(), data),
-            // Arbitrary keypair
-            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                .unwrap()
-                .into(),
-        };
-        Self::new_from_verified(Transaction::new(signed_data))
+        }
+        .pipe(SingleTransactionKind::ChangeEpoch)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_genesis_transaction(objects: Vec<GenesisObject>) -> Self {
+        GenesisTransaction { objects }
+            .pipe(SingleTransactionKind::Genesis)
+            .pipe(Self::new_system_transaction)
+    }
+
+    fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
+        system_transaction
+            .pipe(TransactionKind::Single)
+            .pipe(|kind| {
+                TransactionData::new(
+                    kind,
+                    SuiAddress::default(),
+                    (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
+                    0,
+                )
+            })
+            .pipe(|data| SenderSignedData {
+                intent_message: IntentMessage::new(Intent::default(), data),
+                tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                    .unwrap()
+                    .into(),
+            })
+            .pipe(Transaction::new)
+            .pipe(Self::new_from_verified)
     }
 }
 
