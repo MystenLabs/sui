@@ -77,4 +77,47 @@ export class TypeTagSerializer {
 
     return tok.map((tok) => this.parseFromStr(tok));
   }
+
+  tagToString(tag: TypeTag): string {
+    if ('bool' in tag) {
+      return 'bool';
+    }
+    if ('u8' in tag) {
+      return 'u8';
+    }
+    if ('u16' in tag) {
+      return 'u16';
+    }
+    if ('u32' in tag) {
+      return 'u32';
+    }
+    if ('u64' in tag) {
+      return 'u64';
+    }
+    if ('u128' in tag) {
+      return 'u128';
+    }
+    if ('u256' in tag) {
+      return 'u256';
+    }
+    if ('address' in tag) {
+      return 'address';
+    }
+    if ('signer' in tag) {
+      return 'signer';
+    }
+    if ('vector' in tag) {
+      return `vector<${this.tagToString(tag.vector)}>`;
+    }
+    if ('struct' in tag) {
+      const struct = tag.struct;
+      const typeParams = struct.typeParams
+        .map((tag) => this.tagToString(tag))
+        .join(', ');
+      return `${struct.address}::${struct.module}::${struct.name}${
+        typeParams ? `<${typeParams}>` : ''
+      }`;
+    }
+    throw new Error('Invalid TypeTag');
+  }
 }
