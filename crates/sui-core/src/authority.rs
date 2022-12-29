@@ -74,6 +74,7 @@ use sui_types::{
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store::ExecutionLockReadGuard;
 use crate::authority_aggregator::TransactionCertifier;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
@@ -748,22 +749,28 @@ impl AuthorityState {
             tx_guard.release();
             return Ok(info);
         }
-
+        let execution_guard = self
+            .database
+            .execution_lock_for_certificate(certificate)
+            .await;
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
         // epoch, then it's invalid.
-        if certificate.epoch() != self.epoch() {
-            tx_guard.release();
-            return Err(SuiError::WrongEpoch {
-                expected_epoch: self.epoch(),
-                actual_epoch: certificate.epoch(),
-            });
-        }
+        let execution_guard = match execution_guard {
+            Ok(execution_guard) => execution_guard,
+            Err(err) => {
+                tx_guard.release();
+                return Err(err);
+            }
+        };
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
         let epoch_store = self.epoch_store();
+        // This should be correct because of order execution epoch and epoch store change
+        // See AuthorityState::reconfigure() method for order of lock and store update
+        assert_eq!(*execution_guard, epoch_store.epoch());
         if let Some((inner_temporary_storage, signed_effects)) =
             epoch_store.wal().get_execution_output(&digest)?
         {
@@ -773,6 +780,7 @@ impl AuthorityState {
                     inner_temporary_storage,
                     signed_effects,
                     tx_guard,
+                    execution_guard,
                 )
                 .await;
         }
@@ -807,8 +815,14 @@ impl AuthorityState {
         #[cfg(any(test, msim))]
         tokio::task::yield_now().await;
 
-        self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)
-            .await
+        self.commit_cert_and_notify(
+            certificate,
+            inner_temporary_store,
+            signed_effects,
+            tx_guard,
+            execution_guard,
+        )
+        .await
     }
 
     async fn commit_cert_and_notify(
@@ -817,6 +831,7 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         signed_effects: SignedTransactionEffects,
         tx_guard: CertTxGuard<'_>,
+        _execution_guard: ExecutionLockReadGuard<'_>,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
@@ -1685,10 +1700,15 @@ impl AuthorityState {
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
+        let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         db.revert_uncommitted_epoch_transactions().await?;
-        db.perpetual_tables
-            .set_recovery_epoch(new_committee.epoch)?;
+        let new_epoch = new_committee.epoch;
+        db.perpetual_tables.set_recovery_epoch(new_epoch)?;
         db.reopen_epoch_db(new_committee).await;
+        *execution_lock = new_epoch;
+        // drop execution_lock after epoch store was updated
+        // see also assert in AuthorityState::process_certificate
+        // on the epoch store and execution lock epoch match
         Ok(())
     }
 
