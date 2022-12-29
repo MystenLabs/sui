@@ -20,10 +20,13 @@ use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
+use sui_core::authority_aggregator::{
+    AuthAggMetrics, AuthorityAggregator, NetworkTransactionCertifier,
+};
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
+use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -178,7 +181,8 @@ impl SuiNode {
         let net = AuthorityAggregator::new_from_system_state(
             &store,
             &committee_store,
-            &prometheus_registry,
+            SafeClientMetricsBase::new(&prometheus_registry),
+            AuthAggMetrics::new(&prometheus_registry),
         )?;
 
         let transaction_streamer = if is_full_node {
