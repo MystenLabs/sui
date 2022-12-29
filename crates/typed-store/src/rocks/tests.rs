@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::reopen;
+use crate::{reopen, retry_transaction, retry_transaction_forever};
 use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -673,6 +673,60 @@ async fn test_transaction_snapshot() {
 
     tx2 = tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
     tx2.commit().expect("failed to commit");
+}
+
+#[tokio::test]
+async fn test_retry_transaction() {
+    let key = "key".to_string();
+    let path = temp_dir();
+    let opt = rocksdb::Options::default();
+    let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
+    let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
+
+    let mut conflicts = 0;
+    retry_transaction!({
+        let mut tx1 = db.transaction().expect("failed to initiate transaction");
+        tx1 = tx1
+            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+            .unwrap();
+        if conflicts < 3 {
+            db.insert(&key, &"1".to_string()).unwrap();
+        }
+        conflicts += 1;
+        tx1.commit()
+    })
+    // succeeds after we stop causing conflicts
+    .unwrap();
+
+    retry_transaction!({
+        let mut tx1 = db.transaction().expect("failed to initiate transaction");
+        tx1 = tx1
+            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+            .unwrap();
+        db.insert(&key, &"1".to_string()).unwrap();
+        tx1.commit()
+    })
+    // fails after hitting maximum number of retries
+    .unwrap_err();
+
+    // obviously we cannot verify that this never times out, this is more just a test to make sure
+    // the macro compiles as expected.
+    tokio::time::timeout(Duration::from_secs(1), async move {
+        retry_transaction_forever!({
+            let mut tx1 = db.transaction().expect("failed to initiate transaction");
+            tx1 = tx1
+                .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+                .unwrap();
+            db.insert(&key, &"1".to_string()).unwrap();
+            tx1.commit()
+        })
+        // fails after hitting maximum number of retries
+        .unwrap_err();
+        panic!("should never finish");
+    })
+    .await
+    // must timeout
+    .unwrap_err();
 }
 
 #[tokio::test]

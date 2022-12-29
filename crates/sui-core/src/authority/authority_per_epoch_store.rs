@@ -46,7 +46,7 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
-use typed_store::{do_transaction, Map};
+use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
 
 /// The key where the latest consensus index is stored in the database.
@@ -448,7 +448,10 @@ impl AuthorityPerEpochStore {
         objects_to_init: impl Iterator<Item = ObjectID> + Clone,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<SequenceNumber>> {
-        do_transaction!({
+        // Since this can be called from consensus task, we must retry forever - the only other
+        // option is to panic. It is extremely unlikely that more than 2 retries will be needed, as
+        // the only two writers are the consensus task and checkpoint execution.
+        retry_transaction_forever!({
             // This code may still be correct without using a transaction snapshot, but I couldn't
             // convince myself of that.
             let db_transaction = self

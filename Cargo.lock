@@ -10218,6 +10218,7 @@ dependencies = [
  "proc-macro2 1.0.47",
  "prometheus",
  "quote 1.0.23",
+ "rand 0.8.5",
  "rocksdb",
  "rstest",
  "serde 1.0.151",

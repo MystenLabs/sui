@@ -94,17 +94,26 @@ macro_rules! reopen {
 /// Since many callsites (e.g. the consensus handler) cannot proceed in the case of failed writes,
 /// this will loop forever until the transaction succeeds.
 #[macro_export]
-macro_rules! do_transaction {
-    ($transaction:expr) => {{
+macro_rules! retry_transaction {
+    ($transaction:expr) => {
+        retry_transaction!($transaction, Some(20))
+    };
+
+    (
+        $transaction:expr,
+        $max_retries:expr // should be an Option<int type>, None for unlimited
+        $(,)?
+
+    ) => {{
         use rand::{
             distributions::{Distribution, Uniform},
             rngs::ThreadRng,
-            Rng,
         };
         use tokio::time::{sleep, Duration};
         use tracing::{error, info};
 
         let mut retries = 0;
+        let max_retries = $max_retries;
         loop {
             let status = $transaction;
             match status {
@@ -115,6 +124,12 @@ macro_rules! do_transaction {
                         let mut rng = ThreadRng::default();
                         Duration::from_millis(Uniform::new(0, 50).sample(&mut rng))
                     };
+                    if let Some(max_retries) = max_retries {
+                        if retries > max_retries {
+                            error!(?max_retries, "max retries exceeded");
+                            break status;
+                        }
+                    }
                     if retries > 10 {
                         // TODO: monitoring needed?
                         error!(?delay, ?retries, "excessive transaction retries...");
@@ -131,6 +146,13 @@ macro_rules! do_transaction {
             }
         }
     }};
+}
+
+#[macro_export]
+macro_rules! retry_transaction_forever {
+    ($transaction:expr) => {
+        $crate::retry_transaction!($transaction, None)
+    };
 }
 
 /// Thin wrapper to unify interface across different db types
