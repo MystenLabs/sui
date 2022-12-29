@@ -32,9 +32,19 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_framework::get_sui_framework();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
+                use ::sui_simulator::anemo_tower::callback::CallbackLayer;
+                use ::sui_simulator::anemo_tower::trace::DefaultMakeSpan;
+                use ::sui_simulator::anemo_tower::trace::DefaultOnFailure;
+                use ::sui_simulator::anemo_tower::trace::TraceLayer;
+                use ::sui_simulator::narwhal_network::metrics::MetricsMakeCallbackHandler;
+                use ::sui_simulator::narwhal_network::metrics::NetworkMetrics;
+
+                use std::sync::Arc;
                 use ::sui_simulator::fastcrypto::traits::KeyPair;
                 use rand::rngs::{StdRng, OsRng};
                 use rand::SeedableRng;
+                use ::sui_simulator::tower::ServiceBuilder;
+
                 // anemo uses x509-parser, which has many lazy static variables. start a network to
                 // initialize all that static state before the first test.
                 let rt = ::sui_simulator::runtime::Runtime::new();
@@ -42,6 +52,35 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     use ::sui_simulator::anemo::{Network, Request};
 
                     let make_network = |port: u16| {
+                        let registry = prometheus::Registry::new();
+                        let inbound_network_metrics =
+                            NetworkMetrics::new("sui", "inbound", &registry);
+                        let outbound_network_metrics =
+                            NetworkMetrics::new("sui", "outbound", &registry);
+
+                        let service = ServiceBuilder::new()
+                            .layer(
+                                TraceLayer::new_for_server_errors()
+                                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
+                            )
+                            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                                Arc::new(inbound_network_metrics),
+                            )))
+                            .service(::sui_simulator::anemo::Router::new());
+
+                        let outbound_layer = ServiceBuilder::new()
+                            .layer(
+                                TraceLayer::new_for_client_and_server_errors()
+                                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
+                            )
+                            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                                Arc::new(outbound_network_metrics),
+                            )))
+                            .into_inner();
+
+
                         Network::bind(format!("127.0.0.1:{}", port))
                             .server_name("static-init-network")
                             .private_key(
@@ -50,7 +89,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                                     .0
                                     .to_bytes(),
                             )
-                            .start(::sui_simulator::anemo::Router::new())
+                            .start(service)
                             .unwrap()
                     };
                     let n1 = make_network(80);

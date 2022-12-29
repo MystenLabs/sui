@@ -12,6 +12,8 @@ use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tap::TapFallible;
+use tracing::warn;
 
 thread_local! {
     static PER_THREAD_ROCKS_PERF_CONTEXT: std::cell::RefCell<rocksdb::PerfContext>  = RefCell::new(PerfContext::default());
@@ -846,7 +848,11 @@ impl DBMetrics {
         // registries. The problem is underlying metrics cannot be re-initialized
         // or prometheus complains. We essentially need to pass in DBMetrics
         // everywhere we create DBMap as the right fix
-        ONCE.get_or_init(|| Arc::new(DBMetrics::new(registry)))
+        let _ = ONCE
+            .set(Arc::new(DBMetrics::new(registry)))
+            // this happens many times during tests
+            .tap_err(|_| warn!("DBMetrics registry overwritten"));
+        ONCE.get().unwrap()
     }
     pub fn get() -> &'static Arc<DBMetrics> {
         ONCE.get()
