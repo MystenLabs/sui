@@ -32,5 +32,6 @@ once_cell = "1.13.0"
 proc-macro2 = "1.0.47"
 quote = "1.0.23"
 rstest = "0.16.0"
+rand = "0.8.5"
 syn = { version = "1.0.104", features = ["derive"] }
 typed-store-derive = {path = "../typed-store-derive"}

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::reopen;
+use crate::{reopen, retry_transaction, retry_transaction_forever};
 use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -589,6 +589,144 @@ async fn test_transactional() {
     tx1.commit().expect("failed to commit first transaction");
     assert!(tx2.commit().is_err());
     assert_eq!(db.get(&key.to_string()).unwrap(), Some("1".to_string()));
+}
+
+#[tokio::test]
+async fn test_transaction_snapshot() {
+    let key = "key".to_string();
+    let path = temp_dir();
+    let opt = rocksdb::Options::default();
+    let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
+    let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
+
+    // transaction without set_snapshot succeeds when extraneous write occurs before transaction
+    // write.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    // write occurs after transaction is created but before first write
+    db.insert(&key, &"1".to_string()).unwrap();
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    tx1.commit().expect("failed to commit first transaction");
+    assert_eq!(db.get(&key).unwrap().unwrap(), "2".to_string());
+
+    // transaction without set_snapshot fails when extraneous write occurs after transaction
+    // write.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    db.insert(&key, &"1".to_string()).unwrap();
+    assert!(matches!(
+        tx1.commit(),
+        Err(TypedStoreError::TransactionWriteConflict)
+    ));
+    assert_eq!(db.get(&key).unwrap().unwrap(), "1".to_string());
+
+    // failed transaction with set_snapshot
+    let mut tx1 = db
+        .transaction_with_snapshot()
+        .expect("failed to initiate transaction");
+    // write occurs after transaction is created, so the conflict is detected
+    db.insert(&key, &"1".to_string()).unwrap();
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    assert!(matches!(
+        tx1.commit(),
+        Err(TypedStoreError::TransactionWriteConflict)
+    ));
+
+    let mut tx1 = db
+        .transaction_with_snapshot()
+        .expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    // no conflicting writes, should succeed this time.
+    tx1.commit().unwrap();
+
+    // when to transactions race, one will fail provided that neither commits before the other
+    // writes.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    tx2 = tx2
+        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        .unwrap();
+    // which ever tx is committed first will succeed.
+    tx1.commit().expect("failed to commit");
+    assert!(matches!(
+        tx2.commit(),
+        Err(TypedStoreError::TransactionWriteConflict)
+    ));
+
+    // IMPORTANT: a race is still possible if one tx commits before the other writes.
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+    tx1 = tx1
+        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    tx1.commit().expect("failed to commit");
+
+    tx2 = tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
+    tx2.commit().expect("failed to commit");
+}
+
+#[tokio::test]
+async fn test_retry_transaction() {
+    let key = "key".to_string();
+    let path = temp_dir();
+    let opt = rocksdb::Options::default();
+    let rocksdb = open_cf_opts_transactional(path, None, &[("cf", &opt)]).unwrap();
+    let db = DBMap::<String, String>::reopen(&rocksdb, None).expect("Failed to re-open storage");
+
+    let mut conflicts = 0;
+    retry_transaction!({
+        let mut tx1 = db.transaction().expect("failed to initiate transaction");
+        tx1 = tx1
+            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+            .unwrap();
+        if conflicts < 3 {
+            db.insert(&key, &"1".to_string()).unwrap();
+        }
+        conflicts += 1;
+        tx1.commit()
+    })
+    // succeeds after we stop causing conflicts
+    .unwrap();
+
+    retry_transaction!({
+        let mut tx1 = db.transaction().expect("failed to initiate transaction");
+        tx1 = tx1
+            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+            .unwrap();
+        db.insert(&key, &"1".to_string()).unwrap();
+        tx1.commit()
+    })
+    // fails after hitting maximum number of retries
+    .unwrap_err();
+
+    // obviously we cannot verify that this never times out, this is more just a test to make sure
+    // the macro compiles as expected.
+    tokio::time::timeout(Duration::from_secs(1), async move {
+        retry_transaction_forever!({
+            let mut tx1 = db.transaction().expect("failed to initiate transaction");
+            tx1 = tx1
+                .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+                .unwrap();
+            db.insert(&key, &"1".to_string()).unwrap();
+            tx1.commit()
+        })
+        // fails after hitting maximum number of retries
+        .unwrap_err();
+        panic!("should never finish");
+    })
+    .await
+    // must timeout
+    .unwrap_err();
 }
 
 #[tokio::test]
