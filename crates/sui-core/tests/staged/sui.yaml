@@ -551,4 +551,6 @@ TypedStoreError:
       CrossDBBatch: UNIT
     4:
       MetricsReporting: UNIT
+    5:
+      TransactionWriteConflict: UNIT
 
