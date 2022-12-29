@@ -46,8 +46,8 @@ use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
-    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
-    SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
+    ExecutionStatus, GenesisObject, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PayAllSui,
+    PaySui, SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
     VerifiedCertificate,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -1726,7 +1726,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 computation_charge: e.computation_charge,
             }),
             SingleTransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
-                objects: g.objects.iter().map(Object::id).collect(),
+                objects: g.objects.iter().map(GenesisObject::id).collect(),
             }),
         })
     }

@@ -293,6 +293,13 @@ impl Data {
             Package(_) => None,
         }
     }
+
+    pub fn id(&self) -> ObjectID {
+        match self {
+            Self::Move(v) => v.id(),
+            Self::Package(m) => m.id(),
+        }
+    }
 }
 
 #[derive(
