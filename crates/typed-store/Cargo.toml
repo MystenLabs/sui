@@ -25,6 +25,7 @@ thiserror = "1.0.37"
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing = "0.1.37"
 workspace-hack.workspace = true
+sui-macros = { path = "../sui-macros" }
 
 [dev-dependencies]
 tempfile = "3.3.0"
