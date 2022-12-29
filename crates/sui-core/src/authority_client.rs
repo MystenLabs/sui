@@ -182,6 +182,8 @@ impl AuthorityAPI for NetworkAuthorityClient {
     }
 }
 
+// This function errs on URL parsing error. This may happen
+// when a validator provides a bad URL.
 pub fn make_network_authority_client_sets_from_system_state(
     sui_system_state: &SuiSystemState,
     network_config: &Config,
