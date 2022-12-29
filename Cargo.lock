@@ -8830,10 +8830,7 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
- "msim-macros",
- "proc-macro2 1.0.49",
- "quote 1.0.23",
- "syn 1.0.107",
+ "sui-proc-macros",
  "workspace-hack",
 ]
 
@@ -8934,6 +8931,17 @@ dependencies = [
  "quote 1.0.23",
  "syn 1.0.107",
  "unescape",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-proc-macros"
+version = "0.7.0"
+dependencies = [
+ "msim-macros",
+ "proc-macro2 1.0.47",
+ "quote 1.0.23",
+ "syn 1.0.105",
  "workspace-hack",
 ]
 
