@@ -15,7 +15,7 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-addr2line = { version = "0.17", default-features = false }
+addr2line = { version = "0.19", default-features = false }
 adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 aes = { version = "0.8", default-features = false }
@@ -194,8 +194,8 @@ event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2dcf24facddfd15e83325ab714e3b6cb9cd63afe", features = ["copy_key", "secure"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2dcf24facddfd15e83325ab714e3b6cb9cd63afe", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8d07cc5a60856163829911e5aeedede35e90174a", features = ["copy_key", "secure"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8d07cc5a60856163829911e5aeedede35e90174a", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -229,7 +229,7 @@ gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 ghash = { version = "0.5", default-features = false }
-gimli = { version = "0.26", default-features = false, features = ["read", "read-core"] }
+gimli = { version = "0.27", default-features = false, features = ["read", "read-core"] }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4", features = ["log"] }
 globwalk = { version = "0.8", default-features = false }
@@ -315,8 +315,7 @@ merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
-miniz_oxide-d8f496e17d97b5cb = { package = "miniz_oxide", version = "0.5", default-features = false }
-miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
@@ -379,7 +378,7 @@ num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", feature
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
 number_prefix = { version = "0.4", features = ["std"] }
-object = { version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+object = { version = "0.30", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "kdf", "nist_algs", "pkcs1", "pkcs12", "pkcs7", "pkcs9", "registry", "x509", "x962"] }
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
@@ -648,7 +647,7 @@ zstd-sys = { version = "2", features = ["legacy", "zdict_builder"] }
 
 [build-dependencies]
 Inflector = { version = "0.11", default-features = false }
-addr2line = { version = "0.17", default-features = false }
+addr2line = { version = "0.19", default-features = false }
 adler = { version = "1", default-features = false }
 aead = { version = "0.5", default-features = false, features = ["alloc", "getrandom", "rand_core"] }
 aes = { version = "0.8", default-features = false }
@@ -858,9 +857,9 @@ event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2dcf24facddfd15e83325ab714e3b6cb9cd63afe", features = ["copy_key", "secure"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2dcf24facddfd15e83325ab714e3b6cb9cd63afe", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "2dcf24facddfd15e83325ab714e3b6cb9cd63afe", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8d07cc5a60856163829911e5aeedede35e90174a", features = ["copy_key", "secure"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8d07cc5a60856163829911e5aeedede35e90174a", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8d07cc5a60856163829911e5aeedede35e90174a", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -895,7 +894,7 @@ gethostname = { version = "0.2", default-features = false }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 ghash = { version = "0.5", default-features = false }
-gimli = { version = "0.26", default-features = false, features = ["read", "read-core"] }
+gimli = { version = "0.27", default-features = false, features = ["read", "read-core"] }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4", features = ["log"] }
 globwalk = { version = "0.8", default-features = false }
@@ -992,8 +991,7 @@ merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
-miniz_oxide-d8f496e17d97b5cb = { package = "miniz_oxide", version = "0.5", default-features = false }
-miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
@@ -1060,7 +1058,7 @@ num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
 num_enum_derive = { version = "0.5", default-features = false, features = ["proc-macro-crate", "std"] }
 number_prefix = { version = "0.4", features = ["std"] }
-object = { version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+object = { version = "0.30", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "kdf", "nist_algs", "pkcs1", "pkcs12", "pkcs7", "pkcs9", "registry", "x509", "x962"] }
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }

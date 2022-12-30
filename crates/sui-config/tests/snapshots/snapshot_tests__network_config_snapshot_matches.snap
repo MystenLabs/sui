@@ -3,10 +3,16 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: network_config
 ---
 validator_configs:
-  - protocol-key-pair: VTDx4HjVmRBqdqBWg2zN+zcFE20io3CrBchGy/iV1lqZ8l72H4AyuRRjZGCYLFzG8TTvHdrnZlfyy/7B6/yNCXN0CA32/PDcuLxLDY4K9dgOu/8rTFmfVPQtYxLfwxQnYHjBzDR+u77FGYviWFE/OGuTDQLCdJqAPiMwlV69GhA=
-    worker-key-pair: fsz863qJR38mPjuvloaZBE4vbibFPgrwQXUa+OGTTNMfKnkBqELk02I7xhzhwXF9LnaOD9ct+DQa9WYVuRbwOA==
-    account-key-pair: AJTkqEkxROnmliCMvtACWebdtW+Xm5HDKWdWCYW+YZCbZeUwqtiSP4IuiO1U/Br2sTVBQpkckD5caF+BanumitE=
-    network-key-pair: KUrb+C2JL5zKk+XaKXpgLj08mCQegCCekpnR0SLAhTC+ODDLDFddhaGYhOUoOWrDb5Dh27EywDr6A1haMSoZgA==
+  - protocol-key-pair:
+      value:
+        name: mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ
+        secret: VTDx4HjVmRBqdqBWg2zN+zcFE20io3CrBchGy/iV1lo=
+    worker-key-pair:
+      value: AB8qeQGoQuTTYjvGHOHBcX0udo4P1y34NBr1ZhW5FvA4fsz863qJR38mPjuvloaZBE4vbibFPgrwQXUa+OGTTNM=
+    account-key-pair:
+      value: AJTkqEkxROnmliCMvtACWebdtW+Xm5HDKWdWCYW+YZCbZeUwqtiSP4IuiO1U/Br2sTVBQpkckD5caF+BanumitE=
+    network-key-pair:
+      value: AL44MMsMV12FoZiE5Sg5asNvkOHbsTLAOvoDWFoxKhmAKUrb+C2JL5zKk+XaKXpgLj08mCQegCCekpnR0SLAhTA=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -55,10 +61,16 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1BhvqNz/bRVQQKZW9IGbExEbUsV0aoa6cvOV+6/i7DhH0egUDmJKdR/fa18gULxyBc+dMABMkLDHQK/9Mmzmc8wrI6LSTVPir+sobfxmj9QGAInW0rF7eZ3Tb5DTMuVKejONQ=
-    worker-key-pair: pPBKumCrkESEmAiG/7UfSMyIlAyKCQaysBb0RA9oxIjUlkEGAVZiydeHbfhB9gYL7kzDBgkDW+FtKKCCdkKJrw==
-    account-key-pair: ACxHMS0iupHOTDgHm2HYa+f/ft9OjvxBk5+C7f/APsXUezeV+HwuWFqdYT/NOM6oMWQ2IMvai7GOMn5YNPn+FWA=
-    network-key-pair: 25MXKYkbDqXWtIZXl27gbhE44t3hp1Qi3HFWHLfWWc02Qa/dLNgUCurzqAJUBNJX3l41lsEQSc4BU7HWKBcBww==
+  - protocol-key-pair:
+      value:
+        name: jc/20VUECmVvSBmxMRG1LFdGqGunLzlfuv4uw4R9HoFA5iSnUf32tfIFC8cgXPnTAATJCwx0Cv/TJs5nPMKyOi0k1T4q/rKG38Zo/UBgCJ1tKxe3md02+Q0zLlSnozjU
+        secret: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
+    worker-key-pair:
+      value: ANSWQQYBVmLJ14dt+EH2BgvuTMMGCQNb4W0ooIJ2QomvpPBKumCrkESEmAiG/7UfSMyIlAyKCQaysBb0RA9oxIg=
+    account-key-pair:
+      value: ACxHMS0iupHOTDgHm2HYa+f/ft9OjvxBk5+C7f/APsXUezeV+HwuWFqdYT/NOM6oMWQ2IMvai7GOMn5YNPn+FWA=
+    network-key-pair:
+      value: ADZBr90s2BQK6vOoAlQE0lfeXjWWwRBJzgFTsdYoFwHD25MXKYkbDqXWtIZXl27gbhE44t3hp1Qi3HFWHLfWWc0=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -107,10 +119,16 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+Kt3u+U2JjIjkDb3v+RxfEF+c8sdH+28rw37APWyR7bLhpXjPVEvosJMeJfJD1ZsMMNmKFs47odbPHX9QQmmS6wrbMTSwVb6BQNLbXyX7ANg/jkIivwH9ask6H/TXnaWPI=
-    worker-key-pair: 1Dh27FOw52h9QAd9IijyRq42PtJGYtmCZ2RvXYPDEXq1VgdNLiQC+WWvRST+Sy8o3vw/3KhkD6LkKgSI3cA21A==
-    account-key-pair: ANoED1MVNxaUbvcp8K7QXQLx/JQAamix308cQdCKwKu2YYJojLU7C+8u2vatwd7CUkkEgsvOGsRqjhCYXQPZRPM=
-    network-key-pair: oUiBY+hNlv3/NS7/U/zAW3EMNi45uTXGv9BrFnYfjyL3DKDUcV6AMIaYPpJDgVBG5KinqsQjwmcuxI+1bSHPXg==
+  - protocol-key-pair:
+      value:
+        name: rd7vlNiYyI5A297/kcXxBfnPLHR/tvK8N+wD1ske2y4aV4z1RL6LCTHiXyQ9WbDDDZihbOO6HWzx1/UEJpkusK2zE0sFW+gUDS218l+wDYP45CIr8B/WrJOh/0152ljy
+        secret: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
+    worker-key-pair:
+      value: ALVWB00uJAL5Za9FJP5LLyje/D/cqGQPouQqBIjdwDbU1Dh27FOw52h9QAd9IijyRq42PtJGYtmCZ2RvXYPDEXo=
+    account-key-pair:
+      value: ANoED1MVNxaUbvcp8K7QXQLx/JQAamix308cQdCKwKu2YYJojLU7C+8u2vatwd7CUkkEgsvOGsRqjhCYXQPZRPM=
+    network-key-pair:
+      value: APcMoNRxXoAwhpg+kkOBUEbkqKeqxCPCZy7Ej7VtIc9eoUiBY+hNlv3/NS7/U/zAW3EMNi45uTXGv9BrFnYfjyI=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -159,10 +177,16 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2uz/V77XIckA6StE/EZlRNgbSM1SoRSSa6hV1ZMI/88FcbJ5lK3LXQOjKy5PLzAaGsOwMwMHHYL+0K0NlGfxagFS3ZTOpep8jmH0JfvlrHyUmuyBz+hCncZlBdyNH7ydPQ=
-    worker-key-pair: EHX7HidEWjJgbesq5yxWacBkHUx/wALB90Mm8SiaEZbxwBkF+0PK7tSN8SKVyFzxOP/rMtxd+udylT/0hBBhPA==
-    account-key-pair: AEgi5sKIaNYxb+8Vr0MKLUWpdrRfjLPiCeYy4hQTtSBHkXLa5CsQhIUzlhFBEFTP1eKxJ6lBGRYzNkOjrDamlU8=
-    network-key-pair: jQ5isfeCs5cO8kQfRoNiE6Ex250niEtXCH7U4Y3Khd6oQCQy7u0KEQ5fzh2GiqaHnTSuv58CtSk5zSJ3oCPwCA==
+  - protocol-key-pair:
+      value:
+        name: s/1e+1yHJAOkrRPxGZUTYG0jNUqEUkmuoVdWTCP/PBXGyeZSty10DoysuTy8wGhrDsDMDBx2C/tCtDZRn8WoBUt2UzqXqfI5h9CX75ax8lJrsgc/oQp3GZQXcjR+8nT0
+        secret: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
+    worker-key-pair:
+      value: APHAGQX7Q8ru1I3xIpXIXPE4/+sy3F3653KVP/SEEGE8EHX7HidEWjJgbesq5yxWacBkHUx/wALB90Mm8SiaEZY=
+    account-key-pair:
+      value: AEgi5sKIaNYxb+8Vr0MKLUWpdrRfjLPiCeYy4hQTtSBHkXLa5CsQhIUzlhFBEFTP1eKxJ6lBGRYzNkOjrDamlU8=
+    network-key-pair:
+      value: AKhAJDLu7QoRDl/OHYaKpoedNK6/nwK1KTnNInegI/AIjQ5isfeCs5cO8kQfRoNiE6Ex250niEtXCH7U4Y3Khd4=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -211,10 +235,16 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY2LKRqlcXQ8gPmO3CO3s3dl0lrqWlZovhKpzENp8u9pfBsBwUrId0LiiiqQmP5hlGIVXp7GiO2wX9ApVqo6d7/nZNYB3hOX5NaeinAfDxN4Q6VzStZNxQS3bN/CiKF3/iE=
-    worker-key-pair: UkqY1k2SrJLzldSoAqzDZp1vudV6MzAZqojam0XY2ZMLuRQO9Y+pqy4+d18HnybxccBJ0Peox1wNntUCw83jtg==
-    account-key-pair: AB86G1ccGVVMFPrc3src2g3fB3NMyEcsS5pzI+Yr6cyKJ0hDQggulPK2ZTpGNWrch+vg73OQ9lWfRXu9uN+Qo88=
-    network-key-pair: UqrQzLuBAdMMbnxVAxgiaFTXz6PaV70e0XTyeF6Fu8oK9Zu9eLjNEPIBuXXKvlrVfhuwWWfvZo8RITUz+oGi4A==
+  - protocol-key-pair:
+      value:
+        name: iykapXF0PID5jtwjt7N3ZdJa6lpWaL4SqcxDafLvaXwbAcFKyHdC4ooqkJj+YZRiFV6exojtsF/QKVaqOne/52TWAd4Tl+TWnopwHw8TeEOlc0rWTcUEt2zfwoihd/4h
+        secret: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
+    worker-key-pair:
+      value: AAu5FA71j6mrLj53XwefJvFxwEnQ96jHXA2e1QLDzeO2UkqY1k2SrJLzldSoAqzDZp1vudV6MzAZqojam0XY2ZM=
+    account-key-pair:
+      value: AB86G1ccGVVMFPrc3src2g3fB3NMyEcsS5pzI+Yr6cyKJ0hDQggulPK2ZTpGNWrch+vg73OQ9lWfRXu9uN+Qo88=
+    network-key-pair:
+      value: AAr1m714uM0Q8gG5dcq+WtV+G7BZZ+9mjxEhNTP6gaLgUqrQzLuBAdMMbnxVAxgiaFTXz6PaV70e0XTyeF6Fu8o=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -263,10 +293,16 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnWEMb3Jb7ZvUxW7p0L15A9+Ny8jfF4iDYHfNhg7BiZTXnhH7PRqjjRKWiGtteU4i5UBGlk8bfQSL3/irX6AKKlrCeq9hDdpJepQFWPVhieWLV0wwgqu0wIbxNDn2/0eHJU=
-    worker-key-pair: Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA7wMp6899Qoe0RPBXQsG+CDt54MPp/xImMAyKkV3ZKPbQ==
-    account-key-pair: AHH6sQEDMUJH0Spm5nDLrKbFAUcBHYL/VIORf2ervCbbpvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=
-    network-key-pair: tPu3gzoWoFbHbnuaUp1whWKFV7mtDVfOtTHDWWR2ZoXf5b5cvKkChqZePWeh13cAvg+1CyvrtPB1cQOBhwx4vw==
+  - protocol-key-pair:
+      value:
+        name: hDG9yW+2b1MVu6dC9eQPfjcvI3xeIg2B3zYYOwYmU154R+z0ao40SlohrbXlOIuVARpZPG30Ei9/4q1+gCipawnqvYQ3aSXqUBVj1YYnli1dMMIKrtMCG8TQ59v9HhyV
+        secret: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
+    worker-key-pair:
+      value: APAynrz31Ch7RE8FdCwb4IO3ngw+n/EiYwDIqRXdko9tHloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
+    account-key-pair:
+      value: AHH6sQEDMUJH0Spm5nDLrKbFAUcBHYL/VIORf2ervCbbpvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=
+    network-key-pair:
+      value: AN/lvly8qQKGpl49Z6HXdwC+D7ULK+u08HVxA4GHDHi/tPu3gzoWoFbHbnuaUp1whWKFV7mtDVfOtTHDWWR2ZoU=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -315,10 +351,16 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
-  - protocol-key-pair: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjuVqZ6UqSbldl5MDBHXjF3VHT99e6CgZTuSXpFCRSfw+GMYVuQEwO09WVY8511moRYTuFgfR51108NKCT8re+ppKiuqitxb4BlONYsg4CavliJXCWosawcKZDcea7D6Fe0=
-    worker-key-pair: 5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi993DP7RJ8jr9I9OXm/Mf3nxvRozBZQnRUoPY8tvhMCGA==
-    account-key-pair: AKHC3Gr1i6u+zAK1Yj1vys0hB83qha4jRCfzoHqLAo6FQ5EkvCcy5cw1JKStwSs0v/QByW0I8JXCqdnagoupCMg=
-    network-key-pair: +EEIX4hOQB79xqDr8Cp0UGNNC4sEE849/ORTGY1iwxe4WYJPZ9nNye8f+ObULC/wnR4X87tIAH4wvXsZ8OKWwQ==
+  - protocol-key-pair:
+      value:
+        name: lamelKkm5XZeTAwR14xd1R0/fXugoGU7kl6RQkUn8PhjGFbkBMDtPVlWPOddZqEWE7hYH0edddPDSgk/K3vqaSorqorcW+AZTjWLIOAmr5YiVwlqLGsHCmQ3Hmuw+hXt
+        secret: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
+    worker-key-pair:
+      value: AH3cM/tEnyOv0j05eb8x/efG9GjMFlCdFSg9jy2+EwIY5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
+    account-key-pair:
+      value: AKHC3Gr1i6u+zAK1Yj1vys0hB83qha4jRCfzoHqLAo6FQ5EkvCcy5cw1JKStwSs0v/QByW0I8JXCqdnagoupCMg=
+    network-key-pair:
+      value: ALhZgk9n2c3J7x/45tQsL/CdHhfzu0gAfjC9exnw4pbB+EEIX4hOQB79xqDr8Cp0UGNNC4sEE849/ORTGY1iwxc=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"

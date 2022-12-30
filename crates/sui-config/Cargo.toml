@@ -32,6 +32,7 @@ narwhal-crypto = { path = "../../narwhal/crypto" }
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
+sui-keys = { path = "../sui-keys" }
 workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]

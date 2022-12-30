@@ -92,7 +92,7 @@ pub fn generate_proof_of_possession<K: KeypairTraits>(
 ///
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, From)]
+#[derive(Debug, From, PartialEq, Eq)]
 pub enum SuiKeyPair {
     Ed25519(Ed25519KeyPair),
     Secp256k1(Secp256k1KeyPair),

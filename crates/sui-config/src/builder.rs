@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::default_checkpoints_per_epoch;
+use crate::node::{default_checkpoints_per_epoch, AuthorityKeyPairWithPath, KeyPairWithPath};
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
@@ -16,7 +16,6 @@ use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -309,10 +308,16 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    protocol_key_pair: Arc::new(validator.genesis_info.key_pair),
-                    worker_key_pair: Arc::new(validator.genesis_info.worker_key_pair),
-                    account_key_pair: Arc::new(validator.genesis_info.account_key_pair),
-                    network_key_pair: Arc::new(validator.genesis_info.network_key_pair),
+                    protocol_key_pair: AuthorityKeyPairWithPath::new(
+                        validator.genesis_info.key_pair,
+                    ),
+                    network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
+                        validator.genesis_info.network_key_pair,
+                    )),
+                    account_key_pair: KeyPairWithPath::new(validator.genesis_info.account_key_pair),
+                    worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
+                        validator.genesis_info.worker_key_pair,
+                    )),
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
@@ -332,7 +337,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 }
             })
             .collect();
-
         NetworkConfig {
             validator_configs,
             genesis,
