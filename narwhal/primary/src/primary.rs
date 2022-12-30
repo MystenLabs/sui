@@ -28,8 +28,8 @@ use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use dashmap::DashSet;
 use fastcrypto::{
     hash::Hash,
+    signature_service::SignatureService,
     traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
-    SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
 use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};

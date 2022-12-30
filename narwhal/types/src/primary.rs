@@ -13,8 +13,9 @@ use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
+    signature_service::SignatureService,
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    SignatureService, Verifier,
+    Verifier,
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;

@@ -4,7 +4,7 @@
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
-use fastcrypto::{hash::Hash as _, SignatureService};
+use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
