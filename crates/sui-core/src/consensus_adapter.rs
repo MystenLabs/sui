@@ -104,8 +104,8 @@ impl ConsensusAdapterMetrics {
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Box<dyn SubmitToConsensus>,
-    /// Authority state.
-    authority: Arc<AuthorityState>,
+    /// Authority pubkey.
+    authority: AuthorityName,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
@@ -114,12 +114,20 @@ pub struct ConsensusAdapter {
 
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
-    async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult;
+    async fn submit_to_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult;
 }
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Channel> {
-    async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
+    async fn submit_to_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
         let serialized =
             bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
@@ -144,19 +152,18 @@ impl ConsensusAdapter {
         let num_inflight_transactions = Default::default();
         let this = Arc::new(Self {
             consensus_client,
-            authority,
+            authority: authority.name,
             num_inflight_transactions,
             opt_metrics,
         });
         let recover = this.clone();
-        recover.submit_recovered();
+        recover.submit_recovered(&authority.epoch_store());
         this
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
-    fn submit_recovered(self: Arc<Self>) {
+    fn submit_recovered(self: Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
-        let epoch_store = self.authority.epoch_store().clone();
         // todo - get_all_pending_consensus_transactions is called twice when
         // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
         let mut recovered = epoch_store.get_all_pending_consensus_transactions();
@@ -177,13 +184,11 @@ impl ConsensusAdapter {
                 // re-introduce EndOfPublish message on restart
                 // (2) If node crashed inside ConsensusAdapter::close_epoch,
                 // after reconfig lock state was written to DB and before we persisted EndOfPublish message
-                recovered.push(ConsensusTransaction::new_end_of_publish(
-                    self.authority.name,
-                ));
+                recovered.push(ConsensusTransaction::new_end_of_publish(self.authority));
             }
         }
         for transaction in recovered {
-            self.submit_unchecked(transaction, epoch_store.clone());
+            self.submit_unchecked(transaction, epoch_store);
         }
     }
 
@@ -260,8 +265,8 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
         lock: Option<&RwLockReadGuard<ReconfigState>>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<JoinHandle<()>> {
-        let epoch_store = self.authority.epoch_store().clone();
         epoch_store.insert_pending_consensus_transactions(&transaction, lock)?;
         Ok(self.submit_unchecked(transaction, epoch_store))
     }
@@ -269,10 +274,12 @@ impl ConsensusAdapter {
     fn submit_unchecked(
         self: &Arc<Self>,
         transaction: ConsensusTransaction,
-        epoch_store: Arc<AuthorityPerEpochStore>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
-        let async_stage = self.clone().submit_and_wait(transaction, epoch_store);
+        let async_stage = self
+            .clone()
+            .submit_and_wait(transaction, epoch_store.clone());
         // Number of this tasks is limited by `sequencing_certificate_inflight` limit
         let join_handle = spawn_monitored_task!(async_stage);
         join_handle
@@ -311,9 +318,7 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction.key())
             .boxed();
         let await_submit = {
-            let epoch_store = self.authority.epoch_store();
-            Self::await_submit_delay(epoch_store.committee(), &self.authority.name, &transaction)
-                .boxed()
+            Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction).boxed()
         };
         // We need to wait for some delay until we submit transaction to the consensus
         // However, if transaction is received by consensus while we wait, we don't need to wait
@@ -333,7 +338,7 @@ impl ConsensusAdapter {
                 .map(|m| m.sequencing_acknowledge_latency.start_timer());
             while let Err(e) = self
                 .consensus_client
-                .submit_to_consensus(&transaction)
+                .submit_to_consensus(&transaction, epoch_store)
                 .await
             {
                 error!(
@@ -371,8 +376,9 @@ impl ConsensusAdapter {
         if send_end_of_publish {
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
-                ConsensusTransaction::new_end_of_publish(self.authority.name),
+                ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
+                epoch_store,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
@@ -387,18 +393,18 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
     /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
-    fn close_epoch(&self) -> SuiResult {
-        let epoch_store = self.authority.epoch_store();
+    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
         let send_end_of_publish = {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             let send_end_of_publish = epoch_store.pending_consensus_certificates_empty();
-            self.authority.close_user_certs(reconfig_guard);
+            epoch_store.close_user_certs(reconfig_guard);
             send_end_of_publish
         };
         if send_end_of_publish {
             if let Err(err) = self.submit(
-                ConsensusTransaction::new_end_of_publish(self.authority.name),
+                ConsensusTransaction::new_end_of_publish(self.authority),
                 None,
+                epoch_store,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
@@ -443,8 +449,13 @@ use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
-    async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
-        self.submit(transaction.clone(), None).map(|_| ())
+    async fn submit_to_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        self.submit(transaction.clone(), None, epoch_store)
+            .map(|_| ())
     }
 }
 

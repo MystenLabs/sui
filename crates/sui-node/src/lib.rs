@@ -283,7 +283,9 @@ impl SuiNode {
             .as_ref()
             .ok_or_else(|| SuiError::from("Node is not a validator"))?
             .consensus_adapter
-            .close_epoch()
+            // TODO: If this function is ever called in non-testing code, we need to make sure this
+            // function has no race with the passive reconfiguration.
+            .close_epoch(&self.state.epoch_store())
     }
 
     pub fn validator_components(&self) -> Option<Arc<ValidatorComponents>> {

@@ -363,7 +363,9 @@ impl CheckpointBuilder {
         let content_info = match new_checkpoint {
             Some((summary, contents)) => {
                 // Only create checkpoint if content is not empty
-                self.output.checkpoint_created(&summary, &contents).await?;
+                self.output
+                    .checkpoint_created(&summary, &contents, epoch_store)
+                    .await?;
 
                 self.metrics
                     .transactions_included_in_checkpoint
@@ -1092,6 +1094,7 @@ mod tests {
             &self,
             summary: &CheckpointSummary,
             contents: &CheckpointContents,
+            _epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
             self.try_send((contents.clone(), summary.clone())).unwrap();
             Ok(())

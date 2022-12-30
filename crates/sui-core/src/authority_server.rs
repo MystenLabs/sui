@@ -353,7 +353,7 @@ impl ValidatorService {
                     &state.name,
                     certificate.clone().into(),
                 );
-                consensus_adapter.submit(transaction, Some(&reconfiguration_lock))?;
+                consensus_adapter.submit(transaction, Some(&reconfiguration_lock), &epoch_store)?;
                 // Do not wait for the result, because the transaction might have already executed.
                 // Instead, check or wait for the existence of certificate effects below.
             }
