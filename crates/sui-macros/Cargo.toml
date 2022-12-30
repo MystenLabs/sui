@@ -7,5 +7,5 @@ publish = false
 edition = "2021"
 
 [dependencies]
-sui-proc-macros = { path = "./proc-macros" }
+sui-proc-macros = { path = "../sui-proc-macros" }
 workspace-hack.workspace = true

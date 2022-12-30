@@ -1591,10 +1591,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let primary_path = primary_path.as_ref();
-    let secondary_path = match &secondary_path {
-        Some(p) => Some(p.as_ref()),
-        None => None,
-    };
+    let secondary_path = secondary_path.as_ref().map(|p| p.as_ref());
     nondeterministic!({
         // Customize database options
         let mut options = db_options.unwrap_or_else(|| default_db_options().options);
