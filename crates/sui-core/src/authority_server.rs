@@ -305,7 +305,10 @@ impl ValidatorService {
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
-        if let Some(signed_effects) = state.database.get_signed_effects(&tx_digest)? {
+        let epoch_store = state.epoch_store();
+        if let Some(signed_effects) =
+            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+        {
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects,
             }));
@@ -325,7 +328,6 @@ impl ValidatorService {
         }
         // code block within reconfiguration lock
         let certificate = {
-            let epoch_store = state.epoch_store();
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
                 metrics.num_rejected_cert_in_epoch_boundary.inc();

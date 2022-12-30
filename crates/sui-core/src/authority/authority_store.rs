@@ -218,7 +218,7 @@ impl AuthorityStore {
         Ok(store)
     }
 
-    pub fn get_signed_effects(
+    pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<Option<SignedTransactionEffects>> {

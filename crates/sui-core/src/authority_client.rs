@@ -400,16 +400,15 @@ impl LocalAuthorityClient {
         // Check existing effects before verifying the cert to allow querying certs finalized
         // from previous epochs.
         let tx_digest = *certificate.digest();
-        let signed_effects = match state.database.get_signed_effects(&tx_digest) {
-            Ok(Some(effects)) => effects,
-            _ => {
-                let certificate = {
-                    let epoch_store = state.epoch_store();
-                    certificate.verify(epoch_store.committee())?
-                };
-                state.try_execute_immediately(&certificate).await?
-            }
-        };
+        let epoch_store = state.epoch_store();
+        let signed_effects =
+            match state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest) {
+                Ok(Some(effects)) => effects,
+                _ => {
+                    let certificate = { certificate.verify(epoch_store.committee())? };
+                    state.try_execute_immediately(&certificate).await?
+                }
+            };
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
