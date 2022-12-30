@@ -110,6 +110,18 @@ Private
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_elliptic_curve_native_add_ristretto_point"></a>
 
 ## Function `native_add_ristretto_point`
@@ -129,6 +141,18 @@ A native move wrapper around the addition of Ristretto points. Returns self + ot
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="elliptic_curve.md#0x2_elliptic_curve_native_add_ristretto_point">native_add_ristretto_point</a>(point1: <a href="">vector</a>&lt;u8&gt;, point2: <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt;;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
 </code></pre>
 
 
@@ -160,6 +184,18 @@ A native move wrapper around the subtraction of Ristretto points. Returns self -
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_elliptic_curve_native_scalar_from_u64"></a>
 
 ## Function `native_scalar_from_u64`
@@ -185,6 +221,18 @@ A native move wrapper for the creation of Scalars on Curve25519.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_elliptic_curve_native_scalar_from_bytes"></a>
 
 ## Function `native_scalar_from_bytes`
@@ -204,6 +252,18 @@ A native move wrapper for the creation of Scalars on Curve25519.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="elliptic_curve.md#0x2_elliptic_curve_native_scalar_from_bytes">native_scalar_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt;;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
 </code></pre>
 
 
