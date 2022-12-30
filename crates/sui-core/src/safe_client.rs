@@ -198,7 +198,10 @@ impl<C> SafeClient<C> {
             signed_effects.auth_sig().authority == self.address,
             SuiError::ByzantineAuthoritySuspicion {
                 authority: self.address,
-                reason: "Unexpected validator address in the signed effects signature".to_string()
+                reason: format!(
+                    "Unexpected validator address in the signed effects signature: {:?}",
+                    signed_effects.auth_sig().authority
+                ),
             }
         );
         // Checks it concerns the right tx
