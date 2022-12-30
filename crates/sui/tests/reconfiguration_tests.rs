@@ -95,8 +95,8 @@ async fn advance_epoch_tx_test_impl(
         .collect::<anyhow::Result<Vec<_>>>()
         .unwrap();
     for (state, cert) in states.iter().zip(results) {
-        let results = state.try_execute_for_test(&cert).await.unwrap();
-        assert!(results.signed_effects.unwrap().status.is_ok());
+        let signed_effects = state.try_execute_for_test(&cert).await.unwrap();
+        assert!(signed_effects.status.is_ok());
     }
 }
 

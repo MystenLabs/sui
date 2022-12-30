@@ -218,6 +218,16 @@ impl AuthorityStore {
         Ok(store)
     }
 
+    pub fn get_signed_effects(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<SignedTransactionEffects>> {
+        Ok(self
+            .perpetual_tables
+            .executed_effects
+            .get(transaction_digest)?)
+    }
+
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
     pub fn get_effects(
         &self,
@@ -1396,24 +1406,6 @@ impl AuthorityStore {
             signed_tx.epoch() == cur_epoch
         } else {
             false
-        })
-    }
-
-    pub fn get_signed_transaction_info(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.get_transaction(transaction_digest)?,
-            certified_transaction: self
-                .perpetual_tables
-                .certificates
-                .get(transaction_digest)?
-                .map(|c| c.into()),
-            signed_effects: self
-                .perpetual_tables
-                .executed_effects
-                .get(transaction_digest)?,
         })
     }
 }

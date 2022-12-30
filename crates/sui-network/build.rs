@@ -36,7 +36,7 @@ fn main() -> Result<()> {
                 .name("handle_certificate")
                 .route_name("CertifiedTransaction")
                 .input_type("sui_types::messages::CertifiedTransaction")
-                .output_type("sui_types::messages::TransactionInfoResponse")
+                .output_type("sui_types::messages::HandleCertificateResponse")
                 .codec_path(codec_path)
                 .build(),
         )
