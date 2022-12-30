@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { it, describe, expect } from 'vitest';
 import { TypeTagSerializer } from '../../../../src/signers/txn-data-serializers/type-tag-serializer';
 
