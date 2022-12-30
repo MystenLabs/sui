@@ -21,7 +21,6 @@ use narwhal_node::worker_node::WorkerNode;
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
-    Node,
 };
 use prometheus::Registry;
 use std::sync::Arc;
@@ -241,8 +240,7 @@ async fn run(
     let store = NodeStorage::reopen(store_path);
 
     // The channel returning the result for each transaction's execution.
-    let (_tx_transaction_confirmation, _rx_transaction_confirmation) =
-        channel(Node::CHANNEL_CAPACITY);
+    let (_tx_transaction_confirmation, _rx_transaction_confirmation) = channel(100);
 
     let registry_service = RegistryService::new(Registry::new());
 

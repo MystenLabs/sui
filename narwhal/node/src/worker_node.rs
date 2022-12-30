@@ -24,8 +24,8 @@ pub struct WorkerNodeInner {
     parameters: Parameters,
     // A prometheus RegistryService to use for the metrics
     registry_service: RegistryService,
-    // The latest registry id used for the node
-    registry_id: Option<RegistryID>,
+    // The latest registry id & registry used for the node
+    registry: Option<(RegistryID, Registry)>,
     // The task handles created from primary
     handles: FuturesUnordered<JoinHandle<()>>,
     // The shutdown signal channel
@@ -133,18 +133,19 @@ impl WorkerNodeInner {
     // be removed. If None is passed, then the registry_id is updated to None and any old
     // registry is removed from the RegistryService.
     fn swap_registry(&mut self, registry: Option<Registry>) {
-        if let Some(registry_id) = self.registry_id {
-            self.registry_service.remove(registry_id);
+        if let Some((registry_id, _registry)) = self.registry.as_ref() {
+            self.registry_service.remove(*registry_id);
         }
 
         if let Some(registry) = registry {
-            self.registry_id = Some(self.registry_service.add(registry));
+            self.registry = Some((self.registry_service.add(registry.clone()), registry));
         } else {
-            self.registry_id = None
+            self.registry = None
         }
     }
 }
 
+#[derive(Clone)]
 pub struct WorkerNode {
     internal: Arc<RwLock<WorkerNodeInner>>,
 }
@@ -159,7 +160,7 @@ impl WorkerNode {
             id,
             parameters,
             registry_service,
-            registry_id: None,
+            registry: None,
             handles: FuturesUnordered::new(),
             tx_shutdown: None,
         };

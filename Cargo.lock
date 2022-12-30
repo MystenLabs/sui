@@ -5410,6 +5410,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "multiaddr",
+ "mysten-metrics",
  "mysten-network",
  "narwhal-config",
  "narwhal-crypto",
