@@ -7,7 +7,7 @@ const VECTOR_REGEX = /^vector<(.+)>$/;
 const STRUCT_REGEX = /^([^:]+)::([^:]+)::([^<]+)(<(.+)>)?/;
 
 export class TypeTagSerializer {
-  parseFromStr(str: string): TypeTag {
+  static parseFromStr(str: string): TypeTag {
     if (str === 'address') {
       return { address: null };
     } else if (str === 'bool') {
@@ -29,7 +29,7 @@ export class TypeTagSerializer {
     }
     const vectorMatch = str.match(VECTOR_REGEX);
     if (vectorMatch) {
-      return { vector: this.parseFromStr(vectorMatch[1]) };
+      return { vector: TypeTagSerializer.parseFromStr(vectorMatch[1]) };
     }
 
     const structMatch = str.match(STRUCT_REGEX);
@@ -42,7 +42,7 @@ export class TypeTagSerializer {
           typeParams:
             structMatch[5] === undefined
               ? []
-              : this.parseStructTypeArgs(structMatch[5]),
+              : TypeTagSerializer.parseStructTypeArgs(structMatch[5]),
         },
       };
     }
@@ -52,7 +52,7 @@ export class TypeTagSerializer {
     );
   }
 
-  parseStructTypeArgs(str: string): TypeTag[] {
+  static parseStructTypeArgs(str: string): TypeTag[] {
     // split `str` by all `,` outside angle brackets
     const tok: Array<string> = [];
     let word = '';
@@ -75,10 +75,10 @@ export class TypeTagSerializer {
 
     tok.push(word.trim());
 
-    return tok.map((tok) => this.parseFromStr(tok));
+    return tok.map(TypeTagSerializer.parseFromStr);
   }
 
-  tagToString(tag: TypeTag): string {
+  static tagToString(tag: TypeTag): string {
     if ('bool' in tag) {
       return 'bool';
     }
@@ -107,12 +107,12 @@ export class TypeTagSerializer {
       return 'signer';
     }
     if ('vector' in tag) {
-      return `vector<${this.tagToString(tag.vector)}>`;
+      return `vector<${TypeTagSerializer.tagToString(tag.vector)}>`;
     }
     if ('struct' in tag) {
       const struct = tag.struct;
       const typeParams = struct.typeParams
-        .map((tag) => this.tagToString(tag))
+        .map(TypeTagSerializer.tagToString)
         .join(', ');
       return `${struct.address}::${struct.module}::${struct.name}${
         typeParams ? `<${typeParams}>` : ''

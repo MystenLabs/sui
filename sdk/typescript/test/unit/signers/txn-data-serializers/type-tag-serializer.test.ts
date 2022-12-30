@@ -8,7 +8,7 @@ describe('parseFromStr', () => {
   it('parses nested struct type from a string', () => {
     const typeStr =
       '0x2::balance::Supply<0x72de5feb63c0ab6ed1cda7e5b367f3d0a999add7::amm::LP<0x2::sui::SUI, 0xfee024a3c0c03ada5cdbda7d0e8b68802e6dec80::example_coin::EXAMPLE_COIN>>';
-    const act = new TypeTagSerializer().parseFromStr(typeStr);
+    const act = TypeTagSerializer.parseFromStr(typeStr);
     const exp = {
       struct: {
         address: '0x2',
@@ -48,7 +48,7 @@ describe('parseFromStr', () => {
 
   it('parses non parametrized struct type from a string', () => {
     const typeStr = '0x72de5feb63c0ab6ed1cda7e5b367f3d0a999add7::foo::FOO';
-    const act = new TypeTagSerializer().parseFromStr(typeStr);
+    const act = TypeTagSerializer.parseFromStr(typeStr);
     const exp = {
       struct: {
         address: '0x72de5feb63c0ab6ed1cda7e5b367f3d0a999add7',
@@ -97,7 +97,7 @@ describe('tagToString', () => {
         ],
       },
     };
-    const act = new TypeTagSerializer().tagToString(type);
+    const act = TypeTagSerializer.tagToString(type);
     const exp =
       '0x2::balance::Supply<0x72de5feb63c0ab6ed1cda7e5b367f3d0a999add7::amm::LP<0x2::sui::SUI, 0xfee024a3c0c03ada5cdbda7d0e8b68802e6dec80::example_coin::EXAMPLE_COIN>>';
     expect(act).toEqual(exp);
