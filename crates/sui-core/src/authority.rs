@@ -2053,9 +2053,27 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        let mut info = self
-            .database
-            .get_signed_transaction_info(transaction_digest)?;
+        Ok(VerifiedTransactionInfoResponse {
+            signed_transaction: self.database.get_transaction(transaction_digest)?,
+            certified_transaction: self
+                .database
+                .get_certified_transaction(transaction_digest)?,
+            // TODO: Replace the call to self.epoch() with a epoch store passed from caller to avoid
+            // unexpected change to the epoch id during reconfiguration.
+            signed_effects: self
+                .get_signed_effects_and_maybe_resign(self.epoch(), transaction_digest)?,
+        })
+    }
+
+    /// Get the signed effects of the given transaction. If the effects was signed in a previous
+    /// epoch, re-sign it so that the caller is able to form a cert of the effects in the current
+    /// epoch.
+    fn get_signed_effects_and_maybe_resign(
+        &self,
+        cur_epoch: EpochId,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<SignedTransactionEffects>> {
+        let effects = self.database.get_signed_effects(transaction_digest)?;
         // If the transaction was executed in previous epochs, the validator will
         // re-sign the effects with new current epoch so that a client is always able to
         // obtain an effects certificate at the current epoch.
@@ -2084,9 +2102,8 @@ impl AuthorityState {
         // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
         // the authority's signature, as well as to identify in which epoch the transaction was
         // executed.
-        if let Some(effects) = info.signed_effects.take() {
-            let cur_epoch = self.epoch();
-            let new_effects = if effects.epoch() < cur_epoch {
+        Ok(effects.map(|effects| {
+            if effects.epoch() < cur_epoch {
                 debug!(
                     effects_epoch=?effects.epoch(),
                     ?cur_epoch,
@@ -2100,10 +2117,8 @@ impl AuthorityState {
                 )
             } else {
                 effects
-            };
-            info.signed_effects = Some(new_effects);
-        }
-        Ok(info)
+            }
+        }))
     }
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
