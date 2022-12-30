@@ -42,6 +42,7 @@ pub struct ConfigBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
+    checkpoints_per_epoch: Option<u64>,
 }
 
 impl ConfigBuilder {
@@ -60,6 +61,7 @@ impl ConfigBuilder {
             } else {
                 ValidatorIpSelection::Localhost
             },
+            checkpoints_per_epoch: default_checkpoints_per_epoch(),
         }
     }
 }
@@ -95,6 +97,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
+        self.checkpoints_per_epoch = Some(ckpts);
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -104,6 +111,7 @@ impl<R> ConfigBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
+            checkpoints_per_epoch: self.checkpoints_per_epoch,
         }
     }
 }
@@ -315,7 +323,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_checkpoint: false,
-                    checkpoints_per_epoch: default_checkpoints_per_epoch(),
+                    checkpoints_per_epoch: self.checkpoints_per_epoch,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,

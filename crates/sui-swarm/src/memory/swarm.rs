@@ -27,6 +27,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
+    checkpoints_per_epoch: Option<u64>,
 }
 
 impl SwarmBuilder {
@@ -40,6 +41,7 @@ impl SwarmBuilder {
             fullnode_count: 0,
             fullnode_rpc_addr: None,
             with_event_store: false,
+            checkpoints_per_epoch: None,
         }
     }
 }
@@ -54,6 +56,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
+            checkpoints_per_epoch: None,
         }
     }
 
@@ -94,6 +97,11 @@ impl<R> SwarmBuilder<R> {
         self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
         self
     }
+
+    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
+        self.checkpoints_per_epoch = Some(ckpts);
+        self
+    }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
@@ -109,6 +117,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         if let Some(initial_accounts_config) = self.initial_accounts_config {
             config_builder = config_builder.initial_accounts_config(initial_accounts_config);
+        }
+
+        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
+            config_builder = config_builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
         }
 
         let network_config = config_builder

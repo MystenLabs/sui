@@ -39,7 +39,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -415,9 +415,12 @@ impl CheckpointBuilder {
             )
             .await?;
         }
-        if effects.is_empty() {
-            return Ok(None);
-        }
+
+        // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
+        // modest load. Even if they do happen, it is still useful as it allows fullnodes to
+        // distinguish between "no transactions have happened" and "i am not receiving new
+        // checkpoints".
+
         let contents = CheckpointContents::new_with_causally_ordered_transactions(
             effects.iter().map(TransactionEffects::execution_digests),
         );
@@ -830,7 +833,7 @@ impl CheckpointServiceNotify for CheckpointService {
                 return Ok(());
             }
         }
-        info!(
+        debug!(
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
             Hex::encode(info.summary.summary.digest()),
