@@ -58,6 +58,7 @@ let leftovers = bcs::into_remainder_bytes(prepared);
 -  [Function `peel_option_u8`](#0x2_bcs_peel_option_u8)
 -  [Function `peel_option_u64`](#0x2_bcs_peel_option_u64)
 -  [Function `peel_option_u128`](#0x2_bcs_peel_option_u128)
+-  [Module Specification](#@Module_Specification_1)
 
 
 <pre><code><b>use</b> <a href="">0x1::bcs</a>;
@@ -421,18 +422,6 @@ See more here: https://en.wikipedia.org/wiki/LEB128
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_bcs_peel_vec_address"></a>
 
 ## Function `peel_vec_address`
@@ -757,3 +746,12 @@ Peel <code>Option&lt;u128&gt;</code> from serialized bytes.
 
 
 </details>
+
+<a name="@Module_Specification_1"></a>
+
+## Module Specification
+
+
+
+<pre><code><b>pragma</b> verify = <b>false</b>;
+</code></pre>

@@ -39,6 +39,18 @@ A native move wrapper around the HMAC-SHA3-256. Returns the digest.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_hmac_hmac_sha3_256"></a>
 
 ## Function `hmac_sha3_256`
