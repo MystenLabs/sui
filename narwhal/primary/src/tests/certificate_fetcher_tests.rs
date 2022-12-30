@@ -9,7 +9,7 @@ use anemo::async_trait;
 use anyhow::Result;
 use config::{Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
-use fastcrypto::{hash::Hash, traits::KeyPair, SignatureService};
+use fastcrypto::{hash::Hash, signature_service::SignatureService, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
