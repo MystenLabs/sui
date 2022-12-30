@@ -212,13 +212,21 @@ impl AuthorityStore {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
-        self.perpetual_tables
-            .executed_effects
-            .get(transaction_digest)?
-            .map(|data| data.into_data())
+        self.get_effects_if_exists(transaction_digest)?
             .ok_or(SuiError::TransactionNotFound {
                 digest: *transaction_digest,
             })
+    }
+
+    pub fn get_effects_if_exists(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEffects>> {
+        Ok(self
+            .perpetual_tables
+            .executed_effects
+            .get(transaction_digest)?
+            .map(|data| data.into_data()))
     }
 
     /// Returns true if we have an effects structure for this transaction digest
@@ -1150,7 +1158,11 @@ impl AuthorityStore {
     /// 3. All new object states are deleted.
     /// 4. owner_index table change is reverted.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
-        let effects = self.get_effects(tx_digest)?;
+        let effects = self.get_effects_if_exists(tx_digest)?;
+        let Some(effects) = effects else {
+            debug!("Not reverting {tx_digest} as it was not executed");
+            return Ok(())
+        };
 
         let mut write_batch = self.perpetual_tables.certificates.batch();
         write_batch =
