@@ -125,7 +125,7 @@ module sui::vec_map_tests {
     fun return_list_of_keys() {
         let m = vec_map::empty();
 
-        assert!(vec_map::keys(&m) == vector::empty(), 0);
+        assert!(vec_map::keys(&m) == vector[], 0);
 
         vec_map::insert(&mut m, 1, true);
         vec_map::insert(&mut m, 5, false);
