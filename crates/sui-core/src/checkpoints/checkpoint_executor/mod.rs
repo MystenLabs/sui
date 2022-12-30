@@ -378,7 +378,11 @@ impl CheckpointExecutorEventLoop {
             Ordering::Greater => return Ok(()),
             // follow case. Avoid reading from DB and used checkpoint passed
             // from StateSync
-            Ordering::Equal => return self.schedule_checkpoint(latest_synced_checkpoint, pending),
+            Ordering::Equal => {
+                if pending.len() < self.task_limit && !self.end_of_epoch {
+                    return self.schedule_checkpoint(latest_synced_checkpoint, pending);
+                }
+            }
             // Need to catch up more than 1. Read from store
             Ordering::Less => {
                 for i in next_to_exec..=latest_synced_checkpoint.sequence_number() {
