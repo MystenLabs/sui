@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! This module implements the [Rosetta Account API](https://www.rosetta-api.org/docs/AccountApi.html)
 
-use std::sync::Arc;
-
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use futures::StreamExt;
 
 use sui_sdk::SUI_COIN_TYPE;
@@ -20,9 +20,9 @@ use crate::{OnlineServerContext, SuiEnv};
 /// at which the balance lookup was performed.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountbalance)
 pub async fn balance(
-    Json(request): Json<AccountBalanceRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<AccountBalanceRequest>, Error>,
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
@@ -65,9 +65,9 @@ pub async fn balance(
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountcoins)
 pub async fn coins(
-    Json(request): Json<AccountCoinsRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let coins = context

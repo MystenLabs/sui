@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::future;
-use std::sync::Arc;
 
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
@@ -26,6 +25,8 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 use anyhow::anyhow;
+use axum::extract::State;
+use axum_extra::extract::WithRejection;
 use sui_types::intent::{Intent, IntentMessage};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
@@ -34,8 +35,8 @@ use sui_types::intent::{Intent, IntentMessage};
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionderive)
 pub async fn derive(
-    Json(request): Json<ConstructionDeriveRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionDeriveRequest>, Error>,
 ) -> Result<ConstructionDeriveResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let address: SuiAddress = request.public_key.try_into()?;
@@ -50,8 +51,8 @@ pub async fn derive(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionpayloads)
 pub async fn payloads(
-    Json(request): Json<ConstructionPayloadsRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionPayloadsRequest>, Error>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
@@ -76,8 +77,8 @@ pub async fn payloads(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructioncombine)
 pub async fn combine(
-    Json(request): Json<ConstructionCombineRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionCombineRequest>, Error>,
 ) -> Result<ConstructionCombineResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let unsigned_tx = request
@@ -114,9 +115,9 @@ pub async fn combine(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionsubmit)
 pub async fn submit(
-    Json(request): Json<ConstructionSubmitRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionSubmitRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let signed_tx: Transaction = bcs::from_bytes(&request.signed_transaction.to_vec()?)?;
@@ -144,8 +145,8 @@ pub async fn submit(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionpreprocess)
 pub async fn preprocess(
-    Json(request): Json<ConstructionPreprocessRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionPreprocessRequest>, Error>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
@@ -178,8 +179,8 @@ pub async fn preprocess(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionhash)
 pub async fn hash(
-    Json(request): Json<ConstructionHashRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionHashRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let tx_bytes = request
@@ -200,9 +201,9 @@ pub async fn hash(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionmetadata)
 pub async fn metadata(
-    Json(request): Json<ConstructionMetadataRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionMetadataRequest>, Error>,
 ) -> Result<ConstructionMetadataResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
@@ -243,8 +244,8 @@ pub async fn metadata(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/ConstructionApi.html#constructionparse)
 pub async fn parse(
-    Json(request): Json<ConstructionParseRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<ConstructionParseRequest>, Error>,
 ) -> Result<ConstructionParseResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 

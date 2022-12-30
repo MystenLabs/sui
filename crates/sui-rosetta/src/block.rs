@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use tracing::debug;
 
 use crate::types::{
@@ -17,9 +17,9 @@ use crate::{Error, OnlineServerContext, SuiEnv};
 /// Get a block by its Block Identifier.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/BlockApi.html#block)
 pub async fn block(
-    Json(request): Json<BlockRequest>,
-    Extension(state): Extension<Arc<OnlineServerContext>>,
+    State(state): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<BlockRequest>, Error>,
 ) -> Result<BlockResponse, Error> {
     debug!("Called /block endpoint: {:?}", request.block_identifier);
     env.check_network_identifier(&request.network_identifier)?;
@@ -36,9 +36,9 @@ pub async fn block(
 /// Get a transaction in a block by its Transaction Identifier.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/BlockApi.html#blocktransaction)
 pub async fn transaction(
-    Json(request): Json<BlockTransactionRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<BlockTransactionRequest>, Error>,
 ) -> Result<BlockTransactionResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;

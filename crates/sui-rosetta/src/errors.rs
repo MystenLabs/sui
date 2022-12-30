@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::extract::rejection::JsonRejection;
 use std::fmt::Debug;
 
 use axum::http::StatusCode;
@@ -72,6 +73,8 @@ pub enum Error {
     EncodingError(#[from] eyre::Report),
     #[error(transparent)]
     DBError(#[from] TypedStoreError),
+    #[error(transparent)]
+    JsonExtractorRejection(#[from] JsonRejection),
 }
 
 impl Serialize for ErrorType {
