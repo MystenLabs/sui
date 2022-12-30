@@ -2637,7 +2637,7 @@
         "type": "string"
       },
       "Base64": {
-        "description": "Base64 encoding.",
+        "description": "Base64 encoding",
         "type": "string"
       },
       "CertifiedTransaction": {
