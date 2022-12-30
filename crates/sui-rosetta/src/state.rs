@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::operations::Operation;
+use crate::operations::{Operation, Operations};
 use crate::types::{
-    AccountIdentifier, Amount, Block, BlockHash, BlockHeight, BlockIdentifier, BlockResponse,
-    CoinAction, CoinChange, CoinID, CoinIdentifier, OperationStatus, OperationType, SignedValue,
+    Block, BlockHash, BlockHeight, BlockIdentifier, BlockResponse, OperationType, SignedValue,
     Transaction, TransactionIdentifier,
 };
-use crate::{Error, SUI};
+use crate::Error;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
@@ -22,9 +21,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_config::genesis::Genesis;
 use sui_sdk::SuiClient;
 use sui_storage::default_db_options;
-use sui_types::base_types::{
-    SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
-};
+use sui_types::base_types::{SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
 use sui_types::gas_coin::GasCoin;
 use sui_types::query::TransactionQuery;
 use tracing::{debug, error, info};
@@ -260,20 +257,12 @@ impl PseudoBlockProvider {
                 // update balance
                 let response = client.read_api().get_transaction(digest).await?;
 
-                let operations = Operation::from_data_and_events(
-                    &response.certificate.data,
-                    &response.effects.status,
-                    &response.effects.events,
-                )?;
+                let operations = response.try_into()?;
 
                 self.add_block_index(&block_identifier, &parent_block_identifier)?;
-                self.update_balance(index, operations).await.map_err(|e| {
-                    anyhow!(
-                        "Failed to update balance, tx: {}, effect:{}, cause : {e}",
-                        response.certificate,
-                        response.effects
-                    )
-                })?;
+                self.update_balance(index, operations)
+                    .await
+                    .map_err(|e| anyhow!("Failed to update balance, cause : {e}",))?;
                 parent_block_identifier = block_identifier
             }
         } else {
@@ -303,7 +292,7 @@ impl PseudoBlockProvider {
     async fn update_balance(
         &self,
         block_height: u64,
-        ops: Vec<Operation>,
+        ops: Operations,
     ) -> Result<(), anyhow::Error> {
         let balance_changes = extract_balance_changes_from_ops(ops)?;
         for (addr, value) in balance_changes {
@@ -351,11 +340,7 @@ impl PseudoBlockProvider {
             .await?;
 
         let digest = tx.certificate.transaction_digest;
-        let operations = Operation::from_data_and_events(
-            &tx.certificate.data,
-            &tx.effects.status,
-            &tx.effects.events,
-        )?;
+        let operations = tx.try_into()?;
 
         let transaction = Transaction {
             transaction_identifier: TransactionIdentifier { hash: digest },
@@ -384,7 +369,7 @@ pub struct HistoricBalance {
 }
 
 fn extract_balance_changes_from_ops(
-    ops: Vec<Operation>,
+    ops: Operations,
 ) -> Result<BTreeMap<SuiAddress, SignedValue>, anyhow::Error> {
     let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
     for op in ops {
@@ -395,10 +380,12 @@ fn extract_balance_changes_from_ops(
             | OperationType::PaySui => {
                 let addr = op
                     .account
+                    .clone()
                     .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?
                     .address;
                 let amount = op
                     .amount
+                    .clone()
                     .ok_or_else(|| anyhow!("Amount cannot be null for {:?}", op.type_))?;
                 changes.entry(addr).or_default().add(&amount.value)
             }
@@ -423,27 +410,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
                 .and_then(|coin| o.owner.get_owner_address().ok().map(|addr| (addr, coin)))
         })
         .enumerate()
-        .map(|(index, (address, coin))| Operation {
-            operation_identifier: (index as u64).into(),
-            related_operations: vec![],
-            type_: OperationType::Genesis,
-            status: Some(OperationStatus::Success),
-            account: Some(AccountIdentifier { address }),
-            amount: Some(Amount {
-                value: SignedValue::from(coin.value()),
-                currency: SUI.clone(),
-            }),
-            coin_change: Some(CoinChange {
-                coin_identifier: CoinIdentifier {
-                    identifier: CoinID {
-                        id: *coin.id(),
-                        version: SequenceNumber::new(),
-                    },
-                },
-                coin_action: CoinAction::CoinCreated,
-            }),
-            metadata: None,
-        })
+        .map(|(index, (address, coin))| Operation::genesis(index as u64, address, coin))
         .collect();
 
     let transaction = Transaction {

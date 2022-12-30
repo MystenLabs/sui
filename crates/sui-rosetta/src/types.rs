@@ -19,7 +19,7 @@ use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
 
 use crate::errors::{Error, ErrorType};
-use crate::operations::Operation;
+use crate::operations::{Operation, Operations};
 use crate::SUI;
 
 pub type BlockHeight = u64;
@@ -399,8 +399,7 @@ impl IntoResponse for ConstructionDeriveResponse {
 #[derive(Deserialize)]
 pub struct ConstructionPayloadsRequest {
     pub network_identifier: NetworkIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<ConstructionMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -605,7 +604,7 @@ pub struct ConstructionParseRequest {
 
 #[derive(Serialize)]
 pub struct ConstructionParseResponse {
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     pub account_identifier_signers: Vec<AccountIdentifier>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
@@ -706,8 +705,8 @@ pub enum OperationStatus {
     Failure,
 }
 
-impl From<&SuiExecutionStatus> for OperationStatus {
-    fn from(es: &SuiExecutionStatus) -> Self {
+impl From<SuiExecutionStatus> for OperationStatus {
+    fn from(es: SuiExecutionStatus) -> Self {
         match es {
             SuiExecutionStatus::Success => OperationStatus::Success,
             SuiExecutionStatus::Failure { .. } => OperationStatus::Failure,
@@ -757,7 +756,7 @@ pub struct Block {
 #[derive(Serialize, Clone, Debug)]
 pub struct Transaction {
     pub transaction_identifier: TransactionIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related_transactions: Vec<RelatedTransaction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

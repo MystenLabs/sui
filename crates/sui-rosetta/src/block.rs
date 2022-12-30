@@ -6,7 +6,6 @@ use std::sync::Arc;
 use axum::{Extension, Json};
 use tracing::debug;
 
-use crate::operations::Operation;
 use crate::types::{
     BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Transaction,
     TransactionIdentifier,
@@ -45,10 +44,8 @@ pub async fn transaction(
     let digest = request.transaction_identifier.hash;
     let response = context.client.read_api().get_transaction(digest).await?;
     let hash = response.certificate.transaction_digest;
-    let data = &response.certificate.data;
-    let effects = response.effects;
 
-    let operations = Operation::from_data_and_events(data, &effects.status, &effects.events)?;
+    let operations = response.try_into()?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

@@ -15,15 +15,14 @@ use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
 use crate::errors::Error;
-use crate::operations::Operation;
 use crate::types::{
-    AccountIdentifier, ConstructionCombineRequest, ConstructionCombineResponse,
-    ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
-    ConstructionMetadata, ConstructionMetadataRequest, ConstructionMetadataResponse,
-    ConstructionParseRequest, ConstructionParseResponse, ConstructionPayloadsRequest,
-    ConstructionPayloadsResponse, ConstructionPreprocessRequest, ConstructionPreprocessResponse,
-    ConstructionSubmitRequest, MetadataOptions, SignatureType, SigningPayload,
-    TransactionIdentifier, TransactionIdentifierResponse,
+    ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
+    ConstructionDeriveResponse, ConstructionHashRequest, ConstructionMetadata,
+    ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
+    ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
+    ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
+    MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
+    TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use anyhow::anyhow;
@@ -41,7 +40,7 @@ pub async fn derive(
     env.check_network_identifier(&request.network_identifier)?;
     let address: SuiAddress = request.public_key.try_into()?;
     Ok(ConstructionDeriveResponse {
-        account_identifier: AccountIdentifier { address },
+        account_identifier: address.into(),
     })
 }
 
@@ -57,7 +56,7 @@ pub async fn payloads(
     env.check_network_identifier(&request.network_identifier)?;
     let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
 
-    let data = Operation::create_data(request.operations, metadata).await?;
+    let data = request.operations.into_transaction_data(metadata)?;
     let address = data.signer();
     let intent_msg = IntentMessage::new(Intent::default(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
@@ -65,7 +64,7 @@ pub async fn payloads(
     Ok(ConstructionPayloadsResponse {
         unsigned_transaction: Hex::from_bytes(&intent_msg_bytes),
         payloads: vec![SigningPayload {
-            account_identifier: AccountIdentifier { address },
+            account_identifier: address.into(),
             hex_bytes: Hex::encode(bcs::to_bytes(&intent_msg)?),
             signature_type: Some(SignatureType::Ed25519),
         }],
@@ -171,7 +170,7 @@ pub async fn preprocess(
 
     Ok(ConstructionPreprocessResponse {
         options: Some(MetadataOptions { sender, amount }),
-        required_public_keys: vec![AccountIdentifier { address: sender }],
+        required_public_keys: vec![sender.into()],
     })
 }
 
@@ -263,14 +262,11 @@ pub async fn parse(
         intent.value
     };
     let account_identifier_signers = if request.signed {
-        vec![AccountIdentifier {
-            address: data.signer(),
-        }]
+        vec![data.signer().into()]
     } else {
         vec![]
     };
-    let operations = Operation::from_data(&data.try_into()?)?;
-
+    let operations = data.try_into()?;
     Ok(ConstructionParseResponse {
         operations,
         account_identifier_signers,
