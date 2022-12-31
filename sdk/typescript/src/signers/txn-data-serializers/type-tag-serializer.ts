@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TypeTag } from '../../types';
+import { normalizeSuiAddress, TypeTag } from '../../types';
 
 const VECTOR_REGEX = /^vector<(.+)>$/;
 const STRUCT_REGEX = /^([^:]+)::([^:]+)::([^<]+)(<(.+)>)?/;
 
 export class TypeTagSerializer {
-  static parseFromStr(str: string): TypeTag {
+  static parseFromStr(str: string, normalizeAddress = false): TypeTag {
     if (str === 'address') {
       return { address: null };
     } else if (str === 'bool') {
@@ -29,20 +29,31 @@ export class TypeTagSerializer {
     }
     const vectorMatch = str.match(VECTOR_REGEX);
     if (vectorMatch) {
-      return { vector: TypeTagSerializer.parseFromStr(vectorMatch[1]) };
+      return {
+        vector: TypeTagSerializer.parseFromStr(
+          vectorMatch[1],
+          normalizeAddress
+        ),
+      };
     }
 
     const structMatch = str.match(STRUCT_REGEX);
     if (structMatch) {
+      const address = normalizeAddress
+        ? normalizeSuiAddress(structMatch[1])
+        : structMatch[1];
       return {
         struct: {
-          address: structMatch[1],
+          address,
           module: structMatch[2],
           name: structMatch[3],
           typeParams:
             structMatch[5] === undefined
               ? []
-              : TypeTagSerializer.parseStructTypeArgs(structMatch[5]),
+              : TypeTagSerializer.parseStructTypeArgs(
+                  structMatch[5],
+                  normalizeAddress
+                ),
         },
       };
     }
@@ -52,7 +63,7 @@ export class TypeTagSerializer {
     );
   }
 
-  static parseStructTypeArgs(str: string): TypeTag[] {
+  static parseStructTypeArgs(str: string, normalizeAddress = false): TypeTag[] {
     // split `str` by all `,` outside angle brackets
     const tok: Array<string> = [];
     let word = '';
@@ -75,7 +86,9 @@ export class TypeTagSerializer {
 
     tok.push(word.trim());
 
-    return tok.map(TypeTagSerializer.parseFromStr);
+    return tok.map((tok) =>
+      TypeTagSerializer.parseFromStr(tok, normalizeAddress)
+    );
   }
 
   static tagToString(tag: TypeTag): string {
