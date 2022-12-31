@@ -170,7 +170,10 @@ pub async fn preprocess(
         })?;
 
     Ok(ConstructionPreprocessResponse {
-        options: Some(MetadataOptions { sender, amount }),
+        options: Some(MetadataOptions {
+            sender,
+            amount: amount as u128,
+        }),
         required_public_keys: vec![sender.into()],
     })
 }

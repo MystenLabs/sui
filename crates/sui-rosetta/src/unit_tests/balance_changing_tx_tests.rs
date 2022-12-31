@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -30,7 +30,6 @@ use sui_types::messages::{
 use test_utils::network::TestClusterBuilder;
 
 use crate::state::extract_balance_changes_from_ops;
-use crate::types::SignedValue;
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -399,11 +398,11 @@ async fn test_transaction(
     let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();
 
     // get actual balance changed after transaction
-    let mut actual_balance_change = BTreeMap::new();
+    let mut actual_balance_change = HashMap::new();
     for (addr, balance) in balances {
-        let new_balance = get_balance(client, addr).await as i64;
-        let balance_changed = new_balance - balance as i64;
-        actual_balance_change.insert(addr, SignedValue::from(balance_changed));
+        let new_balance = get_balance(client, addr).await as i128;
+        let balance_changed = new_balance - balance as i128;
+        actual_balance_change.insert(addr, balance_changed);
     }
     assert_eq!(
         actual_balance_change, balances_from_ops,

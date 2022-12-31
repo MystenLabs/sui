@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::ops::Neg;
 use std::str::FromStr;
-use std::vec;
+use std::{iter, vec};
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -21,8 +20,7 @@ use sui_types::object::Owner;
 
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier,
-    ConstructionMetadata, IndexCounter, OperationIdentifier, OperationStatus, OperationType,
-    SignedValue,
+    ConstructionMetadata, OperationIdentifier, OperationStatus, OperationType,
 };
 use crate::Error;
 
@@ -35,7 +33,13 @@ pub struct Operations(Vec<Operation>);
 
 impl FromIterator<Operation> for Operations {
     fn from_iter<T: IntoIterator<Item = Operation>>(iter: T) -> Self {
-        Operations(iter.into_iter().collect())
+        Operations::new(iter.into_iter().collect())
+    }
+}
+
+impl FromIterator<Vec<Operation>> for Operations {
+    fn from_iter<T: IntoIterator<Item = Vec<Operation>>>(iter: T) -> Self {
+        iter.into_iter().flatten().collect()
     }
 }
 
@@ -48,6 +52,20 @@ impl IntoIterator for Operations {
 }
 
 impl Operations {
+    pub fn new(mut ops: Vec<Operation>) -> Self {
+        for (index, mut op) in ops.iter_mut().enumerate() {
+            op.operation_identifier = (index as u64).into()
+        }
+        Self(ops)
+    }
+
+    pub fn set_status(mut self, status: Option<OperationStatus>) -> Self {
+        for op in &mut self.0 {
+            op.status = status
+        }
+        self
+    }
+
     /// Parse operation input from rosetta to Sui transaction
     pub fn into_transaction_data(
         self,
@@ -85,7 +103,7 @@ impl Operations {
                     } else {
                         recipients.push(account.address);
                         let amount = amount.value.abs();
-                        if amount > u64::MAX as u128 {
+                        if amount > u64::MAX as i128 {
                             return Err(Error::InvalidInput(
                                 "Input amount exceed u64::MAX".to_string(),
                             ));
@@ -113,9 +131,8 @@ impl Operations {
     fn from_transaction(
         tx: &SuiTransactionKind,
         sender: SuiAddress,
-        counter: &mut IndexCounter,
         status: Option<OperationStatus>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Vec<Operation>, Error> {
         let operations = if let SuiTransactionKind::PaySui(tx) = tx {
             let recipients = tx.recipients.iter().zip(&tx.amounts);
             let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
@@ -126,17 +143,10 @@ impl Operations {
 
             let mut pay_operations = aggregated_recipients
                 .into_iter()
-                .map(|(recipient, amount)| {
-                    Operation::pay_sui(counter.next_idx(), status, recipient, amount.into())
-                })
+                .map(|(recipient, amount)| Operation::pay_sui(status, recipient, amount.into()))
                 .collect::<Vec<_>>();
             let total_paid = tx.amounts.iter().sum::<u64>();
-            pay_operations.push(Operation::pay_sui(
-                counter.next_idx(),
-                status,
-                sender,
-                SignedValue::neg(total_paid as u128),
-            ));
+            pay_operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
             pay_operations
         } else {
             let (type_, metadata) = match tx {
@@ -149,79 +159,48 @@ impl Operations {
                 SuiTransactionKind::Pay(tx) => (OperationType::Pay, json!(tx)),
                 SuiTransactionKind::PayAllSui(tx) => (OperationType::PayAllSui, json!(tx)),
                 SuiTransactionKind::ChangeEpoch(tx) => (OperationType::EpochChange, json!(tx)),
+                SuiTransactionKind::Genesis(tx) => (OperationType::Genesis, json!(tx)),
                 SuiTransactionKind::PaySui(_) => unreachable!(),
             };
-            vec![Operation::generic_op(
-                counter.next_idx(),
-                type_,
-                status,
-                sender,
-                metadata,
-            )]
+            vec![Operation::generic_op(type_, status, sender, metadata)]
         };
-        Ok(Operations(operations))
+        Ok(operations)
     }
 
-    fn get_coin_operation_from_events(
+    fn get_balance_operation_from_events(
         events: &[SuiEvent],
         status: Option<OperationStatus>,
-        balance_to_subtract: HashMap<SuiAddress, i128>,
-        counter: &mut IndexCounter,
-    ) -> Vec<Operation> {
-        // Aggregate balance changes by address, rosetta don't care about coins.
-        let mut balance_change = balance_to_subtract;
-        let mut gas: HashMap<SuiAddress, i128> = HashMap::new();
-        for (type_, address, amount) in events.iter().flat_map(Self::get_balance_change_from_event)
-        {
-            if type_ == OperationType::SuiBalanceChange {
-                let sum = balance_change.entry(address).or_default();
-                *sum += amount;
-            } else if type_ == OperationType::GasSpent {
-                let sum = gas.entry(address).or_default();
-                *sum += amount;
-            }
-        }
+        balances: HashMap<SuiAddress, i128>,
+    ) -> impl Iterator<Item = Operation> {
+        let (balances, gas) = events
+            .iter()
+            .flat_map(Self::get_balance_change_from_event)
+            .fold(
+                (balances, HashMap::<SuiAddress, i128>::new()),
+                |(mut balances, mut gas), (type_, address, amount)| {
+                    if type_ == BalanceChangeType::Gas {
+                        *gas.entry(address).or_default() += amount;
+                    } else {
+                        *balances.entry(address).or_default() += amount;
+                    }
+                    (balances, gas)
+                },
+            );
 
-        let mut ops = balance_change
+        let balance_change = balances
             .into_iter()
-            .filter_map(|(addr, amount)| {
-                if amount != 0 {
-                    Some(Operation {
-                        operation_identifier: counter.next_idx().into(),
-                        related_operations: vec![],
-                        type_: OperationType::SuiBalanceChange,
-                        status,
-                        account: Some(addr.into()),
-                        amount: Some(Amount::new(amount.into())),
-                        coin_change: None,
-                        metadata: None,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+            .filter(|(_, amount)| *amount != 0)
+            .map(move |(addr, amount)| Operation::balance_change(status, addr, amount));
+        let gas = gas
+            .into_iter()
+            .map(|(addr, amount)| Operation::gas(addr, amount));
 
-        ops.extend(
-            gas.into_iter()
-                .map(|(addr, amount)| Operation {
-                    operation_identifier: counter.next_idx().into(),
-                    related_operations: vec![],
-                    type_: OperationType::GasSpent,
-                    status: Some(OperationStatus::Success),
-                    account: Some(addr.into()),
-                    amount: Some(Amount::new(amount.into())),
-                    coin_change: None,
-                    metadata: None,
-                })
-                .collect::<Vec<_>>(),
-        );
-        ops
+        balance_change.chain(gas)
     }
 
     fn get_balance_change_from_event(
         event: &SuiEvent,
-    ) -> Option<(OperationType, SuiAddress, i128)> {
+    ) -> Option<(BalanceChangeType, SuiAddress, i128)> {
         if let SuiEvent::CoinBalanceChange {
             owner: Owner::AddressOwner(owner),
             coin_type,
@@ -232,13 +211,7 @@ impl Operations {
         {
             // We only interested in SUI coins and account addresses
             if coin_type == &GAS::type_().to_string() {
-                let type_ = if change_type == &BalanceChangeType::Gas {
-                    // We always charge gas
-                    OperationType::GasSpent
-                } else {
-                    OperationType::SuiBalanceChange
-                };
-                return Some((type_, *owner, *amount));
+                return Some((*change_type, *owner, *amount));
             }
         }
         None
@@ -250,65 +223,53 @@ impl TryFrom<SuiTransactionData> for Operations {
 
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
         let sender = data.sender;
-        let mut counter = IndexCounter::default();
-        let mut ops = data
-            .transactions
-            .iter()
-            .flat_map(|tx| Self::from_transaction(tx, sender, &mut counter, None))
-            .flatten()
-            .collect::<Vec<_>>();
         let gas = Operation::gas_budget(
-            &mut counter,
             None,
             data.gas_payment.to_object_ref(),
             data.gas_budget,
             sender,
         );
-        ops.push(gas);
-        Ok(Operations(ops))
+        data.transactions
+            .iter()
+            .map(|tx| Self::from_transaction(tx, sender, None))
+            .chain(iter::once(Ok(vec![gas])))
+            .collect()
     }
 }
 
 impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let mut counter = IndexCounter::default();
         let status = Some(response.effects.status.into());
         let ops: Operations = response.certificate.data.try_into()?;
-        let mut ops = ops.0;
+        let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the PaySui operation amounts from the actual balance
         // change amount extracted from event to prevent double counting.
-        let mut pay_sui_balance_to_subtract = HashMap::new();
+        let mut pay_sui_balances = HashMap::new();
 
-        let pay_sui_ops = ops
-            .iter()
-            .filter_map(|op| match (op.type_, &op.account, &op.amount) {
-                (OperationType::PaySui, Some(acc), Some(amount)) => {
-                    let amount = if amount.value.is_negative() {
-                        // Safe to downcast, total supply of SUI is way less then i128::MAX
-                        amount.value.abs() as i128
-                    } else {
-                        (amount.value.abs() as i128).neg()
-                    };
-                    Some((acc.address, amount))
-                }
-                _ => None,
-            });
+        let pay_sui_ops =
+            ops.as_ref()
+                .iter()
+                .filter_map(|op| match (op.type_, &op.account, &op.amount) {
+                    (OperationType::PaySui, Some(acc), Some(amount)) => {
+                        Some((acc.address, -amount.value))
+                    }
+                    _ => None,
+                });
 
         for (addr, amount) in pay_sui_ops {
-            *pay_sui_balance_to_subtract.entry(addr).or_default() += amount
+            *pay_sui_balances.entry(addr).or_default() += amount
         }
 
         // Extract coin change operations from events
-        let coin_change_operations = Self::get_coin_operation_from_events(
+        let coin_change_operations = Self::get_balance_operation_from_events(
             &response.effects.events,
             status,
-            pay_sui_balance_to_subtract,
-            &mut counter,
+            pay_sui_balances,
         );
-        ops.extend(coin_change_operations);
-        Ok(Operations(ops))
+
+        Ok(ops.into_iter().chain(coin_change_operations).collect())
     }
 }
 
@@ -322,8 +283,6 @@ impl TryFrom<TransactionData> for Operations {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Operation {
     operation_identifier: OperationIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_operations: Vec<OperationIdentifier>,
     #[serde(rename = "type")]
     pub type_: OperationType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -340,15 +299,13 @@ pub struct Operation {
 
 impl Operation {
     fn generic_op(
-        index: u64,
         type_: OperationType,
         status: Option<OperationStatus>,
         sender: SuiAddress,
         metadata: Value,
     ) -> Self {
         Operation {
-            operation_identifier: index.into(),
-            related_operations: vec![],
+            operation_identifier: Default::default(),
             type_,
             status,
             account: Some(sender.into()),
@@ -361,7 +318,6 @@ impl Operation {
     pub fn genesis(index: u64, sender: SuiAddress, coin: GasCoin) -> Self {
         Operation {
             operation_identifier: index.into(),
-            related_operations: vec![],
             type_: OperationType::Genesis,
             status: Some(OperationStatus::Success),
             account: Some(sender.into()),
@@ -379,15 +335,9 @@ impl Operation {
         }
     }
 
-    fn pay_sui(
-        index: u64,
-        status: Option<OperationStatus>,
-        address: SuiAddress,
-        amount: SignedValue,
-    ) -> Self {
+    fn pay_sui(status: Option<OperationStatus>, address: SuiAddress, amount: i128) -> Self {
         Operation {
-            operation_identifier: index.into(),
-            related_operations: vec![],
+            operation_identifier: Default::default(),
             type_: OperationType::PaySui,
             status,
             account: Some(address.into()),
@@ -398,15 +348,13 @@ impl Operation {
     }
 
     fn gas_budget(
-        counter: &mut IndexCounter,
         status: Option<OperationStatus>,
         gas: ObjectRef,
         budget: u64,
         sender: SuiAddress,
     ) -> Self {
         Self {
-            operation_identifier: counter.next_idx().into(),
-            related_operations: vec![],
+            operation_identifier: Default::default(),
             type_: OperationType::GasBudget,
             status,
             account: Some(sender.into()),
@@ -418,6 +366,29 @@ impl Operation {
                 coin_action: CoinAction::CoinSpent,
             }),
             metadata: Some(json!({ "budget": budget })),
+        }
+    }
+
+    fn balance_change(status: Option<OperationStatus>, addr: SuiAddress, amount: i128) -> Self {
+        Self {
+            operation_identifier: Default::default(),
+            type_: OperationType::SuiBalanceChange,
+            status,
+            account: Some(addr.into()),
+            amount: Some(Amount::new(amount)),
+            coin_change: None,
+            metadata: None,
+        }
+    }
+    fn gas(addr: SuiAddress, amount: i128) -> Self {
+        Self {
+            operation_identifier: Default::default(),
+            type_: OperationType::Gas,
+            status: Some(OperationStatus::Success),
+            account: Some(addr.into()),
+            amount: Some(Amount::new(amount)),
+            coin_change: None,
+            metadata: None,
         }
     }
 }

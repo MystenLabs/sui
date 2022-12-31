@@ -42,7 +42,7 @@ pub async fn balance(
             .await
             .map(|balance| AccountBalanceResponse {
                 block_identifier,
-                balances: vec![Amount::new(balance.into())],
+                balances: vec![Amount::new(balance as i128)],
             })
     } else {
         let amount = context
@@ -57,7 +57,7 @@ pub async fn balance(
 
         Ok(AccountBalanceResponse {
             block_identifier: context.blocks().current_block_identifier().await?,
-            balances: vec![Amount::new(amount.into())],
+            balances: vec![Amount::new(amount as i128)],
         })
     }
 }

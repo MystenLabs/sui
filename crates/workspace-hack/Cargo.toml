@@ -56,9 +56,10 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 axum-d8f496e17d97b5cb = { package = "axum", version = "0.5" }
-axum-3b31131e45eafb45 = { package = "axum", version = "0.6", default-features = false }
+axum-3b31131e45eafb45 = { package = "axum", version = "0.6" }
 axum-core-6f8ce4dd05d13bba = { package = "axum-core", version = "0.2", default-features = false }
 axum-core-468e82937335b1c9 = { package = "axum-core", version = "0.3", default-features = false }
+axum-extra = { version = "0.4" }
 axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
@@ -503,6 +504,7 @@ serde-reflection = { version = "0.3", default-features = false }
 serde-value = { version = "0.7", default-features = false }
 serde_bytes = { version = "0.11" }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "raw_value", "unbounded_depth"] }
+serde_path_to_error = { version = "0.1", default-features = false }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["hex"] }
@@ -698,9 +700,10 @@ atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
 axum-d8f496e17d97b5cb = { package = "axum", version = "0.5" }
-axum-3b31131e45eafb45 = { package = "axum", version = "0.6", default-features = false }
+axum-3b31131e45eafb45 = { package = "axum", version = "0.6" }
 axum-core-6f8ce4dd05d13bba = { package = "axum-core", version = "0.2", default-features = false }
 axum-core-468e82937335b1c9 = { package = "axum-core", version = "0.3", default-features = false }
+axum-extra = { version = "0.4" }
 axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["tokio"] }
 backtrace = { version = "0.3" }
@@ -1218,6 +1221,7 @@ serde_bytes = { version = "0.11" }
 serde_derive = { version = "1" }
 serde_derive_internals = { version = "0.26", default-features = false }
 serde_json = { version = "1", features = ["alloc", "preserve_order", "raw_value", "unbounded_depth"] }
+serde_path_to_error = { version = "0.1", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
 serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }

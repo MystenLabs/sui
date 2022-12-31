@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::Json;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::errors::{Error, ErrorType};
@@ -105,125 +105,38 @@ pub type BlockHash = TransactionDigest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {
-    pub value: SignedValue,
+    #[serde(with = "str_format")]
+    pub value: i128,
     pub currency: Currency,
 }
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
-pub struct SignedValue {
-    negative: bool,
-    value: u128,
-}
-
-impl From<u64> for SignedValue {
-    fn from(value: u64) -> Self {
-        Self {
-            negative: false,
-            value: value as u128,
-        }
-    }
-}
-
-impl From<u128> for SignedValue {
-    fn from(value: u128) -> Self {
-        Self {
-            negative: false,
-            value,
-        }
-    }
-}
-
-impl From<i128> for SignedValue {
-    fn from(value: i128) -> Self {
-        Self {
-            negative: value.is_negative(),
-            value: value.unsigned_abs(),
-        }
-    }
-}
-
-impl From<i64> for SignedValue {
-    fn from(value: i64) -> Self {
-        Self {
-            negative: value.is_negative(),
-            value: value.unsigned_abs().into(),
-        }
-    }
-}
-
-impl SignedValue {
-    pub fn neg(v: u128) -> Self {
-        Self {
-            negative: true,
-            value: v,
-        }
-    }
-    pub fn is_negative(&self) -> bool {
-        self.negative
-    }
-
-    pub fn abs(&self) -> u128 {
-        self.value
-    }
-
-    pub fn add(&mut self, other: &Self) {
-        if self.negative ^ other.negative {
-            if self.value > other.value {
-                self.value -= other.value;
-            } else {
-                self.value = other.value - self.value;
-                self.negative = !self.negative;
-            }
-        } else {
-            self.value += other.value
-        }
-    }
-}
-
-impl Display for SignedValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.negative {
-            write!(f, "-")?;
-        }
-        write!(f, "{}", self.value)
-    }
-}
-
-impl Serialize for SignedValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.to_string().serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for SignedValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Ok(if let Some(value) = s.strip_prefix('-') {
-            SignedValue {
-                negative: true,
-                value: u128::from_str(value).map_err(D::Error::custom)?,
-            }
-        } else {
-            SignedValue {
-                negative: false,
-                value: u128::from_str(&s).map_err(D::Error::custom)?,
-            }
-        })
-    }
-}
-
 impl Amount {
-    pub fn new(value: SignedValue) -> Self {
+    pub fn new(value: i128) -> Self {
         Self {
             value,
             currency: SUI.clone(),
         }
+    }
+}
+
+mod str_format {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::str::FromStr;
+
+    pub fn serialize<S>(value: &i128, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        value.to_string().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<i128, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        i128::from_str(&s).map_err(Error::custom)
     }
 }
 
@@ -259,7 +172,7 @@ impl From<sui_sdk::rpc_types::Coin> for Coin {
                 },
             },
             amount: Amount {
-                value: SignedValue::from(coin.balance),
+                value: coin.balance as i128,
                 currency: SUI.clone(),
             },
         }
@@ -408,7 +321,7 @@ pub struct ConstructionPayloadsRequest {
 #[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter, Eq, PartialEq)]
 pub enum OperationType {
     // Balance changing operations from TransactionEffect
-    GasSpent,
+    Gas,
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
@@ -421,11 +334,11 @@ pub enum OperationType {
     Publish,
     MoveCall,
     EpochChange,
-    // Rosetta only transaction type, used for fabricating genesis transactions.
+    // Rosetta only transaction type, for fabricated genesis transactions.
     Genesis,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct OperationIdentifier {
     index: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -818,19 +731,6 @@ pub struct BlockTransactionResponse {
 impl IntoResponse for BlockTransactionResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
-    }
-}
-
-#[derive(Default)]
-pub struct IndexCounter {
-    index: u64,
-}
-
-impl IndexCounter {
-    pub fn next_idx(&mut self) -> u64 {
-        let next = self.index;
-        self.index += 1;
-        next
     }
 }
 

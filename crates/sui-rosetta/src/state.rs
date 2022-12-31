@@ -3,8 +3,8 @@
 
 use crate::operations::{Operation, Operations};
 use crate::types::{
-    Block, BlockHash, BlockHeight, BlockIdentifier, BlockResponse, OperationType, SignedValue,
-    Transaction, TransactionIdentifier,
+    Block, BlockHash, BlockHeight, BlockIdentifier, BlockResponse, OperationType, Transaction,
+    TransactionIdentifier,
 };
 use crate::Error;
 use anyhow::anyhow;
@@ -13,7 +13,7 @@ use mysten_metrics::spawn_monitored_task;
 use rocksdb::Options;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -294,9 +294,8 @@ impl PseudoBlockProvider {
         block_height: u64,
         ops: Operations,
     ) -> Result<(), anyhow::Error> {
-        let balance_changes = extract_balance_changes_from_ops(ops)?;
-        for (addr, value) in balance_changes {
-            let current_balance = self.get_balance_at_block(addr, block_height).await?;
+        for (addr, value) in extract_balance_changes_from_ops(ops)? {
+            let current_balance = self.get_balance_at_block(addr, block_height).await? as i128;
             let new_balance = if value.is_negative() {
                 if current_balance < value.abs() {
                     // This can happen due to missing transactions data due to unstable validators, causing balance to
@@ -316,7 +315,7 @@ impl PseudoBlockProvider {
                 &(addr, block_height),
                 &HistoricBalance {
                     block_height,
-                    balance: new_balance,
+                    balance: new_balance as u128,
                 },
             )?;
         }
@@ -370,29 +369,29 @@ pub struct HistoricBalance {
 
 fn extract_balance_changes_from_ops(
     ops: Operations,
-) -> Result<BTreeMap<SuiAddress, SignedValue>, anyhow::Error> {
-    let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
-    for op in ops {
-        match op.type_ {
-            OperationType::SuiBalanceChange
-            | OperationType::GasSpent
-            | OperationType::Genesis
-            | OperationType::PaySui => {
-                let addr = op
-                    .account
-                    .clone()
-                    .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?
-                    .address;
-                let amount = op
-                    .amount
-                    .clone()
-                    .ok_or_else(|| anyhow!("Amount cannot be null for {:?}", op.type_))?;
-                changes.entry(addr).or_default().add(&amount.value)
-            }
-            _ => {}
-        }
-    }
-    Ok(changes)
+) -> Result<HashMap<SuiAddress, i128>, anyhow::Error> {
+    ops.into_iter()
+        .try_fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
+            match op.type_ {
+                OperationType::SuiBalanceChange
+                | OperationType::Gas
+                | OperationType::Genesis
+                | OperationType::PaySui => {
+                    let addr = op
+                        .account
+                        .ok_or_else(|| {
+                            anyhow!("Account address cannot be null for {:?}", op.type_)
+                        })?
+                        .address;
+                    let amount = op
+                        .amount
+                        .ok_or_else(|| anyhow!("Amount cannot be null for {:?}", op.type_))?;
+                    *changes.entry(addr).or_default() += amount.value
+                }
+                _ => {}
+            };
+            Ok(changes)
+        })
 }
 
 fn genesis_block(genesis: &Genesis) -> BlockResponse {
