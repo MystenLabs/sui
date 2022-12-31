@@ -432,6 +432,7 @@ impl AuthorityState {
     async fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
 
@@ -443,18 +444,23 @@ impl AuthorityState {
 
         let owned_objects = input_objects.filter_owned_objects();
 
-        let signed_transaction =
-            VerifiedSignedTransaction::new(self.epoch(), transaction, self.name, &*self.secret);
+        let signed_transaction = VerifiedSignedTransaction::new(
+            epoch_store.epoch(),
+            transaction,
+            self.name,
+            &*self.secret,
+        );
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.set_transaction_lock(&owned_objects, signed_transaction)
+        self.set_transaction_lock(&owned_objects, signed_transaction, epoch_store)
             .await?;
 
         // Return the signed Transaction or maybe a cert.
-        self.make_transaction_info(&transaction_digest).await
+        self.make_transaction_info(&transaction_digest, epoch_store)
+            .await
     }
 
     /// Initiate a new transaction.
@@ -465,14 +471,14 @@ impl AuthorityState {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", &transaction.data().intent_message.value);
 
+        let epoch_store = self.epoch_store();
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
-        if self
-            .database
-            .transaction_exists(self.epoch(), &transaction_digest)?
-        {
+        if epoch_store.get_transaction(&transaction_digest)?.is_some() {
             self.metrics.tx_already_processed.inc();
-            return self.make_transaction_info(&transaction_digest).await;
+            return self
+                .make_transaction_info(&transaction_digest, &epoch_store)
+                .await;
         }
 
         // CRITICAL! Validators should never sign an external system transaction.
@@ -488,21 +494,22 @@ impl AuthorityState {
         // The should_accept_user_certs check here is best effort, because
         // between a validator signs a tx and a cert is formed, the validator
         // could close the window.
-        if !self
-            .epoch_store()
+        if !epoch_store
             .get_reconfig_state_read_lock_guard()
             .should_accept_user_certs()
         {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let response = self.handle_transaction_impl(transaction).await;
+        let response = self
+            .handle_transaction_impl(transaction, &epoch_store)
+            .await;
         match response {
             Ok(r) => Ok(r),
             // If we see an error, it is possible that a certificate has already been processed.
             // In that case, we could still return Ok to avoid showing confusing errors.
             Err(err) => self
-                .get_tx_info_already_executed(&transaction_digest)
+                .get_tx_info_already_executed(&transaction_digest, &epoch_store)
                 .await?
                 .ok_or(err),
         }
@@ -1062,10 +1069,11 @@ impl AuthorityState {
     pub async fn get_tx_info_already_executed(
         &self,
         digest: &TransactionDigest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Option<VerifiedTransactionInfoResponse>> {
         if self.database.effects_exists(digest)? {
             debug!("Transaction {digest:?} already executed");
-            Ok(Some(self.make_transaction_info(digest).await?))
+            Ok(Some(self.make_transaction_info(digest, epoch_store).await?))
         } else {
             Ok(None)
         }
@@ -1268,13 +1276,12 @@ impl AuthorityState {
         }
 
         // Load cert and effects.
-        let info = self.make_transaction_info(digest).await?;
+        let info = (
+            self.database.get_certified_transaction(digest)?,
+            self.database.get_signed_effects(digest)?,
+        );
         let (cert, effects) = match info {
-            VerifiedTransactionInfoResponse {
-                certified_transaction: Some(cert),
-                signed_effects: Some(effects),
-                ..
-            } => (cert, effects),
+            (Some(cert), Some(effects)) => (cert, effects),
             _ => {
                 return Err(SuiError::CertificateNotfound {
                     certificate_digest: *digest,
@@ -1333,7 +1340,7 @@ impl AuthorityState {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        self.make_transaction_info(&request.transaction_digest)
+        self.make_transaction_info(&request.transaction_digest, &self.epoch_store())
             .await
     }
 
@@ -2052,16 +2059,15 @@ impl AuthorityState {
     pub async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.database.get_transaction(transaction_digest)?,
+            signed_transaction: epoch_store.get_transaction(transaction_digest)?,
             certified_transaction: self
                 .database
                 .get_certified_transaction(transaction_digest)?,
-            // TODO: Replace the call to self.epoch() with a epoch store passed from caller to avoid
-            // unexpected change to the epoch id during reconfiguration.
             signed_effects: self
-                .get_signed_effects_and_maybe_resign(self.epoch(), transaction_digest)?,
+                .get_signed_effects_and_maybe_resign(epoch_store.epoch(), transaction_digest)?,
         })
     }
 
@@ -2138,10 +2144,35 @@ impl AuthorityState {
         &self,
         mutable_input_objects: &[ObjectRef],
         signed_transaction: VerifiedSignedTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<(), SuiError> {
-        self.database
-            .lock_and_write_transaction(self.epoch(), mutable_input_objects, signed_transaction)
+        self.lock_and_write_transaction(mutable_input_objects, signed_transaction, epoch_store)
             .await
+    }
+
+    /// Acquires the transaction lock for a specific transaction, writing the transaction
+    /// to the transaction column family if acquiring the lock succeeds.
+    /// The lock service is used to atomically acquire locks.
+    async fn lock_and_write_transaction(
+        &self,
+        owned_input_objects: &[ObjectRef],
+        transaction: VerifiedSignedTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Result<(), SuiError> {
+        let tx_digest = *transaction.digest();
+
+        // Acquire the lock on input objects
+        self.database
+            .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
+            .await?;
+
+        // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
+        // For now write transactions after because if we write before, there is a chance the lock can fail
+        // and this can cause invalid transactions to be inserted in the table.
+        // https://github.com/MystenLabs/sui/issues/1990
+        epoch_store.insert_transaction(transaction)?;
+
+        Ok(())
     }
 
     /// Commit effects of transaction execution to data store.
@@ -2243,11 +2274,12 @@ impl AuthorityState {
 
     pub async fn create_advance_epoch_tx_cert(
         &self,
-        next_epoch: EpochId,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         gas_cost_summary: &GasCostSummary,
         timeout: Duration,
         transaction_certifier: &dyn TransactionCertifier,
     ) -> anyhow::Result<VerifiedCertificate> {
+        let next_epoch = epoch_store.epoch() + 1;
         debug!(
             ?next_epoch,
             computation_cost=?gas_cost_summary.computation_cost,
@@ -2262,10 +2294,11 @@ impl AuthorityState {
             gas_cost_summary.storage_rebate,
         );
         // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
-        self.handle_transaction_impl(tx.clone()).await?;
+        self.handle_transaction_impl(tx.clone(), epoch_store)
+            .await?;
         debug!(?next_epoch, "Successfully signed advance epoch transaction");
         transaction_certifier
-            .create_certificate(&tx, self, timeout)
+            .create_certificate(&tx, &self.database, &self.committee_store, timeout)
             .await
     }
 }

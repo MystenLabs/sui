@@ -691,30 +691,6 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// Acquires the transaction lock for a specific transaction, writing the transaction
-    /// to the transaction column family if acquiring the lock succeeds.
-    /// The lock service is used to atomically acquire locks.
-    pub async fn lock_and_write_transaction(
-        &self,
-        epoch: EpochId,
-        owned_input_objects: &[ObjectRef],
-        transaction: VerifiedSignedTransaction,
-    ) -> Result<(), SuiError> {
-        let tx_digest = *transaction.digest();
-
-        // Acquire the lock on input objects
-        self.acquire_transaction_locks(epoch, owned_input_objects, tx_digest)
-            .await?;
-
-        // TODO: we should have transaction insertion be atomic with lock acquisition, or retry.
-        // For now write transactions after because if we write before, there is a chance the lock can fail
-        // and this can cause invalid transactions to be inserted in the table.
-        // https://github.com/MystenLabs/sui/issues/1990
-        self.epoch_store().insert_transaction(transaction)?;
-
-        Ok(())
-    }
-
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
@@ -943,7 +919,7 @@ impl AuthorityStore {
     /// Returns SuiError::ObjectVersionUnavailableForConsumption if one of the objects is not locked at the given version.
     /// Returns SuiError::ObjectLockConflict if one of the objects is locked by a different transaction in the same epoch.
     /// Returns SuiError::ObjectLockedAtFutureEpoch if one of the objects is locked in a future epoch (bug).
-    async fn acquire_transaction_locks(
+    pub(crate) async fn acquire_transaction_locks(
         &self,
         epoch: EpochId,
         owned_input_objects: &[ObjectRef],
