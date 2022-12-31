@@ -1702,7 +1702,10 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         &authority_state,
     );
     let signed_effects = authority_state
-        .execute_certificate(&certified_transfer_transaction)
+        .execute_certificate(
+            &certified_transfer_transaction,
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap();
     signed_effects.into_data().status.unwrap();
@@ -1756,7 +1759,10 @@ async fn test_handle_confirmation_transaction_ok() {
         .unwrap();
 
     let signed_effects = authority_state
-        .execute_certificate(&certified_transfer_transaction.clone())
+        .execute_certificate(
+            &certified_transfer_transaction.clone(),
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap();
     signed_effects.into_data().status.unwrap();
@@ -1912,7 +1918,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         }
         interrupted_count += 1;
 
-        let epoch_store = authority_state.epoch_store();
+        let epoch_store = authority_state.epoch_store_for_testing();
         let g = epoch_store
             .acquire_tx_guard(&shared_object_cert)
             .await
@@ -1969,13 +1975,19 @@ async fn test_handle_confirmation_transaction_idempotent() {
     );
 
     let signed_effects = authority_state
-        .execute_certificate(&certified_transfer_transaction)
+        .execute_certificate(
+            &certified_transfer_transaction,
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap();
     assert!(signed_effects.data().status.is_ok());
 
     let signed_effects2 = authority_state
-        .execute_certificate(&certified_transfer_transaction)
+        .execute_certificate(
+            &certified_transfer_transaction,
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap();
     assert!(signed_effects2.data().status.is_ok());
@@ -2114,7 +2126,10 @@ async fn test_move_call_insufficient_gas() {
         &authority_state,
     );
     let effects = authority_state
-        .execute_certificate(&certified_transfer_transaction)
+        .execute_certificate(
+            &certified_transfer_transaction,
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap()
         .into_data();
@@ -2484,7 +2499,10 @@ async fn test_idempotent_reversed_confirmation() {
         &authority_state,
     );
     let result1 = authority_state
-        .execute_certificate(&certified_transfer_transaction)
+        .execute_certificate(
+            &certified_transfer_transaction,
+            &authority_state.epoch_store_for_testing(),
+        )
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
@@ -2534,7 +2552,7 @@ async fn test_transfer_sui_no_amount() {
 
     let certificate = init_certified_transaction(transaction, &authority_state);
     let signed_effects = authority_state
-        .execute_certificate(&certificate)
+        .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
     let effects = signed_effects.into_data();
@@ -2572,7 +2590,7 @@ async fn test_transfer_sui_with_amount() {
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let signed_effects = authority_state
-        .execute_certificate(&certificate)
+        .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
     let effects = signed_effects.into_data();
@@ -2626,7 +2644,7 @@ async fn test_store_revert_transfer_sui() {
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
-        .execute_certificate(&certificate)
+        .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
 
@@ -2695,7 +2713,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrap_digest = *wrap_cert.digest();
 
     let wrap_effects = authority_state
-        .execute_certificate(&wrap_cert)
+        .execute_certificate(&wrap_cert, &authority_state.epoch_store_for_testing())
         .await
         .unwrap()
         .into_data();
@@ -2780,7 +2798,7 @@ async fn test_store_revert_unwrap_move_call() {
     let unwrap_digest = *unwrap_cert.digest();
 
     let unwrap_effects = authority_state
-        .execute_certificate(&unwrap_cert)
+        .execute_certificate(&unwrap_cert, &authority_state.epoch_store_for_testing())
         .await
         .unwrap()
         .into_data();
@@ -3007,7 +3025,7 @@ async fn test_store_revert_add_ofield() {
     let add_digest = *add_cert.digest();
 
     let add_effects = authority_state
-        .execute_certificate(&add_cert)
+        .execute_certificate(&add_cert, &authority_state.epoch_store_for_testing())
         .await
         .unwrap()
         .into_data();
@@ -3117,7 +3135,10 @@ async fn test_store_revert_remove_ofield() {
     let remove_ofield_digest = *remove_ofield_cert.digest();
 
     let remove_effects = authority_state
-        .execute_certificate(&remove_ofield_cert)
+        .execute_certificate(
+            &remove_ofield_cert,
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap()
         .into_data();
@@ -3298,7 +3319,7 @@ fn init_certified_transaction(
         authority_state.name,
         &*authority_state.secret,
     );
-    let epoch_store = authority_state.epoch_store();
+    let epoch_store = authority_state.epoch_store_for_testing();
     CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -3316,11 +3337,11 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
     );
 
     if let Ok(transaction) = authority
-        .epoch_store()
+        .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
         authority
-            .epoch_store()
+            .epoch_store_for_testing()
             .handle_consensus_transaction(
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
@@ -3342,13 +3363,13 @@ pub(crate) async fn send_consensus_no_execution(
     );
 
     if let Ok(transaction) = authority
-        .epoch_store()
+        .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.
         authority
-            .epoch_store()
+            .epoch_store_for_testing()
             .process_consensus_transaction(
                 transaction,
                 &Arc::new(CheckpointServiceNoop {}),
@@ -3672,10 +3693,7 @@ async fn test_shared_object_transaction() {
     authority.try_execute_for_test(&certificate).await.unwrap();
 
     // Ensure transaction effects are available.
-    authority
-        .notify_read_transaction_info(&certificate)
-        .await
-        .unwrap();
+    authority.notify_read_effects(&certificate).await.unwrap();
 
     // Ensure shared object sequence number increased.
     let shared_object_version = authority
@@ -3757,7 +3775,11 @@ async fn test_consensus_message_processed() {
             authority2.try_execute_for_test(&certificate).await.unwrap()
         } else {
             authority2
-                .execute_certificate_with_effects(&certificate, &effects1)
+                .execute_certificate_with_effects(
+                    &certificate,
+                    &effects1,
+                    &authority2.epoch_store_for_testing(),
+                )
                 .await
                 .unwrap();
             authority2
@@ -3794,10 +3816,10 @@ async fn test_consensus_message_processed() {
     // verify the two validators are in sync.
     assert_eq!(
         authority1
-            .epoch_store()
+            .epoch_store_for_testing()
             .get_next_object_version(&shared_object_id),
         authority2
-            .epoch_store()
+            .epoch_store_for_testing()
             .get_next_object_version(&shared_object_id),
     );
 }

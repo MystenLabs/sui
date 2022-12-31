@@ -71,7 +71,7 @@ async fn advance_epoch_tx_test_impl(
 ) {
     let failing_task = states[0]
         .create_advance_epoch_tx_cert(
-            &states[0].epoch_store(),
+            &states[0].epoch_store_for_testing(),
             &GasCostSummary::new(0, 0, 0),
             Duration::from_secs(15),
             certifier,
@@ -86,7 +86,7 @@ async fn advance_epoch_tx_test_impl(
         .map(|state| async {
             state
                 .create_advance_epoch_tx_cert(
-                    &state.epoch_store(),
+                    &state.epoch_store_for_testing(),
                     &GasCostSummary::new(0, 0, 0),
                     Duration::from_secs(1000), // A very very long time
                     certifier,
@@ -122,7 +122,7 @@ async fn basic_reconfig_end_to_end_test() {
         .map(|handle| {
             handle.with_async(|node| async {
                 loop {
-                    if node.state().epoch() == 1 {
+                    if node.state().epoch_store_for_testing().epoch() == 1 {
                         break;
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;

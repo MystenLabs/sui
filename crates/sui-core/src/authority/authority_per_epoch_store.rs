@@ -22,8 +22,9 @@ use sui_types::committee::Committee;
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
-    SignedTransactionEffects, TrustedCertificate, VerifiedCertificate, VerifiedSignedTransaction,
+    CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    SenderSignedData, SignedTransactionEffects, TransactionEffects, TrustedCertificate,
+    VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::{debug, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
@@ -571,6 +572,27 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    /// Lock a sequence number for the shared objects of the input transaction based on the effects
+    /// of that transaction. Used by full nodes, which don't listen to consensus.
+    pub async fn acquire_shared_locks_from_effects(
+        &self,
+        certificate: &VerifiedCertificate,
+        effects: &TransactionEffects,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult {
+        let _tx_lock = self.acquire_tx_lock(certificate.digest()).await;
+        self.set_assigned_shared_object_versions(
+            certificate,
+            &effects
+                .shared_objects
+                .iter()
+                .map(|(id, version, _)| (*id, *version))
+                .collect(),
+            parent_sync_store,
+        )
+        .await
+    }
+
     pub fn insert_checkpoint_boundary(&self, index: u64, height: u64) -> SuiResult {
         self.tables.checkpoint_boundary.insert(&index, &height)?;
         Ok(())
@@ -631,6 +653,17 @@ impl AuthorityPerEpochStore {
         )?;
         batch.write()?;
         Ok(())
+    }
+
+    /// Check whether certificate was processed by consensus.
+    /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
+    pub fn is_tx_cert_consensus_message_processed(
+        &self,
+        certificate: &CertifiedTransaction,
+    ) -> SuiResult<bool> {
+        self.is_consensus_message_processed(&ConsensusTransactionKey::Certificate(
+            *certificate.digest(),
+        ))
     }
 
     pub fn is_consensus_message_processed(&self, key: &ConsensusTransactionKey) -> SuiResult<bool> {

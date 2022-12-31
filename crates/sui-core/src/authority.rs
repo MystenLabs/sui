@@ -77,7 +77,6 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::ExecutionLockReadGuard;
 use crate::authority_aggregator::TransactionCertifier;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::{
@@ -534,6 +533,7 @@ impl AuthorityState {
         // giving us incorrect effects.
         // TODO: allow CertifiedTransactionEffects only
         effects: &TransactionEffectsEnvelope<S>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let _metrics_guard = self
             .metrics
@@ -549,14 +549,14 @@ impl AuthorityState {
         );
 
         if certificate.contains_shared_object() {
-            self.database
-                .acquire_shared_locks_from_effects(certificate, effects.data())
+            epoch_store
+                .acquire_shared_locks_from_effects(certificate, effects.data(), &self.database)
                 .await?;
         }
 
         let expected_effects_digest = effects.digest();
 
-        self.enqueue_certificates_for_execution(vec![certificate.clone()])?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
 
         let observed_effects = self
             .database
@@ -586,6 +586,7 @@ impl AuthorityState {
     pub(crate) async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<SignedTransactionEffects> {
         let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
         let tx_digest = *certificate.digest();
@@ -593,15 +594,17 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if certificate.contains_shared_object() && !self.consensus_message_processed(certificate)? {
+        if certificate.contains_shared_object()
+            && !epoch_store.is_tx_cert_consensus_message_processed(certificate)?
+        {
             return Err(SuiError::CertificateNotSequencedError {
                 digest: *certificate.digest(),
             });
         }
 
-        self.enqueue_certificates_for_execution(vec![certificate.clone()])?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
 
-        self.notify_read_transaction_info(certificate).await
+        self.notify_read_effects(certificate).await
     }
 
     /// Internal logic to execute a certificate.
@@ -619,6 +622,7 @@ impl AuthorityState {
     pub(crate) async fn try_execute_immediately(
         &self,
         certificate: &VerifiedCertificate,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<SignedTransactionEffects> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
@@ -639,13 +643,12 @@ impl AuthorityState {
             ?tx_digest,
             tx_kind = certificate.data().intent_message.value.kind_as_str()
         );
-        let epoch_store = self.epoch_store();
         let tx_guard = epoch_store
             .acquire_tx_guard(certificate)
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, certificate)
+        self.process_certificate(tx_guard, certificate, epoch_store)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
     }
@@ -656,10 +659,11 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<SignedTransactionEffects> {
-        self.try_execute_immediately(certificate).await
+        self.try_execute_immediately(certificate, &self.epoch_store_for_testing())
+            .await
     }
 
-    pub async fn notify_read_transaction_info(
+    pub async fn notify_read_effects(
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<SignedTransactionEffects> {
@@ -683,6 +687,7 @@ impl AuthorityState {
         transaction_digest: &TransactionDigest,
         // inputs: &[(InputObjectKind, Object)],
         shared_object_refs: &[ObjectRef],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<(), SuiError> {
         debug!("Validating shared object sequence numbers from consensus...");
 
@@ -692,8 +697,7 @@ impl AuthorityState {
             "we just checked that there are share objects yet none found?"
         );
 
-        let shared_locks: HashMap<_, _> = self
-            .epoch_store()
+        let shared_locks: HashMap<_, _> = epoch_store
             .get_shared_locks(transaction_digest)?
             .into_iter()
             .collect();
@@ -739,8 +743,8 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<SignedTransactionEffects> {
-        let epoch_store = self.epoch_store();
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -792,7 +796,7 @@ impl AuthorityState {
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
         let (inner_temporary_store, signed_effects) =
-            match self.prepare_certificate(certificate).await {
+            match self.prepare_certificate(certificate, epoch_store).await {
                 Err(e) => {
                     debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                     tx_guard.release();
@@ -904,6 +908,7 @@ impl AuthorityState {
     async fn prepare_certificate(
         &self,
         certificate: &VerifiedCertificate,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
         let (gas_status, input_objects) =
@@ -929,7 +934,7 @@ impl AuthorityState {
             // only be executed at a time when consensus is turned off.
             // TODO: Add some assert here to make sure consensus is indeed off with
             // is_change_epoch_tx.
-            self.check_shared_locks(certificate.digest(), &shared_object_refs)
+            self.check_shared_locks(certificate.digest(), &shared_object_refs, epoch_store)
                 .await?;
         }
 
@@ -951,12 +956,12 @@ impl AuthorityState {
                 &self.move_vm,
                 &self._native_functions,
                 gas_status,
-                self.epoch(),
+                epoch_store.epoch(),
             );
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects =
-            SignedTransactionEffects::new(self.epoch(), effects, &*self.secret, self.name);
+            SignedTransactionEffects::new(epoch_store.epoch(), effects, &*self.secret, self.name);
         Ok((inner_temp_store, signed_effects))
     }
 
@@ -1531,7 +1536,7 @@ impl AuthorityState {
         // Process tx recovery log first, so that checkpoint recovery (below)
         // doesn't observe partially-committed txes.
         state
-            .process_tx_recovery_log(None)
+            .process_tx_recovery_log(None, &state.epoch_store())
             .await
             .expect("Could not fully process recovery log at startup!");
 
@@ -1616,15 +1621,19 @@ impl AuthorityState {
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        self.epoch_store().insert_pending_certificates(&certs)?;
+        epoch_store.insert_pending_certificates(&certs)?;
         self.transaction_manager.enqueue(certs)
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
-    pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
+    pub async fn process_tx_recovery_log(
+        &self,
+        limit: Option<usize>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::MAX);
-        let epoch_store = self.epoch_store();
         while limit > 0 {
             limit -= 1;
             if let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
@@ -1647,7 +1656,10 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self.process_certificate(tx_guard, &cert.into()).await {
+                if let Err(e) = self
+                    .process_certificate(tx_guard, &cert.into(), epoch_store)
+                    .await
+                {
                     warn!(?digest, "Failed to process in-progress certificate: {e}");
                 }
             } else {
@@ -1719,6 +1731,11 @@ impl AuthorityState {
         self.database.epoch_store()
     }
 
+    // Load the epoch store, should be used in tests only.
+    pub fn epoch_store_for_testing(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
+        self.database.epoch_store()
+    }
+
     pub fn load_epoch_store(
         &self,
         intended_epoch: EpochId,
@@ -1728,11 +1745,6 @@ impl AuthorityState {
 
     pub fn clone_committee(&self) -> Committee {
         self.epoch_store().committee().clone()
-    }
-
-    // This method can only be called from ConsensusAdapter::begin_reconfiguration
-    pub fn close_user_certs(&self, lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>) {
-        self.epoch_store().close_user_certs(lock_guard)
     }
 
     pub(crate) async fn get_object(
@@ -2205,18 +2217,6 @@ impl AuthorityState {
             .set(self.database.effects_notify_read.num_pending() as i64);
 
         Ok(())
-    }
-
-    /// Check whether certificate was processed by consensus.
-    /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
-    pub fn consensus_message_processed(
-        &self,
-        certificate: &CertifiedTransaction,
-    ) -> SuiResult<bool> {
-        self.epoch_store()
-            .is_consensus_message_processed(&ConsensusTransactionKey::Certificate(
-                *certificate.digest(),
-            ))
     }
 
     /// Get a read reference to an object/seq lock

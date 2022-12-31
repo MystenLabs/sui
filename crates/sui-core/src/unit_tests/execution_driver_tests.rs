@@ -401,12 +401,18 @@ async fn test_transaction_manager() {
     // Enqueue certs out of dependency order for executions.
     for cert in executed_shared_certs.iter().rev() {
         authorities[3]
-            .enqueue_certificates_for_execution(vec![cert.clone()])
+            .enqueue_certificates_for_execution(
+                vec![cert.clone()],
+                &authorities[3].epoch_store_for_testing(),
+            )
             .unwrap();
     }
     for cert in executed_owned_certs.iter().rev() {
         authorities[3]
-            .enqueue_certificates_for_execution(vec![cert.clone()])
+            .enqueue_certificates_for_execution(
+                vec![cert.clone()],
+                &authorities[3].epoch_store_for_testing(),
+            )
             .unwrap();
     }
 

@@ -406,7 +406,9 @@ impl LocalAuthorityClient {
                 Ok(Some(effects)) => effects,
                 _ => {
                     let certificate = { certificate.verify(epoch_store.committee())? };
-                    state.try_execute_immediately(&certificate).await?
+                    state
+                        .try_execute_immediately(&certificate, &epoch_store)
+                        .await?
                 }
             };
         if fault_config.fail_after_handle_confirmation {
