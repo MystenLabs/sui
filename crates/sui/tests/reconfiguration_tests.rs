@@ -2,19 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use prometheus::Registry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_aggregator::{
-    LocalTransactionCertifier, NetworkTransactionCertifier, TransactionCertifier,
+    AuthAggMetrics, AuthorityAggregator, LocalTransactionCertifier, NetworkTransactionCertifier,
+    TransactionCertifier,
 };
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::test_utils::init_local_authorities;
+use sui_core::safe_client::SafeClientMetricsBase;
+use sui_core::test_utils::{init_local_authorities, make_transfer_sui_transaction};
 use sui_macros::sim_test;
+use sui_types::crypto::get_account_key_pair;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
+use sui_types::object::Object;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     network::TestClusterBuilder,
@@ -144,6 +149,54 @@ async fn test_passive_reconfig() {
         .unwrap_or(30);
 
     sleep(Duration::from_secs(duration_secs)).await;
+}
+
+#[sim_test]
+async fn test_validator_resign_effects() {
+    // This test checks that validators are able to re-sign transaction effects that were finalized
+    // in previous epochs. This allows authority aggregator to form a new effects certificate
+    // in the new epoch.
+    let (sender, keypair) = get_account_key_pair();
+    let gas = Object::with_owner_for_testing(sender);
+    let configs = test_authority_configs();
+    let authorities = spawn_test_authorities([gas.clone()].into_iter(), &configs).await;
+    let tx = make_transfer_sui_transaction(
+        gas.compute_object_reference(),
+        sender,
+        None,
+        sender,
+        &keypair,
+    );
+    let registry = Registry::new();
+    let mut net = AuthorityAggregator::new_from_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let effects0 = net
+        .process_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+    assert_eq!(effects0.epoch(), 0);
+    // Give it enough time for the transaction to be checkpointed and hence finalized.
+    sleep(Duration::from_secs(10)).await;
+    for handle in authorities {
+        let mut new_committee = net.committee.clone();
+        new_committee.epoch = 1;
+        handle
+            .with_async(
+                |node| async move { node.state().reconfigure(new_committee).await.unwrap() },
+            )
+            .await;
+    }
+    net.committee.epoch = 1;
+    let effects1 = net.process_certificate(cert.into_inner()).await.unwrap();
+    // Ensure that we are able to form a new effects cert in the new epoch.
+    assert_eq!(effects1.epoch(), 1);
+    assert_eq!(effects0.into_message(), effects1.into_message());
 }
 
 /*
