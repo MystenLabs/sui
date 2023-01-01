@@ -533,7 +533,6 @@ pub async fn execute_checkpoint(
 
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
-    authority_state: Arc<AuthorityState>,
     authority_store: Arc<AuthorityStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
