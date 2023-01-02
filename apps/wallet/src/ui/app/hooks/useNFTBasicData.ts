@@ -15,8 +15,7 @@ export default function useNFTBasicData(nftObj: SuiObject | null) {
     let nftFields = null;
     if (nftObj && isSuiMoveObject(nftObj.data)) {
         objType = nftObj.data.type;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        nftFields = getObjectFields(nftObj.data) as
+        nftFields = getObjectFields(nftObj.data) as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
             | Record<string, any>
             | undefined;
     }
