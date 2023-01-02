@@ -5,7 +5,7 @@ use derive_more::From;
 use eyre::eyre;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
-    BLS12381Signature,
+    BLS12381Signature, BLS12381AggregateSignatureAsBytes,
 };
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature};
 use fastcrypto::secp256k1::{Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1Signature};
@@ -1173,6 +1173,26 @@ pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
 
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
 pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
+
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SuiAuthorityStrongQuorumSignInfo {
+    pub epoch: EpochId,
+    pub signature: BLS12381AggregateSignatureAsBytes,
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "SuiBitmap")]
+    pub signers_map: RoaringBitmap,
+}
+
+impl From<&AuthorityStrongQuorumSignInfo> for SuiAuthorityStrongQuorumSignInfo {
+    fn from(sig: &AuthorityStrongQuorumSignInfo) -> Self {
+        Self {
+            epoch: sig.epoch,
+            signature: BLS12381AggregateSignatureAsBytes::from(&sig.signature),
+            signers_map: sig.signers_map.clone()
+        }
+    }
+}
 
 // Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
 // or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
