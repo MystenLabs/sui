@@ -130,8 +130,6 @@ module sui::vec_map_tests {
         vec_map::insert(&mut m, 1, true);
         vec_map::insert(&mut m, 5, false);
 
-        let expected_keys = vector::singleton(5);
-        vector::push_back(&mut expected_keys, 1);
         assert!(vec_map::keys(&m) == vector[1, 5], 1);
     }
 }
