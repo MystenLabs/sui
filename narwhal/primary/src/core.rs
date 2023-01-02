@@ -12,7 +12,7 @@ use crate::{
 use anyhow::Result;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
-use fastcrypto::{hash::Hash as _, SignatureService};
+use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
 use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};

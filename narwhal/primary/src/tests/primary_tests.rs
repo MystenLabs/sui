@@ -16,8 +16,8 @@ use dashmap::DashSet;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
+    signature_service::SignatureService,
     traits::KeyPair,
-    SignatureService,
 };
 use itertools::Itertools;
 use prometheus::Registry;
