@@ -1298,29 +1298,30 @@ where
                                 // This should start happen less over time as we are working on
                                 // eliminating this on honest validators.
                                 // Log a warning to keep track.
-                                if let Some(inner_certificate) = &ret.certified_transaction {
-                                    warn!(
+                                let error = if let Some(inner_certificate) = &ret.certified_transaction {
+                                    debug!(
                                         ?tx_digest,
                                         name=?name.concise(),
                                         expected_epoch=?self.committee.epoch,
                                         returned_epoch=?inner_certificate.epoch(),
                                         "Returned certificate is from wrong epoch"
                                     );
-                                }
-                                if let Some(inner_signed) = &ret.signed_transaction {
-                                    warn!(
+                                    SuiError::WrongEpoch { expected_epoch: self.committee.epoch, actual_epoch: inner_certificate.epoch() }
+                                } else if let Some(inner_signed) = &ret.signed_transaction {
+                                    debug!(
                                         ?tx_digest,
                                         name=?name.concise(),
                                         expected_epoch=?self.committee.epoch,
                                         returned_epoch=?inner_signed.epoch(),
                                         "Returned signed transaction is from wrong epoch"
                                     );
-                                }
-                                state.errors.push(
+                                    SuiError::WrongEpoch { expected_epoch: self.committee.epoch, actual_epoch: inner_signed.epoch() }
+                                } else {
                                     SuiError::UnexpectedResultFromValidatorHandleTransaction {
                                         err: format!("{:?}", ret),
-                                    },
-                                );
+                                    }
+                                };
+                                state.errors.push(error);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                         };
