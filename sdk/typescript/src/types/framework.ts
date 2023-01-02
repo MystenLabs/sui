@@ -16,7 +16,7 @@ import { normalizeSuiObjectId, SuiAddress } from './common';
 
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
-import { isSuiMoveObject } from './index.guard';
+import { isSuiMoveObject, isSuiMoveValueUID } from './index.guard';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
@@ -83,7 +83,11 @@ export class Coin {
 
   public static getID(obj: ObjectData): ObjectId {
     if (isSuiMoveObject(obj)) {
-      return obj.fields.id.id;
+      if (isSuiMoveValueUID(obj.fields.id)) {
+        return obj.fields.id.id;
+      } else {
+        throw new Error('Invalid coin object');
+      }
     }
     return getObjectId(obj);
   }
@@ -197,7 +201,7 @@ export class Coin {
       return undefined;
     }
     const balance = getObjectFields(data)?.balance;
-    return BigInt(balance);
+    return BigInt(balance as string);
   }
 
   static getZero(): bigint {

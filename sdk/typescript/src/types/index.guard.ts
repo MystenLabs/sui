@@ -7,7 +7,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, Order, MoveEvent, PublishEvent, CoinBalanceChangeEvent, TransferObjectEvent, MutateObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventQuery, EventId, PaginatedEvents, EventType, BalanceChangeType, SuiEventFilter, SuiEventEnvelope, SuiEvents, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, Pay, PaySui, PayAllSui, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, GenericAuthoritySignature, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, DevInspectResults, DevInspectResultsType, DevInspectResultTupleType, ExecutionResultType, MutableReferenceOutputType, ReturnValueType, TransactionEffects, SuiTransactionResponse, SuiTransactionAuthSignersResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, PaginatedTransactionDigests, TransactionQuery, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, CoinMetadata, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PayTx, PaySuiTx, PayAllSuiTx, PublishTx, SharedObjectRef, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData, RpcApiVersion, FaucetCoinInfo, FaucetResponse } from "./index";
+import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, MovePackageContent, SuiData, SuiMoveValueUID, SuiMoveValue, SuiMoveStructWithFields, SuiMoveStructWithTypes, SuiMoveStruct, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, Order, MoveEvent, PublishEvent, CoinBalanceChangeEvent, TransferObjectEvent, MutateObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventQuery, EventId, PaginatedEvents, EventType, BalanceChangeType, SuiEventFilter, SuiEventEnvelope, SuiEvents, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, Pay, PaySui, PayAllSui, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, GenericAuthoritySignature, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, DevInspectResults, DevInspectResultsType, DevInspectResultTupleType, ExecutionResultType, MutableReferenceOutputType, ReturnValueType, TransactionEffects, SuiTransactionResponse, SuiTransactionAuthSignersResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, PaginatedTransactionDigests, TransactionQuery, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, CoinMetadata, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PayTx, PaySuiTx, PayAllSuiTx, PublishTx, SharedObjectRef, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData, RpcApiVersion, FaucetCoinInfo, FaucetResponse } from "./index";
 
 export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
     return (
@@ -65,16 +65,6 @@ export function isSuiObjectInfo(obj: any, _argumentName?: string): obj is SuiObj
     )
 }
 
-export function isObjectContentFields(obj: any, _argumentName?: string): obj is ObjectContentFields {
-    return (
-        (obj !== null &&
-            typeof obj === "object" ||
-            typeof obj === "function") &&
-        Object.entries<any>(obj)
-            .every(([key, _value]) => (isTransactionDigest(key) as boolean))
-    )
-}
-
 export function isMovePackageContent(obj: any, _argumentName?: string): obj is MovePackageContent {
     return (
         (obj !== null &&
@@ -101,13 +91,72 @@ export function isSuiData(obj: any, _argumentName?: string): obj is SuiData {
     )
 }
 
+export function isSuiMoveValueUID(obj: any, _argumentName?: string): obj is SuiMoveValueUID {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.id) as boolean
+    )
+}
+
+export function isSuiMoveValue(obj: any, _argumentName?: string): obj is SuiMoveValue {
+    return (
+        (obj === null ||
+            isTransactionDigest(obj) as boolean ||
+            isSuiMoveTypeParameterIndex(obj) as boolean ||
+            obj === false ||
+            obj === true ||
+            isSuiMoveValueUID(obj) as boolean ||
+            isSuiMoveStructWithTypes(obj) as boolean ||
+            Array.isArray(obj) &&
+            obj.every((e: any) =>
+            (e === null ||
+                isTransactionDigest(e) as boolean ||
+                isSuiMoveTypeParameterIndex(e) as boolean ||
+                e === false ||
+                e === true ||
+                isSuiMoveValueUID(e) as boolean ||
+                isSuiMoveStructWithTypes(e) as boolean)
+            ))
+    )
+}
+
+export function isSuiMoveStructWithFields(obj: any, _argumentName?: string): obj is SuiMoveStructWithFields {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        Object.entries<any>(obj)
+            .every(([key, value]) => (isSuiMoveValue(value) as boolean &&
+                isTransactionDigest(key) as boolean))
+    )
+}
+
+export function isSuiMoveStructWithTypes(obj: any, _argumentName?: string): obj is SuiMoveStructWithTypes {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.type) as boolean &&
+        isSuiMoveStructWithFields(obj.fields) as boolean
+    )
+}
+
+export function isSuiMoveStruct(obj: any, _argumentName?: string): obj is SuiMoveStruct {
+    return (
+        (isSuiMoveStructWithTypes(obj) as boolean ||
+            isSuiMoveStructWithFields(obj) as boolean)
+    )
+}
+
 export function isSuiMoveObject(obj: any, _argumentName?: string): obj is SuiMoveObject {
     return (
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
         isTransactionDigest(obj.type) as boolean &&
-        isObjectContentFields(obj.fields) as boolean &&
+        isSuiMoveStructWithFields(obj.fields) as boolean &&
         (typeof obj.has_public_transfer === "undefined" ||
             obj.has_public_transfer === false ||
             obj.has_public_transfer === true)

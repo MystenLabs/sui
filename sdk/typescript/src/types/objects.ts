@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner } from './common';
+import { ObjectOwner, SuiAddress } from './common';
 import { TransactionDigest } from './common';
 
 export type SuiObjectRef = {
@@ -19,8 +19,6 @@ export type SuiObjectInfo = SuiObjectRef & {
   previousTransaction: TransactionDigest;
 };
 
-export type ObjectContentFields = Record<string, any>;
-
 export type MovePackageContent = Record<string, string>;
 
 export type SuiData = { dataType: ObjectType } & (
@@ -28,11 +26,33 @@ export type SuiData = { dataType: ObjectType } & (
   | SuiMovePackage
 );
 
+export type SuiMoveValueUID = { id: ObjectId };
+
+type SuiMoveValueInner =
+  | number
+  | boolean
+  | SuiAddress
+  | string
+  | SuiMoveValueUID
+  | SuiMoveStructWithTypes
+  | null;
+
+export type SuiMoveValue = SuiMoveValueInner | SuiMoveValueInner[];
+
+export type SuiMoveStructWithFields = Record<string, SuiMoveValue>;
+
+export type SuiMoveStructWithTypes = {
+  type: string;
+  fields: SuiMoveStructWithFields;
+};
+
+export type SuiMoveStruct = SuiMoveStructWithTypes | SuiMoveStructWithFields;
+
 export type SuiMoveObject = {
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string;
   /** Fields and values stored inside the Move object */
-  fields: ObjectContentFields;
+  fields: SuiMoveStructWithFields;
   has_public_transfer?: boolean;
 };
 
@@ -252,7 +272,7 @@ export function getMoveObjectType(
 
 export function getObjectFields(
   resp: GetObjectDataResponse | SuiMoveObject
-): ObjectContentFields | undefined {
+): SuiMoveStructWithFields | undefined {
   if ('fields' in resp) {
     return resp.fields;
   }
