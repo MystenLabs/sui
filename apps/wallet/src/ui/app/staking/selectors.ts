@@ -49,8 +49,10 @@ export function getValidatorSelector(validatorAddress?: string) {
     return createSelector(suiSystemObjectSelector, (systemObj) => {
         const { data } = systemObj || {};
         if (isSuiMoveObject(data)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fields = data.fields as Record<string, any>;
             const { active_validators: active, next_epoch_validators: next } =
-                data.fields.validators.fields;
+                fields.validators.fields;
             const validator: SuiMoveObject | undefined = [
                 ...active.map((v: SuiMoveObject) => v.fields.metadata),
                 ...next,

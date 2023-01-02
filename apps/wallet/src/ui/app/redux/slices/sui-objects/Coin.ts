@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, Coin as CoinAPI, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    isSuiMoveObject,
+    Coin as CoinAPI,
+    SUI_TYPE_ARG,
+    isSuiMoveValueUID,
+} from '@mysten/sui.js';
 
 import type {
     ObjectId,
@@ -45,11 +50,15 @@ export class Coin {
     }
 
     public static getBalance(obj: SuiMoveObject): bigint {
-        return BigInt(obj.fields.balance);
+        return BigInt(obj.fields.balance as string);
     }
 
     public static getID(obj: SuiMoveObject): ObjectId {
-        return obj.fields.id.id;
+        if (isSuiMoveValueUID(obj.fields.id)) {
+            return obj.fields.id.id;
+        } else {
+            throw new Error('Invalid coin object');
+        }
     }
 
     public static getCoinTypeFromArg(coinTypeArg: string) {

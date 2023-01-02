@@ -27,7 +27,7 @@ export function SelectValidatorCard() {
 
     const validatorsData =
         data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
-            ? (data.details.data.fields as ValidatorState)
+            ? (data.details.data.fields as unknown as ValidatorState)
             : null;
 
     const validators = useMemo(() => {

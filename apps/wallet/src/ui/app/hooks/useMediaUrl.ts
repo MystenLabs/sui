@@ -10,7 +10,9 @@ export default function useMediaUrl(objData: SuiData | null) {
     const { fields } = (isSuiMoveObject(objData) && objData) || {};
     return useMemo(() => {
         if (fields) {
-            const mediaUrl = fields.url || fields.metadata?.fields.url;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const flds = fields as Record<string, any>;
+            const mediaUrl = flds.url || flds.metadata?.fields.url;
             if (typeof mediaUrl === 'string') {
                 return mediaUrl.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
             }

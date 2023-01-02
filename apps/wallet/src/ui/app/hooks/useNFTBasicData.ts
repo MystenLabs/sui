@@ -15,7 +15,10 @@ export default function useNFTBasicData(nftObj: SuiObject | null) {
     let nftFields = null;
     if (nftObj && isSuiMoveObject(nftObj.data)) {
         objType = nftObj.data.type;
-        nftFields = getObjectFields(nftObj.data);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        nftFields = getObjectFields(nftObj.data) as
+            | Record<string, any>
+            | undefined;
     }
     const fileExtensionType = useFileExtensionType(filePath || '');
     return {

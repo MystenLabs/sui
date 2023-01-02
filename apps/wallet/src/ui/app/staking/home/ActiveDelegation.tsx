@@ -38,7 +38,9 @@ export function ActiveDelegation({ id }: Props) {
         if (!validator) {
             return null;
         }
-        return Buffer.from(validator.fields.name, 'base64').toString();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fields = validator.fields as Record<string, any>;
+        return Buffer.from(fields.name, 'base64').toString();
     }, [validator]);
 
     if (!validator || !delegation || !validatorName) {

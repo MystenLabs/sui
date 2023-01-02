@@ -223,7 +223,7 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
 
     const validatorData =
         data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
-            ? (data.details.data.fields as ValidatorState)
+            ? (data.details.data.fields as unknown as ValidatorState)
             : null;
 
     const tableData = useMemo(

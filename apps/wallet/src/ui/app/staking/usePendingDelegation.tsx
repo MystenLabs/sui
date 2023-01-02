@@ -84,7 +84,8 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
             return [];
         }
 
-        const systemState = data.details.data.fields as SystemStateObject;
+        const systemState = data.details.data
+            .fields as unknown as SystemStateObject;
 
         const pendingDelegationsPerValidator =
             systemState.validators.fields.active_validators
