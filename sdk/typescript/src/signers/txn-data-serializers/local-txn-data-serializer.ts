@@ -158,7 +158,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
             function: moveCall.function,
             typeArguments: moveCall.typeArguments.map((a) =>
               typeof a === 'string'
-                ? new TypeTagSerializer().parseFromStr(a)
+                ? TypeTagSerializer.parseFromStr(a, true)
                 : (a as TypeTag)
             ),
             arguments: await new CallArgSerializer(
