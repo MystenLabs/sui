@@ -380,6 +380,9 @@ impl CheckpointExecutor {
             epoch_store.epoch(),
         );
 
+        // Record checkpoint participation for tallying rule.
+        epoch_store.record_certified_checkpoint_signatures(checkpoint.inner())?;
+
         let next_committee = checkpoint.summary().next_epoch_committee.clone();
         let highest_scheduled = checkpoint.sequence_number();
         let metrics = self.metrics.clone();
