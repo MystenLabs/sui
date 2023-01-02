@@ -194,8 +194,8 @@ event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8da003c65a1e2ec942d113808708fd2cd3f0b58e", features = ["copy_key", "secure"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8da003c65a1e2ec942d113808708fd2cd3f0b58e", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ebafc160dd5fb9f787cb2cdd8276d3f821f7d06e", features = ["copy_key", "secure"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ebafc160dd5fb9f787cb2cdd8276d3f821f7d06e", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -858,9 +858,9 @@ event-listener = { version = "2", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8da003c65a1e2ec942d113808708fd2cd3f0b58e", features = ["copy_key", "secure"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8da003c65a1e2ec942d113808708fd2cd3f0b58e", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "8da003c65a1e2ec942d113808708fd2cd3f0b58e", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ebafc160dd5fb9f787cb2cdd8276d3f821f7d06e", features = ["copy_key", "secure"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ebafc160dd5fb9f787cb2cdd8276d3f821f7d06e", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ebafc160dd5fb9f787cb2cdd8276d3f821f7d06e", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
