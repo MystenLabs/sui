@@ -20,8 +20,7 @@ export function useGetNFTMeta(objectID: string): NFTMetadata | null {
 
         const { details } = data || {};
         if (!isSuiObject(details) || !data) return null;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fields = getObjectFields(data) as Record<string, any> | undefined;
+        const fields = getObjectFields(data);
         if (!fields?.url) return null;
         return {
             description:
@@ -29,7 +28,7 @@ export function useGetNFTMeta(objectID: string): NFTMetadata | null {
                     ? fields.description
                     : null,
             name: typeof fields.name === 'string' ? fields.name : null,
-            url: fields.url,
+            url: fields.url as string,
         };
     }, [data, isError]);
 
