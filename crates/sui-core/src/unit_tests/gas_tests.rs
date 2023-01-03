@@ -30,11 +30,9 @@ async fn test_tx_less_than_minimum_gas_budget() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas budget is {}, smaller than minimum requirement {}",
-                budget, *MIN_GAS_BUDGET
-            )
+        SuiError::GasBudgetTooLow {
+            gas_budget: budget,
+            min_budget: *MIN_GAS_BUDGET
         }
     );
 }
@@ -49,8 +47,9 @@ async fn test_tx_more_than_maximum_gas_budget() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!("Gas budget set too high; maximum is {}", *MAX_GAS_BUDGET)
+        SuiError::GasBudgetTooHigh {
+            gas_budget: budget,
+            max_budget: *MAX_GAS_BUDGET
         }
     );
 }
@@ -67,13 +66,10 @@ async fn test_tx_gas_balance_less_than_budget() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                gas_balance,
-                gas_price * budget,
-                gas_price
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: gas_balance as u128,
+            gas_budget: (gas_price * budget) as u128,
+            gas_price
         }
     );
 }
@@ -147,13 +143,10 @@ async fn test_native_transfer_gas_price_is_used() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                gas_balance,
-                (gas_budget as u128) * (gas_price as u128),
-                gas_price
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: (gas_balance as u128),
+            gas_budget: (gas_budget as u128) * (gas_price as u128),
+            gas_price
         }
     );
 }

@@ -72,11 +72,10 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                1000, 1200, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 1200,
+            gas_price: 1
         }
     );
 }
@@ -101,13 +100,10 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Total balance is {}, not enough to pay {} with gas price of {}",
-                1000,
-                100 + 100 + 900,
-                1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 100 + 100 + 900,
+            gas_price: 1
         }
     );
 }
@@ -133,11 +129,10 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                400, 801, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 400,
+            gas_budget: 801,
+            gas_price: 1
         }
     );
 }
@@ -163,13 +158,10 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Total balance is {}, not enough to pay {} with gas price of {}",
-                400 + 600,
-                400 + 400 + 201,
-                1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 400 + 600,
+            gas_budget: 400 + 400 + 201,
+            gas_price: 1
         }
     );
 }
@@ -331,11 +323,10 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                1000, 2000, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 2000,
+            gas_price: 1
         }
     );
 }
@@ -351,11 +342,10 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                1000, 2500, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 2500,
+            gas_price: 1
         }
     );
 }
