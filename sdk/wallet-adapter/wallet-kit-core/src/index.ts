@@ -86,8 +86,11 @@ export function createWalletKitCore({
       ...nextInternalState,
     };
     state = computeState();
-    // TODO: Try-catch to make more robust
-    subscriptions.forEach((handler) => handler(state));
+    subscriptions.forEach((handler) => {
+      try {
+        handler(state);
+      } catch {}
+    });
   }
 
   // TODO: Defer this somehow, probably alongside the work above for lazy wallet adapters:
@@ -106,9 +109,13 @@ export function createWalletKitCore({
     },
 
     subscribe(handler) {
-      // Immediately invoke the handler with the current state to make it compatible with Svelte stores:
-      handler(this.getState());
       subscriptions.add(handler);
+
+      // Immediately invoke the handler with the current state to make it compatible with Svelte stores:
+      try {
+        handler(state);
+      } catch {}
+
       return () => {
         subscriptions.delete(handler);
       };
