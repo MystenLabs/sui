@@ -267,6 +267,7 @@ where
                     // Once all handles to our mailbox have been dropped this
                     // will yield `None` and we can terminate the event loop
                     if let Some(message) = maybe_message {
+                        debug!("state sync event loop got message: {:?}", message);
                         self.handle_message(message);
                     } else {
                         break;
@@ -310,6 +311,10 @@ where
 
     // Handle a checkpoint that we received from consensus
     fn handle_checkpoint_from_consensus(&mut self, checkpoint: Box<VerifiedCheckpoint>) {
+        debug!(
+            "State Sync handle_checkpoint_from_consensus checkpoint: {:?}",
+            checkpoint.inner().summary.epoch
+        );
         let (next_sequence_number, previous_digest) = {
             let latest_checkpoint = self
                 .store
@@ -320,6 +325,10 @@ where
             if latest_checkpoint.as_ref().map(|x| x.sequence_number())
                 >= Some(checkpoint.sequence_number())
             {
+                debug!(
+                    "State Sync ignored old checkpoint: {:?}",
+                    checkpoint.inner().summary.epoch
+                );
                 return;
             }
 
@@ -335,6 +344,10 @@ where
         if checkpoint.sequence_number() == next_sequence_number
             && checkpoint.previous_digest() == previous_digest
         {
+            warn!(
+                "State Sync exactly next checkpoint: {:?}",
+                checkpoint.inner().summary.epoch
+            );
             let checkpoint = *checkpoint;
 
             // Check invariant that consensus must only send state-sync fully synced checkpoints
@@ -370,11 +383,16 @@ where
             self.metrics
                 .set_highest_synced_checkpoint(checkpoint.sequence_number());
 
+            // warn!("State Sync broadcast checkpoint");
             // We don't care if no one is listening as this is a broadcast channel
             let _ = self.checkpoint_event_sender.send(checkpoint.clone());
 
             self.spawn_notify_peers_of_checkpoint(checkpoint);
         } else {
+            warn!(
+                "State Sync future checkpoint: {:?}",
+                checkpoint.inner().summary.epoch
+            );
             // Otherwise stick it with the other unprocessed checkpoints and we can try to sync the missing
             // ones
             self.peer_heights
@@ -500,6 +518,7 @@ where
                     .as_ref()
                     .map(|x| x.sequence_number())
         {
+            info!("@@@@@@@@@ clone checkpoint_event_sender");
             let task = sync_checkpoint_contents(
                 self.network.clone(),
                 self.store.clone(),
@@ -848,7 +867,8 @@ async fn sync_checkpoint_contents<S>(
                     .expect("store operation should not fail");
                 metrics.set_highest_synced_checkpoint(checkpoint.sequence_number());
                 // We don't care if no one is listening as this is a broadcast channel
-                let _ = checkpoint_event_sender.send(checkpoint.clone());
+                let res = checkpoint_event_sender.send(checkpoint.clone());
+                warn!("State Sync broadcast checkpoint: {:?}, res: {:?}", checkpoint, res);
                 highest_synced = Some(checkpoint);
             }
             Err(err) => {

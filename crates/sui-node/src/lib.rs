@@ -269,7 +269,7 @@ impl SuiNode {
             sim_node: sui_simulator::runtime::NodeHandle::current(),
         };
 
-        info!("SuiNode started!");
+        info!("SuiNode started????????????!");
         let node = Arc::new(node);
         let node_copy = node.clone();
         spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });

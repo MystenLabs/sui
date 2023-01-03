@@ -243,7 +243,9 @@ impl CheckpointExecutorEventLoop {
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
 
         loop {
+            info!("in execute_checkpoints_for_epoch loop!");
             if !self.end_of_epoch {
+                info!("end of epoch!");
                 self.schedule_synced_checkpoints(&mut pending)
                     .unwrap_or_else(|err| {
                         self.metrics.checkpoint_exec_errors.inc();
@@ -253,13 +255,14 @@ impl CheckpointExecutorEventLoop {
                         );
                     });
             }
-
+            info!("in execute_checkpoints_for_epoch loop! 2");
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((checkpoint, next_committee))) = pending.next() => {
+                    info!("pending.next() has sth!");
                     match next_committee {
                         None => {
                             // Ensure that we are not skipping checkpoints at any point
@@ -270,7 +273,7 @@ impl CheckpointExecutorEventLoop {
                             }
 
                             let new_highest = checkpoint.sequence_number();
-                            debug!(
+                            info!(
                                 "Bumping highest_executed_checkpoint watermark to {:?}",
                                 new_highest,
                             );
@@ -280,7 +283,7 @@ impl CheckpointExecutorEventLoop {
                                 .unwrap();
                         }
                         Some(committee) => {
-                            debug!(
+                            info!(
                                 "Last checkpoint ({:?}) of epoch {:?} has finished execution",
                                 checkpoint.sequence_number(),
                                 checkpoint.epoch(),
@@ -295,7 +298,7 @@ impl CheckpointExecutorEventLoop {
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
                     Ok(checkpoint) => {
-                        debug!(
+                        info!(
                             "Received new synced checkpoint message for checkpoint {:?}",
                             checkpoint.sequence_number(),
                         );
@@ -322,6 +325,7 @@ impl CheckpointExecutorEventLoop {
                     }
                 },
             }
+            info!("in execute_checkpoints_for_epoch loop! 3, ending select");
         }
     }
 
