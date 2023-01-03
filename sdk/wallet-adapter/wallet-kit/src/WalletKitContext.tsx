@@ -9,7 +9,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { WalletKitCore, WalletKitCoreState } from "@mysten/wallet-kit-core";
+import { createWalletKitCore, WalletKitCoreState } from "@mysten/wallet-kit-core";
 import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
 import { UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-unsafe-burner";
 import { WalletAdapterList } from "@mysten/wallet-adapter-base";
@@ -39,7 +39,7 @@ export function WalletKitProvider({
 
   const walletKitRef = useRef<WalletKitCore | null>(null);
   if (!walletKitRef.current) {
-    walletKitRef.current = new WalletKitCore({ adapters });
+    walletKitRef.current = createWalletKitCore({ adapters });
   }
 
   return (

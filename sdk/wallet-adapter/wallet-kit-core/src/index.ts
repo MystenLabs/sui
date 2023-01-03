@@ -44,139 +44,132 @@ export type Unsubscribe = () => void;
 // TODO: Support lazy loaded adapters, where we'll resolve the adapters only once we attempt to use them.
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
-export class WalletKitCore {
-  #wallets: WalletAdapter[];
-  #currentWallet: WalletAdapter | null;
-  #status: WalletKitCoreConnectionStatus;
+export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
+  let status = WalletKitCoreConnectionStatus.DISCONNECTED;
 
-  #accounts: SuiAddress[];
-  #currentAccount: SuiAddress | null;
+  let wallets: WalletAdapter[] = resolveAdapters(adapters);
+  let accounts: SuiAddress[] = [];
 
-  #state: WalletKitCoreState;
-  #subscriptions: Set<(state: WalletKitCoreState) => void>;
+  let currentWallet: WalletAdapter | null = null;
+  let currentAccount: SuiAddress | null = null;
 
-  constructor({ adapters }: WalletKitCoreOptions) {
-    this.#wallets = resolveAdapters(adapters);
-    this.#currentWallet = null;
-    this.#accounts = [];
-    this.#currentAccount = null;
-    this.#status = WalletKitCoreConnectionStatus.DISCONNECTED;
-    this.#subscriptions = new Set();
-    this.#state = this.#computeState();
+  const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
 
-    // TODO: Defer this somehow, probably alongside the work above for lazy wallet adapters:
-    const providers = adapters.filter(isWalletProvider);
-    if (providers.length) {
-      providers.map((provider) =>
-        provider.on("changed", () => {
-          this.#setWallets(resolveAdapters(adapters));
-        })
-      );
-    }
-  }
+  const computeState = () => ({
+    accounts,
+    currentAccount,
+    wallets,
+    currentWallet,
+    status,
+    isConnecting: status === WalletKitCoreConnectionStatus.CONNECTING,
+    isConnected: status === WalletKitCoreConnectionStatus.CONNECTED,
+    isError: status === WalletKitCoreConnectionStatus.ERROR,
+  });
 
-  subscribe = (handler: SubscribeHandler): Unsubscribe => {
-    // Immediately invoke the handler with the current state to make it compatible with Svelte stores:
-    handler(this.getState());
-    this.#subscriptions.add(handler);
-    return () => {
-      this.#subscriptions.delete(handler);
-    };
+  let state: WalletKitCoreState = computeState();
+  const setState = () => {
+    state = computeState();
   };
-
-  getState = (): WalletKitCoreState => {
-    return this.#state;
-  };
-
-  #computeState(): WalletKitCoreState {
-    return {
-      accounts: this.#accounts,
-      currentAccount: this.#currentAccount,
-      wallets: this.#wallets,
-      currentWallet: this.#currentWallet,
-      status: this.#status,
-      isConnecting: this.#status === WalletKitCoreConnectionStatus.CONNECTING,
-      isConnected: this.#status === WalletKitCoreConnectionStatus.CONNECTED,
-      isError: this.#status === WalletKitCoreConnectionStatus.ERROR,
-    };
-  }
 
   // TODO: Try-catch to make more robust
-  #notify() {
-    this.#state = this.#computeState();
-    this.#subscriptions.forEach((handler) => handler(this.#state));
+  function update() {
+    state = computeState();
+    subscriptions.forEach((handler) => handler(state));
   }
 
-  #setStatus(status: WalletKitCoreConnectionStatus) {
-    this.#status = status;
-    this.#notify();
+  // TODO: Defer this somehow, probably alongside the work above for lazy wallet adapters:
+  const providers = adapters.filter(isWalletProvider);
+  if (providers.length) {
+    providers.map((provider) =>
+      provider.on("changed", () => {
+        wallets = resolveAdapters(adapters);
+        update();
+      })
+    );
   }
 
-  #setCurrentWallet(currentWallet: WalletAdapter | null) {
-    this.#currentWallet = currentWallet;
-    this.#notify();
+  function setStatus(nextStatus: WalletKitCoreConnectionStatus) {
+    status = nextStatus;
+    update();
   }
 
-  #setWallets(wallets: WalletAdapter[]) {
-    this.#wallets = wallets;
-    this.#notify();
+  function setAccounts(
+    nextAccounts: SuiAddress[],
+    nextCurrentAccount: SuiAddress | null
+  ) {
+    accounts = nextAccounts;
+    currentAccount = nextCurrentAccount;
+    update();
   }
 
-  #setAccounts(accounts: SuiAddress[], currentAccount: SuiAddress | null) {
-    this.#accounts = accounts;
-    this.#currentAccount = currentAccount;
-    this.#notify();
+  function setCurrentWallet(nextCurrentWallet: WalletAdapter | null) {
+    currentWallet = nextCurrentWallet;
+    update();
   }
 
-  // TODO: Handle this being called multiple times:
-  // TODO: Return an abort controller so that they can be cancelled.
-  // TODO: Handle already connecting state better.
-  connect = async (walletName: string) => {
-    const currentWallet =
-      this.#wallets.find((wallet) => wallet.name === walletName) ?? null;
+  return {
+    getState() {
+      return state;
+    },
 
-    // TODO: Should the current wallet actually be set before we successfully connect to it?
-    this.#setCurrentWallet(currentWallet);
+    subscribe(handler: SubscribeHandler): Unsubscribe {
+      // Immediately invoke the handler with the current state to make it compatible with Svelte stores:
+      handler(this.getState());
+      subscriptions.add(handler);
+      return () => {
+        subscriptions.delete(handler);
+      };
+    },
 
-    if (currentWallet && !currentWallet.connecting) {
-      try {
-        this.#setStatus(WalletKitCoreConnectionStatus.CONNECTING);
-        await currentWallet.connect();
-        this.#setStatus(WalletKitCoreConnectionStatus.CONNECTED);
-        // TODO: Rather than using this method, we should just standardize the wallet properties on the adapter itself:
-        const accounts = await currentWallet.getAccounts();
-        // TODO: Implement account selection:
-        this.#setAccounts(accounts, accounts[0] ?? null);
-      } catch (e) {
-        console.log("Wallet connection error", e);
-        this.#setStatus(WalletKitCoreConnectionStatus.ERROR);
+    connect: async (walletName: string) => {
+      const nextCurrentWallet =
+        wallets.find((wallet) => wallet.name === walletName) ?? null;
+
+      // TODO: Should the current wallet actually be set before we successfully connect to it?
+      currentWallet = nextCurrentWallet;
+      update();
+
+      if (currentWallet && !currentWallet.connecting) {
+        try {
+          setStatus(WalletKitCoreConnectionStatus.CONNECTING);
+          await currentWallet.connect();
+          setStatus(WalletKitCoreConnectionStatus.CONNECTED);
+          // TODO: Rather than using this method, we should just standardize the wallet properties on the adapter itself:
+          const accounts = await currentWallet.getAccounts();
+          // TODO: Implement account selection:
+
+          setAccounts(accounts, accounts[0] ?? null);
+        } catch (e) {
+          console.log("Wallet connection error", e);
+          setStatus(WalletKitCoreConnectionStatus.ERROR);
+        }
+      } else {
+        setStatus(WalletKitCoreConnectionStatus.DISCONNECTED);
       }
-    } else {
-      this.#setStatus(WalletKitCoreConnectionStatus.DISCONNECTED);
-    }
-  };
+    },
 
-  disconnect = () => {
-    if (!this.#currentWallet) {
-      console.warn("Attempted to `disconnect` but no wallet was connected.");
-      return;
-    }
+    disconnect: () => {
+      if (!currentWallet) {
+        console.warn("Attempted to `disconnect` but no wallet was connected.");
+        return;
+      }
 
-    this.#currentWallet.disconnect();
-    this.#setStatus(WalletKitCoreConnectionStatus.DISCONNECTED);
-    this.#setAccounts([], null);
-    this.#setCurrentWallet(null);
-  };
+      currentWallet.disconnect();
+      setStatus(WalletKitCoreConnectionStatus.DISCONNECTED);
+      setAccounts([], null);
+      setCurrentWallet(null);
+    },
 
-  signAndExecuteTransaction = (
-    transaction: SignableTransaction
-  ): Promise<SuiTransactionResponse> => {
-    if (!this.#currentWallet) {
-      throw new Error(
-        "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
-      );
-    }
+    signAndExecuteTransaction: (
+      transaction: SignableTransaction
+    ): Promise<SuiTransactionResponse> => {
+      if (!currentWallet) {
+        throw new Error(
+          "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
+        );
+      }
 
-    return this.#currentWallet.signAndExecuteTransaction(transaction);
+      return currentWallet.signAndExecuteTransaction(transaction);
+    },
   };
 }
