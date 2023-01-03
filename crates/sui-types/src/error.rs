@@ -307,10 +307,23 @@ pub enum SuiError {
     },
 
     // Gas related errors
-    #[error("Gas budget set higher than max: {error:?}.")]
-    GasBudgetTooHigh { error: String },
-    #[error("Insufficient gas: {error:?}.")]
-    InsufficientGas { error: String },
+    #[error("Gas object is not an owned object with owner: {:?}.", owner)]
+    GasObjectNotOwnedObject { owner: Owner },
+    #[error("Gas budget: {:?} is higher than max: {:?}.", gas_budget, max_budget)]
+    GasBudgetTooHigh { gas_budget: u64, max_budget: u64 },
+    #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
+    GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
+    #[error(
+        "Balance of gas object {:?} is lower than gas budget: {:?}, with gas price: {:?}.",
+        gas_balance,
+        gas_budget,
+        gas_price
+    )]
+    GasBalanceTooLowToCoverGasBudget {
+        gas_balance: u128,
+        gas_budget: u128,
+        gas_price: u64,
+    },
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]

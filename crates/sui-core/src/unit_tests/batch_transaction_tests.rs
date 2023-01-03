@@ -238,7 +238,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
-        SuiError::InsufficientGas { .. }
+        SuiError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
 
     Ok(())
