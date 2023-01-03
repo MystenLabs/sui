@@ -162,7 +162,9 @@ async fn reconfig_with_revert_end_to_end_test() {
 
     // Close epoch on 3 (2f+1) validators.
     for handle in authorities.iter().skip(1) {
-        handle.with(|node| node.close_epoch().unwrap());
+        handle
+            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .await;
     }
 
     // handle transaction on authority 0
@@ -298,7 +300,9 @@ async fn test_validator_resign_effects() {
 async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
     // Close epoch on 3 (2f+1) validators.
     for handle in authorities.iter().skip(1) {
-        handle.with(|node| node.close_epoch().unwrap());
+        handle
+            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .await;
     }
     // Wait for all nodes to reach the next epoch.
     let handles: Vec<_> = authorities
