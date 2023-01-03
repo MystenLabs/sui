@@ -21,7 +21,7 @@ use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, Header, Round, TimestampMs,
 };
-use types::{now, ConditionalBroadcastReceiver};
+use types::{now, Timestamp, ConditionalBroadcastReceiver};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -477,8 +477,11 @@ impl Proposer {
                             break;
                         }
 
+                        // Reset batch creation timer to now as we are attempting to resend an existing digest
+                        // that failed to be committed in a previous header.
+                        let created_at_timestamp = now();
                         digests_to_resend.extend(
-                            header.payload.iter().map(|(digest, worker)| (*digest, *worker, 0))
+                            header.payload.iter().map(|(digest, worker)| (*digest, *worker, created_at_timestamp))
                         );
                         retransmit_rounds.push(*round_header);
                     }
