@@ -61,6 +61,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
   - protocol-key-pair:
       value:
         name: jc/20VUECmVvSBmxMRG1LFdGqGunLzlfuv4uw4R9HoFA5iSnUf32tfIFC8cgXPnTAATJCwx0Cv/TJs5nPMKyOi0k1T4q/rKG38Zo/UBgCJ1tKxe3md02+Q0zLlSnozjU
@@ -119,6 +123,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
   - protocol-key-pair:
       value:
         name: rd7vlNiYyI5A297/kcXxBfnPLHR/tvK8N+wD1ske2y4aV4z1RL6LCTHiXyQ9WbDDDZihbOO6HWzx1/UEJpkusK2zE0sFW+gUDS218l+wDYP45CIr8B/WrJOh/0152ljy
@@ -177,6 +185,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
   - protocol-key-pair:
       value:
         name: s/1e+1yHJAOkrRPxGZUTYG0jNUqEUkmuoVdWTCP/PBXGyeZSty10DoysuTy8wGhrDsDMDBx2C/tCtDZRn8WoBUt2UzqXqfI5h9CX75ax8lJrsgc/oQp3GZQXcjR+8nT0
@@ -235,6 +247,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
   - protocol-key-pair:
       value:
         name: iykapXF0PID5jtwjt7N3ZdJa6lpWaL4SqcxDafLvaXwbAcFKyHdC4ooqkJj+YZRiFV6exojtsF/QKVaqOne/52TWAd4Tl+TWnopwHw8TeEOlc0rWTcUEt2zfwoihd/4h
@@ -293,6 +309,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
   - protocol-key-pair:
       value:
         name: hDG9yW+2b1MVu6dC9eQPfjcvI3xeIg2B3zYYOwYmU154R+z0ao40SlohrbXlOIuVARpZPG30Ei9/4q1+gCipawnqvYQ3aSXqUBVj1YYnli1dMMIKrtMCG8TQ59v9HhyV
@@ -351,6 +371,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
   - protocol-key-pair:
       value:
         name: lamelKkm5XZeTAwR14xd1R0/fXugoGU7kl6RQkUn8PhjGFbkBMDtPVlWPOddZqEWE7hYH0edddPDSgk/K3vqaSorqorcW+AZTjWLIOAmr5YiVwlqLGsHCmQ3Hmuw+hXt
@@ -409,6 +433,10 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 43200
       objects-pruning-initial-delay-secs: 3600
+    checkpoint-executor-config:
+      checkpoint-execution-max-concurrency: 100
+      end-of-epoch-broadcast-channel-capacity: 128
+      local-execution-timeout-sec: 10
 account_keys:
   - 10wECHkYvXqL5/CY6WhjbfFPotZb5tjEbpmumqbRxul6/9LaD95rkXfiBEoGJR8u81q9fCiP+O7nXOsprVTPUQ==
   - ZTWBfKEmFOyYM9oBU9dNfREBuAU5fm2OBhg/vPtI00ee91o4Td1upRqxdMC/5khQi58pBG83ZvbMUnI2shFOvw==

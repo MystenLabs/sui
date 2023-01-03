@@ -20,7 +20,7 @@ use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
 /// picks up where it left off in the event of a mid-epoch node crash.
 #[tokio::test]
 pub async fn test_checkpoint_executor_crash_recovery() {
-    let buffer_size = num_cpus::get() * TASKS_PER_CORE * 2;
+    let buffer_size = num_cpus::get() * 2;
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 

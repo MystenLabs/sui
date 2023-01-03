@@ -202,6 +202,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             grpc_concurrency_limit: None,
             p2p_config,
             authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            checkpoint_executor_config: Default::default(),
         })
     }
 }

@@ -207,6 +207,7 @@ impl SuiNode {
             state_sync_handle.subscribe_to_synced_checkpoints(),
             checkpoint_store.clone(),
             state.clone(),
+            config.checkpoint_executor_config.clone(),
             &prometheus_registry,
         )
         .start()?;

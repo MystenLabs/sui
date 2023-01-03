@@ -22,6 +22,7 @@ use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
+use sui_config::node::CheckpointExecutorConfig;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     committee::Committee,
@@ -50,10 +51,6 @@ mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
-const TASKS_PER_CORE: usize = 1;
-const END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY: usize = 2;
-const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
-
 type CheckpointExecutionBuffer = FuturesOrdered<
     JoinHandle<(
         VerifiedCheckpoint,
@@ -65,6 +62,7 @@ pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_state: Arc<AuthorityState>,
+    config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
 
@@ -73,12 +71,14 @@ impl CheckpointExecutor {
         mailbox: broadcast::Receiver<VerifiedCheckpoint>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
+        config: CheckpointExecutorConfig,
         prometheus_registry: &Registry,
     ) -> Self {
         Self {
             mailbox,
             checkpoint_store,
             authority_state,
+            config,
             metrics: CheckpointExecutorMetrics::new(prometheus_registry),
         }
     }
@@ -92,6 +92,7 @@ impl CheckpointExecutor {
             mailbox,
             checkpoint_store,
             authority_state,
+            config: Default::default(),
             metrics: CheckpointExecutorMetrics::new_for_tests(),
         }
     }
@@ -101,17 +102,19 @@ impl CheckpointExecutor {
             mailbox,
             checkpoint_store,
             authority_state,
+            config,
             metrics,
         } = self;
 
         let (end_of_epoch_event_sender, _receiver) =
-            broadcast::channel::<Committee>(END_OF_EPOCH_BROADCAST_CHANNEL_CAPACITY);
+            broadcast::channel::<Committee>(config.end_of_epoch_broadcast_channel_capacity);
 
         let executor = CheckpointExecutorEventLoop::new(
             mailbox,
             end_of_epoch_event_sender.clone(),
             checkpoint_store,
             authority_state,
+            config,
             metrics,
         )?;
 
@@ -154,6 +157,7 @@ pub struct CheckpointExecutorEventLoop {
     end_of_epoch_event_sender: broadcast::Sender<Committee>,
     checkpoint_store: Arc<CheckpointStore>,
     authority_state: Arc<AuthorityState>,
+    config: CheckpointExecutorConfig,
     highest_scheduled_seq_num: Option<CheckpointSequenceNumber>,
     latest_synced_checkpoint: Option<VerifiedCheckpoint>,
     /// end_of_epoch is set to true once the last checkpoint
@@ -168,7 +172,6 @@ pub struct CheckpointExecutorEventLoop {
     /// the final checkpoint will not have been set, thus CheckpointExecutor
     /// will reschedule the last checkpoint and correctly set end_of_epoch.
     end_of_epoch: bool,
-    task_limit: usize,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
 
@@ -178,6 +181,7 @@ impl CheckpointExecutorEventLoop {
         end_of_epoch_event_sender: broadcast::Sender<Committee>,
         checkpoint_store: Arc<CheckpointStore>,
         authority_state: Arc<AuthorityState>,
+        config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
     ) -> Result<Self, TypedStoreError> {
         Ok(Self {
@@ -185,10 +189,10 @@ impl CheckpointExecutorEventLoop {
             end_of_epoch_event_sender,
             checkpoint_store,
             authority_state,
+            config,
             highest_scheduled_seq_num: None,
             latest_synced_checkpoint: None,
             end_of_epoch: false,
-            task_limit: TASKS_PER_CORE * num_cpus::get(),
             metrics,
         })
     }
@@ -373,20 +377,22 @@ impl CheckpointExecutorEventLoop {
                 .unwrap_or(0),
         );
 
+        let task_limit = self.config.checkpoint_execution_max_concurrency;
+
         match next_to_exec.cmp(&latest_synced_checkpoint.sequence_number()) {
             // fully caught up case
             Ordering::Greater => return Ok(()),
             // follow case. Avoid reading from DB and used checkpoint passed
             // from StateSync
             Ordering::Equal => {
-                if pending.len() < self.task_limit && !self.end_of_epoch {
+                if pending.len() < task_limit && !self.end_of_epoch {
                     return self.schedule_checkpoint(latest_synced_checkpoint, pending);
                 }
             }
             // Need to catch up more than 1. Read from store
             Ordering::Less => {
                 for i in next_to_exec..=latest_synced_checkpoint.sequence_number() {
-                    if pending.len() >= self.task_limit || self.end_of_epoch {
+                    if pending.len() >= task_limit || self.end_of_epoch {
                         break;
                     }
                     let checkpoint = self
@@ -435,10 +441,16 @@ impl CheckpointExecutorEventLoop {
         let state = self.authority_state.clone();
         let store = self.checkpoint_store.clone();
         let metrics = self.metrics.clone();
+        let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
 
         pending.push_back(spawn_monitored_task!(async move {
-            while let Err(err) =
-                execute_checkpoint(checkpoint.clone(), state.clone(), store.clone()).await
+            while let Err(err) = execute_checkpoint(
+                checkpoint.clone(),
+                state.clone(),
+                store.clone(),
+                local_execution_timeout_sec,
+            )
+            .await
             {
                 error!(
                     "Error while executing checkpoint, will retry in 1s: {:?}",
@@ -484,6 +496,7 @@ pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_state: Arc<AuthorityState>,
     checkpoint_store: Arc<CheckpointStore>,
+    local_execution_timeout_sec: u64,
 ) -> SuiResult {
     debug!(
         "Scheduling checkpoint {:?} for execution",
@@ -499,12 +512,13 @@ pub async fn execute_checkpoint(
         })
         .into_inner();
 
-    execute_transactions(txes, authority_state).await
+    execute_transactions(txes, authority_state, local_execution_timeout_sec).await
 }
 
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_state: Arc<AuthorityState>,
+    log_timeout_sec: u64,
 ) -> SuiResult {
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
@@ -555,16 +569,18 @@ async fn execute_transactions(
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
+    let log_timeout_sec = Duration::from_secs(log_timeout_sec);
+
     loop {
         let effects_future = authority_state
             .database
             .notify_read_effects(all_tx_digests.clone());
 
-        match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
+        match timeout(log_timeout_sec, effects_future).await {
             Err(_elapsed) => {
                 warn!(
                     "Transaction effects for checkpoint not present within {:?}. ",
-                    LOCAL_EXECUTION_TIMEOUT * periods
+                    log_timeout_sec * periods,
                 );
                 periods += 1;
             }

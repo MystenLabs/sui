@@ -334,6 +334,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
                     authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
+                    checkpoint_executor_config: Default::default(),
                 }
             })
             .collect();
