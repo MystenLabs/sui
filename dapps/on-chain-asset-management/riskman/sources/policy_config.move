@@ -5,8 +5,13 @@ module riskman::policy_config {
 
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID};
+    use sui::coin::{Self, Coin};
+    use sui::balance::{Self, Balance};
+    use sui::sui::SUI;
     use sui::transfer;
     use std::vector as vec;
+
+    const EAdministratorCannotBeSpender : u64 = 0;
 
     struct AdministratorCap has key, store {
         id: UID,
@@ -20,6 +25,11 @@ module riskman::policy_config {
 
     struct ApproverCap has key, store {
         id: UID,
+    }
+
+    struct Assets has key {
+        id: UID,
+        foundation_balance: Balance<SUI>,
     }
 
     struct Policy has store {
@@ -37,9 +47,13 @@ module riskman::policy_config {
 
     // ======== Functions =========
     fun init(ctx: &mut TxContext) {
-       transfer::transfer(AdministratorCap{id: object::new(ctx)}, 
+        transfer::transfer(AdministratorCap{id: object::new(ctx)}, 
                           tx_context::sender(ctx)
                         );
+        transfer::share_object(Assets {
+            id: object::new(ctx),
+            foundation_balance: balance::zero()
+        });
         transfer::share_object(RolesRegistry {
             id: object::new(ctx),
             administrators: vec::singleton(tx_context::sender(ctx)),
@@ -89,6 +103,14 @@ module riskman::policy_config {
         vec::push_back(&mut reg.approvers, recipient);
     }
 
+    entry fun top_up(
+        assets: &mut Assets,
+        coin: Coin<SUI>,
+        _ctx: &mut TxContext,
+    ) {
+        coin::put(&mut assets.foundation_balance, coin)
+    }
+
     /// TODO
     // entry fun create_policy(
     //     _: &AdministratorCap,
@@ -123,6 +145,12 @@ module riskman::policy_config {
 
     // }
 
+    public fun get_foundation_balance_mut(
+        assets: &mut Assets
+    ) : &mut Balance<SUI> {
+        &mut assets.foundation_balance
+    }
+
     public fun get_amount_limit(
         spender_cap: &SpenderCap
     ) : u64 {
@@ -141,7 +169,7 @@ module riskman::policy_config {
         spender_cap.policy.time_limit
     }
 
-    public fun add_spent(
+    public fun update_spent(
         spender_cap: &mut SpenderCap,
         amount: u64
     ) {

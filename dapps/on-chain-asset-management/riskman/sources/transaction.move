@@ -1,8 +1,9 @@
 module riskman::transaction {
 
-    use riskman::policy_config::{Self, SpenderCap, ApproverCap};
+    use riskman::policy_config::{Self, SpenderCap, ApproverCap, Assets};
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
+    use sui::coin::{Self};
     use std::string::{Self, String};
     use sui::transfer;
 
@@ -74,10 +75,15 @@ module riskman::transaction {
     entry fun execute_transaction(
         spender_cap: &mut SpenderCap,
         tx_approval: TransactionApproval,
-        _ctx: &mut TxContext,
+        assets: &mut Assets,
+        ctx: &mut TxContext,
     ) {
         assert!(tx_approval.amount <= policy_config::get_amount_limit(spender_cap) - policy_config::get_amount_spent(spender_cap), 2);
-        policy_config::add_spent(spender_cap, tx_approval.amount);
+        transfer::transfer(
+            coin::take(policy_config::get_foundation_balance_mut(assets), tx_approval.amount, ctx) , 
+            tx_approval.recipient
+        );
+        policy_config::update_spent(spender_cap, tx_approval.amount);
         
         //Unpack and delete the TransactionApproval
         let TransactionApproval { 
