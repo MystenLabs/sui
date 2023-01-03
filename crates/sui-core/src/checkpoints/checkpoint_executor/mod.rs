@@ -40,6 +40,9 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 use typed_store::{rocks::TypedStoreError, Map};
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::AuthorityStore;
+use crate::transaction_manager::TransactionManager;
 use crate::{
     authority::{AuthorityState, EffectsNotifyRead},
     checkpoints::CheckpointStore,
@@ -424,11 +427,13 @@ impl CheckpointExecutorEventLoop {
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
         let checkpoint_epoch = checkpoint.epoch();
-        let node_epoch = self.authority_state.epoch();
+        let epoch_store = self.authority_state.epoch_store();
         assert_eq!(
-            checkpoint_epoch, node_epoch,
+            checkpoint_epoch,
+            epoch_store.epoch(),
             "Epoch mismatch after startup recovery. checkpoint epoch: {:?}, node epoch: {:?}",
-            checkpoint_epoch, node_epoch,
+            checkpoint_epoch,
+            epoch_store.epoch(),
         );
 
         let next_committee = checkpoint.summary().next_epoch_committee.clone();
@@ -446,8 +451,10 @@ impl CheckpointExecutorEventLoop {
         pending.push_back(spawn_monitored_task!(async move {
             while let Err(err) = execute_checkpoint(
                 checkpoint.clone(),
-                state.clone(),
+                state.db(),
                 store.clone(),
+                epoch_store.clone(),
+                state.transaction_manager().clone(),
                 local_execution_timeout_sec,
             )
             .await
@@ -494,8 +501,10 @@ impl CheckpointExecutorEventLoop {
 
 pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
-    authority_state: Arc<AuthorityState>,
+    authority_store: Arc<AuthorityStore>,
     checkpoint_store: Arc<CheckpointStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
     local_execution_timeout_sec: u64,
 ) -> SuiResult {
     debug!(
@@ -512,19 +521,27 @@ pub async fn execute_checkpoint(
         })
         .into_inner();
 
-    execute_transactions(txes, authority_state, local_execution_timeout_sec).await
+    execute_transactions(
+        txes,
+        authority_store,
+        epoch_store,
+        transaction_manager,
+        local_execution_timeout_sec,
+    )
+    .await
 }
 
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
-    authority_state: Arc<AuthorityState>,
+    authority_store: Arc<AuthorityStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
 ) -> SuiResult {
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
-    let synced_txns: Vec<VerifiedCertificate> = authority_state
-        .database
+    let synced_txns: Vec<VerifiedCertificate> = authority_store
         .perpetual_tables
         .synced_transactions
         .multi_get(&all_tx_digests)?
@@ -537,8 +554,7 @@ async fn execute_transactions(
         .iter()
         .map(|digest| digest.effects)
         .collect();
-    let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_state
-        .database
+    let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_store
         .perpetual_tables
         .effects
         .multi_get(effects_digests)?
@@ -554,27 +570,25 @@ async fn execute_transactions(
 
     for tx in synced_txns.clone() {
         if tx.contains_shared_object() {
-            authority_state
-                .database
-                .acquire_shared_locks_from_effects(&tx, digest_to_effects.get(tx.digest()).unwrap())
+            epoch_store
+                .acquire_shared_locks_from_effects(
+                    &tx,
+                    digest_to_effects.get(tx.digest()).unwrap(),
+                    &authority_store,
+                )
                 .await?;
         }
     }
-    authority_state
-        .database
-        .epoch_store()
-        .insert_pending_certificates(&synced_txns)?;
+    epoch_store.insert_pending_certificates(&synced_txns)?;
 
-    authority_state.transaction_manager().enqueue(synced_txns)?;
+    transaction_manager.enqueue(synced_txns)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
     let log_timeout_sec = Duration::from_secs(log_timeout_sec);
 
     loop {
-        let effects_future = authority_state
-            .database
-            .notify_read_effects(all_tx_digests.clone());
+        let effects_future = authority_store.notify_read_effects(all_tx_digests.clone());
 
         match timeout(log_timeout_sec, effects_future).await {
             Err(_elapsed) => {

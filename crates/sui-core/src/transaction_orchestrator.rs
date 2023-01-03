@@ -192,7 +192,12 @@ where
             });
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            validator_state.execute_certificate_with_effects(tx_cert, effects_cert),
+            validator_state.execute_certificate_with_effects(
+                tx_cert,
+                effects_cert,
+                // TODO: Check whether it's safe to call epoch_store here.
+                &validator_state.epoch_store(),
+            ),
         )
         .await
         {

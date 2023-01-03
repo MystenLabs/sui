@@ -1314,30 +1314,6 @@ impl AuthorityStore {
         }
     }
 
-    /// Lock a sequence number for the shared objects of the input transaction based on the effects
-    /// of that transaction. Used by full nodes, which don't listen to consensus.
-    pub async fn acquire_shared_locks_from_effects(
-        &self,
-        certificate: &VerifiedCertificate,
-        effects: &TransactionEffects,
-    ) -> SuiResult {
-        let _tx_lock = self
-            .epoch_store()
-            .acquire_tx_lock(certificate.digest())
-            .await;
-        self.epoch_store()
-            .set_assigned_shared_object_versions(
-                certificate,
-                &effects
-                    .shared_objects
-                    .iter()
-                    .map(|(id, version, _)| (*id, *version))
-                    .collect(),
-                self,
-            )
-            .await
-    }
-
     pub fn get_transaction(
         &self,
         transaction_digest: &TransactionDigest,

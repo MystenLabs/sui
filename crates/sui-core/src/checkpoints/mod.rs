@@ -508,7 +508,10 @@ impl CheckpointBuilder {
                 self.transaction_certifier.deref(),
             )
             .await?;
-        let signed_effect = self.state.try_execute_immediately(&cert).await?;
+        let signed_effect = self
+            .state
+            .try_execute_immediately(&cert, epoch_store)
+            .await?;
         effects.push(signed_effect.into_data());
         Ok(())
     }
@@ -1014,7 +1017,7 @@ mod tests {
             Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new_for_tests(),
         );
-        let epoch_store = state.epoch_store();
+        let epoch_store = state.epoch_store_for_testing();
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
         checkpoint_service
             .notify_checkpoint(&epoch_store, 0, vec![d(4)], false)
@@ -1142,7 +1145,12 @@ mod tests {
             gas_used,
             ..Default::default()
         };
-        SignedTransactionEffects::new(state.epoch(), effects, &*state.secret, state.name)
+        SignedTransactionEffects::new(
+            state.epoch_store_for_testing().epoch(),
+            effects,
+            &*state.secret,
+            state.name,
+        )
     }
 
     fn committee() -> (AuthorityKeyPair, Committee) {
