@@ -59,7 +59,7 @@ Create a branch of your fork with following command (or follow the [GitHub topic
 
 `git checkout -b your-branch-name`
 
-Use the following command to set the [remote upstream repo](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/configuring-a-remote-for-a-fork):
+Use the following command to set the [remote upstream repo](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/configuring-a-remote-repository-for-a-fork):
 
 `git remote add upstream https://github.com/MystenLabs/sui.git`
 
