@@ -1545,6 +1545,13 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
+    // In the simulator, we intercept the wall clock in the test thread only. This causes problems
+    // because rocksdb uses the simulated clock when creating its background threads, but then
+    // those threads see the real wall clock (because they are not the test thread), which causes
+    // rocksdb to panic. The `nondeterministic` macro evaluates expressions in new threads, which
+    // resolves the issue.
+    //
+    // This is a no-op in non-simulator builds.
     nondeterministic!({
         let options = prepare_db_options(&path, db_options, opt_cfs);
         let rocksdb = {
@@ -1570,6 +1577,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
+    // See comment above for explanation of why nondeterministic is necessary here.
     nondeterministic!({
         let options = prepare_db_options(&path, db_options, opt_cfs);
         let rocksdb = rocksdb::OptimisticTransactionDB::<MultiThreaded>::open_cf_descriptors(
@@ -1592,6 +1600,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let primary_path = primary_path.as_ref();
     let secondary_path = secondary_path.as_ref().map(|p| p.as_ref());
+    // See comment above for explanation of why nondeterministic is necessary here.
     nondeterministic!({
         // Customize database options
         let mut options = db_options.unwrap_or_else(|| default_db_options().options);
