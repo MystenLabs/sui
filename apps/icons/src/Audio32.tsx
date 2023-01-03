@@ -11,21 +11,21 @@ const SvgAudio32 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M9.333 25.667a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <path
       d="M12.333 22.667V9A2.667 2.667 0 0 1 15 6.333h8A2.667 2.667 0 0 1 25.667 9v9.667"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <path
       d="M22.667 21.667a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

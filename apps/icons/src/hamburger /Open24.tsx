@@ -13,7 +13,7 @@ const SvgOpen24 = (props: SVGProps<SVGSVGElement>) => (
       fillRule="evenodd"
       clipRule="evenodd"
       d="M5.636 16.95a1 1 0 0 0 1.414 1.414l4.95-4.95 4.95 4.95a1 1 0 0 0 1.414-1.414L13.414 12l4.95-4.95a1 1 0 0 0-1.414-1.414L12 10.586l-4.95-4.95A1 1 0 1 0 5.636 7.05l4.95 4.95-4.95 4.95Z"
-      fill="#383F47"
+      fill="currentColor"
     />
   </svg>
 );

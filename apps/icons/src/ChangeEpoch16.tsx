@@ -14,7 +14,7 @@ const SvgChangeEpoch16 = (props: SVGProps<SVGSVGElement>) => (
         fillRule="evenodd"
         clipRule="evenodd"
         d="M3.555 1.348A8 8 0 0 1 8 0a8.024 8.024 0 0 1 8 8A8 8 0 1 1 3.555 1.348Zm1.112 11.64A6 6 0 0 0 8 14a6.018 6.018 0 0 0 6-6 6 6 0 1 0-9.333 4.989ZM9 7h2.5a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1V4.5a1 1 0 0 1 2 0V7Z"
-        fill="#383F47"
+        fill="currentColor"
       />
     </g>
     <defs>

@@ -11,7 +11,7 @@ const SvgDown16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="m4 6 4 4 4-4"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

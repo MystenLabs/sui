@@ -11,8 +11,8 @@ const SvgFlag16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M3.833 12.833v-4 4Zm0-4v-5s1.834-1.5 4.167 0c2.333 1.5 4.167 0 4.167 0v5s-1.834 1.5-4.167 0c-2.333-1.5-4.167 0-4.167 0Z"
-      fill="#383F47"
-      stroke="#383F47"
+      fill="currentColor"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

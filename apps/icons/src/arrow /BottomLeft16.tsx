@@ -11,7 +11,7 @@ const SvgBottomLeft16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="m11.333 4.667-6.666 6.666M11.333 11.333H4.667V4.667"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

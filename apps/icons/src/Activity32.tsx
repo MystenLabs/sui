@@ -11,7 +11,7 @@ const SvgActivity32 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M6.333 15.667H11l2.667-9.334 4.666 19.334 2.667-10h4.667"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

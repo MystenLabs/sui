@@ -11,7 +11,7 @@ const SvgDestake16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="m9 10 5 5M14 10l-5 5M6 5h4M2 14V3.655C2 2.741 2.741 2 3.655 2h8.69C13.259 2 14 2.741 14 3.655V7.38"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

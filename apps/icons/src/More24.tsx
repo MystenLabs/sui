@@ -11,7 +11,7 @@ const SvgMore24 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M13 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM17 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
-      fill="#383F47"
+      fill="currentColor"
     />
   </svg>
 );

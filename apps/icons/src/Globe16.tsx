@@ -11,14 +11,14 @@ const SvgGlobe16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12Z"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <path
       d="M10.5 8c0 3.724-1.544 6-2.5 6s-2.5-2.276-2.5-6S7.044 2 8 2s2.5 2.276 2.5 6ZM2 8h12"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

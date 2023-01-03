@@ -11,7 +11,7 @@ const SvgPlus12 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M6 2.5v7M2.5 6h7"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

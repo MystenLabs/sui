@@ -15,12 +15,12 @@ const SvgNew24 = (props: SVGProps<SVGSVGElement>) => (
       width={13.227}
       height={13.227}
       rx={2.25}
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
     />
     <path
       d="M7.91 5.455V5a2 2 0 0 1 2-2H19a2 2 0 0 1 2 2v9.09a2 2 0 0 1-2 2h-.454"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
     />
   </svg>

@@ -11,14 +11,14 @@ const SvgOld16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M5.333 4h-.712c-.711 0-1.288.576-1.288 1.287v6.759c0 .711.577 1.287 1.288 1.287h6.758c.711 0 1.288-.576 1.288-1.287V5.287c0-.71-.577-1.287-1.288-1.287h-.712"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <path
       d="M5.333 3.667a1 1 0 0 1 1-1h3.334a1 1 0 0 1 1 1v.666a1 1 0 0 1-1 1H6.333a1 1 0 0 1-1-1v-.666Z"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

@@ -11,7 +11,7 @@ const SvgUp16 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M12 10 8 6l-4 4"
-      stroke="#383F47"
+      stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"

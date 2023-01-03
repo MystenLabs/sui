@@ -9,10 +9,10 @@ const SvgPublish16 = (props: SVGProps<SVGSVGElement>) => (
     xmlns="http://www.w3.org/2000/svg"
     {...props}
   >
-    <g clipPath="url(#publish-16_svg__a)" fill="#383F47">
+    <g clipPath="url(#publish-16_svg__a)" fill="currentColor">
       <path
         d="M8 4 1.333 7.333 8 10.667l6.666-3.334L8 4Z"
-        stroke="#383F47"
+        stroke="currentColor"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"

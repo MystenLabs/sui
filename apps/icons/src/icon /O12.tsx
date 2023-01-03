@@ -9,7 +9,7 @@ const SvgO12 = (props: SVGProps<SVGSVGElement>) => (
     xmlns="http://www.w3.org/2000/svg"
     {...props}
   >
-    <circle cx={6} cy={6} r={3} fill="#383F47" />
+    <circle cx={6} cy={6} r={3} fill="currentColor" />
   </svg>
 );
 export default SvgO12;
