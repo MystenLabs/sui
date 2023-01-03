@@ -119,7 +119,7 @@ impl SqlEventStore {
             .synchronous(SqliteSynchronous::Normal)
             // Minimal journal size and frequent autocheckpoints help prevent giant WALs
             .pragma("journal_size_limit", "0")
-            .pragma("wal_autocheckpoint", "400") // In pages of 4KB each
+            // "wal_autocheckpoint" default to 1000 => auto checkpointing every 1000 pages
             .create_if_missing(true);
         options.log_statements(log::LevelFilter::Off);
 
@@ -144,6 +144,7 @@ impl SqlEventStore {
                 let _ = self.force_wal_truncation().await.map_err(|e| {
                     warn!("Unable to truncate Event Store SQLite WAL: {}", e);
                 });
+                info!("SQLite WAL truncation finished");
             }
         }
     }
