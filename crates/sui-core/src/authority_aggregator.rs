@@ -456,7 +456,8 @@ pub trait TransactionCertifier: Sync + Send + 'static {
     async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate>;
 }
@@ -482,18 +483,19 @@ impl TransactionCertifier for NetworkTransactionCertifier {
     async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let registry = Registry::new();
         let net = AuthorityAggregator::new_from_system_state(
-            &self_state.db(),
-            self_state.committee_store(),
+            self_store,
+            committee_store,
             SafeClientMetricsBase::new(&registry),
             AuthAggMetrics::new(&registry),
         )?;
 
-        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
+        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
             .await
     }
 }
@@ -503,10 +505,11 @@ impl TransactionCertifier for LocalTransactionCertifier {
     async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
-        let sui_system_state = self_state.get_sui_system_state_object()?;
+        let sui_system_state = self_store.get_sui_system_state_object()?;
         let committee = sui_system_state.get_current_epoch_committee().committee;
         let clients: BTreeMap<_, _> = committee.names().map(|name|
             // unwrap is fine because LocalAuthorityClient is only used for testing.
@@ -514,12 +517,12 @@ impl TransactionCertifier for LocalTransactionCertifier {
         ).collect();
         let net = AuthorityAggregator::new(
             committee,
-            self_state.committee_store().clone(),
+            committee_store.clone(),
             clients,
             &Registry::new(),
         );
 
-        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
+        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
             .await
     }
 }
@@ -1837,20 +1840,14 @@ where
     pub async fn authorty_ask_for_cert_with_retry_and_timeout(
         &self,
         transaction: &VerifiedTransaction,
-        state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let result = tokio::time::timeout(timeout, async {
             loop {
                 // We may have already executed this transaction somewhere else.
                 // If so, no need to try to get it from the network.
-                if let Ok(Some(VerifiedTransactionInfoResponse {
-                    certified_transaction: Some(cert),
-                    ..
-                })) = state
-                    .get_tx_info_already_executed(transaction.digest())
-                    .await
-                {
+                if let Ok(Some(cert)) = self_store.get_certified_transaction(transaction.digest()) {
                     return cert;
                 }
                 match self.process_transaction(transaction.clone()).await {

@@ -71,7 +71,7 @@ async fn advance_epoch_tx_test_impl(
 ) {
     let failing_task = states[0]
         .create_advance_epoch_tx_cert(
-            1,
+            &states[0].epoch_store(),
             &GasCostSummary::new(0, 0, 0),
             Duration::from_secs(15),
             certifier,
@@ -86,7 +86,7 @@ async fn advance_epoch_tx_test_impl(
         .map(|state| async {
             state
                 .create_advance_epoch_tx_cert(
-                    1,
+                    &state.epoch_store(),
                     &GasCostSummary::new(0, 0, 0),
                     Duration::from_secs(1000), // A very very long time
                     certifier,
