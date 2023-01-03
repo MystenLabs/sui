@@ -733,12 +733,15 @@ impl AuthorityState {
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<SignedTransactionEffects> {
+        let epoch_store = self.epoch_store();
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         // If the cert is finalized in a previous epoch, it will be re-signed
         // with current epoch info and returned.
-        if let Some(signed_effects) = self.database.get_signed_effects(&digest)? {
+        if let Some(signed_effects) =
+            self.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &digest)?
+        {
             tx_guard.release();
             return Ok(signed_effects);
         }
@@ -760,7 +763,6 @@ impl AuthorityState {
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
-        let epoch_store = self.epoch_store();
         // This should be correct because of order execution epoch and epoch store change
         // See AuthorityState::reconfigure() method for order of lock and store update
         assert_eq!(*execution_guard, epoch_store.epoch());
@@ -2066,7 +2068,7 @@ impl AuthorityState {
     /// Get the signed effects of the given transaction. If the effects was signed in a previous
     /// epoch, re-sign it so that the caller is able to form a cert of the effects in the current
     /// epoch.
-    fn get_signed_effects_and_maybe_resign(
+    pub fn get_signed_effects_and_maybe_resign(
         &self,
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
