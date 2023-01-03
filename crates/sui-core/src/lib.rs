@@ -13,7 +13,6 @@ pub mod consensus_validator;
 pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
-pub mod execution_engine;
 mod histogram;
 pub mod metrics;
 mod module_cache_gauge;
@@ -31,5 +30,9 @@ mod transaction_manager;
 pub mod transaction_orchestrator;
 pub mod transaction_streamer;
 pub mod validator_info;
+
+#[cfg(test)]
+#[path = "unit_tests/pay_sui_tests.rs"]
+mod pay_sui_tests;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
