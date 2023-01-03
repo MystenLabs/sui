@@ -25,5 +25,5 @@ Last step, top up your foundation balance:
 ```
 
 ### Transaction Flow
-![alt text](https://github.com/MystenLabs/sui/tree/On-Chain-Asset-Management/dapps/on-chain-asset-management/riskman/Transaction-flow.drawio.png)
+![tflow](https://github.com/MystenLabs/sui/blob/On-Chain-Asset-Management/dapps/on-chain-asset-management/riskman/Transaction-flow.drawio.png)
 
