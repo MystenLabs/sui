@@ -1,0 +1,11 @@
+{
+  "name": "@mysten/icons",
+	"main": "src/index.ts",
+  "private": true,
+	"scripts": {
+		"build": "svgr --config-file svgrrc.config.js svgs"
+	},
+  "devDependencies": {
+		"@svgr/cli": "^6.5.1"
+  }
+}

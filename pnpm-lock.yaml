@@ -182,6 +182,12 @@ importers:
       vite-plugin-svgr: 2.4.0_vite@4.0.4
       vitest: 0.26.3_@vitest+ui@0.26.3
 
+  apps/icons:
+    specifiers:
+      '@svgr/cli': ^6.5.1
+    devDependencies:
+      '@svgr/cli': 6.5.1
+
   apps/wallet:
     specifiers:
       '@babel/preset-env': ^7.20.2
@@ -5806,6 +5812,24 @@ packages:
       '@svgr/babel-plugin-transform-svg-component': 6.5.1_@babel+core@7.20.12
     dev: true
 
+  /@svgr/cli/6.5.1:
+    resolution: {integrity: sha512-HdxcV0NeySUU25/wQ1smXspDc7S8Z+TLt3K7pSrEO2FiLVglCRBX5gw+yROGXrcHH5p2Ui4A0xo/pdshfVbBuA==}
+    engines: {node: '>=10'}
+    hasBin: true
+    dependencies:
+      '@svgr/core': 6.5.1
+      '@svgr/plugin-jsx': 6.5.1_@svgr+core@6.5.1
+      '@svgr/plugin-prettier': 6.5.1_@svgr+core@6.5.1
+      '@svgr/plugin-svgo': 6.5.1_@svgr+core@6.5.1
+      camelcase: 6.3.0
+      chalk: 4.1.2
+      commander: 9.4.1
+      dashify: 2.0.0
+      glob: 8.0.3
+    transitivePeerDependencies:
+      - supports-color
+    dev: true
+
   /@svgr/core/6.5.1:
     resolution: {integrity: sha512-/xdLSWxK5QkqG524ONSjvg3V/FkNyCv538OIBdQqPNaAta3AsXj/Bd2FbvR87yMbXO2hFSWiAe/Q6IkVPDw+mw==}
     engines: {node: '>=10'}
@@ -5840,6 +5864,29 @@ packages:
       svg-parser: 2.0.4
     transitivePeerDependencies:
       - supports-color
+    dev: true
+
+  /@svgr/plugin-prettier/6.5.1_@svgr+core@6.5.1:
+    resolution: {integrity: sha512-nJTtamrxQjsHcP9vb5PVBiaVW9kEtAt0hzGK8e4+zbaIUHq6RPeR8+SvYaAbIIn1TExFszFuZSz1U08UX7kz7w==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@svgr/core': '*'
+    dependencies:
+      '@svgr/core': 6.5.1
+      deepmerge: 4.2.2
+      prettier: 2.8.1
+    dev: true
+
+  /@svgr/plugin-svgo/6.5.1_@svgr+core@6.5.1:
+    resolution: {integrity: sha512-omvZKf8ixP9z6GWgwbtmP9qQMPX4ODXi+wzbVZgomNFsUIlHA1sf4fThdwTWSsZGgvGAG6yE+b/F5gWUkcZ/iQ==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@svgr/core': '*'
+    dependencies:
+      '@svgr/core': 6.5.1
+      cosmiconfig: 7.1.0
+      deepmerge: 4.2.2
+      svgo: 2.8.0
     dev: true
 
   /@szmarczak/http-timer/5.0.1:
@@ -8896,6 +8943,11 @@ packages:
     engines: {node: '>=0.10'}
     dependencies:
       assert-plus: 1.0.0
+    dev: true
+
+  /dashify/2.0.0:
+    resolution: {integrity: sha512-hpA5C/YrPjucXypHPPc0oJ1l9Hf6wWbiOL7Ik42cxnsUOhWiCB/fylKbKqqJalW9FgkNQCw16YO8uW9Hs0Iy1A==}
+    engines: {node: '>=4'}
     dev: true
 
   /data-uri-to-buffer/3.0.1:
