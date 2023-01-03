@@ -128,6 +128,9 @@ impl AuthorityStorePruner {
             info!("Skipping pruning of objects table as we want to retain all versions");
             return sender;
         }
+        info!(
+            "Starting object pruning service with num_versions_to_retain={num_versions_to_retain}"
+        );
         let mut prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, pruning_timeperiod);
         prune_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
