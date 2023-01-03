@@ -16,6 +16,7 @@ pub struct RequestMetrics {
     pub(crate) total_requests_succeeded: IntCounter,
     pub(crate) total_requests_shed: IntCounter,
     pub(crate) total_requests_failed: IntCounter,
+    pub(crate) total_requests_disconnected: IntCounter,
     pub(crate) current_requests_in_flight: IntGauge,
     pub(crate) process_latency: Histogram,
 }
@@ -56,6 +57,13 @@ impl RequestMetrics {
             total_requests_failed: register_int_counter_with_registry!(
                 "total_requests_failed",
                 "Total number of requests that started but failed with an uncaught error",
+                registry,
+            )
+            .unwrap(),
+            total_requests_disconnected: register_int_counter_with_registry!(
+                "total_requests_disconnected",
+                "Total number of requests where the client disconnected before the service \
+                 returned a response",
                 registry,
             )
             .unwrap(),

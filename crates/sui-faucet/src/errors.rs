@@ -19,7 +19,7 @@ pub enum FaucetError {
     #[error("Gas coin `{0}` is not valid and has been removed from gas coin pool")]
     InvalidGasCoin(String),
 
-    #[error("No gas coin available in the gas coin pool")]
+    #[error("Timed out waiting for a coin from the gas coin pool")]
     NoGasCoinAvailable,
 
     #[error("Wallet Error: `{0}`")]

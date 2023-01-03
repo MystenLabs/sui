@@ -8,8 +8,8 @@ use std::{
 };
 
 use futures::Future;
-use prometheus::Registry;
-use tower::{BoxError, Layer, Service, ServiceExt};
+use prometheus::{HistogramTimer, Registry};
+use tower::{load_shed::error::Overloaded, BoxError, Layer, Service, ServiceExt};
 use tracing::info;
 
 use crate::metrics::RequestMetrics;
@@ -30,6 +30,11 @@ pub struct RequestMetricsFuture<Res> {
     future: Pin<Box<dyn Future<Output = Result<Res, BoxError>> + Send>>,
 }
 
+struct MetricsGuard {
+    timer: Option<HistogramTimer>,
+    metrics: Arc<RequestMetrics>,
+}
+
 impl RequestMetricsLayer {
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -48,9 +53,9 @@ impl<Inner> Layer<Inner> for RequestMetricsLayer {
     }
 }
 
-impl<Inner, Req> Service<Req> for RequestMetricsService<Inner>
+impl<Inner, Req, Body> Service<Req> for RequestMetricsService<Inner>
 where
-    Inner: Service<Req, Error = BoxError> + Clone + Send + 'static,
+    Inner: Service<Req, Response = http::Response<Body>, Error = BoxError> + Clone + Send + 'static,
     Inner::Future: Send,
     Req: Send + 'static,
 {
@@ -63,36 +68,16 @@ where
     }
 
     fn call(&mut self, req: Req) -> Self::Future {
-        let metrics = self.metrics.clone();
+        let metrics = MetricsGuard::new(self.metrics.clone());
         let inner = self.inner.clone();
 
         let future = Box::pin(async move {
-            metrics.total_requests_received.inc();
-            metrics.current_requests_in_flight.inc();
-            let _metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
-                metrics.current_requests_in_flight.dec();
-            });
-
-            let timer = metrics.process_latency.start_timer();
             let resp = inner.oneshot(req).await;
-
-            let elapsed = timer.stop_and_record();
-
             match &resp {
-                Result::Ok(_) => {
-                    metrics.total_requests_succeeded.inc();
-                    info!("Request succeeded in {:.2}s", elapsed);
-                }
-
-                Result::Err(err) => {
-                    if err.is::<tower::load_shed::error::Overloaded>() {
-                        metrics.total_requests_shed.inc();
-                        info!("Request shed in {:.2}s", elapsed);
-                    } else {
-                        metrics.total_requests_failed.inc();
-                        info!("Request failed in {:.2}s", elapsed);
-                    }
-                }
+                Result::Ok(resp) if !resp.status().is_success() => metrics.failed(),
+                Result::Ok(_) => metrics.succeeded(),
+                Result::Err(err) if err.is::<Overloaded>() => metrics.shed(),
+                Result::Err(_) => metrics.failed(),
             }
 
             resp
@@ -106,5 +91,47 @@ impl<Res> Future for RequestMetricsFuture<Res> {
     type Output = Result<Res, BoxError>;
     fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         Future::poll(self.future.as_mut(), ctx)
+    }
+}
+
+impl MetricsGuard {
+    fn new(metrics: Arc<RequestMetrics>) -> Self {
+        metrics.total_requests_received.inc();
+        metrics.current_requests_in_flight.inc();
+        MetricsGuard {
+            timer: Some(metrics.process_latency.start_timer()),
+            metrics,
+        }
+    }
+
+    fn succeeded(mut self) {
+        let elapsed = self.timer.take().unwrap().stop_and_record();
+        self.metrics.total_requests_succeeded.inc();
+        info!("Request succeeded in {:.2}s", elapsed);
+    }
+
+    fn failed(mut self) {
+        let elapsed = self.timer.take().unwrap().stop_and_record();
+        self.metrics.total_requests_failed.inc();
+        info!("Request failed in {:.2}s", elapsed);
+    }
+
+    fn shed(mut self) {
+        let elapsed = self.timer.take().unwrap().stop_and_record();
+        self.metrics.total_requests_shed.inc();
+        info!("Request shed in {:.2}s", elapsed);
+    }
+}
+
+impl Drop for MetricsGuard {
+    fn drop(&mut self) {
+        self.metrics.current_requests_in_flight.dec();
+
+        // Request was still in flight when the guard was dropped, implying the client disconnected.
+        if let Some(timer) = self.timer.take() {
+            let elapsed = timer.stop_and_record();
+            self.metrics.total_requests_disconnected.inc();
+            info!("Request disconnected in {:.2}s", elapsed);
+        }
     }
 }
