@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::StableSyncAuthoritySigner;
 use crate::consensus_adapter::SubmitToConsensus;
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use fastcrypto::encoding::{Encoding, Hex};
+use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
 use sui_types::messages::ConsensusTransaction;
@@ -21,6 +23,7 @@ pub trait CheckpointOutput: Sync + Send + 'static {
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult;
 }
 
@@ -57,10 +60,11 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let checkpoint_seq = summary.sequence_number;
         LogCheckpointOutput
-            .checkpoint_created(summary, contents)
+            .checkpoint_created(summary, contents, epoch_store)
             .await?;
         let summary = SignedCheckpointSummary::new_from_summary(
             summary.clone(),
@@ -69,10 +73,12 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         );
         let message = CheckpointSignatureMessage { summary };
         let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
-        self.sender.submit_to_consensus(&transaction).await?;
+        self.sender
+            .submit_to_consensus(&transaction, epoch_store)
+            .await?;
         if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
             if checkpoint_seq != 0 && checkpoint_seq % checkpoints_per_epoch == 0 {
-                self.sender.close_epoch()?;
+                self.sender.close_epoch(epoch_store)?;
             }
         }
         Ok(())
@@ -85,6 +91,7 @@ impl CheckpointOutput for LogCheckpointOutput {
         &self,
         summary: &CheckpointSummary,
         contents: &CheckpointContents,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         debug!(
             "Including following transactions in checkpoint {}: {:?}",
