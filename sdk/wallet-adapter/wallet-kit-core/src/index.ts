@@ -43,7 +43,6 @@ export type SubscribeHandler = (state: WalletKitCoreState) => void;
 export type Unsubscribe = () => void;
 
 // TODO: Support autoconnect.
-// TODO: Refactor away from classes so that binding is less of an issue:
 // TODO: Support lazy loaded adapters, where we'll resolve the adapters only once we attempt to use them.
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
@@ -70,9 +69,8 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
   let state = computeState();
 
   function setState(nextInternalState: Partial<InternalWalletKitCoreState>) {
-    const currentInternalState = internalState;
     internalState = {
-      ...currentInternalState,
+      ...internalState,
       ...nextInternalState,
     };
     state = computeState();
