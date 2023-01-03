@@ -25,12 +25,15 @@ export enum WalletKitCoreConnectionStatus {
   ERROR = "ERROR",
 }
 
-export interface WalletKitCoreState {
+export interface InternalWalletKitCoreState {
   wallets: WalletAdapter[];
   currentWallet: WalletAdapter | null;
   accounts: SuiAddress[];
   currentAccount: SuiAddress | null;
   status: WalletKitCoreConnectionStatus;
+}
+
+export interface WalletKitCoreState extends InternalWalletKitCoreState {
   isConnecting: boolean;
   isConnected: boolean;
   isError: boolean;
@@ -45,35 +48,35 @@ export type Unsubscribe = () => void;
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
 export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
-  let status = WalletKitCoreConnectionStatus.DISCONNECTED;
-
-  let wallets: WalletAdapter[] = resolveAdapters(adapters);
-  let accounts: SuiAddress[] = [];
-
-  let currentWallet: WalletAdapter | null = null;
-  let currentAccount: SuiAddress | null = null;
-
   const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
 
-  const computeState = () => ({
-    accounts,
-    currentAccount,
-    wallets,
-    currentWallet,
-    status,
-    isConnecting: status === WalletKitCoreConnectionStatus.CONNECTING,
-    isConnected: status === WalletKitCoreConnectionStatus.CONNECTED,
-    isError: status === WalletKitCoreConnectionStatus.ERROR,
-  });
-
-  let state: WalletKitCoreState = computeState();
-  const setState = () => {
-    state = computeState();
+  let internalState: InternalWalletKitCoreState = {
+    accounts: [],
+    currentAccount: null,
+    wallets: resolveAdapters(adapters),
+    currentWallet: null,
+    status: WalletKitCoreConnectionStatus.DISCONNECTED,
   };
 
-  // TODO: Try-catch to make more robust
-  function update() {
+  const computeState = () => ({
+    ...internalState,
+    isConnecting:
+      internalState.status === WalletKitCoreConnectionStatus.CONNECTING,
+    isConnected:
+      internalState.status === WalletKitCoreConnectionStatus.CONNECTED,
+    isError: internalState.status === WalletKitCoreConnectionStatus.ERROR,
+  });
+
+  let state = computeState();
+
+  function setState(nextInternalState: Partial<InternalWalletKitCoreState>) {
+    const currentInternalState = internalState;
+    internalState = {
+      ...currentInternalState,
+      ...nextInternalState,
+    };
     state = computeState();
+    // TODO: Try-catch to make more robust
     subscriptions.forEach((handler) => handler(state));
   }
 
@@ -82,29 +85,9 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
   if (providers.length) {
     providers.map((provider) =>
       provider.on("changed", () => {
-        wallets = resolveAdapters(adapters);
-        update();
+        setState({ wallets: resolveAdapters(adapters) });
       })
     );
-  }
-
-  function setStatus(nextStatus: WalletKitCoreConnectionStatus) {
-    status = nextStatus;
-    update();
-  }
-
-  function setAccounts(
-    nextAccounts: SuiAddress[],
-    nextCurrentAccount: SuiAddress | null
-  ) {
-    accounts = nextAccounts;
-    currentAccount = nextCurrentAccount;
-    update();
-  }
-
-  function setCurrentWallet(nextCurrentWallet: WalletAdapter | null) {
-    currentWallet = nextCurrentWallet;
-    update();
   }
 
   return {
@@ -122,54 +105,58 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
     },
 
     connect: async (walletName: string) => {
-      const nextCurrentWallet =
-        wallets.find((wallet) => wallet.name === walletName) ?? null;
+      const currentWallet =
+        internalState.wallets.find((wallet) => wallet.name === walletName) ??
+        null;
 
       // TODO: Should the current wallet actually be set before we successfully connect to it?
-      currentWallet = nextCurrentWallet;
-      update();
+      setState({ currentWallet });
 
       if (currentWallet && !currentWallet.connecting) {
         try {
-          setStatus(WalletKitCoreConnectionStatus.CONNECTING);
+          setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();
-          setStatus(WalletKitCoreConnectionStatus.CONNECTED);
+          setState({ status: WalletKitCoreConnectionStatus.CONNECTED });
           // TODO: Rather than using this method, we should just standardize the wallet properties on the adapter itself:
           const accounts = await currentWallet.getAccounts();
           // TODO: Implement account selection:
 
-          setAccounts(accounts, accounts[0] ?? null);
+          setState({ accounts, currentAccount: accounts[0] ?? null });
         } catch (e) {
           console.log("Wallet connection error", e);
-          setStatus(WalletKitCoreConnectionStatus.ERROR);
+
+          setState({ status: WalletKitCoreConnectionStatus.ERROR });
         }
       } else {
-        setStatus(WalletKitCoreConnectionStatus.DISCONNECTED);
+        setState({ status: WalletKitCoreConnectionStatus.DISCONNECTED });
       }
     },
 
     disconnect: () => {
-      if (!currentWallet) {
+      if (!internalState.currentWallet) {
         console.warn("Attempted to `disconnect` but no wallet was connected.");
         return;
       }
 
-      currentWallet.disconnect();
-      setStatus(WalletKitCoreConnectionStatus.DISCONNECTED);
-      setAccounts([], null);
-      setCurrentWallet(null);
+      internalState.currentWallet.disconnect();
+      setState({
+        status: WalletKitCoreConnectionStatus.DISCONNECTED,
+        accounts: [],
+        currentAccount: null,
+        currentWallet: null,
+      });
     },
 
     signAndExecuteTransaction: (
       transaction: SignableTransaction
     ): Promise<SuiTransactionResponse> => {
-      if (!currentWallet) {
+      if (!internalState.currentWallet) {
         throw new Error(
           "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
         );
       }
 
-      return currentWallet.signAndExecuteTransaction(transaction);
+      return internalState.currentWallet.signAndExecuteTransaction(transaction);
     },
   };
 }
