@@ -133,6 +133,126 @@ async fn basic_reconfig_end_to_end_test() {
     join_all(handles).await;
 }
 
+#[sim_test]
+async fn reconfig_with_revert_end_to_end_test() {
+    let (sender, keypair) = get_account_key_pair();
+    let gas1 = Object::with_owner_for_testing(sender); // committed
+    let gas2 = Object::with_owner_for_testing(sender); // reverted
+    let authorities = spawn_test_authorities(
+        [gas1.clone(), gas2.clone()].into_iter(),
+        &test_authority_configs(),
+    )
+    .await;
+    let registry = Registry::new();
+
+    // gas1 transaction is committed
+    let tx = make_transfer_sui_transaction(
+        gas1.compute_object_reference(),
+        sender,
+        None,
+        sender,
+        &keypair,
+    );
+    let net = AuthorityAggregator::new_from_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let effects1 = net
+        .process_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+    assert_eq!(0, effects1.epoch());
+
+    // gas2 transaction is reverted
+    let tx = make_transfer_sui_transaction(
+        gas2.compute_object_reference(),
+        sender,
+        None,
+        sender,
+        &keypair,
+    );
+    let cert = net.process_transaction(tx.clone()).await.unwrap();
+
+    // Close epoch on 3 (2f+1) validators.
+    for handle in authorities.iter().skip(1) {
+        handle.with(|node| node.close_epoch().unwrap());
+    }
+
+    // handle transaction on authority 0
+    let client = net
+        .get_client(&authorities[0].with(|node| node.state().name))
+        .unwrap();
+    client
+        .handle_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+
+    authorities[0]
+        .with_async(|node| async {
+            let object = node
+                .state()
+                .get_objects(&[gas2.id()])
+                .await
+                .unwrap()
+                .into_iter()
+                .next()
+                .unwrap()
+                .unwrap();
+            // verify that authority 0 advanced object version
+            assert_eq!(2, object.version().value());
+        })
+        .await;
+
+    // Wait for all nodes to reach the next epoch.
+    let handles: Vec<_> = authorities
+        .iter()
+        .map(|handle| {
+            handle.with_async(|node| async {
+                loop {
+                    if node.state().epoch() == 1 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            })
+        })
+        .collect();
+    join_all(handles).await;
+
+    for handle in authorities.iter() {
+        handle
+            .with_async(|node| async {
+                let object = node
+                    .state()
+                    .get_objects(&[gas1.id()])
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(2, object.version().value());
+                // verify that **all* authorities (including 0) have not executed transaction(or reverted it)
+                // Note that previously test checked that object version == 2 on authority 0
+                let object = node
+                    .state()
+                    .get_objects(&[gas2.id()])
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(1, object.version().value());
+            })
+            .await;
+    }
+}
+
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 #[ignore] // test is flaky right now
