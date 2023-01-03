@@ -3,7 +3,6 @@
 
 import '@fontsource/inter/variable.css';
 import '@fontsource/red-hat-mono/variable.css';
-import { WalletKitProvider } from '@mysten/wallet-kit';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
@@ -25,12 +24,7 @@ plausible.enableAutoPageviews();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <WalletKitProvider
-            /*autoConnect={false}*/
-            enableUnsafeBurner={import.meta.env.DEV}
-        >
-            <RouterProvider router={router} />
-        </WalletKitProvider>
+        <RouterProvider router={router} />
     </React.StrictMode>
 );
 
