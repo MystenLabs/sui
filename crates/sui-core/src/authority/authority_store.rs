@@ -357,7 +357,7 @@ impl AuthorityStore {
 
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub async fn get_missing_input_objects(
+    pub fn get_missing_input_objects(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],

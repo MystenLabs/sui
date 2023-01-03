@@ -402,13 +402,11 @@ async fn test_transaction_manager() {
     for cert in executed_shared_certs.iter().rev() {
         authorities[3]
             .enqueue_certificates_for_execution(vec![cert.clone()])
-            .await
             .unwrap();
     }
     for cert in executed_owned_certs.iter().rev() {
         authorities[3]
             .enqueue_certificates_for_execution(vec![cert.clone()])
-            .await
             .unwrap();
     }
 

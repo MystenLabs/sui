@@ -549,8 +549,7 @@ impl AuthorityState {
 
         let expected_effects_digest = effects.digest();
 
-        self.enqueue_certificates_for_execution(vec![certificate.clone()])
-            .await?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()])?;
 
         let observed_effects = self
             .database
@@ -593,8 +592,7 @@ impl AuthorityState {
             });
         }
 
-        self.enqueue_certificates_for_execution(vec![certificate.clone()])
-            .await?;
+        self.enqueue_certificates_for_execution(vec![certificate.clone()])?;
 
         self.notify_read_transaction_info(certificate).await
     }
@@ -852,9 +850,7 @@ impl AuthorityState {
         //
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
-        self.transaction_manager
-            .objects_committed(output_keys)
-            .await;
+        self.transaction_manager.objects_committed(output_keys);
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -956,8 +952,8 @@ impl AuthorityState {
     }
 
     /// Notifies TransactionManager about an executed certificate.
-    pub async fn certificate_executed(&self, digest: &TransactionDigest) {
-        self.transaction_manager.certificate_executed(digest).await
+    pub fn certificate_executed(&self, digest: &TransactionDigest) {
+        self.transaction_manager.certificate_executed(digest)
     }
 
     pub async fn dry_exec_transaction(
@@ -1496,9 +1492,11 @@ impl AuthorityState {
         });
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let transaction_manager = Arc::new(
-            TransactionManager::new(store.clone(), tx_ready_certificates, metrics.clone()).await,
-        );
+        let transaction_manager = Arc::new(TransactionManager::new(
+            store.clone(),
+            tx_ready_certificates,
+            metrics.clone(),
+        ));
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1606,12 +1604,12 @@ impl AuthorityState {
     }
 
     /// Adds certificates to the pending certificate store and transaction manager for ordered execution.
-    pub async fn enqueue_certificates_for_execution(
+    pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
     ) -> SuiResult<()> {
         self.epoch_store().insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs).await
+        self.transaction_manager.enqueue(certs)
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
