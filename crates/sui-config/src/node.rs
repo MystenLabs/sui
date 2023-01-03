@@ -288,7 +288,9 @@ impl Default for AuthorityStorePruningConfig {
 impl AuthorityStorePruningConfig {
     pub fn validator_config() -> Self {
         Self {
-            objects_num_latest_versions_to_retain: 2,
+            // TODO: Temporarily disable the pruner, since we are not sure if it properly maintains
+            // most recent 2 versions with lamport versioning.
+            objects_num_latest_versions_to_retain: u64::MAX,
             objects_pruning_period_secs: 12 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
         }
