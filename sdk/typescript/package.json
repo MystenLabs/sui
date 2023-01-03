@@ -23,7 +23,7 @@
   },
   "scripts": {
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-    "build": "node ./type_guards.mjs && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "doc": "typedoc",
     "test": "pnpm test:unit",
@@ -74,7 +74,6 @@
     "mockttp": "^2.7.0",
     "prettier": "^2.8.1",
     "size-limit": "^7.0.8",
-    "ts-auto-guard": "^2.4.1",
     "ts-node": "^10.9.1",
     "ts-retry-promise": "^0.7.0",
     "tslib": "^2.4.1",
@@ -97,6 +96,7 @@
     "jayson": "^3.6.6",
     "js-sha3": "^0.8.0",
     "rpc-websockets": "^7.5.0",
+    "superstruct": "^1.0.3",
     "tweetnacl": "^1.0.3"
   }
 }

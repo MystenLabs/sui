@@ -9,8 +9,7 @@ import {
   MOCK_ENDPOINT,
   MOCK_PORT,
 } from '../mocks/rpc-http';
-import { isGetOwnedObjectsResponse } from '../../../src/types/index.guard';
-import { SuiObjectInfo } from '../../../src';
+import { GetOwnedObjectsResponse, SuiObjectInfo } from '../../../src';
 
 const EXAMPLE_OBJECT: SuiObjectInfo = {
   objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',
@@ -90,7 +89,7 @@ describe('JSON-RPC Client', () => {
     return await client.requestWithType(
       'sui_getOwnedObjectsByAddress',
       [],
-      isGetOwnedObjectsResponse,
+      GetOwnedObjectsResponse,
       skipValidation
     );
   }

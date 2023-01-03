@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject } from '@mysten/sui.js';
+import { is, SuiMoveObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import type { SuiData } from '@mysten/sui.js';
@@ -29,7 +29,7 @@ function sortKeys(a: string, b: string) {
 }
 
 export default function useSuiObjectFields(data: SuiData) {
-    const { fields = null } = isSuiMoveObject(data) ? data : {};
+    const { fields = null } = is(data, SuiMoveObject) ? data : {};
     return useMemo(() => {
         const keys: string[] = [];
         const otherKeys: string[] = [];

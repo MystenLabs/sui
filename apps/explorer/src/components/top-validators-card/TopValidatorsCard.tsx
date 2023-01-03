@@ -3,8 +3,9 @@
 
 import {
     Base64DataBuffer,
-    isSuiObject,
-    isSuiMoveObject,
+    is,
+    SuiObject,
+    SuiMoveObject,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
@@ -222,7 +223,9 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
         useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorData =
-        data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
+        data &&
+        is(data.details, SuiObject) &&
+        is(data.details.data, SuiMoveObject)
             ? (data.details.data.fields as ValidatorState)
             : null;
 

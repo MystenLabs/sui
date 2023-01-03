@@ -3,7 +3,8 @@
 
 import {
     getTransactionDigest,
-    isSuiMoveObject,
+    is,
+    SuiMoveObject,
     Coin as CoinAPI,
 } from '@mysten/sui.js';
 import {
@@ -19,11 +20,7 @@ import {
 } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 
-import type {
-    SuiAddress,
-    SuiMoveObject,
-    SuiExecuteTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiAddress, SuiExecuteTransactionResponse } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -86,7 +83,8 @@ export const stakeTokens = createAsyncThunk<
             .selectAll(state)
             .filter(
                 (anObj) =>
-                    isSuiMoveObject(anObj.data) && anObj.data.type === coinType
+                    is(anObj.data, SuiMoveObject) &&
+                    anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
 
