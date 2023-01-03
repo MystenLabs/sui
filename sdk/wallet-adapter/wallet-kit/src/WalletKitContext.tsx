@@ -9,7 +9,11 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { createWalletKitCore, WalletKitCoreState } from "@mysten/wallet-kit-core";
+import {
+  createWalletKitCore,
+  WalletKitCore,
+  WalletKitCoreState,
+} from "@mysten/wallet-kit-core";
 import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
 import { UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-unsafe-burner";
 import { WalletAdapterList } from "@mysten/wallet-adapter-base";

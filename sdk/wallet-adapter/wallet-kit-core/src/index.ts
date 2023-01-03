@@ -39,6 +39,16 @@ export interface WalletKitCoreState extends InternalWalletKitCoreState {
   isError: boolean;
 }
 
+export interface WalletKitCore {
+  getState(): WalletKitCoreState;
+  subscribe(handler: SubscribeHandler): Unsubscribe;
+  connect(walletName: string): Promise<void>;
+  disconnect(): void;
+  signAndExecuteTransaction(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse>;
+}
+
 export type SubscribeHandler = (state: WalletKitCoreState) => void;
 export type Unsubscribe = () => void;
 
@@ -46,7 +56,9 @@ export type Unsubscribe = () => void;
 // TODO: Support lazy loaded adapters, where we'll resolve the adapters only once we attempt to use them.
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
-export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
+export function createWalletKitCore({
+  adapters,
+}: WalletKitCoreOptions): WalletKitCore {
   const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
 
   let internalState: InternalWalletKitCoreState = {
@@ -93,7 +105,7 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
       return state;
     },
 
-    subscribe(handler: SubscribeHandler): Unsubscribe {
+    subscribe(handler) {
       // Immediately invoke the handler with the current state to make it compatible with Svelte stores:
       handler(this.getState());
       subscriptions.add(handler);
@@ -102,7 +114,7 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
       };
     },
 
-    connect: async (walletName: string) => {
+    async connect(walletName) {
       const currentWallet =
         internalState.wallets.find((wallet) => wallet.name === walletName) ??
         null;
@@ -130,7 +142,7 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
       }
     },
 
-    disconnect: () => {
+    disconnect() {
       if (!internalState.currentWallet) {
         console.warn("Attempted to `disconnect` but no wallet was connected.");
         return;
@@ -145,9 +157,7 @@ export function createWalletKitCore({ adapters }: WalletKitCoreOptions) {
       });
     },
 
-    signAndExecuteTransaction: (
-      transaction: SignableTransaction
-    ): Promise<SuiTransactionResponse> => {
+    signAndExecuteTransaction(transaction) {
       if (!internalState.currentWallet) {
         throw new Error(
           "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
