@@ -21,7 +21,7 @@ use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, Header, Round, TimestampMs,
 };
-use types::{now, Timestamp, ConditionalBroadcastReceiver};
+use types::{now, ConditionalBroadcastReceiver};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
