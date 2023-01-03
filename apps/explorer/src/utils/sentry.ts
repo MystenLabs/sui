@@ -62,7 +62,7 @@ Sentry.init({
     denyUrls: [
         // Chrome extensions
         /extensions\//i,
-				/^chrome(?:-extension)?:\/\//i,
+        /^chrome(?:-extension)?:\/\//i,
         /<anonymous>/,
     ],
     allowUrls: [

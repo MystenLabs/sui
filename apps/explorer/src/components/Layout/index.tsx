@@ -13,7 +13,6 @@ import { Fragment } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Outlet } from 'react-router-dom';
 
-
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
 
