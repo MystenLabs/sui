@@ -61,7 +61,7 @@ export function useSearchParamsMerged() {
 }
 
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
-    ({ to, ...props }) => {
+    ({ to, ...props }, ref) => {
         const href = useHref(to);
         const [searchParams] = useSearchParams();
         const [toBaseURL, toSearchParamString] = href.split('?');
@@ -78,6 +78,7 @@ export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
 
         return (
             <Link
+                ref={ref}
                 to={{
                     pathname: toBaseURL,
                     search: mergedSearchParams,
