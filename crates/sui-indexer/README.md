@@ -27,7 +27,7 @@ diesel migration run
 git fetch upstream devnet
 git reset --hard upstream/devnet
 ```
-3. Go to `sui/crates/sui-indexer` and run command:
+3. Go to `sui/crates/sui-indexer` and run the following command:
 ```sh
 # DATABASE_URL should be the same value as above
 cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
