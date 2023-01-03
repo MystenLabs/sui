@@ -9,7 +9,7 @@ use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
@@ -46,7 +46,7 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
-use typed_store::Map;
+use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
 
 /// The key where the latest consensus index is stored in the database.
@@ -66,6 +66,7 @@ pub struct ExecutionIndicesWithHash {
 pub struct AuthorityPerEpochStore {
     committee: Committee,
     tables: AuthorityEpochTables,
+
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
@@ -186,7 +187,7 @@ pub struct AuthorityEpochTables {
 
 impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(Self::path(epoch, parent_path), db_options, None)
+        Self::open_tables_transactional(Self::path(epoch, parent_path), db_options, None)
     }
 
     pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly {
@@ -427,14 +428,146 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn set_assigned_shared_object_versions(
+    // For each id in objects_to_init, return the next version for that id as recorded in the
+    // next_shared_object_versions table.
+    //
+    // If any ids are missing, then we need to initialize the table. We first check if a previous
+    // version of that object has been written. If so, then the object was written in a previous
+    // epoch, and we initialize next_shared_object_versions to that value. If no version of the
+    // object has yet been written, we initialize the object to the initial version recorded in the
+    // certificate (which is a function of the lamport version computation of the transaction that
+    // created the shared object originally - which transaction may not yet have been execugted on
+    // this node).
+    //
+    // Because all paths that assign shared locks for a shared object transaction call this
+    // function, it is impossible for parent_sync to be updated before this function completes
+    // successfully for each affected object id.
+    async fn get_or_init_next_object_versions(
         &self,
-        transaction_digest: &TransactionDigest,
+        certificate: &VerifiedCertificate,
+        objects_to_init: impl Iterator<Item = ObjectID> + Clone,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Vec<SequenceNumber>> {
+        // Since this can be called from consensus task, we must retry forever - the only other
+        // option is to panic. It is extremely unlikely that more than 2 retries will be needed, as
+        // the only two writers are the consensus task and checkpoint execution.
+        retry_transaction_forever!({
+            // This code may still be correct without using a transaction snapshot, but I couldn't
+            // convince myself of that.
+            let db_transaction = self
+                .tables
+                .next_shared_object_versions
+                .transaction_with_snapshot()?;
+
+            let next_versions = db_transaction.multi_get(
+                &self.tables.next_shared_object_versions,
+                objects_to_init.clone(),
+            )?;
+
+            let uninitialized_objects: Vec<ObjectID> = next_versions
+                .iter()
+                .zip(objects_to_init.clone())
+                .filter_map(|(next_version, id)| match next_version {
+                    None => Some(id),
+                    Some(_) => None,
+                })
+                .collect();
+
+            // The common case is that there are no uninitialized versions - this early return will
+            // happen every time except the first time an object is used in an epoch.
+            if uninitialized_objects.is_empty() {
+                // unwrap ok - we already verified that next_versions is not missing any keys.
+                return Ok(next_versions.into_iter().map(|v| v.unwrap()).collect());
+            }
+
+            // if the object has never been used before (in any epoch) the initial version comes
+            // from the cert.
+            let initial_versions: HashMap<_, _> = certificate
+                .shared_input_objects()
+                .map(|(id, v)| (*id, *v))
+                .collect();
+
+            let mut versions_to_write = Vec::new();
+            for id in &uninitialized_objects {
+                // Note: we don't actually need to read from the transaction here, as no writer
+                // can update parent_sync_store until after get_or_init_next_object_versions
+                // completes.
+                versions_to_write.push(
+                    match parent_sync_store.get_latest_parent_entry_ref(*id)? {
+                        Some(objref) => (*id, objref.1),
+                        None => (
+                            *id,
+                            *initial_versions
+                                .get(id)
+                                .expect("object cannot be missing from shared_input_objects"),
+                        ),
+                    },
+                );
+            }
+
+            let versions_to_write = uninitialized_objects.iter().map(|id| {
+                // Note: we don't actually need to read from the transaction here, as no writer
+                // can update parent_sync_store until after get_or_init_next_object_versions
+                // completes.
+                match parent_sync_store
+                    .get_latest_parent_entry_ref(*id)
+                    .expect("read cannot fail")
+                {
+                    Some(objref) => (*id, objref.1),
+                    None => (
+                        *id,
+                        *initial_versions
+                            .get(id)
+                            .expect("object cannot be missing from shared_input_objects"),
+                    ),
+                }
+            });
+
+            debug!(
+                ?versions_to_write,
+                "initializing next_shared_object_versions"
+            );
+            db_transaction
+                .insert_batch(&self.tables.next_shared_object_versions, versions_to_write)?
+                .commit()
+        })?;
+
+        // this case only occurs when there were uninitialized versions, which is rare, so its much
+        // simpler to just re-read all the ids here.
+        let next_versions = self
+            .tables
+            .next_shared_object_versions
+            .multi_get(objects_to_init)?
+            .into_iter()
+            // unwrap ok - we just finished initializing all versions.
+            .map(|v| v.unwrap())
+            .collect();
+
+        Ok(next_versions)
+    }
+
+    pub async fn set_assigned_shared_object_versions(
+        &self,
+        certificate: &VerifiedCertificate,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
+        parent_sync_store: impl ParentSync,
     ) -> SuiResult {
+        let tx_digest = certificate.digest();
+
+        debug!(
+            ?tx_digest,
+            ?assigned_versions,
+            "set_assigned_shared_object_versions"
+        );
+        self.get_or_init_next_object_versions(
+            certificate,
+            assigned_versions.iter().map(|(id, _)| *id),
+            parent_sync_store,
+        )
+        .await?;
         self.tables
             .assigned_shared_object_versions
-            .insert(transaction_digest, assigned_versions)?;
+            .insert(tx_digest, assigned_versions)?;
         Ok(())
     }
 
@@ -602,34 +735,18 @@ impl AuthorityPerEpochStore {
         let transaction_digest = *certificate.digest();
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids = certificate.shared_input_objects().map(|(id, _)| id);
-        let versions = self.multi_get_next_shared_object_versions(ids)?;
+        let ids: Vec<_> = certificate
+            .shared_input_objects()
+            .map(|(id, _)| *id)
+            .collect();
+
+        let versions = self
+            .get_or_init_next_object_versions(certificate, ids.iter().copied(), &parent_sync_store)
+            .await?;
 
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
         let mut assigned_versions = Vec::new();
-        for ((id, initial_shared_version), v) in
-            certificate.shared_input_objects().zip(versions.iter())
-        {
-            // On epoch changes, the `next_shared_object_versions` table will be empty, and we rely on
-            // parent sync to recover the current version of the object.  However, if an object was
-            // previously aware of the object as owned, and it was upgraded to shared, the version
-            // in parent sync may be out of date, causing a fork.  In that case, we know that the
-            // `initial_shared_version` will be greater than the version in parent sync, and we can
-            // use that.  It is the version that the object was shared at, and can be trusted
-            // because it has been checked and signed by a quorum of other validators when creating
-            // the certificate.
-            let version = match v {
-                Some(v) => *v,
-                None => *initial_shared_version.max(
-                    &parent_sync_store
-                        // TODO: if we use an eventually consistent object store in the future,
-                        // we must make this read strongly consistent somehow!
-                        .get_latest_parent_entry_ref(*id)?
-                        .map(|objref| objref.1)
-                        .unwrap_or_default(),
-                ),
-            };
-
+        for ((id, _), version) in certificate.shared_input_objects().zip(versions.into_iter()) {
             assigned_versions.push((*id, version));
             input_object_keys.push(ObjectKey(*id, version));
         }
@@ -706,9 +823,16 @@ impl AuthorityPerEpochStore {
         // TODO: clear the shared object locks per transaction after ensuring consistency.
         let mut write_batch = self.tables.assigned_shared_object_versions.batch();
 
+        let tx_digest = *certificate.digest();
+
+        debug!(
+            ?tx_digest,
+            ?assigned_versions,
+            "finish_assign_shared_object_versions"
+        );
         write_batch = write_batch.insert_batch(
             &self.tables.assigned_shared_object_versions,
-            iter::once((certificate.digest(), assigned_versions)),
+            iter::once((tx_digest, assigned_versions)),
         )?;
 
         write_batch =

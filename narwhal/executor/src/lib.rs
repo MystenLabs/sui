@@ -23,10 +23,10 @@ use storage::CertificateStore;
 use crate::subscriber::spawn_subscriber;
 use mockall::automock;
 use tokio::sync::oneshot;
-use tokio::{sync::watch, task::JoinHandle};
+use tokio::task::JoinHandle;
 use types::{
-    metered_channel, CertificateDigest, CommittedSubDag, ConsensusOutput, ConsensusStore,
-    ReconfigureNotification,
+    metered_channel, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
+    ConsensusOutput, ConsensusStore,
 };
 
 /// Convenience type representing a serialized transaction.
@@ -57,7 +57,7 @@ impl Executor {
         worker_cache: SharedWorkerCache,
         committee: Committee,
         execution_state: State,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         rx_sequence: metered_channel::Receiver<CommittedSubDag>,
         registry: &Registry,
         restored_consensus_output: Vec<CommittedSubDag>,
@@ -76,7 +76,7 @@ impl Executor {
             network,
             worker_cache,
             committee,
-            tx_reconfigure,
+            shutdown_receivers,
             rx_sequence,
             arc_metrics,
             restored_consensus_output,

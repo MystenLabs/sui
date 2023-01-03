@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use crate::TrivialTransactionValidator;
+use crate::{TrivialTransactionValidator, NUM_SHUTDOWN_RECEIVERS};
 use fastcrypto::hash::Hash;
 use test_utils::CommitteeFixture;
 use types::{MockWorkerToWorker, WorkerToWorkerServer};
@@ -17,8 +17,7 @@ async fn synchronize() {
     let worker_cache = fixture.shared_worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
-    let (tx_reconfigure, _rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
@@ -31,7 +30,7 @@ async fn synchronize() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
-        tx_reconfigure,
+        tx_shutdown,
         validator: TrivialTransactionValidator,
     };
 
@@ -90,8 +89,7 @@ async fn synchronize_when_batch_exists() {
     let worker_cache = fixture.shared_worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
-    let (tx_reconfigure, _rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
@@ -104,7 +102,7 @@ async fn synchronize_when_batch_exists() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
-        tx_reconfigure,
+        tx_shutdown,
         validator: TrivialTransactionValidator,
     };
 
@@ -138,8 +136,7 @@ async fn delete_batches() {
     let worker_cache = fixture.shared_worker_cache();
     let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
-    let (tx_reconfigure, _rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
@@ -156,7 +153,7 @@ async fn delete_batches() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
-        tx_reconfigure,
+        tx_shutdown,
         validator: TrivialTransactionValidator,
     };
     let message = WorkerDeleteBatchesMessage {

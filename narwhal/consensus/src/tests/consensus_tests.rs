@@ -15,7 +15,8 @@ use tokio::sync::watch;
 use crate::bullshark::Bullshark;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
-use types::{Certificate, ReconfigureNotification};
+use crate::NUM_SHUTDOWN_RECEIVERS;
+use types::{Certificate, PreSubscribedBroadcastSender};
 
 /// This test is trying to compare the output of the Consensus algorithm when:
 /// (1) running without any crash for certificates processed from round 1 to 5 (inclusive)
@@ -56,8 +57,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee.clone());
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -72,7 +72,7 @@ async fn test_consensus_recovery_with_bullshark() {
         committee.clone(),
         consensus_store.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        tx_shutdown.subscribe(),
         rx_waiter,
         tx_primary,
         tx_consensus_round_updates,
@@ -140,7 +140,7 @@ async fn test_consensus_recovery_with_bullshark() {
 
     // AND bring up consensus again. Store is clean. Now send again the same certificates
     // but up to round 3.
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee.clone());
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
@@ -162,7 +162,7 @@ async fn test_consensus_recovery_with_bullshark() {
         committee.clone(),
         consensus_store.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        tx_shutdown.subscribe(),
         rx_waiter,
         tx_primary,
         tx_consensus_round_updates,
@@ -213,7 +213,7 @@ async fn test_consensus_recovery_with_bullshark() {
     consensus_handle.abort();
 
     // AND bring up consensus again. Re-use the same store, so we can recover certificates
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
     let (tx_primary, _rx_primary) = test_utils::test_channel!(100);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
@@ -230,7 +230,7 @@ async fn test_consensus_recovery_with_bullshark() {
         committee.clone(),
         consensus_store.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        tx_shutdown.subscribe(),
         rx_waiter,
         tx_primary,
         tx_consensus_round_updates,

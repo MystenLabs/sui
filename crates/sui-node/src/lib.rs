@@ -20,10 +20,13 @@ use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
+use sui_core::authority_aggregator::{
+    AuthAggMetrics, AuthorityAggregator, NetworkTransactionCertifier,
+};
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
+use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -178,7 +181,8 @@ impl SuiNode {
         let net = AuthorityAggregator::new_from_system_state(
             &store,
             &committee_store,
-            &prometheus_registry,
+            SafeClientMetricsBase::new(&prometheus_registry),
+            AuthAggMetrics::new(&prometheus_registry),
         )?;
 
         let transaction_streamer = if is_full_node {
@@ -300,7 +304,8 @@ impl SuiNode {
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
         let mut p2p_config = config.p2p_config.clone();
-        let our_network_public_key = config.network_key_pair.public();
+        let network_kp = config.network_key_pair();
+        let our_network_public_key = network_kp.public();
         let other_validators = config
             .genesis()?
             .validator_set()
@@ -350,7 +355,7 @@ impl SuiNode {
 
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
-                .private_key(config.network_key_pair.copy().private().0.to_bytes())
+                .private_key(config.network_key_pair().copy().private().0.to_bytes())
                 .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
@@ -477,7 +482,7 @@ impl SuiNode {
         ));
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
-            network_keypair: config.network_key_pair.copy(),
+            network_keypair: config.network_key_pair().copy(),
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),

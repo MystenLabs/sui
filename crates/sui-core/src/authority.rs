@@ -74,6 +74,7 @@ use sui_types::{
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store::ExecutionLockReadGuard;
 use crate::authority_aggregator::TransactionCertifier;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::reconfiguration::ReconfigState;
@@ -579,7 +580,7 @@ impl AuthorityState {
     pub(crate) async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate");
@@ -613,7 +614,7 @@ impl AuthorityState {
     pub(crate) async fn try_execute_immediately(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate_internal");
@@ -649,26 +650,21 @@ impl AuthorityState {
     pub async fn try_execute_for_test(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         self.try_execute_immediately(certificate).await
     }
 
     pub async fn notify_read_transaction_info(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let tx_digest = *certificate.digest();
-        let effects = self
+        Ok(self
             .database
             .notify_read_effects(vec![tx_digest])
             .await?
             .pop()
-            .expect("notify_read_effects should return exactly 1 element");
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.database.get_transaction(&tx_digest)?,
-            certified_transaction: Some(certificate.clone()),
-            signed_effects: Some(effects),
-        })
+            .expect("notify_read_effects should return exactly 1 element"))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -738,32 +734,38 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+    ) -> SuiResult<SignedTransactionEffects> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
         // If the cert is finalized in a previous epoch, it will be re-signed
         // with current epoch info and returned.
-        if let Some(info) = self.get_tx_info_already_executed(&digest).await? {
+        if let Some(signed_effects) = self.database.get_signed_effects(&digest)? {
             tx_guard.release();
-            return Ok(info);
+            return Ok(signed_effects);
         }
-
+        let execution_guard = self
+            .database
+            .execution_lock_for_certificate(certificate)
+            .await;
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
         // epoch, then it's invalid.
-        if certificate.epoch() != self.epoch() {
-            tx_guard.release();
-            return Err(SuiError::WrongEpoch {
-                expected_epoch: self.epoch(),
-                actual_epoch: certificate.epoch(),
-            });
-        }
+        let execution_guard = match execution_guard {
+            Ok(execution_guard) => execution_guard,
+            Err(err) => {
+                tx_guard.release();
+                return Err(err);
+            }
+        };
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
         let epoch_store = self.epoch_store();
+        // This should be correct because of order execution epoch and epoch store change
+        // See AuthorityState::reconfigure() method for order of lock and store update
+        assert_eq!(*execution_guard, epoch_store.epoch());
         if let Some((inner_temporary_storage, signed_effects)) =
             epoch_store.wal().get_execution_output(&digest)?
         {
@@ -773,6 +775,7 @@ impl AuthorityState {
                     inner_temporary_storage,
                     signed_effects,
                     tx_guard,
+                    execution_guard,
                 )
                 .await;
         }
@@ -807,8 +810,14 @@ impl AuthorityState {
         #[cfg(any(test, msim))]
         tokio::task::yield_now().await;
 
-        self.commit_cert_and_notify(certificate, inner_temporary_store, signed_effects, tx_guard)
-            .await
+        self.commit_cert_and_notify(
+            certificate,
+            inner_temporary_store,
+            signed_effects,
+            tx_guard,
+            execution_guard,
+        )
+        .await
     }
 
     async fn commit_cert_and_notify(
@@ -817,7 +826,8 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         signed_effects: SignedTransactionEffects,
         tx_guard: CertTxGuard<'_>,
-    ) -> SuiResult<VerifiedTransactionInfoResponse> {
+        _execution_guard: ExecutionLockReadGuard<'_>,
+    ) -> SuiResult<SignedTransactionEffects> {
         let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.data().shared_objects.len();
@@ -873,11 +883,7 @@ impl AuthorityState {
             .batch_size
             .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
 
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.database.get_transaction(&digest)?,
-            certified_transaction: Some(certificate.clone()),
-            signed_effects: Some(signed_effects),
-        })
+        Ok(signed_effects)
     }
 
     /// prepare_certificate validates the transaction input, and executes the certificate,
@@ -1685,10 +1691,15 @@ impl AuthorityState {
 
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
+        let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         db.revert_uncommitted_epoch_transactions().await?;
-        db.perpetual_tables
-            .set_recovery_epoch(new_committee.epoch)?;
+        let new_epoch = new_committee.epoch;
+        db.perpetual_tables.set_recovery_epoch(new_epoch)?;
         db.reopen_epoch_db(new_committee).await;
+        *execution_lock = new_epoch;
+        // drop execution_lock after epoch store was updated
+        // see also assert in AuthorityState::process_certificate
+        // on the epoch store and execution lock epoch match
         Ok(())
     }
 
@@ -2042,9 +2053,27 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        let mut info = self
-            .database
-            .get_signed_transaction_info(transaction_digest)?;
+        Ok(VerifiedTransactionInfoResponse {
+            signed_transaction: self.database.get_transaction(transaction_digest)?,
+            certified_transaction: self
+                .database
+                .get_certified_transaction(transaction_digest)?,
+            // TODO: Replace the call to self.epoch() with a epoch store passed from caller to avoid
+            // unexpected change to the epoch id during reconfiguration.
+            signed_effects: self
+                .get_signed_effects_and_maybe_resign(self.epoch(), transaction_digest)?,
+        })
+    }
+
+    /// Get the signed effects of the given transaction. If the effects was signed in a previous
+    /// epoch, re-sign it so that the caller is able to form a cert of the effects in the current
+    /// epoch.
+    fn get_signed_effects_and_maybe_resign(
+        &self,
+        cur_epoch: EpochId,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<SignedTransactionEffects>> {
+        let effects = self.database.get_signed_effects(transaction_digest)?;
         // If the transaction was executed in previous epochs, the validator will
         // re-sign the effects with new current epoch so that a client is always able to
         // obtain an effects certificate at the current epoch.
@@ -2073,9 +2102,8 @@ impl AuthorityState {
         // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
         // the authority's signature, as well as to identify in which epoch the transaction was
         // executed.
-        if let Some(effects) = info.signed_effects.take() {
-            let cur_epoch = self.epoch();
-            let new_effects = if effects.epoch() < cur_epoch {
+        Ok(effects.map(|effects| {
+            if effects.epoch() < cur_epoch {
                 debug!(
                     effects_epoch=?effects.epoch(),
                     ?cur_epoch,
@@ -2089,10 +2117,8 @@ impl AuthorityState {
                 )
             } else {
                 effects
-            };
-            info.signed_effects = Some(new_effects);
-        }
-        Ok(info)
+            }
+        }))
     }
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {

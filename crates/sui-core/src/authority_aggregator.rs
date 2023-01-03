@@ -298,6 +298,36 @@ impl<A> AuthorityAggregator<A> {
         }
     }
 
+    pub fn new_with_metrics(
+        committee: Committee,
+        committee_store: Arc<CommitteeStore>,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        safe_client_metrics_base: SafeClientMetricsBase,
+        auth_agg_metrics: AuthAggMetrics,
+    ) -> Self {
+        Self {
+            committee,
+            authority_clients: authority_clients
+                .into_iter()
+                .map(|(name, api)| {
+                    (
+                        name,
+                        SafeClient::new(
+                            api,
+                            committee_store.clone(),
+                            name,
+                            SafeClientMetrics::new(&safe_client_metrics_base, name),
+                        ),
+                    )
+                })
+                .collect(),
+            metrics: auth_agg_metrics,
+            safe_client_metrics_base: Arc::new(safe_client_metrics_base),
+            timeouts: Default::default(),
+            committee_store,
+        }
+    }
+
     /// This function recreates AuthorityAggregator with the given committee.
     /// It also updates committee store which impacts other of its references.
     /// If it is called on a Validator/Fullnode, it **may** interleave with the the authority active's
@@ -383,23 +413,29 @@ impl<A> AuthorityAggregator<A> {
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
-    /// Create a new network authority aggregator by reading the committee and network address
-    /// information from the system state object on-chain.
+    /// Create a new network authority aggregator by reading the committee and
+    /// network address information from the system state object on-chain.
+    /// This function needs metrics parameters because registry will panic
+    /// if we attempt to register already-registered metrics again.
     pub fn new_from_system_state(
         store: &Arc<AuthorityStore>,
         committee_store: &Arc<CommitteeStore>,
-        prometheus_registry: &Registry,
+        safe_client_metrics_base: SafeClientMetricsBase,
+        auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let net_config = default_mysten_network_config();
         let sui_system_state = store.get_sui_system_state_object()?;
-
+        // TODO: the function returns on URL parsing errors. In this case we should
+        // tolerate it as long as we have 2f+1 good validators.
+        // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
             make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)?;
-        Ok(Self::new(
+        Ok(Self::new_with_metrics(
             sui_system_state.get_current_epoch_committee().committee,
             committee_store.clone(),
             authority_clients,
-            prometheus_registry,
+            safe_client_metrics_base,
+            auth_agg_metrics,
         ))
     }
 }
@@ -449,10 +485,12 @@ impl TransactionCertifier for NetworkTransactionCertifier {
         self_state: &AuthorityState,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
+        let registry = Registry::new();
         let net = AuthorityAggregator::new_from_system_state(
             &self_state.db(),
             self_state.committee_store(),
-            &Registry::new(),
+            SafeClientMetricsBase::new(&registry),
+            AuthAggMetrics::new(&registry),
         )?;
 
         net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
@@ -1401,12 +1439,11 @@ where
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
-                            Ok(VerifiedTransactionInfoResponse {
-                                signed_effects: Some(inner_effects),
-                                ..
+                            Ok(VerifiedHandleCertificateResponse {
+                                signed_effects,
                             }) => {
                                 // Note: here we aggregate votes by the hash of the effects structure
-                                if state.effects_map.add(inner_effects, weight, &self.committee) {
+                                if state.effects_map.add(signed_effects, weight, &self.committee) {
                                     debug!(
                                         tx_digest = ?tx_digest,
                                         "Got quorum for validators handle_certificate."
@@ -1424,7 +1461,6 @@ where
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
-                            _ => { unreachable!("SafeClient should have ruled out this case") }
                         }
                         Ok(ReduceOutput::Continue(state))
                     })
@@ -1748,25 +1784,21 @@ where
                     Box::pin(async move {
                         state.cumulative_weight += weight;
                         match result {
-                            Ok(TransactionInfoResponse {
-                                signed_effects: Some(effects),
-                                ..
+                            Ok(VerifiedHandleCertificateResponse {
+                                signed_effects,
                             }) => {
                                 state.good_weight += weight;
                                 trace!(name=?name.concise(), ?weight, "successfully executed cert on peer");
-                                let entry = state.digests.entry(*effects.digest()).or_insert(0);
+                                let entry = state.digests.entry(*signed_effects.digest()).or_insert(0);
                                 *entry += weight;
 
                                 if *entry >= validity {
-                                    state.true_effects = Some(effects);
+                                    state.true_effects = Some(signed_effects);
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
                             Err(e) => {
                                 state.errors.push((name, e));
-                            }
-                            _ => {
-                                unreachable!("SafeClient should have ruled out this case")
                             }
                         }
 

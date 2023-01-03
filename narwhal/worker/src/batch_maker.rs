@@ -20,14 +20,13 @@ use futures::{Future, StreamExt};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::sync::Arc;
 use tokio::{
-    sync::watch,
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, PrimaryResponse, ReconfigureNotification, Transaction, TxResponse,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction, TxResponse,
     WorkerOurBatchMessage,
 };
 
@@ -48,8 +47,8 @@ pub struct BatchMaker {
     batch_size: usize,
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
@@ -72,7 +71,7 @@ impl BatchMaker {
         committee: Committee,
         batch_size: usize,
         max_batch_delay: Duration,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
         tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
@@ -86,7 +85,7 @@ impl BatchMaker {
                     committee,
                     batch_size,
                     max_batch_delay,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_batch_maker,
                     tx_message,
                     batch_start_timestamp: Instant::now(),
@@ -153,23 +152,9 @@ impl BatchMaker {
                     self.batch_start_timestamp = Instant::now();
                 }
 
-                // TODO: duplicated code in quorum_waiter.rs
-                // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-
-                        },
-                        ReconfigureNotification::Shutdown => return
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-                },
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
+                }
 
                 // Process the pipeline of batches, this consumes items in the `batch_pipeline`
                 // list, and ensures the main loop in run will always be able to make progress

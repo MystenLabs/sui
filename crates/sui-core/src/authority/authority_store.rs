@@ -19,6 +19,7 @@ use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
@@ -47,7 +48,15 @@ pub struct AuthorityStore {
     // Implementation detail to support notify_read_effects().
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
     _store_pruner: AuthorityStorePruner,
+    /// This lock denotes current 'execution epoch'.
+    /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
+    /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
+    /// from previous epoch that are executed but did not make into checkpoint.
+    execution_lock: RwLock<EpochId>,
 }
+
+pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
+pub type ExecutionLockWriteGuard<'a> = RwLockWriteGuard<'a, EpochId>;
 
 impl AuthorityStore {
     /// Open an authority store by directory path.
@@ -115,6 +124,7 @@ impl AuthorityStore {
         committee: Committee,
         pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
+        let epoch = committee.epoch;
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
             committee,
             path,
@@ -131,6 +141,7 @@ impl AuthorityStore {
             db_options,
             _store_pruner,
             effects_notify_read: NotifyRead::new(),
+            execution_lock: RwLock::new(epoch),
         };
         // Only initialize an empty database.
         if store
@@ -207,18 +218,36 @@ impl AuthorityStore {
         Ok(store)
     }
 
+    pub fn get_signed_effects(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<SignedTransactionEffects>> {
+        Ok(self
+            .perpetual_tables
+            .executed_effects
+            .get(transaction_digest)?)
+    }
+
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
     pub fn get_effects(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
-        self.perpetual_tables
-            .executed_effects
-            .get(transaction_digest)?
-            .map(|data| data.into_data())
+        self.get_effects_if_exists(transaction_digest)?
             .ok_or(SuiError::TransactionNotFound {
                 digest: *transaction_digest,
             })
+    }
+
+    pub fn get_effects_if_exists(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEffects>> {
+        Ok(self
+            .perpetual_tables
+            .executed_effects
+            .get(transaction_digest)?
+            .map(|data| data.into_data()))
     }
 
     /// Returns true if we have an effects structure for this transaction digest
@@ -376,6 +405,28 @@ impl AuthorityStore {
         }
 
         Ok(missing)
+    }
+
+    /// Attempts to acquire execution lock for certificate
+    /// Returns the lock if certificate is matching current executed epoch
+    /// Returns None otherwise
+    pub async fn execution_lock_for_certificate(
+        &self,
+        certificate: &CertifiedTransaction,
+    ) -> SuiResult<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.read().await;
+        if *lock == certificate.epoch() {
+            Ok(lock)
+        } else {
+            Err(SuiError::WrongEpoch {
+                expected_epoch: *lock,
+                actual_epoch: certificate.epoch(),
+            })
+        }
+    }
+
+    pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
+        self.execution_lock.write().await
     }
 
     /// When making changes, please see if get_missing_input_objects() above needs
@@ -846,9 +897,10 @@ impl AuthorityStore {
         // Insert each output object into the stores
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.objects,
-            written
-                .iter()
-                .map(|(_, (obj_ref, new_object, _kind))| (ObjectKey::from(obj_ref), new_object)),
+            written.iter().map(|(_, (obj_ref, new_object, _kind))| {
+                trace!(tx_digest=?transaction_digest, ?obj_ref, "writing object");
+                (ObjectKey::from(obj_ref), new_object)
+            }),
         )?;
 
         let new_locks_to_init: Vec<_> = written
@@ -1149,7 +1201,11 @@ impl AuthorityStore {
     /// 3. All new object states are deleted.
     /// 4. owner_index table change is reverted.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
-        let effects = self.get_effects(tx_digest)?;
+        let effects = self.get_effects_if_exists(tx_digest)?;
+        let Some(effects) = effects else {
+            debug!("Not reverting {tx_digest} as it was not executed");
+            return Ok(())
+        };
 
         let mut write_batch = self.perpetual_tables.certificates.batch();
         write_batch =
@@ -1293,14 +1349,17 @@ impl AuthorityStore {
             .epoch_store()
             .acquire_tx_lock(certificate.digest())
             .await;
-        self.epoch_store().set_assigned_shared_object_versions(
-            certificate.digest(),
-            &effects
-                .shared_objects
-                .iter()
-                .map(|(id, version, _)| (*id, *version))
-                .collect(),
-        )
+        self.epoch_store()
+            .set_assigned_shared_object_versions(
+                certificate,
+                &effects
+                    .shared_objects
+                    .iter()
+                    .map(|(id, version, _)| (*id, *version))
+                    .collect(),
+                self,
+            )
+            .await
     }
 
     pub fn get_transaction(
@@ -1347,24 +1406,6 @@ impl AuthorityStore {
             signed_tx.epoch() == cur_epoch
         } else {
             false
-        })
-    }
-
-    pub fn get_signed_transaction_info(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        Ok(VerifiedTransactionInfoResponse {
-            signed_transaction: self.get_transaction(transaction_digest)?,
-            certified_transaction: self
-                .perpetual_tables
-                .certificates
-                .get(transaction_digest)?
-                .map(|c| c.into()),
-            signed_effects: self
-                .perpetual_tables
-                .executed_effects
-                .get(transaction_digest)?,
         })
     }
 }

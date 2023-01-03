@@ -157,10 +157,6 @@ module sui::bcs {
         total
     }
 
-    spec peel_vec_length {
-        pragma intrinsic = true;
-    }
-
     /// Peel a vector of `address` from serialized bytes.
     public fun peel_vec_address(bcs: &mut BCS): vector<address> {
         let (len, i, res) = (peel_vec_length(bcs), 0, vector[]);
@@ -267,6 +263,9 @@ module sui::bcs {
             option::none()
         }
     }
+
+    // TODO: re-enable once bit-wise operators in peel_vec_length are supported in the prover
+    spec module { pragma verify = false; }
 
     // === Tests ===
 

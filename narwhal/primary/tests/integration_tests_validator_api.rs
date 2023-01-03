@@ -7,6 +7,7 @@ use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
+use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
@@ -26,7 +27,7 @@ use tonic::transport::Channel;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
-    ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
+    PreSubscribedBroadcastSender, ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
@@ -104,8 +105,8 @@ async fn test_get_collections() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -128,7 +129,7 @@ async fn test_get_collections() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -302,8 +303,8 @@ async fn test_remove_collections() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     Primary::spawn(
         name.clone(),
@@ -322,7 +323,7 @@ async fn test_remove_collections() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -508,8 +509,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -536,7 +536,7 @@ async fn test_read_causal_signed_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -548,8 +548,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -580,7 +579,7 @@ async fn test_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -730,8 +729,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
@@ -751,7 +749,7 @@ async fn test_read_causal_unsigned_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -763,8 +761,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -788,7 +785,7 @@ async fn test_read_causal_unsigned_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -933,8 +930,8 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_feedback_1, rx_feedback_1) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -957,7 +954,7 @@ async fn test_get_collections_with_missing_certificates() {
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
         None,
@@ -985,8 +982,7 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let parameters_2 = Parameters {
         batch_size: 200, // Two transactions.
@@ -1018,7 +1014,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

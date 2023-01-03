@@ -1178,6 +1178,16 @@ impl From<TransactionDigest> for TransactionInfoRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
+}
+
+#[derive(Clone, Debug)]
+pub struct VerifiedHandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
     // The signed transaction response to handle_transaction
     pub signed_transaction: Option<TxnT>,
@@ -1906,6 +1916,7 @@ pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
 pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
+pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
