@@ -224,9 +224,16 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let single_move_call = self
-            .single_move_call::<Mode>(package_object_id, module, function, type_args, call_args)
-            .await?;
+        let single_move_call = SingleTransactionKind::Call(
+            self.single_move_call::<Mode>(
+                package_object_id,
+                module,
+                function,
+                type_args,
+                call_args,
+            )
+            .await?,
+        );
         let input_objects = single_move_call
             .input_objects()?
             .iter()
@@ -248,14 +255,14 @@ impl TransactionBuilder {
         ))
     }
 
-    async fn single_move_call<Mode: ExecutionMode>(
+    pub async fn single_move_call<Mode: ExecutionMode>(
         &self,
         package_object_id: ObjectID,
         module: &str,
         function: &str,
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
-    ) -> anyhow::Result<SingleTransactionKind> {
+    ) -> anyhow::Result<MoveCall> {
         let package_ref = self.get_object_ref(package_object_id).await?;
         let module = Identifier::from_str(module)?;
         let function = Identifier::from_str(function)?;
@@ -275,13 +282,13 @@ impl TransactionBuilder {
             )
             .await?;
 
-        Ok(SingleTransactionKind::Call(MoveCall {
+        Ok(MoveCall {
             package: package_ref,
             module,
             function,
             type_arguments: type_args,
             arguments: call_args,
-        }))
+        })
     }
 
     async fn get_object_arg(
@@ -498,14 +505,16 @@ impl TransactionBuilder {
                         .await?
                 }
                 RPCTransactionRequestParams::MoveCallRequestParams(param) => {
-                    self.single_move_call::<Mode>(
-                        param.package_object_id,
-                        &param.module,
-                        &param.function,
-                        param.type_arguments,
-                        param.arguments,
+                    SingleTransactionKind::Call(
+                        self.single_move_call::<Mode>(
+                            param.package_object_id,
+                            &param.module,
+                            &param.function,
+                            param.type_arguments,
+                            param.arguments,
+                        )
+                        .await?,
                     )
-                    .await?
                 }
             };
             tx_kinds.push(single_tx);

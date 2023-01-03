@@ -8,6 +8,9 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_adapter::execution_mode;
+use sui_json::SuiJsonValue;
+use sui_transaction_builder::TransactionBuilder;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
@@ -19,7 +22,7 @@ use sui_json_rpc_types::{
     DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -35,6 +38,7 @@ use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
+use crate::transaction_builder_api::AuthorityStateDataReader;
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -45,11 +49,16 @@ pub struct ReadApi {
 
 pub struct FullNodeApi {
     pub state: Arc<AuthorityState>,
+    builder: TransactionBuilder,
 }
 
 impl FullNodeApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
-        Self { state }
+        let reader = Arc::new(AuthorityStateDataReader::new(state.clone()));
+        Self {
+            state,
+            builder: TransactionBuilder(reader),
+        }
     }
 }
 
@@ -224,6 +233,31 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         Ok(self
             .state
             .dev_inspect_transaction(txn_data, txn_digest)
+            .await?)
+    }
+
+    async fn dev_inspect_move_call(
+        &self,
+        sender_address: SuiAddress,
+        package_object_id: ObjectID,
+        module: String,
+        function: String,
+        type_arguments: Vec<SuiTypeTag>,
+        arguments: Vec<SuiJsonValue>,
+    ) -> RpcResult<DevInspectResults> {
+        let move_call = self
+            .builder
+            .single_move_call::<execution_mode::DevInspect>(
+                package_object_id,
+                &module,
+                &function,
+                type_arguments,
+                arguments,
+            )
+            .await?;
+        Ok(self
+            .state
+            .dev_inspect_move_call(sender_address, move_call)
             .await?)
     }
 
