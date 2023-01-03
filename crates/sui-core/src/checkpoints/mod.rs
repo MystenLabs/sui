@@ -305,8 +305,11 @@ impl CheckpointBuilder {
     async fn run(mut self) {
         loop {
             let epoch_store = self.state.epoch_store();
+            let mut last_processed_height: Option<u64> = None;
             for (height, (roots, last_checkpoint_of_epoch)) in epoch_store.get_pending_checkpoints()
             {
+                last_processed_height = Some(height);
+                debug!("Making checkpoint at commit height {height}");
                 if let Err(e) = self
                     .make_checkpoint(&epoch_store, height, roots, last_checkpoint_of_epoch)
                     .await
@@ -318,6 +321,7 @@ impl CheckpointBuilder {
                 }
             }
             drop(epoch_store);
+            debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // return on exit signal
@@ -362,6 +366,10 @@ impl CheckpointBuilder {
     ) -> SuiResult {
         let content_info = match new_checkpoint {
             Some((summary, contents)) => {
+                debug!(
+                    "Created checkpoint from commit height {height} with sequence {}",
+                    summary.sequence_number
+                );
                 // Only create checkpoint if content is not empty
                 self.output
                     .checkpoint_created(&summary, &contents, epoch_store)
@@ -391,7 +399,10 @@ impl CheckpointBuilder {
                 self.notify_aggregator.notify_waiters();
                 Some((sequence_number, transactions))
             }
-            None => None,
+            None => {
+                debug!("Skipping empty checkpoint at commit height {height}");
+                None
+            }
         };
         epoch_store.process_pending_checkpoint(height, content_info)?;
         Ok(())
@@ -867,6 +878,7 @@ impl CheckpointServiceNotify for CheckpointService {
             index, roots
         );
         epoch_store.insert_pending_checkpoint(&index, &(roots, last_checkpoint_of_epoch))?;
+        debug!("Notifying builder about checkpoint at {index}");
         self.notify_builder.notify_one();
         Ok(())
     }
