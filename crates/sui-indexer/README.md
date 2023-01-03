@@ -22,12 +22,12 @@ diesel setup
 # and then run 
 diesel migration run
 ```
-2. checkout [the latest devnet release](https://github.com/MystenLabs/sui/releases), otherwise API version mismatch could cause errors
+2. checkout the latest devnet commit by running commands below, otherwise API version mismatch could cause errors
 ```sh
-# an example LATEST_RELEASE is: releases/sui-v0.19.0-release
-git checkout <LATEST_RELEASE>
+git fetch upstream devnet
+git reset --hard upstream/devnet
 ```
-3. cargo run under `/sui-indexer`
+3. Go to `sui/crates/sui-indexer` and run command:
 ```sh
 # DATABASE_URL should be the same value as above
 cargo run --bin sui-indexer -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443"
