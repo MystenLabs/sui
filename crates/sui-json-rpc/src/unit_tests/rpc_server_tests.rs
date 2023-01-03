@@ -3,8 +3,6 @@
 
 use std::path::Path;
 
-use std::str::FromStr;
-
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
