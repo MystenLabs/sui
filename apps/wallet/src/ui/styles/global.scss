@@ -67,3 +67,7 @@ textarea {
 textarea {
     font-family: InterVariable, sans-serif;
 }
+
+::-ms-reveal {
+    display: none;
+}
