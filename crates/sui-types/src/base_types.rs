@@ -483,21 +483,6 @@ impl AsRef<[u8]> for TransactionDigest {
     }
 }
 
-impl fmt::Display for TransactionDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
-    }
-}
-
-impl fmt::LowerHex for TransactionDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self))
-    }
-}
-
 /// Returns a Context for OpenTelemetry tracing from a TransactionDigest
 // NOTE: See https://github.com/MystenLabs/sui/issues/852
 // The current code doesn't really work.  Maybe the traceparent needs to be a specific format,

@@ -180,7 +180,7 @@ impl AuthorityStore {
             pending_certificates.len()
         );
         for digest in pending_certificates {
-            debug!("Reverting {} at the end of epoch", digest);
+            debug!("Reverting {:?} at the end of epoch", digest);
             self.revert_state_update(&digest).await?;
         }
         debug!("All uncommitted local transactions reverted");
@@ -1203,7 +1203,7 @@ impl AuthorityStore {
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let effects = self.get_effects_if_exists(tx_digest)?;
         let Some(effects) = effects else {
-            debug!("Not reverting {tx_digest} as it was not executed");
+            debug!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(())
         };
 

@@ -74,7 +74,7 @@ pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError>
         ))
     })?;
     Ok(NewEvent {
-        transaction_digest: e.tx_digest.map(|digest| digest.to_string()),
+        transaction_digest: e.tx_digest.map(|digest| format!("{:?}", digest)),
         transaction_sequence: e.id.tx_seq,
         event_sequence: e.id.event_seq,
         event_time: Some(timestamp),
