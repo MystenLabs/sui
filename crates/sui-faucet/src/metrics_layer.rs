@@ -56,7 +56,6 @@ impl<Inner> Layer<Inner> for RequestMetricsLayer {
 impl<Inner, Req, Body> Service<Req> for RequestMetricsService<Inner>
 where
     Inner: Service<Req, Response = http::Response<Body>, Error = BoxError> + Clone + Send + 'static,
-    Body: std::fmt::Debug,
     Inner::Future: Send,
     Req: Send + 'static,
 {
