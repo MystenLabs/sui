@@ -2,20 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiObject, isSuiMoveObject, Base64DataBuffer } from '@mysten/sui.js';
-import { useWallet, ConnectButton } from '@mysten/wallet-kit';
 import { useMemo } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 
 import { DelegatorsList } from './DelegatorsList';
 
-import { ReactComponent as ArrowRight } from '~/assets/SVGIcons/12px/ArrowRight.svg';
 import ErrorResult from '~/components/error-result/ErrorResult';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
     type ValidatorState,
 } from '~/pages/validator/ValidatorDataTypes';
-import { Button } from '~/ui/Button';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -35,8 +32,6 @@ export type Delegator = {
 
 function ValidatorDetails() {
     const { id } = useParams();
-    const { connected } = useWallet();
-    console.log(connected);
     const { data, isLoading } = useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorsData =
@@ -172,26 +167,6 @@ function ValidatorDetails() {
                     >
                         {validator.name}
                     </Heading>
-                    {!connected ? (
-                        <ConnectButton
-                            connectText={
-                                <>
-                                    Connect Wallet
-                                    <ArrowRight
-                                        fill="currentColor"
-                                        className="-rotate-45"
-                                    />
-                                </>
-                            }
-                            size="md"
-                            className="border border-solid border-steel !bg-white text-steel-dark hover:border-steel-dark hover:text-steel-darker active:border-steel active:text-steel disabled:border-gray-45 disabled:text-steel-dark"
-                        />
-                    ) : (
-                        <Button type="button" variant="outline">
-                            Stake Coins{' '}
-                            <ArrowRight fill="currentColor" className="ml-2" />
-                        </Button>
-                    )}
                 </div>
             </div>
 
