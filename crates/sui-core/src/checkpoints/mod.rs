@@ -39,7 +39,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -303,6 +303,7 @@ impl CheckpointBuilder {
     }
 
     async fn run(mut self) {
+        info!("Starting CheckpointBuilder");
         loop {
             let epoch_store = self.state.epoch_store();
             let mut last_processed_height: Option<u64> = None;
@@ -325,6 +326,7 @@ impl CheckpointBuilder {
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // return on exit signal
+                    info!("Shutting down CheckpointBuilder");
                     return;
                 }
                 Either::Right(_) => {}
@@ -583,6 +585,7 @@ impl CheckpointAggregator {
     }
 
     async fn run(mut self) {
+        info!("Starting CheckpointAggregator");
         loop {
             if let Err(e) = self.run_inner().await {
                 error!(
@@ -597,6 +600,7 @@ impl CheckpointAggregator {
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
                     // return on exit signal
+                    info!("Shutting down CheckpointAggregator");
                     return;
                 }
                 Either::Right(_) => {}
@@ -748,7 +752,6 @@ pub struct CheckpointService {
     notify_builder: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     last_signature_index: Mutex<u64>,
-    _exit: watch::Sender<()>, // dropping this will eventually stop checkpoint tasks
 }
 
 impl CheckpointService {
@@ -760,7 +763,7 @@ impl CheckpointService {
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         transaction_certifier: Box<dyn TransactionCertifier>,
         metrics: Arc<CheckpointMetrics>,
-    ) -> Arc<Self> {
+    ) -> (Arc<Self>, watch::Sender<()> /* The exit sender */) {
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
 
@@ -794,13 +797,13 @@ impl CheckpointService {
         let last_signature_index = state.epoch_store().get_last_checkpoint_signature_index();
         let last_signature_index = Mutex::new(last_signature_index);
 
-        Arc::new(Self {
+        let service = Arc::new(Self {
             tables: checkpoint_store,
             notify_builder,
             notify_aggregator,
             last_signature_index,
-            _exit: exit_snd,
-        })
+        });
+        (service, exit_snd)
     }
 
     /// Used by internal systems that want to subscribe to checkpoints.
@@ -1008,7 +1011,7 @@ mod tests {
         let store = Box::new(store);
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
-        let checkpoint_service = CheckpointService::spawn(
+        let (checkpoint_service, _exit) = CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             store,
