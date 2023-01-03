@@ -182,7 +182,10 @@ impl SuiJsonValue {
                 Some(x) => MoveValue::U32(u32::try_from(x)?),
                 None => return Err(anyhow!("{} is not a valid number. Only u32 allowed.", n)),
             },
-
+            (JsonValue::Number(n), MoveTypeLayout::U64) => match n.as_u64() {
+                Some(x) => MoveValue::U64(x),
+                None => return Err(anyhow!("{} is not a valid number. Only u64 allowed.", n)),
+            },
             // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
                 MoveValue::U8(u8::try_from(convert_string_to_u256(s.as_str())?)?)
@@ -456,8 +459,10 @@ pub fn primitive_type(
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 // there is no MoveLayout for this so while we can still report whether a type
                 // is primitive or not, we can't return the layout
-                let (is_primitive, _) = primitive_type(view, type_args, &targs[0]);
-                (is_primitive, None)
+                let (is_primitive, inner_layout) = primitive_type(view, type_args, &targs[0]);
+                let layout =
+                    inner_layout.map(|inner_layout| MoveTypeLayout::Vector(Box::new(inner_layout)));
+                (is_primitive, layout)
             } else {
                 (false, None)
             }
