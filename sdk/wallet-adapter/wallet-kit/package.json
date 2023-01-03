@@ -32,8 +32,9 @@
     "@headlessui/react": "^1.7.5",
     "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
-    "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
+    "@mysten/wallet-adapter-unsafe-burner": "workspace:*",
+    "@mysten/wallet-kit-core": "workspace:*",
     "@stitches/react": "^1.2.8"
   },
   "devDependencies": {

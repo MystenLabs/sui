@@ -7,7 +7,6 @@
     "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-adapter-all-wallets": "workspace:*",
     "@mysten/wallet-adapter-base": "workspace:*",
-    "@mysten/wallet-adapter-react": "workspace:*",
     "@mysten/wallet-adapter-wallet-standard": "workspace:*",
     "@mysten/wallet-kit": "workspace:*",
     "@testing-library/jest-dom": "^5.16.4",

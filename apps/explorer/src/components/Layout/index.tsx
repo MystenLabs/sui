@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
-import {
-    WalletStandardAdapterProvider,
-    UnsafeBurnerWalletAdapter,
-} from '@mysten/wallet-adapter-all-wallets';
-import { WalletProvider, type WalletProviderProps } from '@mysten/wallet-kit';
+import { WalletKitProvider } from '@mysten/wallet-kit';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Fragment } from 'react';
@@ -20,20 +16,16 @@ import { NetworkContext, useNetwork } from '~/context';
 import { growthbook } from '~/utils/growthbook';
 import { queryClient } from '~/utils/queryClient';
 
-const adapters: WalletProviderProps['adapters'] = [
-    new WalletStandardAdapterProvider(),
-];
-if (import.meta.env.DEV) {
-    adapters.push(new UnsafeBurnerWalletAdapter());
-}
-
 export function Layout() {
     const [network, setNetwork] = useNetwork();
 
     return (
         // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
         <Fragment key={network}>
-            <WalletProvider adapters={adapters} autoConnect={false}>
+            <WalletKitProvider
+                /*autoConnect={false}*/
+                enableUnsafeBurner={import.meta.env.DEV}
+            >
                 <GrowthBookProvider growthbook={growthbook}>
                     <QueryClientProvider client={queryClient}>
                         <NetworkContext.Provider value={[network, setNetwork]}>
@@ -87,7 +79,7 @@ export function Layout() {
                         </NetworkContext.Provider>
                     </QueryClientProvider>
                 </GrowthBookProvider>
-            </WalletProvider>
+            </WalletKitProvider>
         </Fragment>
     );
 }
