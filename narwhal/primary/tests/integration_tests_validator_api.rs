@@ -335,8 +335,8 @@ async fn test_remove_collections() {
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(parameters.clone());
 
-    // Test remove 1 collection without spawning worker. Should result in a timeout error
-    // when trying to remove batches.
+    // Test remove 1 collection without spawning worker. Should result in a connection error
+    // when trying to connect to the worker to remove batches.
     let block_to_be_removed = collection_digests.remove(0);
     let request = tonic::Request::new(RemoveCollectionsRequest {
         collection_ids: vec![block_to_be_removed.into()],
@@ -344,9 +344,13 @@ async fn test_remove_collections() {
 
     let status = client.remove_collections(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Timeout, no result has been received in time"));
+    assert!(
+        status
+            .message()
+            .contains("Removal Error: Network has no connection with peer"),
+        "Actual: {:?}",
+        status
+    );
     assert!(
         store
             .certificate_store
@@ -379,9 +383,30 @@ async fn test_remove_collections() {
 
     let status = client.remove_collections(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Attempted to remove no collections!"));
+    assert!(
+        status
+            .message()
+            .contains("Attempted to remove no collections!"),
+        "Actual: {:?}",
+        status
+    );
+
+    // Wait until worker is ready. Use at most 10 attempts.
+    let mut iter = 0;
+    loop {
+        iter += 1;
+        let request = tonic::Request::new(GetCollectionsRequest {
+            collection_ids: vec![block_to_be_removed.into()],
+        });
+        let status = client.get_collections(request).await;
+        if status.is_ok() {
+            break;
+        }
+        if iter == 10 {
+            panic!("Last failure: {:?}", status);
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
 
     // Test remove 1 collection
     let request = tonic::Request::new(RemoveCollectionsRequest {
