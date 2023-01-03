@@ -6,9 +6,10 @@ use std::{
     sync::Arc,
 };
 
+use parking_lot::Mutex;
 use sui_types::storage::ObjectKey;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
-use tokio::sync::{mpsc::UnboundedSender, RwLock};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -23,7 +24,7 @@ pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
-    inner: RwLock<Inner>,
+    inner: Mutex<Inner>,
 }
 
 #[derive(Default)]
@@ -46,7 +47,7 @@ struct Inner {
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending certificates and
     /// other persistent data.
-    pub(crate) async fn new(
+    pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
@@ -65,7 +66,6 @@ impl TransactionManager {
                     .all_pending_certificates()
                     .unwrap(),
             )
-            .await
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -79,8 +79,8 @@ impl TransactionManager {
     /// TODO: it may be less error prone to take shared object locks inside this function, or
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
-    pub(crate) async fn enqueue(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
-        let inner = &mut self.inner.write().await;
+    pub(crate) fn enqueue(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+        let inner = &mut self.inner.lock();
         for cert in certs {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
@@ -112,7 +112,6 @@ impl TransactionManager {
                     &digest,
                     &cert.data().intent_message.value.input_objects()?,
                 )
-                .await
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
             if missing.is_empty() {
@@ -158,11 +157,11 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager that the given objects have been committed.
-    pub(crate) async fn objects_committed(&self, object_keys: Vec<ObjectKey>) {
+    pub(crate) fn objects_committed(&self, object_keys: Vec<ObjectKey>) {
         let mut ready_digests = Vec::new();
 
         {
-            let inner = &mut self.inner.write().await;
+            let inner = &mut self.inner.lock();
             for object_key in object_keys {
                 let Some(digests) = inner.missing_inputs.remove(&object_key) else {
                     continue;
@@ -222,9 +221,9 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager about a certificate that has been executed.
-    pub(crate) async fn certificate_executed(&self, digest: &TransactionDigest) {
+    pub(crate) fn certificate_executed(&self, digest: &TransactionDigest) {
         {
-            let inner = &mut self.inner.write().await;
+            let inner = &mut self.inner.lock();
             inner.executing_certificates.remove(digest);
             self.metrics
                 .transaction_manager_num_executing_certificates
