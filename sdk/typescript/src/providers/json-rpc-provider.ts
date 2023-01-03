@@ -705,7 +705,7 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_devInspectTransaction',
         [txBytes],
-        isDevInspectResults,
+        DevInspectResults,
         this.options.skipDataValidation
       );
       return resp;

@@ -13,6 +13,7 @@ import {
   union,
   unknown,
   boolean,
+  tuple,
 } from 'superstruct';
 import { SuiEvent } from './events';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
@@ -156,26 +157,6 @@ export const OwnedObjectRef = object({
 });
 export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
 
-export type DevInspectResults = {
-  effects: TransactionEffects;
-  results: DevInspectResultsType;
-};
-
-export type DevInspectResultsType =
-  | { Ok: DevInspectResultTupleType[] }
-  | { Err: string };
-
-export type DevInspectResultTupleType = [number, ExecutionResultType];
-
-export type ExecutionResultType = {
-  mutableReferenceOutputs?: MutableReferenceOutputType[];
-  returnValues?: ReturnValueType[];
-};
-
-export type MutableReferenceOutputType = [number, number[], string];
-
-export type ReturnValueType = [number[], string];
-
 export const TransactionEffects = object({
   /** The status of the execution */
   status: ExecutionStatus,
@@ -209,6 +190,25 @@ export const TransactionEffects = object({
   dependencies: optional(array(TransactionDigest)),
 });
 export type TransactionEffects = Infer<typeof TransactionEffects>;
+
+const ReturnValueType = tuple([array(number()), string()]);
+const MutableReferenceOutputType = tuple([number(), array(number()), string()]);
+const ExecutionResultType = object({
+  mutableReferenceOutputs: optional(array(MutableReferenceOutputType)),
+  returnValues: optional(array(ReturnValueType)),
+});
+const DevInspectResultTupleType = tuple([number(), ExecutionResultType]);
+
+const DevInspectResultsType = union([
+  object({ Ok: array(DevInspectResultTupleType) }),
+  object({ Err: string() }),
+]);
+
+export const DevInspectResults = object({
+  effects: TransactionEffects,
+  results: DevInspectResultsType,
+});
+export type DevInspectResults = Infer<typeof DevInspectResults>;
 
 export const SuiTransactionAuthSignersResponse = object({
   signers: array(string()),
