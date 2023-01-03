@@ -225,11 +225,6 @@ export const SuiCertifiedTransactionEffects = object({
 });
 
 export const SuiExecuteTransactionResponse = union([
-  object({
-    ImmediateReturn: object({
-      tx_digest: string(),
-    }),
-  }),
   object({ TxCert: object({ certificate: CertifiedTransaction }) }),
   object({
     EffectsCert: object({
