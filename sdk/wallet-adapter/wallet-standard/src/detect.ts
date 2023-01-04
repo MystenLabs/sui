@@ -8,14 +8,18 @@ import {
   Wallet,
   WalletWithFeatures,
 } from "@wallet-standard/core";
-import { SuiSignAndExecuteTransactionFeature } from "./features";
+import {
+  SuiDeeplinkFeature,
+  SuiSignAndExecuteTransactionFeature,
+} from "./features";
 
 export type StandardWalletAdapterWallet = WalletWithFeatures<
   ConnectFeature &
     EventsFeature &
     SuiSignAndExecuteTransactionFeature &
-    // Disconnect is an optional feature:
-    Partial<DisconnectFeature>
+    // Optional Features:
+    Partial<DisconnectFeature> &
+    Partial<SuiDeeplinkFeature>
 >;
 
 export function isStandardWalletAdapterCompatibleWallet(
