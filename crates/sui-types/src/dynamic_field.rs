@@ -54,7 +54,7 @@ impl DynamicFieldInfo {
         Ok(if is_dynamic_object(move_struct) {
             let name = match name {
                 MoveValue::Struct(name_struct) => {
-                    extract_field_from_move_struct(&name_struct, "name")
+                    extract_field_from_move_struct(name_struct, "name")
                 }
                 _ => None,
             }
@@ -64,7 +64,7 @@ impl DynamicFieldInfo {
             })?;
             // ID extracted from the wrapper object
             let object_id =
-                extract_id_value(&value).ok_or_else(|| SuiError::ObjectDeserializationError {
+                extract_id_value(value).ok_or_else(|| SuiError::ObjectDeserializationError {
                     error: format!(
                         "Cannot extract dynamic object's object id from \
                         sui::dynamic_field::Field, {value:?}"
