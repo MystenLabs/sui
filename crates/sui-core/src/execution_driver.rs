@@ -98,7 +98,7 @@ pub async fn execution_process(
             }
 
             // Remove the certificate that finished execution from the pending_certificates table.
-            authority.certificate_executed(&digest);
+            authority.certificate_executed(&digest, &epoch_store);
 
             authority
                 .metrics
