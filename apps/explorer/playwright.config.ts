@@ -112,6 +112,14 @@ const config: PlaywrightTestConfig = {
 
     /* Run your local dev server before starting the tests */
     webServer: [
+        // Localnet:
+        {
+            command:
+                'RUST_LOG="consensus=off" cargo run --bin sui-test-validator',
+            port: 9123,
+            timeout: 120 * 1000,
+            reuseExistingServer: !process.env.CI,
+        },
         // Localnet-based dev server:
         {
             command: 'pnpm dev',
@@ -123,13 +131,6 @@ const config: PlaywrightTestConfig = {
         {
             command: 'pnpm dev:static',
             port: 8080,
-            timeout: 120 * 1000,
-            reuseExistingServer: !process.env.CI,
-        },
-        {
-            command:
-                'RUST_LOG="consensus=off" cargo run --bin sui-test-validator',
-            port: 9123,
             timeout: 120 * 1000,
             reuseExistingServer: !process.env.CI,
         },
