@@ -10,8 +10,8 @@ The names highlight that the components split the responsibilities of:
 
 In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
-Still, you may easily use Tusk instead of Bullshark by reverting the change shown in:
-https://github.com/MystenLabs/narwhal/blob/85c226f2824010ff695d0bc5789a24cad2bce289/node/src/lib.rs#L266
+Still, you may easily use Tusk instead of Bullshark by updating the order engine at:
+https://github.com/MystenLabs/sui/blame/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191
 
 Consensus is accomplished in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
 
@@ -24,11 +24,11 @@ The Sui Consensus Engine approach can offer dramatic scalability benefits in the
 ## Features
 
 The Narwhal mempool offers:
-* a high-throughput data availability engine, with cryptographic proofs of data availability at [a primary node](https://github.com/MystenLabs/narwhal/tree/main/primary)
+* a high-throughput data availability engine, with cryptographic proofs of data availability at [a primary node](https://github.com/MystenLabs/sui/blob/main/narwhal/primary)
 * a structured graph data structure for traversing this information
-* a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/narwhal/tree/main/worker)
+* a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/sui/blob/main/narwhal/worker)
 
-The [consensus](https://github.com/MystenLabs/narwhal/tree/main/consensus) component offers a zero-message overhead consensus algorithm, leveraging graph traversals.
+The [consensus](https://github.com/MystenLabs/sui/blob/main/narwhal/consensus) component offers a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 ## Architecture
 
@@ -86,7 +86,7 @@ Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksD
 
 ## Configuration
 
-To conduct a fresh deployment of Sui Consensus Engine, follow the instructions at [Running Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark).
+To conduct a fresh deployment of Sui Consensus Engine, follow the instructions at [Running Benchmarks](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark).
 
 ## Further reading
 
