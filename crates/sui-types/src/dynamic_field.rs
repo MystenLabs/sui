@@ -54,26 +54,32 @@ impl DynamicFieldInfo {
             }
         })?;
 
-        let object_id =
-            extract_object_id(&value).ok_or_else(|| SuiError::ObjectDeserializationError {
-                error: format!(
-                    "Cannot extract dynamic object's object id from Field::value, {:?}",
-                    value
-                ),
-            })?;
-
         Ok(if is_dynamic_object(move_struct) {
             let name = match name {
-                MoveValue::Struct(s) => extract_field_from_move_struct(&s, "name"),
+                MoveValue::Struct(name_struct) => {
+                    extract_field_from_move_struct(&name_struct, "name")
+                }
                 _ => None,
             }
             .ok_or_else(|| SuiError::ObjectDeserializationError {
                 error: "Cannot extract [name] field from sui::dynamic_object_field::Wrapper."
                     .to_string(),
             })?;
-
+            let object_id =
+                extract_id_value(&value).ok_or_else(|| SuiError::ObjectDeserializationError {
+                    error: format!(
+                        "Cannot extract dynamic object's object id from \
+                        sui::dynamic_field::Field, {:?}",
+                        value
+                    ),
+                })?;
             (name.to_string(), DynamicFieldType::DynamicObject, object_id)
         } else {
+            let object_id = extract_object_id(&move_struct).ok_or_else(|| {
+                SuiError::ObjectDeserializationError {
+                    error: "Cannot extract object id from sui::dynamic_field::Field".to_string(),
+                }
+            })?;
             (
                 name.to_string(),
                 DynamicFieldType::DynamicField {
@@ -98,24 +104,27 @@ fn extract_field_from_move_struct(move_struct: &MoveStruct, field_name: &str) ->
     }
 }
 
-fn extract_object_id(value: &MoveValue) -> Option<ObjectID> {
-    match value {
-        MoveValue::Struct(MoveStruct::WithTypes { type_, fields }) => {
-            if type_ == &ID::type_() {
-                match fields.first() {
-                    Some((_, MoveValue::Address(addr))) => Some(ObjectID::from(*addr)),
-                    _ => None,
-                }
-            } else {
-                for (_, value) in fields {
-                    let id = extract_object_id(value);
-                    if id.is_some() {
-                        return id;
-                    }
-                }
-                None
-            }
-        }
+fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
+    // id is the first value in an object
+    let id_value = match value {
+        MoveStruct::Runtime(fields) => fields.get(0)?,
+        MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. } => &fields.get(0)?.1,
+    };
+    extract_id_value(id_value)
+}
+
+fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
+    // the id struct has a single bytes field
+    let id_bytes_value = match id_value {
+        MoveValue::Struct(MoveStruct::Runtime(fields)) => fields.get(0)?,
+        MoveValue::Struct(
+            MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. },
+        ) => &fields.get(0)?.1,
+        _ => return None,
+    };
+    // the bytes field should be an address
+    match id_bytes_value {
+        MoveValue::Address(addr) => Some(ObjectID::from(*addr)),
         _ => None,
     }
 }
