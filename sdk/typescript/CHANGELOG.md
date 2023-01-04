@@ -1,5 +1,21 @@
 # @mysten/sui.js
 
+## 0.21.0
+
+### Minor Changes
+
+- 4fb12ac6d: - removes `transfer` function from framework Coin
+  - renames `newTransferTx` function from framework Coin to `newPayTransaction`. Also it's now a public method and without the need of signer so a dapp can use it
+  - fixes edge cases with pay txs
+- bb14ffdc5: Remove ImmediateReturn and WaitForTxCert from ExecuteTransactionRequestType
+- d2015f815: Rebuilt type-narrowing utilties (e.g. `isSuiObject`) on top of Superstruct, which should make them more reliable.
+  The type-narrowing functions are no longer exported, instead a Superstruct schema is exported, in addition to an `is` and `assert` function, both of which can be used to replace the previous narrowing functions. For example, `isSuiObject(data)` becomes `is(data, SuiObject)`.
+- 7d0f25b61: Add devInspectTransaction, which is similar to dryRunTransaction, but lets you call any Move function(including non-entry function) with arbitrary values.
+
+### Patch Changes
+
+- 9fbe2714b: Add devInspectMoveCall, which is similar to devInspectTransaction, but lets you call any Move function without a gas object and budget
+
 ## 0.20.0
 
 ### Minor Changes
