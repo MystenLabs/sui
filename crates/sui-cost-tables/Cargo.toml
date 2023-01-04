@@ -17,4 +17,4 @@ sui-protocol-constants = { path = "../sui-protocol-constants" }
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.141", features = ["derive"] }
 bcs = "0.1.4"
-once_cell = "1.16"
+once_cell = "1.17"

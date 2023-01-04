@@ -21,7 +21,7 @@ derive_builder = "0.12.0"
 futures = "0.3.24"
 itertools = "0.10.5"
 multiaddr = "0.17.0"
-once_cell = "1.16"
+once_cell = "1.17"
 prometheus = "0.13.3"
 prost = "0.11.3"
 rand = { version = "0.8.5", features = ["small_rng"] }

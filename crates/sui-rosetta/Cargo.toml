@@ -17,7 +17,7 @@ tower-http = { version = "0.3.4", features = ["cors"] }
 tokio = { workspace = true }
 futures-core = "0.3.21"
 futures = "0.3.23"
-once_cell = "1.16"
+once_cell = "1.17"
 serde_with = "2.1.0"
 signature = "1.6.0"
 bcs = "0.1.4"
