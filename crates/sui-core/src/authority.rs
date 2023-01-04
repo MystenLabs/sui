@@ -80,9 +80,10 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::{
-    event_handler::EventHandler, execution_engine, transaction_input_checker,
+    event_handler::EventHandler, transaction_input_checker,
     transaction_manager::TransactionManager, transaction_streamer::TransactionStreamer,
 };
+use sui_adapter::execution_engine;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
