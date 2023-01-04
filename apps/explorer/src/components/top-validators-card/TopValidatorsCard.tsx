@@ -1,17 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    Base64DataBuffer,
-    is,
-    SuiObject,
-    SuiMoveObject,
-    SUI_TYPE_ARG,
-} from '@mysten/sui.js';
+import { Base64DataBuffer, is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
+
+import type { SuiMoveObject } from '@mysten/sui.js';
 
 import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { useGetObject } from '~/hooks/useGetObject';
@@ -222,22 +218,18 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
 
-    const validatorData =
-        data &&
-        is(data.details, SuiObject) &&
-        is(data.details.data, SuiMoveObject)
-            ? (data.details.data.fields as ValidatorState)
-            : null;
-
-    const tableData = useMemo(
-        () => (validatorData ? validatorsTable(validatorData, limit) : null),
-        [validatorData, limit]
-    );
+    const tableData = useMemo(() => {
+        if (!data || !is(data.details, SuiObject)) {
+            return null;
+        }
+        const { fields } = data.details.data as SuiMoveObject;
+        return validatorsTable(fields as ValidatorState, limit);
+    }, [data, limit]);
 
     if (isError || (!isLoading && !tableData?.data.length)) {
         return (
             <Banner variant="error" fullWidth>
-                Validator data could not be loaded
+                Validator data could not be loaded.
             </Banner>
         );
     }
