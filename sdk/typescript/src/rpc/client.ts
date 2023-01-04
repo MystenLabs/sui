@@ -3,6 +3,7 @@
 
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
+import https from 'https';
 import { isErrorResponse, isValidResponse } from './client.guard';
 
 /**
@@ -26,11 +27,11 @@ const TYPE_MISMATCH_ERROR =
 export class JsonRpcClient {
   private rpcClient: RpcClient;
 
-  constructor(url: string, httpHeaders?: HttpHeaders) {
-    this.rpcClient = this.createRpcClient(url, httpHeaders);
+  constructor(url: string, httpHeaders?: HttpHeaders, mTlsOptions?: https.AgentOptions) {
+    this.rpcClient = this.createRpcClient(url, httpHeaders, mTlsOptions);
   }
 
-  private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
+  private createRpcClient(url: string, httpHeaders?: HttpHeaders, mTlsOptions?: https.AgentOptions): RpcClient {
     const client = new RpcClient(
       async (
         request: any,
@@ -45,11 +46,13 @@ export class JsonRpcClient {
             },
             httpHeaders || {}
           ),
+          agent: new https.Agent(mTlsOptions),
         };
 
         try {
           let res: Response = await fetch(url, options);
           const result = await res.text();
+          console.log(res);
           if (res.ok) {
             callback(null, result);
           } else {
