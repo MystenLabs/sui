@@ -656,7 +656,7 @@ mod tests {
         .unwrap();
         write_keypair_to_file(&account_key_pair, &PathBuf::from("account.key")).unwrap();
 
-        const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+        const TEMPLATE: &str = include_str!("../data/fullnode-template-with-path.yaml");
         let template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
         assert_eq!(
             template.protocol_key_pair().public(),
