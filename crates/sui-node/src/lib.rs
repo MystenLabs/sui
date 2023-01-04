@@ -66,6 +66,7 @@ pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
+use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -415,9 +416,10 @@ impl SuiNode {
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         Self::start_epoch_specific_validator_components(
             config,
-            state,
+            state.clone(),
             consensus_adapter,
             checkpoint_store,
+            state.epoch_store().clone(),
             state_sync_handle,
             narwhal_manager,
             validator_server_handle,
@@ -431,6 +433,7 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         narwhal_manager: NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>,
         validator_server_handle: JoinHandle<Result<()>>,
@@ -440,13 +443,14 @@ impl SuiNode {
             config,
             consensus_adapter.clone(),
             checkpoint_store,
+            epoch_store.clone(),
             state.clone(),
             state_sync_handle,
             checkpoint_metrics.clone(),
         );
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
-            state.epoch_store().clone(),
+            epoch_store,
             checkpoint_service,
             state.transaction_manager().clone(),
             state.db(),
@@ -487,6 +491,7 @@ impl SuiNode {
         config: &NodeConfig,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
         checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -503,6 +508,7 @@ impl SuiNode {
         CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
+            epoch_store,
             Box::new(state.db()),
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -671,6 +677,7 @@ impl SuiNode {
                             self.state.clone(),
                             consensus_adapter,
                             self.checkpoint_store.clone(),
+                            self.state.epoch_store().clone(),
                             self.state_sync.clone(),
                             narwhal_manager,
                             validator_server_handle,
