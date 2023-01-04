@@ -7,12 +7,13 @@ use std::{
 };
 
 use mysten_metrics::spawn_monitored_task;
+use sui_types::error::SuiError;
 use sui_types::messages::VerifiedCertificate;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::authority::AuthorityState;
 
@@ -83,6 +84,10 @@ pub async fn execution_process(
                     .try_execute_immediately(&certificate, &epoch_store)
                     .await;
                 if let Err(e) = res {
+                    if matches!(e, SuiError::WrongEpoch { .. }) {
+                        warn!("Scheduled outdated certificate {:?} for wrong epoch {:?}, not retrying", certificate, e);
+                        break;
+                    }
                     if attempts == EXECUTION_MAX_ATTEMPTS {
                         error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
                         authority.metrics.execution_driver_execution_failures.inc();
