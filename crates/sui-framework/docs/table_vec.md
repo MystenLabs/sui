@@ -158,6 +158,7 @@ Return the length of the TableVec.
 
 ## Function `is_empty`
 
+Return if the TableVec is empty or not.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="table_vec.md#0x2_table_vec_is_empty">is_empty</a>&lt;Element: store&gt;(t: &<a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;Element&gt;): bool

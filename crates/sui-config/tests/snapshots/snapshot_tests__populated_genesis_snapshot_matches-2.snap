@@ -246,8 +246,14 @@ validators:
           value: 0
         delegation_token_supply:
           value: 0
-        pending_delegations: []
-        pending_withdraws: []
+        pending_delegations:
+          contents:
+            id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+            size: 0
+        pending_withdraws:
+          contents:
+            id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
+            size: 0
       commission_rate: 0
   pending_validators: []
   pending_removals: []

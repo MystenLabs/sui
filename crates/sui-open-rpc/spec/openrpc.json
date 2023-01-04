@@ -3004,7 +3004,7 @@
           }
         }
       },
-      "Entry_for_ValidatorPair_and_Array_of_PendingWithdrawEntry": {
+      "Entry_for_ValidatorPair_and_TableVec": {
         "description": "Rust version of the Move sui::vec_map::Entry type",
         "type": "object",
         "required": [
@@ -3016,10 +3016,7 @@
             "$ref": "#/components/schemas/ValidatorPair"
           },
           "value": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PendingWithdrawEntry"
-            }
+            "$ref": "#/components/schemas/TableVec"
           }
         }
       },
@@ -4548,50 +4545,6 @@
           }
         }
       },
-      "PendingDelegationEntry": {
-        "description": "Rust version of the Move sui::staking_pool::PendingDelegationEntry type.",
-        "type": "object",
-        "required": [
-          "delegator",
-          "staked_sui_id",
-          "sui_amount"
-        ],
-        "properties": {
-          "delegator": {
-            "$ref": "#/components/schemas/SuiAddress"
-          },
-          "staked_sui_id": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "sui_amount": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      },
-      "PendingWithdrawEntry": {
-        "description": "Rust version of the Move sui::staking_pool::PendingWithdrawEntry type.",
-        "type": "object",
-        "required": [
-          "delegator",
-          "principal_withdraw_amount",
-          "withdrawn_pool_tokens"
-        ],
-        "properties": {
-          "delegator": {
-            "$ref": "#/components/schemas/SuiAddress"
-          },
-          "principal_withdraw_amount": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "withdrawn_pool_tokens": {
-            "$ref": "#/components/schemas/Balance"
-          }
-        }
-      },
       "RPCTransactionRequestParams": {
         "oneOf": [
           {
@@ -4761,16 +4714,10 @@
             "$ref": "#/components/schemas/Supply"
           },
           "pending_delegations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PendingDelegationEntry"
-            }
+            "$ref": "#/components/schemas/TableVec"
           },
           "pending_withdraws": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PendingWithdrawEntry"
-            }
+            "$ref": "#/components/schemas/TableVec"
           },
           "rewards_pool": {
             "$ref": "#/components/schemas/Balance"
@@ -5521,6 +5468,36 @@
           }
         }
       },
+      "Table": {
+        "description": "Rust version of the Move sui::table::Table type. Putting it here since we only use it in sui_system in the framework.",
+        "type": "object",
+        "required": [
+          "id",
+          "size"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "size": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "TableVec": {
+        "description": "Rust version of the Move sui::table::Table type. Putting it here since we only use it in sui_system in the framework.",
+        "type": "object",
+        "required": [
+          "contents"
+        ],
+        "properties": {
+          "contents": {
+            "$ref": "#/components/schemas/Table"
+          }
+        }
+      },
       "TransactionBytes": {
         "type": "object",
         "required": [
@@ -6136,7 +6113,7 @@
             }
           },
           "pending_delegation_switches": {
-            "$ref": "#/components/schemas/VecMap_for_ValidatorPair_and_Array_of_PendingWithdrawEntry"
+            "$ref": "#/components/schemas/VecMap_for_ValidatorPair_and_TableVec"
           },
           "pending_removals": {
             "type": "array",
@@ -6179,7 +6156,7 @@
           }
         }
       },
-      "VecMap_for_ValidatorPair_and_Array_of_PendingWithdrawEntry": {
+      "VecMap_for_ValidatorPair_and_TableVec": {
         "description": "Rust version of the Move sui::vec_map::VecMap type",
         "type": "object",
         "required": [
@@ -6189,7 +6166,7 @@
           "contents": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Entry_for_ValidatorPair_and_Array_of_PendingWithdrawEntry"
+              "$ref": "#/components/schemas/Entry_for_ValidatorPair_and_TableVec"
             }
           }
         }
