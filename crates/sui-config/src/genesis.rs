@@ -6,6 +6,7 @@ use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
@@ -17,15 +18,23 @@ use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode};
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{ExecutionDigests, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::chain_id::ChainId;
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature, ToFromBytes};
+use sui_types::crypto::{
+    AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
+    AuthorityWeakQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
+};
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::messages::CallArg;
-use sui_types::messages::InputObjects;
-use sui_types::messages::Transaction;
+use sui_types::message_envelope::Message;
+use sui_types::messages::{CallArg, TransactionEffects};
+use sui_types::messages::{CertifiedTransaction, Transaction};
+use sui_types::messages::{InputObjects, SignedTransaction};
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+};
+use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
@@ -39,15 +48,47 @@ use sui_types::{
 };
 use tracing::trace;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Genesis {
+    checkpoint: CertifiedCheckpointSummary,
+    checkpoint_contents: CheckpointContents,
+    transaction: CertifiedTransaction,
+    effects: TransactionEffects,
     objects: Vec<Object>,
     validator_set: Vec<ValidatorInfo>,
 }
 
+// Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
+impl PartialEq for Genesis {
+    fn eq(&self, other: &Self) -> bool {
+        self.transaction.data() == other.transaction.data()
+            && {
+                let this = self.transaction.auth_sig();
+                let other = other.transaction.auth_sig();
+
+                this.epoch == other.epoch
+                    && this.signature.as_ref() == other.signature.as_ref()
+                    && this.signers_map == other.signers_map
+            }
+            && self.effects == other.effects
+            && self.objects == other.objects
+            && self.validator_set == other.validator_set
+    }
+}
+
+impl Eq for Genesis {}
+
 impl Genesis {
     pub fn objects(&self) -> &[Object] {
         &self.objects
+    }
+
+    pub fn transaction(&self) -> &CertifiedTransaction {
+        &self.transaction
+    }
+
+    pub fn effects(&self) -> &TransactionEffects {
+        &self.effects
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -86,10 +127,6 @@ impl Genesis {
 
     pub fn chain_id(&self) -> ChainId {
         self.sui_system_object().chain_id
-    }
-
-    pub fn get_default_genesis() -> Self {
-        Builder::new().build()
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -133,11 +170,19 @@ impl Serialize for Genesis {
 
         #[derive(Serialize)]
         struct RawGeneis<'a> {
+            checkpoint: &'a CertifiedCheckpointSummary,
+            checkpoint_contents: &'a CheckpointContents,
+            transaction: &'a CertifiedTransaction,
+            effects: &'a TransactionEffects,
             objects: &'a [Object],
             validator_set: &'a [ValidatorInfo],
         }
 
         let raw_genesis = RawGeneis {
+            checkpoint: &self.checkpoint,
+            checkpoint_contents: &self.checkpoint_contents,
+            transaction: &self.transaction,
+            effects: &self.effects,
             objects: &self.objects,
             validator_set: &self.validator_set,
         };
@@ -162,6 +207,10 @@ impl<'de> Deserialize<'de> for Genesis {
 
         #[derive(Deserialize)]
         struct RawGeneis {
+            checkpoint: CertifiedCheckpointSummary,
+            checkpoint_contents: CheckpointContents,
+            transaction: CertifiedTransaction,
+            effects: TransactionEffects,
             objects: Vec<Object>,
             validator_set: Vec<ValidatorInfo>,
         }
@@ -174,18 +223,28 @@ impl<'de> Deserialize<'de> for Genesis {
             data
         };
 
-        let raw_genesis: RawGeneis =
-            bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
+        let RawGeneis {
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
+            objects,
+            validator_set,
+        } = bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
 
         Ok(Genesis {
-            objects: raw_genesis.objects,
-            validator_set: raw_genesis.validator_set,
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
+            objects,
+            validator_set,
         })
     }
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisValidatorInfo {
     pub info: ValidatorInfo,
     #[serde_as(as = "AuthSignature")]
@@ -203,6 +262,16 @@ pub struct Builder {
     parameters: GenesisChainParameters,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
+    // Validator signatures over 0: checkpoint 1: genesis transaction
+    // TODO remove the need to have a sig on the transaction
+    signatures: BTreeMap<AuthorityPublicKeyBytes, (AuthoritySignInfo, AuthoritySignInfo)>,
+    built_genesis: Option<(
+        CheckpointSummary,
+        CheckpointContents,
+        Transaction,
+        TransactionEffects,
+        Vec<Object>,
+    )>,
 }
 
 impl Default for Builder {
@@ -217,6 +286,8 @@ impl Builder {
             parameters: Default::default(),
             objects: Default::default(),
             validators: Default::default(),
+            signatures: Default::default(),
+            built_genesis: None,
         }
     }
 
@@ -257,7 +328,48 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> Genesis {
+    pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
+        let (checkpoint, _checkpoint_contents, transaction, _effects, _objects) =
+            self.build_unsigned_genesis_data();
+
+        let name = keypair.public().into();
+        assert!(
+            self.validators.contains_key(&name),
+            "provided keypair does not correspond to a validator in the validator set"
+        );
+        let checkpoint_signature = {
+            let signature = AuthoritySignature::new(&checkpoint, checkpoint.epoch, keypair);
+            AuthoritySignInfo {
+                epoch: checkpoint.epoch,
+                authority: name,
+                signature,
+            }
+        };
+
+        let transaction_signature =
+            SignedTransaction::new(checkpoint.epoch, transaction.into_data(), keypair, name)
+                .auth_sig()
+                .clone();
+
+        self.signatures
+            .insert(name, (checkpoint_signature, transaction_signature));
+
+        self
+    }
+
+    fn build_unsigned_genesis_data(
+        &mut self,
+    ) -> (
+        CheckpointSummary,
+        CheckpointContents,
+        Transaction,
+        TransactionEffects,
+        Vec<Object>,
+    ) {
+        if let Some(built_genesis) = &self.built_genesis {
+            return built_genesis.clone();
+        }
+
         let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
 
         // Get Move and Sui Framework
@@ -266,9 +378,15 @@ impl Builder {
             sui_framework::get_sui_framework(),
         ];
 
-        let objects = self.objects.into_iter().map(|(_, o)| o).collect::<Vec<_>>();
+        let objects = self
+            .objects
+            .clone()
+            .into_iter()
+            .map(|(_, o)| o)
+            .collect::<Vec<_>>();
         let validators = self
             .validators
+            .clone()
             .into_iter()
             .map(|(_, v)| v)
             .collect::<Vec<_>>();
@@ -280,7 +398,93 @@ impl Builder {
             &validators,
         );
 
+        let (genesis_transaction, genesis_effects, objects) = create_genesis_transaction(objects);
+        let (checkpoint, checkpoint_contents) =
+            create_genesis_checkpoint(&genesis_transaction, &genesis_effects);
+
+        self.built_genesis = Some((
+            checkpoint,
+            checkpoint_contents,
+            genesis_transaction,
+            genesis_effects,
+            objects,
+        ));
+
+        self.built_genesis.clone().unwrap()
+    }
+
+    fn committee(objects: &[Object]) -> Committee {
+        let sui_system_object = objects
+            .iter()
+            .find(|o| o.id() == sui_types::SUI_SYSTEM_STATE_OBJECT_ID)
+            .expect("Sui System State object must always exist");
+        let move_object = sui_system_object
+            .data
+            .try_as_move()
+            .expect("Sui System State object must be a Move object");
+        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+            .expect("Sui System State object deserialization cannot fail");
+        result.get_current_epoch_committee().committee
+    }
+
+    pub fn build(mut self) -> Genesis {
+        let (checkpoint, checkpoint_contents, transaction, effects, objects) =
+            self.build_unsigned_genesis_data();
+
+        let committee = Self::committee(&objects);
+
+        let transaction = {
+            let signatures = self
+                .signatures
+                .clone()
+                .into_iter()
+                .map(|(_, (_, s))| s)
+                .collect();
+
+            CertifiedTransaction::new(transaction.into_data(), signatures, &committee).unwrap()
+        };
+
+        let checkpoint = {
+            let signatures = self
+                .signatures
+                .clone()
+                .into_iter()
+                .map(|(_, (s, _))| s)
+                .collect();
+
+            CertifiedCheckpointSummary {
+                summary: checkpoint,
+                auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+                    signatures, &committee,
+                )
+                .unwrap(),
+            }
+        };
+
+        let validators = self
+            .validators
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>();
+
+        // Ensure we have signatures from all validators
+        assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
+
+        // TODO(bmwill) remove this and don't override previous txn digest once we actually use the
+        // checkpoint created from genesis.
+        let objects = objects
+            .into_iter()
+            .map(|object| Object {
+                previous_transaction: TransactionDigest::genesis(),
+                ..object
+            })
+            .collect::<Vec<_>>();
+
         let genesis = Genesis {
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
             objects,
             validator_set: validators
                 .into_iter()
@@ -343,6 +547,20 @@ impl Builder {
             objects.insert(object.id(), object);
         }
 
+        // Load Signatures
+        let mut signatures = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let signature_bytes = fs::read(path)?;
+            let sigs: (AuthoritySignInfo, AuthoritySignInfo) = bcs::from_bytes(&signature_bytes)?;
+            signatures.insert(sigs.0.authority, sigs);
+        }
+
         // Load validator infos
         let mut committee = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
@@ -362,6 +580,8 @@ impl Builder {
             parameters,
             objects,
             validators: committee,
+            signatures,
+            built_genesis: None,
         })
     }
 
@@ -385,6 +605,15 @@ impl Builder {
             fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
+        // Write Signatures
+        let signature_dir = path.join(GENESIS_BUILDER_SIGNATURE_DIR);
+        std::fs::create_dir_all(&signature_dir)?;
+        for (pubkey, sigs) in self.signatures {
+            let sig_bytes = bcs::to_bytes(&sigs)?;
+            let hex_name = Hex::encode(pubkey);
+            fs::write(signature_dir.join(hex_name), sig_bytes)?;
+        }
+
         // Write validator infos
         let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
         fs::create_dir_all(&committee_dir)?;
@@ -397,6 +626,108 @@ impl Builder {
 
         Ok(())
     }
+}
+
+fn create_genesis_checkpoint(
+    transaction: &Transaction,
+    effects: &TransactionEffects,
+) -> (CheckpointSummary, CheckpointContents) {
+    let execution_digests = ExecutionDigests {
+        transaction: *transaction.digest(),
+        effects: effects.digest(),
+    };
+    let contents = CheckpointContents::new_with_causally_ordered_transactions([execution_digests]);
+    let checkpoint = CheckpointSummary {
+        epoch: 0,
+        sequence_number: 0,
+        network_total_transactions: contents.size().try_into().unwrap(),
+        content_digest: contents.digest(),
+        previous_digest: None,
+        epoch_rolling_gas_cost_summary: Default::default(),
+        next_epoch_committee: None,
+    };
+
+    (checkpoint, contents)
+}
+
+fn create_genesis_transaction(
+    objects: Vec<Object>,
+) -> (Transaction, TransactionEffects, Vec<Object>) {
+    let genesis_transaction = {
+        let genesis_objects = objects
+            .into_iter()
+            .map(|mut object| {
+                if let Some(o) = object.data.try_as_move_mut() {
+                    o.decrement_version_to(SequenceNumber::MIN);
+                }
+
+                if let Owner::Shared {
+                    initial_shared_version,
+                } = &mut object.owner
+                {
+                    *initial_shared_version = SequenceNumber::MIN;
+                }
+
+                sui_types::messages::GenesisObject::RawObject {
+                    data: object.data,
+                    owner: object.owner,
+                }
+            })
+            .collect();
+
+        sui_types::messages::VerifiedTransaction::new_genesis_transaction(genesis_objects)
+            .into_inner()
+    };
+
+    // execute txn to effects
+    let (effects, objects) = {
+        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
+        let temporary_store = TemporaryStore::new(
+            &mut store,
+            InputObjects::new(vec![]),
+            *genesis_transaction.digest(),
+        );
+
+        let native_functions = sui_framework::natives::all_natives(
+            sui_types::MOVE_STDLIB_ADDRESS,
+            sui_types::SUI_FRAMEWORK_ADDRESS,
+        );
+        let move_vm = std::sync::Arc::new(
+            adapter::new_move_vm(native_functions.clone())
+                .expect("We defined natives to not fail here"),
+        );
+
+        let (inner_temp_store, effects, _execution_error) =
+            sui_adapter::execution_engine::execute_transaction_to_effects::<
+                execution_mode::Normal,
+                _,
+            >(
+                vec![],
+                temporary_store,
+                genesis_transaction.data().intent_message.value.clone(),
+                *genesis_transaction.digest(),
+                Default::default(),
+                &move_vm,
+                &native_functions,
+                SuiGasStatus::new_unmetered(),
+                0,
+            );
+        assert!(inner_temp_store.objects.is_empty());
+        assert!(inner_temp_store.mutable_inputs.is_empty());
+        assert!(inner_temp_store.deleted.is_empty());
+
+        let objects = inner_temp_store
+            .written
+            .into_iter()
+            .map(|(_, (_, o, kind))| {
+                assert_eq!(kind, sui_types::storage::WriteKind::Create);
+                o
+            })
+            .collect();
+        (effects, objects)
+    };
+
+    (genesis_transaction, effects, objects)
 }
 
 fn create_genesis_objects(
@@ -589,10 +920,11 @@ pub fn generate_genesis_system_object(
 const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
+const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
 
 #[cfg(test)]
 mod test {
-    use super::Builder;
+    use super::*;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
     use sui_types::crypto::{
@@ -602,7 +934,9 @@ mod test {
 
     #[test]
     fn roundtrip() {
-        let genesis = Builder::new().build();
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
 
         let s = serde_yaml::to_string(&genesis).unwrap();
         let from_s = serde_yaml::from_str(&s).unwrap();
@@ -642,5 +976,48 @@ mod test {
             .add_validator(validator, pop);
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn genesis_transaction() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
+
+        let genesis_transaction = genesis.transaction.clone();
+
+        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
+        let temporary_store = TemporaryStore::new(
+            &mut store,
+            InputObjects::new(vec![]),
+            *genesis_transaction.digest(),
+        );
+
+        let native_functions = sui_framework::natives::all_natives(
+            sui_types::MOVE_STDLIB_ADDRESS,
+            sui_types::SUI_FRAMEWORK_ADDRESS,
+        );
+        let move_vm = std::sync::Arc::new(
+            adapter::new_move_vm(native_functions.clone())
+                .expect("We defined natives to not fail here"),
+        );
+
+        let (_inner_temp_store, effects, _execution_error) =
+            sui_adapter::execution_engine::execute_transaction_to_effects::<
+                execution_mode::Normal,
+                _,
+            >(
+                vec![],
+                temporary_store,
+                genesis_transaction.data().intent_message.value.clone(),
+                *genesis_transaction.digest(),
+                Default::default(),
+                &move_vm,
+                &native_functions,
+                SuiGasStatus::new_unmetered(),
+                0,
+            );
+
+        assert_eq!(effects, genesis.effects);
     }
 }

@@ -584,7 +584,7 @@ mod tests {
     };
 
     use super::Genesis;
-    use crate::{genesis, NodeConfig};
+    use crate::NodeConfig;
 
     #[test]
     fn serialize_genesis_config_from_file() {
@@ -598,7 +598,11 @@ mod tests {
 
     #[test]
     fn serialize_genesis_config_in_place() {
-        let g = Genesis::new(genesis::Genesis::get_default_genesis());
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
+
+        let g = Genesis::new(genesis);
 
         let mut s = serde_yaml::to_string(&g).unwrap();
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
@@ -615,7 +619,9 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         let genesis_config = Genesis::new_from_file(file.path());
 
-        let genesis = genesis::Genesis::get_default_genesis();
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
         genesis.save(file.path()).unwrap();
 
         let loaded_genesis = genesis_config.genesis().unwrap();

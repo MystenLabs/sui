@@ -3,7 +3,6 @@
 
 use super::*;
 use fastcrypto::traits::KeyPair;
-use sui_types::{committee::Committee, crypto::AuthorityKeyPair};
 use tempfile::tempdir;
 
 use std::{sync::Arc, time::Duration};
@@ -319,8 +318,14 @@ async fn init_executor_test(
     Sender<VerifiedCheckpoint>,
     CommitteeFixture,
 ) {
-    let (keypair, committee) = committee();
-    let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let committee = genesis.committee().unwrap();
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
@@ -386,17 +391,4 @@ fn sync_checkpoint(
         .update_highest_synced_checkpoint(checkpoint)
         .unwrap();
     sender.send(checkpoint.clone()).unwrap();
-}
-
-fn committee() -> (AuthorityKeyPair, Committee) {
-    use std::collections::BTreeMap;
-    use sui_types::crypto::get_key_pair;
-
-    let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-    authorities.insert(
-        /* address */ authority_key.public().into(),
-        /* voting right */ 1,
-    );
-    (authority_key, Committee::new(0, authorities).unwrap())
 }

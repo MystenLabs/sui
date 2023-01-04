@@ -115,17 +115,10 @@ impl SuiTxValidatorMetrics {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use fastcrypto::traits::KeyPair;
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;
-    use sui_types::{
-        base_types::AuthorityName,
-        committee::Committee,
-        crypto::{get_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes},
-        messages::ConsensusTransaction,
-    };
+    use sui_types::{base_types::AuthorityName, messages::ConsensusTransaction};
 
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
@@ -143,19 +136,18 @@ mod tests {
         let mut objects = test_gas_objects();
         objects.push(Object::shared_for_testing());
 
-        let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-        let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-        let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+            .with_objects(objects.clone())
+            .build();
+        let genesis = network_config.genesis;
+
+        let sec1 = network_config.validator_configs[0]
+            .protocol_key_pair()
+            .copy();
         let name1: AuthorityName = sec1.public().into();
-        let name2: AuthorityName = sec2.public().into();
 
-        authorities.insert(name1, 3);
-        authorities.insert(name2, 1);
-
-        let committee = Committee::new(0, authorities.clone()).unwrap();
-
-        let state =
-            init_state_with_objects_and_committee(objects, Some((committee.clone(), sec1))).await;
+        let state = init_state_with_objects_and_committee(objects, &genesis, &sec1).await;
         let certificates = test_certificates(&state).await;
 
         let first_transaction = certificates[0].clone();

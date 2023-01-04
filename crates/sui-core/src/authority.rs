@@ -1566,7 +1566,7 @@ impl AuthorityState {
         genesis_committee: Committee,
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
-        genesis: Option<&Genesis>,
+        genesis: &Genesis,
     ) -> Arc<Self> {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1577,11 +1577,6 @@ impl AuthorityState {
                 std::fs::create_dir(&path).unwrap();
                 path
             }
-        };
-        let default_genesis = Genesis::get_default_genesis();
-        let genesis = match genesis {
-            Some(genesis) => genesis,
-            None => &default_genesis,
         };
 
         // unwrap ok - for testing only.

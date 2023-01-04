@@ -22,6 +22,7 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
     SuiKeyPair,
 };
+use sui_types::object::Object;
 
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
@@ -39,6 +40,7 @@ pub struct ConfigBuilder<R = OsRng> {
     randomize_ports: bool,
     committee: Option<CommitteeConfig>,
     initial_accounts_config: Option<GenesisConfig>,
+    additional_objects: Vec<Object>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
     checkpoints_per_epoch: Option<u64>,
@@ -52,6 +54,7 @@ impl ConfigBuilder {
             randomize_ports: true,
             committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
             initial_accounts_config: None,
+            additional_objects: vec![],
             with_swarm: false,
             // Set a sensible default here so that most tests can run with or without the
             // simulator.
@@ -96,6 +99,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
+        self.additional_objects.extend(objects);
+        self
+    }
+
     pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
         self.checkpoints_per_epoch = Some(ckpts);
         self
@@ -108,6 +116,7 @@ impl<R> ConfigBuilder<R> {
             randomize_ports: self.randomize_ports,
             committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
+            additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
             checkpoints_per_epoch: self.checkpoints_per_epoch,
@@ -265,10 +274,15 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         let genesis = {
             let mut builder = genesis::Builder::new()
                 .with_parameters(initial_accounts_config.parameters)
-                .add_objects(objects);
+                .add_objects(objects)
+                .add_objects(self.additional_objects);
 
             for (validator, proof_of_possession) in validator_set {
                 builder = builder.add_validator(validator, proof_of_possession);
+            }
+
+            for validator in &validators {
+                builder = builder.add_validator_signature(&validator.genesis_info.key_pair);
             }
 
             builder.build()

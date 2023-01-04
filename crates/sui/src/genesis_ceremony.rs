@@ -1,23 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
-use signature::{Signer, Verifier};
-use std::{fs, path::PathBuf};
-use sui_config::{
-    genesis::{Builder, Genesis},
-    SUI_GENESIS_FILENAME,
-};
+use std::path::PathBuf;
+use sui_config::{genesis::Builder, SUI_GENESIS_FILENAME};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{
-        generate_proof_of_possession, AuthorityKeyPair, AuthorityPublicKey,
-        AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, NetworkKeyPair, SuiKeyPair,
-        ToFromBytes,
+        generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
     object::Object,
 };
@@ -25,8 +19,6 @@ use sui_types::{
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
 };
-
-const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
 
 #[derive(Parser)]
 pub struct Ceremony {
@@ -77,14 +69,12 @@ pub enum CeremonyCommand {
         value: u64,
     },
 
-    Build,
-
     VerifyAndSign {
         #[clap(long)]
         key_file: PathBuf,
     },
 
-    Finalize,
+    Build,
 }
 
 pub fn run(cmd: Ceremony) -> Result<()> {
@@ -153,6 +143,17 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
+        CeremonyCommand::VerifyAndSign { key_file } => {
+            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
+
+            let mut builder = Builder::load(&dir)?;
+
+            builder = builder.add_validator_signature(&keypair);
+            builder.save(dir)?;
+
+            println!("Successfully built and signed genesis");
+        }
+
         CeremonyCommand::Build => {
             let builder = Builder::load(&dir)?;
 
@@ -161,101 +162,6 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             genesis.save(dir.join(SUI_GENESIS_FILENAME))?;
 
             println!("Successfully built {SUI_GENESIS_FILENAME}");
-            println!(
-                "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                Hex::encode(genesis.sha3())
-            );
-        }
-
-        CeremonyCommand::VerifyAndSign { key_file } => {
-            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
-            let loaded_genesis = Genesis::load(dir.join(SUI_GENESIS_FILENAME))?;
-            let loaded_genesis_bytes = loaded_genesis.to_bytes();
-
-            let builder = Builder::load(&dir)?;
-
-            let built_genesis = builder.build();
-            let built_genesis_bytes = built_genesis.to_bytes();
-
-            if built_genesis != loaded_genesis || built_genesis_bytes != loaded_genesis_bytes {
-                return Err(anyhow::anyhow!(
-                    "loaded genesis does not match built genesis"
-                ));
-            }
-
-            if !built_genesis.validator_set().iter().any(|validator| {
-                validator.protocol_key() == AuthorityPublicKeyBytes::from(keypair.public())
-            }) {
-                return Err(anyhow::anyhow!(
-                    "provided keypair does not correspond to a validator in the validator set"
-                ));
-            }
-
-            // Sign the genesis bytes
-            let signature: AuthoritySignature = keypair.try_sign(&built_genesis_bytes)?;
-
-            let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
-            std::fs::create_dir_all(&signature_dir)?;
-
-            let hex_name = Hex::encode(AuthorityPublicKeyBytes::from(keypair.public()));
-            fs::write(signature_dir.join(hex_name), signature)?;
-
-            println!("Successfully verified {SUI_GENESIS_FILENAME}");
-            println!(
-                "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                Hex::encode(built_genesis.sha3())
-            );
-        }
-
-        CeremonyCommand::Finalize => {
-            let genesis = Genesis::load(dir.join(SUI_GENESIS_FILENAME))?;
-            let genesis_bytes = genesis.to_bytes();
-
-            let mut signatures = std::collections::BTreeMap::new();
-
-            for entry in dir.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
-                let entry = entry?;
-                if entry.file_name().starts_with('.') {
-                    continue;
-                }
-
-                let path = entry.path();
-                let signature_bytes = fs::read(path)?;
-                let signature: AuthoritySignature =
-                    AuthoritySignature::from_bytes(&signature_bytes)?;
-                let name = path
-                    .file_name()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid signature file"))?;
-                let public_key = AuthorityPublicKeyBytes::from_bytes(
-                    &Hex::decode(name).map_err(|e| anyhow!(e))?[..],
-                )?;
-                signatures.insert(public_key, signature);
-            }
-
-            for validator in genesis.validator_set() {
-                let signature = signatures
-                    .remove(&validator.protocol_key())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("missing signature for validator {}", validator.name())
-                    })?;
-
-                let pk: AuthorityPublicKey = validator.protocol_key().try_into()?;
-
-                pk.verify(&genesis_bytes, &signature).with_context(|| {
-                    format!(
-                        "failed to validate signature for validator {}",
-                        validator.name()
-                    )
-                })?;
-            }
-
-            if !signatures.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "found extra signatures from entities not in the validator set"
-                ));
-            }
-
-            println!("Successfully finalized Genesis!");
             println!(
                 "{SUI_GENESIS_FILENAME} sha3-256: {}",
                 Hex::encode(genesis.sha3())
@@ -356,13 +262,6 @@ mod test {
             command.run()?;
         }
 
-        // Build the Genesis object
-        let command = Ceremony {
-            path: Some(dir.path().into()),
-            command: CeremonyCommand::Build,
-        };
-        command.run()?;
-
         // Have all the validators verify and sign genesis
         for (key, _worker_key, _network_key, _account_key, _validator) in &validators {
             let command = Ceremony {
@@ -374,10 +273,10 @@ mod test {
             command.run()?;
         }
 
-        // Finalize the Ceremony
+        // Finalize the Ceremony and build the Genesis object
         let command = Ceremony {
             path: Some(dir.path().into()),
-            command: CeremonyCommand::Finalize,
+            command: CeremonyCommand::Build,
         };
         command.run()?;
 
