@@ -959,8 +959,6 @@ mod tests {
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
-    use sui_types::committee::Committee;
-    use sui_types::crypto::AuthorityKeyPair;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -968,8 +966,15 @@ mod tests {
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
         let tempdir = tempdir().unwrap();
-        let (keypair, committee) = committee();
-        let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
+        let committee = genesis.committee().unwrap();
+        let keypair = network_config.validator_configs[0]
+            .protocol_key_pair()
+            .copy();
+        let state =
+            AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
 
         let mut store = HashMap::<TransactionDigest, SignedTransactionEffects>::new();
         store.insert(
@@ -1149,19 +1154,5 @@ mod tests {
             &*state.secret,
             state.name,
         )
-    }
-
-    fn committee() -> (AuthorityKeyPair, Committee) {
-        use std::collections::BTreeMap;
-        use sui_types::crypto::get_key_pair;
-        use sui_types::crypto::AuthorityPublicKeyBytes;
-
-        let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-        let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-        authorities.insert(
-            /* address */ authority_key.public().into(),
-            /* voting right */ 1,
-        );
-        (authority_key, Committee::new(0, authorities).unwrap())
     }
 }

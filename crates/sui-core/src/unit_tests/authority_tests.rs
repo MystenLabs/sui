@@ -24,7 +24,6 @@ use rand::{
     prelude::StdRng,
     Rng, SeedableRng,
 };
-use std::collections::BTreeMap;
 use std::fs;
 use std::future::Future;
 use std::pin::Pin;
@@ -36,6 +35,7 @@ use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_macros::sim_test;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
+use sui_types::object::Data;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -45,7 +45,6 @@ use sui_types::{
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
 use sui_types::dynamic_field::DynamicFieldType;
 use tracing::info;
@@ -2416,8 +2415,8 @@ async fn test_authority_persist() {
     }
 
     let seed = [1u8; 32];
-    let (committee, _, authority_key) =
-        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let committee = genesis.committee().unwrap();
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -2430,7 +2429,7 @@ async fn test_authority_persist() {
             &path,
             None,
             &committee,
-            &Genesis::get_default_genesis(),
+            &genesis,
             &AuthorityStorePruningConfig::default(),
         )
         .await
@@ -2455,14 +2454,14 @@ async fn test_authority_persist() {
 
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
-    let (committee, _, authority_key) =
-        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let committee = genesis.committee().unwrap();
     let store = Arc::new(
         AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,
-            &Genesis::get_default_genesis(),
+            &genesis,
             &AuthorityStorePruningConfig::default(),
         )
         .await
@@ -3176,27 +3175,23 @@ pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> 
 
 #[cfg(test)]
 pub async fn init_state() -> Arc<AuthorityState> {
-    init_state_with_committee(None).await
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+
+    init_state_with_committee(&genesis, &keypair).await
 }
 
 #[cfg(test)]
 pub async fn init_state_with_committee(
-    committee: Option<(Committee, AuthorityKeyPair)>,
+    genesis: &Genesis,
+    authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
-    let (committee, authority_key): (_, AuthorityKeyPair) = match committee {
-        Some(c) => c,
-        None => {
-            let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-            let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-            authorities.insert(
-                /* address */ authority_key.public().into(),
-                /* voting right */ 1,
-            );
-            (Committee::new(0, authorities).unwrap(), authority_key)
-        }
-    };
-
-    AuthorityState::new_for_testing(committee, &authority_key, None, None).await
+    AuthorityState::new_for_testing(genesis.committee().unwrap(), authority_key, None, genesis)
+        .await
 }
 
 #[cfg(test)]
@@ -3258,14 +3253,21 @@ pub async fn init_state_with_ids_and_versions<
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> Arc<AuthorityState> {
-    init_state_with_objects_and_committee(objects, None).await
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    init_state_with_objects_and_committee(objects, &genesis, &keypair).await
 }
 
 pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
     objects: I,
-    committee_and_keypair: Option<(Committee, AuthorityKeyPair)>,
+    genesis: &Genesis,
+    authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
-    let state = init_state_with_committee(committee_and_keypair).await;
+    let state = init_state_with_committee(genesis, authority_key).await;
     for o in objects {
         state.insert_genesis_object(o).await;
     }
@@ -3709,14 +3711,6 @@ async fn test_consensus_message_processed() {
 
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
-    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
-    authorities.insert(sec1.public().into(), 1);
-    authorities.insert(sec2.public().into(), 1);
-
-    let committee = Committee::new(0, authorities.clone()).unwrap();
-
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let mut gas_object_ref = gas_object.compute_object_reference();
@@ -3732,14 +3726,30 @@ async fn test_consensus_message_processed() {
     };
     let initial_shared_version = shared_object.version();
 
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        .committee_size(2.try_into().unwrap())
+        .with_objects(vec![gas_object.clone(), shared_object.clone()])
+        .build();
+    let genesis = network_config.genesis;
+
+    let sec1 = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    let sec2 = network_config.validator_configs[1]
+        .protocol_key_pair()
+        .copy();
+
     let authority1 = init_state_with_objects_and_committee(
         vec![gas_object.clone(), shared_object.clone()],
-        Some((committee.clone(), sec1)),
+        &genesis,
+        &sec1,
     )
     .await;
     let authority2 = init_state_with_objects_and_committee(
         vec![gas_object.clone(), shared_object.clone()],
-        Some((committee.clone(), sec2)),
+        &genesis,
+        &sec2,
     )
     .await;
 

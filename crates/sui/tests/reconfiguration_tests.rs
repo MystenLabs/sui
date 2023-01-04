@@ -201,7 +201,7 @@ async fn reconfig_with_revert_end_to_end_test() {
                     if node.state().epoch() == 1 {
                         break;
                     }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             })
         })

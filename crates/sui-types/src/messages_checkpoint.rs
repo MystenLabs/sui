@@ -451,10 +451,10 @@ impl CheckpointSignatureMessage {
 impl CheckpointContents {
     pub fn new_with_causally_ordered_transactions<T>(contents: T) -> Self
     where
-        T: Iterator<Item = ExecutionDigests>,
+        T: IntoIterator<Item = ExecutionDigests>,
     {
         Self {
-            transactions: contents.collect(),
+            transactions: contents.into_iter().collect(),
         }
     }
 
