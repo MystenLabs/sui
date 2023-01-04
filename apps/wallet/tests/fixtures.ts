@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import 'tsconfig-paths/register';
 import { test as base, chromium, type BrowserContext } from '@playwright/test';
 import path from 'path';
 
@@ -35,4 +34,5 @@ export const test = base.extend<{
         await use(extensionUrl);
     },
 });
+
 export const expect = test.expect;

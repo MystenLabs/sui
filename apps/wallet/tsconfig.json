@@ -2,11 +2,6 @@
     "extends": "./configs/ts/tsconfig.dev",
     "include": ["src", "configs", "tests"],
     "compilerOptions": {
-        "module": "commonjs",
-        "noEmit": true,
-        "paths": {
-            "@mysten/sui.js": ["../../sdk/typescript/src/"],
-            "@mysten/bcs": ["../../sdk/bcs/src/"]
-        }
+        "noEmit": true
     }
 }
