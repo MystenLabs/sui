@@ -655,7 +655,7 @@ pub fn resolve_move_function_args(
 
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if is_tx_context(&view, param) => parameters.len() - 1,
+        Some(param) if is_tx_context(&view, param).is_some() => parameters.len() - 1,
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {
