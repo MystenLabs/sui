@@ -10,9 +10,6 @@ import {
 } from '@mysten/sui.js';
 import axios from 'axios';
 
-// NOTE: We import out of the source directory here to work around an issue with Cypress not
-// respecting tsconfig paths in the config file.
-
 const addressToKeypair = new Map<string, Keypair>();
 
 export async function mint(address: string) {

@@ -102,7 +102,6 @@ importers:
       vite: ^4.0.0
       vite-plugin-svgr: ^2.4.0
       vitest: ^0.25.7
-      wait-on: ^6.0.1
       web-vitals: ^3.1.0
       zod: ^3.19.1
     dependencies:
@@ -182,7 +181,6 @@ importers:
       vite: 4.0.0_@types+node@18.11.13
       vite-plugin-svgr: 2.4.0_vite@4.0.0
       vitest: 0.25.7_@vitest+ui@0.25.7
-      wait-on: 6.0.1
 
   apps/wallet:
     specifiers:
