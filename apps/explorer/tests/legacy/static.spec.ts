@@ -103,10 +103,10 @@ test.describe('Group View', () => {
 // // TODO: This test isn't great, ideally we'd either do some more manual assertions, validate linking,
 // // or use visual regression testing.
 test.describe('Transactions for ID', () => {
-    test('are displayed from and to address', async ({ page}) => {
+    test('are displayed from and to address', async ({ page }) => {
         const address = 'ownsAllAddress';
         await page.goto(`${BASE_URL}/address/${address}`);
-        await page.getByTestId('tx').locator('td').first().waitFor()
+        await page.getByTestId('tx').locator('td').first().waitFor();
     });
 
     test('are displayed for input and mutated object', async ({ page }) => {
