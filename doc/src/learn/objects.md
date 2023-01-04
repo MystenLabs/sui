@@ -56,14 +56,14 @@ There are a few different ways to concisely refer to an object without specifyin
 ## The transaction-object DAG: Relating objects and transactions
 
 Transactions (and thus, certificates) take objects as input, read/write/mutate these inputs, and produce mutated or freshly created objects as output. And as discussed above, each object knows the (hash of the) last transaction that produced it as an output. Thus, a natural way to represent the relationship between objects and transactions is a directed acyclic graph (DAG) where:
-* nodes are transactions.
-* directed edges connect transaction output objects to transaction input objects and are labeled with object references.
+* Nodes are transactions.
+* Directed edges connect transaction output objects to transaction input objects and are labeled with object references.
 
 To construct this graph, we add a node for each committed transaction and draw a directed edge labeled with object reference `O` from transaction `A` to transaction `B` if `A` produced object `O` (i.e., created or mutated `O`) and transaction `B` takes object `O` as an input.
 
-The root of this DAG is a *genesis* transaction that takes no inputs and produces the objects that exist in the initial state of the system. The DAG can be extended by identifying mutable transaction outputs that have not yet been consumed by any committed transaction and sending a new transaction that takes these outputs (and optionally, immutable transaction outputs) as inputs.
+The root of this DAG is a *genesis* transaction that takes no inputs and produces the objects that exist in the system's initial state. The DAG can be extended by identifying mutable transaction outputs that have not yet been consumed by any committed transaction and sending a new transaction that takes these outputs (and optionally, immutable transaction outputs) as inputs.
 
 The set of objects that are available to be taken as input by a transaction are the *live objects*, and the global state maintained by Sui consists of the totality of such objects. The live objects for a particular Sui address `A` are all objects owned by `A`, along with all immutable objects in the system.
 
-When this DAG contains all committed transactions in the system, it forms a complete (and crytographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
+When this DAG contains all committed transactions in the system, it forms a complete (and cryptographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
 
