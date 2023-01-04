@@ -21,3 +21,6 @@ yarn-debug.log*
 yarn-error.log*
 cypress/screenshots
 cypress/videos
+/test-results/
+/playwright-report/
+/playwright/.cache/
