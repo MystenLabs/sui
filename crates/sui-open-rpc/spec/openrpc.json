@@ -2956,33 +2956,10 @@
         }
       },
       "DynamicFieldType": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "DynamicObject"
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "DynamicField"
-            ],
-            "properties": {
-              "DynamicField": {
-                "type": "object",
-                "required": [
-                  "wrappedObjectId"
-                ],
-                "properties": {
-                  "wrappedObjectId": {
-                    "$ref": "#/components/schemas/ObjectID"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          }
+        "type": "string",
+        "enum": [
+          "DynamicField",
+          "DynamicObject"
         ]
       },
       "Ed25519SuiSignature": {
