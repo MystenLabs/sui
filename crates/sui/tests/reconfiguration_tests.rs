@@ -25,7 +25,7 @@ use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     network::TestClusterBuilder,
 };
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 
 #[sim_test]
 async fn local_advance_epoch_tx_test() {
@@ -314,7 +314,10 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
             })
         })
         .collect();
-    join_all(handles).await;
+
+    timeout(Duration::from_secs(20), join_all(handles))
+        .await
+        .expect("timed out waiting for reconfiguration to complete");
 }
 
 /*
