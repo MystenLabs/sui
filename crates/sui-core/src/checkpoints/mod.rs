@@ -29,7 +29,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
@@ -250,6 +249,7 @@ pub enum CheckpointWatermark {
 pub struct CheckpointBuilder {
     state: Arc<AuthorityState>,
     tables: Arc<CheckpointStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     effects_store: Box<dyn EffectsNotifyRead>,
@@ -261,6 +261,7 @@ pub struct CheckpointBuilder {
 
 pub struct CheckpointAggregator {
     tables: Arc<CheckpointStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
     exit: watch::Receiver<()>,
     current: Option<CheckpointSignatureAggregator>,
@@ -281,6 +282,7 @@ impl CheckpointBuilder {
     fn new(
         state: Arc<AuthorityState>,
         tables: Arc<CheckpointStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         effects_store: Box<dyn EffectsNotifyRead>,
         output: Box<dyn CheckpointOutput>,
@@ -292,6 +294,7 @@ impl CheckpointBuilder {
         Self {
             state,
             tables,
+            epoch_store,
             notify,
             effects_store,
             output,
@@ -305,14 +308,14 @@ impl CheckpointBuilder {
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
         loop {
-            let epoch_store = self.state.epoch_store();
             let mut last_processed_height: Option<u64> = None;
-            for (height, (roots, last_checkpoint_of_epoch)) in epoch_store.get_pending_checkpoints()
+            for (height, (roots, last_checkpoint_of_epoch)) in
+                self.epoch_store.get_pending_checkpoints()
             {
                 last_processed_height = Some(height);
                 debug!("Making checkpoint at commit height {height}");
                 if let Err(e) = self
-                    .make_checkpoint(&epoch_store, height, roots, last_checkpoint_of_epoch)
+                    .make_checkpoint(height, roots, last_checkpoint_of_epoch)
                     .await
                 {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
@@ -321,7 +324,6 @@ impl CheckpointBuilder {
                     continue;
                 }
             }
-            drop(epoch_store);
             debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
@@ -336,7 +338,6 @@ impl CheckpointBuilder {
 
     async fn make_checkpoint(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         height: CheckpointCommitHeight,
         roots: Vec<TransactionDigest>,
         last_checkpoint_of_epoch: bool,
@@ -350,19 +351,17 @@ impl CheckpointBuilder {
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
         let _scope = monitored_scope("CheckpointBuilder");
-        let unsorted = self.complete_checkpoint_effects(epoch_store, roots)?;
+        let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
         let new_checkpoint = self
-            .create_checkpoint(epoch_store, sorted, last_checkpoint_of_epoch)
+            .create_checkpoint(sorted, last_checkpoint_of_epoch)
             .await?;
-        self.write_checkpoint(epoch_store, height, new_checkpoint)
-            .await?;
+        self.write_checkpoint(height, new_checkpoint).await?;
         Ok(())
     }
 
     async fn write_checkpoint(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         height: CheckpointCommitHeight,
         new_checkpoint: Option<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
@@ -374,7 +373,7 @@ impl CheckpointBuilder {
                 );
                 // Only create checkpoint if content is not empty
                 self.output
-                    .checkpoint_created(&summary, &contents, epoch_store)
+                    .checkpoint_created(&summary, &contents, &self.epoch_store)
                     .await?;
 
                 self.metrics
@@ -406,29 +405,22 @@ impl CheckpointBuilder {
                 None
             }
         };
-        epoch_store.process_pending_checkpoint(height, content_info)?;
+        self.epoch_store
+            .process_pending_checkpoint(height, content_info)?;
         Ok(())
     }
 
     async fn create_checkpoint(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         mut effects: Vec<TransactionEffects>,
         last_checkpoint_of_epoch: bool,
     ) -> anyhow::Result<Option<(CheckpointSummary, CheckpointContents)>> {
         let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
-        let epoch_rolling_gas_cost_summary = Self::get_epoch_total_gas_cost(
-            last_checkpoint.as_ref().map(|(_, c)| c),
-            &effects,
-            epoch_store.epoch(),
-        );
+        let epoch_rolling_gas_cost_summary =
+            self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
         if last_checkpoint_of_epoch {
-            self.augment_epoch_last_checkpoint(
-                epoch_store,
-                &epoch_rolling_gas_cost_summary,
-                &mut effects,
-            )
-            .await?;
+            self.augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
+                .await?;
         }
 
         // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
@@ -453,7 +445,7 @@ impl CheckpointBuilder {
             .map(|(_, c)| c.sequence_number + 1)
             .unwrap_or_default();
         let summary = CheckpointSummary::new(
-            epoch_store.epoch(),
+            self.epoch_store.epoch(),
             sequence_number,
             network_total_transactions,
             &contents,
@@ -475,15 +467,15 @@ impl CheckpointBuilder {
     }
 
     fn get_epoch_total_gas_cost(
+        &self,
         last_checkpoint: Option<&CheckpointSummary>,
         cur_checkpoint_effects: &[TransactionEffects],
-        cur_epoch: EpochId,
     ) -> GasCostSummary {
         let (previous_epoch, previous_gas_costs) = last_checkpoint
             .map(|c| (c.epoch, c.epoch_rolling_gas_cost_summary.clone()))
             .unwrap_or_default();
         let current_gas_costs = GasCostSummary::new_from_txn_effects(cur_checkpoint_effects.iter());
-        if previous_epoch == cur_epoch {
+        if previous_epoch == self.epoch_store.epoch() {
             // sum only when we are within the same epoch
             GasCostSummary::new(
                 previous_gas_costs.computation_cost + current_gas_costs.computation_cost,
@@ -497,14 +489,13 @@ impl CheckpointBuilder {
 
     async fn augment_epoch_last_checkpoint(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         epoch_total_gas_cost: &GasCostSummary,
         effects: &mut Vec<TransactionEffects>,
     ) -> anyhow::Result<()> {
         let cert = self
             .state
             .create_advance_epoch_tx_cert(
-                epoch_store,
+                &self.epoch_store,
                 epoch_total_gas_cost,
                 Duration::from_secs(60), // TODO: Is 60s enough?
                 self.transaction_certifier.deref(),
@@ -512,7 +503,7 @@ impl CheckpointBuilder {
             .await?;
         let signed_effect = self
             .state
-            .try_execute_immediately(&cert, epoch_store)
+            .try_execute_immediately(&cert, &self.epoch_store)
             .await?;
         effects.push(signed_effect.into_data());
         Ok(())
@@ -522,7 +513,6 @@ impl CheckpointBuilder {
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already
     fn complete_checkpoint_effects(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         mut roots: Vec<SignedTransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let mut results = vec![];
@@ -531,7 +521,7 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest;
-                if epoch_store.tx_checkpointed_in_current_epoch(&digest)? {
+                if self.epoch_store.tx_checkpointed_in_current_epoch(&digest)? {
                     continue;
                 }
                 for dependency in effect.dependencies.iter() {
@@ -566,6 +556,7 @@ impl CheckpointBuilder {
 impl CheckpointAggregator {
     fn new(
         tables: Arc<CheckpointStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         exit: watch::Receiver<()>,
         state: Arc<AuthorityState>,
@@ -575,6 +566,7 @@ impl CheckpointAggregator {
         let current = None;
         Self {
             tables,
+            epoch_store,
             notify,
             exit,
             current,
@@ -610,7 +602,6 @@ impl CheckpointAggregator {
 
     async fn run_inner(&mut self) -> SuiResult {
         let _scope = monitored_scope("CheckpointAggregator");
-        let epoch_store = self.state.epoch_store();
         'outer: loop {
             let current = if let Some(current) = &mut self.current {
                 current
@@ -625,7 +616,7 @@ impl CheckpointAggregator {
                 });
                 self.current.as_mut().unwrap()
             };
-            let iter = epoch_store.get_pending_checkpoint_signatures_iter(
+            let iter = self.epoch_store.get_pending_checkpoint_signatures_iter(
                 current.summary.sequence_number,
                 current.next_index,
             )?;
@@ -758,6 +749,7 @@ impl CheckpointService {
     pub fn spawn(
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         effects_store: Box<dyn EffectsNotifyRead>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
@@ -772,6 +764,7 @@ impl CheckpointService {
         let builder = CheckpointBuilder::new(
             state.clone(),
             checkpoint_store.clone(),
+            epoch_store.clone(),
             notify_builder.clone(),
             effects_store,
             checkpoint_output,
@@ -785,16 +778,17 @@ impl CheckpointService {
 
         let aggregator = CheckpointAggregator::new(
             checkpoint_store.clone(),
+            epoch_store.clone(),
             notify_aggregator.clone(),
             exit_rcv,
-            state.clone(),
+            state,
             certified_checkpoint_output,
             metrics,
         );
 
         spawn_monitored_task!(aggregator.run());
 
-        let last_signature_index = state.epoch_store().get_last_checkpoint_signature_index();
+        let last_signature_index = epoch_store.get_last_checkpoint_signature_index();
         let last_signature_index = Mutex::new(last_signature_index);
 
         let service = Arc::new(Self {
@@ -1011,16 +1005,17 @@ mod tests {
         let store = Box::new(store);
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
+        let epoch_store = state.epoch_store_for_testing();
         let (checkpoint_service, _exit) = CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
+            epoch_store.clone(),
             store,
             Box::new(output),
             Box::new(certified_output),
             Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new_for_tests(),
         );
-        let epoch_store = state.epoch_store_for_testing();
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
         checkpoint_service
             .notify_checkpoint(&epoch_store, 0, vec![d(4)], false)
