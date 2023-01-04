@@ -17,6 +17,7 @@ use prometheus::{register_histogram_with_registry, register_int_counter_with_reg
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::future::Future;
+use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -35,8 +36,8 @@ use crate::authority::AuthorityState;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
-use tokio::time::Duration;
-use tracing::{error, warn};
+use tokio::time::{timeout, Duration};
+use tracing::{debug, error, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -131,10 +132,16 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         let serialized =
             bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
-        self.clone()
-            .submit_transaction(TransactionProto { transaction: bytes })
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+        let r = timeout(
+            Duration::from_secs(10),
+            self.clone()
+                .submit_transaction(TransactionProto { transaction: bytes }),
+        )
+        .await;
+        let r = r.map_err(|_| {
+            SuiError::ConsensusConnectionBroken("Timeout when sending to narwhal".to_string())
+        })?;
+        r.map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
             .tap_err(|r| {
                 error!("Submit transaction failed with: {:?}", r);
             })?;
@@ -329,7 +336,19 @@ impl ConsensusAdapter {
             }
             Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
+        let transaction_key = transaction.key();
+        let _monitor = CancelOnDrop(spawn_monitored_task!(async {
+            let mut i = 0u64;
+            loop {
+                i += 1;
+                const WARN_DELAY_S: u64 = 30;
+                tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
+                let total_wait = i * WARN_DELAY_S;
+                warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
+            }
+        }));
         if let Some(processed_waiter) = processed_waiter {
+            debug!("Submitting {transaction_key:?} to consensus");
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             let _timer = self
@@ -350,10 +369,12 @@ impl ConsensusAdapter {
                 });
                 time::sleep(Duration::from_secs(10)).await;
             }
+            debug!("Submitted {transaction_key:?} to consensus");
             processed_waiter
                 .await
                 .expect("Storage error when waiting for consensus message processed");
         }
+        debug!("{transaction_key:?} processed by consensus");
         epoch_store
             .remove_pending_consensus_transaction(&transaction.key())
             .expect("Storage error when removing consensus transaction");
@@ -410,6 +431,22 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             }
         }
         Ok(())
+    }
+}
+
+struct CancelOnDrop<T>(JoinHandle<T>);
+
+impl<T> Deref for CancelOnDrop<T> {
+    type Target = JoinHandle<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Drop for CancelOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
 
