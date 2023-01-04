@@ -169,6 +169,12 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
     }
 }
 
+impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(*self, parent, child)
+    }
+}
+
 pub trait ReadStore {
     type Error;
 
