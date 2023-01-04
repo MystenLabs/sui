@@ -4,6 +4,7 @@
 import {
   any,
   array,
+  assign,
   boolean,
   Infer,
   literal,
@@ -29,12 +30,14 @@ export const SuiObjectRef = object({
 });
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
-export const SuiObjectInfo = object({
-  ...SuiObjectRef.schema,
-  type: string(),
-  owner: ObjectOwner,
-  previousTransaction: TransactionDigest,
-});
+export const SuiObjectInfo = assign(
+  SuiObjectRef,
+  object({
+    type: string(),
+    owner: ObjectOwner,
+    previousTransaction: TransactionDigest,
+  })
+);
 export type SuiObjectInfo = Infer<typeof SuiObjectInfo>;
 
 export const ObjectContentFields = record(string(), any());
@@ -59,11 +62,8 @@ export const SuiMovePackage = object({
 export type SuiMovePackage = Infer<typeof SuiMovePackage>;
 
 export const SuiData = union([
-  object({
-    dataType: ObjectType,
-    ...SuiMoveObject.schema,
-  }),
-  object({ dataType: ObjectType, ...SuiMovePackage.schema }),
+  assign(SuiMoveObject, object({ dataType: literal('moveObject') })),
+  assign(SuiMovePackage, object({ dataType: literal('package') })),
 ]);
 export type SuiData = Infer<typeof SuiData>;
 

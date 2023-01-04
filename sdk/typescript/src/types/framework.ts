@@ -7,7 +7,6 @@ import {
   SuiMoveObject,
   SuiObjectInfo,
   SuiObject,
-  SuiData,
   getMoveObjectType,
   getObjectId,
 } from './objects';
@@ -287,22 +286,22 @@ export class Coin {
   }
 }
 
-export type DelegationData = SuiMoveObject &
-  Pick<SuiData, 'dataType'> & {
-    type: '0x2::delegation::Delegation';
-    fields: {
-      active_delegation: Option<number>;
-      delegate_amount: number;
-      next_reward_unclaimed_epoch: number;
-      validator_address: SuiAddress;
-      info: {
-        id: string;
-        version: number;
-      };
-      coin_locked_until_epoch: Option<SuiMoveObject>;
-      ending_epoch: Option<number>;
+export type DelegationData = SuiMoveObject & {
+  dataType: 'moveObject';
+  type: '0x2::delegation::Delegation';
+  fields: {
+    active_delegation: Option<number>;
+    delegate_amount: number;
+    next_reward_unclaimed_epoch: number;
+    validator_address: SuiAddress;
+    info: {
+      id: string;
+      version: number;
     };
+    coin_locked_until_epoch: Option<SuiMoveObject>;
+    ending_epoch: Option<number>;
   };
+};
 
 export type DelegationSuiObject = Omit<SuiObject, 'data'> & {
   data: DelegationData;
