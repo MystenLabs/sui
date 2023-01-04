@@ -33,6 +33,7 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
+import { trackEvent } from '_src/shared/plausible';
 
 const HIDDEN_MENU_PATHS = [
     '/stake',
@@ -49,6 +50,12 @@ const App = () => {
     const isPopup = useAppSelector(
         (state) => state.app.appType === AppType.popup
     );
+
+    const activeNetwork = useAppSelector(({ app }) => app.apiEnv);
+    trackEvent('Network', {
+        props: { name: activeNetwork, source: 'Landing' },
+    });
+
     useEffect(() => {
         document.body.classList[isPopup ? 'add' : 'remove']('is-popup');
         document.body.classList.remove('app-initializing');
