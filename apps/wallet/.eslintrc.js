@@ -51,4 +51,13 @@ module.exports = {
         ],
         'no-console': ['warn'],
     },
+    overrides: [
+        {
+            files: ['*.test.*'. '*.spec.*'],
+            rules: {
+                // Allow any casting in tests:
+                '@typescript-eslint/no-explicit-any': 'off',
+            },
+        },
+    ],
 };

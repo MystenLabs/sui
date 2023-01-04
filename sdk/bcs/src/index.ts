@@ -11,6 +11,7 @@
  * @property {BcsReader}
  */
 
+console.log('hi')
 import { toB64, fromB64 } from "./b64";
 import { toHEX, fromHEX } from "./hex";
 
