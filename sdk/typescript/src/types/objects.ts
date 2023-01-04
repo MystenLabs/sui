@@ -4,6 +4,7 @@
 import {
   any,
   array,
+  assign,
   boolean,
   Infer,
   literal,
@@ -12,6 +13,7 @@ import {
   optional,
   record,
   string,
+  type,
   union,
 } from 'superstruct';
 import { ObjectId, ObjectOwner, TransactionDigest } from './common';
@@ -29,12 +31,14 @@ export const SuiObjectRef = object({
 });
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
-export const SuiObjectInfo = object({
-  ...SuiObjectRef.schema,
-  type: string(),
-  owner: ObjectOwner,
-  previousTransaction: TransactionDigest,
-});
+export const SuiObjectInfo = assign(
+  SuiObjectRef,
+  object({
+    type: string(),
+    owner: ObjectOwner,
+    previousTransaction: TransactionDigest,
+  })
+);
 export type SuiObjectInfo = Infer<typeof SuiObjectInfo>;
 
 export const ObjectContentFields = record(string(), any());
@@ -43,8 +47,8 @@ export type ObjectContentFields = Infer<typeof ObjectContentFields>;
 export const MovePackageContent = record(string(), string());
 export type MovePackageContent = Infer<typeof MovePackageContent>;
 
-export const SuiMoveObject = object({
-  dataType: string(),
+// NOTE: SuiMoveObject uses `type` to skip extra property checking, making ergonomics for type assertion easier.
+export const SuiMoveObject = type({
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string(),
   /** Fields and values stored inside the Move object */
@@ -60,11 +64,8 @@ export const SuiMovePackage = object({
 export type SuiMovePackage = Infer<typeof SuiMovePackage>;
 
 export const SuiData = union([
-  object({
-    dataType: ObjectType,
-    ...SuiMoveObject.schema,
-  }),
-  object({ dataType: ObjectType, ...SuiMovePackage.schema }),
+  assign(SuiMoveObject, object({ dataType: ObjectType })),
+  assign(SuiMovePackage, object({ dataType: ObjectType })),
 ]);
 export type SuiData = Infer<typeof SuiData>;
 
