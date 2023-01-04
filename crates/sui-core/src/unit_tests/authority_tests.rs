@@ -2963,9 +2963,7 @@ async fn test_store_get_dynamic_field() {
         .get_dynamic_fields(outer_v0.0, None, usize::MAX)
         .unwrap();
     assert_eq!(fields.len(), 1);
-    assert!(
-        matches!(fields[0].type_, DynamicFieldType::DynamicField {wrapped_object_id} if wrapped_object_id == inner_v0.0)
-    );
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
 }
 
 #[tokio::test]
