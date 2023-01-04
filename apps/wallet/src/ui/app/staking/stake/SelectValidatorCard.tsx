@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, SuiMoveObject } from '@mysten/sui.js';
+import { is, SuiObject } from '@mysten/sui.js';
 import { useState, useMemo } from 'react';
 
 import { getName, STATE_OBJECT } from '../usePendingDelegation';
@@ -28,7 +28,7 @@ export function SelectValidatorCard() {
     const validatorsData =
         data &&
         is(data.details, SuiObject) &&
-        is(data.details.data, SuiMoveObject)
+        data.details.data.dataType === 'moveObject'
             ? (data.details.data.fields as ValidatorState)
             : null;
 

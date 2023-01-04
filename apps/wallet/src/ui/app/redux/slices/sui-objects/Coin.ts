@@ -1,18 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    is,
-    SuiMoveObject,
-    Coin as CoinAPI,
-    SUI_TYPE_ARG,
-} from '@mysten/sui.js';
+import { Coin as CoinAPI, SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import type {
     ObjectId,
     SuiObject,
     RawSigner,
     SuiAddress,
+    SuiMoveObject,
     JsonRpcProvider,
     SuiExecuteTransactionResponse,
 } from '@mysten/sui.js';
@@ -32,7 +28,8 @@ export const SUI_SYSTEM_STATE_OBJECT_ID =
 export class Coin {
     public static isCoin(obj: SuiObject) {
         return (
-            is(obj.data, SuiMoveObject) && obj.data.type.startsWith(COIN_TYPE)
+            obj.data.dataType === 'moveObject' &&
+            obj.data.type.startsWith(COIN_TYPE)
         );
     }
 
