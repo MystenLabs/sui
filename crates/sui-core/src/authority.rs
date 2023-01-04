@@ -1655,6 +1655,9 @@ impl AuthorityState {
         let Some(index_store) = &self.indexes else{
             return Ok(())
         };
+        if !index_store.is_empty() {
+            return Ok(());
+        }
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
