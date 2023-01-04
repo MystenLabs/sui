@@ -9,7 +9,6 @@ use serde::Serialize;
 
 use crate::base_types::ObjectDigest;
 use crate::error::{SuiError, SuiResult};
-use crate::id::ID;
 use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -26,9 +25,7 @@ pub struct DynamicFieldInfo {
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum DynamicFieldType {
     #[serde(rename_all = "camelCase")]
-    DynamicField {
-        wrapped_object_id: ObjectID,
-    },
+    DynamicField,
     DynamicObject,
 }
 
@@ -65,50 +62,61 @@ impl DynamicFieldInfo {
                 error: "Cannot extract [name] field from sui::dynamic_object_field::Wrapper."
                     .to_string(),
             })?;
+            // ID extracted from the wrapper object
             let object_id =
                 extract_id_value(&value).ok_or_else(|| SuiError::ObjectDeserializationError {
                     error: format!(
                         "Cannot extract dynamic object's object id from \
-                        sui::dynamic_field::Field, {:?}",
-                        value
+                        sui::dynamic_field::Field, {value:?}"
                     ),
                 })?;
             (name.to_string(), DynamicFieldType::DynamicObject, object_id)
         } else {
-            let object_id = extract_object_id(&move_struct).ok_or_else(|| {
+            // ID of the Field object
+            let object_id = extract_object_id(move_struct).ok_or_else(|| {
                 SuiError::ObjectDeserializationError {
-                    error: "Cannot extract object id from sui::dynamic_field::Field".to_string(),
+                    error: format!(
+                        "Cannot extract dynamic object's object id from \
+                        sui::dynamic_field::Field, {move_struct:?}",
+                    ),
                 }
             })?;
-            (
-                name.to_string(),
-                DynamicFieldType::DynamicField {
-                    wrapped_object_id: object_id,
-                },
-                object_id,
-            )
+            (name.to_string(), DynamicFieldType::DynamicField, object_id)
         })
     }
 }
 
-fn extract_field_from_move_struct(move_struct: &MoveStruct, field_name: &str) -> Option<MoveValue> {
+fn extract_field_from_move_struct<'a>(
+    move_struct: &'a MoveStruct,
+    field_name: &str,
+) -> Option<&'a MoveValue> {
     match move_struct {
-        MoveStruct::WithTypes { fields, .. } => fields.iter().find_map(|(id, value)| {
-            if id.to_string() == field_name {
-                Some(value.clone())
-            } else {
-                None
-            }
-        }),
+        MoveStruct::WithTypes { fields, .. } | MoveStruct::WithFields(fields) => {
+            fields.iter().find_map(|(id, value)| {
+                if id.to_string() == field_name {
+                    Some(value)
+                } else {
+                    None
+                }
+            })
+        }
         _ => None,
     }
 }
 
 fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
-    // id is the first value in an object
-    let id_value = match value {
+    // id:UID is the first value in an object
+    let uid_value = match value {
         MoveStruct::Runtime(fields) => fields.get(0)?,
         MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. } => &fields.get(0)?.1,
+    };
+    // id is the first value in UID
+    let id_value = match uid_value {
+        MoveValue::Struct(MoveStruct::Runtime(fields)) => fields.get(0)?,
+        MoveValue::Struct(
+            MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. },
+        ) => &fields.get(0)?.1,
+        _ => return None,
     };
     extract_id_value(id_value)
 }
