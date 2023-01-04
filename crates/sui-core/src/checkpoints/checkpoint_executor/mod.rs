@@ -485,11 +485,16 @@ impl CheckpointExecutorEventLoop {
         let next_epoch = current_epoch + 1;
         let end_of_epoch_message = Committee::new(next_epoch, next_committee.into_iter().collect())
             .unwrap_or_else(|err| panic!("Failed to create new committee object: {:?}", err));
+
+        // Save the reference to the epoch store before signaling end of epoch to ensure that
+        // we await on the old epoch store
+        let epoch_store = self
+            .authority_state
+            .load_epoch_store(current_epoch)
+            .expect("Current epoch does not epoch store epoch");
+
         let _ = self.end_of_epoch_event_sender.send(end_of_epoch_message);
-        self.authority_state
-            .epoch_store()
-            .wait_epoch_terminated()
-            .await;
+        epoch_store.wait_epoch_terminated().await;
 
         self.metrics.current_local_epoch.set(next_epoch as i64);
         info!(
