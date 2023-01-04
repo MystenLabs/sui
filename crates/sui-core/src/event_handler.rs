@@ -49,12 +49,14 @@ impl EventHandler {
     /// Run a regular cleanup task on the store
     pub fn regular_cleanup_task(&self) {
         let store_copy = self.event_store.clone();
-        match store_copy.as_ref() {
-            EventStoreType::SqlEventStore(db) => {
-                // Start periodic task to clean up WAL
-                let _handle = db.wal_cleanup_thread(Some(Duration::from_secs(300)));
+        tokio::spawn(async move {
+            match store_copy.as_ref() {
+                EventStoreType::SqlEventStore(db) => {
+                    // Start periodic task to clean up WAL
+                    db.wal_cleanup_thread(Some(Duration::from_secs(300))).await;
+                }
             }
-        }
+        });
     }
 
     #[instrument(level = "debug", skip_all, fields(seq=?seq_num, tx_digest=?effects.transaction_digest), err)]
