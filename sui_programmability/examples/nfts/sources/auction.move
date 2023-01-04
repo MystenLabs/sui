@@ -1,35 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//  This module is an implementation of an English auction
-//  (https://en.wikipedia.org/wiki/English_auction) using single-owner
-//  objects only. There are three types of parties participating in an
-//  auction:
-//  - auctioneer - a trusted party that runs the auction
-//  - owner - the original owner of an item that is sold at an
-//    auction; the owner submits a request to an auctioneer which runs
-//    the auction
-//  - bidders - parties interested in purchasing items sold
-//    at an auction; they submit bids to an auctioneer to affect the
-//    state of an auction
-
-//  A typical lifetime of an auction looks as follows:
-//  - The auction starts with the owner sending an item to be sold along with
-//    its own address to the auctioneer who creates and initializes an
-//    auction.
-//  - Bidders send their bid to the auctioneer. 
-//    A bid consists of the funds offered for the item and the bidder's address.
-//  - The auctioneer periodically inspects the bids:
-//    - (inspected bid > current best bid (initially there is no bid)): 
-//      The auctioneer updates the auction with the current bid
-//      and the funds of the previous highest bid are sent back to their owner.
-//    - (inspected bid <= current best bid): 
-//      The auctioneer sents the inspected bid's funds back to the new bidder,
-//      and the auction remains unchanged.
-//  - The auctioneer eventually ends the auction:
-//    - if no bids were received, the item goes back to the original owner
-//    - otherwise the funds accumulated in the auction go to the
-//      original owner and the item goes to the bidder that won the auction
+///  This module is an implementation of an English auction
+///  (https://en.wikipedia.org/wiki/English_auction) using single-owner
+///  objects only. There are three types of parties participating in an
+///  auction:
+///  - auctioneer - a trusted party that runs the auction
+///  - owner - the original owner of an item that is sold at an
+///    auction; the owner submits a request to an auctioneer which runs
+///    the auction
+///  - bidders - parties interested in purchasing items sold
+///    at an auction; they submit bids to an auctioneer to affect the
+///    state of an auction
+///
+///  A typical lifetime of an auction looks as follows:
+///  - The auction starts with the owner sending an item to be sold along with
+///    its own address to the auctioneer who creates and initializes an
+///    auction.
+///  - Bidders send their bid to the auctioneer. 
+///    A bid consists of the funds offered for the item and the bidder's address.
+///  - The auctioneer periodically inspects the bids:
+///    - (inspected bid > current best bid (initially there is no bid)): 
+///      The auctioneer updates the auction with the current bid
+///      and the funds of the previous highest bid are sent back to their owner.
+///    - (inspected bid <= current best bid): 
+///      The auctioneer sents the inspected bid's funds back to the new bidder,
+///      and the auction remains unchanged.
+///  - The auctioneer eventually ends the auction:
+///    - if no bids were received, the item goes back to the original owner
+///    - otherwise the funds accumulated in the auction go to the
+///      original owner and the item goes to the bidder that won the auction
 
 module nfts::auction {
     use sui::coin::{Self, Coin};
@@ -60,7 +60,7 @@ module nfts::auction {
     // Entry functions.
 
     /// Creates an auction. It would be more natural to generate
-    /// auction_id in crate_auction and be able to return it so that
+    /// auction_id in create_auction and be able to return it so that
     /// it can be shared with bidders but we cannot do this at the
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
