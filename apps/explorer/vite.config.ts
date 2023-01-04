@@ -6,6 +6,7 @@ import { pathAlias } from '@mysten/core/vite.config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
+import { configDefaults } from 'vitest/config';
 
 process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 
@@ -13,6 +14,8 @@ process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 export default defineConfig({
     plugins: [react(), svgr()],
     test: {
+        // Omit end-to-end tests:
+        exclude: [...configDefaults.exclude, 'tests/**'],
         css: true,
         globals: true,
         environment: 'happy-dom',
