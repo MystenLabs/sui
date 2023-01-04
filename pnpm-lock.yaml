@@ -211,6 +211,7 @@ importers:
       '@storybook/react': 7.0.0-beta.3
       '@storybook/react-webpack5': ^7.0.0-beta.3
       '@storybook/theming': 7.0.0-beta.3
+      '@svgr/webpack': ^6.5.1
       '@tanstack/react-query': ^4.19.1
       '@types/dotenv-webpack': ^7.0.3
       '@types/git-rev-sync': ^2.0.0
@@ -346,6 +347,7 @@ importers:
       '@storybook/react': 7.0.0-beta.3_bb2lpehc4sm6fnn2zwweqmbmoy
       '@storybook/react-webpack5': 7.0.0-beta.3_oeydsyfwgtntevihiiwymwyd6a
       '@storybook/theming': 7.0.0-beta.3_biqbaboplfbrettd7655fr4n2y
+      '@svgr/webpack': 6.5.1
       '@types/dotenv-webpack': 7.0.3_webpack-cli@4.10.0
       '@types/git-rev-sync': 2.0.0
       '@types/node': 18.11.13
@@ -2379,6 +2381,16 @@ packages:
       '@babel/helper-plugin-utils': 7.20.2
     dev: true
 
+  /@babel/plugin-transform-react-constant-elements/7.20.2_@babel+core@7.20.5:
+    resolution: {integrity: sha512-KS/G8YI8uwMGKErLFOHS/ekhqdHhpEloxs43NecQHVgo2QuQSyJhGIY1fL8UGl9wy5ItVwwoUL4YxVqsplGq2g==}
+    engines: {node: '>=6.9.0'}
+    peerDependencies:
+      '@babel/core': ^7.0.0-0
+    dependencies:
+      '@babel/core': 7.20.5
+      '@babel/helper-plugin-utils': 7.20.2
+    dev: true
+
   /@babel/plugin-transform-react-display-name/7.18.6:
     resolution: {integrity: sha512-TV4sQ+T013n61uMoygyMRm+xf04Bd5oqFpv2jAEQwSZ8NwQA7zeRPg1LMVg2PWi3zWBz+CLKD+v5bcpZ/BS0aA==}
     engines: {node: '>=6.9.0'}
@@ -3498,7 +3510,7 @@ packages:
       '@devicefarmer/adbkit-logcat': 2.1.2
       '@devicefarmer/adbkit-monkey': 1.2.1
       bluebird: 3.7.2
-      commander: 9.4.1
+      commander: 9.4.0
       debug: 4.3.4
       node-forge: 1.3.1
       split: 1.0.1
@@ -5905,6 +5917,34 @@ packages:
       '@svgr/core': 6.5.1
       '@svgr/hast-util-to-babel-ast': 6.5.1
       svg-parser: 2.0.4
+    transitivePeerDependencies:
+      - supports-color
+    dev: true
+
+  /@svgr/plugin-svgo/6.5.1_@svgr+core@6.5.1:
+    resolution: {integrity: sha512-omvZKf8ixP9z6GWgwbtmP9qQMPX4ODXi+wzbVZgomNFsUIlHA1sf4fThdwTWSsZGgvGAG6yE+b/F5gWUkcZ/iQ==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      '@svgr/core': '*'
+    dependencies:
+      '@svgr/core': 6.5.1
+      cosmiconfig: 7.1.0
+      deepmerge: 4.2.2
+      svgo: 2.8.0
+    dev: true
+
+  /@svgr/webpack/6.5.1:
+    resolution: {integrity: sha512-cQ/AsnBkXPkEK8cLbv4Dm7JGXq2XrumKnL1dRpJD9rIO2fTIlJI9a1uCciYG1F2aUsox/hJQyNGbt3soDxSRkA==}
+    engines: {node: '>=10'}
+    dependencies:
+      '@babel/core': 7.20.5
+      '@babel/plugin-transform-react-constant-elements': 7.20.2_@babel+core@7.20.5
+      '@babel/preset-env': 7.20.2_@babel+core@7.20.5
+      '@babel/preset-react': 7.18.6_@babel+core@7.20.5
+      '@babel/preset-typescript': 7.18.6_@babel+core@7.20.5
+      '@svgr/core': 6.5.1
+      '@svgr/plugin-jsx': 6.5.1_@svgr+core@6.5.1
+      '@svgr/plugin-svgo': 6.5.1_@svgr+core@6.5.1
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -8700,8 +8740,8 @@ packages:
     engines: {node: '>= 12'}
     dev: true
 
-  /commander/9.4.1:
-    resolution: {integrity: sha512-5EEkTNyHNGFPD2H+c/dXXfQZYa/scCKasxWcXJaWnNJ99pnQN9Vnmqow+p+PlFPE63Q6mThaZws1T+HxfpgtPw==}
+  /commander/9.4.0:
+    resolution: {integrity: sha512-sRPT+umqkz90UA8M1yqYfnHlZA7fF6nSphDtxeywPZ49ysjxDQybzk13CL+mXekDRG92skbcqCLVovuCusNmFw==}
     engines: {node: ^12.20.0 || >=14}
     dev: true
 
@@ -11939,7 +11979,7 @@ packages:
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
     dependencies:
       dir-glob: 3.0.1
-      fast-glob: 3.2.12
+      fast-glob: 3.2.11
       ignore: 5.2.0
       merge2: 1.4.1
       slash: 4.0.0
@@ -15244,7 +15284,6 @@ packages:
         optional: true
     dependencies:
       lilconfig: 2.0.6
-      postcss: 8.4.19
       ts-node: 10.9.1_typescript@4.8.3
       yaml: 1.10.2
     dev: true
@@ -17791,7 +17830,7 @@ packages:
     engines: {node: '>=16.15.0'}
     hasBin: true
     dependencies:
-      commander: 9.4.1
+      commander: 9.4.0
       glob: 8.0.3
       sax: 1.2.4
       svg-pathdata: 6.0.3
