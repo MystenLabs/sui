@@ -44,6 +44,7 @@ export const MovePackageContent = record(string(), string());
 export type MovePackageContent = Infer<typeof MovePackageContent>;
 
 export const SuiMoveObject = object({
+  dataType: string(),
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string(),
   /** Fields and values stored inside the Move object */
