@@ -60,6 +60,7 @@ const NetworkSelector = () => {
                 return;
             }
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
+
             trackEvent('Network', {
                 props: { name: apiEnv, source: 'menu' },
             });
