@@ -588,6 +588,16 @@ impl SuiObjectRef {
     }
 }
 
+impl Display for SuiObjectRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Object ID: {}, version: {}, digest: {}",
+            self.object_id, self.version, self.digest
+        )
+    }
+}
+
 impl From<ObjectRef> for SuiObjectRef {
     fn from(oref: ObjectRef) -> Self {
         Self {
@@ -1512,6 +1522,7 @@ pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
     pub gas_payment: SuiObjectRef,
+    pub gas_price: u64,
     pub gas_budget: u64,
 }
 
@@ -1527,6 +1538,10 @@ impl Display for SuiTransactionData {
                 writeln!(writer, "{}", kind)?;
             }
         }
+        writeln!(writer, "Sender: {}", self.sender)?;
+        writeln!(writer, "Gas Payment: {}", self.gas_payment)?;
+        writeln!(writer, "Gas Price: {}", self.gas_price)?;
+        writeln!(writer, "Gas Budget: {}", self.gas_budget)?;
         write!(f, "{}", writer)
     }
 }
@@ -1548,6 +1563,7 @@ impl TryFrom<TransactionData> for SuiTransactionData {
             transactions,
             sender: data.signer(),
             gas_payment: data.gas().into(),
+            gas_price: data.gas_price,
             gas_budget: data.gas_budget,
         })
     }
