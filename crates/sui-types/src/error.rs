@@ -139,13 +139,15 @@ pub enum SuiError {
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects, but retried a conflicting transaction {:?}, success: {}",
-        conflicting_tx_digest,
-        conflicting_tx_retry_success
+        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
+        conflicting_txes,
+        retried_tx_digest,
+        retried_tx_success
     )]
-    QuorumFailedToProcessTransactionWithConflictingTransactionRetried {
-        conflicting_tx_digest: TransactionDigest,
-        conflicting_tx_retry_success: bool,
+    QuorumFailedToProcessTransactionWithConflictingTransactions {
+        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        retried_tx_digest: Option<TransactionDigest>,
+        retried_tx_success: Option<bool>,
     },
     #[error(
     "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",

@@ -15,15 +15,12 @@ use sui_sdk::SuiClient;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
-    error::SuiError,
     messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
     object::{Object, ObjectRead},
 };
 use sui_types::{
-    base_types::ObjectRef,
-    crypto::AuthorityStrongQuorumSignInfo,
-    messages::{ExecuteTransactionRequestType, QuorumDriverRequest},
-    object::Owner,
+    base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
+    messages::ExecuteTransactionRequestType, object::Owner,
 };
 use tracing::{error, info};
 
@@ -97,7 +94,7 @@ pub trait ValidatorProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError>;
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
 
     async fn reconfig(&self);
 
@@ -115,7 +112,8 @@ pub struct LocalValidatorAggregatorProxy {
 
 impl LocalValidatorAggregatorProxy {
     pub fn from_auth_agg(agg: Arc<AuthorityAggregator<NetworkAuthorityClient>>) -> Self {
-        let qd_handler = QuorumDriverHandler::new(agg, QuorumDriverMetrics::new_for_tests());
+        let qd_handler =
+            QuorumDriverHandler::new(agg, Arc::new(QuorumDriverMetrics::new_for_tests()));
         let qd = qd_handler.clone_quorum_driver();
         Self {
             _qd_handler: qd_handler,
@@ -137,17 +135,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError> {
-        let QuorumDriverResponse::EffectsCert(result) = self
-            .qd
-            .execute_transaction(QuorumDriverRequest {
-                transaction: tx.verify()?,
-            })
-            .await?;
-        let (tx_cert, effects_cert) = *result;
-        let tx_cert: SuiCertifiedTransaction = tx_cert.try_into().unwrap();
-        let effects = ExecutionEffects::CertifiedTransactionEffects(effects_cert.into());
-        Ok((tx_cert, effects))
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+        let ticket = self.qd.submit_transaction(tx.verify()?).await?;
+        let QuorumDriverResponse {
+            tx_cert,
+            effects_cert,
+        } = ticket.await?;
+        Ok((
+            tx_cert.try_into().unwrap(),
+            ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
+        ))
     }
 
     async fn reconfig(&self) {
@@ -247,7 +244,7 @@ impl ValidatorProxy for FullNodeProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError> {
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
         let result = self
             .sui_client
             .quorum_driver()
@@ -256,11 +253,7 @@ impl ValidatorProxy for FullNodeProxy {
                 tx.verify()?,
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
-            .await
-            // TODO make sure RpcExecuteTransactionError covers epoch change identified on FN
-            .map_err(|e| SuiError::RpcExecuteTransactionError {
-                error: e.to_string(),
-            })?;
+            .await?;
         let tx_cert = result.tx_cert.unwrap();
         let effects = ExecutionEffects::SuiTransactionEffects(result.effects.unwrap());
         Ok((tx_cert, effects))
