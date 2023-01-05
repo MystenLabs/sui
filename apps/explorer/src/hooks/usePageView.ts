@@ -9,10 +9,11 @@ import { DEFAULT_NETWORK } from '../utils/envUtil';
 import { plausible } from '../utils/plausible';
 
 export function usePageView() {
-    const { pathname, search } = useLocation();
+    const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
 
     const networkParam = searchParams.get('network');
+    const network = (networkParam || DEFAULT_NETWORK).toUpperCase();
 
     useEffect(() => {
         // Send a pageview to Plausible
@@ -22,9 +23,9 @@ export function usePageView() {
         // Send a network event to Plausible with the page and url params
         plausible.trackEvent('PageByNetwork', {
             props: {
-                name: networkParam || DEFAULT_NETWORK,
-                source: `${pathname}${search}`,
+                name: network,
+                source: pathname,
             },
         });
-    }, [networkParam, pathname, search]);
+    }, [network, pathname]);
 }
