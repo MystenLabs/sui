@@ -11,7 +11,9 @@ use test_utils::authority::{spawn_fullnodes, spawn_test_authorities, test_author
 use test_utils::network::wait_for_nodes_transition_to_epoch;
 use tracing::info;
 
-#[tokio::test]
+use sui_macros::sim_test;
+
+#[sim_test]
 async fn test_onsite_reconfig_observer_basic() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
