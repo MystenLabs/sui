@@ -688,6 +688,15 @@ impl AsRef<[u8]> for Signature {
         }
     }
 }
+impl AsMut<[u8]> for Signature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        match self {
+            Signature::Ed25519SuiSignature(sig) => sig.as_mut(),
+            Signature::Secp256k1SuiSignature(sig) => sig.as_mut(),
+            Signature::Secp256r1SuiSignature(sig) => sig.as_mut(),
+        }
+    }
+}
 
 impl signature::Signature for Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
@@ -761,6 +770,12 @@ impl AsRef<[u8]> for Ed25519SuiSignature {
     }
 }
 
+impl AsMut<[u8]> for Ed25519SuiSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
 impl signature::Signature for Ed25519SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
         if bytes.len() != Self::LENGTH {
@@ -808,6 +823,12 @@ impl AsRef<[u8]> for Secp256k1SuiSignature {
     }
 }
 
+impl AsMut<[u8]> for Secp256k1SuiSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
 impl signature::Signature for Secp256k1SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
         if bytes.len() != Self::LENGTH {
@@ -852,6 +873,12 @@ impl SuiPublicKey for Secp256r1PublicKey {
 impl AsRef<[u8]> for Secp256r1SuiSignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+impl AsMut<[u8]> for Secp256r1SuiSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
     }
 }
 

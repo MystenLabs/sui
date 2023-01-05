@@ -7,6 +7,7 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 
 use narwhal_worker::TransactionValidator;
+use sui_types::message_envelope::Message;
 use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     messages::{ConsensusTransaction, ConsensusTransactionKind},
@@ -58,7 +59,7 @@ impl TransactionValidator for SuiTxValidator {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     self.metrics.certificate_signatures_verified.inc();
-                    // todo - verify user signature when we pin signature in certificate
+                    certificate.data().verify()?;
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
                     certificate.auth_sig().add_to_verification_obligation(
                         epoch_store.committee(),
@@ -161,6 +162,7 @@ mod tests {
         assert!(res.is_ok(), "{res:?}");
 
         let transaction_bytes: Vec<_> = certificates
+            .clone()
             .into_iter()
             .map(|cert| {
                 bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
@@ -171,5 +173,18 @@ mod tests {
         let batch = Batch::new(transaction_bytes);
         let res_batch = validator.validate_batch(&batch);
         assert!(res_batch.is_ok(), "{res_batch:?}");
+
+        let bogus_transaction_bytes: Vec<_> = certificates
+            .into_iter()
+            .map(|mut cert| {
+                cert.tx_signature.as_mut()[2] = cert.tx_signature.as_mut()[2].wrapping_add(1);
+                bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
+                    .unwrap()
+            })
+            .collect();
+
+        let batch = Batch::new(bogus_transaction_bytes);
+        let res_batch = validator.validate_batch(&batch);
+        assert!(res_batch.is_err());
     }
 }
