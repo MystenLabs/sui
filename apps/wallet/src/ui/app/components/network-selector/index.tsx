@@ -14,7 +14,6 @@ import {
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeRPCNetwork } from '_redux/slices/app';
-import { trackEvent } from '_src/shared/plausible';
 
 import st from './NetworkSelector.module.scss';
 
@@ -61,9 +60,6 @@ const NetworkSelector = () => {
             }
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
 
-            trackEvent('Network', {
-                props: { name: apiEnv, source: 'menu' },
-            });
             dispatch(changeRPCNetwork(apiEnv));
         },
         [customRPC, dispatch]
