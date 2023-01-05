@@ -39,6 +39,7 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 use typed_store::{rocks::TypedStoreError, Map};
 
+use crate::authority::authority_store::EffectsStore;
 use crate::{
     authority::{AuthorityState, EffectsNotifyRead},
     checkpoints::CheckpointStore,
@@ -565,9 +566,28 @@ async fn execute_transactions(
 
         match timeout(LOCAL_EXECUTION_TIMEOUT, effects_future).await {
             Err(_elapsed) => {
+                let missing_digests: Vec<TransactionDigest> = EffectsStore::get_effects(
+                    &authority_state.database,
+                    all_tx_digests.clone().iter(),
+                )
+                .expect("Failed to get effects")
+                .iter()
+                .zip(all_tx_digests.clone())
+                .filter_map(
+                    |(fx, digest)| {
+                        if fx.is_none() {
+                            Some(digest)
+                        } else {
+                            None
+                        }
+                    },
+                )
+                .collect();
+
                 warn!(
-                    "Transaction effects for checkpoint not present within {:?}. ",
-                    LOCAL_EXECUTION_TIMEOUT * periods
+                    "Transaction effects for tx digests {:?} checkpoint not present within {:?}",
+                    missing_digests,
+                    LOCAL_EXECUTION_TIMEOUT * periods,
                 );
                 periods += 1;
             }
