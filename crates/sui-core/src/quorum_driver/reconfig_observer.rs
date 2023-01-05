@@ -53,7 +53,7 @@ impl OnsiteReconfigObserver {
     async fn create_authority_aggregator_from_system_state(
         &self,
     ) -> AuthorityAggregator<NetworkAuthorityClient> {
-        AuthorityAggregator::new_from_system_state(
+        AuthorityAggregator::new_from_local_system_state(
             &self.authority_store,
             &self.committee_store,
             self.safe_client_metrics_base.clone(),
@@ -72,7 +72,6 @@ impl OnsiteReconfigObserver {
 
 #[async_trait]
 impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
-<<<<<<< HEAD
     fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
         Box::new(Self {
             reconfig_rx: self.reconfig_rx.resubscribe(),
@@ -83,8 +82,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         })
     }
 
-=======
->>>>>>> 3c6f11a74 (add reconfig observer)
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         // A tiny optimization: when a very stale node just starts, the
         // channel may fill up committees quickly. Here we skip directly to

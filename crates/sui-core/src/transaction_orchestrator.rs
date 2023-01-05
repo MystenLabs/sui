@@ -63,7 +63,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
     ) -> anyhow::Result<Self> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
-        let validators = AuthorityAggregator::new_from_system_state(
+        let validators = AuthorityAggregator::new_from_local_system_state(
             &validator_state.db(),
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),

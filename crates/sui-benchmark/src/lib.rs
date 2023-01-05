@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::bail;
 use async_trait::async_trait;
+use fullnode_reconfig_observer::FullNodeReconfigObserver;
+use prometheus::Registry;
 use std::{collections::BTreeMap, sync::Arc};
+use sui_config::genesis::Genesis;
+use sui_config::NetworkConfig;
 use sui_core::{
-    authority_aggregator::AuthorityAggregator,
+    authority_aggregator::AuthorityAggregatorBuilder,
     authority_client::NetworkAuthorityClient,
-    quorum_driver::reconfig_observer::DummyReconfigObserver,
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
-use sui_network::default_mysten_network_config;
 use sui_sdk::SuiClient;
 use sui_types::{
     base_types::ObjectID,
@@ -24,9 +26,9 @@ use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
 };
-use tracing::{error, info};
 
 pub mod drivers;
+pub mod fullnode_reconfig_observer;
 pub mod util;
 pub mod workloads;
 
@@ -98,8 +100,6 @@ pub trait ValidatorProxy {
         tx: Transaction,
     ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
 
-    async fn reconfig(&self);
-
     fn clone_committee(&self) -> Committee;
 
     fn get_current_epoch(&self) -> EpochId;
@@ -113,12 +113,62 @@ pub struct LocalValidatorAggregatorProxy {
 }
 
 impl LocalValidatorAggregatorProxy {
-    pub fn from_auth_agg(agg: Arc<AuthorityAggregator<NetworkAuthorityClient>>) -> Self {
+    pub async fn from_genesis(
+        genesis: &Genesis,
+        registry: &Registry,
+        fullnode_rpc_url: &str,
+    ) -> Self {
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+            .with_registry(registry)
+            .build()
+            .unwrap();
+
+        let committee_store = aggregator.clone_committee_store();
+
+        let reconfig_observer = FullNodeReconfigObserver::new(
+            fullnode_rpc_url,
+            committee_store,
+            aggregator.safe_client_metrics_base.clone(),
+            aggregator.metrics.clone(),
+        )
+        .await;
+        let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
         let qd_handler =
-            QuorumDriverHandlerBuilder::new(agg, Arc::new(QuorumDriverMetrics::new_for_tests()))
-                // TODO: replace with a real reconfig observer
-                .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+            QuorumDriverHandlerBuilder::new(Arc::new(aggregator), quorum_driver_metrics)
+                .with_reconfig_observer(Arc::new(reconfig_observer))
                 .start();
+
+        let qd = qd_handler.clone_quorum_driver();
+        Self {
+            _qd_handler: qd_handler,
+            qd,
+        }
+    }
+
+    pub async fn from_network_config(
+        configs: &NetworkConfig,
+        registry: &Registry,
+        fullnode_rpc_url: &str,
+    ) -> Self {
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
+            .with_registry(registry)
+            .build()
+            .unwrap();
+        let committee_store = aggregator.clone_committee_store();
+
+        let reconfig_observer = FullNodeReconfigObserver::new(
+            fullnode_rpc_url,
+            committee_store,
+            aggregator.safe_client_metrics_base.clone(),
+            aggregator.metrics.clone(),
+        )
+        .await;
+        let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
+        let qd_handler =
+            QuorumDriverHandlerBuilder::new(Arc::new(aggregator), quorum_driver_metrics)
+                .with_reconfig_observer(Arc::new(reconfig_observer))
+                .start();
+
         let qd = qd_handler.clone_quorum_driver();
         Self {
             _qd_handler: qd_handler,
@@ -150,41 +200,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             tx_cert.try_into().unwrap(),
             ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
         ))
-    }
-
-    async fn reconfig(&self) {
-        let auth_agg = self.qd.authority_aggregator().load();
-        match auth_agg
-            .get_committee_with_net_addresses(self.qd.current_epoch())
-            .await
-        {
-            Err(err) => {
-                error!(
-                    "Reconfiguration - Failed to get committee with network address: {}",
-                    err
-                )
-            }
-            Ok(committee_info) => {
-                let network_config = default_mysten_network_config();
-                let new_epoch = committee_info.committee.epoch;
-                // Check if we already advanced.
-                let cur_epoch = self.qd.current_epoch();
-                if new_epoch <= cur_epoch {
-                    return;
-                }
-                info!("Reconfiguration - Observed a new epoch {new_epoch}, attempting to reconfig from current epoch: {cur_epoch}");
-                match auth_agg.recreate_with_net_addresses(committee_info, &network_config) {
-                    Err(err) => error!(
-                        "Reconfiguration - Error when cloning authority aggregator with committee: {}",
-                        err
-                    ),
-                    Ok(auth_agg) => {
-                        self.qd.update_validators(Arc::new(auth_agg)).await;
-                        info!("Reconfiguration - Reconfiguration to epoch {new_epoch} is done");
-                    }
-                }
-            }
-        }
     }
 
     fn clone_committee(&self) -> Committee {
@@ -259,12 +274,6 @@ impl ValidatorProxy for FullNodeProxy {
         let tx_cert = result.tx_cert.unwrap();
         let effects = ExecutionEffects::SuiTransactionEffects(result.effects.unwrap());
         Ok((tx_cert, effects))
-    }
-
-    async fn reconfig(&self) {
-        // TODO poll FN until it has proceeds to next epoch
-        // and update self.committee
-        return;
     }
 
     fn clone_committee(&self) -> Committee {

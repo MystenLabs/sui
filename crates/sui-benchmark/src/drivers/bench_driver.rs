@@ -224,6 +224,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         show_progress: bool,
         run_duration: Interval,
     ) -> Result<BenchmarkStats, anyhow::Error> {
+        eprintln!("Running BenchDriver");
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
