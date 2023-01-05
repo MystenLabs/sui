@@ -1,4 +1,6 @@
-## On Chain Asset Management on SUI
+## On Chain Asset Management on Sui
+### Version 0
+This implementation is based on Transaction Request - Transaction Approval agreement. Anyone with the Spender role can initiate a transaction by creating a Transaction Request and sharing it on-chain, if the thresholds are met. After a transaction initiation, anyone with the Approver role can review the request and approve it or reject it. By approving a request, a Transaction Approval is created and sent to the spender who uses this approval to execute the transaction.   
 
 ### Set up your asset management application 
 First step, you have to publish the smart contract:
