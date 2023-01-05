@@ -117,6 +117,7 @@ impl SimpleFaucet {
             unreachable!("channel is closed");
         };
 
+        self.metrics.total_available_coins.dec();
         Some(coin)
     }
 
@@ -495,7 +496,14 @@ mod tests {
         let faucet = SimpleFaucet::new(test_cluster.wallet, &prom_registry)
             .await
             .unwrap();
-        test_basic_interface(faucet).await;
+
+        let available = faucet.metrics.total_available_coins.get();
+        let discarded = faucet.metrics.total_discarded_coins.get();
+
+        test_basic_interface(&faucet).await;
+
+        assert_eq!(available, faucet.metrics.total_available_coins.get());
+        assert_eq!(discarded, faucet.metrics.total_discarded_coins.get());
     }
 
     #[tokio::test]
@@ -508,7 +516,10 @@ mod tests {
         let prom_registry = Registry::new();
         let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
+        let available = faucet.metrics.total_available_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len()).await;
+
+        assert_eq!(available as usize, candidates.len());
         assert_eq!(
             candidates, gases,
             "gases: {:?}, candidates: {:?}",
@@ -543,7 +554,9 @@ mod tests {
         .collect::<Vec<_>>();
 
         // After all transfer requests settle, we still have the original candidates gas in queue.
+        let available = faucet.metrics.total_available_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(available as usize, candidates.len());
         assert_eq!(
             candidates, gases,
             "gases: {:?}, candidates: {:?}",
@@ -594,7 +607,11 @@ mod tests {
 
         // Verify that the bad gas is no longer in the queue.
         // Note `gases` does not contain the bad gas.
+        let available = faucet.metrics.total_available_coins.get();
+        let discarded = faucet.metrics.total_discarded_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len()).await;
+        assert_eq!(available as usize, candidates.len());
+        assert_eq!(discarded, 1);
         assert_eq!(
             candidates, gases,
             "gases: {:?}, candidates: {:?}",
@@ -667,11 +684,13 @@ mod tests {
 
         // Verify that the tiny gas is not in the queue.
         tokio::task::yield_now().await;
+        let discarded = faucet.metrics.total_discarded_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len() - 1).await;
+        assert_eq!(discarded, 1);
         assert!(candidates.get(&tiny_coin_id).is_none());
     }
 
-    async fn test_basic_interface(faucet: impl Faucet) {
+    async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
         let amounts = vec![1, 2, 3];
 
