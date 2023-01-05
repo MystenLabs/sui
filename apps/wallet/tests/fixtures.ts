@@ -4,21 +4,23 @@
 import { test as base, chromium, type BrowserContext } from '@playwright/test';
 import path from 'path';
 
+const EXTENSION_PATH = path.join(__dirname, '../dist');
+const LAUNCH_ARGS = [
+    `--disable-extensions-except=${EXTENSION_PATH}`,
+    `--load-extension=${EXTENSION_PATH}`,
+    // Ensure userAgent is correctly set in serviceworker:
+    '--user-agent=Playwright',
+];
+
 export const test = base.extend<{
     context: BrowserContext;
     extensionUrl: string;
 }>({
     // eslint-disable-next-line no-empty-pattern
     context: async ({}, use) => {
-        const pathToExtension = path.join(__dirname, '../dist');
         const context = await chromium.launchPersistentContext('', {
             headless: false,
-            args: [
-                `--disable-extensions-except=${pathToExtension}`,
-                `--load-extension=${pathToExtension}`,
-                // Ensure userAgent is correctly set in serviceworker:
-                '--user-agent=Playwright',
-            ],
+            args: LAUNCH_ARGS,
         });
         await use(context);
         await context.close();

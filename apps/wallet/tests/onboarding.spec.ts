@@ -2,23 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { test, expect } from './fixtures';
+import { createWallet } from './utils/auth';
 import { generateKeypair } from './utils/localnet';
 
 test('create new wallet', async ({ page, extensionUrl }) => {
-    await page.goto(extensionUrl);
-    await page.getByRole('link', { name: /Get Started/ }).click();
-    await page.getByRole('link', { name: /Create a New Wallet/ }).click();
-    await page.getByLabel('Create Password').fill('mystenlabs');
-    await page.getByLabel('Confirm Password').fill('mystenlabs');
-    // TODO: Clicking checkbox should be improved:
-    await page
-        .locator('label', { has: page.locator('input[type=checkbox]') })
-        .locator('span')
-        .nth(0)
-        .click();
-    await page.getByRole('button', { name: /Create Wallet/ }).click();
-    await page.getByRole('button', { name: /Open Sui Wallet/ }).click();
-    await expect(page.getByRole('main')).toBeVisible();
+    await createWallet(page, extensionUrl);
+    await expect(page.getByTestId('coin-page')).toBeVisible();
 });
 
 test('import wallet', async ({ page, extensionUrl }) => {
@@ -33,7 +22,7 @@ test('import wallet', async ({ page, extensionUrl }) => {
     await page.getByLabel('Confirm Password').fill('mystenlabs');
     await page.getByRole('button', { name: /Import/ }).click();
     await page.getByRole('button', { name: /Open Sui Wallet/ }).click();
-    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.getByTestId('coin-page')).toBeVisible();
     await expect(
         page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 4))
     ).toBeVisible();
