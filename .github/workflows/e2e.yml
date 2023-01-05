@@ -52,6 +52,9 @@ jobs:
           path: apps/explorer/playwright-report/
           retention-days: 30
 
+      - name: Build Wallet
+        if: ${{ needs.diff.outputs.isWallet == 'true' }}
+        run: pnpm wallet build
       - name: Run Wallet e2e tests
         if: ${{ needs.diff.outputs.isWallet == 'true' }}
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
