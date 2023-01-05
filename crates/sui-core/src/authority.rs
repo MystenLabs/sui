@@ -442,6 +442,10 @@ impl AuthorityState {
         &self.committee_store
     }
 
+    pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
+        self.committee_store.clone()
+    }
+
     /// This is a private method and should be kept that way. It doesn't check whether
     /// the provided transaction is a system transaction, and hence can only be called internally.
     async fn handle_transaction_impl(

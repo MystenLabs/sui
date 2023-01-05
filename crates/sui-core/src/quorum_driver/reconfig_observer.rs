@@ -10,7 +10,7 @@ use tracing::{info, warn};
 use crate::{
     authority::AuthorityStore,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
-    authority_client::NetworkAuthorityClient,
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
     epoch::committee_store::CommitteeStore,
     safe_client::SafeClientMetricsBase,
 };
@@ -20,8 +20,11 @@ use super::QuorumDriver;
 #[async_trait]
 pub trait ReconfigObserver<A> {
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<A>>);
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync>;
 }
 
+/// A ReconfigObserver that subscribes to a reconfig channel of new committee.
+/// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
     reconfig_rx: tokio::sync::broadcast::Receiver<Committee>,
     authority_store: Arc<AuthorityStore>,
@@ -69,6 +72,16 @@ impl OnsiteReconfigObserver {
 
 #[async_trait]
 impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
+        Box::new(Self {
+            reconfig_rx: self.reconfig_rx.resubscribe(),
+            authority_store: self.authority_store.clone(),
+            committee_store: self.committee_store.clone(),
+            safe_client_metrics_base: self.safe_client_metrics_base.clone(),
+            auth_agg_metrics: self.auth_agg_metrics.clone(),
+        })
+    }
+
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         // A tiny optimization: when a very stale node just starts, the
         // channel may fill up committees quickly. Here we skip directly to
@@ -102,4 +115,19 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
             }
         }
     }
+}
+
+/// A dummy ReconfigObserver for testing.
+pub struct DummyReconfigObserver;
+
+#[async_trait]
+impl<A> ReconfigObserver<A> for DummyReconfigObserver
+where
+    A: AuthorityAPI + Send + Sync + 'static,
+{
+    fn clone_boxed(&self) -> Box<dyn ReconfigObserver<A> + Send + Sync> {
+        Box::new(Self {})
+    }
+
+    async fn run(&mut self, _quorum_driver: Arc<QuorumDriver<A>>) {}
 }
