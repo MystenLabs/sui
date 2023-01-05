@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject,  Base64DataBuffer } from '@mysten/sui.js';
+import { is, SuiObject, Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 
