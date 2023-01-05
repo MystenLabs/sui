@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { Page } from '@playwright/test';
 
 export const PASSWORD = 'mystenlabs';
@@ -17,5 +20,3 @@ export async function createWallet(page: Page, extensionUrl: string) {
     await page.getByRole('button', { name: /Create Wallet/ }).click();
     await page.getByRole('button', { name: /Open Sui Wallet/ }).click();
 }
-
-export function unlock(page: Page) {}
