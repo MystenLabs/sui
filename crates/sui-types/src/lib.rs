@@ -41,6 +41,7 @@ pub mod messages_checkpoint;
 pub mod move_package;
 pub mod object;
 pub mod query;
+pub mod quorum_driver_types;
 pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;

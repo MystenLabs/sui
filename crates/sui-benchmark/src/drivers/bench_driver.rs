@@ -16,9 +16,7 @@ use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
-use rand::Rng;
 use tokio::sync::OnceCell;
-use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
@@ -50,8 +48,6 @@ pub struct BenchMetrics {
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
-
-const RECONFIG_QUIESCENCE_TIME_SEC: u64 = 5;
 
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
@@ -327,7 +323,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(proxy.clone_committee());
-                                let proxy_clone = proxy.clone();
                                 let start = Arc::new(Instant::now());
                                 let res = proxy
                                     .execute_transaction(b.0.clone().into())
@@ -352,16 +347,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 ))
                                             }
                                             Err(err) => {
-                                                if err.indicates_epoch_change() {
-                                                    let mut rng = rand::rngs::OsRng;
-                                                    let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
-                                                    sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
-
-                                                    proxy_clone.reconfig().await;
-                                                } else {
-                                                    error!("{}", err);
-                                                    metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
-                                                }
+                                                error!("{}", err);
+                                                metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 NextOp::Retry(b)
                                             }
                                         }
@@ -382,7 +369,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let tx = payload.make_transaction();
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
-                                let proxy_clone = proxy.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(proxy.clone_committee());
                                 let res = proxy
@@ -405,16 +391,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             )))
                                         }
                                         Err(err) => {
-                                            if err.indicates_epoch_change() {
-                                                let mut rng = rand::rngs::OsRng;
-                                                let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
-                                                sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
-
-                                                proxy_clone.reconfig().await;
-                                            } else {
-                                                error!("Retry due to error: {}", err);
-                                                metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
-                                            }
+                                            error!("Retry due to error: {}", err);
+                                            metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
                                     }

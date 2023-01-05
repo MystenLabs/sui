@@ -52,8 +52,7 @@ use sui_storage::{
 };
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
-use sui_types::messages::VerifiedCertificate;
-use sui_types::messages::VerifiedCertifiedTransactionEffects;
+use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::mpsc::channel;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
@@ -616,12 +615,7 @@ impl SuiNode {
 
     pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
-    ) -> Result<
-        tokio::sync::broadcast::Receiver<(
-            VerifiedCertificate,
-            VerifiedCertifiedTransactionEffects,
-        )>,
-    > {
+    ) -> Result<tokio::sync::broadcast::Receiver<QuorumDriverResponse>> {
         self.transaction_orchestrator
             .as_ref()
             .map(|to| to.subscribe_to_effects_queue())
