@@ -4,6 +4,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
+import { parseVariant, type SizeAndWeightVariant } from './utils/sizeAndWeight';
+
 const textStyles = cva([], {
     variants: {
         size: {
@@ -45,10 +47,9 @@ const textStyles = cva([], {
 });
 
 type TextStylesProps = VariantProps<typeof textStyles>;
-type Variant = `${TextStylesProps['size']}/${TextStylesProps['weight']}`;
 
 export interface TextProps extends Omit<TextStylesProps, 'size' | 'weight'> {
-    variant: Variant;
+    variant: SizeAndWeightVariant<TextStylesProps>;
     children: ReactNode;
 }
 
@@ -57,10 +58,7 @@ export function Text({
     variant = 'body/medium',
     ...styleProps
 }: TextProps) {
-    const [size, weight] = variant.split('/') as [
-        TextStylesProps['size'],
-        TextStylesProps['weight']
-    ];
+    const [size, weight] = parseVariant<TextStylesProps>(variant);
 
     return (
         <div className={textStyles({ size, weight, ...styleProps })}>

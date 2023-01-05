@@ -19,8 +19,7 @@ export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
                 <div className="flex flex-col items-baseline gap-2.5">
                     <Heading
                         as="h4"
-                        variant="heading4"
-                        weight="semibold"
+                        variant="heading4/semibold"
                         color="gray-90"
                         fixed
                     >
