@@ -4,9 +4,11 @@
 use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
 use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+use std::time::Duration;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tokio::time::sleep;
+use tracing::{info, warn};
 use types::metered_channel::Sender;
 use types::{ConditionalBroadcastReceiver, ReconfigureNotification};
 
@@ -33,7 +35,7 @@ pub fn start_admin_server(
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     info!(
         address =% socket_address,
-        "starting admin server"
+        "Starting admin server at {socket_address}"
     );
 
     let handle = axum_server::Handle::new();
@@ -48,7 +50,22 @@ pub fn start_admin_server(
 
     handles.push(spawn_logged_monitored_task!(
         async move {
-            axum_server::bind(socket_address)
+            let mut i = 0;
+            let listener = loop {
+                i += 1;
+                match TcpListener::bind(socket_address) {
+                    Ok(listener) => break listener,
+                    Err(e) => {
+                        if i == 10 {
+                            panic!("Failed to bind to {socket_address}: {e}");
+                        } else {
+                            warn!("Failed to bind to {socket_address}: {e}. Retrying ...");
+                            sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+                };
+            };
+            axum_server::from_tcp(listener)
                 .handle(shutdown_handle)
                 .serve(router.into_make_service())
                 .await
