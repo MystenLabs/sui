@@ -18,12 +18,18 @@ function ValidatorPageResult() {
             <Heading as="h1" variant="heading2/bold">
                 Validators
             </Heading>
-            <div className="mt-8">
+            <div className="mt-8 flex gap-5">
+            <div className="w-1/2 bg-gray-40 h-full rounded-sm">
+                    hello
+                </div>
+            <div className="w-1/2">
                 <ErrorBoundary>
                     <Suspense fallback={null}>
                         <ValidatorMap />
                     </Suspense>
                 </ErrorBoundary>
+                </div>
+               
             </div>
             <div className="mt-8">
                 <ErrorBoundary>
