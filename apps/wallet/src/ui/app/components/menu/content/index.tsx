@@ -3,13 +3,20 @@
 
 import cl from 'classnames';
 import { useCallback } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import {
+    Navigate,
+    Route,
+    Routes,
+    useLocation,
+    useNavigate,
+} from 'react-router-dom';
 
 import Account from './account';
 import MenuList from './menu-list';
 import Network from './network';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
+    MainLocationContext,
     useMenuIsOpen,
     useMenuUrl,
     useNextMenuUrl,
@@ -23,6 +30,7 @@ import st from './MenuContent.module.scss';
 const CLOSE_KEY_CODES: string[] = ['Escape'];
 
 function MenuContent() {
+    const mainLocation = useLocation();
     const isOpen = useMenuIsOpen();
     const menuUrl = useMenuUrl();
     const menuHomeUrl = useNextMenuUrl(true, '/');
@@ -47,17 +55,19 @@ function MenuContent() {
             <div className={st.backdrop} onClick={handleOnCloseMenu} />
             <div className={cl(st.content, { [st.expanded]: expanded })}>
                 <ErrorBoundary>
-                    <Routes location={menuUrl || ''}>
-                        <Route path="/" element={<MenuList />} />
-                        <Route path="/account" element={<Account />} />
-                        <Route path="/network" element={<Network />} />
-                        <Route
-                            path="*"
-                            element={
-                                <Navigate to={menuHomeUrl} replace={true} />
-                            }
-                        />
-                    </Routes>
+                    <MainLocationContext.Provider value={mainLocation}>
+                        <Routes location={menuUrl || ''}>
+                            <Route path="/" element={<MenuList />} />
+                            <Route path="/account" element={<Account />} />
+                            <Route path="/network" element={<Network />} />
+                            <Route
+                                path="*"
+                                element={
+                                    <Navigate to={menuHomeUrl} replace={true} />
+                                }
+                            />
+                        </Routes>
+                    </MainLocationContext.Provider>
                 </ErrorBoundary>
             </div>
         </div>
