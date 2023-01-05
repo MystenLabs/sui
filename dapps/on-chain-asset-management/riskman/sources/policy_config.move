@@ -13,19 +13,23 @@ module riskman::policy_config {
 
     const EAdministratorCannotBeSpender : u64 = 0;
     const ENotEnoughApprovers : u64 = 1;
+    const ENotOriginalOwnerOfCapability : u64 = 2;
 
     struct AdministratorCap has key, store {
         id: UID,
+        original_owner: address,
     }
 
     struct SpenderCap has key, store {
         id: UID,
+        original_owner: address,
         policy: Policy,
         spent: u64,
     }
 
     struct ApproverCap has key, store {
         id: UID,
+        original_owner: address,
     }
 
     struct Assets has key {
@@ -48,7 +52,7 @@ module riskman::policy_config {
 
     // ======== Functions =========
     fun init(ctx: &mut TxContext) {
-        transfer::transfer(AdministratorCap{id: object::new(ctx)}, 
+        transfer::transfer(AdministratorCap{id: object::new(ctx), original_owner: tx_context::sender(ctx)}, 
                           tx_context::sender(ctx)
                         );
         transfer::share_object(Assets {
@@ -74,7 +78,7 @@ module riskman::policy_config {
     // }
 
     entry fun create_spender(
-        _: &AdministratorCap,
+        admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
         recipient: address,
         amount_limit: u64,
@@ -82,10 +86,12 @@ module riskman::policy_config {
         approvers_num: u64,
         ctx: &mut TxContext,
     ) {
+        assert!(admin_cap.original_owner == tx_context::sender(ctx), 2);
         assert!(tx_context::sender(ctx) != recipient, 0);
         assert!(approvers_num <= vec::length(&reg.approvers), 1);
         transfer::transfer(SpenderCap{
                 id: object::new(ctx),
+                original_owner: recipient,
                 policy: Policy {amount_limit, time_limit, approvers_num},
                 spent: 0,
             }, recipient
@@ -94,13 +100,15 @@ module riskman::policy_config {
     }
 
     entry fun create_approver(
-        _: &AdministratorCap,
+        admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
         recipient: address,
         ctx: &mut TxContext,
     ) {
+        assert!(admin_cap.original_owner == tx_context::sender(ctx), 2);
         transfer::transfer(ApproverCap{
-                id: object::new(ctx)
+                id: object::new(ctx),
+                original_owner: recipient,
             }, recipient
         );
         vec::push_back(&mut reg.approvers, recipient);
@@ -176,6 +184,18 @@ module riskman::policy_config {
         spender_cap: &SpenderCap
     ) : u64 {
         spender_cap.policy.approvers_num
+    }
+
+    public fun get_spender_original_owner(
+        spender_cap: &SpenderCap
+    ) : address {
+        spender_cap.original_owner
+    }
+
+     public fun get_approver_original_owner(
+        approver_cap: &ApproverCap
+    ) : address {
+        approver_cap.original_owner
     }
 
     public fun update_spent(

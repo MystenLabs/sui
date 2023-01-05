@@ -12,6 +12,7 @@ module riskman::transaction {
     const ETimeLimitExceeded : u64 = 1;
     const EAmountLimitExceededAfterApproval : u64 = 2;
     const EAlreadyApprovedByThisApprover : u64 = 3;
+    const ENotOriginalOwnerOfCapability : u64 = 4;
 
     struct TransactionRequest has key, store {
         id: UID,
@@ -40,6 +41,7 @@ module riskman::transaction {
         description: vector<u8>,
         ctx: &mut TxContext,
     ) { 
+        assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 4);
         assert!(amount <= policy_config::get_amount_limit(spender_cap) - policy_config::get_amount_spent(spender_cap), 0);
         transfer::share_object(TransactionRequest {
             id: object::new(ctx),
@@ -54,10 +56,11 @@ module riskman::transaction {
     }
 
     entry fun approve_request(
-        _: &ApproverCap,
+        approver_cap: &ApproverCap,
         tx_request: &mut TransactionRequest,
         ctx: &mut TxContext,
     ) {
+        assert!(policy_config::get_approver_original_owner(approver_cap) == tx_context::sender(ctx), 4);
         assert!(tx_context::epoch(ctx) <= tx_request.time_limit, 1);
         assert!(vec::contains(&tx_request.approved_by, &tx_context::sender(ctx)) == false, 3);
         if (vec::length(&tx_request.approved_by) < tx_request.approvers_num - 1) {
@@ -91,6 +94,7 @@ module riskman::transaction {
         assets: &mut Assets,
         ctx: &mut TxContext,
     ) {
+        assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 4);
         assert!(tx_approval.amount <= policy_config::get_amount_limit(spender_cap) - policy_config::get_amount_spent(spender_cap), 2);
         transfer::transfer(
             coin::take(policy_config::get_foundation_balance_mut(assets), tx_approval.amount, ctx) , 
