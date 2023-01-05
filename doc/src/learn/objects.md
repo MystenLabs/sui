@@ -30,7 +30,7 @@ struct A {
     b: B,
 }
 ```
-defines a object type `A` that contains a field whose type is another object type `B`. In this case, we say an object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.
+defines a object type `A` that contains a field whose type is another object type `B`. In this case, we say an object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.  
 Now back to the topic of object owned by another object. When an object is owned by another object, it's not wrapped. This means the child object still exists independently as a top-level object and can be accessed directly in the Sui storage. The ownership relationship is only tracked through the owner field of the child object. This can be useful if you still want to observe the child object or be able to use it in other transactions. We provide library APIs to make an object owned by another object. More details on how to do this can be found in the [Sui Move library](../build/move/sui-move-library.md).
 
 ### Immutable
@@ -39,18 +39,18 @@ This means an object is immutable and cannot be mutated by anyone. Because of th
 ### Shared
 An object can be shared, meaning that anyone can read or write this object. In contrast to mutable owned objects (which are single-writer), shared objects require [consensus](architecture/consensus.md) to sequence reads and writes. For an example of creating and accessing a shared object, see [Shared Object](../explore/move-examples/basics.md#shared-object).
 
-In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
+In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity. The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
 
-Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move)
-Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move)
+Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move) | 
+Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move) | 
 Tic Tac Toe: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)
 
 
 ## Referring to objects
 
-There are a few different ways to concisely refer to an object without specifying its full contents and metadata, each with slightly different use cases:
-* ID: the globally unique ID of the object mentioned above. This is a stable identifier for the object across time, and is useful for querying the current state of an object or describing which object was transferred between two addresses.
-* Versioned ID: an (ID, version) pair. This describes the state of the object at a particular point in the object's history, and is useful for asking what the value of the object was at some point in the past or determining how fresh some view of an object is now.
+There are a few different ways to concisely refer to an object without specifying its entire contents and metadata, each with slightly different use cases:
+* ID: the globally unique ID of the object mentioned above. ID is a stable identifier for the object across time and is useful for querying the current state of an object or describing which object was transferred between two addresses.
+* Versioned ID: an (ID, version) pair. Versioned ID describes the state of the object at a particular point in the object's history and is useful for asking what the value of the object was at some point in the past or determining how fresh some view of an object is now.
 * Object Reference: an (ID, version, object digest) triple. The object digest is the hash of the object's contents and metadata. An object reference provides an authenticated view of the object at a particular point in the object's history. Transactions require object inputs to be specified via object references to ensure the transaction's sender and a validator processing the transaction agree on the contents and metadata of the object.
 
 ## The transaction-object DAG: Relating objects and transactions
