@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+#[cfg(not(msim))]
 use std::str::FromStr;
 
 use sui_config::SUI_KEYSTORE_FILENAME;

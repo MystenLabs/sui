@@ -34,5 +34,6 @@ pub mod validator_info;
 #[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
+pub mod test_authority_clients;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
