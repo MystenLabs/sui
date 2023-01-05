@@ -173,11 +173,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         err
                     ),
                     Ok(auth_agg) => {
-                        if let Err(err) = self.qd.update_validators(Arc::new(auth_agg)).await {
-                            error!("Reconfiguration - Error when updating authority aggregator in quorum driver: {}", err);
-                        } else {
-                            info!("Reconfiguration - Reconfiguration to epoch {new_epoch} is done");
-                        }
+                        self.qd.update_validators(Arc::new(auth_agg)).await;
+                        info!("Reconfiguration - Reconfiguration to epoch {new_epoch} is done");
                     }
                 }
             }

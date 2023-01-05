@@ -33,6 +33,7 @@ macro_rules! check_error {
     }
 }
 
+#[derive(Clone)]
 pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,

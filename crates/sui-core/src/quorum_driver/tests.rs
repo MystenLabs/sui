@@ -162,8 +162,7 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
     aggregator.committee.epoch = 10;
     quorum_driver_clone
         .update_validators(Arc::new(aggregator))
-        .await
-        .unwrap();
+        .await;
     assert_eq!(
         quorum_driver_handler.clone_quorum_driver().current_epoch(),
         10
