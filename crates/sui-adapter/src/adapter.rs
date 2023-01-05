@@ -15,8 +15,8 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{VMError, VMResult},
     file_format::{
-        AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex,
-        TypeParameterIndex,
+        AbilitySet, CompiledModule, FunctionHandleIndex, LocalIndex, SignatureToken,
+        StructHandleIndex, TypeParameterIndex,
     },
 };
 use move_bytecode_verifier::VerifierConfig;
@@ -50,7 +50,7 @@ use sui_types::{
     storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
 };
 use sui_verifier::{
-    entry_points_verifier::{is_tx_context, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
+    entry_points_verifier::{is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR},
     verifier, INIT_FN_NAME,
 };
 use tracing::instrument;
@@ -195,7 +195,7 @@ fn execute_internal<
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
-    ctx_is_mut: Option<bool>,
+    ctx_is_mut: TxContextKind,
     object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
@@ -243,7 +243,7 @@ fn execute_internal<
     // reflects what happened each time we call into the
     // Move VM (e.g. to account for the number of created
     // objects).
-    if ctx_is_mut.unwrap_or_default() {
+    if matches!(ctx_is_mut, Some(TxContextKind::Mutable)) {
         let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
         let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
         ctx.update_state(updated_ctx)?;
@@ -370,10 +370,7 @@ pub fn store_package_and_init_modules<
                 let fhandle = module.function_handle_at(fdef.function);
                 let fname = module.identifier_at(fhandle.name);
                 if fname == INIT_FN_NAME {
-                    return Some((
-                        module.self_id(),
-                        module.signature_at(fhandle.parameters).len(),
-                    ));
+                    return Some((module.self_id(), fdef.function));
                 }
             }
             None
@@ -408,25 +405,32 @@ fn init_modules<
 >(
     state_view: &mut S,
     vm: &MoveVM,
-    module_ids_to_init: Vec<(ModuleId, usize)>,
+    module_ids_to_init: Vec<(ModuleId, FunctionHandleIndex)>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
 ) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for (module_id, num_args) in module_ids_to_init {
+    for (module_id, fhandle_idx) in module_ids_to_init {
+        let module = vm.load_module(&module_id, state_view)?;
+        let view = &BinaryIndexedView::Module(&module);
+        let fhandle = module.function_handle_at(fhandle_idx);
+        let parameters = &module.signature_at(fhandle.parameters).0;
+        let ctx_is_mut = parameters
+            .last()
+            .map(|t| is_tx_context(view, t))
+            .unwrap_or(TxContextKind::None);
         let mut args = vec![];
         // an init function can have one or two arguments, with the last one always being of type
         // &mut TxContext and the additional (first) one representing a characteristic type (see
         // char_type verfier pass for additional explanation)
-        if num_args == 2 {
+        if parameters.len() == 2 {
             // characteristic type is a struct with a single bool filed which in bcs is encoded as
             // 0x01
             let bcs_char_type_value = vec![0x01];
             args.push(bcs_char_type_value);
         }
+        // init must have a txn ctx
         args.push(ctx.to_vec());
-        // init must have a mutable
-        let ctx_is_mut = Some(true);
         execute_internal::<execution_mode::Normal, _, _>(
             vm,
             state_view,
@@ -679,7 +683,7 @@ pub struct TypeCheckSuccess {
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
     /// is TxContext included in the arguments? If so, is it mutable?
-    pub ctx_is_mut: Option<bool>,
+    pub ctx_is_mut: TxContextKind,
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -743,7 +747,10 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
     let parameters = &module.signature_at(fhandle.parameters).0;
-    let ctx_is_mut = parameters.last().and_then(|t| is_tx_context(view, t));
+    let ctx_is_mut = parameters
+        .last()
+        .map(|t| is_tx_context(view, t))
+        .unwrap_or(TxContextKind::None);
 
     let num_args = if ctx_is_mut.is_some() {
         args.len() + 1
