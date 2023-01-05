@@ -4,15 +4,13 @@ expression: network_config
 ---
 validator_configs:
   - protocol-key-pair:
-      value:
-        name: mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ
-        secret: VTDx4HjVmRBqdqBWg2zN+zcFE20io3CrBchGy/iV1lo=
+      value: VTDx4HjVmRBqdqBWg2zN+zcFE20io3CrBchGy/iV1lo=
     worker-key-pair:
-      value: AB8qeQGoQuTTYjvGHOHBcX0udo4P1y34NBr1ZhW5FvA4fsz863qJR38mPjuvloaZBE4vbibFPgrwQXUa+OGTTNM=
+      value: AH7M/Ot6iUd/Jj47r5aGmQROL24mxT4K8EF1Gvjhk0zT
     account-key-pair:
-      value: AJTkqEkxROnmliCMvtACWebdtW+Xm5HDKWdWCYW+YZCbZeUwqtiSP4IuiO1U/Br2sTVBQpkckD5caF+BanumitE=
+      value: AGXlMKrYkj+CLojtVPwa9rE1QUKZHJA+XGhfgWp7porR
     network-key-pair:
-      value: AL44MMsMV12FoZiE5Sg5asNvkOHbsTLAOvoDWFoxKhmAKUrb+C2JL5zKk+XaKXpgLj08mCQegCCekpnR0SLAhTA=
+      value: AClK2/gtiS+cypPl2il6YC49PJgkHoAgnpKZ0dEiwIUw
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -66,15 +64,13 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
   - protocol-key-pair:
-      value:
-        name: jc/20VUECmVvSBmxMRG1LFdGqGunLzlfuv4uw4R9HoFA5iSnUf32tfIFC8cgXPnTAATJCwx0Cv/TJs5nPMKyOi0k1T4q/rKG38Zo/UBgCJ1tKxe3md02+Q0zLlSnozjU
-        secret: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
+      value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
-      value: ANSWQQYBVmLJ14dt+EH2BgvuTMMGCQNb4W0ooIJ2QomvpPBKumCrkESEmAiG/7UfSMyIlAyKCQaysBb0RA9oxIg=
+      value: AKTwSrpgq5BEhJgIhv+1H0jMiJQMigkGsrAW9EQPaMSI
     account-key-pair:
-      value: ACxHMS0iupHOTDgHm2HYa+f/ft9OjvxBk5+C7f/APsXUezeV+HwuWFqdYT/NOM6oMWQ2IMvai7GOMn5YNPn+FWA=
+      value: AHs3lfh8LlhanWE/zTjOqDFkNiDL2ouxjjJ+WDT5/hVg
     network-key-pair:
-      value: ADZBr90s2BQK6vOoAlQE0lfeXjWWwRBJzgFTsdYoFwHD25MXKYkbDqXWtIZXl27gbhE44t3hp1Qi3HFWHLfWWc0=
+      value: ANuTFymJGw6l1rSGV5du4G4ROOLd4adUItxxVhy31lnN
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -128,15 +124,13 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
   - protocol-key-pair:
-      value:
-        name: rd7vlNiYyI5A297/kcXxBfnPLHR/tvK8N+wD1ske2y4aV4z1RL6LCTHiXyQ9WbDDDZihbOO6HWzx1/UEJpkusK2zE0sFW+gUDS218l+wDYP45CIr8B/WrJOh/0152ljy
-        secret: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
+      value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
-      value: ALVWB00uJAL5Za9FJP5LLyje/D/cqGQPouQqBIjdwDbU1Dh27FOw52h9QAd9IijyRq42PtJGYtmCZ2RvXYPDEXo=
+      value: ANQ4duxTsOdofUAHfSIo8kauNj7SRmLZgmdkb12DwxF6
     account-key-pair:
-      value: ANoED1MVNxaUbvcp8K7QXQLx/JQAamix308cQdCKwKu2YYJojLU7C+8u2vatwd7CUkkEgsvOGsRqjhCYXQPZRPM=
+      value: AGGCaIy1OwvvLtr2rcHewlJJBILLzhrEao4QmF0D2UTz
     network-key-pair:
-      value: APcMoNRxXoAwhpg+kkOBUEbkqKeqxCPCZy7Ej7VtIc9eoUiBY+hNlv3/NS7/U/zAW3EMNi45uTXGv9BrFnYfjyI=
+      value: AKFIgWPoTZb9/zUu/1P8wFtxDDYuObk1xr/QaxZ2H48i
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -190,15 +184,13 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
   - protocol-key-pair:
-      value:
-        name: s/1e+1yHJAOkrRPxGZUTYG0jNUqEUkmuoVdWTCP/PBXGyeZSty10DoysuTy8wGhrDsDMDBx2C/tCtDZRn8WoBUt2UzqXqfI5h9CX75ax8lJrsgc/oQp3GZQXcjR+8nT0
-        secret: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
+      value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
-      value: APHAGQX7Q8ru1I3xIpXIXPE4/+sy3F3653KVP/SEEGE8EHX7HidEWjJgbesq5yxWacBkHUx/wALB90Mm8SiaEZY=
+      value: ABB1+x4nRFoyYG3rKucsVmnAZB1Mf8ACwfdDJvEomhGW
     account-key-pair:
-      value: AEgi5sKIaNYxb+8Vr0MKLUWpdrRfjLPiCeYy4hQTtSBHkXLa5CsQhIUzlhFBEFTP1eKxJ6lBGRYzNkOjrDamlU8=
+      value: AJFy2uQrEISFM5YRQRBUz9XisSepQRkWMzZDo6w2ppVP
     network-key-pair:
-      value: AKhAJDLu7QoRDl/OHYaKpoedNK6/nwK1KTnNInegI/AIjQ5isfeCs5cO8kQfRoNiE6Ex250niEtXCH7U4Y3Khd4=
+      value: AI0OYrH3grOXDvJEH0aDYhOhMdudJ4hLVwh+1OGNyoXe
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -252,15 +244,13 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
   - protocol-key-pair:
-      value:
-        name: iykapXF0PID5jtwjt7N3ZdJa6lpWaL4SqcxDafLvaXwbAcFKyHdC4ooqkJj+YZRiFV6exojtsF/QKVaqOne/52TWAd4Tl+TWnopwHw8TeEOlc0rWTcUEt2zfwoihd/4h
-        secret: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
+      value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
-      value: AAu5FA71j6mrLj53XwefJvFxwEnQ96jHXA2e1QLDzeO2UkqY1k2SrJLzldSoAqzDZp1vudV6MzAZqojam0XY2ZM=
+      value: AFJKmNZNkqyS85XUqAKsw2adb7nVejMwGaqI2ptF2NmT
     account-key-pair:
-      value: AB86G1ccGVVMFPrc3src2g3fB3NMyEcsS5pzI+Yr6cyKJ0hDQggulPK2ZTpGNWrch+vg73OQ9lWfRXu9uN+Qo88=
+      value: ACdIQ0IILpTytmU6RjVq3Ifr4O9zkPZVn0V7vbjfkKPP
     network-key-pair:
-      value: AAr1m714uM0Q8gG5dcq+WtV+G7BZZ+9mjxEhNTP6gaLgUqrQzLuBAdMMbnxVAxgiaFTXz6PaV70e0XTyeF6Fu8o=
+      value: AFKq0My7gQHTDG58VQMYImhU18+j2le9HtF08nhehbvK
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -314,15 +304,13 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
   - protocol-key-pair:
-      value:
-        name: hDG9yW+2b1MVu6dC9eQPfjcvI3xeIg2B3zYYOwYmU154R+z0ao40SlohrbXlOIuVARpZPG30Ei9/4q1+gCipawnqvYQ3aSXqUBVj1YYnli1dMMIKrtMCG8TQ59v9HhyV
-        secret: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
+      value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
-      value: APAynrz31Ch7RE8FdCwb4IO3ngw+n/EiYwDIqRXdko9tHloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
+      value: AB5aMuKZ3/KVhBxj/uDhbF8+emy3SCYZA9jvjnSjKggO
     account-key-pair:
-      value: AHH6sQEDMUJH0Spm5nDLrKbFAUcBHYL/VIORf2ervCbbpvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=
+      value: AKbzEnI6DEfw2jdDOSDsUtlaRgufTepL+oA5ut7ny0Oc
     network-key-pair:
-      value: AN/lvly8qQKGpl49Z6HXdwC+D7ULK+u08HVxA4GHDHi/tPu3gzoWoFbHbnuaUp1whWKFV7mtDVfOtTHDWWR2ZoU=
+      value: ALT7t4M6FqBWx257mlKdcIVihVe5rQ1XzrUxw1lkdmaF
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -376,15 +364,13 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
   - protocol-key-pair:
-      value:
-        name: lamelKkm5XZeTAwR14xd1R0/fXugoGU7kl6RQkUn8PhjGFbkBMDtPVlWPOddZqEWE7hYH0edddPDSgk/K3vqaSorqorcW+AZTjWLIOAmr5YiVwlqLGsHCmQ3Hmuw+hXt
-        secret: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
+      value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
-      value: AH3cM/tEnyOv0j05eb8x/efG9GjMFlCdFSg9jy2+EwIY5RWlYF22jS9i76zLl8jP2D3D8GC5ht+IP1dWUBGZxi8=
+      value: AOUVpWBdto0vYu+sy5fIz9g9w/BguYbfiD9XVlARmcYv
     account-key-pair:
-      value: AKHC3Gr1i6u+zAK1Yj1vys0hB83qha4jRCfzoHqLAo6FQ5EkvCcy5cw1JKStwSs0v/QByW0I8JXCqdnagoupCMg=
+      value: AEORJLwnMuXMNSSkrcErNL/0AcltCPCVwqnZ2oKLqQjI
     network-key-pair:
-      value: ALhZgk9n2c3J7x/45tQsL/CdHhfzu0gAfjC9exnw4pbB+EEIX4hOQB79xqDr8Cp0UGNNC4sEE849/ORTGY1iwxc=
+      value: APhBCF+ITkAe/cag6/AqdFBjTQuLBBPOPfzkUxmNYsMX
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -438,10 +424,10 @@ validator_configs:
       end-of-epoch-broadcast-channel-capacity: 128
       local-execution-timeout-sec: 10
 account_keys:
-  - 10wECHkYvXqL5/CY6WhjbfFPotZb5tjEbpmumqbRxul6/9LaD95rkXfiBEoGJR8u81q9fCiP+O7nXOsprVTPUQ==
-  - ZTWBfKEmFOyYM9oBU9dNfREBuAU5fm2OBhg/vPtI00ee91o4Td1upRqxdMC/5khQi58pBG83ZvbMUnI2shFOvw==
-  - +0LdRe35y6TgXPz6qcArpf0T8/Hh7zkjJL0yT19jbjdWZVO3wT0uCs8sHK38p5+DiwNKSfKm/iqb6R7vmIsYNg==
-  - cHifntmjxd4QLaC71WRMoOeCpvicyDJMbTKRuo2v3R9UjI8DXP6RwO6c5B70OPjZEdiV0XB+RVfcjX6/JKfZeg==
-  - mTzV/JVz4RdheOnQVFF3xuCPFF4AYAPyShHQCUizJX9pHbCeXB5wKAz9LCwtuoC4PCML0v4vko2/c16HlmPrbQ==
+  - 10wECHkYvXqL5/CY6WhjbfFPotZb5tjEbpmumqbRxuk=
+  - ZTWBfKEmFOyYM9oBU9dNfREBuAU5fm2OBhg/vPtI00c=
+  - +0LdRe35y6TgXPz6qcArpf0T8/Hh7zkjJL0yT19jbjc=
+  - cHifntmjxd4QLaC71WRMoOeCpvicyDJMbTKRuo2v3R8=
+  - mTzV/JVz4RdheOnQVFF3xuCPFF4AYAPyShHQCUizJX8=
 genesis: "[fake genesis]"
 
