@@ -36,7 +36,7 @@ async fn local_advance_epoch_tx_test() {
     // 2. The timeout in the API works as expected.
     // 3. The certificate can be executed by each validator.
     // Uses local clients.
-    let (net, states, _) = init_local_authorities(4, vec![]).await;
+    let (net, states, _, _) = init_local_authorities(4, vec![]).await;
 
     // Make sure that validators do not accept advance epoch sent externally.
     let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);

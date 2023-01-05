@@ -12,7 +12,10 @@ use sui_types::messages::{
 use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::QuorumDriverError;
 use sui_types::utils::to_sender_signed_transaction;
-use test_utils::authority::{spawn_fullnode, spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{
+    spawn_fullnode, spawn_test_authorities, test_authority_configs,
+    test_authority_configs_with_objects,
+};
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::wait_for_nodes_transition_to_epoch;
 use test_utils::network::TestClusterBuilder;
@@ -202,8 +205,8 @@ async fn test_tx_across_epoch_boundaries() {
     let (result_tx, mut result_rx) =
         tokio::sync::mpsc::channel::<CertifiedTransaction>(total_tx_cnt);
 
-    let config = test_authority_configs();
-    let authorities = spawn_test_authorities(gas_objects.clone(), &config).await;
+    let (config, gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let authorities = spawn_test_authorities([], &config).await;
     let fullnode = spawn_fullnode(&config, None).await;
 
     let txes = gas_objects

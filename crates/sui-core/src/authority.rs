@@ -615,7 +615,7 @@ impl AuthorityState {
 
     /// Executes a certificate for its effects.
     #[instrument(level = "trace", skip_all)]
-    pub(crate) async fn execute_certificate(
+    pub async fn execute_certificate(
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,

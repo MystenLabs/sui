@@ -268,9 +268,10 @@ async fn execute_transaction_with_fault_configs(
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let mut authorities = init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()])
-        .await
-        .0;
+    let (mut authorities, _, genesis, _) =
+        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
+    let gas_object1 = genesis.object(gas_object1.id()).unwrap();
+    let gas_object2 = genesis.object(gas_object2.id()).unwrap();
 
     for (index, config) in configs_before_process_transaction {
         get_local_client(&mut authorities, *index).fault_config = *config;
@@ -313,12 +314,14 @@ async fn test_quorum_map_and_reduce_timeout() {
         .cloned()
         .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
+    let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
+    let (mut authorities, _, genesis, _) = init_local_authorities(4, genesis_objects).await;
+    let pkg = genesis.object(pkg.id()).unwrap();
+    let pkg_ref = pkg.compute_object_reference();
+    let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();
-    let genesis_objects = vec![pkg, gas_object1];
-    let (mut authorities, _, _) = init_local_authorities(4, genesis_objects).await;
     let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
@@ -352,7 +355,7 @@ async fn test_quorum_map_and_reduce_timeout() {
 
 #[sim_test]
 async fn test_map_reducer() {
-    let (authorities, _, _) = init_local_authorities(4, vec![]).await;
+    let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
     // Test: reducer errors get propagated up
     let res = authorities
@@ -487,7 +490,7 @@ async fn test_execute_cert_to_true_effects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (authorities, _, pkg_ref) =
+    let (authorities, _, _, pkg_ref) =
         init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 

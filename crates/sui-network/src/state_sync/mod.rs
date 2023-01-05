@@ -376,6 +376,12 @@ where
 
             self.spawn_notify_peers_of_checkpoint(checkpoint);
         } else {
+            // Ensure that if consensus sends us a checkpoint that we expect to be the next one,
+            // that it isn't on a fork
+            if checkpoint.sequence_number() == next_sequence_number {
+                assert_eq!(checkpoint.previous_digest(), previous_digest);
+            }
+
             // Otherwise stick it with the other unprocessed checkpoints and we can try to sync the missing
             // ones
             self.peer_heights

@@ -26,9 +26,15 @@ async fn setup() -> (
 ) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(sender);
-    let (aggregator, _, _) = init_local_authorities(4, vec![gas_object.clone()]).await;
+    let (aggregator, _, genesis, _) = init_local_authorities(4, vec![gas_object.clone()]).await;
 
-    let tx = make_tx(&gas_object, sender, &keypair);
+    let gas_object = genesis
+        .objects()
+        .iter()
+        .find(|o| o.id() == gas_object.id())
+        .unwrap();
+
+    let tx = make_tx(gas_object, sender, &keypair);
     (aggregator, tx)
 }
 
@@ -194,10 +200,23 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
 
 #[tokio::test]
 async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error> {
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
     let (sender, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
 
-    let (aggregator, _, _) = init_local_authorities(4, gas_objects.clone()).await;
+    let (aggregator, _, genesis, _) = init_local_authorities(4, gas_objects.clone()).await;
+
+    let mut gas_objects = gas_objects
+        .into_iter()
+        .map(|o| {
+            genesis
+                .objects()
+                .iter()
+                .find(|go| go.id() == o.id())
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+
     let aggregator = Arc::new(aggregator);
 
     let quorum_driver_handler = Arc::new(

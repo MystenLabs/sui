@@ -583,6 +583,13 @@ impl TransactionKind {
             TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
         )
     }
+
+    pub fn is_genesis_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::Genesis(_))
+        )
+    }
 }
 
 impl Display for TransactionKind {

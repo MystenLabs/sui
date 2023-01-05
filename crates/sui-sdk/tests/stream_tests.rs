@@ -21,7 +21,7 @@ async fn test_transactions_stream() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>()
         .await;
 
-    assert_eq!(0, txs.len());
+    assert_eq!(1, txs.len());
 
     // execute some transactions
     SuiClientCommands::CreateExampleNFT {
@@ -40,7 +40,7 @@ async fn test_transactions_stream() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>()
         .await;
 
-    assert_eq!(1, txs.len());
+    assert_eq!(2, txs.len());
     Ok(())
 }
 
@@ -59,7 +59,27 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>()
         .await;
 
-    assert_eq!(0, events.len());
+    let starting_event_count = events.len();
+
+    let events = client
+        .event_api()
+        .get_events_stream(
+            EventQuery::EventType(EventType::CoinBalanceChange),
+            None,
+            true,
+        )
+        .collect::<Vec<_>>()
+        .await;
+
+    let starting_coin_balance_change_event_count = events.len();
+
+    let events = client
+        .event_api()
+        .get_events_stream(EventQuery::EventType(EventType::NewObject), None, true)
+        .collect::<Vec<_>>()
+        .await;
+
+    let starting_new_object_event_count = events.len();
 
     // execute some transactions
     SuiClientCommands::CreateExampleNFT {
@@ -77,7 +97,7 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
         .get_events_stream(EventQuery::All, None, true)
         .collect::<Vec<_>>()
         .await;
-    assert_eq!(3, events.len());
+    assert_eq!(starting_event_count + 3, events.len());
 
     let events = client
         .event_api()
@@ -88,14 +108,14 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
         )
         .collect::<Vec<_>>()
         .await;
-    assert_eq!(1, events.len());
+    assert_eq!(starting_coin_balance_change_event_count + 1, events.len());
 
     let events = client
         .event_api()
         .get_events_stream(EventQuery::EventType(EventType::NewObject), None, true)
         .collect::<Vec<_>>()
         .await;
-    assert_eq!(1, events.len());
+    assert_eq!(starting_new_object_event_count + 1, events.len());
     Ok(())
 }
 

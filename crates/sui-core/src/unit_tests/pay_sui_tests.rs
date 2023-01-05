@@ -466,8 +466,7 @@ async fn execute_pay_all_sui(
             input_coin_objects
                 .clone()
                 .into_iter()
-                .map(ToOwned::to_owned)
-                .collect(),
+                .map(ToOwned::to_owned),
         )
         .build();
     let genesis = network_config.genesis;
