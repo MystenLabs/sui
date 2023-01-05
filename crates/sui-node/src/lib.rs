@@ -50,6 +50,7 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::committee::Committee;
+use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::mpsc::channel;
