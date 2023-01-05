@@ -2,7 +2,7 @@
 title: Narwhal, Bullshark, and Tusk, Sui's Mempool and Consensus Engines
 ---
 
-This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs and used in Sui. As of Dec 2022, Sui uses Narwhal as the mempool and Bullshark as the consensu engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
+This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs and used in Sui. As of Dec 2022, Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
 
 The names highlight that the components split the responsibilities of:
 - ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
@@ -10,21 +10,20 @@ The names highlight that the components split the responsibilities of:
 
 In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
-Still, you may easily use Tusk instead of Bullshark by updating the order engine at:
-https://github.com/MystenLabs/sui/blame/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191
+Still, you may easily use Tusk instead of Bullshark by updating the order engine [here](https://github.com/MystenLabs/sui/blame/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191).
 
 Consensus is accomplished in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
 
-The Sui Consensus Engine represents the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
+The Sui Consensus Engine represents the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reach throughputs of more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
 The Sui Consensus Engine approach can offer dramatic scalability benefits in the following cases:
-- a blockchain that has experimented with larger and larger blocks and has measured runaway latencies before the execution phase,
-- a blockchain with fast execution (e.g. focused on transactions, or with an UTXO data model), but which mempool and consensus do not keep up,
+- a blockchain that has experimented with larger and larger blocks and has measured runaway latencies before the execution phase
+- a blockchain with fast execution (e.g., focused on transactions or with an UTXO data model), but which mempool and consensus do not keep up
 
 ## Features
 
 The Narwhal mempool offers:
-* a high-throughput data availability engine, with cryptographic proofs of data availability at [a primary node](https://github.com/MystenLabs/sui/blob/main/narwhal/primary)
+* a high-throughput data availability engine, with cryptographic proofs of data availability at a [primary node](https://github.com/MystenLabs/sui/blob/main/narwhal/primary)
 * a structured graph data structure for traversing this information
 * a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/sui/blob/main/narwhal/worker)
 
