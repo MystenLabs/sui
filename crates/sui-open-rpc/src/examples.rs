@@ -6,6 +6,7 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::encoding::Base64;
+use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
@@ -29,8 +30,8 @@ use sui_types::base_types::{
 };
 use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature,
-    SuiAuthorityStrongQuorumSignInfo,
+    get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, AuthoritySignature, Signature, SuiAuthorityStrongQuorumSignInfo,
 };
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -463,7 +464,12 @@ impl RpcExampleProvider {
                 tx_signature: signature.clone(),
                 auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&AuthorityQuorumSignInfo {
                     epoch: 0,
-                    signature: Default::default(),
+                    // We create a dummy signature since there is no such thing as a default valid
+                    // signature.
+                    signature: AggregateAuthoritySignature::aggregate(&vec![
+                        AuthoritySignature::default(),
+                    ])
+                    .unwrap(),
                     signers_map: Default::default(),
                 }),
             },
