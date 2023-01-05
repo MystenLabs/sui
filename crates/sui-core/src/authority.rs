@@ -1127,11 +1127,14 @@ impl AuthorityState {
                 error!("Error processing object owner index for tx [{}], cannot find modified at version for deleted object [{id}].", effects.transaction_digest);
                 continue;
             };
-            match self.get_owner_at_version(id, *old_version)? {
-                Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
-                Owner::ObjectOwner(object_id) => {
+            match self.get_owner_at_version(id, *old_version) {
+                Ok(Owner::AddressOwner(addr)) => deleted_owners.push((addr, *id)),
+                Ok(Owner::ObjectOwner(object_id)) => {
                     deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
                 }
+                Err(e) => warn!(
+                    "Cannot find object owner for [{id}] at version [{old_version}], cause: {e}"
+                ),
                 _ => {}
             }
         }
