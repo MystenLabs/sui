@@ -2234,13 +2234,6 @@ impl AuthorityState {
             .expect("Cannot insert genesis object")
     }
 
-    pub async fn insert_genesis_objects_bulk_unsafe(&self, objects: &[&Object]) {
-        self.database
-            .bulk_object_insert(objects)
-            .await
-            .expect("Cannot bulk insert genesis objects")
-    }
-
     /// Make an information response for a transaction
     pub async fn make_transaction_info(
         &self,

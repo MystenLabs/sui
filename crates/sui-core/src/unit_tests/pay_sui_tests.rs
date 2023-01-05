@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_tests::{init_state, send_and_confirm_transaction};
+use crate::authority::authority_tests::{
+    init_state, init_state_with_committee, send_and_confirm_transaction,
+};
 use crate::authority::AuthorityState;
 use futures::future::join_all;
 use std::collections::HashMap;
@@ -458,15 +460,32 @@ async fn execute_pay_all_sui(
     sender_key: AccountKeyPair,
     gas_budget: u64,
 ) -> PaySuiTransactionExecutionResult {
-    let authority_state = init_state().await;
-    authority_state
-        .insert_genesis_objects_bulk_unsafe(&input_coin_objects)
-        .await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        .with_objects(
+            input_coin_objects
+                .clone()
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect(),
+        )
+        .build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0].protocol_key_pair();
 
-    let input_coins: Vec<ObjectRef> = input_coin_objects
-        .iter()
-        .map(|obj| obj.compute_object_reference())
-        .collect();
+    let authority_state = init_state_with_committee(&genesis, keypair).await;
+
+    let mut input_coins = Vec::new();
+    for coin in input_coin_objects {
+        let id = coin.id();
+        let object_ref = genesis
+            .objects()
+            .iter()
+            .find(|o| o.id() == id)
+            .unwrap()
+            .compute_object_reference();
+        input_coins.push(object_ref);
+    }
     let gas_object_ref = input_coins[0];
 
     let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
