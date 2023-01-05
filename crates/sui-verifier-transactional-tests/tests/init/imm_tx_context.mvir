@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TxContext must be mutable for init
+// TxContext can be immutable, even for init
 
 //# publish
 module 0x0.m {

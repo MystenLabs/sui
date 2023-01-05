@@ -155,10 +155,10 @@ pub fn execute<
         object_data,
         by_value_objects,
         mutable_ref_objects,
-        ctx_is_mut,
+        tx_ctx_kind,
     } = resolve_and_type_check::<Mode>(&objects, &module, function, &type_args, args, is_genesis)?;
 
-    if ctx_is_mut.is_some() {
+    if tx_ctx_kind != TxContextKind::None {
         args.push(ctx.to_vec());
     }
     execute_internal::<Mode, _, _>(
@@ -168,7 +168,7 @@ pub fn execute<
         function,
         type_args,
         args,
-        ctx_is_mut,
+        tx_ctx_kind,
         object_data,
         by_value_objects,
         mutable_ref_objects,
@@ -195,7 +195,7 @@ fn execute_internal<
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
-    ctx_is_mut: TxContextKind,
+    tx_ctx_kind: TxContextKind,
     object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
@@ -243,7 +243,7 @@ fn execute_internal<
     // reflects what happened each time we call into the
     // Move VM (e.g. to account for the number of created
     // objects).
-    if matches!(ctx_is_mut, Some(TxContextKind::Mutable)) {
+    if tx_ctx_kind == TxContextKind::Mutable {
         let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
         let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
         ctx.update_state(updated_ctx)?;
@@ -415,7 +415,7 @@ fn init_modules<
         let view = &BinaryIndexedView::Module(&module);
         let fhandle = module.function_handle_at(fhandle_idx);
         let parameters = &module.signature_at(fhandle.parameters).0;
-        let ctx_is_mut = parameters
+        let tx_ctx_kind = parameters
             .last()
             .map(|t| is_tx_context(view, t))
             .unwrap_or(TxContextKind::None);
@@ -438,7 +438,7 @@ fn init_modules<
             &init_ident,
             Vec::new(),
             args,
-            ctx_is_mut,
+            tx_ctx_kind,
             BTreeMap::new(),
             BTreeSet::new(),
             BTreeMap::new(),
@@ -683,7 +683,7 @@ pub struct TypeCheckSuccess {
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
     /// is TxContext included in the arguments? If so, is it mutable?
-    pub ctx_is_mut: TxContextKind,
+    pub tx_ctx_kind: TxContextKind,
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -747,12 +747,12 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
     let parameters = &module.signature_at(fhandle.parameters).0;
-    let ctx_is_mut = parameters
+    let tx_ctx_kind = parameters
         .last()
         .map(|t| is_tx_context(view, t))
         .unwrap_or(TxContextKind::None);
 
-    let num_args = if ctx_is_mut.is_some() {
+    let num_args = if tx_ctx_kind != TxContextKind::None {
         args.len() + 1
     } else {
         args.len()
@@ -898,7 +898,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
         by_value_objects,
         mutable_ref_objects,
         args: bcs_args,
-        ctx_is_mut,
+        tx_ctx_kind,
     })
 }
 
