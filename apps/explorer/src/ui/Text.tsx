@@ -6,12 +6,7 @@ import { type ReactNode } from 'react';
 
 const textStyles = cva([], {
     variants: {
-        weight: {
-            medium: 'font-medium',
-            semibold: 'font-semibold',
-            bold: 'font-bold',
-        },
-        variant: {
+        size: {
             body: 'text-body',
             bodySmall: 'text-bodySmall',
             subtitle: 'text-subtitle',
@@ -19,6 +14,11 @@ const textStyles = cva([], {
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
             captionSmall: 'uppercase text-captionSmall ',
+        },
+        weight: {
+            medium: 'font-medium',
+            semibold: 'font-semibold',
+            bold: 'font-bold',
         },
         color: {
             'gray-100': 'text-gray-100',
@@ -42,16 +42,29 @@ const textStyles = cva([], {
             false: 'font-sans',
         },
     },
-    defaultVariants: {
-        weight: 'medium',
-        variant: 'body',
-    },
 });
 
-export interface TextProps extends VariantProps<typeof textStyles> {
+type TextStylesProps = VariantProps<typeof textStyles>;
+type Variant = `${TextStylesProps['size']}/${TextStylesProps['weight']}`;
+
+export interface TextProps extends Omit<TextStylesProps, 'size' | 'weight'> {
+    variant: Variant;
     children: ReactNode;
 }
 
-export function Text({ children, ...styleProps }: TextProps) {
-    return <div className={textStyles(styleProps)}>{children}</div>;
+export function Text({
+    children,
+    variant = 'body/medium',
+    ...styleProps
+}: TextProps) {
+    const [size, weight] = variant.split('/') as [
+        TextStylesProps['size'],
+        TextStylesProps['weight']
+    ];
+
+    return (
+        <div className={textStyles({ size, weight, ...styleProps })}>
+            {children}
+        </div>
+    );
 }

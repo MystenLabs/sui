@@ -31,7 +31,7 @@ export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
                 </div>
             </div>
             {dollarAmount && (
-                <Text variant="bodySmall" weight="semibold" color="steel-dark">
+                <Text variant="bodySmall/semibold" color="steel-dark">
                     {new Intl.NumberFormat(undefined, {
                         style: 'currency',
                         currency: 'USD',

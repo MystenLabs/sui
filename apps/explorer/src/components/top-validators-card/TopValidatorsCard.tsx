@@ -121,10 +121,10 @@ function StakeColumn({ stake }: { stake: bigint }) {
     const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
     return (
         <div className="flex items-end gap-0.5">
-            <Text variant="bodySmall" color="steel-darker">
+            <Text variant="bodySmall/medium" color="steel-darker">
                 {amount}
             </Text>
-            <Text variant="captionSmall" color="steel-dark">
+            <Text variant="captionSmall/medium" color="steel-dark">
                 {symbol}
             </Text>
         </div>
@@ -173,17 +173,13 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
         data: validatorsItems.map((validator) => {
             return {
                 name: (
-                    <Text
-                        variant="bodySmall"
-                        color="steel-darker"
-                        weight="medium"
-                    >
+                    <Text variant="bodySmall/medium" color="steel-darker">
                         {validator.name}
                     </Text>
                 ),
                 stake: <StakeColumn stake={validator.stake} />,
                 delegation: (
-                    <Text variant="bodySmall" color="steel-darker">
+                    <Text variant="bodySmall/medium" color="steel-darker">
                         {validator.stake.toString()}
                     </Text>
                 ),
