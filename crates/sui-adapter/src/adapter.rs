@@ -628,10 +628,9 @@ fn process_successful_execution<S: Storage + ParentSync>(
             None => match state_view.get_latest_parent_entry_ref(id) {
                 Ok(Some((_, previous_version, _))) => previous_version,
                 Ok(None) => {
-                    // TODO we don't really need to mark this as deleted, as the object was not
-                    // created this txn but has never existed in storage. We just need a better
-                    // way of detecting this rather than relying on the parent sync
-                    SequenceNumber::new()
+                    // This object was not created this transaction but has never existed in
+                    // storage, skip it.
+                    continue;
                 }
                 _ => {
                     return Err(ExecutionError::new_with_source(
