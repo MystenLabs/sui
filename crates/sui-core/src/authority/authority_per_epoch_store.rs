@@ -68,6 +68,10 @@ pub struct AuthorityPerEpochStore {
     committee: Committee,
     tables: AuthorityEpochTables,
 
+    // needed for re-opening epoch db.
+    parent_path: PathBuf,
+    db_options: Option<Options>,
+
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
@@ -216,9 +220,9 @@ impl AuthorityEpochTables {
 }
 
 impl AuthorityPerEpochStore {
-    pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Self {
+    pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Arc<Self> {
         let epoch_id = committee.epoch;
-        let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options);
+        let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
         let reconfig_state = tables
@@ -238,9 +242,11 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
-        Self {
+        Arc::new(Self {
             committee,
             tables,
+            parent_path: parent_path.to_path_buf(),
+            db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
@@ -248,7 +254,7 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             wal,
-        }
+        })
     }
 
     pub fn wal(
@@ -264,6 +270,14 @@ impl AuthorityPerEpochStore {
 
     pub fn epoch(&self) -> EpochId {
         self.committee.epoch
+    }
+
+    pub fn parent_path(&self) -> &Path {
+        &self.parent_path
+    }
+
+    pub fn db_options(&self) -> Option<Options> {
+        self.db_options.clone()
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
@@ -316,7 +330,7 @@ impl AuthorityPerEpochStore {
         self.tables.transactions.remove(transaction).unwrap();
     }
 
-    pub fn get_transaction(
+    pub fn get_signed_transaction(
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {

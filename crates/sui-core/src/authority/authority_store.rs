@@ -4,14 +4,12 @@
 use super::authority_store_pruner::AuthorityStorePruner;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use arc_swap::ArcSwap;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::iter;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
@@ -20,7 +18,6 @@ use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
@@ -39,11 +36,6 @@ pub struct AuthorityStore {
     mutex_table: MutexTable<ObjectDigest>,
 
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
-    epoch_store: ArcSwap<AuthorityPerEpochStore>,
-
-    // needed for re-opening epoch db.
-    path: PathBuf,
-    db_options: Option<Options>,
 
     // Implementation detail to support notify_read_effects().
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
@@ -73,25 +65,10 @@ impl AuthorityStore {
             perpetual_tables.set_recovery_epoch(0)?;
         }
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
-        let committee = match committee_store.get_committee(&cur_epoch)? {
-            Some(committee) => committee,
-            None => {
-                // If we cannot find the corresponding committee from the committee store, we must
-                // be at genesis. This is because we always first insert to the committee store
-                // before updating the current epoch in the perpetual tables.
-                assert_eq!(cur_epoch, 0);
-                genesis.committee()?
-            }
-        };
-        Self::open_inner(
-            path,
-            db_options,
-            genesis,
-            perpetual_tables,
-            committee,
-            pruning_config,
-        )
-        .await
+        let committee = committee_store
+            .get_committee(&cur_epoch)?
+            .expect("Committee of the current epoch must exist");
+        Self::open_inner(genesis, perpetual_tables, committee, pruning_config).await
     }
 
     pub async fn open_with_committee_for_testing(
@@ -105,40 +82,22 @@ impl AuthorityStore {
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
-        Self::open_inner(
-            path,
-            db_options,
-            genesis,
-            perpetual_tables,
-            committee.clone(),
-            pruning_config,
-        )
-        .await
+        Self::open_inner(genesis, perpetual_tables, committee.clone(), pruning_config).await
     }
 
     async fn open_inner(
-        path: &Path,
-        db_options: Option<Options>,
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: Committee,
         pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
-        let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
-            committee,
-            path,
-            db_options.clone(),
-        ));
 
         let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
 
         let store = Self {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
-            epoch_store: epoch_tables.into(),
-            path: path.into(),
-            db_options,
             _store_pruner,
             effects_notify_read: NotifyRead::new(),
             execution_lock: RwLock::new(epoch),
@@ -154,67 +113,6 @@ impl AuthorityStore {
                 .expect("Cannot bulk insert genesis objects");
         }
 
-        Ok(store)
-    }
-
-    /// This function is called at the very end of the epoch.
-    /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
-    pub(crate) async fn revert_uncommitted_epoch_transactions(&self) -> SuiResult {
-        let epoch_store = self.epoch_store.load();
-        {
-            let state = epoch_store.get_reconfig_state_write_lock_guard();
-            if state.should_accept_user_certs() {
-                // Need to change this so that consensus adapter do not accept certificates from user.
-                // This can happen if our local validator did not initiate epoch change locally,
-                // but 2f+1 nodes already concluded the epoch.
-                //
-                // This lock is essentially a barrier for
-                // `epoch_store.pending_consensus_certificates` table we are reading on the line after this block
-                epoch_store.close_user_certs(state);
-            }
-            // lock is dropped here
-        }
-        let pending_certificates = epoch_store.pending_consensus_certificates();
-        debug!(
-            "Reverting {} locally executed transactions that was not included in the epoch",
-            pending_certificates.len()
-        );
-        for digest in pending_certificates {
-            debug!("Reverting {:?} at the end of epoch", digest);
-            self.revert_state_update(&digest).await?;
-        }
-        debug!("All uncommitted local transactions reverted");
-        Ok(())
-    }
-
-    pub(crate) async fn reopen_epoch_db(&self, new_committee: Committee) {
-        info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
-        let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
-            new_committee,
-            &self.path,
-            self.db_options.clone(),
-        ));
-        let previous_store = self.epoch_store.swap(epoch_tables);
-        previous_store.epoch_terminated().await;
-    }
-
-    // TODO: Deprecate this once we replace all calls with load_epoch_store.
-    pub fn epoch_store(&self) -> Guard<Arc<AuthorityPerEpochStore>> {
-        self.epoch_store.load()
-    }
-
-    pub fn load_epoch_store(
-        &self,
-        intended_epoch: EpochId,
-    ) -> SuiResult<Guard<Arc<AuthorityPerEpochStore>>> {
-        let store = self.epoch_store.load();
-        fp_ensure!(
-            store.epoch() == intended_epoch,
-            SuiError::StoreAccessEpochMismatch {
-                store_epoch: store.epoch(),
-                intended_epoch,
-            }
-        );
         Ok(store)
     }
 
@@ -361,6 +259,7 @@ impl AuthorityStore {
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
+        epoch_store: &AuthorityPerEpochStore,
     ) -> Result<Vec<ObjectKey>, SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
@@ -370,10 +269,7 @@ impl AuthorityStore {
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            self.epoch_store()
-                                .get_shared_locks(digest)?
-                                .into_iter()
-                                .collect(),
+                            epoch_store.get_shared_locks(digest)?.into_iter().collect(),
                         )
                     })?;
                     match shared_locks.get(id) {
@@ -435,6 +331,7 @@ impl AuthorityStore {
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
+        epoch_store: &AuthorityPerEpochStore,
     ) -> Result<Vec<Object>, SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
 
@@ -445,10 +342,7 @@ impl AuthorityStore {
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            self.epoch_store()
-                                .get_shared_locks(digest)?
-                                .into_iter()
-                                .collect(),
+                            epoch_store.get_shared_locks(digest)?.into_iter().collect(),
                         )
                     })?;
                     match shared_locks.get(id) {
@@ -487,55 +381,6 @@ impl AuthorityStore {
         } else {
             Ok(result)
         }
-    }
-
-    /// Get the TransactionEnvelope that currently locks the given object, if any.
-    /// Since object locks are only valid for one epoch, we also need the epoch_id in the query.
-    /// Returns SuiError::ObjectNotFound if no lock records for the given object can be found.
-    /// Returns SuiError::ObjectVersionUnavailableForConsumption if the object record is at a different version.
-    /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
-    /// Returns None if the a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
-    ///     or cannot find the transaction in transaction table, because of data race etc.
-    pub async fn get_object_locking_transaction(
-        &self,
-        object_ref: &ObjectRef,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        let lock_info = self.get_lock(*object_ref, epoch_id)?;
-        let lock_info = match lock_info {
-            ObjectLockStatus::LockedAtDifferentVersion { locked_ref } => {
-                return Err(SuiError::ObjectVersionUnavailableForConsumption {
-                    provided_obj_ref: *object_ref,
-                    current_version: locked_ref.1,
-                })
-            }
-            ObjectLockStatus::Initialized => {
-                return Ok(None);
-            }
-            ObjectLockStatus::LockedToTx { locked_by_tx } => locked_by_tx,
-        };
-        // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
-        // However we retry a couple times because the TX is written after the lock is acquired, so it might
-        // just be a race.
-        let tx_digest = &lock_info.tx_digest;
-        let mut retry_strategy = ExponentialBackoff::from_millis(2)
-            .factor(10)
-            .map(jitter)
-            .take(3);
-
-        let mut tx_option = self.get_transaction(tx_digest)?;
-        while tx_option.is_none() {
-            if let Some(duration) = retry_strategy.next() {
-                // Wait to retry
-                tokio::time::sleep(duration).await;
-                trace!(?tx_digest, "Retrying getting pending transaction");
-            } else {
-                // No more retries, just quit
-                break;
-            }
-            tx_option = self.get_transaction(tx_digest)?;
-        }
-        Ok(tx_option)
     }
 
     /// Read a certificate and return an option with None if it does not exist.
@@ -1006,7 +851,7 @@ impl AuthorityStore {
 
     /// Gets ObjectLockInfo that represents state of lock on an object.
     /// Returns SuiError::ObjectNotFound if cannot find lock record for this object
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
+    pub(crate) fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
         Ok(
             if let Some(lock_info) = self
                 .perpetual_tables
@@ -1144,9 +989,10 @@ impl AuthorityStore {
         &self,
         transactions: &[TransactionDigest],
         objects: &[ObjectRef],
+        epoch_store: &AuthorityPerEpochStore,
     ) {
         for tx in transactions {
-            self.epoch_store().delete_signed_transaction_for_test(tx);
+            epoch_store.delete_signed_transaction_for_test(tx);
         }
 
         self.perpetual_tables
@@ -1314,13 +1160,6 @@ impl AuthorityStore {
         }
     }
 
-    pub fn get_transaction(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedSignedTransaction>> {
-        self.epoch_store().get_transaction(transaction_digest)
-    }
-
     pub fn get_certified_transaction(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1344,21 +1183,6 @@ impl AuthorityStore {
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.perpetual_tables.get_sui_system_state_object()
-    }
-
-    /// Returns true if we have a transaction structure for this transaction digest
-    pub fn transaction_exists(
-        &self,
-        cur_epoch: EpochId,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        let tx: Option<VerifiedSignedTransaction> =
-            self.epoch_store().get_transaction(transaction_digest)?;
-        Ok(if let Some(signed_tx) = tx {
-            signed_tx.epoch() == cur_epoch
-        } else {
-            false
-        })
     }
 }
 

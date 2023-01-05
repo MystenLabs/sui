@@ -908,13 +908,19 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
@@ -1014,13 +1020,19 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
@@ -1090,12 +1102,18 @@ async fn test_handle_transfer_transaction_ok() {
 
     // Check the initial state of the locks
     assert!(authority_state
-        .get_transaction_lock(&(object_id, before_object_version, object.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, before_object_version, object.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, after_object_version, object.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, after_object_version, object.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .is_err());
 
@@ -1105,7 +1123,10 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap();
 
     let pending_confirmation = authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap()
         .unwrap();
@@ -1118,7 +1139,7 @@ async fn test_handle_transfer_transaction_ok() {
     // Check the final state of the locks
     let Some(envelope) = authority_state.get_transaction_lock(
         &(object_id, before_object_version, object.digest()),
-        0,
+        &authority_state.epoch_store_for_testing(),
     ).await.unwrap() else {
         panic!("No verified envelope for transaction");
     };
@@ -1240,7 +1261,7 @@ pub async fn send_and_confirm_transaction_with_shared(
     let vote = response.signed_transaction.unwrap().into_inner();
 
     // Collect signatures from a quorum of authorities
-    let committee = authority.clone_committee();
+    let committee = authority.clone_committee_for_testing();
     let certificate = CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -1575,6 +1596,7 @@ async fn test_conflicting_transactions() {
                 gas_object.compute_object_reference(),
                 object.compute_object_reference(),
             ],
+            &authority_state.epoch_store_for_testing(),
         );
     }
 }
@@ -1790,11 +1812,17 @@ async fn test_handle_confirmation_transaction_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), old_account.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, 1.into(), old_account.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .is_err());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 2.into(), new_account.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, 2.into(), new_account.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .expect("Exists")
         .is_none());
@@ -2401,10 +2429,15 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_path).unwrap();
         let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
 
+        let epoch_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&epoch_store_path).unwrap();
+        let epoch_store = AuthorityPerEpochStore::new(committee, &epoch_store_path, None);
+
         AuthorityState::new(
             name,
             secrete,
             store,
+            epoch_store,
             committee_store,
             None,
             None,
@@ -3609,7 +3642,7 @@ async fn make_test_transaction(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 
-    let committee = authorities[0].clone_committee();
+    let committee = authorities[0].clone_committee_for_testing();
     let mut sigs = vec![];
 
     for authority in authorities {
@@ -3674,8 +3707,7 @@ async fn test_shared_object_transaction() {
 
     // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
-        .db()
-        .epoch_store()
+        .epoch_store_for_testing()
         .get_shared_locks(transaction_digest)
         .expect("Reading shared locks should not fail")
         .into_iter()
