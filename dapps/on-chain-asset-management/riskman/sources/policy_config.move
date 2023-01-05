@@ -12,6 +12,7 @@ module riskman::policy_config {
     use std::vector as vec;
 
     const EAdministratorCannotBeSpender : u64 = 0;
+    const ENotEnoughApprovers : u64 = 1;
 
     struct AdministratorCap has key, store {
         id: UID,
@@ -35,7 +36,7 @@ module riskman::policy_config {
     struct Policy has store {
         amount_limit: u64,
         time_limit: u64,
-        //approvers_num: u64,
+        approvers_num: u64,
     }
 
     struct RolesRegistry has key, store {
@@ -78,12 +79,14 @@ module riskman::policy_config {
         recipient: address,
         amount_limit: u64,
         time_limit: u64,
+        approvers_num: u64,
         ctx: &mut TxContext,
     ) {
         assert!(tx_context::sender(ctx) != recipient, 0);
+        assert!(approvers_num <= vec::length(&reg.approvers), 1);
         transfer::transfer(SpenderCap{
                 id: object::new(ctx),
-                policy: Policy {amount_limit, time_limit},
+                policy: Policy {amount_limit, time_limit, approvers_num},
                 spent: 0,
             }, recipient
         );
@@ -167,6 +170,12 @@ module riskman::policy_config {
         spender_cap: &SpenderCap
     ) : u64 {
         spender_cap.policy.time_limit
+    }
+
+    public fun get_approvers_num(
+        spender_cap: &SpenderCap
+    ) : u64 {
+        spender_cap.policy.approvers_num
     }
 
     public fun update_spent(

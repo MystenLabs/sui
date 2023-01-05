@@ -6,10 +6,12 @@ module riskman::transaction {
     use sui::coin::{Self};
     use std::string::{Self, String};
     use sui::transfer;
+    use std::vector as vec;
 
     const EAmountLimitExceeded : u64 = 0;
     const ETimeLimitExceeded : u64 = 1;
     const EAmountLimitExceededAfterApproval : u64 = 2;
+    const EAlreadyApprovedByThisApprover : u64 = 3;
 
     struct TransactionRequest has key, store {
         id: UID,
@@ -18,6 +20,8 @@ module riskman::transaction {
         spender: address,
         recipient: address,
         description: String,
+        approvers_num: u64,
+        approved_by: vector<address>,
     }
 
     struct TransactionApproval has key, store {
@@ -26,7 +30,7 @@ module riskman::transaction {
         amount: u64,
         spender: address,
         recipient: address,
-        approver: address,
+        approvers: vector<address>,
     }
 
     entry fun initiate_transaction(
@@ -43,24 +47,33 @@ module riskman::transaction {
             time_limit: policy_config::get_time_limit(spender_cap) + tx_context::epoch(ctx),
             spender: tx_context::sender(ctx),
             recipient,
-            description: string::utf8(description)
+            description: string::utf8(description),
+            approvers_num: policy_config::get_approvers_num(spender_cap),
+            approved_by: vec::empty()
         })
     }
 
     entry fun approve_request(
         _: &ApproverCap,
-        tx_request: &TransactionRequest,
+        tx_request: &mut TransactionRequest,
         ctx: &mut TxContext,
     ) {
         assert!(tx_context::epoch(ctx) <= tx_request.time_limit, 1);
-        transfer::transfer(TransactionApproval{
-            id: object::new(ctx),
-            transaction_id: object::uid_to_inner(&tx_request.id),
-            amount: tx_request.amount,
-            spender: tx_request.spender,
-            recipient: tx_request.recipient,
-            approver: tx_context::sender(ctx)
-        }, tx_request.spender);
+        assert!(vec::contains(&tx_request.approved_by, &tx_context::sender(ctx)) == false, 3);
+        if (vec::length(&tx_request.approved_by) < tx_request.approvers_num - 1) {
+            vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx))
+        } else {
+            vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx));
+            let newvector : vector<address> = tx_request.approved_by;
+            transfer::transfer(TransactionApproval{
+                id: object::new(ctx),
+                transaction_id: object::uid_to_inner(&tx_request.id),
+                amount: tx_request.amount,
+                spender: tx_request.spender,
+                recipient: tx_request.recipient,
+                approvers: newvector,
+            }, tx_request.spender);
+        }
     }
 
     entry fun reject_request(
@@ -92,7 +105,7 @@ module riskman::transaction {
             amount: _,
             spender: _,
             recipient: _,
-            approver: _ } = tx_approval;
+            approvers: _ } = tx_approval;
         object::delete(id)
     }
 
