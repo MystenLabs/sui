@@ -53,7 +53,7 @@ module.exports = {
     },
     overrides: [
         {
-            files: ['*.test.*'. '*.spec.*'],
+            files: ['*.test.*', '*.spec.*'],
             rules: {
                 // Allow any casting in tests:
                 '@typescript-eslint/no-explicit-any': 'off',
