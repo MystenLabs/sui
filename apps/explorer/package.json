@@ -7,9 +7,8 @@
         "dev:static": "VITE_NETWORK=STATIC vite --port 8080",
         "test": "pnpm test:unit",
         "test:unit": "vitest run",
-        "test:wait-on": "wait-on --log tcp:3000 && wait-on --log --timeout 120000 tcp:127.0.0.1:9123",
-        "test:cypress": "start-server-and-test dev:static 8080 'cypress run --spec \"cypress/e2e/static/*\"'",
         "typecheck": "tsc --noEmit",
+        "playwright": "playwright",
         "build": "pnpm typecheck && vite build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
         "eslint:fix": "pnpm eslint:check --fix",
@@ -63,6 +62,7 @@
     },
     "devDependencies": {
         "@babel/core": "^7.19.3",
+        "@playwright/test": "^1.29.1",
         "@storybook/addon-a11y": "7.0.0-beta.3",
         "@storybook/addon-essentials": "7.0.0-beta.3",
         "@storybook/addons": "7.0.0-beta.3",
@@ -81,12 +81,12 @@
         "@vitest/ui": "^0.25.7",
         "autoprefixer": "^10.4.13",
         "axios": "^0.27.2",
-        "cypress": "^10.10.0",
         "eslint": "^8.22.0",
         "eslint-config-prettier": "^8.3.0",
         "eslint-config-react-app": "^7.0.1",
         "eslint-plugin-header": "^3.1.1",
         "onchange": "^7.1.0",
+        "playwright": "^1.29.1",
         "postcss": "^8.4.19",
         "prettier": "2.8.1",
         "prettier-plugin-tailwindcss": "^0.2.1",
@@ -97,11 +97,11 @@
         "stylelint-config-standard": "^25.0.0",
         "stylelint-config-standard-scss": "^3.0.0",
         "tailwindcss": "^3.2.4",
+        "tsconfig-paths": "^4.1.1",
         "typescript": "^4.8.3",
         "vite": "^4.0.0",
         "vite-plugin-svgr": "^2.4.0",
-        "vitest": "^0.25.7",
-        "wait-on": "^6.0.1"
+        "vitest": "^0.25.7"
     },
     "browserslist": {
         "production": [

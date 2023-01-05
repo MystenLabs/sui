@@ -49,16 +49,10 @@ Start validators locally:
 cargo run --bin sui-test-validator
 ```
 
-In a a separate terminal, start explorer:
+In a a separate terminal, you can now run the end-to-end tests:
 
 ```bash
-pnpm explorer dev
-```
-
-In a separate terminal, run cypress locally, this should open a chrome simulating all tests:
-
-```bash
-pnpm explorer exec cypress open
+pnpm explorer playwright test
 ```
 
 # Other pnpm commands
