@@ -109,10 +109,6 @@ async fn advance_epoch_tx_test_impl(
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
     let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
-
-    // TODO: If this line is removed, the validators never advance to the next epoch
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
     trigger_reconfiguration(&authorities).await;
 }
 
