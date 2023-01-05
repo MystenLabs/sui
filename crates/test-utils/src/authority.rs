@@ -4,6 +4,7 @@
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
+use std::net::IpAddr;
 use std::time::Duration;
 use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::AuthorityAPI;
@@ -56,7 +57,7 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 /// most of the time.
 #[cfg(msim)]
 pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) -> SuiNodeHandle {
-    use std::net::{IpAddr, SocketAddr};
+    use std::net::SocketAddr;
 
     let config = config.clone();
     let socket_addr = mysten_network::multiaddr::to_socket_addr(&config.network_address).unwrap();
@@ -67,6 +68,7 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 
     let handle = sui_simulator::runtime::Handle::current();
     let builder = handle.create_node();
+    tracing::info!("starting new node with ip {:?}", ip);
     let node = builder
         .ip(ip)
         .name(format!("{:?}", config.protocol_public_key().concise()))
@@ -111,7 +113,20 @@ pub async fn spawn_fullnodes(config: &NetworkConfig, fullnode_num: u8) -> Vec<Su
     let mut fullnode_handles = Vec::new();
     for _ in 0..fullnode_num {
         let registry_service = RegistryService::new(Registry::new());
-        let fullnode_config = config.fullnode_config_builder().build().unwrap();
+
+        let mut builder = config.fullnode_config_builder();
+
+        if cfg!(msim) {
+            let ip_addr: IpAddr = format!("11.10.0.{}", fullnode_num + 1).parse().unwrap();
+            builder = builder
+                .with_listen_ip(ip_addr)
+                .with_port(8080)
+                .with_p2p_port(8084)
+                .with_rpc_port(9000)
+                .with_admin_port(8888);
+        }
+
+        let fullnode_config = builder.build().unwrap();
         let node = start_node(&fullnode_config, registry_service).await;
         fullnode_handles.push(node);
     }
