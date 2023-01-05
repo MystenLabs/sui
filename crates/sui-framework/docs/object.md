@@ -193,6 +193,19 @@ Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from raw bytes.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+Specify the calling of native function <code><a href="address.md#0x2_address_from_bytes">address::from_bytes</a></code>
+
+
+<pre><code><b>aborts_if</b> len(bytes) != 20;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_object_id_from_address"></a>
 
 ## Function `id_from_address`
