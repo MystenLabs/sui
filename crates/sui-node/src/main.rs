@@ -32,6 +32,8 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    //console_subscriber::init();
+
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
 

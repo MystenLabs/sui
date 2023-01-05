@@ -89,6 +89,7 @@ async fn reconfigure(
     Extension(tx_state_handler): Extension<Sender<ReconfigureNotification>>,
     Json(reconfigure_notification): Json<ReconfigureNotification>,
 ) -> StatusCode {
+    info!("Sending reconfigure notification to state handler");
     let _ = tx_state_handler.send(reconfigure_notification).await;
     StatusCode::OK
 }

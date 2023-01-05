@@ -238,7 +238,7 @@ impl TelemetryConfig {
         Self {
             service_name: service_name.to_owned(),
             enable_jaeger: false,
-            tokio_console: false,
+            tokio_console: true,
             json_log_output: false,
             chrome_trace_output: false,
             log_file: None,

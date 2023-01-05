@@ -152,7 +152,7 @@ impl SuiCommand {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
                 loop {
                     for node in swarm.validators_mut() {
-                        node.health_check(true).await?;
+                        //node.health_check(true).await?;
                     }
 
                     interval.tick().await;

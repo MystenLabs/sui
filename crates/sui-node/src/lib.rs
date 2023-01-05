@@ -113,6 +113,8 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
     ) -> Result<Arc<SuiNode>> {
+        console_subscriber::init();
+
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;

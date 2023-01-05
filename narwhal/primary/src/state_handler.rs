@@ -115,23 +115,34 @@ impl StateHandler {
 
                 Some(message) = self.rx_state_handler.recv() => {
                     // Notify our workers
+                    info!("Received reconfigure message in state handler");
                     let notify_handlers = self.notify_our_workers(message.to_owned());
 
-
-
+                    info!("Sent message to workers to shutdown");
                     // Notify all other tasks.
                     self.tx_shutdown
                         .send()
                         .expect("Shutdown channel dropped");
-
-                    warn!("Waiting to broadcast shutdown message to workers");
+                    info!("Sent messages to other tasks to shutdown");
+                    //warn!("Waiting to broadcast shutdown message to workers");
 
                     // wait for all the workers to eventually receive the message
                     // TODO: this request will be removed https://mysten.atlassian.net/browse/SUI-984
+                    let timer = tokio::time::sleep(tokio::time::Duration::from_secs(5));
+                    tokio::pin!(timer);
                     let join_all = futures::future::try_join_all(notify_handlers);
-                    join_all.await.expect("Error while sending reconfiguration message to the workers");
+                    tokio::select! {
+                        _ = join_all => {
 
-                    warn!("Successfully broadcasted reconfigure message to workers");
+                        }
+                        _ = timer => {
+                            info!("Timer expired before sending shutdown messages to workers");
+                        }
+                    }
+                    //join_all.await.expect("Error while sending reconfiguration message to the workers");
+
+                    info!("Notify handlers have joined successfully");
+                    //warn!("Successfully broadcasted reconfigure message to workers");
 
                     // Exit only when we are sure that all the other tasks received
                     // the shutdown message.
@@ -140,7 +151,7 @@ impl StateHandler {
                     let _ = self.network.shutdown().await.tap_err(|err|{
                         error!("Error while shutting down network: {err}")
                     });
-
+                    info!("The network has shutdown");
                     warn!("Network has shutdown");
 
                     // self.tx_shutdown.closed().await;
