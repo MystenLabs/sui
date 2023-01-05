@@ -3,8 +3,8 @@
 
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::authority_client::LocalAuthorityClient;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use signature::Signer;

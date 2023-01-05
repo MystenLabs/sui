@@ -7,8 +7,8 @@ use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     transfer_object_move_transaction,
 };
-use crate::authority_client::LocalAuthorityClient;
 use crate::safe_client::SafeClient;
+use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::init_local_authorities;
 
 use std::collections::BTreeSet;

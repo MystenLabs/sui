@@ -119,10 +119,14 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Unexpected validator response from handle_transaction: {err}")]
-    UnexpectedResultFromValidatorHandleTransaction { err: String },
     #[error("Transaction certificate processing failed: {err}")]
     ErrorWhileProcessingCertificate { err: String },
+    #[error(
+        "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
+    )]
+    QuorumFailedToFormEffectsCertWhenProcessingTransaction {
+        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+    },
     #[error(
         "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
         conflicting_tx_digests,
