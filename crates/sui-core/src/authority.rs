@@ -1133,7 +1133,8 @@ impl AuthorityState {
                     deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
                 }
                 Err(e) => warn!(
-                    "Cannot find object owner for [{id}] at version [{old_version}], cause: {e}"
+                    "Cannot find object owner for [{id}] at version [{old_version}], tx digest: [{}], cause: {e}",
+                    effects.transaction_digest
                 ),
                 _ => {}
             }
