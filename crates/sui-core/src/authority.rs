@@ -788,6 +788,7 @@ impl AuthorityState {
                     signed_effects,
                     tx_guard,
                     execution_guard,
+                    epoch_store,
                 )
                 .await;
         }
@@ -828,6 +829,7 @@ impl AuthorityState {
             signed_effects,
             tx_guard,
             execution_guard,
+            epoch_store,
         )
         .await
     }
@@ -839,6 +841,7 @@ impl AuthorityState {
         signed_effects: SignedTransactionEffects,
         tx_guard: CertTxGuard<'_>,
         _execution_guard: ExecutionLockReadGuard<'_>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<SignedTransactionEffects> {
         let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
@@ -864,7 +867,8 @@ impl AuthorityState {
         //
         // REQUIRED: this must be called before tx_guard.commit_tx() (below), to ensure
         // TransactionManager can get the notifications after the node crashes and restarts.
-        self.transaction_manager.objects_committed(output_keys);
+        self.transaction_manager
+            .objects_committed(output_keys, epoch_store);
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -967,8 +971,13 @@ impl AuthorityState {
     }
 
     /// Notifies TransactionManager about an executed certificate.
-    pub fn certificate_executed(&self, digest: &TransactionDigest) {
-        self.transaction_manager.certificate_executed(digest)
+    pub fn certificate_executed(
+        &self,
+        digest: &TransactionDigest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        self.transaction_manager
+            .certificate_executed(digest, epoch_store)
     }
 
     pub async fn dry_exec_transaction(
@@ -1625,7 +1634,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
         epoch_store.insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs)
+        self.transaction_manager.enqueue(certs, epoch_store)
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
