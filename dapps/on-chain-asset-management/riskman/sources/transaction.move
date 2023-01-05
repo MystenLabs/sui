@@ -13,6 +13,7 @@ module riskman::transaction {
     const EAmountLimitExceededAfterApproval : u64 = 2;
     const EAlreadyApprovedByThisApprover : u64 = 3;
     const ENotOriginalOwnerOfCapability : u64 = 4;
+    const ESpenderCannotSendMoneyToHimself : u64 = 5;
 
     struct TransactionRequest has key, store {
         id: UID,
@@ -42,6 +43,7 @@ module riskman::transaction {
         ctx: &mut TxContext,
     ) { 
         assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 4);
+        assert!(recipient != tx_context::sender(ctx), 5);
         assert!(amount <= policy_config::get_amount_limit(spender_cap) - policy_config::get_amount_spent(spender_cap), 0);
         transfer::share_object(TransactionRequest {
             id: object::new(ctx),
