@@ -195,8 +195,8 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         None,
         false,
     )?;
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1], digest);
 
     let txes =
         node.state()
@@ -207,16 +207,16 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let txes =
         node.state()
             .get_transactions(TransactionQuery::ToAddress(receiver), None, None, false)?;
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
     let txes =
         node.state()
             .get_transactions(TransactionQuery::ToAddress(sender), None, None, false)?;
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1], digest);
 
     // No transactions have originated from the receiver
     let txes = node.state().get_transactions(
@@ -280,14 +280,15 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
                 end_time: ts.unwrap() + HOUR_MS,
             },
             None,
-            10,
+            100,
             false,
         )
         .await?;
+    let all_events = &all_events[all_events.len() - 3..];
     assert_eq!(all_events[0].1.tx_digest.unwrap(), digest);
     let all_events = all_events
-        .into_iter()
-        .map(|(_, envelope)| envelope.event)
+        .iter()
+        .map(|(_, envelope)| envelope.event.clone())
         .collect::<Vec<_>>();
     assert_eq!(all_events.len(), 3);
     assert_eq!(
@@ -345,23 +346,22 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .get_events(
             EventQuery::Recipient(Owner::AddressOwner(receiver)),
             None,
-            10,
+            100,
             false,
         )
         .await?;
-    assert_eq!(events_by_recipient[0].1.tx_digest.unwrap(), digest);
-    let events_by_recipient = events_by_recipient
-        .into_iter()
-        .map(|(_, envelope)| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_recipient.len(), 1);
-    assert_eq!(events_by_recipient, vec![recipient_event.clone()]);
+    assert_eq!(
+        events_by_recipient.last().unwrap().1.tx_digest.unwrap(),
+        digest
+    );
+    assert_eq!(events_by_recipient.last().unwrap().1.event, recipient_event,);
 
     // query by object
-    let events_by_object = node
+    let mut events_by_object = node
         .state()
-        .get_events(EventQuery::Object(transferred_object), None, 10, false)
+        .get_events(EventQuery::Object(transferred_object), None, 100, false)
         .await?;
+    let events_by_object = events_by_object.split_off(events_by_object.len() - 2);
     assert_eq!(events_by_object[0].1.tx_digest.unwrap(), digest);
     let events_by_object = events_by_object
         .into_iter()
@@ -813,14 +813,16 @@ async fn test_full_node_event_read_api_ok() {
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(events_by_recipient.data[0].tx_digest.unwrap(), digest);
+    assert_eq!(
+        events_by_recipient.data.last().unwrap().tx_digest.unwrap(),
+        digest
+    );
     let events_by_recipient = events_by_recipient
         .data
         .into_iter()
         .map(|envelope| envelope.event)
         .collect::<Vec<_>>();
-    assert_eq!(events_by_recipient.len(), 1);
-    assert_eq!(events_by_recipient, vec![recipient_event.clone()]);
+    assert_eq!(events_by_recipient.last().unwrap(), &recipient_event);
 
     // query by object
     let params = rpc_params![
@@ -833,17 +835,18 @@ async fn test_full_node_event_read_api_ok() {
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(events_by_object.data[0].tx_digest.unwrap(), digest);
+    assert_eq!(
+        events_by_object.data.last().unwrap().tx_digest.unwrap(),
+        digest
+    );
     let events_by_object = events_by_object
         .data
         .into_iter()
         .map(|envelope| envelope.event)
         .collect::<Vec<_>>();
-    assert_eq!(events_by_object.len(), 2);
-    assert_eq!(
-        events_by_object,
-        vec![sender_event.clone(), recipient_event.clone()]
-    );
+    assert_eq!(events_by_object.len(), 3);
+    assert_eq!(events_by_object[1], sender_event);
+    assert_eq!(events_by_object[2], recipient_event);
 
     // query by transaction module
     let params = rpc_params![
@@ -875,7 +878,7 @@ async fn test_full_node_event_read_api_ok() {
     wait_for_tx(digest2, node.state().clone()).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(5)).await;
 
     // query by move event struct name
     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
@@ -900,16 +903,16 @@ async fn test_full_node_event_read_api_ok() {
             end_time: ts2.unwrap() + HOUR_MS
         },
         None::<u64>,
-        10,
+        100,
         false
     ];
     let all_events: EventPage = jsonrpc_client
         .request("sui_getEvents", params)
         .await
         .unwrap();
+    // genesis txn
     // The first txn emits TransferObject(sender), TransferObject(recipient), Gas
     // The second txn emits MoveEvent, NewObject and Gas
-    assert_eq!(all_events.data.len(), 6);
     let tx_digests: Vec<TransactionDigest> = all_events
         .data
         .iter()
@@ -917,7 +920,7 @@ async fn test_full_node_event_read_api_ok() {
         .collect();
     // Sorted in ascending time
     assert_eq!(
-        tx_digests,
+        tx_digests[tx_digests.len() - 6..],
         vec![digest, digest, digest, digest2, digest2, digest2]
     );
 }

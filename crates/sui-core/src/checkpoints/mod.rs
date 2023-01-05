@@ -73,6 +73,19 @@ impl CheckpointStore {
         Arc::new(Self::open_tables_read_write(path.to_path_buf(), None, None))
     }
 
+    pub fn insert_genesis_checkpoint(
+        &self,
+        checkpoint: VerifiedCheckpoint,
+        contents: CheckpointContents,
+    ) {
+        self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
+        self.insert_checkpoint_contents(contents).unwrap();
+        self.update_highest_synced_checkpoint(&checkpoint).unwrap();
+        self.checkpoint_summary
+            .insert(&checkpoint.sequence_number(), checkpoint.summary())
+            .unwrap();
+    }
+
     pub fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,

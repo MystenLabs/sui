@@ -21,7 +21,6 @@ use sui_types::{
         TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    object::Object,
 };
 use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
 
@@ -133,21 +132,6 @@ impl LocalAuthorityClient {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
         }
-    }
-
-    pub async fn new_with_objects(
-        committee: Committee,
-        secret: AuthorityKeyPair,
-        objects: Vec<Object>,
-        genesis: &Genesis,
-    ) -> Self {
-        let client = Self::new(committee, secret, genesis).await;
-
-        for object in objects {
-            client.state.insert_genesis_object(object).await;
-        }
-
-        client
     }
 
     pub fn new_from_authority(state: Arc<AuthorityState>) -> Self {

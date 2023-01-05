@@ -249,7 +249,9 @@ async fn check_objects(
     if !errors.is_empty() {
         return Err(SuiError::TransactionInputObjectsErrors { errors });
     }
-    fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
+    if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
+        return Err(SuiError::ObjectInputArityViolation);
+    }
 
     Ok(InputObjects::new(all_objects))
 }

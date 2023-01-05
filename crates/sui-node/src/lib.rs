@@ -159,6 +159,8 @@ impl SuiNode {
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        checkpoint_store
+            .insert_genesis_checkpoint(genesis.checkpoint(), genesis.checkpoint_contents().clone());
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),
@@ -200,7 +202,7 @@ impl SuiNode {
             config.protocol_public_key(),
             secret,
             store,
-            epoch_store,
+            epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
             event_store,
@@ -209,6 +211,21 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await;
+
+        // ensure genesis txn was executed
+        if epoch_store.epoch() == 0 {
+            state
+                .execute_certificate(
+                    &genesis
+                        .transaction()
+                        .clone()
+                        .verify(epoch_store.committee())
+                        .unwrap(),
+                    &epoch_store,
+                )
+                .await
+                .unwrap();
+        }
 
         let (checkpoint_executor_handle, reconfig_channel) = CheckpointExecutor::new(
             state_sync_handle.subscribe_to_synced_checkpoints(),
