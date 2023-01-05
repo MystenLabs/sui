@@ -72,6 +72,7 @@ impl OnsiteReconfigObserver {
 
 #[async_trait]
 impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
+<<<<<<< HEAD
     fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
         Box::new(Self {
             reconfig_rx: self.reconfig_rx.resubscribe(),
@@ -82,6 +83,8 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         })
     }
 
+=======
+>>>>>>> 3c6f11a74 (add reconfig observer)
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         // A tiny optimization: when a very stale node just starts, the
         // channel may fill up committees quickly. Here we skip directly to
@@ -116,7 +119,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         }
     }
 }
-
 /// A dummy ReconfigObserver for testing.
 pub struct DummyReconfigObserver;
 
