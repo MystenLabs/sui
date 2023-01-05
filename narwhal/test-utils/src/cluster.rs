@@ -43,6 +43,9 @@ impl Cluster {
     /// Initialises a new cluster by the provided parameters. The cluster will
     /// create all the authorities (primaries & workers) that are defined under
     /// the committee structure, but none of them will be started.
+    /// 
+    /// Fields passed in via Parameters will be used, expect specified ports which have to be
+    /// different for each instance. If None, the default Parameters will be used.
     ///
     /// When the `internal_consensus_enabled` is true then the standard internal
     /// consensus engine will be enabled. If false, then the internal consensus will
@@ -67,7 +70,7 @@ impl Cluster {
                 authority_fixture.keypair().copy(),
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
-                params.clone(),
+                params.with_available_ports(),
                 shared_committee.clone(),
                 shared_worker_cache.clone(),
                 internal_consensus_enabled,
