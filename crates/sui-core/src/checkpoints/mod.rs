@@ -480,7 +480,7 @@ impl CheckpointBuilder {
             GasCostSummary::new(
                 previous_gas_costs.computation_cost + current_gas_costs.computation_cost,
                 previous_gas_costs.storage_cost + current_gas_costs.storage_cost,
-                previous_gas_costs.storage_rebate + current_gas_costs.storage_rebate,
+                previous_gas_costs.storage_rebate() + current_gas_costs.storage_rebate(),
             )
         } else {
             current_gas_costs

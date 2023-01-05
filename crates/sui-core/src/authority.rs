@@ -2301,14 +2301,14 @@ impl AuthorityState {
             ?next_epoch,
             computation_cost=?gas_cost_summary.computation_cost,
             storage_cost=?gas_cost_summary.storage_cost,
-            storage_rebase=?gas_cost_summary.storage_rebate,
+            storage_rebase=?gas_cost_summary.storage_rebate(),
             "Creating advance epoch transaction"
         );
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
-            gas_cost_summary.storage_rebate,
+            gas_cost_summary.storage_rebate(),
         );
         // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
         self.handle_transaction_impl(tx.clone(), epoch_store)

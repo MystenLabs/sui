@@ -54,7 +54,9 @@ macro_rules! ok_or_gas_balance_error {
 pub struct GasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,
-    pub storage_rebate: u64,
+    /// Amount of SUI to refund to the transaction's gas object.
+    /// Be very careful with this field, since it represents money.
+    storage_rebate: u64,
 }
 
 impl GasCostSummary {
@@ -66,8 +68,20 @@ impl GasCostSummary {
         }
     }
 
+    pub fn empty() -> Self {
+        GasCostSummary {
+            computation_cost: 0,
+            storage_cost: 0,
+            storage_rebate: 0,
+        }
+    }
+
     pub fn gas_used(&self) -> u64 {
         self.computation_cost + self.storage_cost
+    }
+
+    pub fn storage_rebate(&self) -> u64 {
+        self.storage_rebate
     }
 
     /// Get net gas usage, positive number means used gas; negative number means refund.
@@ -268,7 +282,7 @@ impl<'a> SuiGasStatus<'a> {
         &mut self,
         old_size: usize,
         new_size: usize,
-        storage_rebate: SuiGas,
+        old_storage_rebate: SuiGas,
     ) -> Result<u64, ExecutionError> {
         if self.is_unmetered() {
             return Ok(0);
@@ -280,8 +294,8 @@ impl<'a> SuiGasStatus<'a> {
         let cost = NumBytes::new((old_size + new_size) as u64)
             .mul(*INIT_SUI_COST_TABLE.object_mutation_per_byte_cost);
         self.deduct_computation_cost(&cost)?;
-
-        self.storage_rebate += storage_rebate;
+        // add the storage rebate from the old object to the running total
+        self.storage_rebate += old_storage_rebate;
 
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*INIT_SUI_COST_TABLE.storage_per_byte_cost);

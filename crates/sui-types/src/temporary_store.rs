@@ -424,8 +424,8 @@ impl<S> TemporaryStore<S> {
         }
     }
 
-    /// For every object changes, charge gas accordingly. Since by this point we haven't charged gas yet,
-    /// the gas object hasn't been mutated yet. Passing in `gas_object_size` so that we can also charge
+    /// For every object change, charge gas accordingly. Since by this point we haven't charged gas yet,
+    /// the gas object hasn't been mutated yet. Passing in `gas_object` so that we can also charge
     /// for the gas object mutation in advance.
     pub fn charge_gas_for_storage_changes(
         &mut self,
@@ -435,12 +435,7 @@ impl<S> TemporaryStore<S> {
     ) -> Result<(), ExecutionError> {
         let mut objects_to_update = vec![];
         // Also charge gas for mutating the gas object in advance.
-        let gas_object_size = gas_object.object_size_for_gas_metering();
-        gas_object.storage_rebate = gas_status.charge_storage_mutation(
-            gas_object_size,
-            gas_object_size,
-            gas_object.storage_rebate.into(),
-        )?;
+        gas_object.charge_storage_mutation_no_size_change(gas_status)?;
         objects_to_update.push((
             SingleTxContext::gas(sender),
             gas_object.clone(),
@@ -448,20 +443,22 @@ impl<S> TemporaryStore<S> {
         ));
 
         for (object_id, (ctx, object, write_kind)) in &mut self.written {
-            let (old_object_size, storage_rebate) = self
-                .input_objects
-                .get(object_id)
-                .map(|old| (old.object_size_for_gas_metering(), old.storage_rebate))
-                .unwrap_or((0, 0));
-            let new_storage_rebate = gas_status.charge_storage_mutation(
-                old_object_size,
-                object.object_size_for_gas_metering(),
-                storage_rebate.into(),
-            )?;
+            match *write_kind {
+                WriteKind::Create | WriteKind::Unwrap => {
+                    // both freshly created and unwrapped objects have no previous storage rebate
+                    object.charge_storage_mutation_no_size_change(gas_status)?
+                }
+                WriteKind::Mutate => {
+                    if let Some(old_object) = self.input_objects.get(object_id) {
+                        object.charge_storage_mutation(old_object, gas_status)?;
+                    } else {
+                        // TODO: this happens when an object is a dynamic field, and is incorrect.
+                        // need to find the input dynamic field and use it as old_object
+                        object.charge_storage_mutation_no_size_change(gas_status)?;
+                    }
+                }
+            }
             if !object.is_immutable() {
-                // We don't need to set storage rebate for immutable objects, as they will
-                // never be deleted.
-                object.storage_rebate = new_storage_rebate;
                 objects_to_update.push((ctx.clone(), object.clone(), *write_kind));
             }
         }
@@ -472,11 +469,7 @@ impl<S> TemporaryStore<S> {
             // object was unwrapped and then deleted. The rebate would have been provided already when
             // mutating the object that wrapped this object.
             if let Some(old_object) = self.input_objects.get(object_id) {
-                gas_status.charge_storage_mutation(
-                    old_object.object_size_for_gas_metering(),
-                    0,
-                    old_object.storage_rebate.into(),
-                )?;
+                old_object.charge_storage_deletion(gas_status)?
             }
         }
 
@@ -670,7 +663,8 @@ impl<S> TemporaryStore<S> {
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
-        let gas_rebate = (cost_summary.storage_rebate as f64 * STORAGE_REBATE_RATE).round() as u64;
+        let gas_rebate =
+            (cost_summary.storage_rebate() as f64 * STORAGE_REBATE_RATE).round() as u64;
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();

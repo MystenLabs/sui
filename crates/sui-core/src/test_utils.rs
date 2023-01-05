@@ -121,11 +121,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
     TransactionEffects {
         status: ExecutionStatus::Success,
-        gas_used: GasCostSummary {
-            computation_cost: 0,
-            storage_cost: 0,
-            storage_rebate: 0,
-        },
+        gas_used: GasCostSummary::empty(),
         modified_at_versions: Vec::new(),
         shared_objects: Vec::new(),
         transaction_digest: *tx.digest(),

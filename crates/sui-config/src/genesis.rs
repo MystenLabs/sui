@@ -474,10 +474,7 @@ impl Builder {
         // checkpoint created from genesis.
         let objects = objects
             .into_iter()
-            .map(|object| Object {
-                previous_transaction: TransactionDigest::genesis(),
-                ..object
-            })
+            .map(|object| Object::new(object.data, object.owner, TransactionDigest::genesis()))
             .collect::<Vec<_>>();
 
         let genesis = Genesis {

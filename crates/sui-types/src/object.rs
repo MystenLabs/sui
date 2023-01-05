@@ -25,6 +25,7 @@ use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     },
+    gas::SuiGasStatus,
     gas_coin::GasCoin,
 };
 use sui_protocol_constants::*;
@@ -394,7 +395,8 @@ pub struct Object {
     /// The amount of SUI we would rebate if this object gets deleted.
     /// This number is re-calculated each time the object is mutated based on
     /// the present storage gas price.
-    pub storage_rebate: u64,
+    /// Be very careful with this field, since it represents money.
+    storage_rebate: u64,
 }
 
 impl Object {
@@ -419,6 +421,32 @@ impl Object {
             previous_transaction,
             storage_rebate: 0,
         })
+    }
+
+    /// Create a new object with a 0 storage rebate
+    pub fn new(data: Data, owner: Owner, previous_transaction: TransactionDigest) -> Self {
+        Object {
+            data,
+            owner,
+            previous_transaction,
+            storage_rebate: 0,
+        }
+    }
+
+    /// Create a new object with a the given storage rebate.
+    /// Should not be used on the write path
+    pub fn new_unsafe(
+        data: Data,
+        owner: Owner,
+        previous_transaction: TransactionDigest,
+        storage_rebate: u64,
+    ) -> Self {
+        Object {
+            data,
+            owner,
+            previous_transaction,
+            storage_rebate,
+        }
     }
 
     pub fn is_immutable(&self) -> bool {
@@ -563,6 +591,53 @@ impl Object {
             return Err(ExecutionErrorKind::InvalidTransferObject.into());
         }
         Ok(())
+    }
+
+    /// Charge storage gas for a mutation from `old_object` to `self`
+    pub fn charge_storage_mutation(
+        &mut self,
+        old_object: &Object,
+        gas_status: &mut SuiGasStatus<'_>,
+    ) -> Result<(), ExecutionError> {
+        debug_assert!(!self.is_immutable());
+        self.storage_rebate = gas_status.charge_storage_mutation(
+            old_object.object_size_for_gas_metering(),
+            self.object_size_for_gas_metering(),
+            old_object.storage_rebate.into(),
+        )?;
+        Ok(())
+    }
+
+    /// Charge storage gas for a mutation to `self` where the size is unchanged
+    pub fn charge_storage_mutation_no_size_change(
+        &mut self,
+        gas_status: &mut SuiGasStatus<'_>,
+    ) -> Result<(), ExecutionError> {
+        let size = self.object_size_for_gas_metering();
+        let rebate = gas_status.charge_storage_mutation(size, size, self.storage_rebate.into())?;
+        if !self.is_immutable() {
+            // rebate is always 0 for immutable objects, since they cannot be deleted
+            self.storage_rebate = rebate
+        }
+        Ok(())
+    }
+
+    /// Charge storage gas + process refund for a deletion of `self`
+    pub fn charge_storage_deletion(
+        &self,
+        gas_status: &mut SuiGasStatus<'_>,
+    ) -> Result<(), ExecutionError> {
+        debug_assert!(!self.is_immutable());
+        gas_status.charge_storage_mutation(
+            self.object_size_for_gas_metering(),
+            0,
+            self.storage_rebate.into(),
+        )?;
+        Ok(())
+    }
+
+    pub fn storage_rebate(&self) -> u64 {
+        self.storage_rebate
     }
 }
 

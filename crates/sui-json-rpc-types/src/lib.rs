@@ -562,12 +562,12 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
             }
             SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)?),
         };
-        Ok(Object {
+        Ok(Object::new_unsafe(
             data,
-            owner: self.owner,
-            previous_transaction: self.previous_transaction,
-            storage_rebate: self.storage_rebate,
-        })
+            self.owner,
+            self.previous_transaction,
+            self.storage_rebate,
+        ))
     }
 }
 
@@ -661,6 +661,7 @@ impl<T: SuiData> SuiObject<T> {
 
     pub fn try_from(o: Object, layout: Option<MoveStructLayout>) -> Result<Self, anyhow::Error> {
         let oref = o.compute_object_reference();
+        let storage_rebate = o.storage_rebate();
         let data = match o.data {
             Data::Move(m) => {
                 let layout = layout.ok_or(SuiError::ObjectSerializationError {
@@ -674,7 +675,7 @@ impl<T: SuiData> SuiObject<T> {
             data,
             owner: o.owner,
             previous_transaction: o.previous_transaction,
-            storage_rebate: o.storage_rebate,
+            storage_rebate,
             reference: oref.into(),
         })
     }
@@ -2112,7 +2113,7 @@ impl From<GasCostSummary> for SuiGasCostSummary {
         Self {
             computation_cost: s.computation_cost,
             storage_cost: s.storage_cost,
-            storage_rebate: s.storage_rebate,
+            storage_rebate: s.storage_rebate(),
         }
     }
 }

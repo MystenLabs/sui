@@ -1933,11 +1933,7 @@ impl Default for TransactionEffects {
     fn default() -> Self {
         TransactionEffects {
             status: ExecutionStatus::Success,
-            gas_used: GasCostSummary {
-                computation_cost: 0,
-                storage_cost: 0,
-                storage_rebate: 0,
-            },
+            gas_used: GasCostSummary::empty(),
             modified_at_versions: Vec::new(),
             shared_objects: Vec::new(),
             transaction_digest: TransactionDigest::random(),

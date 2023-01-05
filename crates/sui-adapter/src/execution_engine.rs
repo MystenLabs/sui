@@ -89,7 +89,7 @@ pub fn execute_transaction_to_effects<
     debug!(
         computation_gas_cost = gas_cost_summary.computation_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
-        storage_gas_rebate = gas_cost_summary.storage_rebate,
+        storage_gas_rebate = gas_cost_summary.storage_rebate(),
         "Finished execution of transaction with status {:?}",
         status
     );
@@ -333,12 +333,7 @@ fn execution_loop<
                 for genesis_object in objects {
                     match genesis_object {
                         sui_types::messages::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
-                                data,
-                                owner,
-                                previous_transaction: tx_ctx.digest(),
-                                storage_rebate: 0,
-                            };
+                            let object = Object::new(data, owner, tx_ctx.digest());
                             temporary_store.write_object(
                                 &SingleTxContext::genesis(),
                                 object,
