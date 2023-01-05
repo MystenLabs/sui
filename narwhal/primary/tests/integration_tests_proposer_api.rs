@@ -83,7 +83,7 @@ async fn test_rounds_errors() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
@@ -118,7 +118,7 @@ async fn test_rounds_errors() {
             Dag::new(&no_name_committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -179,7 +179,7 @@ async fn test_rounds_return_successful_response() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND setup the DAG
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -202,7 +202,7 @@ async fn test_rounds_return_successful_response() {
         rx_consensus_round_updates,
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -327,7 +327,7 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -354,7 +354,7 @@ async fn test_node_read_causal_signed_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -365,7 +365,7 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -396,7 +396,7 @@ async fn test_node_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,

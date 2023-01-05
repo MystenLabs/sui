@@ -12,21 +12,21 @@ use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
-use executor::SerializedTransaction;
 use eyre::Context;
 use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
-use futures::future::join_all;
+use mysten_metrics::RegistryService;
 use narwhal_node as node;
+use narwhal_node::primary_node::PrimaryNode;
+use narwhal_node::worker_node::WorkerNode;
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
-    Node,
 };
 use prometheus::Registry;
 use std::sync::Arc;
 use storage::NodeStorage;
 use telemetry_subscribers::TelemetryGuards;
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::channel;
 #[cfg(feature = "benchmark")]
 use tracing::subscriber::set_global_default;
 use tracing::{info, warn};
@@ -240,26 +240,32 @@ async fn run(
     let store = NodeStorage::reopen(store_path);
 
     // The channel returning the result for each transaction's execution.
-    let (tx_transaction_confirmation, rx_transaction_confirmation) =
-        channel(Node::CHANNEL_CAPACITY);
+    let (_tx_transaction_confirmation, _rx_transaction_confirmation) = channel(100);
+
+    let registry_service = RegistryService::new(Registry::new());
 
     // Check whether to run a primary, a worker, or an entire authority.
-    let node_handles = match matches.subcommand() {
+    let (primary, worker) = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
-            Node::spawn_primary(
-                primary_keypair,
-                primary_network_keypair,
-                committee,
-                worker_cache,
-                &store,
+            let primary = PrimaryNode::new(
                 parameters.clone(),
-                /* consensus */ !sub_matches.is_present("consensus-disabled"),
-                /* execution_state */
-                Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
-                &registry,
-            )
-            .await?
+                !sub_matches.is_present("consensus-disabled"),
+                registry_service,
+            );
+
+            primary
+                .start(
+                    primary_keypair,
+                    primary_network_keypair,
+                    committee,
+                    worker_cache,
+                    &store,
+                    Arc::new(SimpleExecutionState::new(_tx_transaction_confirmation)),
+                )
+                .await?;
+
+            (Some(primary), None)
         }
 
         // Spawn a single worker.
@@ -270,18 +276,21 @@ async fn run(
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
 
-            Node::spawn_workers(
-                /* primary_name */
-                primary_keypair.public().clone(),
-                vec![(id, worker_keypair)],
-                committee,
-                worker_cache,
-                &store,
-                parameters.clone(),
-                /* tx_validator */
-                TrivialTransactionValidator::default(),
-                &registry,
-            )
+            let worker = WorkerNode::new(id, parameters.clone(), registry_service);
+
+            worker
+                .start(
+                    primary_keypair.public().clone(),
+                    worker_keypair,
+                    committee,
+                    worker_cache,
+                    &store,
+                    TrivialTransactionValidator::default(),
+                    None,
+                )
+                .await?;
+
+            (None, Some(worker))
         }
         _ => unreachable!(),
     };
@@ -294,19 +303,12 @@ async fn run(
     );
     let _metrics_server_handle = start_prometheus_server(prom_address, &registry);
 
-    // Analyze the consensus' output.
-    analyze(rx_transaction_confirmation).await;
-
-    // Await on the completion handles of all the nodes we have launched
-    join_all(node_handles).await;
+    if let Some(primary) = primary {
+        primary.wait().await;
+    } else if let Some(worker) = worker {
+        worker.wait().await;
+    }
 
     // If this expression is reached, the program ends and all other tasks terminate.
     Ok(())
-}
-
-/// Receives an ordered list of certificates and apply any application-specific logic.
-async fn analyze(mut rx_output: Receiver<SerializedTransaction>) {
-    while let Some(_message) = rx_output.recv().await {
-        // NOTE: Notify the user that its transaction has been processed.
-    }
 }
