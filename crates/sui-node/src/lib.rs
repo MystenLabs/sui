@@ -79,7 +79,7 @@ use sui_core::narwhal_manager::{
     run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
 };
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
@@ -296,6 +296,13 @@ impl SuiNode {
             .close_epoch(&self.state.epoch_store())
     }
 
+    pub fn tx_checkpointed_in_current_epoch(&self, digest: &TransactionDigest) -> SuiResult<bool> {
+        Ok(self
+            .state
+            .epoch_store()
+            .tx_checkpointed_in_current_epoch(digest)?)
+    }
+
     fn create_p2p_network(
         config: &NodeConfig,
         state_sync_store: RocksDbStore,
@@ -452,7 +459,7 @@ impl SuiNode {
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store,
-            checkpoint_service,
+            checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
             state.metrics.clone(),
