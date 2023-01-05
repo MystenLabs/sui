@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Network } from './utils/api/DefaultRpcClient';
 import { DEFAULT_NETWORK } from './utils/envUtil';
 import { growthbook } from './utils/growthbook';
+import { plausible } from './utils/plausible';
 import { queryClient } from './utils/queryClient';
 
 export const NetworkContext = createContext<
@@ -37,6 +38,7 @@ export function useNetwork(): [string, (network: Network | string) => void] {
         // When resetting the network, we reset the query client at the same time:
         queryClient.cancelQueries();
         queryClient.clear();
+
         setSearchParams({ network: network.toLowerCase() });
     };
 
@@ -47,6 +49,10 @@ export function useNetwork(): [string, (network: Network | string) => void] {
 
         Sentry.setContext('network', {
             network,
+        });
+
+        plausible.trackEvent('Network', {
+            props: { name: network },
         });
     }, [network]);
 
