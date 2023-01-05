@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiObject, isSuiMoveObject, Base64DataBuffer } from '@mysten/sui.js';
+import { is, SuiObject,  Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 
@@ -35,7 +35,9 @@ function ValidatorDetails() {
     const { data, isLoading } = useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorsData =
-        data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
+        data &&
+        is(data.details, SuiObject) &&
+        data.details.data.dataType === 'moveObject'
             ? (data.details.data.fields as ValidatorState)
             : null;
 

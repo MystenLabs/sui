@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-<<<<<<< HEAD
-import { Base64DataBuffer, is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
-=======
-import { isSuiObject, isSuiMoveObject, SUI_TYPE_ARG } from '@mysten/sui.js';
->>>>>>> 4d752c517 (update validator page)
+import { is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
