@@ -13,7 +13,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
 
-use sui_simulator::nondeterministic;
+use sui_macros::nondeterministic;
 
 #[derive(DBMapUtils)]
 pub struct CommitteeStore {

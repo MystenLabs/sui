@@ -1,0 +1,19 @@
+[package]
+name = "sui-proc-macros"
+version = "0.7.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = "1.0.104"
+workspace-hack.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "d9a8a1dce46ac5c0c3e85986a94f2cb3ca0e1367", package = "msim-macros" }

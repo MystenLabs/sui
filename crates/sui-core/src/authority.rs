@@ -40,7 +40,7 @@ use sui_json_rpc_types::{
     type_and_fields_from_move_struct, DevInspectResults, SuiEvent, SuiEventEnvelope,
     SuiTransactionEffects,
 };
-use sui_simulator::nondeterministic;
+use sui_macros::nondeterministic;
 use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{

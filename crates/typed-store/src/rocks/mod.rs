@@ -27,6 +27,7 @@ use tracing::{debug, error, info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
+use sui_macros::nondeterministic;
 
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
@@ -1543,19 +1544,29 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     db_options: Option<rocksdb::Options>,
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
-    let options = prepare_db_options(&path, db_options, opt_cfs);
-    let rocksdb = {
-        Arc::new(RocksDB::DBWithThreadMode(rocksdb::DBWithThreadMode::<
-            MultiThreaded,
-        >::open_cf_descriptors(
-            &options,
-            path.as_ref(),
-            opt_cfs
-                .iter()
-                .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-        )?))
-    };
-    Ok(rocksdb)
+    let path = path.as_ref();
+    // In the simulator, we intercept the wall clock in the test thread only. This causes problems
+    // because rocksdb uses the simulated clock when creating its background threads, but then
+    // those threads see the real wall clock (because they are not the test thread), which causes
+    // rocksdb to panic. The `nondeterministic` macro evaluates expressions in new threads, which
+    // resolves the issue.
+    //
+    // This is a no-op in non-simulator builds.
+    nondeterministic!({
+        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let rocksdb = {
+            Arc::new(RocksDB::DBWithThreadMode(rocksdb::DBWithThreadMode::<
+                MultiThreaded,
+            >::open_cf_descriptors(
+                &options,
+                path,
+                opt_cfs
+                    .iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            )?))
+        };
+        Ok(rocksdb)
+    })
 }
 
 /// Opens a database with options, and a number of column families with individual options that are created if they do not exist.
@@ -1565,15 +1576,19 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     db_options: Option<rocksdb::Options>,
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
-    let options = prepare_db_options(&path, db_options, opt_cfs);
-    let rocksdb = rocksdb::OptimisticTransactionDB::<MultiThreaded>::open_cf_descriptors(
-        &options,
-        path.as_ref(),
-        opt_cfs
-            .iter()
-            .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-    )?;
-    Ok(Arc::new(RocksDB::OptimisticTransactionDB(rocksdb)))
+    let path = path.as_ref();
+    // See comment above for explanation of why nondeterministic is necessary here.
+    nondeterministic!({
+        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let rocksdb = rocksdb::OptimisticTransactionDB::<MultiThreaded>::open_cf_descriptors(
+            &options,
+            path,
+            opt_cfs
+                .iter()
+                .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+        )?;
+        Ok(Arc::new(RocksDB::OptimisticTransactionDB(rocksdb)))
+    })
 }
 
 /// Opens a database with options, and a number of column families with individual options that are created if they do not exist.
@@ -1583,51 +1598,54 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     db_options: Option<rocksdb::Options>,
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
-    // Customize database options
-    let mut options = db_options.unwrap_or_else(|| default_db_options().options);
+    let primary_path = primary_path.as_ref();
+    let secondary_path = secondary_path.as_ref().map(|p| p.as_ref());
+    // See comment above for explanation of why nondeterministic is necessary here.
+    nondeterministic!({
+        // Customize database options
+        let mut options = db_options.unwrap_or_else(|| default_db_options().options);
 
-    fdlimit::raise_fd_limit();
-    // This is a requirement by RocksDB when opening as secondary
-    options.set_max_open_files(-1);
+        fdlimit::raise_fd_limit();
+        // This is a requirement by RocksDB when opening as secondary
+        options.set_max_open_files(-1);
 
-    let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
-    let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &primary_path)
-        .ok()
-        .unwrap_or_default();
+        let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
+        let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, primary_path)
+            .ok()
+            .unwrap_or_default();
 
-    let default_db_options = default_db_options();
-    // Add CFs not explicitly listed
-    for cf_key in cfs.iter() {
-        if !opt_cfs.contains_key(&cf_key[..]) {
-            opt_cfs.insert(cf_key, &default_db_options.options);
+        let default_db_options = default_db_options();
+        // Add CFs not explicitly listed
+        for cf_key in cfs.iter() {
+            if !opt_cfs.contains_key(&cf_key[..]) {
+                opt_cfs.insert(cf_key, &default_db_options.options);
+            }
         }
-    }
 
-    let primary_path = primary_path.as_ref().to_path_buf();
-    let secondary_path = secondary_path
-        .map(|q| q.as_ref().to_path_buf())
-        .unwrap_or_else(|| {
+        let primary_path = primary_path.to_path_buf();
+        let secondary_path = secondary_path.map(|q| q.to_path_buf()).unwrap_or_else(|| {
             let mut s = primary_path.clone();
             s.pop();
             s.push("SECONDARY");
             s.as_path().to_path_buf()
         });
 
-    let rocksdb = {
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
-        Arc::new(RocksDB::DBWithThreadMode(rocksdb::DBWithThreadMode::<
-            MultiThreaded,
-        >::open_cf_descriptors_as_secondary(
-            &options,
-            &primary_path,
-            &secondary_path,
-            opt_cfs
-                .iter()
-                .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
-        )?))
-    };
-    Ok(rocksdb)
+        let rocksdb = {
+            options.create_if_missing(true);
+            options.create_missing_column_families(true);
+            Arc::new(RocksDB::DBWithThreadMode(rocksdb::DBWithThreadMode::<
+                MultiThreaded,
+            >::open_cf_descriptors_as_secondary(
+                &options,
+                &primary_path,
+                &secondary_path,
+                opt_cfs
+                    .iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            )?))
+        };
+        Ok(rocksdb)
+    })
 }
 
 pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
