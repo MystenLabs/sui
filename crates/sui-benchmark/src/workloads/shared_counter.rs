@@ -20,6 +20,7 @@ use test_utils::messages::{make_counter_create_transaction, make_counter_increme
 use test_utils::{
     messages::create_publish_move_package_transaction, transaction::parse_package_ref,
 };
+use tracing::info;
 
 pub struct SharedCounterTestPayload {
     package_ref: ObjectRef,
@@ -107,23 +108,19 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         // publish basics package
         let primary_gas = proxy.get_object(self.test_gas).await.unwrap();
         let mut primary_gas_ref = primary_gas.compute_object_reference();
-        let mut publish_module_gas_ref = None;
         let (address, keypair) = get_key_pair();
-        if let Some((updated, minted)) = transfer_sui_for_testing(
+        let (updated, minted) = transfer_sui_for_testing(
             (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
             &self.test_gas_keypair,
             MAX_GAS_FOR_TESTING,
             address,
             proxy.clone(),
         )
-        .await
-        {
-            publish_module_gas_ref = Some((address, keypair, minted));
-            primary_gas_ref = updated;
-        }
+        .await;
+        let publish_module_gas = (address, keypair, minted);
+        primary_gas_ref = updated;
         // Publish basics package
-        eprintln!("Publishing basics package");
-        let publish_module_gas = publish_module_gas_ref.unwrap();
+        info!("Publishing basics package");
         self.basics_package_ref = Some(
             publish_basics_package(
                 publish_module_gas.2,
@@ -139,7 +136,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         }
         // create counters
         let num_counters = std::cmp::max(num_counters as usize, 1);
-        eprintln!(
+        info!(
             "Creating {:?} shared counters, this may take a while..",
             num_counters
         );
@@ -148,18 +145,16 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         let mut counters_gas = vec![];
         for _ in 0..num_counters {
             let (address, keypair) = get_key_pair();
-            if let Some((updated, minted)) = transfer_sui_for_testing(
+            let (updated, minted) = transfer_sui_for_testing(
                 (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
                 &self.test_gas_keypair,
                 MAX_GAS_FOR_TESTING,
                 address,
                 proxy.clone(),
             )
-            .await
-            {
-                primary_gas_ref = updated;
-                counters_gas.push((address, keypair, minted));
-            }
+            .await;
+            primary_gas_ref = updated;
+            counters_gas.push((address, keypair, minted));
         }
         let mut futures = vec![];
         for (sender, keypair, gas) in counters_gas.iter() {
@@ -192,21 +187,19 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         let mut counters_gas = vec![];
         for _ in 0..count {
             let (address, keypair) = get_key_pair::<AccountKeyPair>();
-            if let Some((updated, minted)) = transfer_sui_for_testing(
+            let (updated, minted) = transfer_sui_for_testing(
                 (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
                 &self.test_gas_keypair,
                 MAX_GAS_FOR_TESTING,
                 address,
                 proxy.clone(),
             )
-            .await
-            {
-                primary_gas_ref = updated;
-                counters_gas.push((address, Arc::new(keypair), minted));
-            }
+            .await;
+            primary_gas_ref = updated;
+            counters_gas.push((address, Arc::new(keypair), minted));
         }
         // create counters using gas objects we created above
-        eprintln!("Creating shared txn payloads, hang tight..");
+        info!("Creating shared txn payloads, hang tight..");
         let mut shared_payloads = vec![];
         for i in 0..count {
             let (sender, keypair, gas) = &counters_gas[i as usize];
