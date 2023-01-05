@@ -41,9 +41,9 @@ An object can be shared, meaning that anyone can read or write this object. In c
 
 In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity. The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
 
-Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move) | 
-Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move) | 
-Tic Tac Toe: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)
+ * Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move)
+ * Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move)
+ * Tic Tac Toe: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)
 
 
 ## Referring to objects
