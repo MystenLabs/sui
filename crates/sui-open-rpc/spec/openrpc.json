@@ -381,6 +381,7 @@
                     "version": 2,
                     "digest": "YTUjbD51qSXhx3rDQSfIuu++oJOfFSRxK003oCCyjN0="
                   },
+                  "gasPrice": 1,
                   "gasBudget": 1000
                 },
                 "txSignature": "AGSIdPE6TiZpK8SYSgDee0v/nYra7zakdS70Mf7f44u95qbqwnNUX8J3LemofDeLFjBEKCG4NWOMJbK26RNPcwFx+rEBAzFCR9EqZuZwy6ymxQFHAR2C/1SDkX9nq7wm2w==",
@@ -545,6 +546,7 @@
                     "version": 2,
                     "digest": "wsHZkAgLQVgjWMbUFXCCHtL4i9yTTujRYs1wXaHfoM0="
                   },
+                  "gasPrice": 1,
                   "gasBudget": 1000
                 },
                 "txSignature": "AEYFlSNOs3VXTafbryAH3/ZKoqy907QU+pP9oSkiOtmix/LsiwY4EjCHwj+ICLkIHNTGXx7LHGbKu++PomyH1QZrcsROTZwfkUDdbwRmvqkE8UTLidenb8PFiZSW/zoONw==",
@@ -1627,6 +1629,7 @@
                     "version": 2,
                     "digest": "ARL4CGSLNu+/je6KGoLeRtlQTpahEIoXjvdvVsOZYzo="
                   },
+                  "gasPrice": 1,
                   "gasBudget": 1000
                 },
                 "txSignature": "ANMM5DC9TGa+L9jh25Bo6zR88WVklxXfpPGGyR/mid9bd1wTs6hHhl2W1PvNYXnf5fGRkrzdnnRtkdX8kio0CAGk8MuV4Ujxl9xtOeYgzm8Jf2BS6d0xIUr4jebbcPvoqQ==",
@@ -5527,6 +5530,7 @@
         "required": [
           "gasBudget",
           "gasPayment",
+          "gasPrice",
           "sender",
           "transactions"
         ],
@@ -5538,6 +5542,11 @@
           },
           "gasPayment": {
             "$ref": "#/components/schemas/ObjectRef"
+          },
+          "gasPrice": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "sender": {
             "$ref": "#/components/schemas/SuiAddress"
