@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{collections::BTreeMap, sync::Arc};
-
 use anyhow::bail;
 use async_trait::async_trait;
+use std::{collections::BTreeMap, sync::Arc};
 use sui_core::{
     authority_aggregator::AuthorityAggregator,
     authority_client::NetworkAuthorityClient,
