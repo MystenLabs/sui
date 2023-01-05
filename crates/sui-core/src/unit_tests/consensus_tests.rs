@@ -103,12 +103,17 @@ async fn submit_transaction_to_consensus_adapter() {
 
     #[async_trait::async_trait]
     impl SubmitToConsensus for SubmitDirectly {
-        async fn submit_to_consensus(&self, transaction: &ConsensusTransaction) -> SuiResult {
-            self.0
+        async fn submit_to_consensus(
+            &self,
+            transaction: &ConsensusTransaction,
+            epoch_store: &Arc<AuthorityPerEpochStore>,
+        ) -> SuiResult {
+            epoch_store
                 .handle_consensus_transaction(
-                    0,
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
+                    self.0.transaction_manager(),
+                    self.0.db(),
                 )
                 .await
         }
@@ -123,10 +128,12 @@ async fn submit_transaction_to_consensus_adapter() {
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
     let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
+    let epoch_store = state.epoch_store_for_testing();
     let waiter = adapter
         .submit(
             transaction.clone(),
-            Some(&state.epoch_store().get_reconfig_state_read_lock_guard()),
+            Some(&epoch_store.get_reconfig_state_read_lock_guard()),
+            &epoch_store,
         )
         .unwrap();
     waiter.await.unwrap();

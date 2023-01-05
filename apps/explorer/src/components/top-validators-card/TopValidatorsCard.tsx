@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    Base64DataBuffer,
-    isSuiObject,
-    isSuiMoveObject,
-    SUI_TYPE_ARG,
-} from '@mysten/sui.js';
+import { Base64DataBuffer, is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
@@ -222,7 +217,9 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
         useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorData =
-        data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
+        data &&
+        is(data.details, SuiObject) &&
+        data.details.data.dataType === 'moveObject'
             ? (data.details.data.fields as ValidatorState)
             : null;
 

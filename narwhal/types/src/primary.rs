@@ -13,8 +13,9 @@ use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
+    signature_service::SignatureService,
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    SignatureService, Verifier,
+    Verifier,
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -928,10 +929,6 @@ impl PayloadAvailabilityResponse {
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ReconfigureNotification {
-    /// Indicate the committee has changed. This happens at epoch change.
-    NewEpoch(Committee),
-    /// Update some network information of the committee.
-    UpdateCommittee(Committee),
     /// Indicate a shutdown.
     Shutdown,
 }

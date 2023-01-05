@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectFields, isSuiObject } from '@mysten/sui.js';
+import { getObjectFields, is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { useGetObject } from './useGetObject';
@@ -19,7 +19,7 @@ export function useGetNFTMeta(objectID: string): NFTMetadata | null {
         if (isError) return null;
 
         const { details } = data || {};
-        if (!isSuiObject(details) || !data) return null;
+        if (!is(details, SuiObject) || !data) return null;
         const fields = getObjectFields(data);
         if (!fields?.url) return null;
         return {

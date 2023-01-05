@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isTransactionBytes } from '../../types/index.guard';
 import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
+import { TransactionBytes } from '../../types/transactions';
 import {
   MoveCallTransaction,
   MergeCoinTransaction,
@@ -16,6 +16,7 @@ import {
   PublishTransaction,
   TxnDataSerializer,
   UnserializedSignableTransaction,
+  TransactionBuilderMode,
 } from './txn-data-serializer';
 
 /**
@@ -48,7 +49,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
 
   async serializeToBytes(
     signerAddress: string,
-    unserializedTxn: UnserializedSignableTransaction
+    unserializedTxn: UnserializedSignableTransaction,
+    mode: TransactionBuilderMode = 'Commit'
   ): Promise<Base64DataBuffer> {
     let endpoint: string;
     let args: Array<any>;
@@ -120,6 +122,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           moveCall.arguments,
           moveCall.gasPayment,
           moveCall.gasBudget,
+          mode,
         ];
         break;
       case 'mergeCoin':
@@ -160,7 +163,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       const resp = await this.client.requestWithType(
         endpoint,
         args,
-        isTransactionBytes,
+        TransactionBytes,
         this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);

@@ -271,11 +271,12 @@ mod tests {
             );
 
         let store = Arc::new(
-            AuthorityStore::open_with_committee_for_testing(
+            AuthorityStore::open_with_committee(
                 &path,
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),

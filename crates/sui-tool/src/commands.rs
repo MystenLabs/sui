@@ -5,7 +5,6 @@ use anyhow::Result;
 use futures::future::join_all;
 use itertools::Itertools;
 use multiaddr::Multiaddr;
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use sui_config::{genesis::Genesis, ValidatorInfo};
@@ -15,13 +14,11 @@ use sui_types::message_envelope::Message;
 use tokio::time::Instant;
 
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
+use sui_types::{base_types::*, messages::*, object::Owner};
 
 use anyhow::anyhow;
-use futures::stream::StreamExt;
 
 use clap::*;
-use sui_core::authority::MAX_ITEMS_LIMIT;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -103,28 +100,6 @@ pub enum ToolCommand {
         db_path: String,
         #[clap(subcommand)]
         cmd: Option<DbToolCommand>,
-    },
-
-    /// Pull down the batch stream for a validator(s).
-    /// Note that this command currently operates sequentially, so it will block on the first
-    /// validator indefinitely. Therefore you should generally use this with a --validator=
-    /// argument.
-    #[clap(name = "batch-stream")]
-    BatchStream {
-        #[clap(long, help = "SequenceNumber to start at")]
-        seq: Option<u64>,
-
-        #[clap(long, help = "Number of items to request", default_value_t = 1000)]
-        len: u64,
-
-        #[clap(
-            long,
-            help = "Validator to fetch from - if not specified, all validators are queried"
-        )]
-        validator: Option<AuthorityName>,
-
-        #[clap(long = "genesis")]
-        genesis: PathBuf,
     },
 
     #[clap(name = "dump-validators")]
@@ -497,72 +472,10 @@ async fn get_object(
     ret
 }
 
-async fn handle_batch(client: &dyn AuthorityAPI, req: &BatchInfoRequest) {
-    let mut streamx = Box::pin(client.handle_batch_stream(req.clone()).await.unwrap());
-
-    while let Some(item) = streamx.next().await {
-        match item {
-            Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
-                println!("batch: {:?}", signed_batch);
-            }
-
-            Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests)))) => {
-                println!("item: {:?}, {:?}", seq, digests);
-            }
-
-            // Return any errors.
-            Err(err) => {
-                println!("error: {}", err);
-            }
-        }
-    }
-}
-
 impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
-            ToolCommand::BatchStream {
-                seq,
-                validator,
-                genesis,
-                len,
-            } => {
-                let clients = make_clients(genesis)?;
-
-                let clients: Vec<_> = clients
-                    .iter()
-                    .filter(|(name, _)| {
-                        if let Some(v) = validator {
-                            v == **name
-                        } else {
-                            true
-                        }
-                    })
-                    .collect();
-
-                for (name, (_v, c)) in clients.iter() {
-                    println!("validator batch stream: {:?}", name);
-                    if let Some(seq) = seq {
-                        let requests =
-                            (seq..(seq + len))
-                                .step_by(MAX_ITEMS_LIMIT as usize)
-                                .map(|start| BatchInfoRequest {
-                                    start: Some(start),
-                                    length: min(MAX_ITEMS_LIMIT, seq + len - start),
-                                });
-                        for request in requests {
-                            handle_batch(c, &request).await;
-                        }
-                    } else {
-                        let req = BatchInfoRequest {
-                            start: seq,
-                            length: len,
-                        };
-                        handle_batch(c, &req).await;
-                    }
-                }
-            }
             ToolCommand::FetchObject {
                 id,
                 validator,

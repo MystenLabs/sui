@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, isSuiMovePackage } from '@mysten/sui.js';
+import { is, SuiMovePackage } from '@mysten/sui.js';
 import cl from 'classnames';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -25,12 +25,11 @@ function SuiObject({ obj, sendNFT }: SuiObjectProps) {
     const { objectId } = obj.reference;
     const shortId = useMiddleEllipsis(objectId);
     const objType =
-        (isSuiMoveObject(obj.data) && obj.data.type) || 'Move Package';
+        (obj.data.dataType === 'moveObject' && obj.data.type) || 'Move Package';
     const imgUrl = useMediaUrl(obj.data);
     const { keys } = useSuiObjectFields(obj.data);
-    const suiMoveObjectFields = isSuiMoveObject(obj.data)
-        ? obj.data.fields
-        : null;
+    const suiMoveObjectFields =
+        obj.data.dataType === 'moveObject' ? obj.data.fields : null;
 
     const sendUrl = useMemo(
         () => `/send-nft?${new URLSearchParams({ objectId }).toString()}`,
@@ -72,7 +71,7 @@ function SuiObject({ obj, sendNFT }: SuiObjectProps) {
                         </>
                     ) : null}
 
-                    {isSuiMovePackage(obj.data) ? (
+                    {is(obj.data, SuiMovePackage) ? (
                         <Field name="disassembled">
                             {JSON.stringify(obj.data.disassembled).substring(
                                 0,

@@ -1,5 +1,27 @@
 # @mysten/wallet-kit
 
+## 0.2.0
+
+### Minor Changes
+
+- c8bab06b0: Introduce new framework-agnostic Wallet Kit Core package.
+- cd64cf1fc: Change modal logic to use @headlessui/react instead.
+
+### Patch Changes
+
+- 15f1d5b63: Fix close button on modals.
+- Updated dependencies [4fb12ac6d]
+- Updated dependencies [bb14ffdc5]
+- Updated dependencies [c8bab06b0]
+- Updated dependencies [9fbe2714b]
+- Updated dependencies [d2015f815]
+- Updated dependencies [7d0f25b61]
+  - @mysten/sui.js@0.21.0
+  - @mysten/wallet-kit-core@0.1.0
+  - @mysten/wallet-adapter-unsafe-burner@0.3.3
+  - @mysten/wallet-adapter-base@0.3.8
+  - @mysten/wallet-adapter-wallet-standard@0.3.7
+
 ## 0.1.2
 
 ### Patch Changes

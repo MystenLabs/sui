@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getTransactionDigest,
-    isSuiMoveObject,
-    Coin as CoinAPI,
-} from '@mysten/sui.js';
+import { getTransactionDigest, Coin as CoinAPI } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -21,8 +17,8 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import type {
     SuiAddress,
-    SuiMoveObject,
     SuiExecuteTransactionResponse,
+    SuiMoveObject,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -86,7 +82,8 @@ export const stakeTokens = createAsyncThunk<
             .selectAll(state)
             .filter(
                 (anObj) =>
-                    isSuiMoveObject(anObj.data) && anObj.data.type === coinType
+                    anObj.data.dataType === 'moveObject' &&
+                    anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
 

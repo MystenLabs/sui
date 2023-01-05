@@ -5,7 +5,7 @@ import {
     getExecutionStatusType,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import { useWallet, ConnectButton } from '@mysten/wallet-kit';
+import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useMemo } from 'react';
@@ -45,7 +45,7 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { connected, signAndExecuteTransaction } = useWallet();
+    const { isConnected, signAndExecuteTransaction } = useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
@@ -89,7 +89,7 @@ export function ModuleFunction({
         formState.isValidating ||
         !formState.isValid ||
         formState.isSubmitting ||
-        !connected;
+        !isConnected;
     return (
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
@@ -138,7 +138,7 @@ export function ModuleFunction({
                         size="md"
                         className={clsx(
                             '!rounded-md !text-bodySmall',
-                            connected
+                            isConnected
                                 ? '!border !border-solid !border-steel !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
                                 : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
                         )}

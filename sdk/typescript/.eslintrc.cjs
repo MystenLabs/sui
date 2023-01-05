@@ -5,6 +5,7 @@ module.exports = {
   root: true,
   extends: ['react-app', 'prettier', 'plugin:prettier/recommended'],
   rules: {
+    "@typescript-eslint/no-redeclare": "off",
     '@typescript-eslint/ban-types': [
       'error',
       {

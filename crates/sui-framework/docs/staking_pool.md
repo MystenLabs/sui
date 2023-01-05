@@ -38,13 +38,13 @@
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="table_vec.md#0x2_table_vec">0x2::table_vec</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -101,7 +101,7 @@ A staking pool embedded in each validator struct in the system state object.
  pool token balance in all the <code><a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a></code> objects delegated to this pool. Updated at epoch boundaries.
 </dd>
 <dt>
-<code>pending_delegations: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">staking_pool::PendingDelegationEntry</a>&gt;</code>
+<code>pending_delegations: <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">staking_pool::PendingDelegationEntry</a>&gt;</code>
 </dt>
 <dd>
  Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
@@ -109,7 +109,7 @@ A staking pool embedded in each validator struct in the system state object.
  have been deposited.
 </dd>
 <dt>
-<code>pending_withdraws: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;</code>
+<code>pending_withdraws: <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;</code>
 </dt>
 <dd>
  Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
@@ -454,7 +454,7 @@ A self-custodial object holding the staked SUI tokens.
 Create a new, empty staking pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(validator_address: <b>address</b>, starting_epoch: u64): <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(validator_address: <b>address</b>, starting_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
 </code></pre>
 
 
@@ -463,15 +463,15 @@ Create a new, empty staking pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(validator_address: <b>address</b>, starting_epoch: u64) : <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(validator_address: <b>address</b>, starting_epoch: u64, ctx: &<b>mut</b> TxContext) : <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
     <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
         validator_address,
         starting_epoch,
         sui_balance: 0,
         rewards_pool: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
         delegation_token_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a> {}),
-        pending_delegations: <a href="_empty">vector::empty</a>(),
-        pending_withdraws: <a href="_empty">vector::empty</a>(),
+        pending_delegations: <a href="table_vec.md#0x2_table_vec_empty">table_vec::empty</a>(ctx),
+        pending_withdraws: <a href="table_vec.md#0x2_table_vec_empty">table_vec::empty</a>(ctx),
     }
 }
 </code></pre>
@@ -514,8 +514,8 @@ when the delegation object containing the pool tokens is distributed to the dele
         principal: <a href="stake.md#0x2_stake">stake</a>,
         sui_token_lock,
     };
-    // insert delegation info into the pendng_delegations <a href="">vector</a>.
-    <a href="_push_back">vector::push_back</a>(
+    // insert delegation info into the pending_delegations <a href="table.md#0x2_table">table</a>.
+    <a href="table_vec.md#0x2_table_vec_push_back">table_vec::push_back</a>(
         &<b>mut</b> pool.pending_delegations,
         <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount, staked_sui_id: <a href="object.md#0x2_object_id">object::id</a>(&staked_sui) }
     );
@@ -558,7 +558,7 @@ can use the new exchange rate to calculate the rewards.
         <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, delegation, staked_sui, principal_withdraw_amount);
 
     <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    <a href="_push_back">vector::push_back</a>(&<b>mut</b> pool.pending_withdraws, <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> {
+    <a href="table_vec.md#0x2_table_vec_push_back">table_vec::push_back</a>(&<b>mut</b> pool.pending_withdraws, <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> {
         delegator, principal_withdraw_amount, withdrawn_pool_tokens });
 
     // TODO: implement withdraw bonding period here.
@@ -684,8 +684,8 @@ tokens.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraws">process_pending_delegation_withdraws</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) : u64 {
     <b>let</b> total_reward_withdraw = 0;
 
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&pool.pending_withdraws)) {
-        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> { delegator, principal_withdraw_amount, withdrawn_pool_tokens } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> pool.pending_withdraws);
+    <b>while</b> (!<a href="table_vec.md#0x2_table_vec_is_empty">table_vec::is_empty</a>(&pool.pending_withdraws)) {
+        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> { delegator, principal_withdraw_amount, withdrawn_pool_tokens } = <a href="table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> pool.pending_withdraws);
         <b>let</b> reward_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool, principal_withdraw_amount, withdrawn_pool_tokens);
         total_reward_withdraw = total_reward_withdraw + <a href="balance.md#0x2_balance_value">balance::value</a>(&reward_withdraw);
         <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(reward_withdraw, ctx), delegator);
@@ -717,9 +717,9 @@ during the previous epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">process_pending_delegations</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&pool.pending_delegations)) {
+    <b>while</b> (!<a href="table_vec.md#0x2_table_vec_is_empty">table_vec::is_empty</a>(&pool.pending_delegations)) {
         <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount, staked_sui_id } =
-            <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> pool.pending_delegations);
+            <a href="table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> pool.pending_delegations);
         <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool, delegator, sui_amount, staked_sui_id, ctx);
         pool.sui_balance = pool.sui_balance + sui_amount;
     };
@@ -744,7 +744,7 @@ used in <code><a href="validator_set.md#0x2_validator_set">validator_set</a></co
 into the new validator's staking pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens">batch_withdraw_rewards_and_burn_pool_tokens</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, entries: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;): (<a href="">vector</a>&lt;<b>address</b>&gt;, <a href="">vector</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens">batch_withdraw_rewards_and_burn_pool_tokens</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, entries: <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;): (<a href="">vector</a>&lt;<b>address</b>&gt;, <a href="">vector</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, u64)
 </code></pre>
 
 
@@ -755,18 +755,18 @@ into the new validator's staking pool.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens">batch_withdraw_rewards_and_burn_pool_tokens</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
-    entries: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a>&gt;,
+    entries: TableVec&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a>&gt;,
 ) : (<a href="">vector</a>&lt;<b>address</b>&gt;, <a href="">vector</a>&lt;Balance&lt;SUI&gt;&gt;, u64) {
     <b>let</b> (delegators, rewards, total_rewards_withdraw_amount) = (<a href="_empty">vector::empty</a>(), <a href="_empty">vector::empty</a>(), 0);
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&<b>mut</b> entries)) {
+    <b>while</b> (!<a href="table_vec.md#0x2_table_vec_is_empty">table_vec::is_empty</a>(&<b>mut</b> entries)) {
         <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> { delegator, principal_withdraw_amount, withdrawn_pool_tokens }
-            = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> entries);
+            = <a href="table_vec.md#0x2_table_vec_pop_back">table_vec::pop_back</a>(&<b>mut</b> entries);
         <b>let</b> reward = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool, principal_withdraw_amount, withdrawn_pool_tokens);
         total_rewards_withdraw_amount = total_rewards_withdraw_amount + <a href="balance.md#0x2_balance_value">balance::value</a>(&reward);
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> delegators, delegator);
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> rewards, reward);
     };
-    <a href="_destroy_empty">vector::destroy_empty</a>(entries);
+    <a href="table_vec.md#0x2_table_vec_destroy_empty">table_vec::destroy_empty</a>(entries);
     (delegators, rewards, total_rewards_withdraw_amount)
 }
 </code></pre>

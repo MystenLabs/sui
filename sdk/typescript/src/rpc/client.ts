@@ -3,7 +3,16 @@
 
 import RpcClient from 'jayson/lib/client/browser/index.js';
 import fetch from 'cross-fetch';
-import { isErrorResponse, isValidResponse } from './client.guard';
+import {
+  any,
+  Infer,
+  is,
+  literal,
+  object,
+  optional,
+  string,
+  Struct,
+} from 'superstruct';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -22,6 +31,22 @@ const TYPE_MISMATCH_ERROR =
   `The response returned from RPC server does not match ` +
   `the TypeScript definition. This is likely because the SDK version is not ` +
   `compatible with the RPC server. Please update your SDK version to the latest. `;
+
+export const ValidResponse = object({
+  jsonrpc: literal('2.0'),
+  id: string(),
+  result: any(),
+});
+
+export const ErrorResponse = object({
+  jsonrpc: literal('2.0'),
+  id: string(),
+  error: object({
+    code: any(),
+    message: string(),
+    data: optional(any()),
+  }),
+});
 
 export class JsonRpcClient {
   private rpcClient: RpcClient;
@@ -68,14 +93,15 @@ export class JsonRpcClient {
   async requestWithType<T>(
     method: string,
     args: Array<any>,
-    isT: (val: any) => val is T,
+    struct: Struct<T>,
     skipDataValidation: boolean = false
   ): Promise<T> {
     const response = await this.request(method, args);
-    if (isErrorResponse(response)) {
+    if (is(response, ErrorResponse)) {
       throw new Error(`RPC Error: ${response.error.message}`);
-    } else if (isValidResponse(response)) {
-      const expectedSchema = isT(response.result);
+    } else if (is(response, ValidResponse)) {
+      // TODO: Improve error messaging here using superstruct asserts
+      const expectedSchema = is(response.result, struct);
       const errMsg =
         TYPE_MISMATCH_ERROR +
         `Result received was: ${JSON.stringify(response.result)}`;
@@ -103,17 +129,18 @@ export class JsonRpcClient {
     });
   }
 
+  // TODO: Improve validation errors:
   async batchRequestWithType<T>(
     requests: RpcParams[],
-    isT: (val: any) => val is T,
+    struct: Struct<T>,
     skipDataValidation: boolean = false
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
     // TODO: supports other error modes such as throw or return
     const validResponses = responses.filter(
       (response: any) =>
-        isValidResponse(response) &&
-        (skipDataValidation || isT(response.result))
+        is(response, ValidResponse) &&
+        (skipDataValidation || is(response.result, struct))
     );
 
     if (responses.length > validResponses.length) {
@@ -122,9 +149,11 @@ export class JsonRpcClient {
           responses.length - validResponses.length
         } of the ${responses.length} requests has invalid schema.`
       );
-      const exampleTypeMismatch = responses.find((r: any) => !isT(r.result));
+      const exampleTypeMismatch = responses.find(
+        (r: any) => !is(r.result, struct)
+      );
       const exampleInvalidResponseIndex = responses.findIndex(
-        (r: any) => !isValidResponse(r)
+        (r: any) => !is(r, ValidResponse)
       );
       if (exampleTypeMismatch) {
         console.warn(
@@ -145,7 +174,9 @@ export class JsonRpcClient {
       }
     }
 
-    return validResponses.map((response: ValidResponse) => response.result);
+    return validResponses.map(
+      (response: Infer<typeof ValidResponse>) => response.result
+    );
   }
 
   async batchRequest(requests: RpcParams[]): Promise<any> {
@@ -167,19 +198,3 @@ export class JsonRpcClient {
     });
   }
 }
-
-export type ValidResponse = {
-  jsonrpc: '2.0';
-  id: string;
-  result: any;
-};
-
-export type ErrorResponse = {
-  jsonrpc: '2.0';
-  id: string;
-  error: {
-    code: any;
-    message: string;
-    data?: any;
-  };
-};

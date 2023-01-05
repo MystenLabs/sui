@@ -30,7 +30,6 @@
 */
 
 use arc_swap::ArcSwap;
-use prometheus::Registry;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
@@ -39,8 +38,6 @@ use tracing::debug;
 use crate::{authority::AuthorityState, authority_aggregator::AuthorityAggregator};
 
 use tokio::time::Instant;
-pub mod gossip;
-use gossip::GossipMetrics;
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -95,17 +92,10 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
-    // Gossip Metrics including gossip between validators and
-    // node sync process between fullnode and validators
-    pub gossip_metrics: GossipMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
-    pub fn new(
-        authority: Arc<AuthorityState>,
-        net: AuthorityAggregator<A>,
-        prometheus_registry: &Registry,
-    ) -> SuiResult<Self> {
+    pub fn new(authority: Arc<AuthorityState>, net: AuthorityAggregator<A>) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
         let net = Arc::new(net);
@@ -119,7 +109,6 @@ impl<A> ActiveAuthority<A> {
             )),
             state: authority,
             net: ArcSwap::from(net),
-            gossip_metrics: GossipMetrics::new(prometheus_registry),
         })
     }
 
@@ -131,7 +120,7 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
-        Self::new(authority, net, &Registry::new())
+        Self::new(authority, net)
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -193,7 +182,6 @@ impl<A> Clone for ActiveAuthority<A> {
             state: self.state.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
-            gossip_metrics: self.gossip_metrics.clone(),
         }
     }
 }

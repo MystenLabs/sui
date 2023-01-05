@@ -622,6 +622,7 @@ pub fn resolve_move_function_args(
     function: Identifier,
     type_args: &[TypeTag],
     combined_args_json: Vec<SuiJsonValue>,
+    allow_arbitrary_function_call: bool,
 ) -> Result<Vec<SuiJsonCallArg>, anyhow::Error> {
     // Extract the expected function signature
     let module = package.deserialize_module(&module_ident)?;
@@ -642,7 +643,7 @@ pub fn resolve_move_function_args(
     let function_signature = module.function_handle_at(fdef.function);
     let parameters = &module.signature_at(function_signature.parameters).0;
 
-    if !fdef.is_entry {
+    if !allow_arbitrary_function_call && !fdef.is_entry {
         bail!(
             "{}::{} is not an entry function",
             module.self_id(),

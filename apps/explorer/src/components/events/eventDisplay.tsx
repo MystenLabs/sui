@@ -2,33 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    isMoveEvent,
-    isNewObjectEvent,
-    isTransferObjectEvent,
-    isDeleteObjectEvent,
-    isPublishEvent,
-    isCoinBalanceChangeEvent,
-    isMutateObjectEvent,
-} from '@mysten/sui.js';
-
-import { isBigIntOrNumber } from '../../utils/numberUtil';
-import { getOwnerStr } from '../../utils/objectUtils';
-import { truncate } from '../../utils/stringUtils';
-
-import type { Category } from '../../pages/transaction-result/TransactionResultType';
-import type { LinkObj } from '../transaction-card/TxCardUtils';
-import type {
-    MoveEvent,
+    is,
     NewObjectEvent,
-    ObjectId,
-    SuiAddress,
-    SuiEvent,
     TransferObjectEvent,
     DeleteObjectEvent,
     PublishEvent,
     CoinBalanceChangeEvent,
     MutateObjectEvent,
+    MoveEvent,
+    EpochChangeEvent,
+    CheckpointEvent,
+    type SuiEvent,
+    type SuiAddress,
+    type ObjectId,
 } from '@mysten/sui.js';
+
+import { getOwnerStr } from '../../utils/objectUtils';
+import { truncate } from '../../utils/stringUtils';
+
+import type { Category } from '../../pages/transaction-result/TransactionResultType';
+import type { LinkObj } from '../transaction-card/TxCardUtils';
 
 export type ContentItem = {
     label: string;
@@ -229,7 +222,7 @@ export function publishEventDisplay(event: PublishEvent): EventDisplayData {
 export function bigintDisplay(
     title: string,
     label: string,
-    value: bigint
+    value: bigint | number
 ): EventDisplayData {
     return {
         top: {
@@ -240,38 +233,38 @@ export function bigintDisplay(
 }
 
 export function eventToDisplay(event: SuiEvent) {
-    if ('moveEvent' in event && isMoveEvent(event.moveEvent))
+    if ('moveEvent' in event && is(event.moveEvent, MoveEvent))
         return moveEventDisplay(event.moveEvent);
 
-    if ('newObject' in event && isNewObjectEvent(event.newObject))
+    if ('newObject' in event && is(event.newObject, NewObjectEvent))
         return newObjectEventDisplay(event.newObject);
 
     if (
         'transferObject' in event &&
-        isTransferObjectEvent(event.transferObject)
+        is(event.transferObject, TransferObjectEvent)
     )
         return transferObjectEventDisplay(event.transferObject);
 
-    if ('mutateObject' in event && isMutateObjectEvent(event.mutateObject))
+    if ('mutateObject' in event && is(event.mutateObject, MutateObjectEvent))
         return mutateObjectEventDisplay(event.mutateObject);
 
-    if ('deleteObject' in event && isDeleteObjectEvent(event.deleteObject))
+    if ('deleteObject' in event && is(event.deleteObject, DeleteObjectEvent))
         return deleteObjectEventDisplay(event.deleteObject);
 
     if (
         'coinBalanceChange' in event &&
-        isCoinBalanceChangeEvent(event.coinBalanceChange)
+        is(event.coinBalanceChange, CoinBalanceChangeEvent)
     )
         return coinBalanceChangeEventDisplay(event.coinBalanceChange);
 
-    if ('publish' in event && isPublishEvent(event.publish))
+    if ('publish' in event && is(event.publish, PublishEvent))
         return publishEventDisplay(event.publish);
 
     // TODO - once epoch and checkpoint pages exist, make these links
-    if ('epochChange' in event && isBigIntOrNumber(event.epochChange))
+    if ('epochChange' in event && is(event.epochChange, EpochChangeEvent))
         return bigintDisplay('Epoch Change', 'Epoch ID', event.epochChange);
 
-    if ('checkpoint' in event && isBigIntOrNumber(event.checkpoint))
+    if ('checkpoint' in event && is(event.checkpoint, CheckpointEvent))
         return bigintDisplay('Checkpoint', 'Sequence #', event.checkpoint);
 
     return null;

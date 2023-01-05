@@ -6,27 +6,25 @@ use std::str::FromStr;
 
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use fastcrypto::encoding::{Base64, Hex};
+use fastcrypto::encoding::Hex;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
 use serde_json::Value;
-use serde_with::serde_as;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 use sui_sdk::rpc_types::SuiExecutionStatus;
-use sui_types::base_types::{
-    ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
-};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::sui_serde::Readable;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operation;
 use crate::SUI;
 
-#[derive(Serialize, Deserialize, Clone)]
+pub type BlockHeight = u64;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkIdentifier {
     pub blockchain: String,
     pub network: SuiEnv,
@@ -98,22 +96,13 @@ impl IntoResponse for AccountBalanceResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, Copy)]
 pub struct BlockIdentifier {
-    pub index: u64,
+    pub index: BlockHeight,
     pub hash: BlockHash,
 }
-#[serde_as]
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
-pub struct BlockHash(
-    #[serde_as(as = "Readable<Base64, _>")] pub(crate) [u8; TRANSACTION_DIGEST_LENGTH],
-);
 
-impl From<TransactionDigest> for BlockHash {
-    fn from(digest: TransactionDigest) -> Self {
-        Self(digest.into_bytes())
-    }
-}
+pub type BlockHash = TransactionDigest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {
@@ -538,7 +527,7 @@ impl IntoResponse for TransactionIdentifierResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TransactionIdentifier {
     pub hash: TransactionDigest,
 }
@@ -755,7 +744,7 @@ pub enum Case {
     Null,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Block {
     pub block_identifier: BlockIdentifier,
     pub parent_block_identifier: BlockIdentifier,
@@ -765,7 +754,7 @@ pub struct Block {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Transaction {
     pub transaction_identifier: TransactionIdentifier,
     pub operations: Vec<Operation>,
@@ -775,14 +764,14 @@ pub struct Transaction {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct RelatedTransaction {
     network_identifier: NetworkIdentifier,
     transaction_identifier: TransactionIdentifier,
     direction: Direction,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 #[allow(dead_code)]
 pub enum Direction {
@@ -790,7 +779,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct BlockResponse {
     pub block: Block,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

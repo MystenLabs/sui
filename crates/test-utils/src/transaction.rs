@@ -8,6 +8,7 @@ use tracing::{debug, info};
 
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_adapter::execution_mode;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
@@ -23,11 +24,11 @@ use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
-use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
-    TransactionEffects, TransactionInfoResponse, VerifiedTransaction,
+    TransactionEffects, VerifiedTransaction,
 };
+use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
 use sui_types::object::{Object, Owner};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
@@ -142,7 +143,7 @@ pub async fn submit_move_transaction(
     let client = context.get_client().await.unwrap();
     let data = client
         .transaction_builder()
-        .move_call(
+        .move_call::<execution_mode::Normal>(
             sender,
             package_ref.0,
             module,
@@ -484,10 +485,10 @@ pub async fn submit_shared_object_transaction_with_committee(
     replies.map(get_unique_effects)
 }
 
-pub fn get_unique_effects(replies: Vec<TransactionInfoResponse>) -> TransactionEffects {
+pub fn get_unique_effects(replies: Vec<HandleCertificateResponse>) -> TransactionEffects {
     let mut all_effects = HashMap::new();
     for reply in replies {
-        let effects = reply.signed_effects.unwrap().into_data();
+        let effects = reply.signed_effects.into_data();
         all_effects.insert(effects.digest(), effects);
     }
     assert_eq!(all_effects.len(), 1);

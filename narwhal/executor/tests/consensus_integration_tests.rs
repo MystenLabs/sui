@@ -7,6 +7,7 @@ use consensus::Consensus;
 use fastcrypto::hash::Hash;
 use narwhal_executor::get_restored_consensus_output;
 use narwhal_executor::MockExecutionState;
+use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
-use types::{Certificate, ReconfigureNotification, TransactionProto};
+use types::{Certificate, PreSubscribedBroadcastSender, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
@@ -52,8 +53,7 @@ async fn test_recovery() {
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
     let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let gc_depth = 50;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -68,7 +68,7 @@ async fn test_recovery() {
         committee,
         consensus_store.clone(),
         certificate_store.clone(),
-        rx_reconfigure,
+        tx_shutdown.subscribe(),
         rx_waiter,
         tx_primary,
         tx_consensus_round_updates,

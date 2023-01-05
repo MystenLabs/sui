@@ -6,29 +6,13 @@ pub use msim::*;
 
 // Re-export things used by sui-macros
 pub use anemo;
+pub use anemo_tower;
 pub use fastcrypto;
+pub use narwhal_network;
 pub use sui_framework;
 pub use sui_types;
 pub use telemetry_subscribers;
-
-/// Evaluates an expression in a new thread which will not be subject to interception of
-/// getrandom(), clock_gettime(), etc.
-#[cfg(msim)]
-#[macro_export]
-macro_rules! nondeterministic {
-    ($expr: expr) => {
-        std::thread::spawn(move || $expr).join()
-    };
-}
-
-/// Simply evaluates expr.
-#[cfg(not(msim))]
-#[macro_export]
-macro_rules! nondeterministic {
-    ($expr: expr) => {
-        $expr
-    };
-}
+pub use tower;
 
 #[cfg(msim)]
 pub mod configs {

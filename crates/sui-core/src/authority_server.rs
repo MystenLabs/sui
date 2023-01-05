@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_metrics::spawn_monitored_task;
 use narwhal_types::TransactionsClient;
@@ -12,7 +11,7 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
@@ -31,9 +30,6 @@ use crate::{
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
-
-const MIN_BATCH_SIZE: u64 = 1000;
-const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -69,8 +65,6 @@ pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    min_batch_size: u64,
-    max_delay: Duration,
     pub metrics: Arc<ValidatorServiceMetrics>,
 }
 
@@ -96,25 +90,8 @@ impl AuthorityServer {
             address,
             state,
             consensus_adapter,
-            min_batch_size: MIN_BATCH_SIZE,
-            max_delay: Duration::from_millis(MAX_DELAY_MILLIS),
             metrics,
         }
-    }
-
-    /// Create a batch subsystem, register it with the authority state, and
-    /// launch a task that manages it. Return the join handle of this task.
-    pub async fn spawn_batch_subsystem(
-        &self,
-        min_batch_size: u64,
-        max_delay: Duration,
-    ) -> SuiResult<JoinHandle<()>> {
-        // Start the batching subsystem, and register the handles with the authority.
-        let state = self.state.clone();
-        let batch_join_handle =
-            spawn_monitored_task!(state.run_batch_service(min_batch_size, max_delay));
-
-        Ok(batch_join_handle)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -126,11 +103,6 @@ impl AuthorityServer {
         self,
         address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
-        // Start the batching subsystem
-        let _join_handle = self
-            .spawn_batch_subsystem(self.min_batch_size, self.max_delay)
-            .await;
-
         let mut server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
@@ -319,7 +291,7 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
         let certificate = request.into_inner();
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -331,10 +303,16 @@ impl ValidatorService {
                 .start_timer()
         };
 
+        let epoch_store = state.epoch_store();
+
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
-        if let Some(response) = state.get_tx_info_already_executed(&tx_digest).await? {
-            return Ok(tonic::Response::new(response.into()));
+        if let Some(signed_effects) =
+            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+        {
+            return Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects,
+            }));
         }
 
         // 2) Validate if cert can be executed, and verify the cert.
@@ -351,7 +329,6 @@ impl ValidatorService {
         }
         // code block within reconfiguration lock
         let certificate = {
-            let epoch_store = state.epoch_store();
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
             if !reconfiguration_lock.should_accept_user_certs() {
                 metrics.num_rejected_cert_in_epoch_boundary.inc();
@@ -367,7 +344,7 @@ impl ValidatorService {
             // For shared objects this will wait until either timeout or we have heard back from consensus.
             // For owned objects this will return without waiting for certificate to be sequenced
             // First do quick dirty non-async check
-            if !state.consensus_message_processed(&certificate)? {
+            if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
                 let _metrics_guard = if shared_object_tx {
                     Some(metrics.consensus_latency.start_timer())
                 } else {
@@ -377,7 +354,7 @@ impl ValidatorService {
                     &state.name,
                     certificate.clone().into(),
                 );
-                consensus_adapter.submit(transaction, Some(&reconfiguration_lock))?;
+                consensus_adapter.submit(transaction, Some(&reconfiguration_lock), &epoch_store)?;
                 // Do not wait for the result, because the transaction might have already executed.
                 // Instead, check or wait for the existence of certificate effects below.
             }
@@ -390,12 +367,14 @@ impl ValidatorService {
         let res = if certificate.contains_shared_object() {
             // The transaction needs sequencing by Narwhal before it can be sent for execution.
             // So rely on the submission to consensus above to execute the certificate.
-            state.notify_read_transaction_info(&certificate).await
+            state.notify_read_effects(&certificate).await
         } else {
-            state.execute_certificate(&certificate).await
+            state.execute_certificate(&certificate, &epoch_store).await
         };
         match res {
-            Ok(response) => Ok(tonic::Response::new(response.into())),
+            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects,
+            })),
             Err(e) => Err(tonic::Status::from(e)),
         }
     }
@@ -420,7 +399,7 @@ impl Validator for ValidatorService {
     async fn handle_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
         let state = self.state.clone();
         let consensus_adapter = self.consensus_adapter.clone();
 
@@ -468,21 +447,6 @@ impl Validator for ValidatorService {
         let response = self.state.handle_transaction_info_request(request).await?;
 
         Ok(tonic::Response::new(response.into()))
-    }
-
-    type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
-
-    async fn batch_info(
-        &self,
-        request: tonic::Request<BatchInfoRequest>,
-    ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
-        let request = request.into_inner();
-
-        let xstream = self.state.handle_batch_streaming(request).await?;
-
-        let response = xstream.map_err(tonic::Status::from);
-
-        Ok(tonic::Response::new(Box::pin(response)))
     }
 
     async fn checkpoint(

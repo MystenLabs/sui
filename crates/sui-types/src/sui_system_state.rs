@@ -108,6 +108,32 @@ pub struct PendingWithdrawEntry {
     withdrawn_pool_tokens: Balance,
 }
 
+/// Rust version of the Move sui::table::Table type. Putting it here since
+/// we only use it in sui_system in the framework.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct TableVec {
+    pub contents: Table,
+}
+
+impl Default for TableVec {
+    fn default() -> Self {
+        TableVec {
+            contents: Table {
+                id: ObjectID::from(SuiAddress::ZERO),
+                size: 0,
+            },
+        }
+    }
+}
+
+/// Rust version of the Move sui::table::Table type. Putting it here since
+/// we only use it in sui_system in the framework.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct Table {
+    pub id: ObjectID,
+    pub size: u64,
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
@@ -116,8 +142,8 @@ pub struct StakingPool {
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,
-    pub pending_delegations: Vec<PendingDelegationEntry>,
-    pub pending_withdraws: Vec<PendingWithdrawEntry>,
+    pub pending_delegations: TableVec,
+    pub pending_withdraws: TableVec,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorPair type
@@ -137,7 +163,7 @@ pub struct ValidatorSet {
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
     pub next_epoch_validators: Vec<ValidatorMetadata>,
-    pub pending_delegation_switches: VecMap<ValidatorPair, Vec<PendingWithdrawEntry>>,
+    pub pending_delegation_switches: VecMap<ValidatorPair, TableVec>,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type

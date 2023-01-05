@@ -1,0 +1,20 @@
+# Update this value to the location you want Sui to store its database
+db-path: "suidb"
+
+network-address: "/dns/localhost/tcp/8080/http"
+metrics-address: "0.0.0.0:9184"
+json-rpc-address: "0.0.0.0:9000"
+websocket-address: "0.0.0.0:9001"
+enable-event-processing: true
+
+genesis:
+  # Update this to the location of where the genesis file is stored
+  genesis-file-location: "genesis.blob"
+protocol-key-pair:
+  path: "protocol.key"
+network-key-pair: 
+  path: "network.key"
+account-key-pair: 
+  path: "account.key"
+worker-key-pair: 
+  path: "worker.key"

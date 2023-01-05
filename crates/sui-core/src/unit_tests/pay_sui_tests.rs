@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
-
 use crate::authority::authority_tests::{init_state, send_and_confirm_transaction};
 use crate::authority::AuthorityState;
 use futures::future::join_all;
 use std::collections::HashMap;
+use std::sync::Arc;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
+use sui_types::gas_coin::GasCoin;
+use sui_types::messages::{
+    ExecutionFailureStatus, ExecutionStatus, PayAllSui, PaySui, SignedTransactionEffects,
+    SingleTransactionKind, TransactionData,
+};
+use sui_types::object::Object;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::dbg_addr,
-    crypto::get_key_pair,
-    error::SuiError,
-    messages::{TransactionInfoResponse, TransactionKind},
+    base_types::dbg_addr, crypto::get_key_pair, error::SuiError, messages::TransactionKind,
 };
 
 #[tokio::test]
@@ -23,7 +26,7 @@ async fn test_pay_sui_failure_empty_recipients() {
 
     let res = execute_pay_sui(vec![coin1], vec![], vec![], sender, sender_key, 1100).await;
 
-    let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
+    let effects = res.txn_result.unwrap().into_data();
     assert_eq!(
         effects.status,
         ExecutionStatus::new_failure(ExecutionFailureStatus::EmptyRecipients)
@@ -47,7 +50,7 @@ async fn test_pay_sui_failure_arity_mismatch() {
     )
     .await;
 
-    let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
+    let effects = res.txn_result.unwrap().into_data();
     assert_eq!(
         effects.status,
         ExecutionStatus::new_failure(ExecutionFailureStatus::RecipientsAmountsArityMismatch)
@@ -74,11 +77,10 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                1000, 1200, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 1200,
+            gas_price: 1
         }
     );
 }
@@ -103,13 +105,10 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Total balance is {}, not enough to pay {} with gas price of {}",
-                1000,
-                100 + 100 + 900,
-                1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 100 + 100 + 900,
+            gas_price: 1
         }
     );
 }
@@ -135,11 +134,10 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                400, 801, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 400,
+            gas_budget: 801,
+            gas_price: 1
         }
     );
 }
@@ -165,13 +163,10 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Total balance is {}, not enough to pay {} with gas price of {}",
-                400 + 600,
-                400 + 400 + 201,
-                1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 400 + 600,
+            gas_budget: 400 + 400 + 201,
+            gas_price: 1
         }
     );
 }
@@ -196,7 +191,7 @@ async fn test_pay_sui_success_one_input_coin() -> anyhow::Result<()> {
     )
     .await;
 
-    let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
+    let effects = res.txn_result.unwrap().into_data();
     assert_eq!(effects.status, ExecutionStatus::Success);
     // make sure each recipient receives the specified amount
     assert_eq!(effects.created.len(), 3);
@@ -275,7 +270,7 @@ async fn test_pay_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     .await;
     let recipient_amount_map: HashMap<_, u64> =
         HashMap::from([(recipient1, 500), (recipient2, 1500)]);
-    let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
+    let effects = res.txn_result.unwrap().into_data();
     assert_eq!(effects.status, ExecutionStatus::Success);
 
     // make sure each recipient receives the specified amount
@@ -333,11 +328,10 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                1000, 2000, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 2000,
+            gas_price: 1
         }
     );
 }
@@ -353,11 +347,10 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     let err = res.txn_result.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                1000, 2500, 1
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: 1000,
+            gas_budget: 2500,
+            gas_price: 1
         }
     );
 }
@@ -370,7 +363,7 @@ async fn test_pay_all_sui_success_one_input_coin() -> anyhow::Result<()> {
     let recipient = dbg_addr(2);
     let res = execute_pay_all_sui(vec![&coin_obj], recipient, sender, sender_key, 1000).await;
 
-    let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
+    let effects = res.txn_result.unwrap().into_data();
     assert_eq!(effects.status, ExecutionStatus::Success);
 
     // make sure the first object now belongs to the recipient,
@@ -402,7 +395,7 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     )
     .await;
 
-    let effects = res.txn_result.unwrap().signed_effects.unwrap().into_data();
+    let effects = res.txn_result.unwrap().into_data();
     assert_eq!(effects.status, ExecutionStatus::Success);
 
     // make sure the first object now belongs to the recipient,
@@ -419,7 +412,7 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
 
 struct PaySuiTransactionExecutionResult {
     pub authority_state: Arc<AuthorityState>,
-    pub txn_result: Result<TransactionInfoResponse, SuiError>,
+    pub txn_result: Result<SignedTransactionEffects, SuiError>,
 }
 
 async fn execute_pay_sui(
@@ -450,9 +443,7 @@ async fn execute_pay_sui(
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx)
-        .await
-        .map(|t| t.into());
+    let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
 
     PaySuiTransactionExecutionResult {
         authority_state,
@@ -484,9 +475,7 @@ async fn execute_pay_all_sui(
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx)
-        .await
-        .map(|t| t.into());
+    let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
     PaySuiTransactionExecutionResult {
         authority_state,
         txn_result,

@@ -108,6 +108,7 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
+    checkpoints_per_epoch: Option<u64>,
 }
 
 impl TestClusterBuilder {
@@ -117,6 +118,7 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
+            checkpoints_per_epoch: None,
         }
     }
 
@@ -137,6 +139,11 @@ impl TestClusterBuilder {
 
     pub fn enable_fullnode_events(mut self) -> Self {
         self.enable_fullnode_events = true;
+        self
+    }
+
+    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
+        self.checkpoints_per_epoch = Some(ckpts);
         self
     }
 
@@ -196,6 +203,10 @@ impl TestClusterBuilder {
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.initial_accounts_config(genesis_config);
+        }
+
+        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
+            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
         }
 
         let mut swarm = builder.build();

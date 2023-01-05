@@ -24,6 +24,8 @@ pub struct P2pConfig {
     pub anemo_config: Option<anemo::Config>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state_sync: Option<StateSyncConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discovery: Option<DiscoveryConfig>,
 }
 
 fn default_listen_address() -> SocketAddr {
@@ -38,6 +40,7 @@ impl Default for P2pConfig {
             seed_peers: Default::default(),
             anemo_config: Default::default(),
             state_sync: None,
+            discovery: None,
         }
     }
 }
@@ -77,6 +80,12 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_header_download_concurrency: Option<usize>,
 
+    /// Set the upper bound on the number of checkpoint contents to be downloaded concurrently.
+    ///
+    /// If unspecified, this will default to `100`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_download_concurrency: Option<usize>,
+
     /// Set the upper bound on the number of transactions to be downloaded concurrently from a
     /// single checkpoint.
     ///
@@ -112,10 +121,63 @@ impl StateSyncConfig {
             .unwrap_or(CHECKPOINT_HEADER_DOWNLOAD_CONCURRENCY)
     }
 
+    pub fn checkpoint_content_download_concurrency(&self) -> usize {
+        const CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY: usize = 100;
+
+        self.checkpoint_content_download_concurrency
+            .unwrap_or(CHECKPOINT_CONTENT_DOWNLOAD_CONCURRENCY)
+    }
+
     pub fn transaction_download_concurrency(&self) -> usize {
         const TRANSACTION_DOWNLOAD_CONCURRENCY: usize = 100;
 
         self.transaction_download_concurrency
             .unwrap_or(TRANSACTION_DOWNLOAD_CONCURRENCY)
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct DiscoveryConfig {
+    /// Query peers for their latest checkpoint every interval period.
+    ///
+    /// If unspecified, this will default to `5,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval_period_ms: Option<u64>,
+
+    /// Target number of conncurrent connections to establish.
+    ///
+    /// If unspecified, this will default to `4`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_concurrent_connections: Option<usize>,
+
+    /// Number of peers to query each interval.
+    ///
+    /// Sets the number of peers, to be randomly selected, that are queried for their known peers
+    /// each interval.
+    ///
+    /// If unspecified, this will default to `1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peers_to_query: Option<usize>,
+}
+
+impl DiscoveryConfig {
+    pub fn interval_period(&self) -> Duration {
+        const INTERVAL_PERIOD_MS: u64 = 5_000; // 5 seconds
+
+        Duration::from_millis(self.interval_period_ms.unwrap_or(INTERVAL_PERIOD_MS))
+    }
+
+    pub fn target_concurrent_connections(&self) -> usize {
+        const TARGET_CONCURRENT_CONNECTIONS: usize = 4;
+
+        self.target_concurrent_connections
+            .unwrap_or(TARGET_CONCURRENT_CONNECTIONS)
+    }
+
+    pub fn peers_to_query(&self) -> usize {
+        const PEERS_TO_QUERY: usize = 1;
+
+        self.peers_to_query.unwrap_or(PEERS_TO_QUERY)
     }
 }

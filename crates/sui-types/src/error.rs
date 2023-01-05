@@ -119,10 +119,14 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Unexpected validator response from handle_transaction: {err}")]
-    UnexpectedResultFromValidatorHandleTransaction { err: String },
     #[error("Transaction certificate processing failed: {err}")]
     ErrorWhileProcessingCertificate { err: String },
+    #[error(
+        "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
+    )]
+    QuorumFailedToFormEffectsCertWhenProcessingTransaction {
+        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+    },
     #[error(
         "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
         conflicting_tx_digests,
@@ -307,10 +311,23 @@ pub enum SuiError {
     },
 
     // Gas related errors
-    #[error("Gas budget set higher than max: {error:?}.")]
-    GasBudgetTooHigh { error: String },
-    #[error("Insufficient gas: {error:?}.")]
-    InsufficientGas { error: String },
+    #[error("Gas object is not an owned object with owner: {:?}.", owner)]
+    GasObjectNotOwnedObject { owner: Owner },
+    #[error("Gas budget: {:?} is higher than max: {:?}.", gas_budget, max_budget)]
+    GasBudgetTooHigh { gas_budget: u64, max_budget: u64 },
+    #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
+    GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
+    #[error(
+        "Balance of gas object {:?} is lower than gas budget: {:?}, with gas price: {:?}.",
+        gas_balance,
+        gas_budget,
+        gas_price
+    )]
+    GasBalanceTooLowToCoverGasBudget {
+        gas_balance: u128,
+        gas_budget: u128,
+        gas_price: u64,
+    },
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
@@ -606,10 +623,7 @@ impl SuiError {
         match self {
             SuiError::QuorumFailedToProcessTransaction { errors, .. }
             | SuiError::QuorumFailedToExecuteCertificate { errors, .. } => {
-                errors.iter().any(|err| {
-                    matches!(err, SuiError::ValidatorHaltedAtEpochEnd)
-                        || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
-                })
+                errors.iter().any(|err| err.indicates_epoch_change())
             }
             SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
             _ => false,

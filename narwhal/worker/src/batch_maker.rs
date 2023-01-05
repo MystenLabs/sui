@@ -20,14 +20,13 @@ use futures::{Future, StreamExt};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::sync::Arc;
 use tokio::{
-    sync::watch,
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, PrimaryResponse, ReconfigureNotification, Transaction, TxResponse,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction, TxResponse,
     WorkerOurBatchMessage,
 };
 
@@ -48,16 +47,16 @@ pub struct BatchMaker {
     batch_size: usize,
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
-    /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
     tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
-    /// The timestamp of the first transaction received
-    /// to be included on the next batch
+    /// The timestamp of the batch creation.
+    /// Average resident time in the batch would be ~ (batch seal time - creation time) / 2
     batch_start_timestamp: Instant,
     /// The batch store to store our own batches.
     store: Store<BatchDigest, Batch>,
@@ -72,7 +71,7 @@ impl BatchMaker {
         committee: Committee,
         batch_size: usize,
         max_batch_delay: Duration,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
         tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
         node_metrics: Arc<WorkerMetrics>,
@@ -86,7 +85,7 @@ impl BatchMaker {
                     committee,
                     batch_size,
                     max_batch_delay,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_batch_maker,
                     tx_message,
                     batch_start_timestamp: Instant::now(),
@@ -119,15 +118,6 @@ impl BatchMaker {
                 // 'in-flight' are below a certain number (MAX_PARALLEL_BATCH). This
                 // condition will be met eventually if the store and network are functioning.
                 Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
-
-                    if current_batch.transactions.is_empty() {
-                        // We are interested to measure the time to seal a batch
-                        // only when we do have transactions to include. Thus we reset
-                        // the timer on the first transaction we receive to include on
-                        // an empty batch.
-                        self.batch_start_timestamp = Instant::now();
-                    }
-
                     current_batch_size += transaction.len();
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
@@ -137,10 +127,12 @@ impl BatchMaker {
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
-                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                         current_batch = Batch::default();
                         current_responses = Vec::new();
                         current_batch_size = 0;
+
+                        timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                        self.batch_start_timestamp = Instant::now();
                     }
                 },
 
@@ -157,25 +149,12 @@ impl BatchMaker {
                         current_batch_size = 0;
                     }
                     timer.as_mut().reset(Instant::now() + self.max_batch_delay);
+                    self.batch_start_timestamp = Instant::now();
                 }
 
-                // TODO: duplicated code in quorum_waiter.rs
-                // Trigger reconfigure.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-
-                        },
-                        ReconfigureNotification::Shutdown => return
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-                },
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
+                }
 
                 // Process the pipeline of batches, this consumes items in the `batch_pipeline`
                 // list, and ensures the main loop in run will always be able to make progress

@@ -4,7 +4,7 @@
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{PublicKey, Signature};
-use fastcrypto::{hash::Hash as _, SignatureService};
+use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
@@ -16,12 +16,12 @@ use tokio::{
     time::{sleep, Duration},
 };
 use tracing::{debug, enabled, error, info};
-use types::now;
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, ReconfigureNotification, Round, TimestampMs,
+    BatchDigest, Certificate, Header, Round, TimestampMs,
 };
+use types::{now, ConditionalBroadcastReceiver};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -63,8 +63,8 @@ pub struct Proposer {
     /// The network model in which the node operates.
     network_model: NetworkModel,
 
-    /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives the parents to include in the next header (along with their round number) from core.
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
@@ -109,7 +109,7 @@ impl Proposer {
         max_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
         network_model: NetworkModel,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_our_digests: Receiver<OurDigestMessage>,
         tx_headers: Sender<Header>,
@@ -129,7 +129,7 @@ impl Proposer {
                     max_header_delay,
                     header_resend_timeout,
                     network_model,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_parents,
                     rx_our_digests,
                     tx_headers,
@@ -241,9 +241,11 @@ impl Proposer {
         self.proposed_headers.insert(this_round, header.clone());
 
         // Update metrics related to latency
+        let mut total_inclusion_secs = 0.0;
         for (_digest, _worker_id, created_at_timestamp) in digests.clone() {
-            let batch_inclusion_duration =
+            let batch_inclusion_secs =
                 Duration::from_millis(header.created_at - created_at_timestamp).as_secs_f64();
+            total_inclusion_secs += batch_inclusion_secs;
 
             #[cfg(feature = "benchmark")]
             {
@@ -252,33 +254,33 @@ impl Proposer {
                     "Batch {:?} from worker {} took {} seconds from creation to be included in a proposed header",
                     _digest,
                     _worker_id,
-                    batch_inclusion_duration
+                    batch_inclusion_secs
                 );
             }
 
             self.metrics
                 .proposer_batch_latency
-                .observe(batch_inclusion_duration);
+                .observe(batch_inclusion_secs);
         }
 
-        #[cfg(feature = "benchmark")]
         // NOTE: This log entry is used to compute performance.
-        tracing::info!(
-            "Header {:?} was created in {} seconds",
+        let (header_creation_secs, avg_inclusion_secs) = if let Some(digest) = digests.first() {
+            (
+                Duration::from_millis(header.created_at - digest.2).as_secs_f64(),
+                total_inclusion_secs / digests.len() as f64,
+            )
+        } else {
+            (self.max_header_delay.as_secs_f64(), 0.0)
+        };
+        debug!(
+            "Header {:?} was created in {} seconds. Contains {} batches, with average delay {} seconds.",
             header.digest(),
-            Duration::from_millis(header.created_at - digests.first().unwrap().2).as_secs_f64()
+            header_creation_secs,
+            digests.len(),
+            avg_inclusion_secs,
         );
 
         Ok(header)
-    }
-
-    /// Update the committee and cleanup internal state.
-    fn change_epoch(&mut self, committee: Committee) {
-        self.committee = committee;
-
-        self.round = 0;
-        let _ = self.tx_narwhal_round_updates.send(self.round);
-        self.last_parents = Certificate::genesis(&self.committee);
     }
 
     /// Compute the timeout value of the proposer.
@@ -502,28 +504,12 @@ impl Proposer {
                 Some((parents, round, epoch)) = self.rx_parents.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
+
                     match epoch.cmp(&self.committee.epoch()) {
-                        Ordering::Greater => {
-                            let message = self.rx_reconfigure.borrow_and_update().clone();
-                            match message  {
-                                ReconfigureNotification::NewEpoch(new_committee) => {
-                                    self.change_epoch(new_committee);
-                                },
-                                ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                    self.committee = new_committee;
-                                },
-                                ReconfigureNotification::Shutdown => return,
-                            }
-                            tracing::debug!("Committee updated to {}", self.committee);
-                        }
-                        Ordering::Less => {
-                            // We already updated committee but the core is slow. Ignore the parents
-                            // from older epochs.
-                            continue
-                        },
                         Ordering::Equal => {
-                            // Nothing to do, we can proceed.
+                            // we can proceed.
                         }
+                        _ => continue
                     }
 
                     // Sanity check: verify provided certs are of the correct round & epoch.
@@ -593,21 +579,8 @@ impl Proposer {
                     // Nothing to do.
                 }
 
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.change_epoch(new_committee);
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::Shutdown => return,
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
                 }
             }
 

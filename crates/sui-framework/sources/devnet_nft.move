@@ -60,13 +60,12 @@ module sui::devnet_nft {
     public entry fun update_description(
         nft: &mut DevNetNFT,
         new_description: vector<u8>,
-        _: &mut TxContext
     ) {
         nft.description = string::utf8(new_description)
     }
 
     /// Permanently delete `nft`
-    public entry fun burn(nft: DevNetNFT, _: &mut TxContext) {
+    public entry fun burn(nft: DevNetNFT) {
         let DevNetNFT { id, name: _, description: _, url: _ } = nft;
         object::delete(id)
     }
@@ -113,7 +112,7 @@ module sui::devnet_nftTests {
         ts::next_tx(&mut scenario, addr2);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            devnet_nft::update_description(&mut nft, b"a new description", ts::ctx(&mut scenario)) ;
+            devnet_nft::update_description(&mut nft, b"a new description") ;
             assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
             ts::return_to_sender(&mut scenario, nft);
         };
@@ -121,7 +120,7 @@ module sui::devnet_nftTests {
         ts::next_tx(&mut scenario, addr2);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            devnet_nft::burn(nft, ts::ctx(&mut scenario))
+            devnet_nft::burn(nft)
         };
         ts::end(scenario);
     }

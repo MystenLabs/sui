@@ -6,7 +6,7 @@
       "@mysten/bcs": ["../../bcs/src"],
       "@mysten/sui.js": ["../../typescript/src"],
       "@mysten/wallet-kit": ["../wallet-kit/src"],
-      "@mysten/wallet-adapter-react": ["../react-providers/src"],
+      "@mysten/wallet-kit-core": ["../wallet-kit-core/src"],
       "@mysten/wallet-adapter-all-wallets": ["../adapters/all-wallets/src"],
       "@mysten/wallet-adapter-base": ["../adapters/base-adapter/src"],
       "@mysten/wallet-adapter-unsafe-burner": ["../adapters/unsafe-burner/src"],
@@ -16,12 +16,12 @@
       ]
     }
   },
-  "include": ["example/src"],
+  "include": ["src"],
   "references": [
     { "path": "../../bcs" },
     { "path": "../../typescript" },
-    { "path": "../react-providers" },
     { "path": "../wallet-kit" },
+    { "path": "../wallet-kit-core" },
     { "path": "../wallet-standard" },
     { "path": "../adapters/all-wallets" },
     { "path": "../adapters/base-adapter" },

@@ -4,17 +4,17 @@
 
 use crate::authority_client::{
     make_authority_clients, make_network_authority_client_sets_from_committee,
-    make_network_authority_client_sets_from_system_state, AuthorityAPI, LocalAuthorityClient,
-    NetworkAuthorityClient,
+    make_network_authority_client_sets_from_system_state, AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
+use crate::test_authority_clients::LocalAuthorityClient;
 use crate::validator_info::make_committee;
 
 use async_trait::async_trait;
-use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
+use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use move_core_types::value::MoveStructLayout;
-use mysten_metrics::{monitored_future, spawn_monitored_task};
+use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use sui_config::genesis::Genesis;
@@ -47,7 +47,6 @@ use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
-use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
 use crate::authority::{AuthorityState, AuthorityStore};
@@ -55,7 +54,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
-const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
@@ -177,6 +175,7 @@ impl AuthAggMetrics {
     }
 }
 
+#[derive(Debug)]
 struct EffectsStakeInfo {
     stake: StakeUnit,
     effects: TransactionEffects,
@@ -300,6 +299,36 @@ impl<A> AuthorityAggregator<A> {
         }
     }
 
+    pub fn new_with_metrics(
+        committee: Committee,
+        committee_store: Arc<CommitteeStore>,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        safe_client_metrics_base: SafeClientMetricsBase,
+        auth_agg_metrics: AuthAggMetrics,
+    ) -> Self {
+        Self {
+            committee,
+            authority_clients: authority_clients
+                .into_iter()
+                .map(|(name, api)| {
+                    (
+                        name,
+                        SafeClient::new(
+                            api,
+                            committee_store.clone(),
+                            name,
+                            SafeClientMetrics::new(&safe_client_metrics_base, name),
+                        ),
+                    )
+                })
+                .collect(),
+            metrics: auth_agg_metrics,
+            safe_client_metrics_base: Arc::new(safe_client_metrics_base),
+            timeouts: Default::default(),
+            committee_store,
+        }
+    }
+
     /// This function recreates AuthorityAggregator with the given committee.
     /// It also updates committee store which impacts other of its references.
     /// If it is called on a Validator/Fullnode, it **may** interleave with the the authority active's
@@ -385,23 +414,29 @@ impl<A> AuthorityAggregator<A> {
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
-    /// Create a new network authority aggregator by reading the committee and network address
-    /// information from the system state object on-chain.
+    /// Create a new network authority aggregator by reading the committee and
+    /// network address information from the system state object on-chain.
+    /// This function needs metrics parameters because registry will panic
+    /// if we attempt to register already-registered metrics again.
     pub fn new_from_system_state(
         store: &Arc<AuthorityStore>,
         committee_store: &Arc<CommitteeStore>,
-        prometheus_registry: &Registry,
+        safe_client_metrics_base: SafeClientMetricsBase,
+        auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let net_config = default_mysten_network_config();
         let sui_system_state = store.get_sui_system_state_object()?;
-
+        // TODO: the function returns on URL parsing errors. In this case we should
+        // tolerate it as long as we have 2f+1 good validators.
+        // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
             make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)?;
-        Ok(Self::new(
+        Ok(Self::new_with_metrics(
             sui_system_state.get_current_epoch_committee().committee,
             committee_store.clone(),
             authority_clients,
-            prometheus_registry,
+            safe_client_metrics_base,
+            auth_agg_metrics,
         ))
     }
 }
@@ -422,7 +457,8 @@ pub trait TransactionCertifier: Sync + Send + 'static {
     async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate>;
 }
@@ -448,16 +484,19 @@ impl TransactionCertifier for NetworkTransactionCertifier {
     async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
+        let registry = Registry::new();
         let net = AuthorityAggregator::new_from_system_state(
-            &self_state.db(),
-            self_state.committee_store(),
-            &Registry::new(),
+            self_store,
+            committee_store,
+            SafeClientMetricsBase::new(&registry),
+            AuthAggMetrics::new(&registry),
         )?;
 
-        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
+        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
             .await
     }
 }
@@ -467,10 +506,11 @@ impl TransactionCertifier for LocalTransactionCertifier {
     async fn create_certificate(
         &self,
         transaction: &VerifiedTransaction,
-        self_state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
+        committee_store: &Arc<CommitteeStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
-        let sui_system_state = self_state.get_sui_system_state_object()?;
+        let sui_system_state = self_store.get_sui_system_state_object()?;
         let committee = sui_system_state.get_current_epoch_committee().committee;
         let clients: BTreeMap<_, _> = committee.names().map(|name|
             // unwrap is fine because LocalAuthorityClient is only used for testing.
@@ -478,12 +518,12 @@ impl TransactionCertifier for LocalTransactionCertifier {
         ).collect();
         let net = AuthorityAggregator::new(
             committee,
-            self_state.committee_store().clone(),
+            committee_store.clone(),
             clients,
             &Registry::new(),
         );
 
-        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_state, timeout)
+        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
             .await
     }
 }
@@ -1160,7 +1200,7 @@ where
         let state = ProcessTransactionState::default();
 
         let transaction_ref = &transaction;
-        let state = self
+        let mut state = self
             .quorum_map_then_reduce_with_timeout(
                 state,
                 |_name, client| {
@@ -1171,37 +1211,56 @@ where
                 |mut state, name, weight, result| {
                     Box::pin(async move {
                         match result {
-                            // If we are given back a certificate, then we do not need
-                            // to re-submit this transaction, we just returned the ready made
-                            // certificate. A certificate is only valid if it's formed in the
-                            // current epoch.
                             Ok(VerifiedTransactionInfoResponse {
                                 certified_transaction: Some(inner_certificate),
-                                ..
-                            }) if inner_certificate.epoch() == self.committee.epoch  => {
-                                // A validator could return a certificate from an epoch that's
-                                // different from what the authority aggregator is expecting.
-                                // In that case, we should not accept that certificate.
-                                debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
-                                state.certificate = Some(inner_certificate);
-                            }
-
-                            // If we didn't match the above case but here, it means that we have
-                            // a cert from a different epoch, and also have effects (i.e. already
-                            // executed), we can accept the certificate if we get 2f+1 effects.
-                            // It's an proof that the transaction has already been finalized
-                            // in a different epoch, and hence it's ok to reuse the old certificate.
-                            Ok(VerifiedTransactionInfoResponse {
                                 signed_effects: Some(inner_effects),
-                                certified_transaction: Some(inner_certificate),
                                 ..
                             }) => {
-                                if state.effects_map.add(inner_effects, weight, &self.committee) {
+                                // If we get a certificate in the same epoch, then we use it.
+                                // A certificate in a past epoch does not guaranteee finality
+                                // and validators may reject to process it.
+                                if inner_certificate.epoch() == self.committee.epoch {
+                                    debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
+                                    state.certificate = Some(inner_certificate);
+                                } else if inner_effects.epoch() == self.committee.epoch {
+                                    // If we get 2f+1 effects, it's an proof that the transaction
+                                    // has already been finalized in a different epoch. Regardless
+                                    // of the cert's epoch, we can accept it.
+                                    // This is safe when the signed-effects's epoch is equal to
+                                    // the local epoch because validators re-sign effects that are
+                                    // committed in past epochs. However it's not safe when the
+                                    // signed effects comes from the future because the stake
+                                    // distribution may have changed.
+                                    // Theoretically, the signed effects could be in a previous
+                                    // epoch from a stale validator, but in `effects_map` we try to
+                                    // form a CertifiedTransactionEffects which requires all sigs
+                                    // in the same epoch, this is not necessary but not a big deal
+                                    // anyways.
+                                    // TODO: we may return a CertifiedTransactionEffects directly here
+                                    if state.effects_map.add(inner_effects, weight, &self.committee) {
+                                        debug!(
+                                            tx_digest = ?tx_digest,
+                                            "Got quorum for effects for certs that are from previous epochs handle_transaction"
+                                        );
+                                        state.certificate = Some(inner_certificate);
+                                    }
+                                } else {
+                                    // We reach here when
+                                    // inner_certificate and inner_effects.epoch() > self.committee.epoch
+                                    // and the shared committee store in SafeClient is updated. In this case
+                                    // we record a transient error.
                                     debug!(
                                         tx_digest = ?tx_digest,
-                                        "Got quorum for effects for certs that are from previous epochs handle_transaction"
+                                        name=?name.concise(),
+                                        weight,
+                                        actual_epoch = inner_certificate.epoch(),
+                                        expected_epoch = self.committee.epoch,
+                                        "Received epoch-mismatched transaction cert from validator handle_transaction",
                                     );
-                                    state.certificate = Some(inner_certificate);
+                                    state.errors.push(
+                                        SuiError::WrongEpoch { expected_epoch: self.committee.epoch, actual_epoch: inner_certificate.epoch() }
+                                    );
+                                    state.bad_stake += weight;
                                 }
                             }
 
@@ -1211,30 +1270,42 @@ where
                             Ok(VerifiedTransactionInfoResponse {
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
-                            }) if inner_signed_transaction.epoch() == self.committee.epoch => {
-                                let tx_digest = inner_signed_transaction.digest();
-                                debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
-                                state.signatures.push(inner_signed_transaction.into_inner().into_data_and_sig().1);
-                                state.good_stake += weight;
-                                if state.good_stake >= threshold {
-                                    self.metrics
-                                        .num_signatures
-                                        .observe(state.signatures.len() as f64);
-                                    self.metrics.num_good_stake.observe(state.good_stake as f64);
-                                    self.metrics.num_bad_stake.observe(state.bad_stake as f64);
-                                    state.certificate =
-                                        Some( CertifiedTransaction::new(
-                                            transaction_ref.data().clone(),
-                                            state.signatures.clone(),
-                                            &self.committee,
-                                        )?.verify(&self.committee)?);
+                            }) => {
+                                // If the signed transaction's epoch is older, than the validator is falling behind.
+                                // If it's newer than we need a reconfig. Either way, we return a transient error.
+                                if inner_signed_transaction.epoch() != self.committee.epoch {
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        name=?name.concise(),
+                                        weight,
+                                        actual_epoch = inner_signed_transaction.epoch(),
+                                        expected_epoch = self.committee.epoch,
+                                        "Received epoch-mismatched signed transaction from validator handle_transaction"
+                                    );
+                                    state.errors.push(
+                                        SuiError::WrongEpoch { expected_epoch: self.committee.epoch, actual_epoch: inner_signed_transaction.epoch() }
+                                    );
+                                    state.bad_stake += weight;
+                                } else {
+                                    let tx_digest = inner_signed_transaction.digest();
+                                    debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
+                                    state.signatures.push(inner_signed_transaction.into_inner().into_data_and_sig().1);
+                                    state.good_stake += weight;
+                                    if state.good_stake >= threshold {
+                                        self.metrics
+                                            .num_signatures
+                                            .observe(state.signatures.len() as f64);
+                                        self.metrics.num_good_stake.observe(state.good_stake as f64);
+                                        self.metrics.num_bad_stake.observe(state.bad_stake as f64);
+                                        state.certificate =
+                                            Some(CertifiedTransaction::new(
+                                                transaction_ref.data().clone(),
+                                                state.signatures.clone(),
+                                                &self.committee,
+                                            )?.verify(&self.committee)?);
+                                    }
                                 }
                             }
-                            // If we get back an error, then we aggregate and check
-                            // if we have too many errors
-                            // In this case we will not be able to use this response
-                            // to make a certificate. If this happens for more than f
-                            // authorities we just stop, as there is no hope to finish.
                             Err(err) => {
                                 let concise_name = name.concise();
                                 debug!(tx_digest = ?tx_digest, name=?concise_name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
@@ -1255,35 +1326,23 @@ where
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
-                            // In case we don't get an error but also don't get a valid value
-                            Ok(ret) => {
-                                // If we are here and yet there are either certs of signed tx,
-                                // it's because their epoch doesn't match with the committee.
-                                // This should start happen less over time as we are working on
-                                // eliminating this on honest validators.
-                                // Log a warning to keep track.
-                                if let Some(inner_certificate) = &ret.certified_transaction {
-                                    warn!(
-                                        ?tx_digest,
-                                        name=?name.concise(),
-                                        expected_epoch=?self.committee.epoch,
-                                        returned_epoch=?inner_certificate.epoch(),
-                                        "Returned certificate is from wrong epoch"
-                                    );
-                                }
-                                if let Some(inner_signed) = &ret.signed_transaction {
-                                    warn!(
-                                        ?tx_digest,
-                                        name=?name.concise(),
-                                        expected_epoch=?self.committee.epoch,
-                                        returned_epoch=?inner_signed.epoch(),
-                                        "Returned signed transaction is from wrong epoch"
-                                    );
-                                }
+                            // In case we don't get an error but also don't get a valid value:
+                            // the response contains either signed transaction or transaction certificate.
+                            // This should only happen on byzantine validators.
+                            Ok(rep) => {
+                                let error_msg = format!(
+                                    "Validator returned unexpected response for handle_transaction. has_signed_tx: {}, has_tx_cert: {}, has_signed_effects: {}",
+                                    rep.signed_transaction.is_some(),
+                                    rep.certified_transaction.is_some(),
+                                    rep.signed_effects.is_some(),
+                                );
+                                error!(?tx_digest, name=?name.concise(), error_msg);
+
                                 state.errors.push(
-                                    SuiError::UnexpectedResultFromValidatorHandleTransaction {
-                                        err: format!("{:?}", ret),
-                                    },
+                                    SuiError::ByzantineAuthoritySuspicion {
+                                        authority: name,
+                                        reason: error_msg,
+                                    }
                                 );
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1322,6 +1381,34 @@ where
         );
         if !state.errors.is_empty() {
             debug!(?tx_digest, "Errors received: {:?}", state.errors);
+        }
+
+        if state.certificate.is_none() && !state.effects_map.effects_map.is_empty() {
+            debug!(
+                ?tx_digest,
+                "Received signed Effects but not with a quprum {:?}", state.effects_map.effects_map
+            );
+            state.errors.push(
+                SuiError::QuorumFailedToFormEffectsCertWhenProcessingTransaction {
+                    effects_map: state
+                        .effects_map
+                        .effects_map
+                        .into_iter()
+                        .map(|(k, v)| {
+                            (
+                                k,
+                                (
+                                    v.signatures
+                                        .into_iter()
+                                        .map(|s| s.authority)
+                                        .collect::<Vec<_>>(),
+                                    v.stake,
+                                ),
+                            )
+                        })
+                        .collect(),
+                },
+            );
         }
 
         // If we have some certificate return it, or return an error.
@@ -1374,28 +1461,9 @@ where
                 state,
                 |name, client| {
                     Box::pin(async move {
-                        // Here is the per-authority logic to process a certificate:
-                        // - we try to process a cert, and return Ok on success.
-                        // - we try to update the authority with the cert, and on error return Err.
-                        // - we try to re-process the certificate and return the result.
-
-                        let res =
-                            client.handle_certificate(cert_ref.clone())
-                                .instrument(tracing::trace_span!("handle_certificate", authority =? name.concise()))
-                                .await;
-
-                        if res.is_ok() {
-                            debug!(
-                                tx_digest = ?tx_digest,
-                                name = ?name.concise(),
-                                "Validator handled certificate successfully",
-                            );
-                        }
-
-                        // The authority may have failed to process the certificate if there were
-                        // missing parents. In that case, the authority will attempt to perform causal
-                        // completion and execute the cert later.
-                        res
+                        client.handle_certificate(cert_ref.clone())
+                            .instrument(tracing::trace_span!("handle_certificate", authority =? name.concise()))
+                            .await
                     })
                 },
                 |mut state, name, weight, result| {
@@ -1403,12 +1471,16 @@ where
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
-                            Ok(VerifiedTransactionInfoResponse {
-                                signed_effects: Some(inner_effects),
-                                ..
+                            Ok(VerifiedHandleCertificateResponse {
+                                signed_effects,
                             }) => {
+                                debug!(
+                                    tx_digest = ?tx_digest,
+                                    name = ?name.concise(),
+                                    "Validator handled certificate successfully",
+                                );
                                 // Note: here we aggregate votes by the hash of the effects structure
-                                if state.effects_map.add(inner_effects, weight, &self.committee) {
+                                if state.effects_map.add(signed_effects, weight, &self.committee) {
                                     debug!(
                                         tx_digest = ?tx_digest,
                                         "Got quorum for validators handle_certificate."
@@ -1426,7 +1498,6 @@ where
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
-                            _ => { unreachable!("SafeClient should have ruled out this case") }
                         }
                         Ok(ReduceOutput::Continue(state))
                     })
@@ -1504,77 +1575,6 @@ where
         }
 
         Ok(ObjectRead::NotExists(object_id))
-    }
-
-    /// Given a list of object refs, download the objects.
-    pub fn fetch_objects_from_authorities(
-        &self,
-        object_refs: BTreeSet<ObjectRef>,
-    ) -> Receiver<SuiResult<Object>> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
-        for object_ref in object_refs {
-            let sender = sender.clone();
-            let client = self.authority_clients.clone();
-            let timeout = self.timeouts.authority_request_timeout;
-            spawn_monitored_task!(Self::fetch_one_object(client, object_ref, timeout, sender,));
-        }
-        // Close unused channel
-        drop(sender);
-        receiver
-    }
-
-    /// This function fetches one object at a time, and sends back the result over the channel
-    /// The object ids are also returned so the caller can determine which fetches failed
-    /// NOTE: This function assumes all authorities are honest
-    async fn fetch_one_object(
-        authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
-        object_ref: ObjectRef,
-        timeout: Duration,
-        sender: tokio::sync::mpsc::Sender<Result<Object, SuiError>>,
-    ) {
-        let object_id = object_ref.0;
-        // Prepare the request
-        // TODO: We should let users decide what layout they want in the result.
-        let request = ObjectInfoRequest::latest_object_info_request(
-            object_id,
-            Some(ObjectFormatOptions::default()),
-        );
-
-        // For now assume all authorities. Assume they're all honest
-        // This assumption is woeful, and should be fixed
-        // TODO: https://github.com/MystenLabs/sui/issues/320
-        let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
-            tokio::time::timeout(
-                timeout,
-                ac.handle_object_info_request(request.clone(), false),
-            )
-        }))
-        .await;
-
-        let mut ret_val: Result<Object, SuiError> = Err(SuiError::ObjectFetchFailed {
-            object_id,
-            err: "No authority returned the correct object".to_string(),
-        });
-        // Find the first non-error value
-        // There are multiple reasons why we might not have an object
-        // We can timeout, or the authority returns an error or simply no object
-        // When we get an object back, it also might not match the digest we want
-        for resp in results.into_iter().flatten().flatten() {
-            match resp.object_and_lock {
-                // Either the object is a shared object, in which case we don't care about its content
-                // because we can never keep shared objects up-to-date.
-                // Or if it's not shared object, we check if the digest matches.
-                Some(o) if o.object.is_shared() || o.object.digest() == object_ref.2 => {
-                    ret_val = Ok(o.object);
-                    break;
-                }
-                _ => (),
-            }
-        }
-        sender
-            .send(ret_val)
-            .await
-            .expect("Cannot send object on channel after object fetch attempt");
     }
 
     pub async fn handle_checkpoint_request(
@@ -1821,25 +1821,21 @@ where
                     Box::pin(async move {
                         state.cumulative_weight += weight;
                         match result {
-                            Ok(TransactionInfoResponse {
-                                signed_effects: Some(effects),
-                                ..
+                            Ok(VerifiedHandleCertificateResponse {
+                                signed_effects,
                             }) => {
                                 state.good_weight += weight;
                                 trace!(name=?name.concise(), ?weight, "successfully executed cert on peer");
-                                let entry = state.digests.entry(*effects.digest()).or_insert(0);
+                                let entry = state.digests.entry(*signed_effects.digest()).or_insert(0);
                                 *entry += weight;
 
                                 if *entry >= validity {
-                                    state.true_effects = Some(effects);
+                                    state.true_effects = Some(signed_effects);
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
                             Err(e) => {
                                 state.errors.push((name, e));
-                            }
-                            _ => {
-                                unreachable!("SafeClient should have ruled out this case")
                             }
                         }
 
@@ -1877,20 +1873,14 @@ where
     pub async fn authorty_ask_for_cert_with_retry_and_timeout(
         &self,
         transaction: &VerifiedTransaction,
-        state: &AuthorityState,
+        self_store: &Arc<AuthorityStore>,
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let result = tokio::time::timeout(timeout, async {
             loop {
                 // We may have already executed this transaction somewhere else.
                 // If so, no need to try to get it from the network.
-                if let Ok(Some(VerifiedTransactionInfoResponse {
-                    certified_transaction: Some(cert),
-                    ..
-                })) = state
-                    .get_tx_info_already_executed(transaction.digest())
-                    .await
-                {
+                if let Ok(Some(cert)) = self_store.get_certified_transaction(transaction.digest()) {
                     return cert;
                 }
                 match self.process_transaction(transaction.clone()).await {

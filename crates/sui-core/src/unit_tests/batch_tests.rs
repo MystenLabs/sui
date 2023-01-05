@@ -4,6 +4,8 @@
 use fastcrypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
 use sui_config::genesis::Genesis;
+use sui_config::node::AuthorityStorePruningConfig;
+use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -62,13 +64,21 @@ pub(crate) async fn init_state(
     let secrete = Arc::pin(authority_key);
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
+    let node_sync_path = dir.join(format!("DB_{:?}", nondeterministic!(ObjectID::random())));
     fs::create_dir(&epoch_path).unwrap();
     let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
+
+    let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+        node_sync_path,
+        None,
+        None,
+    ));
 
     AuthorityState::new(
         name,
         secrete,
         store,
+        node_sync_store,
         committee_store,
         None,
         None,
@@ -94,11 +104,12 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open_with_committee_for_testing(
+            AuthorityStore::open_with_committee(
                 &path,
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -134,11 +145,12 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open_with_committee_for_testing(
+            AuthorityStore::open_with_committee(
                 &path,
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -170,11 +182,12 @@ async fn test_open_manager() {
     {
         // Create an authority
         let store = Arc::new(
-            AuthorityStore::open_with_committee_for_testing(
+            AuthorityStore::open_with_committee(
                 &path,
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -204,11 +217,12 @@ async fn test_batch_manager_happy_path() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
+        AuthorityStore::open_with_committee(
             &path,
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -287,11 +301,12 @@ async fn test_batch_manager_out_of_order() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
+        AuthorityStore::open_with_committee(
             &path,
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -364,11 +379,12 @@ async fn test_batch_manager_drop_out_of_order() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
+        AuthorityStore::open_with_committee(
             &path,
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -742,11 +758,12 @@ async fn test_safe_batch_stream() {
     authorities.insert(public_key_bytes, 1);
     let committee = Committee::new(0, authorities).unwrap();
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
+        AuthorityStore::open_with_committee(
             &path.join("store"),
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),

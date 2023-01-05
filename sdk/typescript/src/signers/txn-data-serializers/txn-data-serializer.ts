@@ -95,6 +95,14 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+export interface RawMoveCall {
+  packageObjectId: ObjectId;
+  module: string;
+  function: string;
+  typeArguments: string[];
+  arguments: SuiJsonValue[];
+}
+
 export type UnserializedSignableTransaction =
   | {
       kind: 'moveCall';
@@ -171,6 +179,8 @@ export interface PublishTransaction {
   gasBudget: number;
 }
 
+export type TransactionBuilderMode = 'Commit' | 'DevInspect';
+
 ///////////////////////////////
 // Exported Abstracts
 /**
@@ -179,6 +189,7 @@ export interface PublishTransaction {
 export interface TxnDataSerializer {
   serializeToBytes(
     signerAddress: SuiAddress,
-    txn: UnserializedSignableTransaction
+    txn: UnserializedSignableTransaction,
+    mode: TransactionBuilderMode
   ): Promise<Base64DataBuffer>;
 }

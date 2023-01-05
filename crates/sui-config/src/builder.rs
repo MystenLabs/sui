@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::default_checkpoints_per_epoch;
+use crate::node::{default_checkpoints_per_epoch, AuthorityKeyPairWithPath, KeyPairWithPath};
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
+    node::AuthorityStorePruningConfig,
     p2p::P2pConfig,
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME,
@@ -15,7 +16,6 @@ use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -41,6 +41,7 @@ pub struct ConfigBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
+    checkpoints_per_epoch: Option<u64>,
 }
 
 impl ConfigBuilder {
@@ -59,6 +60,7 @@ impl ConfigBuilder {
             } else {
                 ValidatorIpSelection::Localhost
             },
+            checkpoints_per_epoch: default_checkpoints_per_epoch(),
         }
     }
 }
@@ -94,6 +96,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
+        self.checkpoints_per_epoch = Some(ckpts);
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -103,6 +110,7 @@ impl<R> ConfigBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
+            checkpoints_per_epoch: self.checkpoints_per_epoch,
         }
     }
 }
@@ -300,10 +308,16 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    protocol_key_pair: Arc::new(validator.genesis_info.key_pair),
-                    worker_key_pair: Arc::new(validator.genesis_info.worker_key_pair),
-                    account_key_pair: Arc::new(validator.genesis_info.account_key_pair),
-                    network_key_pair: Arc::new(validator.genesis_info.network_key_pair),
+                    protocol_key_pair: AuthorityKeyPairWithPath::new(
+                        validator.genesis_info.key_pair,
+                    ),
+                    network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
+                        validator.genesis_info.network_key_pair,
+                    )),
+                    account_key_pair: KeyPairWithPath::new(validator.genesis_info.account_key_pair),
+                    worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(
+                        validator.genesis_info.worker_key_pair,
+                    )),
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
@@ -314,15 +328,16 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_checkpoint: false,
-                    checkpoints_per_epoch: default_checkpoints_per_epoch(),
+                    checkpoints_per_epoch: self.checkpoints_per_epoch,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
+                    authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
+                    checkpoint_executor_config: Default::default(),
                 }
             })
             .collect();
-
         NetworkConfig {
             validator_configs,
             genesis,

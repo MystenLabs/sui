@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+#[cfg(not(msim))]
 use std::str::FromStr;
 
 use sui_config::SUI_KEYSTORE_FILENAME;
@@ -30,6 +31,8 @@ use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
 use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 
 use sui_macros::sim_test;
+
+use tokio::time::{sleep, Duration};
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
@@ -147,6 +150,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             json_args,
             Some(gas.object_id),
             10_000,
+            None,
         )
         .await?;
 
@@ -395,6 +399,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
             ],
             Some(gas.object_id),
             10_000,
+            None,
         )
         .await?;
 
@@ -650,6 +655,9 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
             tx_responses.push(response);
         }
     }
+
+    // Add a delay to ensure event processing is done after transaction commits.
+    sleep(Duration::from_millis(100)).await;
 
     // test get all events ascending
     let page1 = client

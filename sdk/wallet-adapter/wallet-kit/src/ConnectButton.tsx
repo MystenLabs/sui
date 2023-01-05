@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ComponentProps, ReactNode, useEffect, useState } from "react";
+import { ComponentProps, ReactNode, useState } from "react";
 
 import { ConnectModal } from "./ConnectModal";
-import { useWallet } from "@mysten/wallet-adapter-react";
 import { Button } from "./utils/ui";
 import { AccountModal } from "./AccountModal";
+import { useWalletKit } from "./WalletKitContext";
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
   connectText?: ReactNode;
@@ -18,25 +18,11 @@ export function ConnectButton({
 }: ConnectButtonProps) {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
-  const [account, setAccount] = useState<string | null>(null);
-
-  const { connected, getAccounts } = useWallet();
-
-  useEffect(() => {
-    if (!connected) {
-      setAccount(null);
-    } else {
-      getAccounts()
-        .then((accounts) => setAccount(accounts[0]))
-        .catch((e) => {
-          console.warn("Error getting accounts");
-        });
-    }
-  }, [connected]);
+  const { currentAccount, } = useWalletKit();
 
   return (
     <>
-      {account ? (
+      {currentAccount ? (
         <Button
           css={{ fontFamily: "$mono" }}
           color="connected"
@@ -45,7 +31,7 @@ export function ConnectButton({
           type="button"
           {...props}
         >
-          {`${account.slice(0, 4)}...${account.slice(-4)}`}
+          {`${currentAccount.slice(0, 4)}...${currentAccount.slice(-4)}`}
         </Button>
       ) : (
         <Button
@@ -59,9 +45,8 @@ export function ConnectButton({
         </Button>
       )}
 
-      {account ? (
+      {currentAccount ? (
         <AccountModal
-          account={account}
           open={accountModalOpen}
           onClose={() => setAccountModalOpen(false)}
         />

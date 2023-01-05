@@ -51,7 +51,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
-const RECONFIG_QUIESCENCE_TIME_SEC: u64 = 10;
+const RECONFIG_QUIESCENCE_TIME_SEC: u64 = 5;
 
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
@@ -66,7 +66,7 @@ impl BenchMetrics {
             num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
-                &["workload", "error_type"],
+                &["workload"],
                 registry,
             )
             .unwrap(),
@@ -277,7 +277,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted = 0;
                 let mut latency_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
+                    hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
                 let mut request_interval =
                     time::interval(Duration::from_micros(request_delay_micros));
                 request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
@@ -413,7 +413,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 proxy_clone.reconfig().await;
                                             } else {
                                                 error!("Retry due to error: {}", err);
-                                                metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), err.as_ref()]).inc();
+                                                metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             }
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
@@ -435,7 +435,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                     num_success += 1;
                                     num_in_flight -= 1;
                                     free_pool.push(new_payload);
-                                    latency_histogram.record(latency.as_millis().try_into().unwrap()).unwrap();
+                                    latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
                                     BenchDriver::update_progress(*start_time, run_duration, progress.clone());
                                     if progress.is_finished() {
                                         break;
@@ -479,7 +479,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 num_error: 0,
                 num_success: 0,
                 latency_ms: HistogramWrapper {
-                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap(),
+                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap(),
                 },
             };
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
@@ -502,7 +502,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut num_success: u64 = 0;
                 let mut num_error: u64 = 0;
                 let mut latency_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
+                    hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;

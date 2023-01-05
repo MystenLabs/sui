@@ -7,17 +7,15 @@ import {
   SuiMoveObject,
   SuiObjectInfo,
   SuiObject,
-  SuiData,
   getMoveObjectType,
-  ObjectId,
   getObjectId,
 } from './objects';
-import { normalizeSuiObjectId, SuiAddress } from './common';
+import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
 
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
-import { isSuiMoveObject } from './index.guard';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
+import { Infer, is, literal, number, object, string, union } from 'superstruct';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
@@ -35,14 +33,16 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
 
-export type CoinMetadata = {
-  decimals: number;
-  name: string;
-  symbol: string;
-  description: string;
-  iconUrl: string | null;
-  id: ObjectId | null;
-};
+export const CoinMetadataStruct = object({
+  decimals: number(),
+  name: string(),
+  symbol: string(),
+  description: string(),
+  iconUrl: union([string(), literal(null)]),
+  id: union([ObjectId, literal(null)]),
+});
+
+export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
 
 /**
  * Utility class for 0x2::coin
@@ -82,7 +82,7 @@ export class Coin {
   }
 
   public static getID(obj: ObjectData): ObjectId {
-    if (isSuiMoveObject(obj)) {
+    if (is(obj, SuiMoveObject)) {
       return obj.fields.id.id;
     }
     return getObjectId(obj);
@@ -286,22 +286,22 @@ export class Coin {
   }
 }
 
-export type DelegationData = SuiMoveObject &
-  Pick<SuiData, 'dataType'> & {
-    type: '0x2::delegation::Delegation';
-    fields: {
-      active_delegation: Option<number>;
-      delegate_amount: number;
-      next_reward_unclaimed_epoch: number;
-      validator_address: SuiAddress;
-      info: {
-        id: string;
-        version: number;
-      };
-      coin_locked_until_epoch: Option<SuiMoveObject>;
-      ending_epoch: Option<number>;
+export type DelegationData = SuiMoveObject & {
+  dataType: 'moveObject';
+  type: '0x2::delegation::Delegation';
+  fields: {
+    active_delegation: Option<number>;
+    delegate_amount: number;
+    next_reward_unclaimed_epoch: number;
+    validator_address: SuiAddress;
+    info: {
+      id: string;
+      version: number;
     };
+    coin_locked_until_epoch: Option<SuiMoveObject>;
+    ending_epoch: Option<number>;
   };
+};
 
 export type DelegationSuiObject = Omit<SuiObject, 'data'> & {
   data: DelegationData;

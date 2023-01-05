@@ -1,16 +1,17 @@
 ---
-Authority:
-  STRUCT:
-    - stake: U64
-    - primary_address: BYTES
-    - network_key: STR
 BLS12381AggregateSignature:
   STRUCT:
     - sig:
-        OPTION: BYTES
+        OPTION:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 48
 BLS12381Signature:
   STRUCT:
-    - sig: BYTES
+    - sig:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
 Batch:
   STRUCT:
     - transactions:
@@ -37,14 +38,6 @@ CertificateDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Committee:
-  STRUCT:
-    - authorities:
-        MAP:
-          KEY: STR
-          VALUE:
-            TYPENAME: Authority
-    - epoch: U64
 Header:
   STRUCT:
     - author: STR
@@ -72,10 +65,6 @@ Metadata:
 ReconfigureNotification:
   ENUM:
     0:
-      NewEpoch:
-        NEWTYPE:
-          TYPENAME: Committee
-    2:
       Shutdown: UNIT
 WorkerIndex:
   NEWTYPESTRUCT:
@@ -110,3 +99,4 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
+

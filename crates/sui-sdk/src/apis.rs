@@ -16,8 +16,9 @@ use sui_json_rpc_types::{
     SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::batch::TxSequenceNumber;
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;

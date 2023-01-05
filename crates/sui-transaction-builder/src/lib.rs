@@ -13,7 +13,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
 use sui_adapter::adapter::resolve_and_type_check;
-use sui_adapter::execution_mode;
+use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_json_rpc_types::SuiObjectInfo;
@@ -213,7 +213,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn move_call(
+    pub async fn move_call<Mode: ExecutionMode>(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
@@ -224,9 +224,16 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let single_move_call = self
-            .single_move_call(package_object_id, module, function, type_args, call_args)
-            .await?;
+        let single_move_call = SingleTransactionKind::Call(
+            self.single_move_call::<Mode>(
+                package_object_id,
+                module,
+                function,
+                type_args,
+                call_args,
+            )
+            .await?,
+        );
         let input_objects = single_move_call
             .input_objects()?
             .iter()
@@ -248,14 +255,14 @@ impl TransactionBuilder {
         ))
     }
 
-    async fn single_move_call(
+    pub async fn single_move_call<Mode: ExecutionMode>(
         &self,
         package_object_id: ObjectID,
         module: &str,
         function: &str,
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
-    ) -> anyhow::Result<SingleTransactionKind> {
+    ) -> anyhow::Result<MoveCall> {
         let package_ref = self.get_object_ref(package_object_id).await?;
         let module = Identifier::from_str(module)?;
         let function = Identifier::from_str(function)?;
@@ -266,7 +273,7 @@ impl TransactionBuilder {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args(
+            .resolve_and_checks_json_args::<Mode>(
                 package_object_id,
                 &module,
                 &function,
@@ -275,13 +282,13 @@ impl TransactionBuilder {
             )
             .await?;
 
-        Ok(SingleTransactionKind::Call(MoveCall {
+        Ok(MoveCall {
             package: package_ref,
             module,
             function,
             type_arguments: type_args,
             arguments: call_args,
-        }))
+        })
     }
 
     async fn get_object_arg(
@@ -307,7 +314,7 @@ impl TransactionBuilder {
         })
     }
 
-    async fn resolve_and_checks_json_args(
+    async fn resolve_and_checks_json_args<Mode: ExecutionMode>(
         &self,
         package_id: ObjectID,
         module: &Identifier,
@@ -329,6 +336,7 @@ impl TransactionBuilder {
             function.clone(),
             type_args,
             json_args,
+            Mode::allow_arbitrary_function_calls(),
         )?;
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
@@ -350,7 +358,7 @@ impl TransactionBuilder {
         let compiled_module = package.deserialize_module(module)?;
 
         // TODO set the Mode from outside?
-        resolve_and_type_check::<execution_mode::Normal>(
+        resolve_and_type_check::<Mode>(
             &objects,
             &compiled_module,
             function,
@@ -475,7 +483,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn batch_transaction(
+    pub async fn batch_transaction<Mode: ExecutionMode>(
         &self,
         signer: SuiAddress,
         single_transaction_params: Vec<RPCTransactionRequestParams>,
@@ -497,14 +505,16 @@ impl TransactionBuilder {
                         .await?
                 }
                 RPCTransactionRequestParams::MoveCallRequestParams(param) => {
-                    self.single_move_call(
-                        param.package_object_id,
-                        &param.module,
-                        &param.function,
-                        param.type_arguments,
-                        param.arguments,
+                    SingleTransactionKind::Call(
+                        self.single_move_call::<Mode>(
+                            param.package_object_id,
+                            &param.module,
+                            &param.function,
+                            param.type_arguments,
+                            param.arguments,
+                        )
+                        .await?,
                     )
-                    .await?
                 }
             };
             tx_kinds.push(single_tx);

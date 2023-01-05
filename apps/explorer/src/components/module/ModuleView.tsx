@@ -5,7 +5,6 @@ import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
 import { useMemo } from 'react';
 
-import codestyle from '../../styles/bytecode.module.css';
 import { normalizeSuiAddress } from '../../utils/stringUtils';
 
 import type { SuiMoveNormalizedType } from '@mysten/sui.js';
@@ -85,7 +84,7 @@ function ModuleView({ id, name, code }: Props) {
 
     return (
         <section className={styles.modulewrapper}>
-            <div className={cl(codestyle.code, styles.codeview)}>
+            <div className={cl(styles.code, styles.codeview)}>
                 <Highlight
                     {...defaultProps}
                     code={code}
