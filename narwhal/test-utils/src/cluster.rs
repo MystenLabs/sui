@@ -43,7 +43,7 @@ impl Cluster {
     /// Initialises a new cluster by the provided parameters. The cluster will
     /// create all the authorities (primaries & workers) that are defined under
     /// the committee structure, but none of them will be started.
-    /// 
+    ///
     /// Fields passed in via Parameters will be used, expect specified ports which have to be
     /// different for each instance. If None, the default Parameters will be used.
     ///

@@ -446,7 +446,7 @@ impl Core {
         match self.process_certificate_internal(certificate.clone()).await {
             Ok(()) => Ok(()),
             result @ Err(DagError::ShuttingDown) => result,
-            _ => panic!("Failed to process locally-created certificate"),
+            Err(e) => panic!("Failed to process locally-created certificate: {e}"),
         }?;
 
         // Broadcast the certificate.
