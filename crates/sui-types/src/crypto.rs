@@ -1176,6 +1176,8 @@ pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
 pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 
+// Variant of [AuthorityStrongQuorumSignInfo] but with a serialized signature, to be used in
+// external APIs.
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SuiAuthorityStrongQuorumSignInfo {
