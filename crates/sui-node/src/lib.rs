@@ -79,6 +79,7 @@ use sui_core::narwhal_manager::{
     run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
 };
 use sui_json_rpc::coin_api::CoinReadApi;
+use sui_types::base_types::EpochId;
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
@@ -638,18 +639,6 @@ impl SuiNode {
                 "Received reconfiguration signal. About to reconfigure the system."
             );
 
-            let system_state = self
-                .state
-                .get_sui_system_state_object()
-                .expect("Reading Sui system state object cannot fail");
-            let new_committee = system_state.get_current_epoch_committee();
-            assert_eq!(next_epoch, new_committee.committee.epoch);
-            self.state
-                .reconfigure(new_committee.committee)
-                .await
-                .expect("Reconfigure authority state cannot fail");
-            info!("Validator State has been reconfigured");
-
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
@@ -668,6 +657,8 @@ impl SuiNode {
                 info!("Sending shutdown signal to Narwhal");
                 narwhal_manager.tx_stop.send(()).await?;
                 // TODO: (Laura) wait for stop complete signal
+
+                self.reconfigure_state(next_epoch).await;
 
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator in the new epoch.
@@ -689,25 +680,43 @@ impl SuiNode {
                     info!("This node is no longer a validator after reconfiguration");
                     None
                 }
-            } else if self.state.is_validator() {
-                info!("Promoting the node from fullnode to validator, starting grpc server");
-
-                Some(
-                    Self::construct_validator_components(
-                        &self.config,
-                        self.state.clone(),
-                        self.checkpoint_store.clone(),
-                        self.state_sync.clone(),
-                        &self.registry_service,
-                    )
-                    .await?,
-                )
             } else {
-                None
+                self.reconfigure_state(next_epoch).await;
+
+                if self.state.is_validator() {
+                    info!("Promoting the node from fullnode to validator, starting grpc server");
+
+                    Some(
+                        Self::construct_validator_components(
+                            &self.config,
+                            self.state.clone(),
+                            self.checkpoint_store.clone(),
+                            self.state_sync.clone(),
+                            &self.registry_service,
+                        )
+                        .await?,
+                    )
+                } else {
+                    None
+                }
             };
             *self.validator_components.lock().await = new_validator_components;
             info!("Reconfiguration finished");
         }
+    }
+
+    async fn reconfigure_state(&self, next_epoch: EpochId) {
+        let system_state = self
+            .state
+            .get_sui_system_state_object()
+            .expect("Reading Sui system state object cannot fail");
+        let new_committee = system_state.get_current_epoch_committee();
+        assert_eq!(next_epoch, new_committee.committee.epoch);
+        self.state
+            .reconfigure(new_committee.committee)
+            .await
+            .expect("Reconfigure authority state cannot fail");
+        info!("Validator State has been reconfigured");
     }
 }
 
