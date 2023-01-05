@@ -24,6 +24,7 @@ use serde::Serialize;
 use serde_json::json;
 use sui_framework::build_move_package;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::error::SuiError;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
@@ -33,7 +34,7 @@ use sui_adapter::execution_mode;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse, DynamicFieldPage
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
@@ -337,6 +338,14 @@ pub enum SuiClientCommands {
         address: Option<SuiAddress>,
     },
 
+    /// Query a dynamic field by its address.
+    #[clap(name = "dynamic-field")]
+    DynamicFieldQuery {
+        ///The ID of the parent object
+        #[clap(name = "object_id")]
+        id: ObjectID,
+    },
+
     /// Split a coin object into multiple coins.
     #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
@@ -504,6 +513,13 @@ impl SuiClientCommands {
                 let object_read = client.read_api().get_parsed_object(id).await?;
                 SuiClientCommandResult::Object(object_read, bcs)
             }
+
+            SuiClientCommands::DynamicFieldQuery { id } => {
+                let client = context.get_client().await?;
+                let df_read = client.read_api().get_dynamic_fields(id, None, None).await?;
+                SuiClientCommandResult::DynamicFieldQuery(df_read)
+            }
+
             SuiClientCommands::Call {
                 package,
                 module,
@@ -1248,6 +1264,36 @@ impl Display for SuiClientCommandResult {
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
+            SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
+                writeln!(
+                    writer,
+                    "{0: ^67} | {1: ^15} | {2: ^63} | {3: ^42} | {4: ^10} | {5: ^44}",
+                    "Name", "Type", "Object Type", "Object Id", "Version", "Digest"
+                )?;
+                writeln!(writer, "{}", ["-"; 165].join(""))?;
+                loop{
+                    for df_ref in df_refs.data.iter(){
+                        let df_type = match df_ref.type_{
+                            DynamicFieldType::DynamicField{ .. } => "DynamicField",
+                            DynamicFieldType::DynamicObject => "DynamicObject",
+                        };
+                        writeln!(
+                            writer,
+                            "{0: ^67} | {1: ^15} | {2: ^63} | {3: ^42} | {4: ^10} | {5: ^44}",
+                            df_ref.name,
+                            df_type,
+                            df_ref.object_type,
+                            df_ref.object_id,
+                            df_ref.version.value(),
+                            Base64::encode(df_ref.digest)
+                        )?
+                    }
+                    if df_refs.next_cursor == None {
+                        break;
+                    }
+                }
+                writeln!(writer, "Showing {} results.", df_refs.data.len())?;
+            }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
@@ -1466,6 +1512,7 @@ pub enum SuiClientCommandResult {
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
+    DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
