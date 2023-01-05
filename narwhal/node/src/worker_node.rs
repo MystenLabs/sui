@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{try_join_all, FuturesUnordered, NodeError};
-use arc_swap::ArcSwapOption;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{NetworkKeyPair, PublicKey};
-use dashmap::DashMap;
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use storage::NodeStorage;
 use tokio::sync::RwLock;
@@ -218,7 +218,7 @@ impl WorkerNode {
 }
 
 pub struct WorkerNodes {
-    workers: DashMap<WorkerId, WorkerNode>,
+    workers: ArcSwap<HashMap<WorkerId, WorkerNode>>,
     registry_service: RegistryService,
     registry_id: ArcSwapOption<RegistryID>,
     parameters: Parameters,
@@ -227,7 +227,7 @@ pub struct WorkerNodes {
 impl WorkerNodes {
     pub fn new(registry_service: RegistryService, parameters: Parameters) -> Self {
         Self {
-            workers: DashMap::new(),
+            workers: ArcSwap::from(Arc::new(HashMap::default())),
             registry_service,
             registry_id: ArcSwapOption::empty(),
             parameters,
@@ -261,8 +261,9 @@ impl WorkerNodes {
 
         // now clear the previous handles - we want to do that proactively
         // as it's not guaranteed that shutdown has been called
-        self.workers.clear();
+        self.workers.store(Arc::new(HashMap::default()));
 
+        let mut workers = HashMap::<WorkerId, WorkerNode>::new();
         // start all the workers one by one
         for (worker_id, key_pair) in ids_and_keypairs {
             let worker = WorkerNode::new(
@@ -283,8 +284,11 @@ impl WorkerNodes {
                 )
                 .await?;
 
-            self.workers.insert(worker_id, worker);
+            workers.insert(worker_id, worker);
         }
+
+        // update the worker handles.
+        self.workers.store(Arc::new(workers));
 
         // now add the registry
         let registry_id = self.registry_service.add(registry);
@@ -299,8 +303,8 @@ impl WorkerNodes {
 
     // Shuts down all the workers
     pub async fn shutdown(&self) {
-        for worker in &self.workers {
-            info!("Shutting down worker {}", worker.key());
+        for (key, worker) in self.workers.load_full().as_ref() {
+            info!("Shutting down worker {}", key);
             worker.shutdown().await;
         }
 
@@ -311,16 +315,16 @@ impl WorkerNodes {
         }
 
         // now clean up the worker handles
-        self.workers.clear();
+        self.workers.store(Arc::new(HashMap::default()));
     }
 
     // returns the worker ids that are currently running
     async fn workers_running(&self) -> Vec<WorkerId> {
         let mut worker_ids = Vec::new();
 
-        for worker in &self.workers {
-            if worker.value().is_running().await {
-                worker_ids.push(*worker.key());
+        for (id, worker) in self.workers.load_full().as_ref() {
+            if worker.is_running().await {
+                worker_ids.push(*id);
             }
         }
 

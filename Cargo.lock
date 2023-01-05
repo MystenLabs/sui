@@ -5275,7 +5275,6 @@ dependencies = [
  "bytes",
  "cfg-if",
  "clap 2.34.0",
- "dashmap",
  "eyre",
  "fail 0.5.1",
  "fastcrypto",
