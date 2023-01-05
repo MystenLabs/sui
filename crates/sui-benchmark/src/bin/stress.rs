@@ -33,6 +33,7 @@ use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;
+use tracing::info;
 
 #[derive(Parser)]
 #[clap(name = "Stress Testing Framework")]
@@ -206,7 +207,7 @@ async fn main() -> Result<()> {
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let (primary_gas_id, owner, keypair, aggregator) = if opts.local {
-        eprintln!("Configuring local benchmark..");
+        info!("Configuring local benchmark..");
         let configs = {
             let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
             let mut metric_port = opts.server_metric_port;
@@ -259,7 +260,7 @@ async fn main() -> Result<()> {
         });
         (primary_gas_id, owner, Arc::new(keypair), proxy)
     } else {
-        eprintln!("Configuring remote benchmark..");
+        info!("Configuring remote benchmark..");
         std::thread::spawn(move || {
             Builder::new_multi_thread()
                 .build()
@@ -271,7 +272,7 @@ async fn main() -> Result<()> {
 
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
             if let Some(fullnode_url) = opts.fullnode_rpc_address {
-                eprintln!("Using Full node: {fullnode_url}..");
+                info!("Using Full node: {fullnode_url}..");
                 Arc::new(FullNodeProxy::from_url(&fullnode_url).await.unwrap())
             } else {
                 let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
@@ -286,7 +287,7 @@ async fn main() -> Result<()> {
                     aggregator,
                 )))
             };
-        eprintln!(
+        info!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
             proxy.get_current_epoch(),
         );

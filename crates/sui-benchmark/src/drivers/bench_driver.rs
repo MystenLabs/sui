@@ -33,7 +33,7 @@ use sui_types::messages::VerifiedTransaction;
 use tokio::sync::Barrier;
 use tokio::time;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use super::BenchmarkStats;
 use super::Interval;
@@ -127,7 +127,7 @@ enum NextOp {
 async fn print_and_start_benchmark() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move {
-        eprintln!("Starting benchmark!");
+        info!("Starting benchmark!");
         Instant::now()
     })
     .await
@@ -241,7 +241,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
-        eprintln!("Setting up workers...");
+        info!("Setting up workers...");
         let progress = Arc::new(match run_duration {
             Interval::Count(count) => ProgressBar::new(count)
                 .with_prefix("Running benchmark(count):")

@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{collections::HashMap, fmt};
 
 use sui_types::{
@@ -10,7 +11,6 @@ use sui_types::{
     object::Owner,
 };
 
-use futures::FutureExt;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair, messages::VerifiedTransaction};
 use tracing::error;
@@ -34,7 +34,7 @@ pub async fn transfer_sui_for_testing(
     value: u64,
     address: SuiAddress,
     proxy: Arc<dyn ValidatorProxy + Sync + Send>,
-) -> Option<UpdatedAndNewlyMinted> {
+) -> UpdatedAndNewlyMinted {
     let tx = make_transfer_sui_transaction(
         gas.0,
         address,
@@ -42,9 +42,9 @@ pub async fn transfer_sui_for_testing(
         gas.1.get_owner_address().unwrap(),
         keypair,
     );
-    proxy
-        .execute_transaction(tx.into())
-        .map(move |res| match res {
+    // Retry 5 times.
+    for _ in 0..5 {
+        match proxy.execute_transaction(tx.clone().into()).await {
             Ok((_, effects)) => {
                 let minted = effects.created().get(0).unwrap().0;
                 let updated = effects
@@ -53,14 +53,15 @@ pub async fn transfer_sui_for_testing(
                     .find(|(k, _)| k.0 == gas.0 .0)
                     .unwrap()
                     .0;
-                Some((updated, minted))
+                return (updated, minted);
             }
             Err(err) => {
                 error!("Error while transferring sui: {:?}", err);
-                None
+                tokio::time::sleep(Duration::from_secs(3)).await;
             }
-        })
-        .await
+        }
+    }
+    panic!("Failed to finish transfer_sui_for_testing");
 }
 
 pub trait Payload: Send + Sync {
