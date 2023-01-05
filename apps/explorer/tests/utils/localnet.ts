@@ -10,7 +10,6 @@ import {
     LocalTxnDataSerializer,
     type Keypair,
 } from '@mysten/sui.js';
-import axios from 'axios';
 
 const addressToKeypair = new Map<string, Keypair>();
 
@@ -57,10 +56,15 @@ export async function faucet() {
     const keypair = Ed25519Keypair.generate();
     const address = keypair.getPublicKey().toSuiAddress();
     addressToKeypair.set(address, keypair);
-    const res = await axios.post<{ error: any }>('http://127.0.0.1:9123/gas', {
-        FixedAmountRequest: { recipient: address },
+    const res = await fetch('http://127.0.0.1:9123/gas', {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({ FixedAmountRequest: { recipient: address } }),
     });
-    if (res.data.error) {
+    const data = await res.json();
+    if (!res.ok || data.error) {
         throw new Error('Unable to invoke local faucet.');
     }
     return address;
