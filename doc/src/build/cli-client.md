@@ -409,6 +409,24 @@ the sui module using the following Sui client command:
 sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
 ```
 
+or using environment variables:
+```shell
+export OBJECT_ID=0x471c8e241d0473c34753461529b70f9c4ed3151b
+```
+
+```shell
+export RECIPIENT=0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+```
+
+```shell
+echo $OBJECT_ID
+echo $RECIPIENT
+```
+
+```shell
+sui client call --function transfer --module sui --package 0x2 --args $OBJECT_ID $RECIPIENT --gas-budget 1000
+```
+
 This is a pretty complicated command so let's explain all of its
 parameters one-by-one:
 
