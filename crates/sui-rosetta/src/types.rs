@@ -18,6 +18,7 @@ use strum_macros::EnumIter;
 use strum_macros::EnumString;
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::committee::EpochId;
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::{PaySui, SingleTransactionKind, TransactionData, TransactionKind};
@@ -62,11 +63,29 @@ impl SuiEnv {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AccountIdentifier {
     pub address: SuiAddress,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_account: Option<SubAccount>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SubAccount {
+    #[serde(rename = "address")]
+    pub account_type: SubAccountType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum SubAccountType {
+    DelegatedSui,
+    PendingDelegation,
+    LockedSui,
 }
 
 impl From<SuiAddress> for AccountIdentifier {
     fn from(address: SuiAddress) -> Self {
-        AccountIdentifier { address }
+        AccountIdentifier {
+            address,
+            sub_account: None,
+        }
     }
 }
 
@@ -109,6 +128,13 @@ pub struct Amount {
     #[serde(with = "str_format")]
     pub value: i128,
     pub currency: Currency,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<AmountMetadata>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AmountMetadata {
+    lock_until_epoch: EpochId,
 }
 
 impl Amount {
@@ -116,6 +142,16 @@ impl Amount {
         Self {
             value,
             currency: SUI.clone(),
+            metadata: None,
+        }
+    }
+    pub fn new_locked(epoch: EpochId, value: i128) -> Self {
+        Self {
+            value,
+            currency: SUI.clone(),
+            metadata: Some(AmountMetadata {
+                lock_until_epoch: epoch,
+            }),
         }
     }
 }
@@ -175,6 +211,9 @@ impl From<sui_sdk::rpc_types::Coin> for Coin {
             amount: Amount {
                 value: coin.balance as i128,
                 currency: SUI.clone(),
+                metadata: coin.locked_until_epoch.map(|epoch| AmountMetadata {
+                    lock_until_epoch: epoch,
+                }),
             },
         }
     }
@@ -326,6 +365,10 @@ pub enum OperationType {
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
+    DelegateSui,
+    DelegateLockedSui,
+    Delegation,
+    WithdrawDelegation,
     // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
@@ -334,7 +377,6 @@ pub enum OperationType {
     Publish,
     MoveCall,
     EpochChange,
-    // Rosetta only transaction type, for fabricated genesis transactions.
     Genesis,
 }
 
