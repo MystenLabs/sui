@@ -15,7 +15,7 @@ import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
-import { Infer, is, literal, number, object, string, union } from 'superstruct';
+import { Infer, literal, number, object, string, union } from 'superstruct';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
@@ -82,7 +82,7 @@ export class Coin {
   }
 
   public static getID(obj: ObjectData): ObjectId {
-    if (is(obj, SuiMoveObject)) {
+    if ('fields' in obj) {
       return obj.fields.id.id;
     }
     return getObjectId(obj);
