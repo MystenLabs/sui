@@ -65,7 +65,7 @@ pub struct QuorumDriver<A> {
 
 impl<A> QuorumDriver<A> {
     pub(crate) fn new(
-        validators: Arc<AuthorityAggregator<A>>,
+        validators: ArcSwap<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumDriverTask>,
         effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverResponse>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
@@ -73,7 +73,7 @@ impl<A> QuorumDriver<A> {
         max_retry_times: u8,
     ) -> Self {
         Self {
-            validators: ArcSwap::from(validators),
+            validators,
             task_sender,
             effects_subscribe_sender,
             notifier,
@@ -521,7 +521,7 @@ where
         let (subscriber_tx, subscriber_rx) =
             tokio::sync::broadcast::channel::<_>(EFFECTS_QUEUE_SIZE);
         let quorum_driver = Arc::new(QuorumDriver::new(
-            validators,
+            ArcSwap::from(validators),
             task_tx,
             subscriber_tx,
             notifier,
@@ -603,6 +603,10 @@ where
 
     pub fn subscribe_to_effects(&self) -> tokio::sync::broadcast::Receiver<QuorumDriverResponse> {
         self.effects_subscriber.resubscribe()
+    }
+
+    pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
+        self.quorum_driver.authority_aggregator()
     }
 
     /// Process a QuorumDriverTask.
@@ -705,6 +709,7 @@ where
     }
 }
 
+// TODO: categorize all possible SuiErrors
 fn convert_to_quorum_driver_error_if_nonretryable(
     err: SuiError,
     tx_digest: &TransactionDigest,
