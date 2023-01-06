@@ -21,5 +21,6 @@ export { useTransactionDryRun } from './useTransactionDryRun';
 export { useTransactionSummary } from './useTransactionSummary';
 export { useRpc } from './useRpc';
 export { useGetObject } from './useGetObject';
+export { useGetTransactions } from './useGetTransactions';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
