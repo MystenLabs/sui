@@ -9,6 +9,7 @@ use crate::narwhal_manager::{
 };
 use bytes::Bytes;
 use fastcrypto::bls12381;
+use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, SharedWorkerCache};
 use narwhal_executor::ExecutionState;
@@ -18,7 +19,6 @@ use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_types::crypto::KeypairTraits;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::channel;
@@ -94,7 +94,7 @@ async fn test_narwhal_manager() {
     let mut narwhal_managers = Vec::new();
     let mut shutdown_senders = Vec::new();
 
-    for config in &(*configs.validator_configs()).clone() {
+    for config in configs.validator_configs() {
         let consensus_config = config.consensus_config().unwrap();
         let registry_service = RegistryService::new(Registry::new());
         let secret = Arc::pin(config.protocol_key_pair().copy());
