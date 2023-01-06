@@ -15,8 +15,8 @@ import {
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
+import type { CoinsMetaProps } from '../../helpers/getEventsSummary';
 import type { TransactionDryRun } from '../../hooks/useTransactionDryRun';
-import type { CoinsMetaProps } from '../../hooks/useTransactionSummary';
 import type { TransactionRequest } from '_payloads/transactions';
 
 import st from './DappTxApprovalPage.module.scss';

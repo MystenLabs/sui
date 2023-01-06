@@ -22,8 +22,7 @@ import {
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-import { getEventsSummary } from '_app/hooks/useTransactionSummary';
-import { notEmpty } from '_helpers';
+import { notEmpty, getEventsSummary } from '_helpers';
 
 import type {
     GetTxnDigestsResponse,
