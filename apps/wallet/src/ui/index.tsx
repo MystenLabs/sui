@@ -14,7 +14,6 @@ import { queryClient } from './app/helpers/queryClient';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
-import { trackEvent } from '_src/shared/plausible';
 import initSentry from '_src/shared/sentry';
 import store from '_store';
 import { thunkExtras } from '_store/thunk-extras';
@@ -33,12 +32,6 @@ async function init() {
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await store.dispatch(initNetworkFromStorage()).unwrap();
     await thunkExtras.background.init(store.dispatch);
-
-    const activeNetwork = store.getState().app.apiEnv;
-
-    trackEvent('Network', {
-        props: { name: activeNetwork, source: 'Landing' },
-    });
 }
 
 function renderApp() {
