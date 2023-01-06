@@ -2153,11 +2153,23 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
+}
+
+impl Debug for ConsensusTransactionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Certificate(digest) => write!(f, "Certificate({:?})", digest),
+            Self::CheckpointSignature(name, seq) => {
+                write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
+            }
+            Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
