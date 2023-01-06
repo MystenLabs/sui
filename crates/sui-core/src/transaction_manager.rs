@@ -92,16 +92,28 @@ impl TransactionManager {
 
             // skip already pending txes
             if inner.pending_certificates.contains_key(&digest) {
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_pending"])
+                    .inc();
                 continue;
             }
             // skip already executing txes
             if inner.executing_certificates.contains(&digest) {
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executing"])
+                    .inc();
                 continue;
             }
             // skip already executed txes
             if self.authority_store.effects_exists(&digest)? {
                 // also ensure the transaction will not be retried after restart.
                 let _ = epoch_store.remove_pending_certificate(&digest);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
                 continue;
             }
 
@@ -117,6 +129,10 @@ impl TransactionManager {
                 debug!(tx_digest = ?digest, "certificate ready");
                 assert!(inner.executing_certificates.insert(digest));
                 self.certificate_ready(cert);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["ready"])
+                    .inc();
                 continue;
             }
 
@@ -132,18 +148,31 @@ impl TransactionManager {
 
             for objkey in missing.iter() {
                 debug!(?objkey, ?digest, "adding missing object entry");
-                inner
-                    .missing_inputs
-                    .entry(*objkey)
-                    .or_default()
-                    .insert(digest);
+                assert!(
+                    inner
+                        .missing_inputs
+                        .entry(*objkey)
+                        .or_default()
+                        .insert(digest),
+                    "Duplicated certificate {:?} for missing object {:?}",
+                    digest,
+                    objkey
+                );
             }
 
-            inner
-                .pending_certificates
-                .entry(digest)
-                .or_default()
-                .extend(missing);
+            assert!(
+                inner
+                    .pending_certificates
+                    .insert(digest, missing.into_iter().collect())
+                    .is_none(),
+                "Duplicated pending certificate {:?}",
+                digest
+            );
+
+            self.metrics
+                .transaction_manager_num_enqueued_certificates
+                .with_label_values(&["pending"])
+                .inc();
         }
 
         self.metrics

@@ -14,8 +14,9 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -144,6 +145,7 @@ pub struct AuthorityMetrics {
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
 
+    pub(crate) transaction_manager_num_enqueued_certificates: IntCounterVec,
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
     pub(crate) transaction_manager_num_pending_certificates: IntGauge,
     pub(crate) transaction_manager_num_executing_certificates: IntGauge,
@@ -277,6 +279,13 @@ impl AuthorityMetrics {
                 "authority_state_commit_certificate_latency",
                 "Latency of committing certificate execution results",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            transaction_manager_num_enqueued_certificates: register_int_counter_vec_with_registry!(
+                "transaction_manager_num_enqueued_certificates",
+                "Current number of certificates enqueued to TransactionManager",
+                &["result"],
                 registry,
             )
             .unwrap(),
