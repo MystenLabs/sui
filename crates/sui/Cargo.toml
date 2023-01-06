@@ -20,6 +20,7 @@ tracing = "0.1.36"
 bcs = "0.1.4"
 clap = { version = "3.2.17", features = ["derive"] }
 bip32 = "0.4.0"
+prettytable-rs = "0.10.0"
 
 sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
