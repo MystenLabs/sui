@@ -443,6 +443,13 @@ impl CheckpointBuilder {
             .as_ref()
             .map(|(_, c)| c.sequence_number + 1)
             .unwrap_or_default();
+        if last_checkpoint_of_epoch {
+            info!(
+                ?sequence_number,
+                "creating last checkpoint of epoch {}",
+                self.epoch_store.epoch()
+            );
+        }
         let summary = CheckpointSummary::new(
             self.epoch_store.epoch(),
             sequence_number,
