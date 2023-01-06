@@ -1195,21 +1195,15 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(address),
-    }
-        .execute(context)
-        .await? else{
-        panic!()
-    };
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
 
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-    let validator_addrs = context
-        .get_client()
-        .await?
-        .governance_api()
-        .get_validators()
-        .await?;
+    let validator_addrs = client.governance_api().get_validators().await?;
     let validator_addr = validator_addrs.first().unwrap().sui_address;
 
     test_with_sui_binary(&[
@@ -1225,7 +1219,7 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
         "request_add_delegation_mul_coin",
         "--args",
         "0x5",
-        &format!("[{}]", coins.first().unwrap().object_id),
+        &format!("[{}]", coins.first().unwrap().coin_object_id),
         "[]",
         &validator_addr.to_string(),
         "--gas-budget",
@@ -1233,14 +1227,16 @@ async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
     ])
     .await?;
 
-    let stake = context
-        .get_client()
-        .await?
+    let stake = client
         .governance_api()
         .get_delegated_stakes(address)
         .await?;
 
     assert_eq!(1, stake.len());
+    assert_eq!(
+        coins.first().unwrap().balance,
+        stake.first().unwrap().staked_sui.principal()
+    );
     Ok(())
 }
 
@@ -1250,21 +1246,15 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
 
-    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(address),
-    }
-        .execute(context)
-        .await? else{
-        panic!()
-    };
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
 
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
-    let validator_addrs = context
-        .get_client()
-        .await?
-        .governance_api()
-        .get_validators()
-        .await?;
+    let validator_addrs = client.governance_api().get_validators().await?;
     let validator_addr = validator_addrs.first().unwrap().sui_address;
 
     test_with_sui_binary(&[
@@ -1280,7 +1270,7 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
         "request_add_delegation_mul_coin",
         "--args",
         "0x5",
-        &format!("[{}]", coins.first().unwrap().object_id),
+        &format!("[{}]", coins.first().unwrap().coin_object_id),
         "[10000]",
         &validator_addr.to_string(),
         "--gas-budget",
@@ -1288,9 +1278,7 @@ async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
     ])
     .await?;
 
-    let stake = context
-        .get_client()
-        .await?
+    let stake = client
         .governance_api()
         .get_delegated_stakes(address)
         .await?;
