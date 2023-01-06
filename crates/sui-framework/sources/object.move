@@ -59,7 +59,6 @@ module sui::object {
         id_from_address(address::from_bytes(bytes))
     }
 
-    /// Specify the calling of native function `address::from_bytes`
     spec id_from_bytes {
         aborts_if len(bytes) != 20;
         ensures address::from_bytes(bytes) == result.bytes;

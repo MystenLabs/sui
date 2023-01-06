@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::address_spec {
+module 0x0::address_spec {
     use sui::address;
 
     const MAX: u256 = 1461501637330902918203684832716283019655932542975;
