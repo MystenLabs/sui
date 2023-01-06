@@ -427,22 +427,6 @@ impl AuthorityPerEpochStore {
         self.tables.next_shared_object_versions.get(obj).unwrap()
     }
 
-    pub fn delete_shared_object_versions(
-        &self,
-        executed_transaction: &TransactionDigest,
-        deleted_objects: &[ObjectID],
-    ) -> SuiResult {
-        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
-        write_batch = write_batch.delete_batch(
-            &self.tables.assigned_shared_object_versions,
-            iter::once(executed_transaction),
-        )?;
-        write_batch =
-            write_batch.delete_batch(&self.tables.next_shared_object_versions, deleted_objects)?;
-        write_batch.write()?;
-        Ok(())
-    }
-
     // For each id in objects_to_init, return the next version for that id as recorded in the
     // next_shared_object_versions table.
     //
@@ -808,19 +792,6 @@ impl AuthorityPerEpochStore {
         trace!(tx_digest = ?transaction_digest,
                ?assigned_versions, ?next_version,
                "locking shared objects");
-
-        // Make an iterator to update the last consensus index.
-
-        // Holding _tx_lock avoids the following race:
-        // - we check effects_exist, returns false
-        // - another task (starting from CheckpointExecutor) writes effects,
-        //    and then deletes locks from assigned_shared_object_versions
-        // - we write to assigned_object versions, re-creating the locks that were just deleted
-        // - now it's possible to run a new tx against old versions of the shared objects.
-        let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
-
-        // Note: if we crash here we are not in an inconsistent state since
-        //       it is ok to just update the pending list without updating the sequence.
 
         self.finish_assign_shared_object_versions(
             transaction.key(),
