@@ -896,13 +896,10 @@ impl SuiClientCommands {
                     .await?;
                 let data1 = data.clone();
                 let intent_msg = IntentMessage::new(Intent::default(), data);
-                info!(
-                    "Transaction bytes : {}",
-                    Base64::encode(&bcs::to_bytes(&data1).unwrap())
-                );
-                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
-                    bcs::to_bytes(&intent_msg)?.as_slice(),
-                ))
+                SuiClientCommandResult::SerializeTransferSui(
+                    Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
+                    Base64::encode(&bcs::to_bytes(&data1).unwrap()),
+                )
             }
 
             SuiClientCommands::ExecuteSignedTx {
@@ -1318,8 +1315,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, "{}", parsed_resp)?;
                 }
             }
-            SuiClientCommandResult::SerializeTransferSui(res) => {
-                write!(writer, "Data to sign: {}", res)?;
+            SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
+                writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
+                writeln!(writer, "Raw transaction to execute: {}", data_to_execute)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1478,7 +1476,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
-    SerializeTransferSui(String),
+    SerializeTransferSui(String, String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),
 }

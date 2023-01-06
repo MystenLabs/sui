@@ -73,7 +73,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
     let tx_response: SuiExecuteTransactionResponse = http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes1,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -111,7 +111,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -162,7 +162,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -266,14 +266,12 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
         .execute_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signature,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -327,14 +325,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
         .execute_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signature,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -407,14 +403,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = transaction_bytes.to_data()?;
 
     let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
         .execute_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signature,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -452,7 +446,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
         let response = http_client
-            .execute_transaction_serialized_sig(
+            .execute_transaction(
                 tx_bytes,
                 signature_bytes,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -784,7 +778,7 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -838,7 +832,7 @@ async fn test_delegation() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -897,7 +891,7 @@ async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -964,7 +958,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -995,7 +989,7 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
