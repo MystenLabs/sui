@@ -794,12 +794,19 @@ impl AuthorityState {
                 return Err(err);
             }
         };
+        // Since we obtain a reference to the epoch store before taking the execution lock, it's
+        // possible that reconfiguration has happened and they no longer match.
+        if *execution_guard != epoch_store.epoch() {
+            tx_guard.release();
+            debug!("The epoch of the execution_guard doesn't match the epoch store");
+            return Err(SuiError::WrongEpoch {
+                expected_epoch: epoch_store.epoch(),
+                actual_epoch: *execution_guard,
+            });
+        }
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
-        // This should be correct because of order execution epoch and epoch store change
-        // See AuthorityState::reconfigure() method for order of lock and store update
-        assert_eq!(*execution_guard, epoch_store.epoch());
         if let Some((inner_temporary_storage, signed_effects)) =
             epoch_store.wal().get_execution_output(&digest)?
         {
