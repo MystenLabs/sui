@@ -193,6 +193,8 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "devInspectMoveCall")]
     async fn dev_inspect_move_call(
         &self,
+        /// The epoch to perform the call
+        epoch: EpochId,
         /// the caller's Sui address
         sender_address: SuiAddress,
         /// the Move package ID, e.g. `0x2`
@@ -265,7 +267,7 @@ pub trait RpcFullNodeReadApi {
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
@@ -616,7 +618,7 @@ pub trait EventReadApi {
         cursor: Option<EventID>,
         /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage>;
 }

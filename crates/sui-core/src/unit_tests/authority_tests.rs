@@ -3580,6 +3580,7 @@ pub async fn call_dev_inspect(
         .dev_inspect_transaction(
             transaction.data().intent_message.value.clone(),
             transaction_digest,
+            authority.epoch(),
         )
         .await
 }
@@ -3604,7 +3605,9 @@ pub async fn call_dev_inspect_move_call(
         type_arguments,
         arguments,
     };
-    authority.dev_inspect_move_call(sender, move_call).await
+    authority
+        .dev_inspect_move_call(sender, move_call, authority.epoch())
+        .await
 }
 
 #[cfg(test)]

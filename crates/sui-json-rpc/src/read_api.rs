@@ -11,6 +11,7 @@ use std::sync::Arc;
 use sui_adapter::execution_mode;
 use sui_json::SuiJsonValue;
 use sui_transaction_builder::TransactionBuilder;
+use sui_types::committee::EpochId;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
 
@@ -230,12 +231,13 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
         Ok(self
             .state
-            .dev_inspect_transaction(txn_data, txn_digest)
+            .dev_inspect_transaction(txn_data, txn_digest, 0)
             .await?)
     }
 
     async fn dev_inspect_move_call(
         &self,
+        epoch: EpochId,
         sender_address: SuiAddress,
         package_object_id: ObjectID,
         module: String,
@@ -255,7 +257,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .await?;
         Ok(self
             .state
-            .dev_inspect_move_call(sender_address, move_call)
+            .dev_inspect_move_call(sender_address, move_call, epoch)
             .await?)
     }
 

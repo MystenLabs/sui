@@ -1018,6 +1018,10 @@ impl AuthorityState {
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
     ) -> Result<SuiTransactionEffects, anyhow::Error> {
+        if !self.is_fullnode() && !cfg!(test) {
+            return Err(anyhow!("dry-exec is only support on fullnodes"));
+        }
+
         let (gas_status, input_objects) =
             transaction_input_checker::check_transaction_input(&self.database, &transaction)
                 .await?;
@@ -1045,7 +1049,12 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
+        epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
+        if !self.is_fullnode() && !cfg!(test) {
+            return Err(anyhow!("dev-inspect is only supported on fullnodes"));
+        }
+
         let (gas_status, input_objects) =
             transaction_input_checker::check_dev_inspect_input(&self.database, &transaction)
                 .await?;
@@ -1064,7 +1073,7 @@ impl AuthorityState {
                 &self.move_vm,
                 &self._native_functions,
                 gas_status,
-                self.epoch(),
+                epoch,
             );
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
     }
@@ -1073,7 +1082,12 @@ impl AuthorityState {
         &self,
         sender: SuiAddress,
         move_call: MoveCall,
+        epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
+        if !self.is_fullnode() && !cfg!(test) {
+            return Err(anyhow!("dev-inspect is only supported on fullnodes"));
+        }
+
         let input_objects = move_call.input_objects();
         let input_objects = transaction_input_checker::check_dev_inspect_input_objects(
             &self.database,
@@ -1104,7 +1118,7 @@ impl AuthorityState {
                 transaction_dependencies,
                 &self.move_vm,
                 gas_status,
-                self.epoch(),
+                epoch,
             );
 
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
