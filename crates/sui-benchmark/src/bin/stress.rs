@@ -261,7 +261,7 @@ async fn main() -> Result<()> {
         // Let fullnode be created.
         sleep(Duration::from_secs(5)).await;
         let fullnode_rpc_url = format!("http://{fullnode_ip}:{fullnode_rpc_port}");
-        eprintln!("Fullnode rpc url: {fullnode_rpc_url}");
+        info!("Fullnode rpc url: {fullnode_rpc_url}");
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
             LocalValidatorAggregatorProxy::from_network_config(
                 &configs,
@@ -285,7 +285,7 @@ async fn main() -> Result<()> {
         let fullnode_rpc_url = opts
             .fullnode_rpc_address
             .expect("Remote benchmark requires fullnode-rpc-url");
-            info!("Fullnode rpc url: {fullnode_rpc_url}");
+        info!("Fullnode rpc url: {fullnode_rpc_url}");
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if opts.use_fullnode_for_execution {
             info!("Using FullNodeProxy: {fullnode_rpc_url}..");
             Arc::new(FullNodeProxy::from_url(&fullnode_rpc_url).await.unwrap())

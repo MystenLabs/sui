@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
 use sui_core::{
-    authority_aggregator::AuthorityAggregatorBuilder,
+    authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
@@ -123,26 +123,7 @@ impl LocalValidatorAggregatorProxy {
             .build()
             .unwrap();
 
-        let committee_store = aggregator.clone_committee_store();
-
-        let reconfig_observer = FullNodeReconfigObserver::new(
-            fullnode_rpc_url,
-            committee_store,
-            aggregator.safe_client_metrics_base.clone(),
-            aggregator.metrics.clone(),
-        )
-        .await;
-        let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
-        let qd_handler =
-            QuorumDriverHandlerBuilder::new(Arc::new(aggregator), quorum_driver_metrics)
-                .with_reconfig_observer(Arc::new(reconfig_observer))
-                .start();
-
-        let qd = qd_handler.clone_quorum_driver();
-        Self {
-            _qd_handler: qd_handler,
-            qd,
-        }
+        Self::new_impl(aggregator, registry, fullnode_rpc_url).await
     }
 
     pub async fn from_network_config(
@@ -154,6 +135,14 @@ impl LocalValidatorAggregatorProxy {
             .with_registry(registry)
             .build()
             .unwrap();
+        Self::new_impl(aggregator, registry, fullnode_rpc_url).await
+    }
+
+    async fn new_impl(
+        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        registry: &Registry,
+        fullnode_rpc_url: &str,
+    ) -> Self {
         let committee_store = aggregator.clone_committee_store();
 
         let reconfig_observer = FullNodeReconfigObserver::new(
