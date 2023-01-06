@@ -1,6 +1,5 @@
 {
     "name": "sui-explorer",
-    "version": "0.1.2",
     "private": true,
     "scripts": {
         "dev": "vite --port 3000",
