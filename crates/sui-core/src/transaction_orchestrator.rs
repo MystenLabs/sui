@@ -6,31 +6,33 @@ Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
-use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
-use std::sync::Arc;
-use std::time::Duration;
-use sui_types::base_types::TransactionDigest;
-use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
-
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority::AuthorityState;
-use crate::authority_aggregator::AuthorityAggregator;
-use crate::authority_client::AuthorityAPI;
-use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
+use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
+use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
+use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
+use crate::safe_client::SafeClientMetricsBase;
 use mysten_metrics::spawn_monitored_task;
+use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
 use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
+use sui_types::base_types::TransactionDigest;
+use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse, VerifiedCertificate, VerifiedCertifiedTransactionEffects,
 };
+use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, instrument, warn};
@@ -52,22 +54,62 @@ pub struct TransactiondOrchestrator<A> {
     metrics: Arc<TransactionOrchestratorMetrics>,
 }
 
+impl TransactiondOrchestrator<NetworkAuthorityClient> {
+    pub fn new_with_network_clients(
+        validator_state: Arc<AuthorityState>,
+        reconfig_channel: broadcast::Receiver<Committee>,
+        parent_path: &Path,
+        prometheus_registry: &Registry,
+    ) -> anyhow::Result<Self> {
+        let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
+        let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
+        let validators = AuthorityAggregator::new_from_system_state(
+            &validator_state.db(),
+            validator_state.committee_store(),
+            safe_client_metrics_base.clone(),
+            auth_agg_metrics.clone(),
+        )?;
+
+        let observer = OnsiteReconfigObserver::new(
+            reconfig_channel,
+            validator_state.db(),
+            validator_state.clone_committee_store(),
+            safe_client_metrics_base,
+            auth_agg_metrics,
+        );
+        Ok(TransactiondOrchestrator::new(
+            Arc::new(validators),
+            validator_state,
+            parent_path,
+            prometheus_registry,
+            observer,
+        ))
+    }
+}
+
 impl<A> TransactiondOrchestrator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
+    OnsiteReconfigObserver: ReconfigObserver<A>,
 {
     pub fn new(
         validators: Arc<AuthorityAggregator<A>>,
         validator_state: Arc<AuthorityState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
+        reconfig_observer: OnsiteReconfigObserver,
     ) -> Self {
         let notifier = Arc::new(NotifyRead::new());
-        let quorum_driver_handler = Arc::new(QuorumDriverHandler::new_with_notify_read(
-            validators,
-            notifier.clone(),
-            Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
-        ));
+        let quorum_driver_handler = Arc::new(
+            QuorumDriverHandlerBuilder::new(
+                validators,
+                Arc::new(QuorumDriverMetrics::new(prometheus_registry)),
+            )
+            .with_notifier(notifier.clone())
+            .with_reconfig_observer(Arc::new(reconfig_observer))
+            .start(),
+        );
+
         let effects_receiver = quorum_driver_handler.subscribe_to_effects();
         let state_clone = validator_state.clone();
         let metrics = Arc::new(TransactionOrchestratorMetrics::new(prometheus_registry));

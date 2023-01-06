@@ -19,13 +19,10 @@ use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::{
-    AuthAggMetrics, AuthorityAggregator, NetworkTransactionCertifier,
-};
+use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -184,13 +181,6 @@ impl SuiNode {
         let (p2p_network, discovery_handle, state_sync_handle) =
             Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
 
-        let arc_net = AuthorityAggregator::new_from_system_state(
-            &store,
-            &committee_store,
-            SafeClientMetricsBase::new(&prometheus_registry),
-            AuthAggMetrics::new(&prometheus_registry),
-        )?;
-
         let transaction_streamer = if is_full_node {
             Some(Arc::new(TransactionStreamer::new()))
         } else {
@@ -220,12 +210,15 @@ impl SuiNode {
         .start()?;
 
         let transaction_orchestrator = if is_full_node {
-            Some(Arc::new(TransactiondOrchestrator::new(
-                Arc::new(arc_net),
-                state.clone(),
-                config.db_path(),
-                &prometheus_registry,
-            )))
+            Some(Arc::new(
+                TransactiondOrchestrator::new_with_network_clients(
+                    state.clone(),
+                    // TODO: use an indirection layer for subscription but not checkpoint executor
+                    checkpoint_executor_handle.subscribe_to_end_of_epoch(),
+                    config.db_path(),
+                    &prometheus_registry,
+                )?,
+            ))
         } else {
             None
         };

@@ -448,7 +448,6 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
 /// However to make testing easier, we sometimes want to use local authority clients that do not
 /// involve full-fledged network Sui nodes (e.g. when we want to abstract out Narwhal). In order
 /// to support both network clients and local clients, this trait is defined to hide the difference.
-/// We implement this trait for both NetworkTransactionCertifier and LocalTransactionCertifier.
 #[async_trait]
 pub trait TransactionCertifier: Sync + Send + 'static {
     /// This function first loads the Sui system state object from `self_state`, get the committee

@@ -108,6 +108,8 @@ async fn advance_epoch_tx_test_impl(
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
+    // TODO remove this sleep when this test passes consistently
+    sleep(Duration::from_secs(1)).await;
     let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
     trigger_reconfiguration(&authorities).await;
 }
