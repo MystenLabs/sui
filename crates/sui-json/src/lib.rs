@@ -182,10 +182,7 @@ impl SuiJsonValue {
                 Some(x) => MoveValue::U32(u32::try_from(x)?),
                 None => return Err(anyhow!("{} is not a valid number. Only u32 allowed.", n)),
             },
-            (JsonValue::Number(n), MoveTypeLayout::U64) => match n.as_u64() {
-                Some(x) => MoveValue::U64(x),
-                None => return Err(anyhow!("{} is not a valid number. Only u64 allowed.", n)),
-            },
+
             // u8, u16, u32, u64, u128, u256 can be encoded as String
             (JsonValue::String(s), MoveTypeLayout::U8) => {
                 MoveValue::U8(u8::try_from(convert_string_to_u256(s.as_str())?)?)

@@ -161,38 +161,26 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         .await? else{
         panic!()
     };
-
-    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
 
-    // test cluster will not response if this call is in the same thread
-    let out = thread::spawn(move || {
-        cmd.args([
-            "client",
-            "--client.config",
-            config_path.to_str().unwrap(),
-            "call",
-            "--package",
-            "0x2",
-            "--module",
-            "sui",
-            "--function",
-            "transfer",
-            "--args",
-            &coins.first().unwrap().object_id.to_string(),
-            &test_cluster.get_address_1().to_string(),
-            "--gas-budget",
-            "10000",
-        ])
-        .assert()
-    });
-
-    while !out.is_finished() {
-        sleep(Duration::from_millis(100)).await;
-    }
-
-    out.join().unwrap().success();
-    Ok(())
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui",
+        "--function",
+        "transfer",
+        "--args",
+        &coins.first().unwrap().object_id.to_string(),
+        &test_cluster.get_address_1().to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await
 }
 
 #[sim_test]
@@ -1198,5 +1186,128 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
+        address: Some(address),
+    }
+        .execute(context)
+        .await? else{
+        panic!()
+    };
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addrs = context
+        .get_client()
+        .await?
+        .governance_api()
+        .get_validators()
+        .await?;
+    let validator_addr = validator_addrs.first().unwrap().sui_address;
+
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_add_delegation_mul_coin",
+        "--args",
+        "0x5",
+        &format!("[{}]", coins.first().unwrap().object_id),
+        "[]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await?;
+
+    let stake = context
+        .get_client()
+        .await?
+        .governance_api()
+        .get_delegated_stakes(address)
+        .await?;
+
+    assert_eq!(1, stake.len());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
+        address: Some(address),
+    }
+        .execute(context)
+        .await? else{
+        panic!()
+    };
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addrs = context
+        .get_client()
+        .await?
+        .governance_api()
+        .get_validators()
+        .await?;
+    let validator_addr = validator_addrs.first().unwrap().sui_address;
+
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_add_delegation_mul_coin",
+        "--args",
+        "0x5",
+        &format!("[{}]", coins.first().unwrap().object_id),
+        "[10000]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await?;
+
+    let stake = context
+        .get_client()
+        .await?
+        .governance_api()
+        .get_delegated_stakes(address)
+        .await?;
+
+    assert_eq!(1, stake.len());
+    assert_eq!(10000, stake.first().unwrap().staked_sui.principal());
+    Ok(())
+}
+
+async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // test cluster will not response if this call is in the same thread
+    let out = thread::spawn(move || cmd.args(args).assert());
+    while !out.is_finished() {
+        sleep(Duration::from_millis(100)).await;
+    }
+    out.join().unwrap().success();
     Ok(())
 }
