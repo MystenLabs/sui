@@ -30,6 +30,7 @@
         "@headlessui/react": "^1.7.7",
         "@hookform/resolvers": "^2.9.10",
         "@mysten/core": "workspace:*",
+        "@mysten/icons": "workspace:*",
         "@mysten/sui.js": "workspace:*",
         "@mysten/wallet-kit": "workspace:*",
         "@sentry/react": "^7.29.0",

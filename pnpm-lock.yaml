@@ -38,6 +38,7 @@ importers:
       '@headlessui/react': ^1.7.7
       '@hookform/resolvers': ^2.9.10
       '@mysten/core': workspace:*
+      '@mysten/icons': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-kit': workspace:*
       '@playwright/test': ^1.29.1
@@ -113,6 +114,7 @@ importers:
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
       '@hookform/resolvers': 2.9.10_react-hook-form@7.41.5
       '@mysten/core': link:../core
+      '@mysten/icons': link:../icons
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-kit': link:../../sdk/wallet-adapter/wallet-kit
       '@sentry/react': 7.29.0_react@18.2.0
