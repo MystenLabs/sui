@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { is, SuiObject, type SuiAddress } from '@mysten/sui.js';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { notEmpty } from '_helpers';
