@@ -307,6 +307,14 @@ impl CheckpointBuilder {
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
         loop {
+            // Check whether an exit signal has been received, if so we break the loop.
+            // This gives us a chance to exit, in case checkpoint making keeps failing.
+            match self.exit.has_changed() {
+                Ok(true) | Err(_) => {
+                    break;
+                }
+                Ok(false) => (),
+            };
             let mut last_processed_height: Option<u64> = None;
             for (height, (roots, last_checkpoint_of_epoch)) in
                 self.epoch_store.get_pending_checkpoints()
@@ -326,13 +334,13 @@ impl CheckpointBuilder {
             debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
-                    // return on exit signal
-                    info!("Shutting down CheckpointBuilder");
-                    return;
+                    // break loop on exit signal
+                    break;
                 }
                 Either::Right(_) => {}
             }
         }
+        info!("Shutting down CheckpointBuilder");
     }
 
     async fn make_checkpoint(
