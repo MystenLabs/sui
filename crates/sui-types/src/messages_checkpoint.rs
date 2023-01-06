@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::encoding::{Base58, Encoding, Hex};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
@@ -10,14 +10,17 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::sui_serde::Readable;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, Bytes};
 
 pub type CheckpointSequenceNumber = u64;
 
@@ -96,8 +99,15 @@ impl AuthenticatedCheckpoint {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct CheckpointDigest(pub [u8; 32]);
+#[serde_as]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointDigest(
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
+    pub [u8; 32],
+);
 
 impl AsRef<[u8]> for CheckpointDigest {
     fn as_ref(&self) -> &[u8] {
@@ -111,8 +121,15 @@ impl AsRef<[u8; 32]> for CheckpointDigest {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct CheckpointContentsDigest(pub [u8; 32]);
+#[serde_as]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointContentsDigest(
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
+    pub [u8; 32],
+);
 
 impl AsRef<[u8]> for CheckpointContentsDigest {
     fn as_ref(&self) -> &[u8] {
@@ -128,7 +145,7 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
 
 // The constituent parts of checkpoints, signed and certified
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
@@ -437,7 +454,7 @@ pub struct CheckpointSignatureMessage {
 /// They must have already been causally ordered. Since the causal order algorithm
 /// is the same among validators, we expect all honest validators to come up with
 /// the same order for each checkpoint content.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
 }
