@@ -1936,11 +1936,11 @@ impl AuthorityState {
             .get_owner_objects_iterator(owner)?
             .filter(move |o| Self::matches_type(&ObjectType::Struct(type_.clone()), &o.type_))
             .map(|info| info.object_id);
-        let mut staked_suis = vec![];
+        let mut move_objects = vec![];
         for id in object_ids {
-            staked_suis.push(self.get_move_object(&id).await?)
+            move_objects.push(self.get_move_object(&id).await?)
         }
-        Ok(staked_suis)
+        Ok(move_objects)
     }
 
     fn matches_type(type_: &ObjectType, other_type: &ObjectType) -> bool {
