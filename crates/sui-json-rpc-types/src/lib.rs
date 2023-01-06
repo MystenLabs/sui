@@ -4,7 +4,7 @@
 /// This file contain response types used by RPC, most of the types mirrors it's internal type counterparts.
 /// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
 ///
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -29,6 +29,8 @@ use serde_json::Value;
 use serde_with::serde_as;
 
 use fastcrypto::encoding::{Base64, Encoding};
+use tracing::warn;
+
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -56,7 +58,6 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
-use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -74,6 +75,7 @@ pub struct Balance {
     pub coin_type: String,
     pub coin_object_count: usize,
     pub total_balance: u128,
+    pub locked_balance: HashMap<EpochId, u128>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -84,6 +86,7 @@ pub struct Coin {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
     pub balance: u64,
+    pub locked_until_epoch: Option<EpochId>,
 }
 
 impl Coin {

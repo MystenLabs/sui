@@ -9,6 +9,7 @@ use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
 use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
@@ -18,6 +19,7 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
     IntCounterVec, IntGauge, Registry,
 };
+use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -1811,6 +1813,24 @@ impl AuthorityState {
         }
     }
 
+    async fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
+    where
+        T: DeserializeOwned,
+    {
+        let o = self.get_object_read(object_id).await?.into_object()?;
+        if let Some(move_object) = o.data.try_as_move() {
+            Ok(bcs::from_bytes(move_object.contents()).map_err(|e| {
+                SuiError::ObjectDeserializationError {
+                    error: format!("{e}"),
+                }
+            })?)
+        } else {
+            Err(SuiError::ObjectDeserializationError {
+                error: format!("Provided object : [{object_id}] is not a Move object."),
+            })
+        }
+    }
+
     /// This function aims to serve rpc reads on past objects and
     /// we don't expect it to be called for other purposes.
     /// Depending on the object pruning policies that will be enforced in the
@@ -1901,6 +1921,38 @@ impl AuthorityState {
             indexes.get_owner_objects_iterator(owner)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
+        }
+    }
+
+    pub async fn get_move_objects<T>(
+        &self,
+        owner: SuiAddress,
+        type_: &StructTag,
+    ) -> SuiResult<Vec<T>>
+    where
+        T: DeserializeOwned,
+    {
+        let object_ids = self
+            .get_owner_objects_iterator(owner)?
+            .filter(move |o| Self::matches_type(&ObjectType::Struct(type_.clone()), &o.type_))
+            .map(|info| info.object_id);
+        let mut move_objects = vec![];
+        for id in object_ids {
+            move_objects.push(self.get_move_object(&id).await?)
+        }
+        Ok(move_objects)
+    }
+
+    fn matches_type(type_: &ObjectType, other_type: &ObjectType) -> bool {
+        match (type_, other_type) {
+            (ObjectType::Package, ObjectType::Package) => true,
+            (ObjectType::Struct(type_), ObjectType::Struct(other_type)) => {
+                type_.address == other_type.address
+                    && type_.module == other_type.module
+                    && type_.name == other_type.name
+                    && (type_.type_params.is_empty() || type_.type_params == other_type.type_params)
+            }
+            _ => false,
         }
     }
 
