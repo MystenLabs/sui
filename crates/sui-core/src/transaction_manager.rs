@@ -50,6 +50,7 @@ impl TransactionManager {
     /// other persistent data.
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
+        epoch_store: &AuthorityPerEpochStore,
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
@@ -59,12 +60,8 @@ impl TransactionManager {
             inner: Default::default(),
             tx_ready_certificates,
         };
-        let epoch_store = transaction_manager.authority_store.epoch_store();
         transaction_manager
-            .enqueue(
-                epoch_store.all_pending_certificates().unwrap(),
-                &epoch_store,
-            )
+            .enqueue(epoch_store.all_pending_certificates().unwrap(), epoch_store)
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -122,6 +119,7 @@ impl TransactionManager {
                 .get_missing_input_objects(
                     &digest,
                     &cert.data().intent_message.value.input_objects()?,
+                    epoch_store,
                 )
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 

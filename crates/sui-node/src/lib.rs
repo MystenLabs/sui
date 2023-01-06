@@ -149,6 +149,8 @@ impl SuiNode {
             )
             .await?,
         );
+        let epoch_store =
+            AuthorityPerEpochStore::new(genesis_committee, &config.db_path().join("store"), None);
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let state_sync_store = RocksDbStore::new(
@@ -199,6 +201,7 @@ impl SuiNode {
             config.protocol_public_key(),
             secret,
             store,
+            epoch_store,
             committee_store.clone(),
             index_store.clone(),
             event_store,

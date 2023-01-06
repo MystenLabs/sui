@@ -265,7 +265,6 @@ pub struct CheckpointAggregator {
     notify: Arc<Notify>,
     exit: watch::Receiver<()>,
     current: Option<CheckpointSignatureAggregator>,
-    state: Arc<AuthorityState>,
     output: Box<dyn CertifiedCheckpointOutput>,
     metrics: Arc<CheckpointMetrics>,
 }
@@ -559,7 +558,6 @@ impl CheckpointAggregator {
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         exit: watch::Receiver<()>,
-        state: Arc<AuthorityState>,
         output: Box<dyn CertifiedCheckpointOutput>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
@@ -570,7 +568,6 @@ impl CheckpointAggregator {
             notify,
             exit,
             current,
-            state,
             output,
             metrics,
         }
@@ -612,7 +609,7 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: StakeAggregator::new(self.state.clone_committee()),
+                    signatures: StakeAggregator::new(self.epoch_store.committee().clone()),
                 });
                 self.current.as_mut().unwrap()
             };
@@ -762,7 +759,7 @@ impl CheckpointService {
         let (exit_snd, exit_rcv) = watch::channel(());
 
         let builder = CheckpointBuilder::new(
-            state.clone(),
+            state,
             checkpoint_store.clone(),
             epoch_store.clone(),
             notify_builder.clone(),
@@ -781,7 +778,6 @@ impl CheckpointService {
             epoch_store.clone(),
             notify_aggregator.clone(),
             exit_rcv,
-            state,
             certified_checkpoint_output,
             metrics,
         );
