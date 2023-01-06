@@ -4,6 +4,8 @@
 mod metrics;
 pub use metrics::*;
 
+pub mod reconfig_observer;
+
 use arc_swap::ArcSwap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
@@ -300,12 +302,12 @@ where
         Ok(response)
     }
 
-    pub async fn update_validators(
-        &self,
-        new_validators: Arc<AuthorityAggregator<A>>,
-    ) -> SuiResult {
+    pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
+        info!(
+            "Quorum Drvier updating AuthorityAggregator with committee {:?}",
+            new_validators.committee
+        );
         self.validators.store(new_validators);
-        Ok(())
     }
 
     // TODO currently this function is not epoch-boundary-safe. We need to make it so.
@@ -607,6 +609,10 @@ where
 
     pub fn authority_aggregator(&self) -> &ArcSwap<AuthorityAggregator<A>> {
         self.quorum_driver.authority_aggregator()
+    }
+
+    pub fn current_epoch(&self) -> EpochId {
+        self.quorum_driver.current_epoch()
     }
 
     /// Process a QuorumDriverTask.

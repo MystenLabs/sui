@@ -103,7 +103,7 @@ pub struct SuiNode {
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    _checkpoint_executor_handle: checkpoint_executor::Handle,
+    checkpoint_executor_handle: checkpoint_executor::Handle,
 
     reconfig_channel: Mutex<tokio::sync::broadcast::Receiver<Committee>>,
 
@@ -261,7 +261,7 @@ impl SuiNode {
             _discovery: discovery_handle,
             state_sync: state_sync_handle,
             checkpoint_store,
-            _checkpoint_executor_handle: checkpoint_executor_handle,
+            checkpoint_executor_handle,
             reconfig_channel: Mutex::new(reconfig_channel),
 
             #[cfg(msim)]
@@ -274,6 +274,14 @@ impl SuiNode {
         spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
         Ok(node)
+    }
+
+    pub async fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+        self.checkpoint_executor_handle.subscribe_to_end_of_epoch()
+    }
+
+    pub fn current_epoch(&self) -> EpochId {
+        self.state.epoch()
     }
 
     pub async fn close_epoch(&self) -> SuiResult {
@@ -594,6 +602,14 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
+        self.state.committee_store().clone()
+    }
+
+    pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
+        self.state.db()
     }
 
     /// Clone an AuthorityAggregator currently used in this node's

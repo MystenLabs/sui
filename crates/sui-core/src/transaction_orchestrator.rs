@@ -284,6 +284,10 @@ where
         &self.quorum_driver_handler
     }
 
+    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriverHandler<A>> {
+        self.quorum_driver_handler.clone()
+    }
+
     pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
         self.quorum_driver().authority_aggregator().load_full()
     }

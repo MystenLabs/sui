@@ -74,7 +74,14 @@ pub struct FullnodeConfigBuilder<'a> {
     dir: Option<PathBuf>,
     enable_event_store: bool,
     listen_ip: Option<IpAddr>,
+    // port for main network_address
+    port: Option<u16>,
+    // port for p2p data sync
+    p2p_port: Option<u16>,
+    // port for json rpc api
     rpc_port: Option<u16>,
+    // port for admin interface
+    admin_port: Option<u16>,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -84,7 +91,10 @@ impl<'a> FullnodeConfigBuilder<'a> {
             dir: None,
             enable_event_store: false,
             listen_ip: None,
+            port: None,
+            p2p_port: None,
             rpc_port: None,
+            admin_port: None,
         }
     }
 
@@ -103,6 +113,16 @@ impl<'a> FullnodeConfigBuilder<'a> {
         self
     }
 
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    pub fn with_p2p_port(mut self, port: u16) -> Self {
+        self.p2p_port = Some(port);
+        self
+    }
+
     pub fn with_rpc_port(mut self, port: u16) -> Self {
         self.rpc_port = Some(port);
         self
@@ -110,6 +130,11 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
     pub fn set_rpc_port(mut self, port: Option<u16>) -> Self {
         self.rpc_port = port;
+        self
+    }
+
+    pub fn with_admin_port(mut self, port: u16) -> Self {
+        self.admin_port = Some(port);
         self
     }
 
@@ -149,13 +174,18 @@ impl<'a> FullnodeConfigBuilder<'a> {
         let network_address = format!(
             "/ip4/{}/tcp/{}/http",
             listen_ip,
-            utils::get_available_port(&listen_ip_str)
+            self.port
+                .unwrap_or_else(|| utils::get_available_port(&listen_ip_str))
         )
         .parse()
         .unwrap();
 
         let p2p_config = {
-            let address = SocketAddr::new(listen_ip, utils::get_available_port(&listen_ip_str));
+            let address = SocketAddr::new(
+                listen_ip,
+                self.p2p_port
+                    .unwrap_or_else(|| utils::get_available_port(&listen_ip_str)),
+            );
             let seed_peers = validator_configs
                 .iter()
                 .map(|config| SeedPeer {
@@ -191,7 +221,9 @@ impl<'a> FullnodeConfigBuilder<'a> {
             metrics_address: utils::available_local_socket_address(),
             // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
             // provide the entire socket address here to avoid confusion.
-            admin_interface_port: utils::get_available_port("127.0.0.1"),
+            admin_interface_port: self
+                .admin_port
+                .unwrap_or_else(|| utils::get_available_port("127.0.0.1")),
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
