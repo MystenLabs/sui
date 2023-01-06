@@ -1042,10 +1042,12 @@ impl AuthorityStore {
             ($object_keys: expr) => {
                 self.perpetual_tables
                     .objects
-                    .multi_get($object_keys)?
+                    .multi_get($object_keys.clone())?
                     .into_iter()
-                    .filter_map(|obj_opt| {
-                        let obj = obj_opt.expect("Older object version not found");
+                    .zip($object_keys)
+                    .filter_map(|(obj_opt, key)| {
+                        let obj =
+                            obj_opt.expect(&format!("Older object version not found: {:?}", key));
 
                         if obj.is_immutable() {
                             return None;

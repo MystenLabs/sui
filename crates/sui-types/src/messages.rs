@@ -185,7 +185,7 @@ impl GenesisObject {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -779,11 +779,6 @@ impl TransactionData {
             modules,
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
-    }
-
-    /// Returns the transaction kind as a &str (variant name, no fields)
-    pub fn kind_as_str(&self) -> &'static str {
-        (&self.kind).into()
     }
 
     pub fn gas(&self) -> ObjectRef {
