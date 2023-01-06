@@ -10,6 +10,8 @@ pub type SuiRpcResult<T = ()> = Result<T, RpcError>;
 pub enum RpcError {
     #[error(transparent)]
     RpcError(#[from] jsonrpsee::core::Error),
+    #[error(transparent)]
+    PcsSerialisationError(#[from] bcs::Error),
     #[error("Subscription error : {0}")]
     Subscription(String),
     #[error("Encountered error when confirming tx status for {0:?}, err: {1:?}")]

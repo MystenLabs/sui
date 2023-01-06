@@ -3,6 +3,7 @@
 
 use crate::error::{RpcError, SuiRpcResult};
 use crate::{RpcClient, TransactionExecutionResult, WAIT_FOR_TX_TIMEOUT_SEC};
+use fastcrypto::encoding::Base64;
 use futures::stream;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
@@ -14,7 +15,7 @@ use sui_json_rpc_types::{
     Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionResponse, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -24,7 +25,7 @@ use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{
-    CommitteeInfoResponse, ExecuteTransactionRequestType, VerifiedTransaction,
+    CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
@@ -176,6 +177,17 @@ impl ReadApi {
 
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
+    }
+
+    pub async fn dry_run_transaction(
+        &self,
+        tx: TransactionData,
+    ) -> SuiRpcResult<SuiTransactionEffects> {
+        Ok(self
+            .api
+            .http
+            .dry_run_transaction(Base64::from_bytes(&bcs::to_bytes(&tx)?))
+            .await?)
     }
 }
 

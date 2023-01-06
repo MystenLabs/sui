@@ -569,6 +569,10 @@ impl TransactionKind {
         )
     }
 
+    pub fn is_single_tx(&self) -> bool {
+        matches!(self, TransactionKind::Single(_))
+    }
+
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
@@ -791,7 +795,7 @@ impl TransactionData {
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let mut inputs = self.kind.input_objects()?;
 
-        if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
+        if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() && !self.kind.is_single_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
             ));
