@@ -32,7 +32,9 @@ export const Default: StoryObj<DescriptionListProps> = {
                     0xb758af2061e7c0e55df23de52c51968f6efbc959
                 </Link>
             </DescriptionItem>
-            <DescriptionItem title={<Text variant="bodySmall">Owner</Text>}>
+            <DescriptionItem
+                title={<Text variant="bodySmall/medium">Owner</Text>}
+            >
                 Value 1
             </DescriptionItem>
         </DescriptionList>
