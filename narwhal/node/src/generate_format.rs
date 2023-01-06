@@ -76,7 +76,11 @@ fn get_registry() -> Result<Registry> {
         .epoch(0)
         .created_at(0)
         .round(1)
-        .payload((0..4u32).map(|wid| (BatchDigest([0u8; 32]), wid)).collect())
+        .payload(
+            (0..4u32)
+                .map(|wid| (BatchDigest([0u8; 32]), (wid, 0u64)))
+                .collect(),
+        )
         .parents(certificates.iter().map(|x| x.digest()).collect())
         .build(&kp)
         .unwrap();

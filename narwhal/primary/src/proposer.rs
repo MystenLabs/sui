@@ -221,7 +221,7 @@ impl Proposer {
             this_epoch,
             digests
                 .iter()
-                .map(|(digest, worker_id, _)| (*digest, *worker_id))
+                .map(|(digest, worker_id, created_at)| (*digest, (*worker_id, *created_at)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
             &self.signature_service,
@@ -477,11 +477,8 @@ impl Proposer {
                             break;
                         }
 
-                        // Reset batch creation timer to now as we are attempting to resend an existing digest
-                        // that failed to be committed in a previous header.
-                        let created_at_timestamp = now();
                         digests_to_resend.extend(
-                            header.payload.iter().map(|(digest, worker)| (*digest, *worker, created_at_timestamp))
+                            header.payload.iter().map(|(digest, (worker, created_at))| (*digest, *worker, *created_at))
                         );
                         retransmit_rounds.push(*round_header);
                     }

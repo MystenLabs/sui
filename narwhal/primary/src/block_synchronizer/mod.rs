@@ -529,8 +529,13 @@ impl BlockSynchronizer {
         let mut futures = Vec::new();
 
         for certificate in certificates {
-            let payload: Vec<(BatchDigest, WorkerId)> =
-                certificate.header.payload.clone().into_iter().collect();
+            let payload: Vec<(BatchDigest, WorkerId)> = certificate
+                .header
+                .payload
+                .clone()
+                .into_iter()
+                .map(|(batch, (worker_id, _))| (batch, worker_id))
+                .collect();
 
             let payload_available = if certificate.header.author == self.name {
                 trace!(
@@ -665,7 +670,9 @@ impl BlockSynchronizer {
             .header
             .payload
             .iter()
-            .map(|(batch_digest, worker_id)| payload_store.notify_read((*batch_digest, *worker_id)))
+            .map(|(batch_digest, (worker_id, _))| {
+                payload_store.notify_read((*batch_digest, *worker_id))
+            })
             .collect::<Vec<_>>();
 
         // Wait for all the items to sync - have a timeout

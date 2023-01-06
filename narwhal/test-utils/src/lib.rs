@@ -33,7 +33,7 @@ use types::{
     GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
     PayloadAvailabilityResponse, PrimaryMessage, PrimaryToPrimary, PrimaryToPrimaryServer,
     PrimaryToWorker, PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse,
-    RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, Transaction, Vote,
+    RequestVoteRequest, RequestVoteResponse, Round, SequenceNumber, TimestampMs, Transaction, Vote,
     WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerReconfigureMessage,
     WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
@@ -136,13 +136,13 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
 }
 
-pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, WorkerId> {
-    let mut payload: IndexMap<BatchDigest, WorkerId> = IndexMap::new();
+pub fn fixture_payload(number_of_batches: u8) -> IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+    let mut payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)> = IndexMap::new();
 
     for _ in 0..number_of_batches {
         let batch_digest = batch().digest();
 
-        payload.insert(batch_digest, 0);
+        payload.insert(batch_digest, (0, 0));
     }
 
     payload
@@ -726,7 +726,7 @@ impl CommitteeFixture {
                     .round(round)
                     .epoch(0)
                     .parents(parents.clone())
-                    .with_payload_batch(fixture_batch_with_transactions(10), 0)
+                    .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
                     .build(a.keypair())
                     .unwrap()
             })

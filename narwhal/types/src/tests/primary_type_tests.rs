@@ -33,7 +33,7 @@ fn clean_signed_header(kp: KeyPair) -> impl Strategy<Value = Header> {
         .prop_map(move |(round, epoch, batches, parents)| {
             let payload = batches
                 .into_iter()
-                .map(|(batch_digest, worker_id)| (batch_digest, worker_id as WorkerId))
+                .map(|(batch_digest, worker_id)| (batch_digest, (worker_id as WorkerId, 0)))
                 .collect();
 
             let parents = parents.into_iter().collect();

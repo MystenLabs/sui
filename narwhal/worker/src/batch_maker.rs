@@ -174,7 +174,7 @@ impl BatchMaker {
     async fn seal(
         &self,
         timeout: bool,
-        batch: Batch,
+        mut batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
     ) -> Option<impl Future<Output = ()>> {
@@ -267,11 +267,11 @@ impl BatchMaker {
         let store = self.store.clone();
         let worker_id = self.id;
         let tx_digest = self.tx_digest.clone();
-        let mut metadata = batch.metadata.clone();
 
-        // batch has been sealed so we can officially set its creation time for
-        // latency calculations.
-        metadata.created_at = now();
+        // The batch has been sealed so we can officially set its creation time
+        // for latency calculations.
+        batch.metadata.created_at = now();
+        let metadata = batch.metadata.clone();
 
         Some(async move {
             // Now save it to disk

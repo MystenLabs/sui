@@ -64,7 +64,7 @@ async fn test_get_collections() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id)
+            .with_payload_batch(batch.clone(), worker_id, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -267,7 +267,7 @@ async fn test_remove_collections() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id)
+            .with_payload_batch(batch.clone(), worker_id, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -1139,7 +1139,7 @@ async fn fixture_certificate(
     let batch_digest = batch.digest();
 
     let mut payload = IndexMap::new();
-    payload.insert(batch_digest, worker_id);
+    payload.insert(batch_digest, (worker_id, 0));
 
     let header = authority
         .header_builder(committee)
