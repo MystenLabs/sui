@@ -285,6 +285,7 @@ impl SuiNode {
     }
 
     pub async fn close_epoch(&self) -> SuiResult {
+        info!("close_epoch (current epoch = {})", self.state.epoch());
         self.validator_components
             .lock()
             .await
