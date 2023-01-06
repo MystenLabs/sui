@@ -134,7 +134,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         sender,
         &keypair,
     );
-    let net = AuthorityAggregator::new_from_system_state(
+    let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),
@@ -271,7 +271,7 @@ async fn test_validator_resign_effects() {
         &keypair,
     );
     let registry = Registry::new();
-    let mut net = AuthorityAggregator::new_from_system_state(
+    let mut net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),

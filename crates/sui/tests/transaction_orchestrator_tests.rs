@@ -12,7 +12,7 @@ use sui_types::messages::{
 use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::QuorumDriverError;
 use sui_types::utils::to_sender_signed_transaction;
-use test_utils::authority::{spawn_fullnodes, spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{spawn_fullnode, spawn_test_authorities, test_authority_configs};
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::wait_for_nodes_transition_to_epoch;
 use test_utils::network::TestClusterBuilder;
@@ -158,8 +158,7 @@ async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
     let authorities = spawn_test_authorities([].into_iter(), &config).await;
-    let fullnodes = spawn_fullnodes(&config, 1).await;
-    let fullnode = &fullnodes[0];
+    let fullnode = spawn_fullnode(&config, None).await;
     let epoch = fullnode.with(|node| {
         node.transaction_orchestrator()
             .unwrap()
@@ -175,7 +174,8 @@ async fn test_transaction_orchestrator_reconfig() {
     }
 
     // Wait for all nodes to reach the next epoch.
-    wait_for_nodes_transition_to_epoch(authorities.iter().chain(fullnodes.iter()), 1).await;
+    wait_for_nodes_transition_to_epoch(authorities.iter().chain(std::iter::once(&fullnode)), 1)
+        .await;
 
     // Give it some time for the update to happen
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
@@ -204,7 +204,8 @@ async fn test_tx_across_epoch_boundaries() {
 
     let config = test_authority_configs();
     let authorities = spawn_test_authorities(gas_objects.clone(), &config).await;
-    let mut fullnodes = spawn_fullnodes(&config, 1).await;
+    let fullnode = spawn_fullnode(&config, None).await;
+
     let txes = gas_objects
         .iter()
         .map(|o| {
@@ -218,7 +219,6 @@ async fn test_tx_across_epoch_boundaries() {
             to_sender_signed_transaction(data, &keypair)
         })
         .collect::<Vec<_>>();
-    let fullnode = fullnodes.swap_remove(0);
     let to = fullnode.with(|node| node.transaction_orchestrator().unwrap());
 
     // Spawn a task that fires transactions through TransactionOrchestrator

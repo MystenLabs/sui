@@ -53,7 +53,7 @@ impl OnsiteReconfigObserver {
     async fn create_authority_aggregator_from_system_state(
         &self,
     ) -> AuthorityAggregator<NetworkAuthorityClient> {
-        AuthorityAggregator::new_from_system_state(
+        AuthorityAggregator::new_from_local_system_state(
             &self.authority_store,
             &self.committee_store,
             self.safe_client_metrics_base.clone(),
@@ -116,7 +116,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         }
     }
 }
-
 /// A dummy ReconfigObserver for testing.
 pub struct DummyReconfigObserver;
 

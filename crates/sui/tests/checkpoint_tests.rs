@@ -32,7 +32,7 @@ async fn basic_checkpoints_integration_test() {
         sender,
         &keypair,
     );
-    let net = AuthorityAggregator::new_from_system_state(
+    let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),

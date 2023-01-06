@@ -7,7 +7,7 @@ use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::quorum_driver::reconfig_observer::OnsiteReconfigObserver;
 use sui_core::quorum_driver::reconfig_observer::ReconfigObserver;
 use sui_core::safe_client::SafeClientMetricsBase;
-use test_utils::authority::{spawn_fullnodes, spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{spawn_fullnode, spawn_test_authorities, test_authority_configs};
 use test_utils::network::wait_for_nodes_transition_to_epoch;
 use tracing::info;
 
@@ -18,8 +18,7 @@ async fn test_onsite_reconfig_observer_basic() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
     let authorities = spawn_test_authorities([].into_iter(), &config).await;
-    let fullnodes = spawn_fullnodes(&config, 1).await;
-    let fullnode = &fullnodes[0];
+    let fullnode = spawn_fullnode(&config, None).await;
 
     let _observer_handle = fullnode
         .with_async(|node| async {
@@ -49,7 +48,8 @@ async fn test_onsite_reconfig_observer_basic() {
     }
     // Wait for all nodes to reach the next epoch.
     info!("Waiting for nodes to advance to epoch 1");
-    wait_for_nodes_transition_to_epoch(authorities.iter().chain(fullnodes.iter()), 1).await;
+    wait_for_nodes_transition_to_epoch(authorities.iter().chain(std::iter::once(&fullnode)), 1)
+        .await;
 
     // Give it some time for the update to happen
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;

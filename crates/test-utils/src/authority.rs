@@ -108,29 +108,26 @@ where
 }
 
 /// This function can be called after `spawn_test_authorities` to
-/// start fullnodes.
-pub async fn spawn_fullnodes(config: &NetworkConfig, fullnode_num: u8) -> Vec<SuiNodeHandle> {
-    let mut fullnode_handles = Vec::new();
-    for _ in 0..fullnode_num {
-        let registry_service = RegistryService::new(Registry::new());
+/// start a fullnode.
+pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> SuiNodeHandle {
+    let registry_service = RegistryService::new(Registry::new());
 
-        let mut builder = config.fullnode_config_builder();
+    let mut builder = config.fullnode_config_builder();
 
-        if cfg!(msim) {
-            let ip_addr: IpAddr = format!("11.10.0.{}", fullnode_num + 1).parse().unwrap();
-            builder = builder
-                .with_listen_ip(ip_addr)
-                .with_port(8080)
-                .with_p2p_port(8084)
-                .with_rpc_port(9000)
-                .with_admin_port(8888);
-        }
-
-        let fullnode_config = builder.build().unwrap();
-        let node = start_node(&fullnode_config, registry_service).await;
-        fullnode_handles.push(node);
+    if cfg!(msim) {
+        let ip_addr: IpAddr = "11.10.0.0".to_string().parse().unwrap();
+        builder = builder
+            .with_listen_ip(ip_addr)
+            .with_port(8080)
+            .with_p2p_port(8084)
+            .with_rpc_port(rpc_port.unwrap_or(9000))
+            .with_admin_port(8888);
+    } else {
+        builder = builder.set_rpc_port(rpc_port);
     }
-    fullnode_handles
+
+    let fullnode_config = builder.build().unwrap();
+    start_node(&fullnode_config, registry_service).await
 }
 
 /// Get a network client to communicate with the consensus.
