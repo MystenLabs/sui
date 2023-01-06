@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{SuiAddress, TransactionDigest};
 use thiserror::Error;
 
-pub type SuiRpcResult<T = ()> = Result<T, RpcError>;
+pub type SuiRpcResult<T = ()> = Result<T, Error>;
 
 #[derive(Error, Debug)]
-pub enum RpcError {
+pub enum Error {
     #[error(transparent)]
     RpcError(#[from] jsonrpsee::core::Error),
     #[error(transparent)]
@@ -25,4 +25,6 @@ pub enum RpcError {
         client_version: String,
         server_version: String,
     },
+    #[error("Insufficient fund for address [{address}], requested amount: {amount}")]
+    InsufficientFund { address: SuiAddress, amount: u128 },
 }

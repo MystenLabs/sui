@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future;
-
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
-use futures::StreamExt;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
@@ -195,26 +192,15 @@ pub async fn metadata(
             sender, amounts, ..
         } => {
             let amount = amounts.iter().sum::<u64>() as u128;
-            let mut total = 0u128;
             let sender_coins = context
                 .client
                 .coin_read_api()
-                .get_coins_stream(*sender, None)
-                .take_while(|coin| {
-                    let ready = future::ready(total < amount);
-                    total += coin.balance as u128;
-                    ready
-                })
-                .map(|c| c.object_ref())
-                .collect::<Vec<_>>()
-                .await;
-
-            if total < amount {
-                return Err(Error::InsufficientFund {
-                    address: *sender,
-                    amount,
-                });
-            }
+                .select_coins(*sender, None, amount + 1000, false)
+                .await?
+                .into_iter()
+                .map(|coin| coin.object_ref())
+                .collect::<Vec<_>>();
+            // gas is always the first coin for pay_sui
             let gas = sender_coins[0];
             (TransactionMetadata::PaySui(sender_coins), gas)
         }
