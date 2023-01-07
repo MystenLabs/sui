@@ -245,6 +245,7 @@ module sui::validator_set {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         validator::request_set_gas_price(validator, new_gas_price);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun request_set_commission_rate(
@@ -255,6 +256,7 @@ module sui::validator_set {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         validator::request_set_commission_rate(validator, new_commission_rate);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
 
