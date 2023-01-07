@@ -13,11 +13,13 @@ import {
     VALIDATORS_OBJECT_ID,
     type ValidatorState,
 } from '~/pages/validator/ValidatorDataTypes';
+import { Card } from '~/ui/Card';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { Stats } from '~/ui/Stats';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
@@ -55,10 +57,10 @@ function ValidatorDetails() {
 
         const { name, pubkey_bytes, sui_address } =
             validatorData.fields.metadata.fields;
+
         const {
             sui_balance,
             starting_epoch,
-            pending_delegations,
             delegation_token_supply,
         } = validatorData.fields.delegation_staking_pool.fields;
 
@@ -71,10 +73,6 @@ function ValidatorDetails() {
             365 / num_epochs_participated - 1
         );
 
-        const totalStaked = [...pending_delegations]?.reduce(
-            (acc, fields) => (acc += BigInt(fields.fields.sui_amount || 0n)),
-            0n
-        );
 
         return {
             name: getName(name),
@@ -82,58 +80,17 @@ function ValidatorDetails() {
                 new Uint8Array(pubkey_bytes)
             ).toString(),
             suiAddress: sui_address,
-            apy: APY > 0 ? APY : 'N/A',
+            apy: APY ? APY : 0,
             logo: null,
-            link: null,
-            address: sui_address,
-            totalStaked,
-            delegators: Object.values(
-                [...pending_delegations]?.reduce(
-                    (acc, delegation) => {
-                        return {
-                            ...acc,
-                            [`${delegation.fields.delegator}`]: {
-                                delegator: delegation.fields.delegator,
-                                type: delegation.type,
-                                sui_amount:
-                                    BigInt(
-                                        delegation.fields?.sui_amount || 0n
-                                    ) +
-                                    BigInt(
-                                        acc[`${delegation.fields.delegator}`]
-                                            ?.sui_amount || 0n
-                                    ),
-                                share: getStakedPercent(
-                                    BigInt(
-                                        delegation.fields?.sui_amount || 0n
-                                    ) +
-                                        BigInt(
-                                            acc[
-                                                `${delegation.fields.delegator}`
-                                            ]?.sui_amount || 0n
-                                        ),
-                                    totalStaked
-                                ),
-                            },
-                        };
-                    },
-                    {} as {
-                        [key: string]: Delegator;
-                    }
-                )
+            delegatedStakePercentage: getStakedPercent(
+                validatorData.fields.stake_amount,
+                BigInt(validatorsData.validators.fields.total_delegation_stake),
             ),
+            delegatedStake: validatorData.fields.stake_amount,
+            address: sui_address,
         };
     }, [validatorData, validatorsData]);
 
-    const delegatorsData = useMemo(
-        () =>
-            validator
-                ? validator.delegators.sort((a, b) =>
-                      b.share > a.share ? 1 : -1
-                  )
-                : null,
-        [validator]
-    );
 
     if (!id) {
         return <Navigate to="/validators" />;
@@ -153,48 +110,113 @@ function ValidatorDetails() {
 
     return (
         <div className="mt-5 mb-10">
-            <div className="flex gap-5 capitalize">
-                <ImageIcon
-                    src={validator.logo}
-                    alt={validator.name}
-                    variant="square"
-                    size="xl"
-                />
-                <div className="mt-1 flex flex-col gap-2.5 md:gap-3.5">
-                    <Heading
-                        as="h1"
-                        variant="heading2"
-                        weight="bold"
-                        color="gray-100"
-                    >
-                        {validator.name}
-                    </Heading>
+            <div className="flex flex-col flex-nowrap md:flex-row ">
+                <div className="flex basis-full gap-5 capitalize md:basis-1/3">
+                    <ImageIcon
+                        src={validator.logo}
+                        alt={validator.name}
+                        variant="square"
+                        size="xl"
+                    />
+                    <div className="mt-1 flex flex-col gap-2.5 md:gap-3.5">
+                        <Heading
+                            as="h1"
+                            variant="heading2/bold"
+                            color="gray-100"
+                        >
+                            {validator.name}
+                        </Heading>
+                    </div>
+                </div>
+                <div className="basis-full break-all md:basis-2/3">
+                    <DescriptionItem title="Address">
+                            <AddressLink
+                                address={validator.suiAddress}
+                                noTruncate
+                            />
+                    </DescriptionItem>
+                    <DescriptionList>
+                        {validator.pubkeyBytes && (
+                            <DescriptionItem title="Public Key">
+                                <Text variant="p1/medium" color="gray-90">
+                                    {validator.pubkeyBytes}
+                                </Text>
+                            </DescriptionItem>
+                        )}
+                    </DescriptionList>
                 </div>
             </div>
-
-            <div className="mt-8 break-all">
-                <TableHeader>Details</TableHeader>
-                <DescriptionList>
-                    {validator.pubkeyBytes && (
-                        <DescriptionItem title="Public Key">
-                            <Text variant="p1" weight="medium" color="gray-90">
-                                {validator.pubkeyBytes}
-                            </Text>
-                        </DescriptionItem>
-                    )}
-
-                    <DescriptionItem title="Sui Address">
-                        <AddressLink
-                            address={validator.suiAddress}
-                            noTruncate
-                        />
-                    </DescriptionItem>
-                </DescriptionList>
+            <div className="mt-8 flex w-full">
+                <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
+                    <div className="basis-full md:basis-2/5">
+                        <Card spacing="lg">
+                            <div className="flex  max-w-full flex-col flex-nowrap gap-8">
+                                <Heading as="div" variant="heading4/semibold">
+                                    SUI Staked on Validator
+                                </Heading>
+                                <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
+                                    <Stats
+                                        label="Staking APY"
+                                        tooltip="Staking APY"
+                                        variant="heading2/semibold"
+                                        value={`${validator.apy}%`}
+                                    />
+                                    <Stats
+                                        label="Total Staked"
+                                        variant="heading2/semibold"
+                                        tooltip="Total Staked"
+                                        value="1"
+                                    />
+                                </div>
+                                <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
+                                    <Stats
+                                        label="Delegators"
+                                        tooltip="Delegators"
+                                        variant="heading3/semibold"
+                                        value="4,234"
+                                    />
+                                    <Stats
+                                        label="Delegated Staked"
+                                        value="26,242"
+                                        variant="heading3/semibold"
+                                        tooltip="Delegated Staked"
+                                    />
+                                    <Stats
+                                        label="Self Staked"
+                                        value="42%"
+                                        variant="heading3/semibold"
+                                        tooltip="Self Staked"
+                                    />
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+                    <div className="basis-full md:basis-1/4">
+                        <Card spacing="lg">
+                            <div className="flex  max-w-full flex-col flex-nowrap gap-8">
+                                <Heading as="div" variant="heading4/semibold">
+                                    SUI Staked on Validator
+                                </Heading>
+                                <div className="flex flex-col flex-nowrap gap-8">
+                                    <Stats
+                                        label="Last Epoch"
+                                        tooltip="Last Epoch"
+                                        variant="heading3/semibold"
+                                        value="2,333"
+                                    />
+                                    <Stats
+                                        label="Total Reward"
+                                        value="26,904"
+                                        variant="heading3/semibold"
+                                        tooltip="Total Reward"
+                                    />
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+                    
+                </div>
             </div>
-
-            {!!delegatorsData?.length && (
-                <DelegatorsList delegators={delegatorsData} />
-            )}
         </div>
     );
 }

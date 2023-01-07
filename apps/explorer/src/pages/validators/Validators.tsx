@@ -177,28 +177,33 @@ function ValidatorPageResult() {
             </Heading>
 
             <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
-                <div className=" basis-full md:basis-1/2">
+                <div className="basis-full md:basis-1/2">
                     {isSuccess && validatorsStats && (
                         <Card spacing="lg">
                             <div className="flex min-h-[180px] max-w-full flex-col flex-nowrap md:flex-row justify-between">
                                 <Stats
                                     label="Participation"
                                     tooltip="Participation"
-                                    value={`${validatorsStats.participation.toString()} %`}
+                                    variant='heading2/semibold'
+                                    value={`${validatorsStats.participation.toString()}%`}
                                 />
                                 <Stats
                                     label="Total Staked"
+                                    variant='heading2/semibold'
                                     value={validatorsStats.totalDelegateStake}
                                 />
                                 <Stats
                                     label="Last Epoch Reward"
+                                    variant='heading2/semibold'
                                     tooltip="LAST EPOCH REWARDS"
+
                                     value={validatorsStats.lastEpochRewards}
                                 />
                                 <Stats
                                     label="AVG APY"
+                                    variant='heading2/semibold'
                                     tooltip="Average APY"
-                                    value={`${validatorsStats.averageAPY.toString()} %`}
+                                    value={`${validatorsStats.averageAPY.toString()}%`}
                                 />
                             </div>
                         </Card>
