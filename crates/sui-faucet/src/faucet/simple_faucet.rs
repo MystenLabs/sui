@@ -20,7 +20,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
     intent::Intent,
-    messages::{ExecuteTransactionRequestType, Transaction, TransactionData},
+    messages::{ExecuteTransactionRequestType, Transaction, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -179,16 +179,37 @@ impl SimpleFaucet {
 
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
-                let response = match timeout(
-                    Duration::from_secs(300),
-                    self.execute_pay_sui_txn_with_retries(
+                let context = &self.wallet;
+                let tx_data = self
+                    .build_pay_sui_txn(
                         coin_id,
                         self.active_address,
                         recipient,
                         amounts,
                         DEFAULT_GAS_BUDGET,
-                        uuid,
-                    ),
+                    )
+                    .await
+                    .map_err(|e| FaucetError::Internal(format!("{}", e)))?;
+                let signature = context
+                    .config
+                    .keystore
+                    .sign_secure(&self.active_address, &tx_data, Intent::default())
+                    .map_err(|e| FaucetError::Internal(format!("{}", e)))?;
+                let tx = Transaction::from_data(tx_data, Intent::default(), signature)
+                    .verify()
+                    .unwrap();
+                let tx_digest = *tx.digest();
+                info!(
+                    ?tx_digest,
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "PaySui transaction in faucet."
+                );
+
+                let response = match timeout(
+                    Duration::from_secs(300),
+                    self.execute_pay_sui_txn_with_retries(&tx, coin_id, recipient, uuid),
                 )
                 .await
                 {
@@ -255,18 +276,15 @@ impl SimpleFaucet {
 
     async fn execute_pay_sui_txn_with_retries(
         &self,
+        tx: &VerifiedTransaction,
         coin_id: ObjectID,
-        signer: SuiAddress,
         recipient: SuiAddress,
-        amounts: &[u64],
-        budget: u64,
         uuid: Uuid,
     ) -> SuiTransactionResponse {
         let mut retry_delay = Duration::from_millis(500);
+
         loop {
-            let res = self
-                .execute_pay_sui_txn(coin_id, signer, recipient, amounts, budget, uuid)
-                .await;
+            let res = self.execute_pay_sui_txn(tx, coin_id, recipient, uuid).await;
 
             if let Ok(res) = res {
                 return res;
@@ -288,11 +306,9 @@ impl SimpleFaucet {
 
     async fn execute_pay_sui_txn(
         &self,
+        tx: &VerifiedTransaction,
         coin_id: ObjectID,
-        signer: SuiAddress,
         recipient: SuiAddress,
-        amounts: &[u64],
-        budget: u64,
         uuid: Uuid,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
         self.metrics.current_executions_in_flight.inc();
@@ -300,29 +316,12 @@ impl SimpleFaucet {
             metrics.current_executions_in_flight.dec();
         });
 
-        let context = &self.wallet;
-        let tx_data = self
-            .build_pay_sui_txn(coin_id, signer, recipient, amounts, budget)
-            .await?;
-        let signature =
-            context
-                .config
-                .keystore
-                .sign_secure(&signer, &tx_data, Intent::default())?;
-        let tx = Transaction::from_data(tx_data, Intent::default(), signature).verify()?;
-        let tx_digest = *tx.digest();
-        info!(
-            ?tx_digest,
-            ?recipient,
-            ?coin_id,
-            ?uuid,
-            "PaySui transaction in faucet."
-        );
+        let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
         let response = client
             .quorum_driver()
             .execute_transaction(
-                tx,
+                tx.clone(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
