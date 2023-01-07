@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::authority_store_pruner::AuthorityStorePruner;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use arc_swap::ArcSwap;
@@ -47,7 +46,7 @@ pub struct AuthorityStore {
 
     // Implementation detail to support notify_read_effects().
     pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
-    _store_pruner: AuthorityStorePruner,
+    //_store_pruner: AuthorityStorePruner,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
     /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
@@ -122,7 +121,7 @@ impl AuthorityStore {
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: Committee,
-        pruning_config: &AuthorityStorePruningConfig,
+        _pruning_config: &AuthorityStorePruningConfig,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
         let epoch_tables = Arc::new(AuthorityPerEpochStore::new(
@@ -131,7 +130,7 @@ impl AuthorityStore {
             db_options.clone(),
         ));
 
-        let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
+        //let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
 
         let store = Self {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
@@ -139,7 +138,7 @@ impl AuthorityStore {
             epoch_store: epoch_tables.into(),
             path: path.into(),
             db_options,
-            _store_pruner,
+            //_store_pruner,
             effects_notify_read: NotifyRead::new(),
             execution_lock: RwLock::new(epoch),
         };
