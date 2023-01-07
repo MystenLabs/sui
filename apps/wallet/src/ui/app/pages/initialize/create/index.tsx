@@ -26,7 +26,7 @@ const CreatePage = () => {
         <CardLayout
             title="Create Password for This Wallet"
             headerCaption="Create New wallet"
-            className="bg-aliceBlue"
+            className="bg-alice-blue"
         >
             <Formik
                 initialValues={{

@@ -67,7 +67,7 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
             }
             headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
             mode={mode === 'import' ? 'box' : 'plain'}
-            className="bg-aliceBlue"
+            className="bg-alice-blue"
         >
             {StepForm ? (
                 <div className="mt-7.5 flex flex-col flex-nowrap items-stretch flex-1 flex-grow w-full">

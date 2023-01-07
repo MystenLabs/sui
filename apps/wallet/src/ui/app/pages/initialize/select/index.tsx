@@ -38,7 +38,7 @@ const SelectPage = () => {
                     <div
                         className={cl(
                             st.card,
-                            'bg-aliceBlue flex flex-col flex-nowrap items-center gap-3 text-center'
+                            'bg-alice-blue flex flex-col flex-nowrap items-center gap-3 text-center'
                         )}
                         key={aSelection.url}
                     >

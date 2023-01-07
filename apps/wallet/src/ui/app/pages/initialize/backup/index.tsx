@@ -61,7 +61,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                 title={`Wallet ${
                     mode === 'imported' ? 'Imported' : 'Created'
                 } Successfully!`}
-                className="bg-aliceBlue"
+                className="bg-alice-blue"
             >
                 {mode === 'created' ? (
                     <>
@@ -104,7 +104,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                 color="steel-dark"
                                 weight="semibold"
                             >
-                                WARNING
+                                Warning
                             </Text>
                         </div>
                         <div className="mb-1 text-center">
@@ -118,12 +118,11 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                 account forever.
                             </Text>
                         </div>
-                        <div className="w-full text-left flex">
+                        <div className="w-full text-left flex mt-6">
                             <label
-                                className={cl(
-                                    st.passwordCopied,
-                                    'flex items-center justify-center h-5 mb-0'
-                                )}
+                                className={
+                                    'flex items-center justify-center h-5 mb-0 mr-5 text-gray-75 gap-1.25 relative cursor-pointer'
+                                }
                             >
                                 <input
                                     type="checkbox"
