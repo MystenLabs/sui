@@ -132,6 +132,7 @@ module.exports = {
         1.25: "0.3125rem",
         3.75: "0.9375rem",
         4.5: "1.125rem",
+        7.5: '1.875rem',
         50: '12.5rem',
         verticalListShort: "13.0625rem",
         verticalListLong: "35.6875rem",
