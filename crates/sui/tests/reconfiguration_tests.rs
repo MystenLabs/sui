@@ -12,6 +12,7 @@ use sui_core::authority_aggregator::{
     TransactionCertifier,
 };
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::{init_local_authorities, make_transfer_sui_transaction};
 use sui_macros::sim_test;
@@ -159,22 +160,32 @@ async fn reconfig_with_revert_end_to_end_test() {
     let cert = net.process_transaction(tx.clone()).await.unwrap();
 
     // Close epoch on 3 (2f+1) validators.
-    for handle in authorities.iter().skip(1) {
+    let mut reverting_authority_idx = None;
+    for (i, handle) in authorities.iter().enumerate() {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async {
+                if position_submit_certificate(&net.committee, &node.state().name, tx.digest())
+                    < (authorities.len() - 1)
+                {
+                    node.close_epoch().await.unwrap();
+                } else {
+                    // remember the authority that wouild submit it to consensus last.
+                    reverting_authority_idx = Some(i);
+                }
+            })
             .await;
     }
 
-    // handle transaction on authority 0
+    let reverting_authority_idx = reverting_authority_idx.unwrap();
     let client = net
-        .get_client(&authorities[0].with(|node| node.state().name))
+        .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
     client
         .handle_certificate(cert.clone().into_inner())
         .await
         .unwrap();
 
-    authorities[0]
+    authorities[reverting_authority_idx]
         .with_async(|node| async {
             let object = node
                 .state()
