@@ -558,61 +558,21 @@ impl AuthorityStore {
             iter::once((transaction_digest, certificate.serializable_ref())),
         )?;
 
-        self.sequence_tx(
-            write_batch,
-            inner_temporary_store,
-            transaction_digest,
-            effects,
-            effects_digest,
-        )
-        .await?;
-
-        self.effects_notify_read.notify(transaction_digest, effects);
-
-        Ok(())
-    }
-
-    /// Persist temporary storage to DB for genesis modules
-    pub async fn update_objects_state_for_genesis(
-        &self,
-        inner_temporary_store: InnerTemporaryStore,
-        transaction_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
-        debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
-        let write_batch = self.perpetual_tables.certificates.batch();
-        self.batch_update_objects(
-            write_batch,
-            inner_temporary_store,
-            transaction_digest,
-            UpdateType::Genesis,
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn sequence_tx(
-        &self,
-        write_batch: DBBatch,
-        inner_temporary_store: InnerTemporaryStore,
-        transaction_digest: &TransactionDigest,
-        effects: &SignedTransactionEffects,
-        effects_digest: &TransactionEffectsDigest,
-    ) -> SuiResult {
-        // Safe to unwrap since UpdateType::Transaction ensures we get a sequence number back.
-        self.batch_update_objects(
-            write_batch,
-            inner_temporary_store,
-            *transaction_digest,
-            UpdateType::Transaction(*effects_digest),
-        )
-        .await?;
+        // Add batched writes for objects and locks.
+        write_batch = self
+            .update_objects_and_locks(
+                write_batch,
+                inner_temporary_store,
+                *transaction_digest,
+                UpdateType::Transaction(*effects_digest),
+            )
+            .await?;
 
         // Store the signed effects of the transaction
         // We can't write this until after sequencing succeeds (which happens in
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
-        let batch = self.perpetual_tables.executed_effects.batch();
-        let batch = batch
+        write_batch = write_batch
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
                 [(transaction_digest, effects)],
@@ -622,19 +582,22 @@ impl AuthorityStore {
                 [(effects_digest, effects.data())],
             )?;
 
-        batch.write()?;
+        // Commit.
+        write_batch.write()?;
+
+        self.effects_notify_read.notify(transaction_digest, effects);
 
         Ok(())
     }
 
-    /// Helper function for updating the objects in the state
-    async fn batch_update_objects(
+    /// Helper function for updating the objects and locks in the state
+    async fn update_objects_and_locks(
         &self,
         mut write_batch: DBBatch,
         inner_temporary_store: InnerTemporaryStore,
         transaction_digest: TransactionDigest,
         update_type: UpdateType,
-    ) -> SuiResult {
+    ) -> SuiResult<DBBatch> {
         let InnerTemporaryStore {
             objects,
             mutable_inputs: active_inputs,
@@ -749,12 +712,7 @@ impl AuthorityStore {
         }
 
         write_batch = self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
-        write_batch = self.delete_locks(write_batch, &owned_inputs)?;
-
-        write_batch.write()?;
-        trace!("Finished writing batch");
-
-        Ok(())
+        self.delete_locks(write_batch, &owned_inputs)
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
