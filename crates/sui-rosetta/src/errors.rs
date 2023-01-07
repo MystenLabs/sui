@@ -56,6 +56,9 @@ pub enum Error {
     #[error("Public key deserialization error: {0:?}")]
     PublicKeyDeserializationError(PublicKey),
 
+    #[error("Error executing transaction: {0}")]
+    TransactionExecutionError(String),
+
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
     #[error(transparent)]

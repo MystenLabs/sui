@@ -108,9 +108,7 @@ impl RpcClient {
             .pointer("/info/version")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                Error::DataError(
-                    "Fail parsing server version from rpc.discover endpoint.".into(),
-                )
+                Error::DataError("Fail parsing server version from rpc.discover endpoint.".into())
             })?;
         let rpc_methods = Self::parse_methods(&rpc_spec)?;
 

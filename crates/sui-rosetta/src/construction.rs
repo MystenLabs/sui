@@ -22,6 +22,7 @@ use crate::{OnlineServerContext, SuiEnv};
 use anyhow::anyhow;
 use axum::extract::State;
 use axum_extra::extract::WithRejection;
+use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::intent::{Intent, IntentMessage};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
@@ -127,6 +128,12 @@ pub async fn submit(
         )
         .await?;
 
+    if let Some(effect) = response.effects {
+        if let SuiExecutionStatus::Failure { error } = effect.status {
+            return Err(Error::TransactionExecutionError(error));
+        }
+    }
+
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
             hash: response.tx_digest,
@@ -214,8 +221,7 @@ pub async fn metadata(
     });
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
 
-    let budget = dry_run.gas_used.computation_cost + dry_run.gas_used.storage_cost
-        - dry_run.gas_used.storage_rebate;
+    let budget = dry_run.gas_used.computation_cost + dry_run.gas_used.storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
