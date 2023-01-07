@@ -20,7 +20,7 @@ async fn propose_empty() {
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
-    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
+    let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
@@ -43,7 +43,7 @@ async fn propose_empty() {
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
-        rx_commited_own_headers,
+        rx_committed_own_headers,
         metrics,
     );
 
@@ -67,7 +67,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
-    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
+    let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
 
@@ -92,7 +92,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
-        rx_commited_own_headers,
+        rx_committed_own_headers,
         metrics,
     );
 
@@ -102,12 +102,13 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
+    let created_at_ts = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
     tx_our_digests
         .send(OurDigestMessage {
             digest,
             worker_id,
-            timestamp: 0,
+            timestamp: created_at_ts,
             ack_channel: tx_ack,
         })
         .await
@@ -116,20 +117,24 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round, 1);
-    assert_eq!(header.payload.get(&digest), Some(&worker_id));
+    assert_eq!(
+        header.payload.get(&digest),
+        Some(&(worker_id, created_at_ts))
+    );
     assert!(header.verify(&committee, shared_worker_cache).is_ok());
 
     // WHEN available batches are more than the maximum ones
-    let batches: IndexMap<BatchDigest, WorkerId> = fixture_payload((max_num_of_batches * 2) as u8);
+    let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> =
+        fixture_payload((max_num_of_batches * 2) as u8);
 
     let mut ack_list = vec![];
-    for (batch_id, worker_id) in batches {
+    for (batch_id, (worker_id, created_at)) in batches {
         let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
         tx_our_digests
             .send(OurDigestMessage {
                 digest: batch_id,
                 worker_id,
-                timestamp: 0,
+                timestamp: created_at,
                 ack_channel: tx_ack,
             })
             .await
@@ -188,7 +193,7 @@ async fn equivocation_protection() {
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
-    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
+    let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the proposer.
@@ -208,7 +213,7 @@ async fn equivocation_protection() {
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
-        rx_commited_own_headers,
+        rx_committed_own_headers,
         metrics,
     );
 
@@ -218,12 +223,13 @@ async fn equivocation_protection() {
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
+    let created_at_ts = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
     tx_our_digests
         .send(OurDigestMessage {
             digest,
             worker_id,
-            timestamp: 0,
+            timestamp: created_at_ts,
             ack_channel: tx_ack,
         })
         .await
@@ -243,7 +249,10 @@ async fn equivocation_protection() {
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(header.payload.get(&digest), Some(&worker_id));
+    assert_eq!(
+        header.payload.get(&digest),
+        Some(&(worker_id, created_at_ts))
+    );
     assert!(header.verify(&committee, shared_worker_cache).is_ok());
 
     // restart the proposer.
@@ -255,7 +264,7 @@ async fn equivocation_protection() {
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
-    let (_tx_commited_own_headers, rx_commited_own_headers) = test_utils::test_channel!(1);
+    let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let _proposer_handle = Proposer::spawn(
@@ -274,7 +283,7 @@ async fn equivocation_protection() {
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
-        rx_commited_own_headers,
+        rx_committed_own_headers,
         metrics,
     );
 

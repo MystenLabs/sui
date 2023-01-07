@@ -1049,7 +1049,13 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             if let Some(certificate) = certificate_option {
                 let payload_available = match self
                     .payload_store
-                    .read_all(certificate.header.payload)
+                    .read_all(
+                        certificate
+                            .header
+                            .payload
+                            .into_iter()
+                            .map(|(batch, (worker_id, _))| (batch, worker_id)),
+                    )
                     .await
                 {
                     Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
