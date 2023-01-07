@@ -498,7 +498,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
 
 #[cfg(test)]
 mod adapter_tests {
-    use super::ConsensusAdapter;
+    use super::position_submit_certificate;
     use fastcrypto::traits::KeyPair;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
     use sui_types::{
