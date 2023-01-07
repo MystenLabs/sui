@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
+import { StakeColumn } from './StakeColumn';
 
-import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
@@ -25,19 +25,7 @@ import { getStakedPercent } from '~/utils/getStakedPercent';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-function StakeColumn({ stake }: { stake: bigint }) {
-    const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
-    return (
-        <div className="flex items-end gap-0.5">
-            <Text variant="bodySmall/medium" color="steel-darker">
-                {amount}
-            </Text>
-            <Text variant="captionSmall/medium" color="steel-dark">
-                {symbol}
-            </Text>
-        </div>
-    );
-}
+
 
 export function processValidators(set: Validator[], totalStake: bigint) {
     return set.map((av) => {

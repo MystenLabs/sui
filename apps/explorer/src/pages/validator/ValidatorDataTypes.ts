@@ -35,6 +35,7 @@ export type Validator = {
         delegation_staking_pool: {
             fields: {
                 sui_balance: number;
+                rewards_pool: string;
                 starting_epoch: number;
                 delegation_token_supply: {
                     type: string;
@@ -79,6 +80,7 @@ export type ValidatorState = {
             pending_removals: string;
             pending_validators: string;
             quorum_stake_threshold: bigint;
+            total_delegation_stake: string;
             total_validator_stake: bigint;
         };
     };
