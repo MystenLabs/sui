@@ -26,6 +26,7 @@ use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
 };
+use tracing::error;
 
 pub mod drivers;
 pub mod fullnode_reconfig_observer;
@@ -180,15 +181,33 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
-        let ticket = self.qd.submit_transaction(tx.verify()?).await?;
-        let QuorumDriverResponse {
-            tx_cert,
-            effects_cert,
-        } = ticket.await?;
-        Ok((
-            tx_cert.try_into().unwrap(),
-            ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
-        ))
+        let tx_digest = *tx.digest();
+        let tx = tx.verify()?;
+        let mut retry_cnt = 0;
+        while retry_cnt < 3 {
+            let ticket = self.qd.submit_transaction(tx.clone()).await?;
+            // The ticket only times out when QuorumDriver exceeds the retry times
+            match ticket.await {
+                Ok(resp) => {
+                    let QuorumDriverResponse {
+                        tx_cert,
+                        effects_cert,
+                    } = resp;
+                    return Ok((
+                        tx_cert.try_into().unwrap(),
+                        ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
+                    ));
+                }
+                Err(err) => {
+                    error!(
+                        ?tx_digest,
+                        retry_cnt, "Transaction failed with err: {:?}", err
+                    );
+                    retry_cnt += 1;
+                }
+            }
+        }
+        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
     fn clone_committee(&self) -> Committee {
@@ -216,6 +235,7 @@ pub struct FullNodeProxy {
 
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
+        // Each request times out after 60s (default value)
         let sui_client = SuiClient::new(http_url, None, None).await?;
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
@@ -251,18 +271,37 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
-        let result = self
-            .sui_client
-            .quorum_driver()
-            // We need to use WaitForLocalExecution to make sure objects are updated on FN
-            .execute_transaction(
-                tx.verify()?,
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?;
-        let tx_cert = result.tx_cert.unwrap();
-        let effects = ExecutionEffects::SuiTransactionEffects(result.effects.unwrap());
-        Ok((tx_cert, effects))
+        let tx_digest = *tx.digest();
+        let tx = tx.verify()?;
+        let mut retry_cnt = 0;
+        while retry_cnt < 10 {
+            // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
+            // SuiClient times out after 60s
+            match self
+                .sui_client
+                .quorum_driver()
+                .execute_transaction(
+                    tx.clone(),
+                    // We need to use WaitForLocalExecution to make sure objects are updated on FN
+                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                )
+                .await
+            {
+                Ok(resp) => {
+                    let tx_cert = resp.tx_cert.unwrap();
+                    let effects = ExecutionEffects::SuiTransactionEffects(resp.effects.unwrap());
+                    return Ok((tx_cert, effects));
+                }
+                Err(err) => {
+                    error!(
+                        ?tx_digest,
+                        retry_cnt, "Transaction failed with err: {:?}", err
+                    );
+                    retry_cnt += 1;
+                }
+            }
+        }
+        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
     fn clone_committee(&self) -> Committee {
