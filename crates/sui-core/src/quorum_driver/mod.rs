@@ -137,6 +137,15 @@ impl<A> QuorumDriver<A> {
         let next_retry_after =
             Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times.into()));
         sleep_until(next_retry_after).await;
+
+        let tx_cert = match tx_cert {
+            // TxCert is only valid when its epoch matches current epoch.
+            // Note, it's impossible that TxCert's epoch is larger than current epoch
+            // because the TxCert will be considered invalid and cannot reach here.
+            Some(tx_cert) if tx_cert.epoch() == self.current_epoch() => Some(tx_cert),
+            _other => None,
+        };
+
         self.enqueue_task(QuorumDriverTask {
             transaction,
             tx_cert,
