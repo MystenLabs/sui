@@ -17,6 +17,9 @@ module sui::display {
     use sui::event::emit;
     use sui::transfer;
 
+    /// For when T does not belong to package in PublisherCap.
+    const ENotOwner: u64 = 0;
+
     /// The display standard. Defines the way an object should be
     /// displayed. New Display objects can only be created with a
     /// PublisherCap, making sure that the rules are set by the owner
@@ -71,6 +74,8 @@ module sui::display {
     /// Create an empty Display object. It can either be
     /// shared empty of filled with data later on.
     public fun empty<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
+        assert!(is_package<T>(pub), ENotOwner);
+
         let uid = object::new(ctx);
 
         event::emit(DisplayCreated {
