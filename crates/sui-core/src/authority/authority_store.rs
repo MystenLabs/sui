@@ -116,6 +116,10 @@ impl AuthorityStore {
         Ok(store)
     }
 
+    pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
+        self.perpetual_tables.get_recovery_epoch_at_restart()
+    }
+
     pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,

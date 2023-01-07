@@ -146,8 +146,12 @@ impl SuiNode {
             )
             .await?,
         );
+        let cur_epoch = store.get_recovery_epoch_at_restart()?;
+        let committee = committee_store
+            .get_committee(&cur_epoch)?
+            .expect("Committee of the current epoch must exist");
         let epoch_store =
-            AuthorityPerEpochStore::new(genesis_committee, &config.db_path().join("store"), None);
+            AuthorityPerEpochStore::new(committee, &config.db_path().join("store"), None);
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let state_sync_store = RocksDbStore::new(
@@ -612,7 +616,7 @@ impl SuiNode {
 
     /// Clone an AuthorityAggregator currently used in this node's
     /// QuorumDriver, if the node is a fullnode. After reconfig,
-    /// QuorumDrvier builds a new AuthorityAggregator. The caller
+    /// QuorumDriver builds a new AuthorityAggregator. The caller
     /// of this function will mostly likely want to call this again
     /// to get a fresh one.
     pub fn clone_authority_aggregator(
