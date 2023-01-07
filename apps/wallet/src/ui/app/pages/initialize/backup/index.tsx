@@ -119,9 +119,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                             </Text>
                         </div>
                         <div className="w-full text-left flex mt-6">
-                            <label
-                                className="flex items-center justify-center h-5 mb-0 mr-5 text-gray-75 gap-1.25 relative cursor-pointer"
-                            >
+                            <label className="flex items-center justify-center h-5 mb-0 mr-5 text-gray-75 gap-1.25 relative cursor-pointer">
                                 <input
                                     type="checkbox"
                                     name="agree"
