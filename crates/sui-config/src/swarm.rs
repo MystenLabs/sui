@@ -172,7 +172,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
         let listen_ip_str = format!("{}", listen_ip);
 
         let get_available_port = |public_port| {
-            if listen_ip.is_loopback() {
+            if listen_ip.is_loopback() || listen_ip == utils::get_local_ip_for_tests() {
                 utils::get_available_port(&listen_ip_str)
             } else {
                 public_port
