@@ -19,7 +19,7 @@ export function usePageView() {
     const { apiEnv, customRPC } = useAppSelector((state) => state.app);
     // Use customRPC url if apiEnv is customRPC
     const activeNetwork =
-        customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv;
+        customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
 
     useEffect(() => {
         trackPageview({
