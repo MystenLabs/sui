@@ -1878,10 +1878,8 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
 
     // We repeatedly timeout certs after a variety of delays, using LimitedPoll to ensure that we
     // interrupt the future at every point at which it is possible to be interrupted.
-    // At the time of writing this comment, there is only 1 point at which the future is
-    // interruptible (probably when it contacts the lock service), so the loop below runs
-    // only once. However, if more .await points are added later, this test will automatically
-    // exercise them.
+    // When .await points are added, this test will automatically exercise them.
+    // The loop below terminates after all await points have been checked.
     let delays: Vec<_> = (1..100).collect();
 
     let mut objects: Vec<_> = delays
@@ -1906,7 +1904,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     authority_state.insert_genesis_object(shared_object).await;
 
     let mut interrupted_count = 0;
-    for (limit, _) in delays.iter().zip(objects) {
+    for limit in &delays {
         info!("Testing with poll limit {}", limit);
         let gas_object = authority_state
             .get_object(&gas_object_id)
@@ -1934,11 +1932,10 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         let clone1 = shared_object_cert.clone();
         let state1 = authority_state.clone();
 
-        let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
+        let res = Box::pin(LimitedPoll::new(*limit, async move {
             state1.try_execute_for_test(&clone1).await.unwrap();
-        }));
-
-        let res = limited_fut.await;
+        }))
+        .await;
         if res.is_some() {
             info!(?limit, "limit was high enough that future completed");
             break;
@@ -1955,16 +1952,12 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         assert_eq!(g.retry_num(), 1);
         std::mem::drop(g);
 
-        // Now run the tx to completion
-        //
-        // NOTE: this test fails if execute_certificate() is used here instead, while keeping
-        // try_execute_for_test() above. This is because owned object locks are not cleared
-        // atomically after a transaction completes, causing inconsistency when TransactionManager
-        // calls get_missing_input_objects(). This would be an issue for crash recovery too.
-        // TODO: fix the issue and test interrupting both execute_certificate() and
-        // try_execute_for_test(), and calling execute_certificate() again.
+        // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
         authority_state
-            .try_execute_for_test(&shared_object_cert)
+            .execute_certificate(
+                &shared_object_cert,
+                &authority_state.epoch_store_for_testing(),
+            )
             .await
             .unwrap();
     }
