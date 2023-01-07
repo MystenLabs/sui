@@ -31,6 +31,10 @@ use crate::{
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
 
+// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
+// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
+const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
+
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
     local_addr: Multiaddr,
@@ -345,6 +349,14 @@ impl ValidatorService {
             // For owned objects this will return without waiting for certificate to be sequenced
             // First do quick dirty non-async check
             if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
+                if consensus_adapter.num_inflight_transactions()
+                    > MAX_PENDING_CONSENSUS_TRANSACTIONS
+                {
+                    return Err(tonic::Status::resource_exhausted(format!(
+                        "Reached {} transactions pending in consensus. Consensus is overloaded.",
+                        MAX_PENDING_CONSENSUS_TRANSACTIONS
+                    )));
+                }
                 let _metrics_guard = if shared_object_tx {
                     Some(metrics.consensus_latency.start_timer())
                 } else {
