@@ -128,7 +128,7 @@ pub enum SuiError {
         effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
     },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
+        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:?}. Validator errors: {:?}",
         conflicting_tx_digests,
         errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
@@ -150,7 +150,7 @@ pub enum SuiError {
         retried_tx_success: Option<bool>,
     },
     #[error(
-    "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",
+    "Failed to execute certificate on a quorum of validators. Validator errors: {:?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
