@@ -4609,6 +4609,21 @@
           "ByValue"
         ]
       },
+      "OwnedObjectRef": {
+        "type": "object",
+        "required": [
+          "owner",
+          "reference"
+        ],
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/Owner"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/ObjectRef"
+          }
+        }
+      },
       "Owner": {
         "oneOf": [
           {
@@ -5954,7 +5969,7 @@
           "created": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ObjectRef"
+              "$ref": "#/components/schemas/OwnedObjectRef"
             }
           },
           "deleted": {
@@ -5978,7 +5993,7 @@
             }
           },
           "gasObject": {
-            "$ref": "#/components/schemas/ObjectRef"
+            "$ref": "#/components/schemas/OwnedObjectRef"
           },
           "gasUsed": {
             "$ref": "#/components/schemas/GasCostSummary"
@@ -5986,7 +6001,7 @@
           "mutated": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ObjectRef"
+              "$ref": "#/components/schemas/OwnedObjectRef"
             }
           },
           "sharedObjects": {
@@ -6004,7 +6019,7 @@
           "unwrapped": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ObjectRef"
+              "$ref": "#/components/schemas/OwnedObjectRef"
             }
           },
           "wrapped": {

@@ -2121,7 +2121,7 @@ impl From<GasCostSummary> for SuiGasCostSummary {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "ObjectRef")]
+#[serde(rename = "OwnedObjectRef")]
 pub struct OwnedObjectRef {
     pub owner: Owner,
     pub reference: SuiObjectRef,
