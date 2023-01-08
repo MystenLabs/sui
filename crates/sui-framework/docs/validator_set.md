@@ -26,6 +26,7 @@
 -  [Function `total_voting_power`](#0x2_validator_set_total_voting_power)
 -  [Function `total_validator_stake`](#0x2_validator_set_total_validator_stake)
 -  [Function `total_delegation_stake`](#0x2_validator_set_total_delegation_stake)
+-  [Function `validator_total_stake_amount`](#0x2_validator_set_validator_total_stake_amount)
 -  [Function `validator_stake_amount`](#0x2_validator_set_validator_stake_amount)
 -  [Function `validator_delegate_amount`](#0x2_validator_set_validator_delegate_amount)
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
@@ -42,6 +43,8 @@
 -  [Function `calculate_total_stakes`](#0x2_validator_set_calculate_total_stakes)
 -  [Function `calculate_total_voting_power_and_quorum_threshold`](#0x2_validator_set_calculate_total_voting_power_and_quorum_threshold)
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_set_adjust_stake_and_gas_price)
+-  [Function `compute_stake_adjustments`](#0x2_validator_set_compute_stake_adjustments)
+-  [Function `process_and_empty_validator_report_records`](#0x2_validator_set_process_and_empty_validator_report_records)
 -  [Function `compute_reward_distribution`](#0x2_validator_set_compute_reward_distribution)
 -  [Function `distribute_reward`](#0x2_validator_set_distribute_reward)
 -  [Function `derive_next_epoch_validators`](#0x2_validator_set_derive_next_epoch_validators)
@@ -322,6 +325,24 @@ each validator, emitted during epoch advancement.
 
 
 <pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+</code></pre>
+
+
+
+<a name="0x2_validator_set_EINVALID_STAKE_ADJUSTMENT_AMOUNT"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_EINVALID_STAKE_ADJUSTMENT_AMOUNT">EINVALID_STAKE_ADJUSTMENT_AMOUNT</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS">ENON_VALIDATOR_IN_REPORT_RECORDS</a>: u64 = 0;
 </code></pre>
 
 
@@ -739,7 +760,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(new_epoch: u64, self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(new_epoch: u64, self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_threshold_bps: u64, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -751,20 +772,34 @@ It does the following things:
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(
     new_epoch: u64,
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
-    validator_reward: &<b>mut</b> Balance&lt;SUI&gt;,
-    delegator_reward: &<b>mut</b> Balance&lt;SUI&gt;,
+    computation_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
-    validator_report_records: &VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    reward_slashing_threshold_bps: u64,
+    reward_slashing_rate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> (slashed_validators, total_slashed_validator_stake) =
+        <a href="validator_set.md#0x2_validator_set_process_and_empty_validator_report_records">process_and_empty_validator_report_records</a>(
+            self,
+            validator_report_records,
+            reward_slashing_threshold_bps,
+        );
+    <b>let</b> (total_adjustment, individual_adjustments) =
+        <a href="validator_set.md#0x2_validator_set_compute_stake_adjustments">compute_stake_adjustments</a>(
+            self,
+            slashed_validators,
+            reward_slashing_rate,
+        );
     // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` <b>to</b>
     // make sure we are using the current epoch's <a href="stake.md#0x2_stake">stake</a> information <b>to</b> compute reward distribution.
-    <b>let</b> (validator_reward_amounts, delegator_reward_amounts) = <a href="validator_set.md#0x2_validator_set_compute_reward_distribution">compute_reward_distribution</a>(
+    <b>let</b> reward_amounts = <a href="validator_set.md#0x2_validator_set_compute_reward_distribution">compute_reward_distribution</a>(
         &self.active_validators,
-        self.total_validator_stake,
-        <a href="balance.md#0x2_balance_value">balance::value</a>(validator_reward),
-        self.total_delegation_stake,
-        <a href="balance.md#0x2_balance_value">balance::value</a>(delegator_reward),
+        self.total_validator_stake + self.total_delegation_stake,
+        <a href="balance.md#0x2_balance_value">balance::value</a>(computation_reward),
+        total_adjustment,
+        individual_adjustments,
+        total_slashed_validator_stake,
     );
 
     // TODO: <b>use</b> `validator_report_records` and punish validators whose numbers of reports receives are greater than
@@ -773,10 +808,8 @@ It does the following things:
     // the rewards for validators and delegators.
     <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(
         &<b>mut</b> self.active_validators,
-        &validator_reward_amounts,
-        validator_reward,
-        &delegator_reward_amounts,
-        delegator_reward,
+        &reward_amounts,
+        computation_reward,
         storage_fund_reward,
         ctx
     );
@@ -791,7 +824,7 @@ It does the following things:
     <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(&<b>mut</b> self.active_validators, ctx);
 
     // Emit events after we have processed all the rewards distribution and pending delegations.
-    <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &validator_reward_amounts, validator_report_records);
+    <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &reward_amounts, validator_report_records);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(&<b>mut</b> self.active_validators, &<b>mut</b> self.pending_validators);
 
@@ -965,6 +998,31 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_total_delegation_stake">total_delegation_stake</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): u64 {
     self.total_delegation_stake
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_validator_total_stake_amount"></a>
+
+## Function `validator_total_stake_amount`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
+    <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>)
 }
 </code></pre>
 
@@ -1492,6 +1550,98 @@ Process the pending stake changes for each validator.
 
 </details>
 
+<a name="0x2_validator_set_compute_stake_adjustments"></a>
+
+## Function `compute_stake_adjustments`
+
+Some validators' rewards may get slashed due to getting sub-par scores
+for tallying rule. This function computes, using the report record, the
+stake adjustment amounts of non-performant validators. When computing reward
+distribution, the adjusted stake amount will be used so these validators
+receive less rewards than what's proportional to their original stake.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_stake_adjustments">compute_stake_adjustments</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, slashed_validators: <a href="">vector</a>&lt;<b>address</b>&gt;, reward_slashing_rate: u64): (u64, <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_stake_adjustments">compute_stake_adjustments</a>(
+    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    slashed_validators: <a href="">vector</a>&lt;<b>address</b>&gt;,
+    reward_slashing_rate: u64,
+): (u64, VecMap&lt;<b>address</b>, u64&gt;) {
+    <b>let</b> total_adjustment = 0;
+    <b>let</b> individual_adjustments = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&<b>mut</b> slashed_validators)) {
+        <b>let</b> validator_address = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> slashed_validators);
+        <b>let</b> original_stake = <a href="validator_set.md#0x2_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self, validator_address);
+        <b>let</b> adjustment_u128 =
+            (original_stake <b>as</b> u128) * (reward_slashing_rate <b>as</b> u128)
+            / <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        <b>let</b> adjustment = (adjustment_u128 <b>as</b> u64);
+        <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> individual_adjustments, validator_address, adjustment);
+        total_adjustment = total_adjustment + adjustment;
+    };
+    (total_adjustment, individual_adjustments)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_process_and_empty_validator_report_records"></a>
+
+## Function `process_and_empty_validator_report_records`
+
+Empties the validator report records of the epoch and returns the addresses of the
+non-performant validators according to the input threshold.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_and_empty_validator_report_records">process_and_empty_validator_report_records</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_report_records: &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_threshold_bps: u64): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_process_and_empty_validator_report_records">process_and_empty_validator_report_records</a>(
+    self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    reward_slashing_threshold_bps: u64,
+): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64) {
+    <b>let</b> num_validators = <a href="_length">vector::length</a>(&self.active_validators);
+    // `num_validators` can't be greater than 400 so no overflow can happen below.
+    <b>let</b> reward_slashing_threshold = (num_validators * reward_slashing_threshold_bps) / (<a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u64);
+    <b>let</b> slashed_validators = <a href="">vector</a>[];
+    <b>let</b> sum_of_stake = 0;
+    <b>while</b> (!<a href="vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(validator_report_records)) {
+        <b>let</b> (validator_address, reporters) = <a href="vec_map.md#0x2_vec_map_pop">vec_map::pop</a>(validator_report_records);
+        <b>assert</b>!(
+            <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self, validator_address),
+            <a href="validator_set.md#0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS">ENON_VALIDATOR_IN_REPORT_RECORDS</a>
+        );
+        <b>let</b> num_reporters = <a href="vec_set.md#0x2_vec_set_size">vec_set::size</a>(&reporters);
+        <b>if</b> (num_reporters &gt;= reward_slashing_threshold) {
+            sum_of_stake = sum_of_stake + <a href="validator_set.md#0x2_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self, validator_address);
+            <a href="_push_back">vector::push_back</a>(&<b>mut</b> slashed_validators, validator_address);
+        }
+    };
+    (slashed_validators, sum_of_stake)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_validator_set_compute_reward_distribution"></a>
 
 ## Function `compute_reward_distribution`
@@ -1502,7 +1652,7 @@ Returns the amount of reward for each validator, as well as a remaining reward
 due to integer division loss.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_reward_distribution">compute_reward_distribution</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, total_stake: u64, total_reward: u64, total_delegation_stake: u64, total_delegation_reward: u64): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_reward_distribution">compute_reward_distribution</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, total_stake: u64, total_reward: u64, total_stake_adjustment: u64, stake_adjustments: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;, total_slashed_validator_stake: u64): <a href="">vector</a>&lt;u64&gt;
 </code></pre>
 
 
@@ -1515,31 +1665,36 @@ due to integer division loss.
     validators: &<a href="">vector</a>&lt;Validator&gt;,
     total_stake: u64,
     total_reward: u64,
-    total_delegation_stake: u64,
-    total_delegation_reward: u64,
-): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;) {
-    <b>let</b> validator_reward_amounts = <a href="_empty">vector::empty</a>();
-    <b>let</b> delegator_reward_amounts = <a href="_empty">vector::empty</a>();
+    total_stake_adjustment: u64,
+    stake_adjustments: VecMap&lt;<b>address</b>, u64&gt;,
+    total_slashed_validator_stake: u64,
+): <a href="">vector</a>&lt;u64&gt; {
+    <b>assert</b>!(total_stake &gt; total_stake_adjustment, <a href="validator_set.md#0x2_validator_set_EINVALID_STAKE_ADJUSTMENT_AMOUNT">EINVALID_STAKE_ADJUSTMENT_AMOUNT</a>);
+    <b>let</b> total_unslashed_validator_stake = total_stake - total_slashed_validator_stake;
+    <b>let</b> reward_amounts = <a href="_empty">vector::empty</a>();
     <b>let</b> length = <a href="_length">vector::length</a>(validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow">vector::borrow</a>(validators, i);
+        <b>let</b> validator_address = <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(<a href="validator.md#0x2_validator">validator</a>);
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_reward`.
         // Use u128 <b>to</b> avoid multiplication overflow.
-        <b>let</b> stake_amount: u128 = (<a href="validator.md#0x2_validator_stake_amount">validator::stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128);
-        <b>let</b> reward_amount = stake_amount * (total_reward <b>as</b> u128) / (total_stake <b>as</b> u128);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> validator_reward_amounts, (reward_amount <b>as</b> u64));
-
-        <b>let</b> delegation_stake_amount: u128 = (<a href="validator.md#0x2_validator_delegate_amount">validator::delegate_amount</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128);
-        <b>let</b> delegation_reward_amount =
-            <b>if</b> (total_delegation_stake == 0) 0
-            <b>else</b> delegation_stake_amount * (total_delegation_reward <b>as</b> u128) / (total_delegation_stake <b>as</b> u128);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> delegator_reward_amounts, (delegation_reward_amount <b>as</b> u64));
-
+        <b>let</b> stake_amount: u128 = (<a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128);
+        <b>let</b> adjusted_stake_amount =
+            <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&stake_adjustments, &validator_address)) {
+                <b>let</b> adjustment = *<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(&stake_adjustments, &validator_address);
+                stake_amount - (adjustment <b>as</b> u128)
+            } <b>else</b> {
+                <b>let</b> adjustment = (total_stake_adjustment <b>as</b> u128) * stake_amount
+                               / (total_unslashed_validator_stake <b>as</b> u128);
+                stake_amount + adjustment
+            };
+        <b>let</b> reward_amount = adjusted_stake_amount * (total_reward <b>as</b> u128) / (total_stake <b>as</b> u128);
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> reward_amounts, (reward_amount <b>as</b> u64));
         i = i + 1;
     };
-    (validator_reward_amounts, delegator_reward_amounts)
+    reward_amounts
 }
 </code></pre>
 
@@ -1553,7 +1708,7 @@ due to integer division loss.
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;, validator_rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;, delegator_rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, reward_amounts: &<a href="">vector</a>&lt;u64&gt;, rewards: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1564,10 +1719,8 @@ due to integer division loss.
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_distribute_reward">distribute_reward</a>(
     validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;,
-    validator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;,
-    validator_rewards: &<b>mut</b> Balance&lt;SUI&gt;,
-    delegator_reward_amounts: &<a href="">vector</a>&lt;u64&gt;,
-    delegator_rewards: &<b>mut</b> Balance&lt;SUI&gt;,
+    reward_amounts: &<a href="">vector</a>&lt;u64&gt;,
+    rewards: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext
 ) {
@@ -1577,11 +1730,14 @@ due to integer division loss.
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
-        <b>let</b> validator_reward_amount = *<a href="_borrow">vector::borrow</a>(validator_reward_amounts, i);
-        <b>let</b> validator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(validator_rewards, validator_reward_amount);
+        <b>let</b> reward_amount = *<a href="_borrow">vector::borrow</a>(reward_amounts, i);
+        <b>let</b> combined_stake = <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>);
+        <b>let</b> self_stake = <a href="validator.md#0x2_validator_stake_amount">validator::stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>);
+        <b>let</b> validator_reward_amount = (reward_amount <b>as</b> u128) * (self_stake <b>as</b> u128) / (combined_stake <b>as</b> u128);
+        <b>let</b> validator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(rewards, (validator_reward_amount <b>as</b> u64));
 
-        <b>let</b> delegator_reward_amount = *<a href="_borrow">vector::borrow</a>(delegator_reward_amounts, i);
-        <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(delegator_rewards, delegator_reward_amount);
+        <b>let</b> delegator_reward_amount = reward_amount - (validator_reward_amount <b>as</b> u64);
+        <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(rewards, delegator_reward_amount);
 
         // Validator takes a cut of the rewards <b>as</b> commission.
         <b>let</b> commission_amount = (delegator_reward_amount <b>as</b> u128) * (<a href="validator.md#0x2_validator_commission_rate">validator::commission_rate</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128) / <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;

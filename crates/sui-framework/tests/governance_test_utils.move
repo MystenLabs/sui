@@ -81,7 +81,27 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, 0, 0, ctx);
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun advance_epoch_with_reward_amounts_and_slashing_rates(
+        storage_charge: u64,
+        computation_charge: u64,
+        reward_slashing_threshold_bps: u64,
+        reward_slashing_rate: u64,
+        scenario: &mut Scenario
+    ) {
+        test_scenario::next_epoch(scenario, @0x0);
+        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::advance_epoch(
+            &mut system_state, new_epoch, storage_charge, computation_charge, 0, 0,
+            reward_slashing_threshold_bps, reward_slashing_rate, ctx
+        );
         test_scenario::return_shared(system_state);
     }
 

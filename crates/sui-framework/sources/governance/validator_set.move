@@ -90,6 +90,10 @@ module sui::validator_set {
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
+    // Errors
+    const ENON_VALIDATOR_IN_REPORT_RECORDS: u64 = 0;
+    const EINVALID_STAKE_ADJUSTMENT_AMOUNT: u64 = 1;
+
     // ==== initialization at genesis ====
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
@@ -313,20 +317,34 @@ module sui::validator_set {
     public(friend) fun advance_epoch(
         new_epoch: u64,
         self: &mut ValidatorSet,
-        validator_reward: &mut Balance<SUI>,
-        delegator_reward: &mut Balance<SUI>,
+        computation_reward: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
-        validator_report_records: &VecMap<address, VecSet<address>>,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
+        reward_slashing_threshold_bps: u64,
+        reward_slashing_rate: u64,
         ctx: &mut TxContext,
     ) {
-        // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` to
+        let (slashed_validators, total_slashed_validator_stake) = 
+            process_and_empty_validator_report_records(
+                self,
+                validator_report_records,
+                reward_slashing_threshold_bps,
+            );
+        let (total_adjustment, individual_adjustments) = 
+            compute_stake_adjustments(
+                self,
+                slashed_validators,
+                reward_slashing_rate,
+            );
+        // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` to 
         // make sure we are using the current epoch's stake information to compute reward distribution.
-        let (validator_reward_amounts, delegator_reward_amounts) = compute_reward_distribution(
+        let reward_amounts = compute_reward_distribution(
             &self.active_validators,
-            self.total_validator_stake,
-            balance::value(validator_reward),
-            self.total_delegation_stake,
-            balance::value(delegator_reward),
+            self.total_validator_stake + self.total_delegation_stake,
+            balance::value(computation_reward),
+            total_adjustment,
+            individual_adjustments,
+            total_slashed_validator_stake,
         );
 
         // TODO: use `validator_report_records` and punish validators whose numbers of reports receives are greater than
@@ -334,12 +352,10 @@ module sui::validator_set {
         // Distribute the rewards before adjusting stake so that we immediately start compounding
         // the rewards for validators and delegators.
         distribute_reward(
-            &mut self.active_validators,
-            &validator_reward_amounts,
-            validator_reward,
-            &delegator_reward_amounts,
-            delegator_reward,
-            storage_fund_reward,
+            &mut self.active_validators, 
+            &reward_amounts, 
+            computation_reward,
+            storage_fund_reward, 
             ctx
         );
 
@@ -353,7 +369,7 @@ module sui::validator_set {
         process_pending_delegations_and_withdraws(&mut self.active_validators, ctx);
 
         // Emit events after we have processed all the rewards distribution and pending delegations.
-        emit_validator_epoch_events(new_epoch, &self.active_validators, &validator_reward_amounts, validator_report_records);
+        emit_validator_epoch_events(new_epoch, &self.active_validators, &reward_amounts, validator_report_records);
 
         process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
 
@@ -430,6 +446,11 @@ module sui::validator_set {
 
     public fun total_delegation_stake(self: &ValidatorSet): u64 {
         self.total_delegation_stake
+    }
+
+    public fun validator_total_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
+        let validator = get_validator_ref(&self.active_validators, validator_address);
+        validator::total_stake_amount(validator)
     }
 
     public fun validator_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
@@ -635,6 +656,58 @@ module sui::validator_set {
         }
     }
 
+    /// Some validators' rewards may get slashed due to getting sub-par scores
+    /// for tallying rule. This function computes, using the report record, the
+    /// stake adjustment amounts of non-performant validators. When computing reward
+    /// distribution, the adjusted stake amount will be used so these validators
+    /// receive less rewards than what's proportional to their original stake.
+    fun compute_stake_adjustments(
+        self: &ValidatorSet,
+        slashed_validators: vector<address>,
+        reward_slashing_rate: u64,
+    ): (u64, VecMap<address, u64>) {
+        let total_adjustment = 0;
+        let individual_adjustments = vec_map::empty();
+        while (!vector::is_empty(&mut slashed_validators)) {
+            let validator_address = vector::pop_back(&mut slashed_validators);
+            let original_stake = validator_total_stake_amount(self, validator_address);
+            let adjustment_u128 = 
+                (original_stake as u128) * (reward_slashing_rate as u128) 
+                / BASIS_POINT_DENOMINATOR;
+            let adjustment = (adjustment_u128 as u64);
+            vec_map::insert(&mut individual_adjustments, validator_address, adjustment);
+            total_adjustment = total_adjustment + adjustment;
+        };
+        (total_adjustment, individual_adjustments)
+    }
+
+    /// Empties the validator report records of the epoch and returns the addresses of the
+    /// non-performant validators according to the input threshold. 
+    fun process_and_empty_validator_report_records(
+        self: &ValidatorSet,
+        validator_report_records: &mut VecMap<address, VecSet<address>>,
+        reward_slashing_threshold_bps: u64,
+    ): (vector<address>, u64) {
+        let num_validators = vector::length(&self.active_validators);
+        // `num_validators` can't be greater than 400 so no overflow can happen below.
+        let reward_slashing_threshold = (num_validators * reward_slashing_threshold_bps) / (BASIS_POINT_DENOMINATOR as u64);
+        let slashed_validators = vector[];
+        let sum_of_stake = 0;
+        while (!vec_map::is_empty(validator_report_records)) {
+            let (validator_address, reporters) = vec_map::pop(validator_report_records);
+            assert!(
+                is_active_validator(self, validator_address), 
+                ENON_VALIDATOR_IN_REPORT_RECORDS
+            );
+            let num_reporters = vec_set::size(&reporters);
+            if (num_reporters >= reward_slashing_threshold) {
+                sum_of_stake = sum_of_stake + validator_total_stake_amount(self, validator_address);
+                vector::push_back(&mut slashed_validators, validator_address);
+            }
+        };
+        (slashed_validators, sum_of_stake)
+    }
+
     /// Given the current list of active validators, the total stake and total reward,
     /// calculate the amount of reward each validator should get.
     /// Returns the amount of reward for each validator, as well as a remaining reward
@@ -643,39 +716,42 @@ module sui::validator_set {
         validators: &vector<Validator>,
         total_stake: u64,
         total_reward: u64,
-        total_delegation_stake: u64,
-        total_delegation_reward: u64,
-    ): (vector<u64>, vector<u64>) {
-        let validator_reward_amounts = vector::empty();
-        let delegator_reward_amounts = vector::empty();
+        total_stake_adjustment: u64,
+        stake_adjustments: VecMap<address, u64>,
+        total_slashed_validator_stake: u64,
+    ): vector<u64> {
+        assert!(total_stake > total_stake_adjustment, EINVALID_STAKE_ADJUSTMENT_AMOUNT);
+        let total_unslashed_validator_stake = total_stake - total_slashed_validator_stake;
+        let reward_amounts = vector::empty();
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow(validators, i);
+            let validator_address = validator::sui_address(validator);
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_reward`.
             // Use u128 to avoid multiplication overflow.
-            let stake_amount: u128 = (validator::stake_amount(validator) as u128);
-            let reward_amount = stake_amount * (total_reward as u128) / (total_stake as u128);
-            vector::push_back(&mut validator_reward_amounts, (reward_amount as u64));
-
-            let delegation_stake_amount: u128 = (validator::delegate_amount(validator) as u128);
-            let delegation_reward_amount =
-                if (total_delegation_stake == 0) 0
-                else delegation_stake_amount * (total_delegation_reward as u128) / (total_delegation_stake as u128);
-            vector::push_back(&mut delegator_reward_amounts, (delegation_reward_amount as u64));
-
+            let stake_amount: u128 = (validator::total_stake_amount(validator) as u128);
+            let adjusted_stake_amount = 
+                if (vec_map::contains(&stake_adjustments, &validator_address)) {
+                    let adjustment = *vec_map::get(&stake_adjustments, &validator_address);
+                    stake_amount - (adjustment as u128)
+                } else {
+                    let adjustment = (total_stake_adjustment as u128) * stake_amount
+                                   / (total_unslashed_validator_stake as u128);
+                    stake_amount + adjustment
+                };
+            let reward_amount = adjusted_stake_amount * (total_reward as u128) / (total_stake as u128);
+            vector::push_back(&mut reward_amounts, (reward_amount as u64));
             i = i + 1;
         };
-        (validator_reward_amounts, delegator_reward_amounts)
+        reward_amounts
     }
 
     fun distribute_reward(
         validators: &mut vector<Validator>,
-        validator_reward_amounts: &vector<u64>,
-        validator_rewards: &mut Balance<SUI>,
-        delegator_reward_amounts: &vector<u64>,
-        delegator_rewards: &mut Balance<SUI>,
+        reward_amounts: &vector<u64>,
+        rewards: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
         ctx: &mut TxContext
     ) {
@@ -685,11 +761,14 @@ module sui::validator_set {
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            let validator_reward_amount = *vector::borrow(validator_reward_amounts, i);
-            let validator_reward = balance::split(validator_rewards, validator_reward_amount);
-
-            let delegator_reward_amount = *vector::borrow(delegator_reward_amounts, i);
-            let delegator_reward = balance::split(delegator_rewards, delegator_reward_amount);
+            let reward_amount = *vector::borrow(reward_amounts, i);
+            let combined_stake = validator::total_stake_amount(validator);
+            let self_stake = validator::stake_amount(validator);
+            let validator_reward_amount = (reward_amount as u128) * (self_stake as u128) / (combined_stake as u128);
+            let validator_reward = balance::split(rewards, (validator_reward_amount as u64));
+            
+            let delegator_reward_amount = reward_amount - (validator_reward_amount as u64);
+            let delegator_reward = balance::split(rewards, delegator_reward_amount);
 
             // Validator takes a cut of the rewards as commission.
             let commission_amount = (delegator_reward_amount as u128) * (validator::commission_rate(validator) as u128) / BASIS_POINT_DENOMINATOR;
