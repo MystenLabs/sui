@@ -75,6 +75,7 @@ const deduplicate = (results: string[] | undefined) =>
 const moveCallTxnName = (moveCallFunctionName?: string): string | null =>
     moveCallFunctionName ? moveCallFunctionName.replace(/_/g, ' ') : null;
 
+ // TODO: move from redux to react-query 
 // Get objectId from a transaction effects -> events where recipient is the address
 const getTxnEffectsEventID = (
     txEffects: TransactionEffects,
