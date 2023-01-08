@@ -222,11 +222,17 @@ export function DappTxApprovalPage() {
     }[] = useMemo(() => {
         switch (txRequest?.tx.type) {
             case 'v2': {
-                const data = txRequest.tx.data;
+                const moveCallTxn = txRequest.tx.data
+                    .data as MoveCallTransaction;
                 return [
+                    { label: 'Transaction Type', content: 'MoveCall' },
                     {
-                        label: 'Transaction Type',
-                        content: data.kind,
+                        label: 'Function',
+                        content: moveCallTxn.function,
+                    },
+                    {
+                        label: 'Module',
+                        content: moveCallTxn.module,
                     },
                 ];
             }
@@ -237,11 +243,19 @@ export function DappTxApprovalPage() {
                         label: 'Function',
                         content: txRequest.tx.data.function,
                     },
+                    {
+                        label: 'Module',
+                        content: txRequest.tx.data.module,
+                    },
                 ];
             case 'serialized-move-call':
                 return [
                     ...(txRequest?.unSerializedTxn
                         ? [
+                              {
+                                  label: 'Transaction Type',
+                                  content: 'Serialized-move-call',
+                              },
                               {
                                   label: 'Function',
                                   content:
@@ -269,7 +283,7 @@ export function DappTxApprovalPage() {
             default:
                 return [];
         }
-    }, [txRequest?.tx, txRequest?.unSerializedTxn]);
+    }, [txRequest]);
 
     const address = useAppSelector(({ account: { address } }) => address);
 
@@ -299,24 +313,29 @@ export function DappTxApprovalPage() {
                                         Transaction Type
                                     </div>
                                     <div className="font-semibold text-sui-steel-darker">
-                                        {txRequest?.unSerializedTxn?.kind ??
-                                            txRequest?.tx?.type}
+                                        {valuesContent[0].content}
                                     </div>
                                 </>
                             }
                         >
                             <div className={st.content}>
-                                {valuesContent.map(
-                                    ({ label, content, loading = false }) => (
-                                        <div key={label} className={st.row}>
-                                            <TransactionTypeCard
-                                                label={label}
-                                                content={content}
-                                                loading={loading}
-                                            />
-                                        </div>
-                                    )
-                                )}
+                                {valuesContent
+                                    .slice(1)
+                                    .map(
+                                        ({
+                                            label,
+                                            content,
+                                            loading = false,
+                                        }) => (
+                                            <div key={label} className={st.row}>
+                                                <TransactionTypeCard
+                                                    label={label}
+                                                    content={content}
+                                                    loading={loading}
+                                                />
+                                            </div>
+                                        )
+                                    )}
                             </div>
                         </SummaryCard>
                     </section>

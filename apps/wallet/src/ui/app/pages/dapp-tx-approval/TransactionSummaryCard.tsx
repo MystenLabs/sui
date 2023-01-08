@@ -179,13 +179,10 @@ export function TransactionSummaryCard({
     address: string;
 }) {
     const txData: TransactionDryRun = (
-        txRequest.tx.type === 'move-call' || txRequest.tx.type === 'v2'
+        txRequest.tx.type === 'move-call'
             ? {
                   kind: 'moveCall',
-                  data:
-                      txRequest.tx.type === 'v2'
-                          ? txRequest.tx.data.data
-                          : txRequest.tx.data,
+                  data: txRequest.tx.data,
               }
             : txRequest.tx.data
     ) as TransactionDryRun;

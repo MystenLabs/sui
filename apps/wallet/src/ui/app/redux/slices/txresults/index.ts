@@ -8,7 +8,6 @@ import {
     getTransferObjectTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
-    getTransferSuiTransaction,
     getExecutionStatusError,
     getMoveCallTransaction,
     getTransactionSender,
@@ -17,12 +16,10 @@ import {
     Coin,
     is,
     SuiObject,
-    getPaySuiTransaction,
-    getPayTransaction,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-import { notEmpty, getEventsSummary } from '_helpers';
+import { notEmpty, getEventsSummary, getAmount } from '_helpers';
 
 import type {
     GetTxnDigestsResponse,
@@ -30,7 +27,6 @@ import type {
     ExecutionStatusType,
     TransactionEffects,
     SuiEvent,
-    SuiTransactionKind,
 } from '@mysten/sui.js';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -79,41 +75,6 @@ const deduplicate = (results: string[] | undefined) =>
 const moveCallTxnName = (moveCallFunctionName?: string): string | null =>
     moveCallFunctionName ? moveCallFunctionName.replace(/_/g, ' ') : null;
 
-// Return amount of SUI from a transaction
-// if multiple recipients return list of recipients and amounts
-function getAmount(
-    txnData: SuiTransactionKind,
-    address?: string
-): { [key: string]: number } | number | null {
-    //TODO: add PayAllSuiTransaction
-    const transferSui = getTransferSuiTransaction(txnData);
-    if (transferSui?.amount) {
-        return transferSui.amount;
-    }
-
-    const paySuiData =
-        getPaySuiTransaction(txnData) ?? getPayTransaction(txnData);
-
-    const amountByRecipient =
-        paySuiData?.recipients.reduce((acc, value, index) => {
-            return {
-                ...acc,
-                [value]:
-                    paySuiData.amounts[index] + (value in acc ? acc[value] : 0),
-            };
-        }, {} as { [key: string]: number }) ?? null;
-
-    // return amount if only one recipient or if address is in recipient object
-    const amountByRecipientList = Object.values(amountByRecipient || {});
-
-    const amount =
-        amountByRecipientList.length === 1
-            ? amountByRecipientList[0]
-            : amountByRecipient;
-
-    return address && amountByRecipient ? amountByRecipient[address] : amount;
-}
-
 // Get objectId from a transaction effects -> events where recipient is the address
 const getTxnEffectsEventID = (
     txEffects: TransactionEffects,
@@ -131,6 +92,7 @@ const getTxnEffectsEventID = (
     return objectIDs;
 };
 
+// Rewrite using react query
 export const getTransactionsByAddress = createAsyncThunk<
     TxResultByAddress,
     void,
@@ -176,17 +138,24 @@ export const getTransactionsByAddress = createAsyncThunk<
 
             const txn = txns[0];
             const txKind = getTransactionKindName(txn);
-            const transferSui = getTransferSuiTransaction(txn);
             const txTransferObject = getTransferObjectTransaction(txn);
-            const recipient =
-                transferSui?.recipient ?? txTransferObject?.recipient;
+            const amountByRecipient = getAmount(txn);
+            const sender = getTransactionSender(txEff.certificate);
+            const senderData = amountByRecipient?.find(
+                ({ recipientAddress }) => recipientAddress === sender
+            );
+            const recipients =
+                amountByRecipient &&
+                amountByRecipient?.filter(
+                    ({ recipientAddress }) => recipientAddress !== sender
+                );
+
             const moveCallTxn = getMoveCallTransaction(txn);
             const metaDataObjectId = getTxnEffectsEventID(
                 txEff.effects,
                 address
             );
-            const sender = getTransactionSender(txEff.certificate);
-            const amountByRecipient = getAmount(txn);
+
             const { coins: eventsSummary } = getEventsSummary(
                 txEff.effects,
                 address
@@ -195,12 +164,6 @@ export const getTransactionsByAddress = createAsyncThunk<
                 (acc, { amount }) => acc + amount,
                 0
             );
-
-            // todo: handle multiple recipients, for now just return first
-            const amount =
-                typeof amountByRecipient === 'number'
-                    ? amountByRecipient
-                    : Object.values(amountByRecipient || {})[0];
 
             return {
                 txId: digest,
@@ -212,9 +175,9 @@ export const getTransactionsByAddress = createAsyncThunk<
                 isSender: sender === address,
                 error: getExecutionStatusError(txEff),
                 timestampMs: txEff.timestamp_ms,
-                ...(recipient && { to: recipient }),
-                ...((amount || amountTransfers) && {
-                    amount: Math.abs(amount || amountTransfers),
+                ...(recipients && { to: recipients[0].recipientAddress }),
+                ...((senderData?.amount || amountTransfers) && {
+                    amount: Math.abs(senderData?.amount || amountTransfers),
                 }),
                 ...((txTransferObject?.objectRef?.objectId ||
                     metaDataObjectId.length > 0) && {
