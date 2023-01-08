@@ -254,7 +254,7 @@ export function DappTxApprovalPage() {
                         ? [
                               {
                                   label: 'Transaction Type',
-                                  content: 'Serialized-move-call',
+                                  content: 'SerializedMoveCall',
                               },
                               {
                                   label: 'Function',

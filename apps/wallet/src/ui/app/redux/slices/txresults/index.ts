@@ -145,7 +145,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                 ({ recipientAddress }) => recipientAddress === sender
             )?.amount;
 
-            //TODO handle Support multiple recipients
+            //TODO: Support multiple recipients
             const recipient =
                 amountByRecipient &&
                 amountByRecipient?.filter(
