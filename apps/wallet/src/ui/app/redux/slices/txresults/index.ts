@@ -141,14 +141,16 @@ export const getTransactionsByAddress = createAsyncThunk<
             const txTransferObject = getTransferObjectTransaction(txn);
             const amountByRecipient = getAmount(txn);
             const sender = getTransactionSender(txEff.certificate);
-            const senderData = amountByRecipient?.find(
+            const amount = amountByRecipient?.find(
                 ({ recipientAddress }) => recipientAddress === sender
-            );
-            const recipients =
+            )?.amount;
+
+            //TODO handle Support multiple recipients
+            const recipient =
                 amountByRecipient &&
                 amountByRecipient?.filter(
                     ({ recipientAddress }) => recipientAddress !== sender
-                );
+                )[0].recipientAddress;
 
             const moveCallTxn = getMoveCallTransaction(txn);
             const metaDataObjectId = getTxnEffectsEventID(
@@ -175,9 +177,9 @@ export const getTransactionsByAddress = createAsyncThunk<
                 isSender: sender === address,
                 error: getExecutionStatusError(txEff),
                 timestampMs: txEff.timestamp_ms,
-                ...(recipients && { to: recipients[0].recipientAddress }),
-                ...((senderData?.amount || amountTransfers) && {
-                    amount: Math.abs(senderData?.amount || amountTransfers),
+                ...(recipient && { to: recipient }),
+                ...((amount || amountTransfers) && {
+                    amount: Math.abs(amount || amountTransfers),
                 }),
                 ...((txTransferObject?.objectRef?.objectId ||
                     metaDataObjectId.length > 0) && {
