@@ -23,9 +23,9 @@ export function getEventsSummary(
     const objectIDs: string[] = [];
 
     events.forEach((event) => {
-        // Aggregate coin balance changes
-        /// A net positive amount means the user received coins
-        /// A net negative amount means the user sent coins
+        // Aggregate coinBalanceChange by coinType and address
+        // A net positive amount means the user received coins
+        // A net negative amount means the user sent coins
         if (
             'coinBalanceChange' in event &&
             ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType)
