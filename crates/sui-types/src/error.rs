@@ -4,7 +4,7 @@
 
 use crate::{
     base_types::*,
-    committee::{EpochId, StakeUnit},
+    committee::{Committee, EpochId, StakeUnit},
     messages::{ExecutionFailureStatus, MoveLocation},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
@@ -94,8 +94,12 @@ pub enum SuiError {
     SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
-    #[error("Value was not signed by a known authority")]
-    UnknownSigner,
+    #[error("Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}", signer, index)]
+    UnknownSigner {
+        signer: Option<String>,
+        index: Option<u32>,
+        committee: Committee,
+    },
 
     // Certificate verification and execution
     #[error(

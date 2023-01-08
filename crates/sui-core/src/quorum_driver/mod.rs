@@ -315,7 +315,7 @@ where
 
     pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
         info!(
-            "Quorum Drvier updating AuthorityAggregator with committee {:?}",
+            "Quorum Drvier updating AuthorityAggregator with committee {}",
             new_validators.committee
         );
         self.validators.store(new_validators);

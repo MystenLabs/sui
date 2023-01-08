@@ -1084,7 +1084,14 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
         message_index: usize,
     ) -> SuiResult<()> {
         let weight = committee.weight(&self.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+        fp_ensure!(
+            weight > 0,
+            SuiError::UnknownSigner {
+                signer: Some(self.authority.concise().to_string()),
+                index: None,
+                committee: committee.clone()
+            }
+        );
 
         obligation
             .public_keys
@@ -1220,13 +1227,25 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
             .ok_or(SuiError::InvalidAuthenticator)?;
 
         for authority_index in self.signers_map.iter() {
-            let authority = committee
-                .authority_by_index(authority_index)
-                .ok_or(SuiError::UnknownSigner)?;
+            let authority =
+                committee
+                    .authority_by_index(authority_index)
+                    .ok_or(SuiError::UnknownSigner {
+                        signer: None,
+                        index: Some(authority_index),
+                        committee: committee.clone(),
+                    })?;
 
             // Update weight.
             let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            fp_ensure!(
+                voting_rights > 0,
+                SuiError::UnknownSigner {
+                    signer: Some(authority.concise().to_string()),
+                    index: Some(authority_index),
+                    committee: committee.clone()
+                }
+            );
             weight += voting_rights;
 
             selected_public_keys.push(committee.public_key(authority)?);
@@ -1272,7 +1291,11 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             map.insert(
                 committee
                     .authority_index(pk)
-                    .ok_or(SuiError::UnknownSigner)? as u32,
+                    .ok_or(SuiError::UnknownSigner {
+                        signer: Some(pk.concise().to_string()),
+                        index: None,
+                        committee: committee.clone(),
+                    })? as u32,
             );
         }
         let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();

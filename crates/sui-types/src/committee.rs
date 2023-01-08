@@ -14,7 +14,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 pub type EpochId = u64;
 
@@ -22,7 +24,7 @@ pub type StakeUnit = u64;
 
 pub type CommitteeDigest = [u8; 32];
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
@@ -326,12 +328,24 @@ impl PartialEq for Committee {
     }
 }
 
+impl Hash for Committee {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.epoch.hash(state);
+        self.voting_rights.hash(state);
+        self.total_votes.hash(state);
+    }
+}
+
 impl Display for Committee {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut voting_rights = String::new();
+        for (name, vote) in &self.voting_rights {
+            write!(voting_rights, "{}: {}, ", name.concise(), vote)?;
+        }
         writeln!(
             f,
-            "Committee (epoch={:?}): {:?}",
-            self.epoch, self.voting_rights
+            "Committee (epoch={:?}, voting_rights=[{}])",
+            self.epoch, voting_rights
         )
     }
 }
