@@ -4580,7 +4580,7 @@ dependencies = [
  "move-docgen",
  "move-model",
  "move-symbol-pool",
- "named-lock 0.2.0",
+ "named-lock",
  "once_cell",
  "petgraph 0.5.1",
  "ptree",
@@ -5066,21 +5066,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "thiserror",
- "widestring 0.5.1",
- "winapi",
-]
-
-[[package]]
-name = "named-lock"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b4a84f3731e71a5792fca72324356bf700c8959d31a2ac34134b25989f254c3"
-dependencies = [
- "libc",
- "once_cell",
- "parking_lot 0.12.1",
- "thiserror",
- "widestring 1.0.2",
+ "widestring",
  "winapi",
 ]
 
@@ -10730,12 +10716,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17882f045410753661207383517a6f62ec3dbeb6a4ed2acce01f0728238d1983"
 
 [[package]]
-name = "widestring"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "653f141f39ec16bba3c5abe400a0c60da7468261cc2cbf36805022876bc721a8"
-
-[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11297,7 +11277,7 @@ dependencies = [
  "multihash",
  "multihash-derive",
  "multimap",
- "named-lock 0.3.0",
+ "named-lock",
  "native-tls",
  "nested",
  "nexlint",
@@ -11668,7 +11648,7 @@ dependencies = [
  "webpki-roots",
  "which",
  "whoami",
- "widestring 0.5.1",
+ "widestring",
  "winapi",
  "winapi-util",
  "windows-sys 0.36.1",
