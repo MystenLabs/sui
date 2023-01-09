@@ -181,8 +181,11 @@ pub struct AuthorityEpochTables {
     /// The boolean value indicates whether this is the last checkpoint of the epoch.
     pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
 
-    /// Lists all transaction digests included in checkpoints
-    digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+    /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
+    builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+
+    /// When transaction is executed via checkpoint executor, we store association here
+    executed_transactions_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
     /// Stores pending signatures
     /// The key in this table is checkpoint sequence number and an arbitrary integer
@@ -328,6 +331,30 @@ impl AuthorityPerEpochStore {
     #[cfg(test)]
     pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
         self.tables.transactions.remove(transaction).unwrap();
+    }
+
+    pub fn insert_executed_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let batch = self.tables.executed_transactions_to_checkpoint.batch();
+        let batch = batch.insert_batch(
+            &self.tables.executed_transactions_to_checkpoint,
+            digests.iter().map(|d| (*d, sequence)),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .tables
+            .executed_transactions_to_checkpoint
+            .contains_key(digest)?)
     }
 
     pub fn get_signed_transaction(
@@ -1269,7 +1296,7 @@ impl AuthorityPerEpochStore {
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
         if let Some((seq, transactions)) = content_info {
             batch = batch.insert_batch(
-                &self.tables.digest_to_checkpoint,
+                &self.tables.builder_digest_to_checkpoint,
                 transactions.iter().map(|tx| (*tx, seq)),
             )?;
         }
@@ -1277,11 +1304,13 @@ impl AuthorityPerEpochStore {
         batch.write()
     }
 
-    pub fn tx_checkpointed_in_current_epoch(
+    pub fn builder_included_transaction_in_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> Result<bool, TypedStoreError> {
-        self.tables.digest_to_checkpoint.contains_key(digest)
+        self.tables
+            .builder_digest_to_checkpoint
+            .contains_key(digest)
     }
 
     pub fn get_pending_checkpoint_signatures_iter(
