@@ -4886,7 +4886,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=3b0ddf83aed1590ccf11f0174a5cab53b7a3f099#3b0ddf83aed1590ccf11f0174a5cab53b7a3f099"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=f591ab0b1e56435fe7b354f02131fe104bd825e7#f591ab0b1e56435fe7b354f02131fe104bd825e7"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -4906,7 +4906,7 @@ dependencies = [
  "real_tokio",
  "serde 1.0.152",
  "socket2",
- "tokio-util 0.7.4 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=bb463863b8155543731bdf7850057c083cf1b427)",
+ "tokio-util 0.7.4 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082)",
  "toml",
  "tracing",
  "tracing-subscriber 0.3.16",
@@ -4915,7 +4915,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=3b0ddf83aed1590ccf11f0174a5cab53b7a3f099#3b0ddf83aed1590ccf11f0174a5cab53b7a3f099"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=f591ab0b1e56435fe7b354f02131fe104bd825e7#f591ab0b1e56435fe7b354f02131fe104bd825e7"
 dependencies = [
  "darling",
  "proc-macro2 1.0.49",
@@ -7045,8 +7045,8 @@ dependencies = [
 
 [[package]]
 name = "real_tokio"
-version = "1.22.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=bb463863b8155543731bdf7850057c083cf1b427#bb463863b8155543731bdf7850057c083cf1b427"
+version = "1.24.1"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082#8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082"
 dependencies = [
  "autocfg",
  "bytes",
@@ -7058,8 +7058,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 1.8.0",
- "winapi",
+ "tokio-macros 1.8.2 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082)",
+ "windows-sys",
 ]
 
 [[package]]
@@ -9744,7 +9744,7 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros 1.8.2",
+ "tokio-macros 1.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "windows-sys",
 ]
@@ -9761,8 +9761,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.8.0"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=bb463863b8155543731bdf7850057c083cf1b427#bb463863b8155543731bdf7850057c083cf1b427"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d266c00fde287f55d3f1c3e96c500c362a2b8c695076ec180f27918820bc6df8"
 dependencies = [
  "proc-macro2 1.0.49",
  "quote 1.0.23",
@@ -9772,8 +9773,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "1.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d266c00fde287f55d3f1c3e96c500c362a2b8c695076ec180f27918820bc6df8"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082#8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082"
 dependencies = [
  "proc-macro2 1.0.49",
  "quote 1.0.23",
@@ -9842,7 +9842,7 @@ dependencies = [
 [[package]]
 name = "tokio-util"
 version = "0.7.4"
-source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=bb463863b8155543731bdf7850057c083cf1b427#bb463863b8155543731bdf7850057c083cf1b427"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082#8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082"
 dependencies = [
  "bytes",
  "futures-core",
@@ -11518,7 +11518,7 @@ dependencies = [
  "tinyvec_macros",
  "tokio",
  "tokio-io-timeout",
- "tokio-macros 1.8.2",
+ "tokio-macros 1.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-native-tls",
  "tokio-retry",
  "tokio-rustls",
