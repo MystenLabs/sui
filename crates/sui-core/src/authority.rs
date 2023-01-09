@@ -2469,6 +2469,10 @@ impl AuthorityState {
             pending_certificates.len()
         );
         for digest in pending_certificates {
+            if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
+                debug!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
+                continue;
+            }
             debug!("Reverting {:?} at the end of epoch", digest);
             self.database.revert_state_update(&digest).await?;
         }

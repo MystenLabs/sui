@@ -527,7 +527,10 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest;
-                if self.epoch_store.tx_checkpointed_in_current_epoch(&digest)? {
+                if self
+                    .epoch_store
+                    .builder_included_transaction_in_checkpoint(&digest)?
+                {
                     continue;
                 }
                 for dependency in effect.dependencies.iter() {

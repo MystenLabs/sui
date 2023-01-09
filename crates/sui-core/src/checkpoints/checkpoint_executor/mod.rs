@@ -534,6 +534,7 @@ pub async fn execute_checkpoint(
         epoch_store,
         transaction_manager,
         local_execution_timeout_sec,
+        checkpoint.sequence_number(),
     )
     .await
 }
@@ -544,6 +545,7 @@ async fn execute_transactions(
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
+    checkpoint_sequence: CheckpointSequenceNumber,
 ) -> SuiResult {
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
@@ -623,7 +625,10 @@ async fn execute_transactions(
                 periods += 1;
             }
             Ok(Err(err)) => return Err(err),
-            Ok(Ok(_)) => return Ok(()),
+            Ok(Ok(_)) => {
+                epoch_store.insert_executed_transactions(&all_tx_digests, checkpoint_sequence)?;
+                return Ok(());
+            }
         }
     }
 }
