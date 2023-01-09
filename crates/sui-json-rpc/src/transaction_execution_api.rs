@@ -18,9 +18,9 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::SuiExecuteTransactionResponse;
 use sui_open_rpc::Module;
 use sui_types::intent::Intent;
+use sui_types::messages::Transaction;
 use sui_types::messages::{ExecuteTransactionRequest, ExecuteTransactionRequestType};
-use sui_types::{crypto, messages::Transaction};
-
+use sui_types::signature::GenericSignature;
 pub struct FullNodeTransactionExecutionApi {
     pub transaction_orchestrator: Arc<TransactiondOrchestrator<NetworkAuthorityClient>>,
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
@@ -48,10 +48,9 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
     ) -> RpcResult<SuiExecuteTransactionResponse> {
         let tx_data =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
+        let signature = GenericSignature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
             .map_err(|e| anyhow!(e))?;
-
-        let txn = Transaction::from_data(tx_data, Intent::default(), signature);
+        let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), signature);
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
@@ -79,11 +78,9 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
     ) -> RpcResult<SuiExecuteTransactionResponse> {
         let tx_data =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
+        let signature = GenericSignature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
             .map_err(|e| anyhow!(e))?;
-
-        let txn = Transaction::from_data(tx_data, Intent::default(), signature);
-
+        let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), signature);
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
             ExecuteTransactionRequest {

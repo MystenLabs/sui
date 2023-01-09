@@ -23,7 +23,7 @@ use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
@@ -98,10 +98,13 @@ pub enum SuiKeyPair {
     Secp256r1(Secp256r1KeyPair),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, From)]
+#[derive(Clone, PartialEq, Eq, From, JsonSchema)]
 pub enum PublicKey {
+    #[schemars(with = "Base64")]
     Ed25519(Ed25519PublicKey),
+    #[schemars(with = "Base64")]
     Secp256k1(Secp256k1PublicKey),
+    #[schemars(with = "Base64")]
     Secp256r1(Secp256r1PublicKey),
 }
 
@@ -268,6 +271,12 @@ impl<'de> Deserialize<'de> for PublicKey {
         let s = String::deserialize(deserializer)?;
         <PublicKey as EncodeDecodeBase64>::decode_base64(&s)
             .map_err(|e| Error::custom(e.to_string()))
+    }
+}
+
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.encode_base64())
     }
 }
 
@@ -618,7 +627,7 @@ where
 // Account Signatures
 //
 
-// Enums for Signatures
+// Enums for signature scheme signatures
 #[enum_dispatch]
 #[derive(Clone, JsonSchema, PartialEq, Eq, Hash)]
 pub enum Signature {
@@ -681,6 +690,55 @@ impl Signature {
             secret,
             &bcs::to_bytes(&value).expect("Message serialization should not fail"),
         )
+    }
+
+    /// Parse [enum CompressedSignature] from trait SuiSignature `flag || sig || pk`.
+    /// This is useful for the MultiSig to combine partial signature into a MultiSig public key.
+    pub fn to_compressed(&self) -> Result<CompressedSignature, SuiError> {
+        let bytes = self.signature_bytes();
+        match self.scheme() {
+            SignatureScheme::ED25519 => Ok(CompressedSignature::Ed25519(
+                Ed25519Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
+                    error: "Cannot parse sig".to_string(),
+                })?,
+            )),
+            SignatureScheme::Secp256k1 => Ok(CompressedSignature::Secp256k1(
+                Secp256k1Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
+                    error: "Cannot parse sig".to_string(),
+                })?,
+            )),
+            SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
+                Secp256r1Signature::from_bytes(bytes).map_err(|_| SuiError::InvalidSignature {
+                    error: "Cannot parse sig".to_string(),
+                })?,
+            )),
+            _ => Err(SuiError::UnsupportedFeatureError {
+                error: "Unsupported signature scheme in MultiSig".to_string(),
+            }),
+        }
+    }
+
+    /// Parse [struct PublicKey] from trait SuiSignature `flag || sig || pk`.
+    /// This is useful for the MultiSig to construct the bitmap in [struct MultiPublicKey].
+    pub fn to_public_key(&self) -> Result<PublicKey, SuiError> {
+        let bytes = self.public_key_bytes();
+        match self.scheme() {
+            SignatureScheme::ED25519 => Ok(PublicKey::Ed25519(
+                Ed25519PublicKey::from_bytes(bytes)
+                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?,
+            )),
+            SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(
+                Secp256k1PublicKey::from_bytes(bytes)
+                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?,
+            )),
+            SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
+                Secp256r1PublicKey::from_bytes(bytes)
+                    .map_err(|_| SuiError::KeyConversionError("Cannot parse pk".to_string()))?,
+            )),
+            _ => Err(SuiError::UnsupportedFeatureError {
+                error: "Unsupported signature scheme in MultiSig".to_string(),
+            }),
+        }
     }
 }
 
@@ -1585,6 +1643,7 @@ pub enum SignatureScheme {
     Secp256k1,
     Secp256r1,
     BLS12381,
+    MultiSig,
 }
 
 impl SignatureScheme {
@@ -1593,6 +1652,7 @@ impl SignatureScheme {
             SignatureScheme::ED25519 => 0x00,
             SignatureScheme::Secp256k1 => 0x01,
             SignatureScheme::Secp256r1 => 0x02,
+            SignatureScheme::MultiSig => 0x03,
             SignatureScheme::BLS12381 => 0xff,
         }
     }
@@ -1609,6 +1669,7 @@ impl SignatureScheme {
             0x00 => Ok(SignatureScheme::ED25519),
             0x01 => Ok(SignatureScheme::Secp256k1),
             0x02 => Ok(SignatureScheme::Secp256r1),
+            0x03 => Ok(SignatureScheme::MultiSig),
             _ => Err(SuiError::KeyConversionError(
                 "Invalid key scheme".to_string(),
             )),
@@ -1622,4 +1683,28 @@ pub fn construct_tbls_randomness_object_message(epoch: EpochId, obj_id: &ObjectI
     msg.extend_from_slice(bcs::to_bytes(&epoch).unwrap().as_slice());
     msg.extend_from_slice(obj_id.as_ref());
     msg
+}
+/// Unlike `enum Signature`, `enum CompressedSignature` does not contain public key.
+#[derive(Debug, From, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub enum CompressedSignature {
+    #[schemars(with = "Base64")]
+    Ed25519(Ed25519Signature),
+    #[schemars(with = "Base64")]
+    Secp256k1(Secp256k1Signature),
+    #[schemars(with = "Base64")]
+    Secp256r1(Secp256r1Signature),
+}
+
+impl FromStr for Signature {
+    type Err = eyre::Report;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::decode_base64(s).map_err(|e| eyre!("Fail to decode base64 {}", e.to_string()))
+    }
+}
+
+impl FromStr for PublicKey {
+    type Err = eyre::Report;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::decode_base64(s).map_err(|e| eyre!("Fail to decode base64 {}", e.to_string()))
+    }
 }

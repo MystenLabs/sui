@@ -241,3 +241,35 @@ impl<'de> DeserializeAs<'de, AggregateAuthoritySignature> for AggrAuthSignature 
             .map_err(to_custom_error::<'de, D, _>)
     }
 }
+
+#[macro_export]
+macro_rules! serde_to_from_bytes {
+    ($type:ty) => {
+        impl ::serde::Serialize for $type {
+            fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                match serializer.is_human_readable() {
+                    true => serializer.serialize_str(&self.encode_base64()),
+                    false => self.as_ref().serialize(serializer),
+                }
+            }
+        }
+
+        impl<'de> ::serde::Deserialize<'de> for $type {
+            fn deserialize<D: ::serde::Deserializer<'de>>(
+                deserializer: D,
+            ) -> Result<Self, D::Error> {
+                use serde::de::Error;
+                match deserializer.is_human_readable() {
+                    true => {
+                        let s = <String as ::serde::Deserialize>::deserialize(deserializer)?;
+                        Self::decode_base64(&s).map_err(::serde::de::Error::custom)
+                    }
+                    false => {
+                        let data: Vec<u8> = Vec::deserialize(deserializer)?;
+                        Self::from_bytes(&data).map_err(|e| Error::custom(e.to_string()))
+                    }
+                }
+            }
+        }
+    };
+}
