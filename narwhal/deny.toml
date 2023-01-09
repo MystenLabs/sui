@@ -49,6 +49,8 @@ notice = "warn"
 # output a note when they are encountered.
 ignore = [
     #"RUSTSEC-0000-0000",
+    # On Windows, configuring a named pipe server with [pipe_mode] will force [ServerOptions]::[reject_remote_clients] as `false`.
+    "RUSTSEC-2023-0001"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
