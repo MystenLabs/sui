@@ -38,6 +38,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
+use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -511,6 +512,7 @@ impl CheckpointBuilder {
         epoch_total_gas_cost: &GasCostSummary,
         effects: &mut Vec<TransactionEffects>,
     ) -> anyhow::Result<()> {
+        let timer = Instant::now();
         let cert = self
             .state
             .create_advance_epoch_tx_cert(
@@ -520,6 +522,10 @@ impl CheckpointBuilder {
                 self.transaction_certifier.deref(),
             )
             .await?;
+        self.epoch_store
+            .record_epoch_last_transaction_cert_creation_time_metric(
+                timer.elapsed().as_millis() as u64
+            );
         let signed_effect = self
             .state
             .try_execute_immediately(&cert, &self.epoch_store)

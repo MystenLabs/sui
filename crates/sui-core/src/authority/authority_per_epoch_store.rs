@@ -264,6 +264,7 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
+        metrics.current_epoch.set(epoch_id as i64);
         Arc::new(Self {
             committee,
             tables,
@@ -286,7 +287,6 @@ impl AuthorityPerEpochStore {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
         self.record_epoch_total_duration_metric();
-        self.metrics.current_epoch.set(new_committee.epoch as i64);
         Self::new(
             new_committee,
             &self.parent_path,
@@ -1403,6 +1403,12 @@ impl AuthorityPerEpochStore {
         self.metrics
             .epoch_first_checkpoint_ready_time_since_epoch_begin_ms
             .report(self.epoch_open_time.elapsed().as_millis() as u64);
+    }
+
+    pub(crate) fn record_epoch_last_transaction_cert_creation_time_metric(&self, elapsed_ms: u64) {
+        self.metrics
+            .epoch_last_transaction_cert_creation_time_ms
+            .report(elapsed_ms);
     }
 
     fn record_epoch_total_duration_metric(&self) {
