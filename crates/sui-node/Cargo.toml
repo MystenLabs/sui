@@ -37,8 +37,7 @@ prometheus-closure-metric = { path = "../prometheus-closure-metric" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
-
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 reqwest = { version = "0.11.13", features = ["blocking", "json"] }
