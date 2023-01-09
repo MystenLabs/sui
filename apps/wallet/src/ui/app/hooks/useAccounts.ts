@@ -1,23 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo, useSyncExternalStore } from 'react';
+import { useMemo } from 'react';
 
-import { SyncedStore } from '../helpers/SyncedStore';
-
-import type { AccountSerialized } from '_src/background/keyring/Account';
-
-export const accountsStore = new SyncedStore<AccountSerialized[] | null>(null);
+import { accountsAdapterSelectors } from '../redux/slices/account';
+import useAppSelector from './useAppSelector';
 
 export function useAccounts(addressesFilters?: string[]) {
-    const accounts = useSyncExternalStore(
-        accountsStore.subscribe,
-        accountsStore.getSnapshot
-    );
+    const accounts = useAppSelector(accountsAdapterSelectors.selectAll);
     return useMemo(() => {
-        if (!accounts) {
-            return null;
-        }
         if (!addressesFilters?.length) {
             return accounts;
         }

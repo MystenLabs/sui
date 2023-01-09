@@ -5,8 +5,6 @@ import { Base64DataBuffer, publicKeyFromSerialized } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
-import { accountsStore } from '../hooks/useAccounts';
-import { activeAddressStore } from '../hooks/useActiveAddress';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
@@ -307,8 +305,6 @@ export class BackgroundClient {
             payload.return
         ) {
             action = setKeyringStatus(payload.return);
-            activeAddressStore.setValue(payload.return.activeAddress);
-            accountsStore.setValue(payload.return.accounts);
         } else if (isLoadedFeaturesPayload(payload)) {
             growthbook.setFeatures(payload.features);
         }

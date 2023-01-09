@@ -4,6 +4,7 @@
 import { getObjectId } from '@mysten/sui.js';
 import {
     createAsyncThunk,
+    createEntityAdapter,
     createSelector,
     createSlice,
 } from '@reduxjs/toolkit';
@@ -16,6 +17,7 @@ import type { ObjectId, SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
+import type { AccountSerialized } from '_src/background/keyring/Account';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const createVault = createAsyncThunk<
@@ -51,6 +53,24 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
+const accountsAdapter = createEntityAdapter<AccountSerialized>({
+    selectId: ({ address }) => address,
+    sortComparer: (a, b) => {
+        if (a.type !== b.type) {
+            // first derived accounts
+            return a.type === 'derived' ? -1 : 1;
+        } else if (a.type === 'derived') {
+            // sort derived accounts by derivation path
+            return (a.derivationPath || '').localeCompare(
+                b.derivationPath || ''
+            );
+        } else {
+            // sort imported account by address
+            return a.address.localeCompare(b.address);
+        }
+    },
+});
+
 type AccountState = {
     creating: boolean;
     address: SuiAddress | null;
@@ -58,12 +78,12 @@ type AccountState = {
     isInitialized: boolean | null;
 };
 
-const initialState: AccountState = {
+const initialState = accountsAdapter.getInitialState<AccountState>({
     creating: false,
     address: null,
     isLocked: null,
     isInitialized: null,
-};
+});
 
 const accountSlice = createSlice({
     name: 'account',
@@ -76,14 +96,14 @@ const accountSlice = createSlice({
             state,
             {
                 payload,
-            }: PayloadAction<KeyringPayload<'walletStatusUpdate'>['return']>
+            }: PayloadAction<
+                Required<KeyringPayload<'walletStatusUpdate'>>['return']
+            >
         ) => {
-            if (!payload) {
-                return;
-            }
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
             state.address = payload.activeAddress || null; // is already normalized
+            accountsAdapter.setAll(state, payload.accounts);
         },
     },
     extraReducers: (builder) =>
@@ -101,6 +121,10 @@ const accountSlice = createSlice({
 });
 
 export const { setAddress, setKeyringStatus } = accountSlice.actions;
+
+export const accountsAdapterSelectors = accountsAdapter.getSelectors(
+    (state: RootState) => state.account
+);
 
 const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
