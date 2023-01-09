@@ -7,12 +7,6 @@ the [Move](https://github.com/MystenLabs/awesome-move) language.
 This tutorial provides a brief explanation of the Move language and
 includes concrete examples to demonstrate how Move can be used in Sui.
 
-## Quick links
-
-* [Why Move?](../../learn/why-move.md) - Quick links to external Move resources and a comparison with Solidity
-* [How Sui Move differs from Core Move](../../learn/sui-move-diffs.md) - Highlights the differences between the core Move language and the Move we use in Sui
-* [Programming Objects Tutorial Series](../../build/programming-with-objects/index.md) - Tutorial series that walks through all the powerful ways to interact with objects in Sui Move.
-
 ## Move
 
 Move is an open source language for writing safe smart contracts. It
@@ -26,12 +20,10 @@ and there are also plans to integrate the language in several upcoming
 and existing platforms (e.g.,
 [Celo](https://www.businesswire.com/news/home/20210921006104/en/Celo-Sets-Sights-On-Becoming-Fastest-EVM-Chain-Through-Collaboration-With-Mysten-Labs)).
 
-
 The Move language documentation is available in the
 [Move GitHub](https://github.com/move-language/move) repository and includes a
 [tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md)
-and a
-[book](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md)
+and a [book](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md)
 describing language features in detail. These are invaluable resources
 to deepen your understanding of the Move language but not strict prerequisites
 to following the Sui tutorial, which we strived to make self-contained.
