@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.64"
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 futures = "0.3.23"
 bcs = "0.1.4"
 

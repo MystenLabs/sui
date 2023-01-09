@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 chrono = { version = "0.4.23", features = [
   "clock",

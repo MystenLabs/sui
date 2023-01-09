@@ -19,7 +19,7 @@ serde_with = "2.1.0"
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 parking_lot = "0.12.1"
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 tempfile = "3.3.0"
 itertools = "0.10.4"
 strum_macros = "^0.24"

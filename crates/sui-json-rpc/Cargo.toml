@@ -19,7 +19,7 @@ move-core-types.workspace = true
 prometheus = "0.13.3"
 anyhow = "1.0.64"
 tracing = "0.1.36"
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 serde = { version = "1.0.144", features = ["derive"] }
 futures = "0.3.23"
 tokio = { workspace = true, features = ["full"] }

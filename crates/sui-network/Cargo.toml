@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anemo.workspace = true
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 serde = { version = "1.0.144", features = ["derive"] }
 tonic = "0.8"
 
