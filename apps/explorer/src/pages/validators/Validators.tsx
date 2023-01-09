@@ -88,12 +88,14 @@ function ValidatorPageResult() {
         return {
             totalStake,
             totalDelegateStake,
-            participation: 0,
-            lastEpochRewards: 0,
             validatorsTableData: validators,
             averageAPY:
                 validators.reduce((acc, cur) => acc + cur.apy, 0) /
                 validators.length,
+
+             // TODO: add missing fields
+             participation: 0,
+             lastEpochRewards: 0,
         };
     }, [validatorsData]);
 

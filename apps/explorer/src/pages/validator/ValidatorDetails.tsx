@@ -76,8 +76,8 @@ function ValidatorDetails() {
             totalStake: validatorData.fields.stake_amount,
             delegatedStake: validatorData.fields.stake_amount,
             address: sui_address,
+            
             // TODO: add missing fields
-
             numberOfDelegators: 0,
             selfStake: 0,
             lastEpoch: 0,
