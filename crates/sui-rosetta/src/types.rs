@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use axum::Json;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -16,12 +17,19 @@ use serde::{Deserializer, Serialize};
 use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
-use sui_sdk::rpc_types::SuiExecutionStatus;
+use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionKind};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::messages::{PaySui, SingleTransactionKind, TransactionData, TransactionKind};
+use sui_types::governance::{
+    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
+};
+use sui_types::messages::{
+    CallArg, MoveCall, ObjectArg, PaySui, SingleTransactionKind, TransactionData, TransactionKind,
+};
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 
 pub type BlockHeight = u64;
 
@@ -365,10 +373,9 @@ pub enum OperationType {
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
-    DelegateSui,
-    DelegateLockedSui,
     Delegation,
     WithdrawDelegation,
+    SwitchDelegation,
     // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
@@ -378,6 +385,22 @@ pub enum OperationType {
     MoveCall,
     EpochChange,
     Genesis,
+}
+
+impl From<&SuiTransactionKind> for OperationType {
+    fn from(tx: &SuiTransactionKind) -> Self {
+        match tx {
+            SuiTransactionKind::TransferObject(_) => OperationType::TransferObject,
+            SuiTransactionKind::Pay(_) => OperationType::Pay,
+            SuiTransactionKind::PaySui(_) => OperationType::PaySui,
+            SuiTransactionKind::PayAllSui(_) => OperationType::PayAllSui,
+            SuiTransactionKind::Publish(_) => OperationType::Publish,
+            SuiTransactionKind::Call(_) => OperationType::MoveCall,
+            SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
+            SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
+            SuiTransactionKind::Genesis(_) => OperationType::Genesis,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default)]
@@ -490,7 +513,24 @@ pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
     pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+    pub metadata: Option<PreprocessMetadata>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum PreprocessMetadata {
+    PaySui,
+    Delegation { locked_until_epoch: Option<EpochId> },
+}
+
+impl From<TransactionMetadata> for PreprocessMetadata {
+    fn from(tx_metadata: TransactionMetadata) -> Self {
+        match tx_metadata {
+            TransactionMetadata::PaySui(_) => Self::PaySui,
+            TransactionMetadata::Delegation {
+                locked_until_epoch, ..
+            } => Self::Delegation { locked_until_epoch },
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -533,7 +573,7 @@ pub struct ConstructionMetadataResponse {
     pub suggested_fee: Vec<Amount>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionMetadata {
     pub tx_metadata: TransactionMetadata,
     pub sender: SuiAddress,
@@ -546,9 +586,14 @@ impl IntoResponse for ConstructionMetadataResponse {
         Json(self).into_response()
     }
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TransactionMetadata {
     PaySui(Vec<ObjectRef>),
+    Delegation {
+        sui_framework: ObjectRef,
+        coins: Vec<ObjectRef>,
+        locked_until_epoch: Option<EpochId>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -786,23 +831,30 @@ pub struct PrefundedAccount {
     pub currency: Currency,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum InternalOperation {
     PaySui {
         sender: SuiAddress,
         recipients: Vec<SuiAddress>,
         amounts: Vec<u64>,
     },
+    Delegation {
+        sender: SuiAddress,
+        validator: SuiAddress,
+        amount: u128,
+        locked_until_epoch: Option<EpochId>,
+    },
 }
 
 impl InternalOperation {
     pub fn sender(&self) -> SuiAddress {
         match self {
-            InternalOperation::PaySui { sender, .. } => *sender,
+            InternalOperation::PaySui { sender, .. }
+            | InternalOperation::Delegation { sender, .. } => *sender,
         }
     }
 
-    pub fn into_data(self, metadata: ConstructionMetadata) -> TransactionData {
+    pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
         let single_tx = match (self, metadata.tx_metadata) {
             (
                 Self::PaySui {
@@ -816,12 +868,56 @@ impl InternalOperation {
                 recipients,
                 amounts,
             }),
+            (
+                InternalOperation::Delegation {
+                    validator,
+                    amount,
+                    locked_until_epoch,
+                    ..
+                },
+                TransactionMetadata::Delegation {
+                    sui_framework,
+                    coins,
+                    ..
+                },
+            ) => {
+                let function = if locked_until_epoch.is_some() {
+                    ADD_DELEGATION_LOCKED_COIN_FUN_NAME.to_owned()
+                } else {
+                    ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
+                };
+                SingleTransactionKind::Call(MoveCall {
+                    package: sui_framework,
+                    module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+                    function,
+                    type_arguments: vec![],
+                    arguments: vec![
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_SYSTEM_STATE_OBJECT_ID,
+                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                        }),
+                        CallArg::ObjVec(
+                            coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
+                        ),
+                        CallArg::Pure(bcs::to_bytes(&amount)?),
+                        CallArg::Pure(bcs::to_bytes(&validator)?),
+                    ],
+                })
+            }
+            (op, metadata) => {
+                return Err(Error::InternalError(anyhow!(
+                "Cannot construct TransactionData from provided operation and metadata, {:?}, {:?}",
+                op,
+                metadata
+            )))
+            }
         };
-        TransactionData::new_with_dummy_gas_price(
+
+        Ok(TransactionData::new_with_dummy_gas_price(
             TransactionKind::Single(single_tx),
             metadata.sender,
             metadata.gas,
             metadata.budget,
-        )
+        ))
     }
 }

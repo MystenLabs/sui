@@ -5,7 +5,6 @@ use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
-use sui_config::genesis::Genesis;
 use sui_config::utils;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::types::{
@@ -27,11 +26,8 @@ async fn test_locked_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(
-        client.clone(),
-        test_cluster.swarm.config().genesis.clone(),
-        test_cluster.swarm.dir(),
-    );
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir());
 
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
@@ -123,11 +119,8 @@ async fn test_get_delegated_sui() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(
-        client.clone(),
-        test_cluster.swarm.config().genesis.clone(),
-        test_cluster.swarm.dir(),
-    );
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir());
 
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
@@ -209,11 +202,10 @@ async fn test_get_delegated_sui() {
 
 fn start_rosetta_test_server(
     client: SuiClient,
-    genesis: Genesis,
     dir: &Path,
 ) -> (RosettaClient, JoinHandle<hyper::Result<()>>) {
     let rosetta_server =
-        RosettaOnlineServer::new(SuiEnv::LocalNet, client, genesis, &dir.join("rosetta_data"));
+        RosettaOnlineServer::new(SuiEnv::LocalNet, client, &dir.join("rosetta_data"));
     let local_ip = utils::get_local_ip_for_tests().to_string();
     let port = utils::get_available_port(&local_ip);
     let rosetta_address = format!("{}:{}", local_ip, port);

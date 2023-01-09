@@ -137,7 +137,17 @@ impl BlockProvider for PseudoBlockProvider {
     }
 
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.current_block().await.map(|b| b.block.block_identifier)
+        let (_, (block_id, ..)) = self
+            .database
+            .blocks
+            .iter()
+            .skip_prior_to(&BlockHeight::MAX)?
+            .next()
+            .ok_or(Error::BlockNotFound {
+                index: None,
+                hash: None,
+            })?;
+        Ok(block_id)
     }
 
     async fn get_balance_at_block(
