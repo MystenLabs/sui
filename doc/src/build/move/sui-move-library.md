@@ -3,6 +3,7 @@ title: Use Sui Move Library
 ---
 
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
+The implementation of the core Sui Move framework can be found [here](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources).
 
 ## Object ownership
 Objects in Sui can have different ownership types. Specifically, they are:
