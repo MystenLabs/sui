@@ -345,8 +345,10 @@ pub enum SuiClientCommands {
         ///The ID of the parent object
         #[clap(name = "object_id")]
         id: ObjectID,
+        /// Optional paging cursor
         #[clap(long)]
         cursor: Option<ObjectID>,
+        /// Maximum item returned per page
         #[clap(long, default_value = "50")]
         limit: usize,
     },
