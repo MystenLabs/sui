@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
+import { toast } from 'react-hot-toast';
 
+import FaucetMessageInfo from '../message-info';
+import { useFaucetMutation, useIsFaucetMutating } from '../useFaucetMutation';
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
 import Button from '_app/shared/button';
-import { requestGas } from '_app/shared/faucet/actions';
 import Icon, { SuiIcons } from '_components/icon';
-import { useAppDispatch, useAppSelector } from '_hooks';
+import { useAppSelector } from '_hooks';
 import { trackEvent } from '_shared/plausible';
 
 import type { ButtonProps } from '_app/shared/button';
@@ -26,18 +28,26 @@ function FaucetRequestButton({
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name;
     const showFaucetRequestButton = API_ENV.customRPC !== network;
-    const dispatch = useAppDispatch();
-    const loading = useAppSelector(({ faucet }) => faucet.loading);
+    const mutation = useFaucetMutation();
+    const isMutating = useIsFaucetMutating();
     return showFaucetRequestButton ? (
         <Button
             mode={mode}
             onClick={() => {
-                dispatch(requestGas());
+                toast.promise(mutation.mutateAsync(), {
+                    loading: <FaucetMessageInfo loading />,
+                    success: (totalReceived) => (
+                        <FaucetMessageInfo totalReceived={totalReceived} />
+                    ),
+                    error: (error) => (
+                        <FaucetMessageInfo error={error.message} />
+                    ),
+                });
                 trackEvent('RequestGas', {
                     props: { source: trackEventSource, networkName },
                 });
             }}
-            disabled={loading}
+            disabled={mutation.isLoading || isMutating}
         >
             <Icon icon={SuiIcons.Download} className={cl(st.icon, st[mode])} />
             Request {networkName} SUI Tokens
