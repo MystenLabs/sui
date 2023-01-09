@@ -17,6 +17,8 @@ module risk_management::transaction {
     const EFinalApproverMustSignLast : u64 = 5;
     const ENotSpendersFinalApprover : u64 = 6;
 
+    /// A Transaction Request is created by a spender and hold all the required information
+    /// for an approver to determine if its eligible to be approved or rejected 
     struct TransactionRequest has key, store {
         id: UID,
         amount: u64,
@@ -29,6 +31,8 @@ module risk_management::transaction {
         approved_by: vector<address>,
     }
 
+    /// Transaction Approval is the key that an approver sends to the spender in order
+    /// to execute the transaction requested
     struct TransactionApproval has key, store {
         id: UID,
         transaction_id: ID,
@@ -38,6 +42,7 @@ module risk_management::transaction {
         approvers: vector<address>,
     }
 
+    /// Initiate transaction can only be called by a spender to share the Transaction Request.
     entry fun initiate_transaction(
         spender_cap: &SpenderCap,
         registry: &RolesRegistry,
@@ -62,6 +67,7 @@ module risk_management::transaction {
         })
     }
 
+    /// A Transaction Request can only be approved by approvers.
     entry fun approve_request(
         approver_cap: &ApproverCap,
         tx_request: &mut TransactionRequest,
@@ -74,6 +80,7 @@ module risk_management::transaction {
             assert!(option::get_with_default(&tx_request.final_approver, @0x0) != tx_context::sender(ctx), 5);
             vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx));
         } else {
+            // if there is a final approver, assert that is the last to approve the request
             if (option::is_some(&tx_request.final_approver)) {
                 assert!(&tx_context::sender(ctx) == option::borrow(&tx_request.final_approver), 6);
             };
@@ -99,6 +106,7 @@ module risk_management::transaction {
         // transaction_id: object::uid_to_inner(&tx_request.id) got rejected
     }
 
+    /// Once the spender gets the Transaction Approval, the transaction can be executed
     entry fun execute_transaction(
         spender_cap: &mut SpenderCap,
         tx_approval: TransactionApproval,

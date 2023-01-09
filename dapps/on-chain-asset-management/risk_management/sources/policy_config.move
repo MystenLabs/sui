@@ -16,33 +16,41 @@ module risk_management::policy_config {
     const ENotOriginalOwnerOfCapability : u64 = 1;
     const EFinalApproverDoesNotExist : u64 = 2;
 
+    /// Administrator capability holder has the right to 
+    /// create and assign spender and approver roles.
     struct AdministratorCap has key, store {
         id: UID,
         original_owner: address,
     }
-
+    
+    /// Spender capability holder has the right to initiate a transaction request.
+    /// Spender's policy is specified by administrator once the capability is created
     struct SpenderCap has key, store {
         id: UID,
         original_owner: address,
         policy: Policy,
     }
 
+    /// Approver capability holder has the right to approve transaction requests.
     struct ApproverCap has key, store {
         id: UID,
         original_owner: address,
     }
 
+    /// Assets struct contains the balance of the foundation, which is used for transactions.
     struct Assets has key {
         id: UID,
         foundation_balance: Balance<SUI>,
     }
 
+    /// Policy is stored inside Spender capability to specify the thresholds of a spender.
     struct Policy has store {
         amount_limit: u64,
         time_limit: u64,
         final_approver: Option<address>,
     }
 
+    /// Roles Registry is where the addresses that are assigned to a specific role.
     struct RolesRegistry has key, store {
         id: UID,
         administrators: vector<address>,
@@ -51,6 +59,10 @@ module risk_management::policy_config {
     }
 
     // ======== Functions =========
+    
+    /// Once the smart contract is published, the publisher gets an Administrator capability.
+    /// A Roles Registry object is shared containing the created administrator.
+    /// Assets struct is also shared containing a balance with zero amount. 
     fun init(ctx: &mut TxContext) {
         transfer::transfer(AdministratorCap{id: object::new(ctx), original_owner: tx_context::sender(ctx)}, 
                           tx_context::sender(ctx)
@@ -77,6 +89,8 @@ module risk_management::policy_config {
 
     // }
 
+    /// Create spender function can only be called by an administrator, specifying the spender's thresholds.
+    /// When a spender is created the Roles Registry gets updated.
     entry fun create_spender(
         admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
@@ -96,6 +110,8 @@ module risk_management::policy_config {
         vec::push_back(&mut reg.spenders, recipient);
     }
 
+    /// Same function as above, with the difference 
+    /// that a final_approver is specified for this kind of spender.
     entry fun create_spender_with_final_approver(
         admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
@@ -117,6 +133,8 @@ module risk_management::policy_config {
         vec::push_back(&mut reg.spenders, recipient);
     }
 
+    /// Create approver function can only be called by an administrator.
+    /// When a approver is created the Roles Registry gets updated.
     entry fun create_approver(
         admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
@@ -132,6 +150,7 @@ module risk_management::policy_config {
         vec::push_back(&mut reg.approvers, recipient);
     }
 
+    /// Function that can be called by whoever to top up foundation's balance.
     entry fun top_up(
         assets: &mut Assets,
         coin: Coin<SUI>,
