@@ -113,8 +113,6 @@ impl SqlEventStore {
         // TODO: configure other SQLite options
         let mut options = SqliteConnectOptions::new()
             .filename(db_path)
-            // SQLite turns off WAL by default and uses DELETE journaling.  WAL is at least 2x faster.
-            .journal_mode(SqliteJournalMode::Wal)
             // Normal vs Full sync mode also speeds up writes
             .synchronous(SqliteSynchronous::Normal)
             // Minimal journal size and frequent autocheckpoints help prevent giant WALs
