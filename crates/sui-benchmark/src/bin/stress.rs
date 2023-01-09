@@ -84,6 +84,10 @@ struct Opts {
     /// use a LocalValidatorAggregatorProxy.
     #[clap(long, parse(try_from_str), default_value = "false", global = true)]
     pub use_fullnode_for_execution: bool,
+    /// True to use FullNodeReconfigObserver,
+    /// Otherwise use EmbeddedReconfigObserver,
+    #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+    pub use_fullnode_for_reconfig: bool,
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     run_spec: RunSpec,
@@ -266,7 +270,7 @@ async fn main() -> Result<()> {
             LocalValidatorAggregatorProxy::from_network_config(
                 &configs,
                 &registry,
-                &fullnode_rpc_url,
+                Some(&fullnode_rpc_url),
             )
             .await,
         );
@@ -282,19 +286,36 @@ async fn main() -> Result<()> {
                 });
         });
 
-        let fullnode_rpc_url = opts
-            .fullnode_rpc_address
-            .expect("Remote benchmark requires fullnode-rpc-url");
-        info!("Fullnode rpc url: {fullnode_rpc_url}");
+        let fullnode_rpc_url = opts.fullnode_rpc_address;
+        info!("Fullnode rpc url: {:?}", fullnode_rpc_url);
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if opts.use_fullnode_for_execution {
-            info!("Using FullNodeProxy: {fullnode_rpc_url}..");
-            Arc::new(FullNodeProxy::from_url(&fullnode_rpc_url).await.unwrap())
+            info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
+            Arc::new(
+                FullNodeProxy::from_url(&fullnode_rpc_url.expect(
+                    "fullnode-rpc-url is required when use-fullnode-for-execution is true",
+                ))
+                .await
+                .unwrap(),
+            )
         } else {
+            info!("Using LocalValidatorAggregatorProxy");
+            let reconfig_fullnode_rpc_url =
+                if opts.use_fullnode_for_reconfig {
+                    Some(fullnode_rpc_url.expect(
+                        "fullnode-rpc-url is required when use-fullnode-for-reconfig is true",
+                    ))
+                } else {
+                    None
+                };
             let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
             let genesis = genesis.genesis()?;
             Arc::new(
-                LocalValidatorAggregatorProxy::from_genesis(genesis, &registry, &fullnode_rpc_url)
-                    .await,
+                LocalValidatorAggregatorProxy::from_genesis(
+                    genesis,
+                    &registry,
+                    reconfig_fullnode_rpc_url.as_deref(),
+                )
+                .await,
             )
         };
         info!(
