@@ -21,6 +21,7 @@ use std::sync::Arc;
 use sui_types::crypto::NetworkKeyPair;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 pub struct NarwhalStartMessage<State> {
     pub committee: Arc<Committee>,
@@ -61,6 +62,16 @@ pub async fn run_narwhal_manager<State, TxValidator>(
     State: ExecutionState + Send + Sync + 'static,
     TxValidator: TransactionValidator,
 {
+    // Create the Narwhal Primary with configuration
+    let primary_node = PrimaryNode::new(
+        config.parameters.clone(),
+        true,
+        config.registry_service.clone(),
+    );
+
+    // Create Narwhal Workers with configuration
+    let worker_nodes = WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
+
     loop {
         // Copy the config for this iteration of the loop
         let mut id_keypair_copy = Vec::new();
@@ -78,6 +89,8 @@ pub async fn run_narwhal_manager<State, TxValidator>(
             None => break,
         };
 
+        tracing::info!("Received start signal for epoch {}", committee.epoch);
+
         let config_copy = NarwhalConfiguration {
             primary_keypair: config.primary_keypair.copy(),
             network_keypair: config.network_keypair.copy(),
@@ -88,33 +101,44 @@ pub async fn run_narwhal_manager<State, TxValidator>(
             registry_service: config.registry_service.clone(),
         };
 
-        let (primary_node, worker_nodes) =
-            start_narwhal(config_copy, committee, shared_worker_cache, execution_state).await;
+        start_narwhal(
+            config_copy,
+            committee,
+            shared_worker_cache,
+            execution_state,
+            &primary_node,
+            &worker_nodes,
+        )
+        .await;
 
         // Wait for instruction to stop the instance of narwhal
         match tr_stop.recv().await {
-            Some(_) => shutdown_narwhal(primary_node, worker_nodes).await,
+            Some(_) => shutdown_narwhal(&primary_node, &worker_nodes).await,
             None => break,
         };
     }
 }
 
-async fn shutdown_narwhal(primary_node: PrimaryNode, worker_nodes: WorkerNodes) {
+#[instrument(level = "info", skip_all)]
+async fn shutdown_narwhal(primary_node: &PrimaryNode, worker_nodes: &WorkerNodes) {
     tracing::info!("Shutting down narwhal");
 
     primary_node.shutdown().await;
     worker_nodes.shutdown().await;
 
     tracing::info!("Narwhal shutdown is complete");
+    // TODO: clean up previous storage disk as is no longer needed
 }
 
+#[instrument(level = "info", skip_all)]
 async fn start_narwhal<State, TxValidator>(
     config: NarwhalConfiguration<TxValidator>,
     committee: Arc<Committee>,
     worker_cache: SharedWorkerCache,
     execution_state: Arc<State>,
-) -> (PrimaryNode, WorkerNodes)
-where
+    primary_node: &PrimaryNode,
+    worker_nodes: &WorkerNodes,
+) where
     State: ExecutionState + Send + Sync + 'static,
     TxValidator: TransactionValidator,
 {
@@ -128,12 +152,6 @@ where
     tracing::info!("Starting up narwhal");
 
     // Start Narwhal Primary with configuration
-    let primary_node = PrimaryNode::new(
-        config.parameters.clone(),
-        true,
-        config.registry_service.clone(),
-    );
-
     primary_node
         .start(
             config.primary_keypair.copy(),
@@ -147,7 +165,6 @@ where
         .expect("Unable to start Narwhal Primary");
 
     // Start Narwhal Workers with configuration
-    let worker_nodes = WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
     worker_nodes
         .start(
             name,
@@ -161,6 +178,4 @@ where
         .expect("Unable to start Narwhal Worker");
 
     tracing::info!("Starting up narwhal is complete");
-
-    (primary_node, worker_nodes)
 }

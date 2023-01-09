@@ -12,7 +12,7 @@ use std::sync::Arc;
 use storage::NodeStorage;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{info, instrument};
 use types::PreSubscribedBroadcastSender;
 use worker::metrics::{initialise_metrics, Metrics};
 use worker::{TransactionValidator, Worker, NUM_SHUTDOWN_RECEIVERS};
@@ -35,6 +35,7 @@ pub struct WorkerNodeInner {
 impl WorkerNodeInner {
     // Starts the worker node with the provided info. If the node is already running then this
     // method will return an error instead.
+    #[instrument(level = "info", skip_all)]
     async fn start(
         &mut self,
         // The primary's public key
@@ -97,6 +98,7 @@ impl WorkerNodeInner {
     // Will shutdown the worker node and wait until the node has shutdown by waiting on the
     // underlying components handles. If the node was not already running then the
     // method will return immediately.
+    #[instrument(level = "info", skip_all)]
     async fn shutdown(&mut self) {
         if !self.is_running().await {
             return;
@@ -234,6 +236,7 @@ impl WorkerNodes {
         }
     }
 
+    #[instrument(level = "info", skip_all)]
     pub async fn start(
         &self,
         // The primary's public key of this authority.
@@ -302,6 +305,7 @@ impl WorkerNodes {
     }
 
     // Shuts down all the workers
+    #[instrument(level = "info", skip_all)]
     pub async fn shutdown(&self) {
         for (key, worker) in self.workers.load_full().as_ref() {
             info!("Shutting down worker {}", key);
