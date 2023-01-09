@@ -505,6 +505,7 @@ impl RpcExampleProvider {
                     storage_cost: 100,
                     storage_rebate: 10,
                 },
+                modified_at_versions: vec![],
                 shared_objects: vec![],
                 transaction_digest: TransactionDigest::new(self.rng.gen()),
                 created: vec![],

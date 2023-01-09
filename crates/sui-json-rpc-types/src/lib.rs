@@ -1870,6 +1870,10 @@ pub struct SuiTransactionEffects {
     // The status of the execution
     pub status: SuiExecutionStatus,
     pub gas_used: SuiGasCostSummary,
+    // The version that every modified (mutated or deleted) object had before it was modified by
+    // this transaction.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shared_objects: Vec<SuiObjectRef>,
@@ -1916,6 +1920,7 @@ impl SuiTransactionEffects {
         Ok(Self {
             status: effect.status.into(),
             gas_used: effect.gas_used.into(),
+            modified_at_versions: effect.modified_at_versions,
             shared_objects: to_sui_object_ref(effect.shared_objects),
             transaction_digest: effect.transaction_digest,
             created: to_owned_ref(effect.created),
