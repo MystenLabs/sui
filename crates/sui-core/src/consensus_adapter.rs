@@ -37,7 +37,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::{timeout, Duration};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -301,6 +301,11 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
+            info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
+            epoch_store.record_epoch_pending_certs_process_time_metric();
+        }
+
         let _guard = InflightDropGuard::acquire(&self);
         let processed_waiter = epoch_store
             .consensus_message_processed_notify(transaction.key())

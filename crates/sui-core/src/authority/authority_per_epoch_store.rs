@@ -26,7 +26,7 @@ use sui_types::messages::{
     SenderSignedData, SignedTransactionEffects, TransactionEffects, TrustedCertificate,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
@@ -48,6 +48,7 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
+use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
 
@@ -95,6 +96,15 @@ pub struct AuthorityPerEpochStore {
     /// crashes.
     wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
 
+    /// The moment when the current epoch started locally on this validator. Note that this
+    /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
+    /// ok because this is used for metric purposes and we could tolerate some skews occasionally.
+    epoch_open_time: Instant,
+
+    /// The moment when epoch is closed. We don't care much about crash recovery because it's
+    /// a metric that doesn't have to be available for each epoch, and it's only used during
+    /// the last few seconds of an epoch.
+    epoch_close_time: RwLock<Option<Instant>>,
     metrics: Arc<EpochMetrics>,
 }
 
@@ -232,6 +242,7 @@ impl AuthorityPerEpochStore {
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
     ) -> Arc<Self> {
+        let current_time = Instant::now();
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
@@ -265,12 +276,16 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             wal,
+            epoch_open_time: current_time,
+            epoch_close_time: Default::default(),
             metrics,
         })
     }
 
     pub fn new_at_next_epoch(&self, new_committee: Committee) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
+        self.record_reconfig_halt_duration_metric();
+        self.record_epoch_total_duration_metric();
         self.metrics.current_epoch.set(new_committee.epoch as i64);
         Self::new(
             new_committee,
@@ -1012,7 +1027,6 @@ impl AuthorityPerEpochStore {
         self.reconfig_state_mem.write()
     }
 
-    // This method can only be called from ConsensusAdapter::begin_reconfiguration
     pub fn close_user_certs(
         &self,
         mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
@@ -1020,6 +1034,13 @@ impl AuthorityPerEpochStore {
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
+
+        // Set epoch_close_time for metric purpose.
+        let mut epoch_close_time = self.epoch_close_time.write();
+        if epoch_close_time.is_none() {
+            // Only update it the first time epoch is closed.
+            *epoch_close_time = Some(Instant::now());
+        }
     }
 
     /// Notify epoch is terminated, can only be called once on epoch store
@@ -1244,6 +1265,12 @@ impl AuthorityPerEpochStore {
                 None => false,
             };
             checkpoint_service.notify_checkpoint(self, index, roots, final_checkpoint)?;
+            if final_checkpoint {
+                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                self.record_end_of_message_quorum_time_metric();
+            } else {
+                self.record_epoch_first_checkpoint_creation_time_metric();
+            }
         }
         self.record_checkpoint_boundary(round)
     }
@@ -1330,6 +1357,58 @@ impl AuthorityPerEpochStore {
         self.tables
             .pending_checkpoint_signatures
             .insert(&(checkpoint_seq, index), info)
+    }
+
+    pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_pending_certs_processed_time_since_epoch_close_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    fn record_end_of_message_quorum_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_end_of_publish_quorum_time_since_epoch_close_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    pub(crate) fn record_epoch_last_checkpoint_creation_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_last_transaction_cert_creation_time_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    pub(crate) fn record_epoch_reconfig_start_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_reconfig_start_time_since_epoch_close_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    fn record_reconfig_halt_duration_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_validator_halt_duration_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    fn record_epoch_first_checkpoint_creation_time_metric(&self) {
+        self.metrics
+            .epoch_first_checkpoint_ready_time_since_epoch_begin_ms
+            .report(self.epoch_open_time.elapsed().as_millis() as u64);
+    }
+
+    fn record_epoch_total_duration_metric(&self) {
+        self.metrics
+            .epoch_total_duration
+            .report(self.epoch_open_time.elapsed().as_millis() as u64);
     }
 }
 

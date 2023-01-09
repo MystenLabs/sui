@@ -502,6 +502,7 @@ impl CheckpointExecutorEventLoop {
             .load_epoch_store(current_epoch)
             .expect("Current epoch does not epoch store epoch");
 
+        epoch_store.record_epoch_reconfig_start_time_metric();
         let _ = self.end_of_epoch_event_sender.send(end_of_epoch_message);
         epoch_store.wait_epoch_terminated().await;
 

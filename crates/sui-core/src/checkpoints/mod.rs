@@ -364,6 +364,11 @@ impl CheckpointBuilder {
             .create_checkpoint(sorted, last_checkpoint_of_epoch)
             .await?;
         self.write_checkpoint(height, new_checkpoint).await?;
+        if last_checkpoint_of_epoch {
+            info!(epoch=?self.epoch_store.epoch(), "Last checkpoint of the epoch created");
+            self.epoch_store
+                .record_epoch_last_checkpoint_creation_time_metric();
+        }
         Ok(())
     }
 
