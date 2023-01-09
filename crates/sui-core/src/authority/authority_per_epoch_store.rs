@@ -36,6 +36,7 @@ use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
+use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
@@ -93,6 +94,8 @@ pub struct AuthorityPerEpochStore {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
     wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
+
+    metrics: Arc<EpochMetrics>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -223,7 +226,12 @@ impl AuthorityEpochTables {
 }
 
 impl AuthorityPerEpochStore {
-    pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Arc<Self> {
+    pub fn new(
+        committee: Committee,
+        parent_path: &Path,
+        db_options: Option<Options>,
+        metrics: Arc<EpochMetrics>,
+    ) -> Arc<Self> {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
@@ -257,7 +265,18 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             wal,
+            metrics,
         })
+    }
+
+    pub fn new_at_next_epoch(&self, new_committee: Committee) -> Arc<Self> {
+        assert_eq!(self.epoch() + 1, new_committee.epoch);
+        Self::new(
+            new_committee,
+            &self.parent_path,
+            self.db_options.clone(),
+            self.metrics.clone(),
+        )
     }
 
     pub fn wal(
@@ -273,14 +292,6 @@ impl AuthorityPerEpochStore {
 
     pub fn epoch(&self) -> EpochId {
         self.committee.epoch
-    }
-
-    pub fn parent_path(&self) -> &Path {
-        &self.parent_path
-    }
-
-    pub fn db_options(&self) -> Option<Options> {
-        self.db_options.clone()
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
