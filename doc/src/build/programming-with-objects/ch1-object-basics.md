@@ -83,9 +83,9 @@ public fun get_color(self: &ColorObject): (u8, u8, u8) {
 }
 ```
 
-Find the full code online in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
+Find the full code in the Sui repo under `sui_programmability/examples/objects_tutorial/sources/` in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
 
-To compile the code, make sure you have [installed Sui](../install.md) so that `sui` is in `PATH`. In the code root directory (where `Move.toml` is), run:
+To compile the code, make sure you have [installed Sui](../install.md) so that `sui` is in `PATH`. In the code root directory `(../examples/objects_tutorial/)` (where `Move.toml` is), run:
 ```
 sui move build
 ```
