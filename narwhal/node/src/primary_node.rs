@@ -16,7 +16,7 @@ use std::sync::Arc;
 use storage::NodeStorage;
 use tokio::sync::{oneshot, watch, RwLock};
 use tokio::task::JoinHandle;
-use tracing::{debug, info};
+use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender, Round,
 };
@@ -46,6 +46,7 @@ impl PrimaryNodeInner {
 
     // Starts the primary node with the provided info. If the node is already running then this
     // method will return an error instead.
+    #[instrument(level = "info", skip_all)]
     async fn start<State>(
         &mut self, // The private-public key pair of this authority.
         keypair: KeyPair,
@@ -102,13 +103,14 @@ impl PrimaryNodeInner {
     // Will shutdown the primary node and wait until the node has shutdown by waiting on the
     // underlying components handles. If the node was not already running then the
     // method will return immediately.
+    #[instrument(level = "info", skip_all)]
     async fn shutdown(&mut self) {
         if !self.is_running().await {
             return;
         }
 
         // send the shutdown signal to the node
-        info!("Sending shutdown message to narwhal");
+        info!("Sending shutdown message to primary node");
 
         if let Some(tx_shutdown) = self.tx_shutdown.as_ref() {
             tx_shutdown
