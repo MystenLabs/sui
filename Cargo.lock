@@ -1179,16 +1179,6 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bbc13bf6290a6b202cc3efb36f7ec2b739a80634215630c8053a313edf6abef"
-dependencies = [
- "smallvec",
- "target-lexicon",
-]
-
-[[package]]
-name = "cfg-expr"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a327683d7499ecc47369531a679fe38acdd300e09bf8c852d08b1e10558622bd"
@@ -3140,34 +3130,6 @@ name = "hakari"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dd93cb6139c6ed69389d0ad541b521a6f2d6cf2cdbf20fe2bb9a46a11ccdd34"
-dependencies = [
- "atomicwrites",
- "bimap",
- "camino",
- "cfg-if",
- "debug-ignore",
- "diffy",
- "guppy",
- "guppy-workspace-hack",
- "include_dir",
- "indenter",
- "itertools",
- "owo-colors",
- "pathdiff",
- "rayon",
- "serde 1.0.152",
- "tabular",
- "target-spec",
- "toml",
- "toml_edit",
- "twox-hash",
-]
-
-[[package]]
-name = "hakari"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e0ce12f9db3b92519952b70ad25fce9ee6f7e63da602b1d2bd3f637aa61cf6a"
 dependencies = [
  "atomicwrites",
  "bimap",
@@ -5596,7 +5558,7 @@ dependencies = [
  "debug-ignore",
  "determinator",
  "guppy",
- "hakari 0.11.1",
+ "hakari",
  "hex",
  "once_cell",
  "serde 1.0.152",
@@ -9445,7 +9407,7 @@ version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb0303f2cecb4171c439135b28c33fe9da7b9fd7816fe674761834da70c9778"
 dependencies = [
- "cfg-expr 0.13.0",
+ "cfg-expr",
  "guppy-workspace-hack",
  "serde 1.0.152",
  "target-lexicon",
@@ -11004,7 +10966,7 @@ dependencies = [
  "cbc",
  "cc",
  "cexpr",
- "cfg-expr 0.12.0",
+ "cfg-expr",
  "cfg-if",
  "chrono",
  "chrono-tz",
@@ -11176,7 +11138,7 @@ dependencies = [
  "guppy-summaries",
  "guppy-workspace-hack",
  "h2",
- "hakari 0.12.0",
+ "hakari",
  "half",
  "hashbrown 0.11.2",
  "hashbrown 0.12.3",
