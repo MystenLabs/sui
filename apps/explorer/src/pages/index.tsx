@@ -59,11 +59,6 @@ export const router = sentryCreateBrowserRouter([
         path: '/addresses/:id',
         element: <RedirectWithId base="address" />,
     },
-    {
-        path: '/validator/:id',
-        element: <RedirectWithId base="validators" />,
-    },
-
     // 404 route:
     { path: '*', element: <Navigate to="/" replace /> },
 ]);
