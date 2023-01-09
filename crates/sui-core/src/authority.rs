@@ -57,6 +57,9 @@ use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -80,6 +83,7 @@ use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
 use crate::authority_aggregator::TransactionCertifier;
+use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
@@ -409,6 +413,7 @@ pub struct AuthorityState {
 
     pub event_handler: Option<Arc<EventHandler>>,
     pub transaction_streamer: Option<Arc<TransactionStreamer>>,
+    checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -1530,6 +1535,7 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         transaction_streamer: Option<Arc<TransactionStreamer>>,
+        checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
     ) -> Arc<Self> {
         let native_functions =
@@ -1566,6 +1572,7 @@ impl AuthorityState {
             module_cache,
             event_handler,
             transaction_streamer,
+            checkpoint_store,
             committee_store,
             transaction_manager,
             metrics,
@@ -1632,6 +1639,7 @@ impl AuthorityState {
             None,
         ));
 
+        let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
         let index_store = Some(Arc::new(IndexStore::new(path.join("indexes"))));
 
         // add the object_basics module
@@ -1644,6 +1652,7 @@ impl AuthorityState {
             index_store,
             None,
             None,
+            checkpoint_store,
             &Registry::new(),
         )
         .await;
@@ -2064,6 +2073,69 @@ impl AuthorityState {
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
         self.get_indexes()?
             .get_transactions(query, cursor, limit, reverse)
+    }
+
+    fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {
+        self.checkpoint_store.clone()
+    }
+
+    pub fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, anyhow::Error> {
+        self.get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()?
+            .ok_or_else(|| anyhow!("Latest checkpoint sequence number not found"))
+    }
+
+    pub fn get_checkpoint_summary(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<CheckpointSummary, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_sequence_number(sequence_number)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().summary),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for sequence number {}",
+                sequence_number
+            )),
+        }
+    }
+
+    pub fn get_checkpoint_contents(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> Result<CheckpointContents, anyhow::Error> {
+        self.get_checkpoint_store()
+            .get_checkpoint_contents(&digest)?
+            .ok_or_else(|| anyhow!("Checkpoint contents not found for digest: {:?}", digest))
+    }
+
+    pub fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<CheckpointContents, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_sequence_number(sequence_number)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => {
+                let content_digest = verified_checkpoint.into_inner().content_digest();
+                self.get_checkpoint_store()
+                    .get_checkpoint_contents(&content_digest)?
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Checkpoint contents not found for sequence number: {}",
+                            sequence_number
+                        )
+                    })
+            }
+            None => Err(anyhow!(
+                "Verified checkpoint not found for sequence number {}",
+                sequence_number
+            )),
+        }
     }
 
     pub async fn get_timestamp_ms(

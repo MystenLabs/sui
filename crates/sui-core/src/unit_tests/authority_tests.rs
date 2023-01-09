@@ -2426,6 +2426,10 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let epoch_store = AuthorityPerEpochStore::new(committee, &epoch_store_path, None);
 
+        let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&checkpoint_store_path).unwrap();
+        let checkpoint_store = CheckpointStore::new(&checkpoint_store_path);
+
         AuthorityState::new(
             name,
             secrete,
@@ -2435,6 +2439,7 @@ async fn test_authority_persist() {
             None,
             None,
             None,
+            checkpoint_store,
             &prometheus::Registry::new(),
         )
         .await

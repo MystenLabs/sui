@@ -28,6 +28,9 @@ use sui_types::event::EventID;
 use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
@@ -281,6 +284,31 @@ pub trait RpcFullNodeReadApi {
         /// the version of the queried object. If None, default to the latest known version
         version: SequenceNumber,
     ) -> RpcResult<GetPastObjectDataResponse>;
+
+    /// Return the sequence number of the latest checkpoint that has been executed
+    #[method(name = "getLatestCheckpointSequenceNumber")]
+    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+
+    /// Return a checkpoint summary based on a checkpoint sequence number
+    #[method(name = "getCheckpointSummary")]
+    fn get_checkpoint_summary(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointSummary>;
+
+    /// Return contents of a checkpoint, namely a list of execution digests
+    #[method(name = "getCheckpointContents")]
+    fn get_checkpoint_contents(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> RpcResult<CheckpointContents>;
+
+    /// Return contents of a checkpoint based on its sequence number
+    #[method(name = "getCheckpointContentsBySequenceNumber")]
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointContents>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]

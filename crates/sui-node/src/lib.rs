@@ -200,6 +200,7 @@ impl SuiNode {
             index_store.clone(),
             event_store,
             transaction_streamer,
+            checkpoint_store.clone(),
             &prometheus_registry,
         )
         .await;
