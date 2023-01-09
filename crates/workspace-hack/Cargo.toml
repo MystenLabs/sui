@@ -241,7 +241,7 @@ guppy = { version = "0.15", default-features = false, features = ["guppy-summari
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
-hakari = { version = "0.11", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
+hakari = { version = "0.12", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
@@ -906,7 +906,7 @@ guppy = { version = "0.15", default-features = false, features = ["guppy-summari
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
-hakari = { version = "0.11", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
+hakari = { version = "0.12", default-features = false, features = ["cli-support", "include_dir", "owo-colors", "serde", "tabular", "toml"] }
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
