@@ -30,10 +30,10 @@ const selections = [
 const SelectPage = () => {
     return (
         <>
-            <Heading variant="heading2" color="gray-90" as="h1" weight="bold">
+            <Heading variant="heading1" color="gray-90" as="h2" weight="bold">
                 New to Sui Wallet?
             </Heading>
-            <div className="flex flex-col flex-nowrap gap-7.5 mt-7.5">
+            <div className="flex flex-col flex-nowrap gap-7.5 mt-7">
                 {selections.map((aSelection) => (
                     <div
                         className={cl(

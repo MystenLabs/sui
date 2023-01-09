@@ -21,6 +21,13 @@ module.exports = {
                 7.5: '1.875rem',
                 8: '2rem',
             },
+            boxShadow: {
+                'wallet-content': '0px -5px 20px 5px rgba(160, 182, 195, 0.15)',
+                button: '0px 1px 2px rgba(16, 24, 40, 0.05)',
+            },
+            borderRadius: {
+                20: '1.25rem',
+            },
             height: {
                 header: '68px',
             },

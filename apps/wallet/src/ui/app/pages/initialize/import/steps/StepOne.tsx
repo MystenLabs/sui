@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { Formik, Form } from 'formik';
 import { useNavigate } from 'react-router-dom';
 import * as Yup from 'yup';
@@ -14,8 +13,6 @@ import Loading from '_components/loading';
 import { mnemonicValidation } from '_pages/initialize/import/validation';
 
 import type { StepProps } from '.';
-
-import st from './StepOne.module.scss';
 
 const validationSchema = Yup.object({
     mnemonic: mnemonicValidation,
@@ -61,7 +58,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                 );
                                 handleBlur(e);
                             }}
-                            className={cl(st.mnemonic, 'text-steel-dark')}
+                            className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-[15px] bg-white border border-solid border-[#EBECED] shadow-button leading-snug resize-none min-h-[100px] placeholder:text-steel-dark"
                             placeholder="Enter your 12-word recovery phrase"
                             name="mnemonic"
                             disabled={isSubmitting}
@@ -70,22 +67,22 @@ export default function StepOne({ next, data, mode }: StepProps) {
                             <Alert>{errors?.mnemonic}</Alert>
                         )}
                     </FieldLabel>
-                    <div className={st.fill} />
-                    <div className={st.actionsContainer}>
+                    <div className="flex-1" />
+                    <div className="flex flex-nowrap items-center mt-5 gap-2.5">
                         {mode === 'forgot' ? (
                             <Button
                                 type="button"
                                 disabled={isSubmitting}
                                 mode="neutral"
                                 size="large"
-                                className={st.btn}
+                                className="flex-1"
                                 onClick={() => {
                                     navigate(-1);
                                 }}
                             >
                                 <Icon
                                     icon={SuiIcons.ArrowLeft}
-                                    className={st.btnIcon}
+                                    className="text-subtitleSmallExtra font-light"
                                 />
                                 Back
                             </Button>
@@ -101,7 +98,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                 {mode === 'forgot' ? 'Next' : 'Continue'}
                                 <Icon
                                     icon={SuiIcons.ArrowRight}
-                                    className={st.btnIcon}
+                                    className="text-subtitleSmallExtra font-light"
                                 />
                             </Loading>
                         </Button>

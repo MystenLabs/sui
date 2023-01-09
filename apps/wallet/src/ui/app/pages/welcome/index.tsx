@@ -21,7 +21,7 @@ const WelcomePage = () => {
         <PageLayout forceFullscreen={true}>
             <Loading loading={checkingInitialized}>
                 <div className="flex flex-col flex-nowrap items-center justify-center">
-                    <div className={st.content}>
+                    <div className="pt-6 rounded-20 bg-alice-blue shadow-wallet-content flex flex-col flex-nowrap items-center justify-center w-popup-width h-popup-height">
                         <BottomMenuLayout>
                             <Content className="flex flex-col flex-nowrap items-center p-7.5 pb-0">
                                 <Logo
