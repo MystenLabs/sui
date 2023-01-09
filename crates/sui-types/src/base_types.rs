@@ -27,6 +27,7 @@ use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
+use crate::multisig::MultiPublicKey;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
 use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
@@ -250,6 +251,25 @@ impl From<&PublicKey> for SuiAddress {
         let mut hasher = Sha3_256::default();
         hasher.update([pk.flag()]);
         hasher.update(pk);
+        let g_arr = hasher.finalize();
+
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+        SuiAddress(res)
+    }
+}
+
+/// A Multisig address is the first 20 bytes of `threshold || pk_1 || weight_1 || ... || pk_n || weight_n`
+/// of all participating public keys and its weight.  
+impl From<MultiPublicKey> for SuiAddress {
+    fn from(multi_pk: MultiPublicKey) -> Self {
+        let mut hasher = Sha3_256::default();
+        hasher.update(multi_pk.threshold().to_le_bytes());
+        multi_pk.pubkeys().iter().for_each(|(pk, w)| {
+            hasher.update(pk.as_ref());
+            hasher.update(w.to_le_bytes());
+        });
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];

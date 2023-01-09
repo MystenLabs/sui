@@ -828,7 +828,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     bad_signature_transfer_transaction
         .data_mut_for_testing()
         .tx_signature =
-        Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key);
+        Signature::new_secure(&transfer_transaction.data().intent_message, &unknown_key).into();
 
     assert!(client
         .handle_transaction(bad_signature_transfer_transaction)

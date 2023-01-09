@@ -9,17 +9,17 @@ use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
+use super::*;
 use crate::base_types::random_object_ref;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
+use crate::crypto::SuiSignature;
 use crate::crypto::{
     get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::object::Owner;
-
-use super::*;
 
 #[test]
 fn test_signed_values() {
@@ -665,11 +665,12 @@ fn verify_sender_signature_correctly_with_flag() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
+    let s = match &transaction.data().tx_signature {
+        GenericSignature::Signature(s) => s,
+        _ => panic!("invalid"),
+    };
     // signature contains the correct Secp256k1 flag
-    assert_eq!(
-        transaction.data().tx_signature.scheme().flag(),
-        Secp256k1SuiSignature::SCHEME.flag()
-    );
+    assert_eq!(s.scheme().flag(), Secp256k1SuiSignature::SCHEME.flag());
 
     // authority accepts signs tx after verification
     assert!(signed_tx
@@ -688,12 +689,13 @@ fn verify_sender_signature_correctly_with_flag() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
+    let s = match &transaction_1.data().tx_signature {
+        GenericSignature::Signature(s) => s,
+        _ => panic!("unexpected signature scheme"),
+    };
 
     // signature contains the correct Ed25519 flag
-    assert_eq!(
-        transaction_1.data().tx_signature.scheme().flag(),
-        Ed25519SuiSignature::SCHEME.flag()
-    );
+    assert_eq!(s.scheme().flag(), Ed25519SuiSignature::SCHEME.flag());
 
     // signature verified
     assert!(signed_tx_1

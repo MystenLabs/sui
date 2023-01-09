@@ -7,11 +7,10 @@ use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
-use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature,
-};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::multisig::GenericSignature;
 use crate::sui_serde::Readable;
 use crate::{
     base_types::AuthorityName,
@@ -443,7 +442,7 @@ pub struct CheckpointContents {
     /// * Genesis checkpoint has transactions but this field is empty.
     /// * Last checkpoint in the epoch will have (last)extra system transaction
     /// in the transactions list not covered in the signatures list
-    user_signatures: Vec<Signature>,
+    user_signatures: Vec<GenericSignature>,
 }
 
 impl CheckpointSignatureMessage {
@@ -465,7 +464,7 @@ impl CheckpointContents {
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<Signature>,
+        signatures: Vec<GenericSignature>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,

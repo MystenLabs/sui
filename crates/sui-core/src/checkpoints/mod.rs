@@ -1236,7 +1236,7 @@ mod tests {
         }
         let all_digests: Vec<_> = store.iter().map(|(k, _v)| *k).collect();
         for digest in all_digests {
-            let signature = Signature::Ed25519SuiSignature(Default::default());
+            let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
                 .epoch_store()
                 .test_insert_user_signature(digest, &signature);

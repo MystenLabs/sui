@@ -1,20 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::fs;
-use std::path::{Path, PathBuf};
-
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use std::fs;
+use std::path::{Path, PathBuf};
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
     write_keypair_to_file,
 };
+use sui_types::crypto::{PublicKey, Signature};
 use sui_types::intent::IntentMessage;
 use sui_types::messages::TransactionData;
+use sui_types::multisig::{
+    GenericSignature, MultiPublicKey, MultiSignature, ThresholdUnit, WeightUnit,
+};
 use tracing::info;
 
 use sui_keys::keystore::{AccountKeystore, Keystore};
@@ -62,6 +64,31 @@ pub enum KeyToolCommand {
     /// to generate protocol, account, worker, network keys in NodeConfig with its expected encoding.
     LoadKeypair {
         file: PathBuf,
+    },
+
+    /// To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64.
+    /// See `keytool list` for example public keys.
+    MultiSigAddress {
+        #[clap(long)]
+        threshold: ThresholdUnit,
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        pks: Vec<PublicKey>,
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        weights: Vec<WeightUnit>,
+    },
+
+    /// Provides a list of signatures (`flag || sig || pk` encoded in Base64), threshold, a list of public keys.
+    /// Returns a valid multisig and its sender address. The result can be used as signature field for `sui client execute-signed-tx`.
+    /// The number of sigs must be greater than the threshold. The number of sigs must be smaller than the number of pks.
+    MultiSigCombinePartialSig {
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        sigs: Vec<Signature>,
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        pks: Vec<PublicKey>,
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        weights: Vec<WeightUnit>,
+        #[clap(long)]
+        threshold: ThresholdUnit,
     },
 }
 
@@ -162,6 +189,44 @@ impl KeyToolCommand {
                         }
                     }
                 }
+            }
+            KeyToolCommand::MultiSigAddress {
+                threshold,
+                pks,
+                weights,
+            } => {
+                let multi_pk = MultiPublicKey::new(pks.clone(), weights.clone(), threshold)?;
+                let address: SuiAddress = multi_pk.into();
+                println!("Multisig address: {address}");
+
+                println!("Participating parties:");
+                println!(
+                    " {0: ^42} | {1: ^50} | {2: ^6}",
+                    "Sui Address", "Public Key (Base64)", "Weight"
+                );
+                println!("{}", ["-"; 100].join(""));
+                for (pk, w) in pks.into_iter().zip(weights.into_iter()) {
+                    println!(
+                        " {0: ^42} | {1: ^45} | {2: ^6}",
+                        Into::<SuiAddress>::into(&pk),
+                        pk.encode_base64(),
+                        w
+                    );
+                }
+            }
+            KeyToolCommand::MultiSigCombinePartialSig {
+                sigs,
+                pks,
+                weights,
+                threshold,
+            } => {
+                let multi_pk = MultiPublicKey::new(pks, weights, threshold)?;
+                let address: SuiAddress = multi_pk.clone().into();
+                let multisig = MultiSignature::combine(sigs, multi_pk)?;
+                let generic_sig: GenericSignature = multisig.into();
+                println!("Multisig address: {address}");
+                println!("Multisig parsed: {:?}", generic_sig);
+                println!("Multisig serialized: {:?}", generic_sig.encode_base64());
             }
         }
 

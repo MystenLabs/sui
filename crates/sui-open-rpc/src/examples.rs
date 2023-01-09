@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
-use fastcrypto::encoding::Base64;
 use fastcrypto::traits::AggregateAuthenticator;
+use fastcrypto::traits::EncodeDecodeBase64;
 use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
@@ -31,7 +31,7 @@ use sui_types::base_types::{
 use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, AuthoritySignature, Signature, SuiAuthorityStrongQuorumSignInfo,
+    AuthorityPublicKeyBytes, AuthoritySignature, SuiAuthorityStrongQuorumSignInfo,
 };
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -39,6 +39,7 @@ use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
+use sui_types::multisig::GenericSignature;
 use sui_types::object::Owner;
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
@@ -173,7 +174,7 @@ impl RpcExampleProvider {
                 "Execute an transaction with serialized signature",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("signature", json!(Base64::from_bytes(signature.as_ref()))),
+                    ("signature", json!(signature.encode_base64())),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -409,7 +410,7 @@ impl RpcExampleProvider {
         &mut self,
     ) -> (
         TransactionData,
-        Signature,
+        GenericSignature,
         SuiAddress,
         ObjectID,
         SuiTransactionResponse,
