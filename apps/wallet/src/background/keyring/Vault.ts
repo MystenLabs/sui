@@ -28,6 +28,9 @@ export type V2DecryptedDataType = {
  * Also provides functionality to create/encrypt/decrypt it.
  */
 export class Vault {
+    public readonly entropy: Uint8Array;
+    public readonly importedKeypairs: Keypair[];
+
     public static async from(
         password: string,
         data: StoredData,
@@ -65,10 +68,10 @@ export class Vault {
         return vault;
     }
 
-    constructor(
-        public readonly entropy: Uint8Array,
-        public readonly importedKeypairs: Keypair[] = []
-    ) {}
+    constructor(entropy: Uint8Array, importedKeypairs: Keypair[] = []) {
+        this.entropy = entropy;
+        this.importedKeypairs = importedKeypairs;
+    }
 
     public async encrypt(password: string) {
         const dataToEncrypt: V2DecryptedDataType = {

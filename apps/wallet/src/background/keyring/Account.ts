@@ -7,19 +7,18 @@ export type AccountType = 'derived' | 'imported';
 
 export class Account {
     #keypair: Keypair;
+    public readonly type: AccountType;
     public readonly derivationPath: string | null;
     public readonly address: SuiAddress;
 
     constructor(
-        type: 'derived',
-        options: { derivationPath: string; keypair: Keypair }
-    );
-    constructor(type: 'imported', options: { keypair: Keypair });
-    constructor(
-        public readonly type: AccountType,
-        options: { derivationPath?: string; keypair: Keypair }
+        options:
+            | { type: 'derived'; derivationPath: string; keypair: Keypair }
+            | { type: 'imported'; keypair: Keypair }
     ) {
-        this.derivationPath = options.derivationPath || null;
+        this.type = options.type;
+        this.derivationPath =
+            options.type === 'derived' ? options.derivationPath : null;
         this.#keypair = options.keypair;
         this.address = this.#keypair.getPublicKey().toSuiAddress();
     }

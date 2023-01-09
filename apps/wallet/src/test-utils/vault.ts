@@ -3,6 +3,10 @@
 
 import { fromExportedKeypair } from '@mysten/sui.js';
 
+import {
+    EPHEMERAL_PASSWORD_KEY,
+    EPHEMERAL_VAULT_KEY,
+} from '_src/background/keyring/VaultStorage';
 import { toEntropy } from '_src/shared/utils/bip39';
 
 import type { Keypair } from '@mysten/sui.js';
@@ -24,11 +28,11 @@ export const testSecp256k1Serialized = Object.freeze({
 } as const);
 export const testSecp256k1 = fromExportedKeypair(testSecp256k1Serialized);
 export const testSecp256k1Address = testSecp256k1.getPublicKey().toSuiAddress();
-type TestDataVault = typeof testVault;
+type TestDataVault = typeof testDataVault1;
 /**
  * A test vault with 2 keypairs
  */
-export const testVault = Object.freeze({
+export const testDataVault1 = Object.freeze({
     mnemonic: testMnemonic as string,
     entropy: testEntropy,
     entropySerialized: testEntropySerialized as string,
@@ -46,9 +50,9 @@ export const testVault = Object.freeze({
         },
     },
     sessionStorage: {
-        '244e4b24e667ebf':
+        [EPHEMERAL_PASSWORD_KEY]:
             '156790a94d9f9b10ca6f61748ef5f048f66d8bc24f55482333c4d74b97d997b889ac2be54f481eeb6f76a51e176ded15ba884cd9aaf48679fb9caf0516e72e19',
-        a8e451b8ae8a1b4: {
+        [EPHEMERAL_VAULT_KEY]: {
             v: 2 as const,
             data: '{"data":"DTFsXKIEPXeIMt2QR5CUw5rHIqY1A2rhSwerk+H7ZssiloSgkzBEFVA2OD8KGn3hMDsJz7QTnzoTeZ7yg/Z2eJwtEqqQO9UaGyTqae9CowhGfYPrlF3HBtLIfPzaSQk/77gnq/059MmBbwrIngc+fZCArmgm3VHx3Emggm/I1aT5vhsPR3RQnW5TTKjelj095VXFSYrWhBgUWFXlt89/5Vq+SxOZsEkD5HHXkdb5Ped8Jwa9Ugsv7qp3gMMtlGOil55X5qfuexXJ7C2MrOcG4ynMo8Zv82duDxnbdGDRkXCcq/0DGgJUdQp4ApTKhtPBdLJ6XMYDJt6edBaBbuNJZOLyY4hNQUkW6kB3z2K9ZarnBm4Er9c4xrQwg6rbzyEHcqER","iv":"+/NhgTYIk2/QxVlf7DOAzg==","salt":"vUIMdz0Jmg6noKTCJqdV7sI5yCQBMge9TKqR2awR2FY="}',
         },
@@ -57,24 +61,24 @@ export const testVault = Object.freeze({
 /**
  * A test vault with no keypairs
  */
-export const testVault1: TestDataVault = Object.freeze({
+export const testDataVault2: TestDataVault = Object.freeze({
     mnemonic: testMnemonic,
     entropy: testEntropy,
     entropySerialized: testEntropySerialized,
     keypairs: [],
     password: '12345',
     encrypted: {
-        v0: testVault.encrypted.v0,
-        v1: testVault.encrypted.v1,
+        v0: testDataVault1.encrypted.v0,
+        v1: testDataVault1.encrypted.v1,
         v2: {
             v: 2 as const,
             data: '{"data":"5Oua+5DkH7OWWkvNseCqAECC9PF6Csxl5E4zDEdV5/uthNgI3/c1WjZCswsYEXMxeBoxnfUIzjKLthAHKvZOdYbvISzlCjtXmDoWeRnFvrWiXKWV","iv":"K5uVmJUkArzVzU58VGzIuw==","salt":"IM7Y1aRpJ5WQajQbmdGHI8+D2cZXHblEc58aoHfISfg="}',
         },
     },
     sessionStorage: {
-        '244e4b24e667ebf':
+        [EPHEMERAL_PASSWORD_KEY]:
             'bfd5de9e215ed0c80ab8869c7e53bb29f080d2215c0efe1ebc5754b4012f5ccb5915c25d31308cc1a24a5ee1dda426357638b5d47124e5eb829e5ad14e26124b',
-        a8e451b8ae8a1b4: {
+        [EPHEMERAL_VAULT_KEY]: {
             v: 2 as const,
             data: '{"data":"5Cc22P3DMmsJ7q/RFhmuh8+FeK2S5r/K4hzFzNoha+ANFTkaNjbqn+gOjOoG0q67BHItyI4FoCm9isgVfBucvXVJrLcn85Ash1mS6yMDrnt3Zk+i","iv":"Y7X+yW0jEMYDLdP8rBsblQ==","salt":"Af17/8ya+n9+Fk21JKgQAHwckAcg3OiLMkwzQNz27bQ="}',
         },

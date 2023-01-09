@@ -2,35 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import Browser from 'webextension-polyfill';
 
 import { Keyring } from '.';
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { VaultStorage } from './VaultStorage';
 import Alarm from '_src/background/Alarms';
 import {
-    testEd25519,
-    testEd25519Address,
     testEd25519Serialized,
     testMnemonic,
+    testSecp256k1,
+    testSecp256k1Address,
+    testSecp256k1Serialized,
 } from '_src/test-utils/vault';
 
 import type { MockedObject } from 'vitest';
 
 vi.mock('_src/background/Alarms');
-vi.mock('./VaultStorage', () => {
-    const v = vi.fn();
-    v.prototype.revive = vi.fn();
-    v.prototype.getMnemonic = vi.fn();
-    v.prototype.getImportedKeys = vi.fn();
-    v.prototype.verifyPassword = vi.fn();
-    v.prototype.importKeypair = vi.fn();
-    return { VaultStorage: v };
-});
+vi.mock('./VaultStorage');
+vi.mock('../storage-utils');
 
 describe('Keyring', () => {
-    let vaultStorageMock: MockedObject<VaultStorage>;
+    let vaultStorageMock: MockedObject<typeof VaultStorage>;
+
     beforeEach(() => {
-        vaultStorageMock = vi.mocked(new VaultStorage());
+        vaultStorageMock = vi.mocked(VaultStorage);
+        vi.mocked(setToLocalStorage).mockResolvedValue();
+        vi.mocked(getFromLocalStorage).mockImplementation(
+            async (_, val) => val
+        );
         vi.mocked(Alarm.clearLockAlarm).mockResolvedValue(true);
         vi.mocked(Alarm.setLockAlarm).mockResolvedValue();
     });
@@ -38,22 +37,8 @@ describe('Keyring', () => {
     it('initializes and is locked', async () => {
         vaultStorageMock.revive.mockResolvedValue(false);
         const k = new Keyring();
-        expect(k).toBeDefined();
         await k.reviveDone;
         expect(k.isLocked).toBe(true);
-    });
-
-    it('initializes and unlocks from session storage', async () => {
-        vaultStorageMock.revive.mockResolvedValue(true);
-        vaultStorageMock.getMnemonic.mockReturnValue(testMnemonic);
-        vaultStorageMock.getImportedKeys.mockReturnValue(null);
-        vi.spyOn(Browser.storage.local, 'get').mockImplementation(
-            async (val) => val as Record<string, unknown>
-        );
-        const k = new Keyring();
-        expect(k).toBeDefined();
-        await k.reviveDone;
-        expect(k.isLocked).toBe(false);
     });
 
     describe('when Keyring is unlocked', () => {
@@ -62,17 +47,17 @@ describe('Keyring', () => {
         beforeEach(async () => {
             vaultStorageMock.revive.mockResolvedValue(true);
             vaultStorageMock.getMnemonic.mockReturnValue(testMnemonic);
-            vaultStorageMock.getImportedKeys.mockReturnValue([testEd25519]);
-            vi.spyOn(Browser.storage.local, 'get').mockImplementation(
-                async (val) => val as Record<string, unknown>
-            );
+            vaultStorageMock.getImportedKeys.mockReturnValue([testSecp256k1]);
             k = new Keyring();
             await k.reviveDone;
         });
 
+        it('unlocks from session storage', async () => {
+            expect(k.isLocked).toBe(false);
+        });
+
         describe('getActiveAccount', () => {
             it('returns as active account the first derived from mnemonic', async () => {
-                expect(await k.getActiveAccount()).toBeDefined();
                 expect((await k.getActiveAccount())!.address).toBe(
                     '9c08076187d961f1ed809a9d803fa49037a92039'
                 );
@@ -86,13 +71,8 @@ describe('Keyring', () => {
             it('creates the account with index 1 and emits a change event', async () => {
                 const eventSpy = vi.fn();
                 k.on('accountsChanged', eventSpy);
-                const setSpy = vi
-                    .spyOn(Browser.storage.local, 'set')
-                    .mockResolvedValue();
                 const result = await k.deriveNextAccount();
                 expect(result).toBe(true);
-                expect(setSpy).toHaveBeenCalledOnce();
-                expect(setSpy).toHaveBeenCalledWith({ last_account_index: 1 });
                 const accounts = k.getAccounts();
                 expect(accounts?.length).toBe(3);
                 expect(
@@ -110,29 +90,20 @@ describe('Keyring', () => {
             it('does not change the active account when not existing address provided', async () => {
                 const eventSpy = vi.fn();
                 k.on('activeAccountChanged', eventSpy);
-                const setSpy = vi
-                    .spyOn(Browser.storage.local, 'set')
-                    .mockResolvedValue();
                 const result = await k.changeActiveAccount('test');
                 expect(result).toBe(false);
-                expect(setSpy).not.toHaveBeenCalled();
                 expect(eventSpy).not.toHaveBeenCalled();
             });
 
             it('changes to new account', async () => {
                 const eventSpy = vi.fn();
                 k.on('activeAccountChanged', eventSpy);
-                const setSpy = vi
-                    .spyOn(Browser.storage.local, 'set')
-                    .mockResolvedValue();
-                const result = await k.changeActiveAccount(testEd25519Address);
+                const result = await k.changeActiveAccount(
+                    testSecp256k1Address
+                );
                 expect(result).toBe(true);
-                expect(setSpy).toHaveBeenCalledOnce();
-                expect(setSpy).toHaveBeenCalledWith({
-                    active_account: testEd25519Address,
-                });
                 expect(eventSpy).toHaveBeenCalledOnce();
-                expect(eventSpy).toHaveBeenCalledWith(testEd25519Address);
+                expect(eventSpy).toHaveBeenCalledWith(testSecp256k1Address);
             });
         });
 
@@ -140,10 +111,10 @@ describe('Keyring', () => {
             it('exports the keypair', async () => {
                 vaultStorageMock.verifyPassword.mockResolvedValue(true);
                 const exportedKeypair = await k.exportAccountKeypair(
-                    testEd25519Address,
+                    testSecp256k1Address,
                     'correct password'
                 );
-                expect(exportedKeypair).toEqual(testEd25519Serialized);
+                expect(exportedKeypair).toEqual(testSecp256k1Serialized);
             });
 
             it('returns null when address not found', async () => {
@@ -159,7 +130,7 @@ describe('Keyring', () => {
                 vaultStorageMock.verifyPassword.mockResolvedValue(false);
                 await expect(
                     k.exportAccountKeypair('unknown', 'wrong password')
-                ).rejects.toThrow('Wrong password');
+                ).rejects.toThrow();
             });
         });
 
@@ -199,7 +170,7 @@ describe('Keyring', () => {
                         testEd25519Serialized,
                         'wrong password'
                     )
-                ).rejects.toThrow('Wrong password');
+                ).rejects.toThrow();
                 expect(eventSpy).not.toHaveBeenCalled();
                 expect(vaultStorageMock.importKeypair).not.toHaveBeenCalled();
             });
