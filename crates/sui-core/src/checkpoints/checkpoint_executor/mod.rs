@@ -216,12 +216,15 @@ impl CheckpointExecutorEventLoop {
 
     pub async fn handle_crash_recovery(&self) -> SuiResult {
         let local_epoch = self.authority_state.epoch();
+        let mut highest_executed_metric = 0;
 
         match self.checkpoint_store.get_highest_executed_checkpoint()? {
             // TODO this invariant may no longer hold once we introduce snapshots
             None => assert_eq!(local_epoch, 0),
 
             Some(last_checkpoint) => {
+                highest_executed_metric = last_checkpoint.sequence_number();
+
                 match last_checkpoint.next_epoch_committee() {
                     // Make sure there was not an epoch change in this case
                     None => assert_eq!(local_epoch, last_checkpoint.epoch()),
@@ -240,6 +243,10 @@ impl CheckpointExecutorEventLoop {
                 }
             }
         }
+
+        self.metrics
+            .last_executed_checkpoint
+            .set(highest_executed_metric as i64);
         Ok(())
     }
 
