@@ -42,7 +42,10 @@ module risk_management::transaction {
         approvers: vector<address>,
     }
 
-    /// Initiate transaction can only be called by a spender to share the Transaction Request.
+    /// Initiate transaction can only be called by a spender and a Transaction Request is shared,
+    /// containing the amount to be transfered, the recipient and a description.
+    /// M out of N rule is applied here by getting the number of existed approvers, dividing with 2 and adding 1.
+    /// eg. if we have 4 approvers, 3 must approve this request.
     entry fun initiate_transaction(
         spender_cap: &SpenderCap,
         registry: &RolesRegistry,
@@ -68,6 +71,9 @@ module risk_management::transaction {
     }
 
     /// A Transaction Request can only be approved by approvers.
+    /// If the spender is associated with a final approver, then only the final approver can
+    /// create the Transaction Approval and send it to spender. Otherwise, when the m out of n
+    /// rule is met, the Transaction Approval is send to spender.
     entry fun approve_request(
         approver_cap: &ApproverCap,
         tx_request: &mut TransactionRequest,
@@ -106,7 +112,8 @@ module risk_management::transaction {
         // transaction_id: object::uid_to_inner(&tx_request.id) got rejected
     }
 
-    /// Once the spender gets the Transaction Approval, the transaction can be executed
+    /// Once the spender gets the Transaction Approval, the transaction can be executed.
+    /// The funds are extracted from Assets and transfered to the recipient.
     entry fun execute_transaction(
         spender_cap: &mut SpenderCap,
         tx_approval: TransactionApproval,
