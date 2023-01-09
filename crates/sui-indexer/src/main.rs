@@ -3,7 +3,7 @@
 
 use std::env;
 use sui_indexer::errors::IndexerError;
-use sui_indexer::{new_pg_connection_pool, new_rpc_client};
+use sui_indexer::{new_pg_connection_pool, new_rpc_client, RPC_CLIENT_URL};
 
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
@@ -27,7 +27,7 @@ async fn main() -> Result<(), IndexerError> {
 
     let indexer_config = IndexerConfig::parse();
     retry(ExponentialBackoff::default(), || async {
-        let rpc_client = new_rpc_client(indexer_config.rpc_client_url.clone()).await?;
+        let rpc_client = new_rpc_client(RPC_CLIENT_URL.into()).await?;
         let pg_connection_pool = new_pg_connection_pool(indexer_config.db_url.clone()).await?;
         // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
         // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
@@ -63,6 +63,4 @@ async fn main() -> Result<(), IndexerError> {
 struct IndexerConfig {
     #[clap(long)]
     db_url: String,
-    #[clap(long)]
-    rpc_client_url: String,
 }
