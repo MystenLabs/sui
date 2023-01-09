@@ -435,7 +435,7 @@ impl AuthorityPerEpochStore {
     // epoch, and we initialize next_shared_object_versions to that value. If no version of the
     // object has yet been written, we initialize the object to the initial version recorded in the
     // certificate (which is a function of the lamport version computation of the transaction that
-    // created the shared object originally - which transaction may not yet have been execugted on
+    // created the shared object originally - which transaction may not yet have been executed on
     // this node).
     //
     // Because all paths that assign shared locks for a shared object transaction call this
@@ -578,7 +578,6 @@ impl AuthorityPerEpochStore {
         effects: &TransactionEffects,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult {
-        let _tx_lock = self.acquire_tx_lock(certificate.digest()).await;
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
