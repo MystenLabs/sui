@@ -34,22 +34,13 @@ export function getEventsSummary(
             const { coinType, amount, owner } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
 
-            if (!coinsMeta[`${AddressOwner}${coinType}`]) {
-                coinsMeta[`${AddressOwner}${coinType}`] = {
-                    amount: amount,
-                    coinType: coinType,
-                    receiverAddress: AddressOwner,
-                };
-            }
-
-            if (!coinsMeta[`${AddressOwner}${coinType}`]) {
-                coinsMeta[`${AddressOwner}${coinType}`] = {
-                    amount:
-                        coinsMeta[`${AddressOwner}${coinType}`].amount + amount,
-                    coinType: coinType,
-                    receiverAddress: AddressOwner,
-                };
-            }
+            coinsMeta[`${AddressOwner}${coinType}`] = {
+                amount:
+                    (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
+                    amount,
+                coinType: coinType,
+                receiverAddress: AddressOwner,
+            };
         }
 
         // return objectIDs of the transfer objects
