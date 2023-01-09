@@ -49,7 +49,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
         let mut builder = TestClusterBuilder::new()
-            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 4));
+            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 7));
 
         let checkpoints_per_epoch = get_var("CHECKPOINTS_PER_EPOCH", 0);
         if checkpoints_per_epoch > 0 {
