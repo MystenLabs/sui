@@ -27,7 +27,7 @@ sui-verifier = { path = "../sui-verifier" }
 sui-types = { path = "../sui-types" }
 sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-constants = { path = "../sui-protocol-constants" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 move-package.workspace = true

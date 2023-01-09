@@ -37,7 +37,7 @@ sui-node = { path = "../sui-node" }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
 telemetry-subscribers.workspace = true
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 

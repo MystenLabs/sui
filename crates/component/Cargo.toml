@@ -13,4 +13,4 @@ publish = false
 async-trait = "0.1.61"
 eyre = "0.6.8"
 tokio = { workspace = true, features = ["sync", "macros", "rt", "rt-multi-thread"] }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

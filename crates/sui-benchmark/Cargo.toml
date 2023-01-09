@@ -46,7 +46,7 @@ telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 narwhal-node = { path = "../../narwhal/node" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-utils = { path = "../test-utils" }
 
 [target.'cfg(msim)'.dependencies]

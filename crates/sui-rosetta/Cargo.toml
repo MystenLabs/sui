@@ -45,7 +45,7 @@ mysten-metrics = { path = "../mysten-metrics" }
 move-core-types.workspace = true
 
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 sui-sdk = { path = "../sui-sdk" }
