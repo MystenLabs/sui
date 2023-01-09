@@ -275,9 +275,9 @@ Since the only way to own a Display is before it has been published,
 we don't need to perform an authorization check every time the value is
 set in the initializer.
 
-Since the only place it can be used is the function where the Display
-object is created; values and names are likely to be hardcoded and vector<u8>
-is the best type for that purpose.
+Also, the only place it can be used is the function where the Display
+object was created; hence values and names are likely to be hardcoded and
+vector<u8> is the best type for that purpose.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_owned">set_owned</a>&lt;T: key&gt;(d: <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="">vector</a>&lt;u8&gt;, value: <a href="">vector</a>&lt;u8&gt;): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;

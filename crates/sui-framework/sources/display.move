@@ -87,12 +87,11 @@ module sui::display {
     }
 
     /// Since the only way to own a Display is before it has been published,
-    /// we don't need to perform an authorization check every time the value is
-    /// set in the initializer.
+    /// we don't need to perform an authorization check.
     ///
-    /// Since the only place it can be used is the function where the Display
-    /// object is created; values and names are likely to be hardcoded and vector<u8>
-    /// is the best type for that purpose.
+    /// Also, the only place it can be used is the function where the Display
+    /// object was created; hence values and names are likely to be hardcoded and
+    /// vector<u8> is the best type for that purpose.
     public fun set_owned<T: key>(d: Display<T>, name: vector<u8>, value: vector<u8>): Display<T> {
         vec_map::insert(&mut d.fields, utf8(name), utf8(value));
         d
