@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module riskman::policy_config {
+module risk_management::policy_config {
 
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID};
@@ -24,7 +24,6 @@ module riskman::policy_config {
         id: UID,
         original_owner: address,
         policy: Policy,
-        spent: u64,
     }
 
     struct ApproverCap has key, store {
@@ -93,7 +92,6 @@ module riskman::policy_config {
                 id: object::new(ctx),
                 original_owner: recipient,
                 policy: Policy {amount_limit, time_limit, approvers_num},
-                spent: 0,
             }, recipient
         );
         vec::push_back(&mut reg.spenders, recipient);
@@ -168,12 +166,6 @@ module riskman::policy_config {
         spender_cap.policy.amount_limit
     }
 
-    public fun get_amount_spent(
-        spender_cap: &SpenderCap
-    ) : u64 {
-        spender_cap.spent
-    }
-
     public fun get_time_limit(
         spender_cap: &SpenderCap
     ) : u64 {
@@ -196,12 +188,5 @@ module riskman::policy_config {
         approver_cap: &ApproverCap
     ) : address {
         approver_cap.original_owner
-    }
-
-    public fun update_spent(
-        spender_cap: &mut SpenderCap,
-        amount: u64
-    ) {
-        spender_cap.spent = spender_cap.spent + amount
     }
 }

@@ -1,6 +1,6 @@
-module riskman::transaction {
+module risk_management::transaction {
 
-    use riskman::policy_config::{Self, SpenderCap, ApproverCap, Assets};
+    use risk_management::policy_config::{Self, SpenderCap, ApproverCap, Assets};
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
     use sui::coin::{Self};
@@ -10,10 +10,9 @@ module riskman::transaction {
 
     const EAmountLimitExceeded : u64 = 0;
     const ETimeLimitExceeded : u64 = 1;
-    const EAmountLimitExceededAfterApproval : u64 = 2;
-    const EAlreadyApprovedByThisApprover : u64 = 3;
-    const ENotOriginalOwnerOfCapability : u64 = 4;
-    const ESpenderCannotSendMoneyToHimself : u64 = 5;
+    const EAlreadyApprovedByThisApprover : u64 = 2;
+    const ENotOriginalOwnerOfCapability : u64 = 3;
+    const ESpenderCannotSendMoneyToHimself : u64 = 4;
 
     struct TransactionRequest has key, store {
         id: UID,
@@ -42,9 +41,9 @@ module riskman::transaction {
         description: vector<u8>,
         ctx: &mut TxContext,
     ) { 
-        assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 4);
-        assert!(recipient != tx_context::sender(ctx), 5);
-        assert!(amount <= policy_config::get_amount_limit(spender_cap) - policy_config::get_amount_spent(spender_cap), 0);
+        assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 3);
+        assert!(recipient != tx_context::sender(ctx), 4);
+        assert!(amount <= policy_config::get_amount_limit(spender_cap), 0);
         transfer::share_object(TransactionRequest {
             id: object::new(ctx),
             amount,
@@ -62,9 +61,9 @@ module riskman::transaction {
         tx_request: &mut TransactionRequest,
         ctx: &mut TxContext,
     ) {
-        assert!(policy_config::get_approver_original_owner(approver_cap) == tx_context::sender(ctx), 4);
+        assert!(policy_config::get_approver_original_owner(approver_cap) == tx_context::sender(ctx), 3);
         assert!(tx_context::epoch(ctx) <= tx_request.time_limit, 1);
-        assert!(vec::contains(&tx_request.approved_by, &tx_context::sender(ctx)) == false, 3);
+        assert!(vec::contains(&tx_request.approved_by, &tx_context::sender(ctx)) == false, 2);
         if (vec::length(&tx_request.approved_by) < tx_request.approvers_num - 1) {
             vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx))
         } else {
@@ -96,13 +95,12 @@ module riskman::transaction {
         assets: &mut Assets,
         ctx: &mut TxContext,
     ) {
-        assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 4);
-        assert!(tx_approval.amount <= policy_config::get_amount_limit(spender_cap) - policy_config::get_amount_spent(spender_cap), 2);
+        assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 3);
+        assert!(tx_approval.amount <= policy_config::get_amount_limit(spender_cap), 0);
         transfer::transfer(
             coin::take(policy_config::get_foundation_balance_mut(assets), tx_approval.amount, ctx) , 
             tx_approval.recipient
         );
-        policy_config::update_spent(spender_cap, tx_approval.amount);
         
         //Unpack and delete the TransactionApproval
         let TransactionApproval { 
