@@ -94,7 +94,7 @@ pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
     pub account_identifier: AccountIdentifier,
@@ -103,7 +103,7 @@ pub struct AccountBalanceRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub currencies: Vec<Currency>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceResponse {
     pub block_identifier: BlockIdentifier,
     pub balances: Vec<Amount>,
@@ -134,7 +134,7 @@ pub struct Amount {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AmountMetadata {
-    lock_until_epoch: EpochId,
+    pub lock_until_epoch: EpochId,
 }
 
 impl Amount {
@@ -699,7 +699,7 @@ pub enum Case {
     Null,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Block {
     pub block_identifier: BlockIdentifier,
     pub parent_block_identifier: BlockIdentifier,
@@ -709,7 +709,7 @@ pub struct Block {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Transaction {
     pub transaction_identifier: TransactionIdentifier,
     pub operations: Operations,
@@ -719,14 +719,14 @@ pub struct Transaction {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RelatedTransaction {
     network_identifier: NetworkIdentifier,
     transaction_identifier: TransactionIdentifier,
     direction: Direction,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 #[allow(dead_code)]
 pub enum Direction {
@@ -734,7 +734,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockResponse {
     pub block: Block,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -746,7 +746,7 @@ impl IntoResponse for BlockResponse {
         Json(self).into_response()
     }
 }
-#[derive(Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct PartialBlockIdentifier {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index: Option<u64>,
