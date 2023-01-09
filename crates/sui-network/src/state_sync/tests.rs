@@ -20,8 +20,15 @@ use tokio::time::timeout;
 async fn server_push_checkpoint() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let (ordered_checkpoints, _sequence_number_to_digest, _checkpoints) =
-        committee.make_checkpoints(1, None);
+        committee.make_checkpoints(2, None);
     let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        ordered_checkpoints.first().cloned().unwrap(),
+        empty_contents(),
+        vec![],
+        vec![],
+        committee.committee().to_owned(),
+    );
 
     let (
         UnstartedStateSync {
@@ -34,13 +41,13 @@ async fn server_push_checkpoint() {
     ) = Builder::new().store(store).build_internal();
     let peer_id = PeerId([9; 32]); // fake PeerId
 
-    let checkpoint = ordered_checkpoints[0].inner().to_owned();
+    let checkpoint = ordered_checkpoints[1].inner().to_owned();
     let request = Request::new(checkpoint.clone()).with_extension(peer_id);
     server.push_checkpoint_summary(request).await.unwrap();
 
     assert_eq!(
         peer_heights.read().unwrap().heights.get(&peer_id),
-        Some(&Some(0))
+        Some(&Some(1))
     );
     assert_eq!(
         peer_heights
@@ -69,13 +76,35 @@ async fn server_push_checkpoint() {
 
 #[tokio::test]
 async fn server_get_checkpoint() {
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (ordered_checkpoints, _sequence_number_to_digest, _checkpoints) =
+        committee.make_checkpoints(3, None);
+
     let (builder, server) = Builder::new()
         .store(SharedInMemoryStore::default())
         .build_internal();
 
+    builder.store.inner_mut().insert_genesis_state(
+        ordered_checkpoints.first().cloned().unwrap(),
+        empty_contents(),
+        vec![],
+        vec![],
+        committee.committee().to_owned(),
+    );
+
+    // Requests for the Latest checkpoint should return the genesis checkpoint
+    let response = server
+        .get_checkpoint_summary(Request::new(GetCheckpointSummaryRequest::Latest))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(
+        response.unwrap().summary,
+        ordered_checkpoints.first().unwrap().summary,
+    );
+
     // Requests for checkpoints that aren't in the server's store
     let requests = [
-        GetCheckpointSummaryRequest::Latest,
         GetCheckpointSummaryRequest::BySequenceNumber(9),
         GetCheckpointSummaryRequest::ByDigest(CheckpointDigest([10; 32])),
     ];
@@ -89,9 +118,6 @@ async fn server_get_checkpoint() {
     }
 
     // Populate the node's store with some checkpoints
-    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
-    let (ordered_checkpoints, _sequence_number_to_digest, _checkpoints) =
-        committee.make_checkpoints(3, None);
     for checkpoint in ordered_checkpoints.clone() {
         builder.store.inner_mut().insert_checkpoint(checkpoint)
     }
@@ -136,6 +162,9 @@ async fn server_get_checkpoint() {
 #[tokio::test]
 async fn isolated_sync_job() {
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    // build mock data
+    let (ordered_checkpoints, sequence_number_to_digest, checkpoints) =
+        committee.make_checkpoints(100, None);
 
     // Build and connect two nodes
     let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
@@ -147,18 +176,20 @@ async fn isolated_sync_job() {
     network_1.connect(network_2.local_addr()).await.unwrap();
 
     // Init the root committee in both nodes
-    event_loop_1
-        .store
-        .inner_mut()
-        .insert_committee(committee.committee().to_owned());
-    event_loop_2
-        .store
-        .inner_mut()
-        .insert_committee(committee.committee().to_owned());
-
-    // build mock data
-    let (ordered_checkpoints, sequence_number_to_digest, checkpoints) =
-        committee.make_checkpoints(100, None);
+    event_loop_1.store.inner_mut().insert_genesis_state(
+        ordered_checkpoints.first().cloned().unwrap(),
+        empty_contents(),
+        vec![],
+        vec![],
+        committee.committee().to_owned(),
+    );
+    event_loop_2.store.inner_mut().insert_genesis_state(
+        ordered_checkpoints.first().cloned().unwrap(),
+        empty_contents(),
+        vec![],
+        vec![],
+        committee.committee().to_owned(),
+    );
 
     // Node 2 will have all the data
     {
@@ -186,12 +217,13 @@ async fn isolated_sync_job() {
     event_loop_1.tasks.join_next().await.unwrap().unwrap();
     assert_eq!(
         ordered_checkpoints.last().map(|x| &x.summary),
-        event_loop_1
-            .store
-            .get_highest_verified_checkpoint()
-            .unwrap()
-            .as_ref()
-            .map(|x| &x.summary)
+        Some(
+            &event_loop_1
+                .store
+                .get_highest_verified_checkpoint()
+                .unwrap()
+                .summary
+        )
     );
 
     {
@@ -217,6 +249,9 @@ async fn isolated_sync_job() {
 async fn sync_with_checkpoints_being_inserted() {
     telemetry_subscribers::init_for_testing();
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    // build mock data
+    let (ordered_checkpoints, sequence_number_to_digest, checkpoints) =
+        committee.make_checkpoints(4, None);
 
     // Build and connect two nodes
     let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
@@ -228,14 +263,20 @@ async fn sync_with_checkpoints_being_inserted() {
     network_1.connect(network_2.local_addr()).await.unwrap();
 
     // Init the root committee in both nodes
-    event_loop_1
-        .store
-        .inner_mut()
-        .insert_committee(committee.committee().to_owned());
-    event_loop_2
-        .store
-        .inner_mut()
-        .insert_committee(committee.committee().to_owned());
+    event_loop_1.store.inner_mut().insert_genesis_state(
+        ordered_checkpoints.first().cloned().unwrap(),
+        empty_contents(),
+        vec![],
+        vec![],
+        committee.committee().to_owned(),
+    );
+    event_loop_2.store.inner_mut().insert_genesis_state(
+        ordered_checkpoints.first().cloned().unwrap(),
+        empty_contents(),
+        vec![],
+        vec![],
+        committee.committee().to_owned(),
+    );
 
     // get handles to each node's stores
     let store_1 = event_loop_1.store.clone();
@@ -251,15 +292,11 @@ async fn sync_with_checkpoints_being_inserted() {
     tokio::spawn(event_loop_1.start());
     tokio::spawn(event_loop_2.start());
 
-    // build mock data
-    let (ordered_checkpoints, sequence_number_to_digest, checkpoints) =
-        committee.make_checkpoints(4, None);
-
     let mut subscriber_1 = handle_1.subscribe_to_synced_checkpoints();
     let mut subscriber_2 = handle_2.subscribe_to_synced_checkpoints();
 
     // Inject one checkpoint and verify that it was shared with the other node
-    let mut checkpoint_iter = ordered_checkpoints.clone().into_iter();
+    let mut checkpoint_iter = ordered_checkpoints.clone().into_iter().skip(1);
     store_1
         .insert_checkpoint_contents(empty_contents())
         .unwrap();
@@ -270,11 +307,11 @@ async fn sync_with_checkpoints_being_inserted() {
     timeout(Duration::from_secs(1), async {
         assert_eq!(
             subscriber_1.recv().await.unwrap().summary(),
-            ordered_checkpoints[0].summary(),
+            ordered_checkpoints[1].summary(),
         );
         assert_eq!(
             subscriber_2.recv().await.unwrap().summary(),
-            ordered_checkpoints[0].summary()
+            ordered_checkpoints[1].summary()
         );
     })
     .await
@@ -286,7 +323,7 @@ async fn sync_with_checkpoints_being_inserted() {
     }
 
     timeout(Duration::from_secs(1), async {
-        for checkpoint in &ordered_checkpoints[1..] {
+        for checkpoint in &ordered_checkpoints[2..] {
             assert_eq!(
                 subscriber_1.recv().await.unwrap().summary(),
                 checkpoint.summary()

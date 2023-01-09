@@ -318,23 +318,18 @@ where
                 .expect("store operation should not fail");
 
             // If this is an older checkpoint, just ignore it
-            if latest_checkpoint.as_ref().map(|x| x.sequence_number())
-                >= Some(checkpoint.sequence_number())
-            {
+            if latest_checkpoint.sequence_number() >= checkpoint.sequence_number() {
                 return;
             }
 
-            let next_sequence_number = latest_checkpoint
-                .as_ref()
-                .map(|x| x.sequence_number().saturating_add(1))
-                .unwrap_or(0);
-            let previous_digest = latest_checkpoint.map(|x| x.digest());
+            let next_sequence_number = latest_checkpoint.sequence_number().saturating_add(1);
+            let previous_digest = latest_checkpoint.digest();
             (next_sequence_number, previous_digest)
         };
 
         // If this is exactly the next checkpoint then insert it and then notify our peers
         if checkpoint.sequence_number() == next_sequence_number
-            && checkpoint.previous_digest() == previous_digest
+            && checkpoint.previous_digest() == Some(previous_digest)
         {
             let checkpoint = *checkpoint;
 
@@ -379,7 +374,7 @@ where
             // Ensure that if consensus sends us a checkpoint that we expect to be the next one,
             // that it isn't on a fork
             if checkpoint.sequence_number() == next_sequence_number {
-                assert_eq!(checkpoint.previous_digest(), previous_digest);
+                assert_eq!(checkpoint.previous_digest(), Some(previous_digest));
             }
 
             // Otherwise stick it with the other unprocessed checkpoints and we can try to sync the missing
@@ -450,7 +445,7 @@ where
             .highest_known_checkpoint()
             .cloned();
 
-        if highest_processed_checkpoint.map(|x| x.sequence_number())
+        if Some(highest_processed_checkpoint.sequence_number())
             < highest_known_checkpoint
                 .as_ref()
                 .map(|x| x.sequence_number())
@@ -491,21 +486,15 @@ where
             .get_highest_synced_checkpoint()
             .expect("store operation should not fail");
 
-        if highest_verified_checkpoint
-            .as_ref()
-            .map(|x| x.sequence_number())
-            > highest_synced_checkpoint
-                .as_ref()
-                .map(|x| x.sequence_number())
+        if highest_verified_checkpoint.sequence_number()
+            > highest_synced_checkpoint.sequence_number()
             // skip if we aren't connected to any peers that can help
             && self
                 .peer_heights
                 .read()
                 .unwrap()
                 .highest_known_checkpoint_sequence_number()
-                > highest_synced_checkpoint
-                    .as_ref()
-                    .map(|x| x.sequence_number())
+                > Some(highest_synced_checkpoint.sequence_number())
         {
             let task = sync_checkpoint_contents(
                 self.network.clone(),
@@ -516,8 +505,7 @@ where
                 self.metrics.clone(),
                 self.config.transaction_download_concurrency(),
                 self.config.checkpoint_content_download_concurrency(),
-                // The if condition should ensure that this is Some
-                highest_verified_checkpoint.unwrap(),
+                highest_verified_checkpoint,
             );
 
             let task_handle = self.tasks.spawn(task);
@@ -657,11 +645,11 @@ where
     let mut current = store
         .get_highest_verified_checkpoint()
         .expect("store operation should not fail");
-    if current.as_ref().map(|x| x.sequence_number()) >= Some(checkpoint.sequence_number()) {
+    if current.sequence_number() >= checkpoint.sequence_number() {
         return Err(anyhow::anyhow!(
             "target checkpoint {} is older than highest verified checkpoint {}",
             checkpoint.sequence_number(),
-            current.map(|x| x.sequence_number()).unwrap_or(0)
+            current.sequence_number(),
         ));
     }
 
@@ -673,15 +661,13 @@ where
         .heights
         .iter()
         // Filter out any peers who can't help
-        .filter(|(_peer_id, &height)| height > current.as_ref().map(|x| x.sequence_number()))
+        .filter(|(_peer_id, &height)| height > Some(current.sequence_number()))
         .map(|(&peer_id, &height)| (peer_id, height))
         .collect::<Vec<_>>();
 
     // range of the next sequence_numbers to fetch
-    let mut request_stream = (current
-        .as_ref()
-        .map(|x| x.sequence_number().saturating_add(1))
-        .unwrap_or(0)..=checkpoint.sequence_number())
+    let mut request_stream = (current.sequence_number().saturating_add(1)
+        ..=checkpoint.sequence_number())
         .map(|next| {
             let mut peers = peers
                 .iter()
@@ -742,12 +728,12 @@ where
                 .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
 
             if checkpoint.sequence_number() != next
-                || current.as_ref().map(|x| x.digest()) != checkpoint.previous_digest()
+                || Some(current.digest()) != checkpoint.previous_digest()
             {
                 return Err(anyhow::anyhow!("detected fork"));
             }
 
-            let current_epoch = current.as_ref().map(|x| x.epoch()).unwrap_or(0);
+            let current_epoch = current.epoch();
             if checkpoint.epoch() != current_epoch
                 && checkpoint.epoch() != current_epoch.saturating_add(1)
             {
@@ -759,10 +745,7 @@ where
             }
 
             if checkpoint.epoch() == current_epoch.saturating_add(1)
-                && current
-                    .as_ref()
-                    .and_then(|x| x.next_epoch_committee())
-                    .is_none()
+                && current.next_epoch_committee().is_none()
             {
                 return Err(anyhow::anyhow!(
                     "next checkpoint claims to be from the next epoch but the latest verified \
@@ -777,7 +760,7 @@ where
             VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
 
-        current = Some(checkpoint.clone());
+        current = checkpoint.clone();
         // Insert the newly verified checkpoint into our store, which will bump our highest
         // verified checkpoint watermark as well.
         store
@@ -812,10 +795,7 @@ async fn sync_checkpoint_contents<S>(
         .get_highest_synced_checkpoint()
         .expect("store operation should not fail");
 
-    let start = highest_synced
-        .as_ref()
-        .map(|x| x.sequence_number().saturating_add(1))
-        .unwrap_or(0);
+    let start = highest_synced.sequence_number().saturating_add(1);
 
     let mut checkpoint_contents_stream = (start..=target_checkpoint.sequence_number())
         .map(|next| {
@@ -841,14 +821,12 @@ async fn sync_checkpoint_contents<S>(
     while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
         match maybe_checkpoint {
             Ok((checkpoint, num_txns)) => {
-                if let Some(highest_synced) = &highest_synced {
-                    // if this fails, there is a bug in checkpoint construction (or the chain is
-                    // corrupted)
-                    assert_eq!(
-                        highest_synced.summary.network_total_transactions + num_txns,
-                        checkpoint.summary.network_total_transactions
-                    );
-                }
+                // if this fails, there is a bug in checkpoint construction (or the chain is
+                // corrupted)
+                assert_eq!(
+                    highest_synced.summary.network_total_transactions + num_txns,
+                    checkpoint.summary.network_total_transactions
+                );
 
                 store
                     .update_highest_synced_checkpoint(&checkpoint)
@@ -856,7 +834,7 @@ async fn sync_checkpoint_contents<S>(
                 metrics.set_highest_synced_checkpoint(checkpoint.sequence_number());
                 // We don't care if no one is listening as this is a broadcast channel
                 let _ = checkpoint_event_sender.send(checkpoint.clone());
-                highest_synced = Some(checkpoint);
+                highest_synced = checkpoint;
             }
             Err(err) => {
                 debug!("unable to sync contents of checkpoint: {err}");
@@ -866,11 +844,9 @@ async fn sync_checkpoint_contents<S>(
     }
 
     // Notify event loop to notify our peers that we've synced to a new checkpoint height
-    if let Some(checkpoint) = highest_synced {
-        if let Some(sender) = sender.upgrade() {
-            let message = StateSyncMessage::SyncedCheckpoint(Box::new(checkpoint));
-            let _ = sender.send(message).await;
-        }
+    if let Some(sender) = sender.upgrade() {
+        let message = StateSyncMessage::SyncedCheckpoint(Box::new(highest_synced));
+        let _ = sender.send(message).await;
     }
 }
 
