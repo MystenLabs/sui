@@ -271,6 +271,7 @@ impl AuthorityPerEpochStore {
 
     pub fn new_at_next_epoch(&self, new_committee: Committee) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
+        self.metrics.current_epoch.set(new_committee.epoch as i64);
         Self::new(
             new_committee,
             &self.parent_path,
