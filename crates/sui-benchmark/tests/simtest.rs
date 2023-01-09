@@ -48,11 +48,16 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
-        let test_cluster = TestClusterBuilder::new()
-            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 4))
-            .build()
-            .await
-            .unwrap();
+        let mut builder = TestClusterBuilder::new()
+            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 7));
+
+        let checkpoints_per_epoch = get_var("CHECKPOINTS_PER_EPOCH", 0);
+        if checkpoints_per_epoch > 0 {
+            builder = builder.with_checkpoints_per_epoch(30);
+        }
+
+        let test_cluster = builder.build().await.unwrap();
+
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
         let sender = test_cluster.get_address_0();
