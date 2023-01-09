@@ -5,9 +5,8 @@ import { is, SuiObject, Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 
-import { DelegatorsList } from './DelegatorsList';
-
 import ErrorResult from '~/components/error-result/ErrorResult';
+import { StatsCoin } from '~/components/top-validators-card/StatsCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
@@ -20,17 +19,9 @@ import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
-import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 import { getStakedPercent } from '~/utils/getStakedPercent';
-
-export type Delegator = {
-    delegator: string;
-    sui_amount: bigint;
-    share: number;
-    type: string;
-};
 
 function ValidatorDetails() {
     const { id } = useParams();
@@ -58,11 +49,8 @@ function ValidatorDetails() {
         const { name, pubkey_bytes, sui_address } =
             validatorData.fields.metadata.fields;
 
-        const {
-            sui_balance,
-            starting_epoch,
-            delegation_token_supply,
-        } = validatorData.fields.delegation_staking_pool.fields;
+        const { sui_balance, starting_epoch, delegation_token_supply } =
+            validatorData.fields.delegation_staking_pool.fields;
 
         const num_epochs_participated = validatorsData.epoch - starting_epoch;
 
@@ -72,7 +60,6 @@ function ValidatorDetails() {
                     delegation_token_supply.fields.value,
             365 / num_epochs_participated - 1
         );
-
 
         return {
             name: getName(name),
@@ -84,13 +71,19 @@ function ValidatorDetails() {
             logo: null,
             delegatedStakePercentage: getStakedPercent(
                 validatorData.fields.stake_amount,
-                BigInt(validatorsData.validators.fields.total_delegation_stake),
+                validatorsData.validators.fields.total_validator_stake
             ),
+            totalStake: validatorData.fields.stake_amount,
             delegatedStake: validatorData.fields.stake_amount,
             address: sui_address,
+            // TODO: add missing fields
+
+            numberOfDelegators: 0,
+            selfStake: 0,
+            lastEpoch: 0,
+            totalRewards: 0,
         };
     }, [validatorData, validatorsData]);
-
 
     if (!id) {
         return <Navigate to="/validators" />;
@@ -98,14 +91,18 @@ function ValidatorDetails() {
 
     if (isLoading) {
         return (
-            <div className="mt-5 mb-10">
+            <div className="mt-5 mb-10 flex items-center justify-center">
                 <LoadingSpinner />
             </div>
         );
     }
 
     if (!validator) {
-        return <ErrorResult id={id} errorMsg="No validator data found" />;
+        return (
+            <div className="mt-5 mb-10 flex items-center justify-center">
+                <ErrorResult id={id} errorMsg="No validator data found" />
+            </div>
+        );
     }
 
     return (
@@ -130,10 +127,10 @@ function ValidatorDetails() {
                 </div>
                 <div className="basis-full break-all md:basis-2/3">
                     <DescriptionItem title="Address">
-                            <AddressLink
-                                address={validator.suiAddress}
-                                noTruncate
-                            />
+                        <AddressLink
+                            address={validator.suiAddress}
+                            noTruncate
+                        />
                     </DescriptionItem>
                     <DescriptionList>
                         {validator.pubkeyBytes && (
@@ -158,35 +155,62 @@ function ValidatorDetails() {
                                     <Stats
                                         label="Staking APY"
                                         tooltip="Staking APY"
-                                        variant="heading2/semibold"
-                                        value={`${validator.apy}%`}
-                                    />
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validator.apy}%
+                                        </Heading>
+                                    </Stats>
                                     <Stats
                                         label="Total Staked"
-                                        variant="heading2/semibold"
                                         tooltip="Total Staked"
-                                        value="1"
-                                    />
+                                    >
+                                        <StatsCoin
+                                            amount={validator.totalStake}
+                                        />
+                                    </Stats>
                                 </div>
                                 <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
                                     <Stats
                                         label="Delegators"
                                         tooltip="Delegators"
-                                        variant="heading3/semibold"
-                                        value="4,234"
-                                    />
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading3/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validator.numberOfDelegators}
+                                        </Heading>
+                                    </Stats>
                                     <Stats
                                         label="Delegated Staked"
-                                        value="26,242"
-                                        variant="heading3/semibold"
                                         tooltip="Delegated Staked"
-                                    />
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading3/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validator.delegatedStakePercentage}
+                                            %
+                                        </Heading>
+                                    </Stats>
                                     <Stats
                                         label="Self Staked"
-                                        value="42%"
-                                        variant="heading3/semibold"
                                         tooltip="Self Staked"
-                                    />
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading3/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validator.selfStake}%
+                                        </Heading>
+                                    </Stats>
                                 </div>
                             </div>
                         </Card>
@@ -201,20 +225,31 @@ function ValidatorDetails() {
                                     <Stats
                                         label="Last Epoch"
                                         tooltip="Last Epoch"
-                                        variant="heading3/semibold"
-                                        value="2,333"
-                                    />
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading3/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validator.lastEpoch}
+                                        </Heading>
+                                    </Stats>
                                     <Stats
                                         label="Total Reward"
-                                        value="26,904"
-                                        variant="heading3/semibold"
                                         tooltip="Total Reward"
-                                    />
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading3/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validator.totalRewards}
+                                        </Heading>
+                                    </Stats>
                                 </div>
                             </div>
                         </Card>
                     </div>
-                    
                 </div>
             </div>
         </div>

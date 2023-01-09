@@ -14,5 +14,6 @@ export const defaultAmount: StoryObj<StatsProps> = {
         label: 'Last Epoch Change',
         value: '8,109',
         tooltip: 'Last Epoch Change Tooltip',
+        variant: 'heading3',
     },
 };

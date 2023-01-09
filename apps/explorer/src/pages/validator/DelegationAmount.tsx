@@ -16,8 +16,8 @@ export function DelegationAmount({ amount }: { amount?: bigint | number }) {
     return (
         <div className="flex h-full items-center gap-1">
             <div className="flex items-baseline gap-0.5 text-gray-90">
-                <Text variant="body">{formattedAmount}</Text>
-                <Text variant="subtitleSmall">{symbol}</Text>
+                <Text variant="body/medium">{formattedAmount}</Text>
+                <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
         </div>
     );

@@ -5,8 +5,6 @@ import { useState } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
 
-import type { Delegator } from './ValidatorDetails';
-
 import Pagination from '~/components/pagination/Pagination';
 import { AddressLink } from '~/ui/InternalLink';
 import { TableCard } from '~/ui/TableCard';
@@ -17,6 +15,13 @@ const DELEGATORS_PER_PAGE = 20;
 
 type DelegatorsListProps = {
     delegators: Delegator[];
+};
+
+type Delegator = {
+    delegator: string;
+    sui_amount: bigint;
+    share: number;
+    type: string;
 };
 
 export function DelegatorsList({ delegators }: DelegatorsListProps) {
@@ -61,9 +66,8 @@ export function DelegatorsList({ delegators }: DelegatorsListProps) {
                         return {
                             share: (
                                 <Text
-                                    variant="bodySmall"
+                                    variant="bodySmall/medium"
                                     color="steel-darker"
-                                    weight="medium"
                                 >
                                     {share} %
                                 </Text>

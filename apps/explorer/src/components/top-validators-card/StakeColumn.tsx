@@ -8,9 +8,9 @@ import { Text } from '~/ui/Text';
 
 type StakeColumnProps = {
     stake: bigint;
-}
+};
 
-export function StakeColumn({ stake }:  StakeColumnProps) {
+export function StakeColumn({ stake }: StakeColumnProps) {
     const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
     return (
         <div className="flex items-end gap-0.5">

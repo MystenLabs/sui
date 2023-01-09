@@ -25,8 +25,6 @@ import { getStakedPercent } from '~/utils/getStakedPercent';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-
-
 export function processValidators(set: Validator[], totalStake: bigint) {
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;

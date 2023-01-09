@@ -5,7 +5,8 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
-import {StakeColumn} from '~/components/top-validators-card/StakeColumn';
+import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
+import { StatsCoin } from '~/components/top-validators-card/StatsCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
@@ -180,31 +181,47 @@ function ValidatorPageResult() {
                 <div className="basis-full md:basis-1/2">
                     {isSuccess && validatorsStats && (
                         <Card spacing="lg">
-                            <div className="flex min-h-[180px] max-w-full flex-col flex-nowrap md:flex-row justify-between">
+                            <div className="flex min-h-[156px] max-w-full flex-col flex-nowrap justify-between gap-1.5 md:flex-row md:gap-0.5">
                                 <Stats
                                     label="Participation"
                                     tooltip="Participation"
-                                    variant='heading2/semibold'
-                                    value={`${validatorsStats.participation.toString()}%`}
-                                />
-                                <Stats
-                                    label="Total Staked"
-                                    variant='heading2/semibold'
-                                    value={validatorsStats.totalDelegateStake}
-                                />
+                                >
+                                    <Heading
+                                        as="h3"
+                                        variant="heading2/semibold"
+                                        color="steel-darker"
+                                    >{`${validatorsStats.participation}%`}</Heading>
+                                </Stats>
+                                <Stats label="Total Staked">
+                                    <Heading
+                                        as="h3"
+                                        variant="heading2/semibold"
+                                        color="steel-darker"
+                                    >
+                                        <StatsCoin
+                                            amount={validatorsStats.totalStake}
+                                        />
+                                    </Heading>
+                                </Stats>
                                 <Stats
                                     label="Last Epoch Reward"
-                                    variant='heading2/semibold'
                                     tooltip="LAST EPOCH REWARDS"
-
-                                    value={validatorsStats.lastEpochRewards}
-                                />
-                                <Stats
-                                    label="AVG APY"
-                                    variant='heading2/semibold'
-                                    tooltip="Average APY"
-                                    value={`${validatorsStats.averageAPY.toString()}%`}
-                                />
+                                >
+                                    <Heading
+                                        as="h3"
+                                        variant="heading2/semibold"
+                                        color="steel-darker"
+                                    >
+                                        {validatorsStats.lastEpochRewards}
+                                    </Heading>
+                                </Stats>
+                                <Stats label="AVG APY" tooltip="Average APY">
+                                    <Heading
+                                        as="h3"
+                                        variant="heading2/semibold"
+                                        color="steel-darker"
+                                    >{`${validatorsStats.averageAPY}%`}</Heading>
+                                </Stats>
                             </div>
                         </Card>
                     )}
