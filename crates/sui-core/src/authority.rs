@@ -488,7 +488,10 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", &transaction.data().intent_message.value);
+        debug!(
+            "handle_transaction. Tx data: {:?}",
+            &transaction.data().intent_message.value
+        );
 
         let epoch_store = self.epoch_store();
         // Ensure an idempotent answer. This is checked before the system_tx check so that
@@ -661,15 +664,7 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let span = tracing::debug_span!(
-            "execute_certificate_internal_guard",
-            ?tx_digest,
-            tx_kind = certificate.data().intent_message.value.kind_as_str()
-        );
-        let tx_guard = epoch_store
-            .acquire_tx_guard(certificate)
-            .instrument(span)
-            .await?;
+        let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         self.process_certificate(tx_guard, certificate, epoch_store)
             .await

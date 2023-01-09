@@ -888,7 +888,7 @@ impl CheckpointServiceNotify for CheckpointService {
             return Ok(());
         }
         debug!(
-            "Transaction roots for pending checkpoint {}: {:?}",
+            "Transaction roots for pending checkpoint at height {}: {:?}",
             index, roots
         );
         epoch_store.insert_pending_checkpoint(&index, &(roots, last_checkpoint_of_epoch))?;
