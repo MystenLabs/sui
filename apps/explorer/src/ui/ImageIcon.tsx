@@ -15,14 +15,14 @@ const imageStyle = cva(
                 lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-bodySmall',
                 xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-bodySmall',
             },
-            variant: {
-                circle: 'rounded-full',
-                square: 'rounded-md',
+            circle: {
+                true: 'rounded-full',
+                false: 'rounded-md',
             },
         },
 
         defaultVariants: {
-            variant: 'circle',
+            circle: true,
             size: 'md',
         },
     }

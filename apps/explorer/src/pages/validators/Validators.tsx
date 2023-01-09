@@ -186,7 +186,7 @@ function ValidatorPageResult() {
                             <div className="flex min-h-[156px] max-w-full flex-col flex-nowrap justify-between gap-1.5 md:flex-row md:gap-0.5">
                                 <Stats
                                     label="Participation"
-                                    tooltip="Participation"
+                                    tooltip="Coming soon"
                                 >
                                     <Heading
                                         as="h3"
@@ -207,7 +207,7 @@ function ValidatorPageResult() {
                                 </Stats>
                                 <Stats
                                     label="Last Epoch Reward"
-                                    tooltip="LAST EPOCH REWARDS"
+                                    tooltip="Coming soon"
                                 >
                                     <Heading
                                         as="h3"

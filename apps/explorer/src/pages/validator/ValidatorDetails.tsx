@@ -3,7 +3,7 @@
 
 import { is, SuiObject, Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import ErrorResult from '~/components/error-result/ErrorResult';
 import { StatsCoin } from '~/components/top-validators-card/StatsCoin';
@@ -74,20 +74,21 @@ function ValidatorDetails() {
                 validatorsData.validators.fields.total_validator_stake
             ),
             totalStake: validatorData.fields.stake_amount,
-            delegatedStake: validatorData.fields.stake_amount,
+            delegatedStake:  '--',
             address: sui_address,
 
             // TODO: add missing fields
-            numberOfDelegators: 0,
-            selfStake: 0,
-            lastEpoch: 0,
-            totalRewards: 0,
+            numberOfDelegators: '--',
+            selfStake:0,
+            lastEpoch: '--',
+            totalRewards: '--',
+            networkStakingParticipation: '--',
+            votedLastRound: '--',
+            tallyingScore: '--',
+            lastNarwhalRound: '--',
         };
     }, [validatorData, validatorsData]);
 
-    if (!id) {
-        return <Navigate to="/validators" />;
-    }
 
     if (isLoading) {
         return (
@@ -145,7 +146,7 @@ function ValidatorDetails() {
             </div>
             <div className="mt-8 flex w-full">
                 <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
-                    <div className="basis-full md:basis-2/5">
+                    <div className="basis-full md:basis-2/5 max-w-[480px]">
                         <Card spacing="lg">
                             <div className="flex  max-w-full flex-col flex-nowrap gap-8">
                                 <Heading as="div" variant="heading4/semibold">
@@ -154,19 +155,19 @@ function ValidatorDetails() {
                                 <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
                                     <Stats
                                         label="Staking APY"
-                                        tooltip="Staking APY"
+                                        tooltip="Coming soon"
                                     >
                                         <Heading
                                             as="h3"
                                             variant="heading2/semibold"
                                             color="steel-darker"
                                         >
-                                            {validator.apy}%
+                                            {validator.apy ? `${validator.apy}%` : '--'}
                                         </Heading>
                                     </Stats>
                                     <Stats
                                         label="Total Staked"
-                                        tooltip="Total Staked"
+                                        tooltip="Coming soon"
                                     >
                                         <StatsCoin
                                             amount={validator.totalStake}
@@ -183,12 +184,12 @@ function ValidatorDetails() {
                                             variant="heading3/semibold"
                                             color="steel-darker"
                                         >
-                                            {validator.numberOfDelegators}
+                                            {validator.numberOfDelegators || '--'}
                                         </Heading>
                                     </Stats>
                                     <Stats
                                         label="Delegated Staked"
-                                        tooltip="Delegated Staked"
+                                        tooltip="Coming soon"
                                     >
                                         <Heading
                                             as="h3"
@@ -201,14 +202,14 @@ function ValidatorDetails() {
                                     </Stats>
                                     <Stats
                                         label="Self Staked"
-                                        tooltip="Self Staked"
+                                        tooltip="Coming soon"
                                     >
                                         <Heading
                                             as="h3"
                                             variant="heading3/semibold"
                                             color="steel-darker"
                                         >
-                                            {validator.selfStake}%
+                                            {validator.selfStake ? `${validator.selfStake}%` : '--'}
                                         </Heading>
                                     </Stats>
                                 </div>
@@ -224,7 +225,7 @@ function ValidatorDetails() {
                                 <div className="flex flex-col flex-nowrap gap-8">
                                     <Stats
                                         label="Last Epoch"
-                                        tooltip="Last Epoch"
+                                        tooltip="Coming soon"
                                     >
                                         <Heading
                                             as="h3"
@@ -236,7 +237,7 @@ function ValidatorDetails() {
                                     </Stats>
                                     <Stats
                                         label="Total Reward"
-                                        tooltip="Total Reward"
+                                        tooltip="Coming soon"
                                     >
                                         <Heading
                                             as="h3"
@@ -247,6 +248,73 @@ function ValidatorDetails() {
                                         </Heading>
                                     </Stats>
                                 </div>
+                            </div>
+                        </Card>
+                    </div>
+                    <div className="basis-full md:basis-1/3">
+                        <Card spacing="lg">
+                            <div className="flex  max-w-full flex-col flex-nowrap gap-8">
+                                <Heading as="div" variant="heading4/semibold">
+                                    Network Participation
+                                </Heading>
+                                <div className="flex flex-col flex-nowrap gap-8">
+                                    <div className='flex flex-col flex-nowrap gap-8 md:flex-row'>
+                                        <Stats
+                                            label="Last Epoch"
+                                            tooltip="Coming soon"
+                                        >
+                                            <Heading
+                                                as="h3"
+                                                variant="heading3/semibold"
+                                                color="steel-darker"
+                                            >
+                                                {validator.lastEpoch}
+                                            </Heading>
+                                        </Stats>
+
+                                        <Stats
+                                            label="Total Reward"
+                                            tooltip="Coming soon"
+                                        >
+                                            <Heading
+                                                as="h3"
+                                                variant="heading3/semibold"
+                                                color="steel-darker"
+                                            >
+                                                {validator.totalRewards}
+                                            </Heading>
+                                        </Stats>
+                                    </div>
+                                    <div className='flex flex-col flex-nowrap gap-8 md:flex-row'>
+                                        <Stats
+                                            label="Staking Participation"
+                                            tooltip="Coming soon"
+                                        >
+                                            <Heading
+                                                as="h3"
+                                                variant="heading3/semibold"
+                                                color="steel-darker"
+                                            >
+                                                {validator.networkStakingParticipation}
+                                            </Heading>
+                                        </Stats>
+
+                                        <Stats
+                                            label="Total Reward"
+                                            tooltip="Coming soon"
+                                        >
+                                            <Heading
+                                                as="h3"
+                                                variant="heading3/semibold"
+                                                color="steel-darker"
+                                            >
+                                                {validator.totalRewards}
+                                            </Heading>
+                                        </Stats>
+                                    </div>
+                                
+                                </div>
+                                
                             </div>
                         </Card>
                     </div>
