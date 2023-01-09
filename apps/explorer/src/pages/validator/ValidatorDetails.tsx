@@ -219,7 +219,7 @@ function ValidatorDetails() {
                         <Card spacing="lg">
                             <div className="flex  max-w-full flex-col flex-nowrap gap-8">
                                 <Heading as="div" variant="heading4/semibold">
-                                    SUI Staked on Validator
+                                    Validator Staking Rewards
                                 </Heading>
                                 <div className="flex flex-col flex-nowrap gap-8">
                                     <Stats
