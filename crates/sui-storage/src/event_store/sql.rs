@@ -113,9 +113,10 @@ impl SqlEventStore {
         // TODO: configure other SQLite options
         let mut options = SqliteConnectOptions::new()
             .filename(db_path)
+            .journal_mode(SqliteJournalMode::Delete)
             // Normal vs Full sync mode also speeds up writes
             .synchronous(SqliteSynchronous::Normal)
-            // Minimal journal size and frequent autocheckpoints help prevent giant WALs
+            // Minimal journal size and frequent autocheckpoints help prevent giant WAL/journal logss
             .pragma("journal_size_limit", "0")
             // "wal_autocheckpoint" default to 1000 => auto checkpointing every 1000 pages
             .create_if_missing(true);
