@@ -10,14 +10,16 @@ interface BaseInternalLinkProps extends LinkProps {
 }
 
 function createInternalLink<T extends string>(base: string, propName: T) {
-    return (props: BaseInternalLinkProps & Record<T, string>) => {
-        const truncatedAddress = props.noTruncate
-            ? props[propName]
-            : formatAddress(props[propName]);
+    return ({
+        [propName]: id,
+        noTruncate,
+        ...props
+    }: BaseInternalLinkProps & Record<T, string>) => {
+        const truncatedAddress = noTruncate ? id : formatAddress(id);
         return (
             <Link
                 variant="mono"
-                to={`/${base}/${encodeURIComponent(props[propName])}`}
+                to={`/${base}/${encodeURIComponent(id)}`}
                 {...props}
             >
                 {truncatedAddress}
