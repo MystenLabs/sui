@@ -10,10 +10,11 @@ module risk_management::policy_config {
     use sui::sui::SUI;
     use sui::transfer;
     use std::vector as vec;
+    use std::option::{Self, Option};
 
     const EAdministratorCannotBeSpender : u64 = 0;
-    const ENotEnoughApprovers : u64 = 1;
-    const ENotOriginalOwnerOfCapability : u64 = 2;
+    const ENotOriginalOwnerOfCapability : u64 = 1;
+    const EFinalApproverDoesNotExist : u64 = 2;
 
     struct AdministratorCap has key, store {
         id: UID,
@@ -39,7 +40,7 @@ module risk_management::policy_config {
     struct Policy has store {
         amount_limit: u64,
         time_limit: u64,
-        approvers_num: u64,
+        final_approver: Option<address>,
     }
 
     struct RolesRegistry has key, store {
@@ -82,16 +83,35 @@ module risk_management::policy_config {
         recipient: address,
         amount_limit: u64,
         time_limit: u64,
-        approvers_num: u64,
         ctx: &mut TxContext,
     ) {
-        assert!(admin_cap.original_owner == tx_context::sender(ctx), 2);
+        assert!(admin_cap.original_owner == tx_context::sender(ctx), 1);
         assert!(tx_context::sender(ctx) != recipient, 0);
-        assert!(approvers_num <= vec::length(&reg.approvers), 1);
         transfer::transfer(SpenderCap{
                 id: object::new(ctx),
                 original_owner: recipient,
-                policy: Policy {amount_limit, time_limit, approvers_num},
+                policy: Policy {amount_limit, time_limit, final_approver: option::none()},
+            }, recipient
+        );
+        vec::push_back(&mut reg.spenders, recipient);
+    }
+
+    entry fun create_spender_with_final_approver(
+        admin_cap: &AdministratorCap,
+        reg: &mut RolesRegistry,
+        recipient: address,
+        amount_limit: u64,
+        time_limit: u64,
+        final_approver: address,
+        ctx: &mut TxContext,
+    ) {
+        assert!(admin_cap.original_owner == tx_context::sender(ctx), 1);
+        assert!(tx_context::sender(ctx) != recipient, 0);
+        assert!(vec::contains(&reg.approvers, &final_approver) == true, 2);
+        transfer::transfer(SpenderCap{
+                id: object::new(ctx),
+                original_owner: recipient,
+                policy: Policy {amount_limit, time_limit, final_approver: option::some(final_approver)},
             }, recipient
         );
         vec::push_back(&mut reg.spenders, recipient);
@@ -103,7 +123,7 @@ module risk_management::policy_config {
         recipient: address,
         ctx: &mut TxContext,
     ) {
-        assert!(admin_cap.original_owner == tx_context::sender(ctx), 2);
+        assert!(admin_cap.original_owner == tx_context::sender(ctx), 1);
         transfer::transfer(ApproverCap{
                 id: object::new(ctx),
                 original_owner: recipient,
@@ -160,6 +180,12 @@ module risk_management::policy_config {
         &mut assets.foundation_balance
     }
 
+    public fun get_approvers_list(
+        registry: &RolesRegistry
+    ) : &vector<address> {
+        &registry.approvers
+    }
+
     public fun get_amount_limit(
         spender_cap: &SpenderCap
     ) : u64 {
@@ -172,10 +198,10 @@ module risk_management::policy_config {
         spender_cap.policy.time_limit
     }
 
-    public fun get_approvers_num(
+    public fun get_final_approver(
         spender_cap: &SpenderCap
-    ) : u64 {
-        spender_cap.policy.approvers_num
+    ) : Option<address> {
+        spender_cap.policy.final_approver
     }
 
     public fun get_spender_original_owner(

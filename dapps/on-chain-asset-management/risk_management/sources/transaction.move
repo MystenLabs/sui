@@ -1,18 +1,21 @@
 module risk_management::transaction {
 
-    use risk_management::policy_config::{Self, SpenderCap, ApproverCap, Assets};
+    use risk_management::policy_config::{Self, SpenderCap, ApproverCap, RolesRegistry, Assets};
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID, ID};
     use sui::coin::{Self};
     use std::string::{Self, String};
     use sui::transfer;
     use std::vector as vec;
+    use std::option::{Self, Option};
 
     const EAmountLimitExceeded : u64 = 0;
     const ETimeLimitExceeded : u64 = 1;
     const EAlreadyApprovedByThisApprover : u64 = 2;
     const ENotOriginalOwnerOfCapability : u64 = 3;
     const ESpenderCannotSendMoneyToHimself : u64 = 4;
+    const EFinalApproverMustSignLast : u64 = 5;
+    const ENotSpendersFinalApprover : u64 = 6;
 
     struct TransactionRequest has key, store {
         id: UID,
@@ -22,6 +25,7 @@ module risk_management::transaction {
         recipient: address,
         description: String,
         approvers_num: u64,
+        final_approver: Option<address>,
         approved_by: vector<address>,
     }
 
@@ -36,6 +40,7 @@ module risk_management::transaction {
 
     entry fun initiate_transaction(
         spender_cap: &SpenderCap,
+        registry: &RolesRegistry,
         amount: u64,
         recipient: address,
         description: vector<u8>,
@@ -51,7 +56,8 @@ module risk_management::transaction {
             spender: tx_context::sender(ctx),
             recipient,
             description: string::utf8(description),
-            approvers_num: policy_config::get_approvers_num(spender_cap),
+            approvers_num: (vec::length(policy_config::get_approvers_list(registry))/2) + 1,
+            final_approver: policy_config::get_final_approver(spender_cap),
             approved_by: vec::empty()
         })
     }
@@ -65,8 +71,12 @@ module risk_management::transaction {
         assert!(tx_context::epoch(ctx) <= tx_request.time_limit, 1);
         assert!(vec::contains(&tx_request.approved_by, &tx_context::sender(ctx)) == false, 2);
         if (vec::length(&tx_request.approved_by) < tx_request.approvers_num - 1) {
-            vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx))
+            assert!(option::get_with_default(&tx_request.final_approver, @0x0) != tx_context::sender(ctx), 5);
+            vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx));
         } else {
+            if (option::is_some(&tx_request.final_approver)) {
+                assert!(&tx_context::sender(ctx) == option::borrow(&tx_request.final_approver), 6);
+            };
             vec::push_back(&mut tx_request.approved_by, tx_context::sender(ctx));
             let newvector : vector<address> = tx_request.approved_by;
             transfer::transfer(TransactionApproval{
