@@ -5,68 +5,27 @@ import { formatAddress } from '../utils/stringUtils';
 
 import { Link, type LinkProps } from '~/ui/Link';
 
-export interface AddressLinkProps extends LinkProps {
-    address: string;
+interface BaseInternalLinkProps extends LinkProps {
     noTruncate?: boolean;
 }
 
-export interface ObjectLinkProps extends LinkProps {
-    objectId: string;
-    noTruncate?: boolean;
+function createInternalLink<T extends string>(base: string, propName: T) {
+    return (props: BaseInternalLinkProps & Record<T, string>) => {
+        const truncatedAddress = props.noTruncate
+            ? props[propName]
+            : formatAddress(props[propName]);
+        return (
+            <Link
+                variant="mono"
+                to={`/${base}/${encodeURIComponent(props[propName])}`}
+                {...props}
+            >
+                {truncatedAddress}
+            </Link>
+        );
+    };
 }
 
-export interface TransactionLinkProps extends LinkProps {
-    digest: string;
-    noTruncate?: boolean;
-}
-
-export function AddressLink({
-    address,
-    noTruncate,
-    ...props
-}: AddressLinkProps) {
-    const truncatedAddress = noTruncate ? address : formatAddress(address);
-    return (
-        <Link
-            variant="mono"
-            to={`/address/${encodeURIComponent(address)}`}
-            {...props}
-        >
-            {truncatedAddress}
-        </Link>
-    );
-}
-
-export function ObjectLink({
-    objectId,
-    noTruncate,
-    ...props
-}: ObjectLinkProps) {
-    const truncatedObjectId = noTruncate ? objectId : formatAddress(objectId);
-    return (
-        <Link
-            variant="mono"
-            to={`/object/${encodeURIComponent(objectId)}`}
-            {...props}
-        >
-            {truncatedObjectId}
-        </Link>
-    );
-}
-
-export function TransactionLink({
-    digest,
-    noTruncate,
-    ...props
-}: TransactionLinkProps) {
-    const truncatedDigest = noTruncate ? digest : formatAddress(digest);
-    return (
-        <Link
-            variant="mono"
-            to={`/transaction/${encodeURIComponent(digest)}`}
-            {...props}
-        >
-            {truncatedDigest}
-        </Link>
-    );
-}
+export const AddressLink = createInternalLink('address', 'address');
+export const ObjectLink = createInternalLink('object', 'objectId');
+export const TransactionLink = createInternalLink('transaction', 'digest');
