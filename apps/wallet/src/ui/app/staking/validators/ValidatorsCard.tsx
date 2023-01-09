@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import { FEATURES } from '../../experimentation/features';
 import { ActiveDelegation } from '../home/ActiveDelegation';
@@ -57,7 +56,7 @@ export function ValidatorsCard({
                                         weight="semibold"
                                         color="steel-darker"
                                     >
-                                        STAKING ON {numOfValidators}
+                                        Staking on {numOfValidators}
                                         {numOfValidators > 1
                                             ? ' VALIDATORS'
                                             : ' VALIDATOR'}
@@ -66,33 +65,25 @@ export function ValidatorsCard({
                             }
                         >
                             <div className="flex divide-x divide-solid divide-gray-45 divide-y-0">
-                                <CardItem
-                                    title="Your Stake"
-                                    value={
-                                        <StakeAmount
-                                            balance={totalStaked}
-                                            type={SUI_TYPE_ARG}
-                                            diffSymbol
-                                            size="heading4"
-                                            color="gray-90"
-                                            symbolColor="steel"
-                                        />
-                                    }
-                                />
+                                <CardItem title="Your Stake">
+                                    <StakeAmount
+                                        balance={totalStaked}
+                                        variant="heading"
+                                        size="heading4"
+                                        color="gray-90"
+                                        symbolColor="steel"
+                                    />
+                                </CardItem>
                                 {/* TODO: show the actual Rewards Collected value https://github.com/MystenLabs/sui/issues/3605 */}
-                                <CardItem
-                                    title="EARNED"
-                                    value={
-                                        <StakeAmount
-                                            balance={earnedRewards}
-                                            type={SUI_TYPE_ARG}
-                                            diffSymbol
-                                            symbolColor="gray-60"
-                                            size="heading4"
-                                            color="gray-60"
-                                        />
-                                    }
-                                />
+                                <CardItem title="Earned">
+                                    <StakeAmount
+                                        balance={earnedRewards}
+                                        variant="heading"
+                                        symbolColor="gray-60"
+                                        size="heading4"
+                                        color="gray-60"
+                                    />
+                                </CardItem>
                             </div>
                         </Card>
 

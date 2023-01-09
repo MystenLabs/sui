@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import { is, SuiObject } from '@mysten/sui.js';
+import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
 import StakeAmount from '../home/StakeAmount';
+import { getName, STATE_OBJECT } from '../usePendingDelegation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
@@ -13,34 +15,115 @@ import { CardItem } from '_app/shared/card/CardItem';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import { totalActiveStakedSelector } from '_app/staking/selectors';
+import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
-import { useAppSelector } from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { useAppSelector, useGetObject } from '_hooks';
+
+import type { ValidatorState } from '../ValidatorDataTypes';
 
 type ValidatorDetailCardProps = {
     validatorAddress: string;
-    pendingDelegationAmount: bigint;
-    suiEarned: bigint;
-    apy: number | string;
-    commissionRate: number;
 };
 
 export function ValidatorDetailCard({
     validatorAddress,
-    pendingDelegationAmount,
-    suiEarned,
-    apy,
-    commissionRate,
 }: ValidatorDetailCardProps) {
+    const accountAddress = useAppSelector(({ account }) => account.address);
+    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
+    const validatorsData =
+        data &&
+        is(data.details, SuiObject) &&
+        data.details.data.dataType === 'moveObject'
+            ? (data.details.data.fields as ValidatorState)
+            : null;
+
+    const validatorData = useMemo(() => {
+        if (!validatorsData) return null;
+
+        const validator =
+            validatorsData.validators.fields.active_validators.find(
+                (av) =>
+                    av.fields.metadata.fields.sui_address === validatorAddress
+            );
+
+        if (!validator) return null;
+
+        const {
+            sui_balance,
+            starting_epoch,
+            pending_delegations,
+            delegation_token_supply,
+        } = validator.fields.delegation_staking_pool.fields;
+
+        const num_epochs_participated = validatorsData.epoch - starting_epoch;
+        const { name: rawName, sui_address } = validator.fields.metadata.fields;
+
+        const APY = Math.pow(
+            1 +
+                (sui_balance - delegation_token_supply.fields.value) /
+                    delegation_token_supply.fields.value,
+            365 / num_epochs_participated - 1
+        );
+        const pending_delegationsByAddress = pending_delegations
+            ? pending_delegations.filter(
+                  (d) => d.fields.delegator === accountAddress
+              )
+            : [];
+
+        return {
+            name: getName(rawName),
+            commissionRate: validator.fields.commission_rate,
+            apy: APY > 0 ? APY : 'N/A',
+            logo: null,
+            address: sui_address,
+            totalStaked: pending_delegations.reduce(
+                (acc, fields) =>
+                    (acc += BigInt(fields.fields.sui_amount || 0n)),
+                0n
+            ),
+            // TODO: Calculate suiEarned
+            suiEarned: 0n,
+            pendingDelegationAmount: pending_delegationsByAddress.reduce(
+                (acc, fields) =>
+                    (acc += BigInt(fields.fields.sui_amount || 0n)),
+                0n
+            ),
+        };
+    }, [accountAddress, validatorAddress, validatorsData]);
+
     const totalStaked = useAppSelector(totalActiveStakedSelector);
-    const pendingStake = pendingDelegationAmount || 0n;
+    const pendingStake = validatorData?.pendingDelegationAmount || 0n;
+    const apy = validatorData?.apy || 0;
+    const commissionRate = validatorData?.commissionRate || 0;
     const totalStakedIncludingPending = totalStaked + pendingStake;
+    const suiEarned = validatorData?.suiEarned || 0n;
 
     const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(
         validatorAddress
     )}`;
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
+
+    if (isLoading) {
+        return (
+            <div className="p-2 w-full flex justify-center item-center h-full">
+                <LoadingIndicator />
+            </div>
+        );
+    }
+
+    if (isError) {
+        return (
+            <div className="p-2">
+                <Alert mode="warning">
+                    <div className="mb-1 font-semibold">
+                        Something went wrong
+                    </div>
+                </Alert>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full">
@@ -51,35 +134,27 @@ export function ValidatorDetailCard({
                             <Card
                                 header={
                                     <div className="grid grid-cols-2 divide-x divide-solid divide-gray-45 divide-y-0 w-full">
-                                        <CardItem
-                                            title="Your Stake"
-                                            value={
-                                                <StakeAmount
-                                                    balance={
-                                                        totalStakedIncludingPending
-                                                    }
-                                                    type={GAS_TYPE_ARG}
-                                                    diffSymbol
-                                                    size="heading4"
-                                                    color="gray-90"
-                                                    symbolColor="steel"
-                                                />
-                                            }
-                                        />
+                                        <CardItem title="Your Stake">
+                                            <StakeAmount
+                                                balance={
+                                                    totalStakedIncludingPending
+                                                }
+                                                variant="heading"
+                                                size="heading4"
+                                                color="gray-90"
+                                                symbolColor="steel"
+                                            />
+                                        </CardItem>
 
-                                        <CardItem
-                                            title="EARNED"
-                                            value={
-                                                <StakeAmount
-                                                    balance={suiEarned}
-                                                    type={SUI_TYPE_ARG}
-                                                    diffSymbol
-                                                    symbolColor="gray-60"
-                                                    size="heading4"
-                                                    color="gray-60"
-                                                />
-                                            }
-                                        />
+                                        <CardItem title="Earned">
+                                            <StakeAmount
+                                                balance={suiEarned}
+                                                variant="heading"
+                                                symbolColor="gray-60"
+                                                size="heading4"
+                                                color="gray-60"
+                                            />
+                                        </CardItem>
                                     </div>
                                 }
                                 padding="none"
@@ -97,26 +172,25 @@ export function ValidatorDetailCard({
                                                 </div>
                                             </div>
                                         }
-                                        value={
-                                            <div className="flex gap-0.5 items-baseline">
-                                                <Text
-                                                    variant="heading4"
-                                                    weight="semibold"
-                                                    color="gray-90"
-                                                >
-                                                    {apy}
-                                                </Text>
+                                    >
+                                        <div className="flex gap-0.5 items-baseline">
+                                            <Text
+                                                variant="heading4"
+                                                weight="semibold"
+                                                color="gray-90"
+                                            >
+                                                {apy}
+                                            </Text>
 
-                                                <Text
-                                                    variant="subtitleSmall"
-                                                    weight="medium"
-                                                    color="steel-dark"
-                                                >
-                                                    %
-                                                </Text>
-                                            </div>
-                                        }
-                                    />
+                                            <Text
+                                                variant="subtitleSmall"
+                                                weight="medium"
+                                                color="steel-dark"
+                                            >
+                                                %
+                                            </Text>
+                                        </div>
+                                    </CardItem>
 
                                     <CardItem
                                         title={
@@ -130,26 +204,25 @@ export function ValidatorDetailCard({
                                                 </div>
                                             </div>
                                         }
-                                        value={
-                                            <div className="flex gap-0.5 items-baseline">
-                                                <Text
-                                                    variant="heading4"
-                                                    weight="semibold"
-                                                    color="gray-90"
-                                                >
-                                                    {commissionRate}
-                                                </Text>
+                                    >
+                                        <div className="flex gap-0.5 items-baseline">
+                                            <Text
+                                                variant="heading4"
+                                                weight="semibold"
+                                                color="gray-90"
+                                            >
+                                                {commissionRate}
+                                            </Text>
 
-                                                <Text
-                                                    variant="subtitleSmall"
-                                                    weight="medium"
-                                                    color="steel-dark"
-                                                >
-                                                    %
-                                                </Text>
-                                            </div>
-                                        }
-                                    />
+                                            <Text
+                                                variant="subtitleSmall"
+                                                weight="medium"
+                                                color="steel-dark"
+                                            >
+                                                %
+                                            </Text>
+                                        </div>
+                                    </CardItem>
                                 </div>
                             </Card>
                         </div>

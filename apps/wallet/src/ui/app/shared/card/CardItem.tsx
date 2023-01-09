@@ -7,10 +7,10 @@ import type { ReactNode } from 'react';
 
 export type CardItemProps = {
     title: ReactNode;
-    value: ReactNode;
+    children: ReactNode;
 };
 
-export function CardItem({ title, value }: CardItemProps) {
+export function CardItem({ title, children }: CardItemProps) {
     return (
         <div
             className={
@@ -21,7 +21,7 @@ export function CardItem({ title, value }: CardItemProps) {
                 {title}
             </Text>
 
-            <div className="overflow-x-hidden text-ellipsis">{value}</div>
+            <div className="overflow-x-hidden text-ellipsis">{children}</div>
         </div>
     );
 }

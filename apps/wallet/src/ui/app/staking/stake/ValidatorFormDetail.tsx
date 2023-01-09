@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
+import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import StakeAmount from '../home/StakeAmount';
@@ -133,7 +133,7 @@ export function ValidatorFormDetail({
 
                             <StakeAmount
                                 balance={validatorData.pendingDelegationAmount}
-                                type={SUI_TYPE_ARG}
+                                variant="body"
                                 size="body"
                                 color="steel-darker"
                                 symbolColor="steel-darker"
@@ -176,7 +176,7 @@ export function ValidatorFormDetail({
                                 </div>
                                 <StakeAmount
                                     balance={validatorData.totalStaked}
-                                    type={SUI_TYPE_ARG}
+                                    variant="body"
                                     size="body"
                                     color="steel-darker"
                                     symbolColor="steel-darker"
