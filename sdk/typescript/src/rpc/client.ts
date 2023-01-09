@@ -46,7 +46,7 @@ export class JsonRpcClient {
             },
             httpHeaders || {}
           ),
-          agent: new https.Agent(mTlsOptions),
+          agent: mTlsOptions? new https.Agent(mTlsOptions) : null
         };
 
         try {
