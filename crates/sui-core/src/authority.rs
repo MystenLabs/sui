@@ -85,6 +85,7 @@ use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus
 use crate::authority_aggregator::TransactionCertifier;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::{
@@ -1630,8 +1631,13 @@ impl AuthorityState {
             .await
             .unwrap(),
         );
-        let epoch_store =
-            AuthorityPerEpochStore::new(genesis_committee.clone(), &path.join("store"), None);
+        let registry = Registry::new();
+        let epoch_store = AuthorityPerEpochStore::new(
+            genesis_committee.clone(),
+            &path.join("store"),
+            None,
+            EpochMetrics::new(&registry),
+        );
 
         let epochs = Arc::new(CommitteeStore::new(
             path.join("epochs"),
@@ -1653,7 +1659,7 @@ impl AuthorityState {
             None,
             None,
             checkpoint_store,
-            &Registry::new(),
+            &registry,
         )
         .await;
 
@@ -1755,11 +1761,6 @@ impl AuthorityState {
     }
 
     pub async fn reconfigure(&self, new_committee: Committee) -> SuiResult {
-        fp_ensure!(
-            self.epoch() + 1 == new_committee.epoch,
-            SuiError::from("Invalid new epoch")
-        );
-
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
@@ -2549,11 +2550,7 @@ impl AuthorityState {
 
     async fn reopen_epoch_db(&self, new_committee: Committee) {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
-        let epoch_tables = AuthorityPerEpochStore::new(
-            new_committee,
-            self.epoch_store().parent_path(),
-            self.epoch_store().db_options(),
-        );
+        let epoch_tables = self.epoch_store().new_at_next_epoch(new_committee);
         let previous_store = self.epoch_store.swap(epoch_tables);
         previous_store.epoch_terminated().await;
     }

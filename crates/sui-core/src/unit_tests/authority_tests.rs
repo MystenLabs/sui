@@ -46,6 +46,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::epoch::epoch_metrics::EpochMetrics;
 use sui_types::dynamic_field::DynamicFieldType;
 use tracing::info;
 
@@ -2424,7 +2425,13 @@ async fn test_authority_persist() {
 
         let epoch_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&epoch_store_path).unwrap();
-        let epoch_store = AuthorityPerEpochStore::new(committee, &epoch_store_path, None);
+        let registry = Registry::new();
+        let epoch_store = AuthorityPerEpochStore::new(
+            committee,
+            &epoch_store_path,
+            None,
+            EpochMetrics::new(&registry),
+        );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&checkpoint_store_path).unwrap();
@@ -2440,7 +2447,7 @@ async fn test_authority_persist() {
             None,
             None,
             checkpoint_store,
-            &prometheus::Registry::new(),
+            &registry,
         )
         .await
     }

@@ -69,6 +69,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{
     run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
@@ -150,8 +151,12 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        let epoch_store =
-            AuthorityPerEpochStore::new(committee, &config.db_path().join("store"), None);
+        let epoch_store = AuthorityPerEpochStore::new(
+            committee,
+            &config.db_path().join("store"),
+            None,
+            EpochMetrics::new(&registry_service.default_registry()),
+        );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let state_sync_store = RocksDbStore::new(
