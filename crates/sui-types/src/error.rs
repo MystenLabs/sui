@@ -554,6 +554,9 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
+    #[error("This Move function is currently disabled and not available for call")]
+    BlockedMoveFunction,
+
     #[error("unknown error: {0}")]
     Unknown(String),
 }

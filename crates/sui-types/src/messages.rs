@@ -16,7 +16,9 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use crate::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
@@ -42,6 +44,19 @@ use std::{
 use strum::IntoStaticStr;
 use tap::Pipe;
 use tracing::debug;
+
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 2] = [
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_add_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_remove_validator",
+    ),
+];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -568,49 +583,6 @@ impl TransactionKind {
             TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
         )
     }
-
-    pub fn validity_check(&self) -> SuiResult {
-        match self {
-            Self::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
-                    }
-                );
-            }
-            Self::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::PaySui(_)
-                | SingleTransactionKind::PayAllSui(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::Genesis(_) => (),
-            },
-        }
-        Ok(())
-    }
 }
 
 impl Display for TransactionKind {
@@ -821,8 +793,37 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
         match &self.kind {
-            TransactionKind::Batch(_) => (),
+            TransactionKind::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = b.iter().all(|s| match s {
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::Publish(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                    }
+                );
+            }
             TransactionKind::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
                 | SingleTransactionKind::Call(_)
@@ -850,6 +851,17 @@ impl TransactionData {
             },
         }
         Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        self.kind.single_transactions().any(|tx| match tx {
+            SingleTransactionKind::Call(call) => {
+                let (package, module, func) =
+                    (call.package.0, call.module.as_str(), call.function.as_str());
+                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+            }
+            _ => false,
+        })
     }
 }
 
