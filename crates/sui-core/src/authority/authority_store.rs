@@ -160,6 +160,45 @@ impl AuthorityStore {
             .map_err(|e| e.into())
     }
 
+    pub fn insert_executed_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        epoch: EpochId,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let batch = self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .batch();
+        let batch = batch.insert_batch(
+            &self.perpetual_tables.executed_transactions_to_checkpoint,
+            digests.iter().map(|d| (*d, (epoch, sequence))),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .contains_key(digest)?)
+    }
+
+    pub fn transaction_executed_in_epoch(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<EpochId>> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .get(digest)?
+            .map(|(epoch, _)| epoch))
+    }
+
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         self.perpetual_tables.database_is_empty()

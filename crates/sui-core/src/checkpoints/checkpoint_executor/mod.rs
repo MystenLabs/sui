@@ -645,7 +645,11 @@ async fn execute_transactions(
             }
             Ok(Err(err)) => return Err(err),
             Ok(Ok(_)) => {
-                epoch_store.insert_executed_transactions(&all_tx_digests, checkpoint_sequence)?;
+                authority_store.insert_executed_transactions(
+                    &all_tx_digests,
+                    epoch_store.epoch(),
+                    checkpoint_sequence,
+                )?;
                 return Ok(());
             }
         }

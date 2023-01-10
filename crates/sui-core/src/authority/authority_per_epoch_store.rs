@@ -197,9 +197,6 @@ pub struct AuthorityEpochTables {
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
-    /// When transaction is executed via checkpoint executor, we store association here
-    executed_transactions_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
-
     /// Stores pending signatures
     /// The key in this table is checkpoint sequence number and an arbitrary integer
     pending_checkpoint_signatures:
@@ -358,30 +355,6 @@ impl AuthorityPerEpochStore {
     #[cfg(test)]
     pub fn delete_signed_transaction_for_test(&self, transaction: &TransactionDigest) {
         self.tables.transactions.remove(transaction).unwrap();
-    }
-
-    pub fn insert_executed_transactions(
-        &self,
-        digests: &[TransactionDigest],
-        sequence: CheckpointSequenceNumber,
-    ) -> SuiResult {
-        let batch = self.tables.executed_transactions_to_checkpoint.batch();
-        let batch = batch.insert_batch(
-            &self.tables.executed_transactions_to_checkpoint,
-            digests.iter().map(|d| (*d, sequence)),
-        )?;
-        batch.write()?;
-        Ok(())
-    }
-
-    pub fn is_transaction_executed_in_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .tables
-            .executed_transactions_to_checkpoint
-            .contains_key(digest)?)
     }
 
     pub fn get_signed_transaction(
