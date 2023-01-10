@@ -150,23 +150,17 @@ const txns = await provider.getTransactionWithEffectsBatch([
 ]);
 ```
 
-Fetch transaction events from a transaction digest:
-
-```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider();
-const txEvents = await provider.getEventsByTransaction(
-  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
-);
-```
-
 Fetch events by sender address:
 
+:warning: Functions `getEventsBySender` and `getEventsByTransaction` are now deprecated
+
 ```typescript
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const senderEvents = await provider.getEventsBySender(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+const senderEvents = await provider.getEvents(
+    {Sender:   '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'},
+    null,  /// optional paging cursor
+    10    /// maximum number of items per page
 );
 ```
 
