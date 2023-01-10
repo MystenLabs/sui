@@ -4,14 +4,15 @@
 use crate::{
     state_sync::{
         test_utils::{empty_contents, CommitteeFixture},
-        Builder, GetCheckpointSummaryRequest, StateSync, StateSyncMessage, UnstartedStateSync,
+        Builder, GetCheckpointSummaryRequest, PeerStateSyncInfo, StateSync, StateSyncMessage,
+        UnstartedStateSync,
     },
     utils::build_network,
 };
 use anemo::{PeerId, Request};
 use std::{collections::HashMap, time::Duration};
 use sui_types::{
-    messages_checkpoint::{CheckpointDigest, VerifiedCheckpoint},
+    messages_checkpoint::CheckpointDigest,
     storage::{ReadStore, SharedInMemoryStore, WriteStore},
 };
 use tokio::time::timeout;
@@ -41,13 +42,26 @@ async fn server_push_checkpoint() {
     ) = Builder::new().store(store).build_internal();
     let peer_id = PeerId([9; 32]); // fake PeerId
 
+    peer_heights.write().unwrap().peers.insert(
+        peer_id,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            on_same_chain_as_us: true,
+            height: 0,
+        },
+    );
+
     let checkpoint = ordered_checkpoints[1].inner().to_owned();
     let request = Request::new(checkpoint.clone()).with_extension(peer_id);
     server.push_checkpoint_summary(request).await.unwrap();
 
     assert_eq!(
-        peer_heights.read().unwrap().heights.get(&peer_id),
-        Some(&Some(1))
+        peer_heights.read().unwrap().peers.get(&peer_id),
+        Some(&PeerStateSyncInfo {
+            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            on_same_chain_as_us: true,
+            height: 1,
+        })
     );
     assert_eq!(
         peer_heights
@@ -200,17 +214,19 @@ async fn isolated_sync_job() {
     }
 
     // Node 1 will know that Node 2 has the data
+    event_loop_1.peer_heights.write().unwrap().peers.insert(
+        network_2.peer_id(),
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            on_same_chain_as_us: true,
+            height: ordered_checkpoints.last().unwrap().sequence_number(),
+        },
+    );
     event_loop_1
         .peer_heights
         .write()
         .unwrap()
-        .update_peer_height(
-            network_2.peer_id(),
-            ordered_checkpoints
-                .last()
-                .cloned()
-                .map(VerifiedCheckpoint::into_inner),
-        );
+        .insert_checkpoint(ordered_checkpoints.last().cloned().unwrap().into_inner());
 
     // Sync the data
     event_loop_1.maybe_start_checkpoint_summary_sync_task();
@@ -282,12 +298,14 @@ async fn sync_with_checkpoints_being_inserted() {
     let store_1 = event_loop_1.store.clone();
     let store_2 = event_loop_2.store.clone();
     // make sure that node_1 knows about node_2
-    event_loop_1
-        .peer_heights
-        .write()
-        .unwrap()
-        .heights
-        .insert(network_2.peer_id(), None);
+    event_loop_1.peer_heights.write().unwrap().peers.insert(
+        network_2.peer_id(),
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: ordered_checkpoints[0].digest(),
+            on_same_chain_as_us: true,
+            height: 0,
+        },
+    );
     // Start both event loops
     tokio::spawn(event_loop_1.start());
     tokio::spawn(event_loop_2.start());
