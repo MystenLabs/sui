@@ -37,7 +37,7 @@ use super::*;
 pub struct SqlEventStore {
     pool: SqlitePool,
     // Query lock is held for read by both read and write API calls. Periodically, a background
-    // task wakes up, acquires the lock for read (which excludes any access to the db) and attempts
+    // task wakes up, acquires the lock for write (which excludes any access to the db) and attempts
     // to compact the WAL, which otherwise may grow too large.
     query_lock: RwLock<()>,
 }
@@ -170,10 +170,12 @@ impl SqlEventStore {
     /// grows too big.
     #[instrument(level = "debug", skip_all, err)]
     pub async fn force_wal_truncation(&self) -> Result<(), SuiError> {
-        self.pool
+        let res = self
+            .pool
             .execute("PRAGMA wal_checkpoint(TRUNCATE)")
             .await
             .map_err(convert_sqlx_err)?;
+        info!("force_wal_truncation result: {:?}", res);
         Ok(())
     }
 
