@@ -182,13 +182,10 @@ export class SuiWallet implements Wallet {
     };
 
     #stake = async (input: StakeInput) => {
-        await mapToPromise<void, void>(
-            this.#send<StakeRequest, void>({
-                type: 'stake-request',
-                validatorAddress: input.validatorAddress,
-            }),
-            (response) => response
-        );
+        this.#send<StakeRequest, void>({
+            type: 'stake-request',
+            validatorAddress: input.validatorAddress,
+        });
     };
 
     #hasPermissions(permissions: HasPermissionsRequest['permissions']) {
