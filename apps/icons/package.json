@@ -2,6 +2,7 @@
   "name": "@mysten/icons",
   "main": "src/index.ts",
   "private": true,
+  "sideEffects": false,
   "scripts": {
     "clean": "rimraf src/**",
     "clean:svgs": "rimraf svgs/**",
