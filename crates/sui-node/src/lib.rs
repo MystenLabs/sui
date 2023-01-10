@@ -522,6 +522,11 @@ impl SuiNode {
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
+        // Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
+        #[cfg(test)]
+        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 2;
+        #[cfg(not(test))]
+        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
 
         CheckpointService::spawn(
             state.clone(),
@@ -532,6 +537,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             Box::new(NetworkTransactionCertifier::default()),
             checkpoint_metrics,
+            MAX_TRANSACTIONS_PER_CHECKPOINT,
         )
     }
 

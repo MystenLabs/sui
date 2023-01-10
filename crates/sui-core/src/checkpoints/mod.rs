@@ -280,6 +280,7 @@ pub struct CheckpointBuilder {
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
     transaction_certifier: Box<dyn TransactionCertifier>,
+    max_transactions_per_checkpoint: usize,
 }
 
 pub struct CheckpointAggregator {
@@ -312,6 +313,7 @@ impl CheckpointBuilder {
         notify_aggregator: Arc<Notify>,
         metrics: Arc<CheckpointMetrics>,
         transaction_certifier: Box<dyn TransactionCertifier>,
+        max_transactions_per_checkpoint: usize,
     ) -> Self {
         Self {
             state,
@@ -324,6 +326,7 @@ impl CheckpointBuilder {
             notify_aggregator,
             metrics,
             transaction_certifier,
+            max_transactions_per_checkpoint,
         }
     }
 
@@ -384,9 +387,9 @@ impl CheckpointBuilder {
         let unsorted = self.complete_checkpoint_effects(roots)?;
         let sorted = CasualOrder::casual_sort(unsorted);
         let new_checkpoint = self
-            .create_checkpoint(sorted, last_checkpoint_of_epoch)
+            .create_checkpoints(sorted, last_checkpoint_of_epoch)
             .await?;
-        self.write_checkpoint(height, new_checkpoint).await?;
+        self.write_checkpoints(height, new_checkpoint).await?;
         if last_checkpoint_of_epoch {
             info!(epoch=?self.epoch_store.epoch(), "Last checkpoint of the epoch created");
             self.epoch_store
@@ -395,117 +398,130 @@ impl CheckpointBuilder {
         Ok(())
     }
 
-    async fn write_checkpoint(
+    async fn write_checkpoints(
         &self,
         height: CheckpointCommitHeight,
-        new_checkpoint: Option<(CheckpointSummary, CheckpointContents)>,
+        new_checkpoint: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
-        let content_info = match new_checkpoint {
-            Some((summary, contents)) => {
-                debug!(
-                    "Created checkpoint from commit height {height} with sequence {}",
-                    summary.sequence_number
-                );
-                // Only create checkpoint if content is not empty
-                self.output
-                    .checkpoint_created(&summary, &contents, &self.epoch_store)
-                    .await?;
+        let mut batch = self.tables.checkpoint_content.batch();
+        for (summary, contents) in &new_checkpoint {
+            debug!(
+                "Created checkpoint from commit height {height} with sequence {}",
+                summary.sequence_number
+            );
+            self.output
+                .checkpoint_created(summary, contents, &self.epoch_store)
+                .await?;
 
-                self.metrics
-                    .transactions_included_in_checkpoint
-                    .inc_by(contents.size() as u64);
-                let sequence_number = summary.sequence_number;
-                self.metrics
-                    .last_constructed_checkpoint
-                    .set(sequence_number as i64);
+            self.metrics
+                .transactions_included_in_checkpoint
+                .inc_by(contents.size() as u64);
+            let sequence_number = summary.sequence_number;
+            self.metrics
+                .last_constructed_checkpoint
+                .set(sequence_number as i64);
 
-                let transactions: Vec<_> = contents.iter().map(|tx| tx.transaction).collect();
-
-                let mut batch = self.tables.checkpoint_content.batch();
-                batch = batch.insert_batch(
-                    &self.tables.checkpoint_content,
-                    [(contents.digest(), contents)],
-                )?;
-                batch = batch.insert_batch(
-                    &self.tables.checkpoint_summary,
-                    [(sequence_number, summary)],
-                )?;
-                batch.write()?;
-
-                self.notify_aggregator.notify_waiters();
-                Some((sequence_number, transactions))
-            }
-            None => {
-                debug!("Skipping empty checkpoint at commit height {height}");
-                None
-            }
-        };
+            batch = batch.insert_batch(
+                &self.tables.checkpoint_content,
+                [(contents.digest(), contents)],
+            )?;
+            batch = batch.insert_batch(
+                &self.tables.checkpoint_summary,
+                [(sequence_number, summary)],
+            )?;
+        }
+        batch.write()?;
+        self.notify_aggregator.notify_waiters();
         self.epoch_store
-            .process_pending_checkpoint(height, content_info)?;
+            .process_pending_checkpoint(height, &new_checkpoint)?;
         Ok(())
     }
 
-    async fn create_checkpoint(
+    async fn create_checkpoints(
         &self,
-        mut effects: Vec<TransactionEffects>,
-        last_checkpoint_of_epoch: bool,
-    ) -> anyhow::Result<Option<(CheckpointSummary, CheckpointContents)>> {
-        let last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
-        let epoch_rolling_gas_cost_summary =
-            self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
-        if last_checkpoint_of_epoch {
-            self.augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
-                .await?;
+        all_effects: Vec<TransactionEffects>,
+        last_pending_of_epoch: bool,
+    ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
+        let total = all_effects.len();
+        let mut last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
+        let chunks = all_effects.chunks(self.max_transactions_per_checkpoint);
+        let chunks = chunks.into_iter().map(|ch| ch.to_vec());
+        let mut chunks: Vec<_> = chunks.collect();
+        if chunks.is_empty() {
+            // We intentionally create an empty checkpoint here if there is no content provided
+            // to make a 'heartbeat' checkpoint.
+            // Important: if some conditions are added here later, we need to make sure we always
+            // have at least one chunk if last_pending_of_epoch is set
+            chunks.push(vec![]);
+            // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
+            // modest load. Even if they do happen, it is still useful as it allows fullnodes to
+            // distinguish between "no transactions have happened" and "i am not receiving new
+            // checkpoints".
         }
-
-        // Note: empty checkpoints are ok - they shouldn't happen at all on a network with even
-        // modest load. Even if they do happen, it is still useful as it allows fullnodes to
-        // distinguish between "no transactions have happened" and "i am not receiving new
-        // checkpoints".
-
-        let contents = CheckpointContents::new_with_causally_ordered_transactions(
-            effects.iter().map(TransactionEffects::execution_digests),
+        let chunks_count = chunks.len();
+        let mut checkpoints = Vec::with_capacity(chunks_count);
+        debug!(
+            "Creating {} checkpoints with {} transactions total after sequence {:?}",
+            chunks_count,
+            total,
+            last_checkpoint.as_ref().map(|(seq, _)| *seq)
         );
-
-        let num_txns = contents.size() as u64;
-
-        let network_total_transactions = last_checkpoint
-            .as_ref()
-            .map(|(_, c)| c.network_total_transactions + num_txns)
-            .unwrap_or(num_txns);
-
-        let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
-        let sequence_number = last_checkpoint
-            .as_ref()
-            .map(|(_, c)| c.sequence_number + 1)
-            .unwrap_or_default();
-        if last_checkpoint_of_epoch {
-            info!(
-                ?sequence_number,
-                "creating last checkpoint of epoch {}",
-                self.epoch_store.epoch()
-            );
-        }
-        let summary = CheckpointSummary::new(
-            self.epoch_store.epoch(),
-            sequence_number,
-            network_total_transactions,
-            &contents,
-            previous_digest,
-            epoch_rolling_gas_cost_summary,
+        for (index, mut effects) in chunks.into_iter().enumerate() {
+            let last_checkpoint_of_epoch = last_pending_of_epoch && index == chunks_count - 1;
+            let epoch_rolling_gas_cost_summary =
+                self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
             if last_checkpoint_of_epoch {
-                Some(
-                    self.state
-                        .get_sui_system_state_object()
-                        .unwrap()
-                        .get_current_epoch_committee()
-                        .committee,
-                )
-            } else {
-                None
-            },
-        );
-        Ok(Some((summary, contents)))
+                self.augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
+                    .await?;
+            }
+
+            let contents = CheckpointContents::new_with_causally_ordered_transactions(
+                effects.iter().map(TransactionEffects::execution_digests),
+            );
+
+            let num_txns = contents.size() as u64;
+
+            let network_total_transactions = last_checkpoint
+                .as_ref()
+                .map(|(_, c)| c.network_total_transactions + num_txns)
+                .unwrap_or(num_txns);
+
+            let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
+            let sequence_number = last_checkpoint
+                .as_ref()
+                .map(|(_, c)| c.sequence_number + 1)
+                .unwrap_or_default();
+            if last_checkpoint_of_epoch {
+                info!(
+                    ?sequence_number,
+                    "creating last checkpoint of epoch {}",
+                    self.epoch_store.epoch()
+                );
+            }
+            let summary = CheckpointSummary::new(
+                self.epoch_store.epoch(),
+                sequence_number,
+                network_total_transactions,
+                &contents,
+                previous_digest,
+                epoch_rolling_gas_cost_summary,
+                if last_checkpoint_of_epoch {
+                    Some(
+                        self.state
+                            .get_sui_system_state_object()
+                            .unwrap()
+                            .get_current_epoch_committee()
+                            .committee,
+                    )
+                } else {
+                    None
+                },
+            );
+            last_checkpoint = Some((sequence_number, summary.clone()));
+            checkpoints.push((summary, contents));
+        }
+
+        Ok(checkpoints)
     }
 
     fn get_epoch_total_gas_cost(
@@ -814,6 +830,7 @@ impl CheckpointService {
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         transaction_certifier: Box<dyn TransactionCertifier>,
         metrics: Arc<CheckpointMetrics>,
+        max_transactions_per_checkpoint: usize,
     ) -> (Arc<Self>, watch::Sender<()> /* The exit sender */) {
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
@@ -831,6 +848,7 @@ impl CheckpointService {
             notify_aggregator.clone(),
             metrics.clone(),
             transaction_certifier,
+            max_transactions_per_checkpoint,
         );
 
         spawn_monitored_task!(builder.run());
@@ -1061,6 +1079,12 @@ mod tests {
             d(4),
             e(&state, d(4), vec![], GasCostSummary::new(41, 42, 43)),
         );
+        for i in [10, 11, 12, 13] {
+            store.insert(
+                d(i),
+                e(&state, d(i), vec![], GasCostSummary::new(41, 42, 43)),
+            );
+        }
 
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
         let (certified_output, mut certified_result) =
@@ -1078,6 +1102,7 @@ mod tests {
             Box::new(certified_output),
             Box::new(NetworkTransactionCertifier::default()),
             CheckpointMetrics::new_for_tests(),
+            3,
         );
         let mut tailer = checkpoint_service.subscribe_checkpoints(0);
         checkpoint_service
@@ -1089,6 +1114,9 @@ mod tests {
             .unwrap();
         checkpoint_service
             .notify_checkpoint(&epoch_store, 1, vec![d(1), d(3)], false)
+            .unwrap();
+        checkpoint_service
+            .notify_checkpoint(&epoch_store, 2, vec![d(10), d(11), d(12), d(13)], false)
             .unwrap();
 
         let (c1c, c1s) = result.recv().await.unwrap();
@@ -1111,6 +1139,19 @@ mod tests {
             c2s.epoch_rolling_gas_cost_summary,
             GasCostSummary::new(104, 108, 112)
         );
+
+        // Pending at index 2 had 4 transactions, and we configured 3 transactions max
+        // Verify that we split that we generated 2 checkpoints
+        let (c3c, c3s) = result.recv().await.unwrap();
+        let c3t = c3c.iter().map(|d| d.transaction).collect::<Vec<_>>();
+        let (c4c, c4s) = result.recv().await.unwrap();
+        let c4t = c4c.iter().map(|d| d.transaction).collect::<Vec<_>>();
+        assert_eq!(c3s.sequence_number, 2);
+        assert_eq!(c3s.previous_digest, Some(c2s.digest()));
+        assert_eq!(c4s.sequence_number, 3);
+        assert_eq!(c4s.previous_digest, Some(c3s.digest()));
+        assert_eq!(c3t, vec![d(10), d(11), d(12)]);
+        assert_eq!(c4t, vec![d(13)]);
 
         let c1ss =
             SignedCheckpointSummary::new_from_summary(c1s, keypair.public().into(), &keypair);

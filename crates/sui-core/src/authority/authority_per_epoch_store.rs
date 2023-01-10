@@ -45,7 +45,9 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+};
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
 use tokio::time::Instant;
@@ -1272,14 +1274,16 @@ impl AuthorityPerEpochStore {
     pub fn process_pending_checkpoint(
         &self,
         commit_height: CheckpointCommitHeight,
-        content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
+        content_info: &[(CheckpointSummary, CheckpointContents)],
     ) -> Result<(), TypedStoreError> {
         let mut batch = self.tables.pending_checkpoints.batch();
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
-        if let Some((seq, transactions)) = content_info {
+        for (summary, transactions) in content_info {
             batch = batch.insert_batch(
                 &self.tables.builder_digest_to_checkpoint,
-                transactions.iter().map(|tx| (*tx, seq)),
+                transactions
+                    .iter()
+                    .map(|tx| (tx.transaction, summary.sequence_number)),
             )?;
         }
 
