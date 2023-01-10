@@ -229,7 +229,7 @@ module sui::test_scenario {
     public fun return_to_address<T: key>(account: address, t: T) {
         let id = object::id(&t);
         assert!(was_taken_from_address(account, id), ECantReturnObject);
-        sui::transfer::transfer(t, account)
+        sui::transfer::transfer(t, account);
     }
 
     /// Returns true if the object with `ID` id was in the inventory for `account`

@@ -14,7 +14,6 @@ procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 // ==================================================================================
 // Native transfer
 
-
 {%- for instance in transfer_instances %}
 
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
@@ -24,7 +23,13 @@ procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 // Native transfer implementation for object type `{{instance.suffix}}`
 
 
-procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int);
+//procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int);
+
+procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int) {
+    var id: int;
+    call id := $2_object_id_address{{S}}(obj);
+    {{T}}_$memory := transfer({{T}}_$memory, id, obj);
+}
 
 procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}});
 
@@ -47,7 +52,9 @@ procedure {:inline 1} $2_object_record_new_uid(id: int);
 // ----------------------------------------------------------------------------------
 // Native object implementation for object type `{{instance.suffix}}`
 
-procedure {:inline 1} $2_object_borrow_uid{{S}}(obj: {{T}}) returns (res: $2_object_UID);
+procedure {:inline 1} $2_object_borrow_uid{{S}}(obj: {{T}}) returns (res: $2_object_UID) {
+    res := $id#{{T}}(obj);
+}
 
 {%- endfor %}
 
@@ -121,3 +128,24 @@ procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int
 function GetDynField<T, V>(o: T, addr: int): V;
 
 function UpdateDynField<T, V>(o: T, addr: int, v: V): T;
+
+// ==================================================================================
+// Spec native functions to be used in specs to tap into Sui storage model
+
+
+// Representation of memory for a given type.
+type {:datatype} $SuiMemory _;
+
+function {:constructor} $SuiMemory<T>(domain: [int]bool, contents: [int]T): $SuiMemory T;
+
+function {:inline} $2_prover_owned<T>(m: $SuiMemory T, id: int): bool {
+    domain#$SuiMemory(m)[id]
+}
+
+function {:inline} transfer<T>(m: $SuiMemory T, id: int, v: T): $SuiMemory T {
+    $SuiMemory(domain#$SuiMemory(m)[id := true], contents#$SuiMemory(m)[id := v])
+}
+
+
+
+

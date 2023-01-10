@@ -160,7 +160,7 @@ module sui::object {
     public fun calibrate_address_from_bytes(bytes: vector<u8>) {
         sui::address::from_bytes(bytes);
     }
-    
+
     #[test_only]
     public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
         let _ = bytes;
