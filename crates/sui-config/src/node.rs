@@ -59,9 +59,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    #[serde(default)]
-    pub enable_checkpoint: bool,
-
     /// Number of checkpoints per epoch.
     /// Some means reconfiguration is enabled.
     /// None means reconfiguration is disabled.

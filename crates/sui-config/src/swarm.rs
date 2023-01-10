@@ -229,7 +229,6 @@ impl<'a> FullnodeConfigBuilder<'a> {
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
-            enable_checkpoint: false,
             checkpoints_per_epoch: default_checkpoints_per_epoch(),
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,

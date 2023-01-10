@@ -341,7 +341,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
-                    enable_checkpoint: false,
                     checkpoints_per_epoch: self.checkpoints_per_epoch,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
