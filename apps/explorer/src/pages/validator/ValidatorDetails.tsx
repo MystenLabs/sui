@@ -5,11 +5,13 @@ import { is, SuiObject, Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { DelegationAmount } from './DelegationAmount';
+
 import ErrorResult from '~/components/error-result/ErrorResult';
-import { StatsCoin } from '~/components/top-validators-card/StatsCoin';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
+    type Validator,
     type ValidatorState,
 } from '~/pages/validator/ValidatorDataTypes';
 import { Card } from '~/ui/Card';
@@ -22,6 +24,67 @@ import { Stats } from '~/ui/Stats';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 import { getStakedPercent } from '~/utils/getStakedPercent';
+
+
+
+
+
+type ValidatorMetaProps = {
+    validatorData: Validator;
+}
+
+function ValidatorMeta({validatorData}:ValidatorMetaProps) {
+    const validatorName = useMemo(() => {
+        return getName(validatorData.fields.metadata.fields.name)
+     }, [validatorData]);
+
+    const logo = null
+
+    const validatorPublicKey = useMemo(() => new Base64DataBuffer(
+        new Uint8Array(validatorData.fields.metadata.fields.pubkey_bytes)
+    ).toString(),
+    [validatorData]);
+
+    return (
+        <>
+        <div className="flex basis-full gap-5 capitalize md:basis-1/4 md:mr-7.5 border-r border-r-gray-45 border-transparent border-solid">
+                     <ImageIcon
+                        src={logo}
+                        alt={validatorName}
+                        size="xl"
+                    />
+                    <div className="mt-1 flex flex-col gap-2.5 md:gap-3.5 pl-2">
+                        <Heading
+                            as="h1"
+                            variant="heading2/bold"
+                            color="gray-100"
+                        >
+                            {validatorName}
+                        </Heading>
+                    </div>
+                </div>
+                <div className="basis-full break-all md:basis-2/3 ">
+                    <DescriptionItem title="Address">
+                        <AddressLink
+                            address={validatorData.fields.metadata.fields.sui_address}
+                            noTruncate
+                        />
+                    </DescriptionItem>
+                    <DescriptionList>
+                   
+                            <DescriptionItem title="Public Key">
+                                <Text variant="p1/medium" color="gray-90">
+                                    {validatorPublicKey}
+                                </Text>
+                            </DescriptionItem>
+                    
+                    </DescriptionList>
+                </div>
+            </>    
+    )
+}
+
+
 
 function ValidatorDetails() {
     const { id } = useParams();
@@ -42,6 +105,7 @@ function ValidatorDetails() {
             ) || null
         );
     }, [id, validatorsData]);
+
 
     const validator = useMemo(() => {
         if (!validatorData || !validatorsData) return null;
@@ -74,7 +138,6 @@ function ValidatorDetails() {
                 validatorsData.validators.fields.total_validator_stake
             ),
             totalStake: validatorData.fields.stake_amount,
-            delegatedStake:  '--',
             address: sui_address,
 
             // TODO: add missing fields
@@ -98,7 +161,7 @@ function ValidatorDetails() {
         );
     }
 
-    if (!validator) {
+    if (!validatorData || !validator) {
         return (
             <div className="mt-5 mb-10 flex items-center justify-center">
                 <ErrorResult id={id} errorMsg="No validator data found" />
@@ -108,48 +171,15 @@ function ValidatorDetails() {
 
     return (
         <div className="mt-5 mb-10">
-            <div className="flex flex-col flex-nowrap md:flex-row ">
-                <div className="flex basis-full gap-5 capitalize md:basis-1/3">
-                    <ImageIcon
-                        src={validator.logo}
-                        alt={validator.name}
-                        variant="square"
-                        size="xl"
-                    />
-                    <div className="mt-1 flex flex-col gap-2.5 md:gap-3.5">
-                        <Heading
-                            as="h1"
-                            variant="heading2/bold"
-                            color="gray-100"
-                        >
-                            {validator.name}
-                        </Heading>
-                    </div>
-                </div>
-                <div className="basis-full break-all md:basis-2/3">
-                    <DescriptionItem title="Address">
-                        <AddressLink
-                            address={validator.suiAddress}
-                            noTruncate
-                        />
-                    </DescriptionItem>
-                    <DescriptionList>
-                        {validator.pubkeyBytes && (
-                            <DescriptionItem title="Public Key">
-                                <Text variant="p1/medium" color="gray-90">
-                                    {validator.pubkeyBytes}
-                                </Text>
-                            </DescriptionItem>
-                        )}
-                    </DescriptionList>
-                </div>
+            <div className="flex flex-col flex-nowrap md:flex-row gap-5 md:gap-0">
+                <ValidatorMeta validatorData={validatorData}/>
             </div>
-            <div className="mt-8 flex w-full">
-                <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
+            <div className="mt-5 md:mt-8 flex w-full">
+            <div className="md:mt-8 flex w-full flex-col gap-5 md:flex-row">
                     <div className="basis-full md:basis-2/5 max-w-[480px]">
                         <Card spacing="lg">
-                            <div className="flex  max-w-full flex-col flex-nowrap gap-8">
-                                <Heading as="div" variant="heading4/semibold">
+                            <div className="flex max-w-full flex-col flex-nowrap gap-8">
+                                <Heading as="div" variant="heading4/semibold" color="steel-darker">
                                     SUI Staked on Validator
                                 </Heading>
                                 <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
@@ -169,8 +199,9 @@ function ValidatorDetails() {
                                         label="Total Staked"
                                         tooltip="Coming soon"
                                     >
-                                        <StatsCoin
+                                        <DelegationAmount
                                             amount={validator.totalStake}
+                                            isStats
                                         />
                                     </Stats>
                                 </div>
@@ -219,7 +250,7 @@ function ValidatorDetails() {
                     <div className="basis-full md:basis-1/4">
                         <Card spacing="lg">
                             <div className="flex  max-w-full flex-col flex-nowrap gap-8">
-                                <Heading as="div" variant="heading4/semibold">
+                                <Heading as="div" variant="heading4/semibold" color="steel-darker">
                                     Validator Staking Rewards
                                 </Heading>
                                 <div className="flex flex-col flex-nowrap gap-8">
@@ -251,10 +282,10 @@ function ValidatorDetails() {
                             </div>
                         </Card>
                     </div>
-                    <div className="basis-full md:basis-1/3">
+                    <div className="basis-full md:basis-1/3 max-w-[432px]">
                         <Card spacing="lg">
                             <div className="flex  max-w-full flex-col flex-nowrap gap-8">
-                                <Heading as="div" variant="heading4/semibold">
+                                <Heading as="div" variant="heading4/semibold" color="steel-darker">
                                     Network Participation
                                 </Heading>
                                 <div className="flex flex-col flex-nowrap gap-8">

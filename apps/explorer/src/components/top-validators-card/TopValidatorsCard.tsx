@@ -57,9 +57,9 @@ const validatorsTable = (
         data: validatorsItems.map(({ name, stake, address, logo }) => {
             return {
                 name: (
-                    <div className="flex items-center gap-2.5 capitalize">
+                    <div className="flex items-center gap-2.5">
                         {showIcon && (
-                            <ImageIcon src={logo} size="sm" alt={name} />
+                            <ImageIcon src={logo} size="sm" alt={name} circle />
                         )}
                         <Text variant="bodySmall/medium" color="steel-darker">
                             {name}

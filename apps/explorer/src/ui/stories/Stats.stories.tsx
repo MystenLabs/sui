@@ -5,8 +5,6 @@ import { type Meta, type StoryObj } from '@storybook/react';
 
 import { Stats, type StatsProps } from '../Stats';
 
-import { Heading } from '~/ui/Heading';
-
 export default {
     component: Stats,
 } as Meta;
@@ -14,9 +12,7 @@ export default {
 export const defaultAmount: StoryObj<StatsProps> = {
     render: () => (
         <Stats label="Last Epoch Change" tooltip="Last Epoch Change Tooltip">
-            <Heading as="h3" variant="heading2/semibold" color="steel-darker">
-                2,334
-            </Heading>
+            2,334
         </Stats>
     ),
 };

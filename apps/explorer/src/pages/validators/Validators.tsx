@@ -6,8 +6,8 @@ import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
-import { StatsCoin } from '~/components/top-validators-card/StatsCoin';
 import { useGetObject } from '~/hooks/useGetObject';
+import { DelegationAmount } from '~/pages/validator/DelegationAmount';
 import {
     VALIDATORS_OBJECT_ID,
     type ValidatorState,
@@ -108,9 +108,8 @@ function ValidatorPageResult() {
                     return {
                         number: index + 1,
                         name: (
-                            <div className="flex items-center gap-2.5 capitalize">
-                                <ImageIcon src={logo} size="sm" alt={name} />
-
+                            <div className="flex items-center gap-2.5">
+                                <ImageIcon src={logo} size="sm" alt={name} circle />
                                 <Text
                                     variant="bodySmall/medium"
                                     color="steel-darker"
@@ -195,15 +194,10 @@ function ValidatorPageResult() {
                                     >{`${validatorsStats.participation}%`}</Heading>
                                 </Stats>
                                 <Stats label="Total Staked">
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >
-                                        <StatsCoin
-                                            amount={validatorsStats.totalStake}
-                                        />
-                                    </Heading>
+                                    <DelegationAmount
+                                        amount={validatorsStats.totalStake}
+                                        isStats
+                                    />
                                 </Stats>
                                 <Stats
                                     label="Last Epoch Reward"
