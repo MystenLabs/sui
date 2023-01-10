@@ -71,9 +71,9 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                             weight="bold"
                             leading="none"
                         >
-                            {`Wallet ${
-                                mode === 'imported' ? 'Imported' : 'Created'
-                            } Successfully!`}
+                            {mode === 'imported'
+                                ? 'Wallet Imported Successfully!'
+                                : 'Wallet Created Successfully!'}
                         </Heading>
                     </div>
 
@@ -142,7 +142,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                     <div className="absolute top-0 left-0 h-5 w-5 bg-white peer-checked/agree:bg-success peer-checked/agree:shadow-none border-gray-50 border rounded shadow-button flex justify-center items-center">
                                         <Icon
                                             icon={SuiIcons.Checkmark}
-                                            className="text-white text-extraSmall font-semibold"
+                                            className="text-white text-[8px] font-semibold"
                                         />
                                     </div>
 

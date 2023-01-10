@@ -29,7 +29,7 @@ const WelcomePage = () => {
                                     className="text-hero mt-7.5"
                                     txt={true}
                                 />
-                                <div className="mx-auto text-center w-11/12 mt-12">
+                                <div className="mx-auto text-center mt-12">
                                     <Heading
                                         variant="heading2"
                                         color="gray-90"
@@ -51,7 +51,7 @@ const WelcomePage = () => {
                                     <div className="flex gap-2 mt-10 items-center">
                                         <Icon
                                             icon={SuiIcons.Checkmark}
-                                            className="text-success text-extraSmall"
+                                            className="text-success text-[8px]"
                                         />
 
                                         <Text
@@ -65,7 +65,7 @@ const WelcomePage = () => {
                                     <div className="flex gap-2 mt-3 items-center">
                                         <Icon
                                             icon={SuiIcons.Checkmark}
-                                            className="text-success text-extraSmall"
+                                            className="text-success text-[8px]"
                                         />
                                         <Text
                                             variant="body"

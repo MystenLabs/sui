@@ -36,10 +36,9 @@ const SelectPage = () => {
             <div className="flex flex-col flex-nowrap gap-7.5 mt-7">
                 {selections.map((aSelection) => (
                     <div
-                        className={cl(
-                            st.card,
-                            'bg-alice-blue flex flex-col flex-nowrap items-center gap-3 text-center'
-                        )}
+                        className={
+                            'bg-alice-blue flex flex-col flex-nowrap items-center gap-3 text-center rounded-15 py-10 px-7.5 max-w-popup-width shadow-wallet-content'
+                        }
                         key={aSelection.url}
                     >
                         <Heading

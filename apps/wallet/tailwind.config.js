@@ -27,6 +27,7 @@ module.exports = {
             },
             borderRadius: {
                 20: '1.25rem',
+                15: '0.9375rem',
             },
             height: {
                 header: '68px',
@@ -36,6 +37,9 @@ module.exports = {
             },
             boxShadow: {
                 notification: '0px 0px 20px rgba(29, 55, 87, 0.11)',
+            },
+            maxWidth: {
+                'popup-width': '360px',
             },
         },
     },
