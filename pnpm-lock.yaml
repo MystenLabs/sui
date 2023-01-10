@@ -187,8 +187,10 @@ importers:
   apps/icons:
     specifiers:
       '@svgr/cli': ^6.5.1
+      rimraf: ^3.0.2
     devDependencies:
       '@svgr/cli': 6.5.1
+      rimraf: 3.0.2
 
   apps/wallet:
     specifiers:

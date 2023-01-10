@@ -1,11 +1,15 @@
 {
   "name": "@mysten/icons",
-	"main": "src/index.ts",
+  "main": "src/index.ts",
   "private": true,
-	"scripts": {
-		"build": "svgr --config-file svgrrc.config.js svgs"
-	},
+  "scripts": {
+    "clean": "rimraf src/**",
+    "clean:svgs": "rimraf svgs/**",
+    "clean:all": "pnpm clean && pnpm clean:svgs",
+    "build": "node scripts/preprocess.mjs && svgr --config-file svgrrc.config.js svgs"
+  },
   "devDependencies": {
-		"@svgr/cli": "^6.5.1"
+    "@svgr/cli": "^6.5.1",
+    "rimraf": "^3.0.2"
   }
 }
