@@ -156,7 +156,7 @@ impl SuiClient {
         let read_api = Arc::new(ReadApi::new(api.clone()));
         let quorum_driver = QuorumDriver::new(api.clone());
         let event_api = EventApi::new(api.clone());
-        let transaction_builder = TransactionBuilder::new(read_api.clone(), Normal);
+        let transaction_builder = TransactionBuilder::new(read_api.clone());
         let coin_read_api = CoinReadApi::new(api.clone());
         let governance_api = GovernanceApi::new(api.clone());
 

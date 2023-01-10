@@ -58,7 +58,7 @@ impl FullNodeApi {
         let reader = Arc::new(AuthorityStateDataReader::new(state.clone()));
         Self {
             state,
-            dev_inspect_builder: TransactionBuilder::new(reader, DevInspect),
+            dev_inspect_builder: TransactionBuilder::new(reader),
         }
     }
 }

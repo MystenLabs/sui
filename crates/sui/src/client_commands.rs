@@ -25,7 +25,6 @@ use prettytable::Table;
 use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::json;
-use sui_adapter::execution_mode;
 use sui_framework::build_move_package;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;

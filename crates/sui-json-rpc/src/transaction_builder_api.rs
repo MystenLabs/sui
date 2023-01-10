@@ -34,8 +34,8 @@ impl FullNodeTransactionBuilderApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self {
-            builder: TransactionBuilder::new(reader.clone(), Normal),
-            dev_inspect_builder: TransactionBuilder::new(reader, DevInspect),
+            builder: TransactionBuilder::new(reader.clone()),
+            dev_inspect_builder: TransactionBuilder::new(reader),
         }
     }
 }

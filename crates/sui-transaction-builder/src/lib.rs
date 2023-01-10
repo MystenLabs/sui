@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -53,11 +54,14 @@ pub trait DataReader {
 }
 
 #[derive(Clone)]
-pub struct TransactionBuilder<Mode: ExecutionMode>(Arc<dyn DataReader + Sync + Send>, Mode);
+pub struct TransactionBuilder<Mode: ExecutionMode>(
+    Arc<dyn DataReader + Sync + Send>,
+    PhantomData<Mode>,
+);
 
 impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
-    pub fn new(data_reader: Arc<dyn DataReader + Sync + Send>, mode: Mode) -> Self {
-        Self(data_reader, mode)
+    pub fn new(data_reader: Arc<dyn DataReader + Sync + Send>) -> Self {
+        Self(data_reader, PhantomData)
     }
 
     async fn select_gas(

@@ -46,6 +46,7 @@ pub trait ExecutionMode {
         result: Self::ExecutionResult,
     );
 }
+
 #[derive(Clone)]
 pub struct Normal;
 
