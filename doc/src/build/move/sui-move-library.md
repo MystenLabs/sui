@@ -61,7 +61,7 @@ To make an object `obj` immutable, one can call:
 transfer::freeze_object(obj);
 ```
 
-After this call, `obj` becomes immutable, meaning it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. Anyone can use an immutable object as a reference in their Move call.
+After this call, `obj` becomes immutable, meaning you can't mutate or delete it. This process is also irreversible: once an object is frozen, it stays frozen forever. Anyone can use an immutable object as a reference in their Move call.
 
 ### Shared
 To make an object `obj` shared, one can call:
