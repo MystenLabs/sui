@@ -59,6 +59,14 @@ impl FullNodeApi {
             builder: TransactionBuilder(reader),
         }
     }
+
+    fn get_sui_system_state_object_epoch(&self) -> RpcResult<EpochId> {
+        Ok(self
+            .state
+            .get_sui_system_state_object()
+            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?
+            .epoch)
+    }
 }
 
 impl ReadApi {
@@ -227,24 +235,36 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
-    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults> {
+    async fn dev_inspect_transaction(
+        &self,
+        tx_bytes: Base64,
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults> {
+        let epoch = match epoch {
+            None => self.get_sui_system_state_object_epoch()?,
+            Some(n) => n,
+        };
         let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
         Ok(self
             .state
-            .dev_inspect_transaction(txn_data, txn_digest, 0)
+            .dev_inspect_transaction(txn_data, txn_digest, epoch)
             .await?)
     }
 
     async fn dev_inspect_move_call(
         &self,
-        epoch: EpochId,
         sender_address: SuiAddress,
         package_object_id: ObjectID,
         module: String,
         function: String,
         type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
+        let epoch = match epoch {
+            None => self.get_sui_system_state_object_epoch()?,
+            Some(n) => n,
+        };
         let move_call = self
             .builder
             .single_move_call::<execution_mode::DevInspect>(

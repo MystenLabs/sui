@@ -187,14 +187,17 @@ pub trait RpcFullNodeReadApi {
     /// Return dev-inpsect results of the transaction, including both the transaction
     /// effects and return values of the transaction.
     #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults>;
+    async fn dev_inspect_transaction(
+        &self,
+        tx_bytes: Base64,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults>;
 
     /// Similar to `dev_inspect_transaction` but do not require gas object and budget
     #[method(name = "devInspectMoveCall")]
     async fn dev_inspect_move_call(
         &self,
-        /// The epoch to perform the call
-        epoch: EpochId,
         /// the caller's Sui address
         sender_address: SuiAddress,
         /// the Move package ID, e.g. `0x2`
@@ -207,6 +210,8 @@ pub trait RpcFullNodeReadApi {
         type_arguments: Vec<SuiTypeTag>,
         /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
         arguments: Vec<SuiJsonValue>,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
