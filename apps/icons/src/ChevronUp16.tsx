@@ -1,4 +1,5 @@
-import * as React from "react";
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 import { SVGProps } from "react";
 const SvgChevronUp16 = (props: SVGProps<SVGSVGElement>) => (
   <svg
