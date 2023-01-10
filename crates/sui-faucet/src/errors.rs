@@ -31,3 +31,9 @@ pub enum FaucetError {
     #[error("Internal error: {0}")]
     Internal(String),
 }
+
+impl FaucetError {
+    pub(crate) fn internal(e: impl ToString) -> Self {
+        FaucetError::Internal(e.to_string())
+    }
+}
