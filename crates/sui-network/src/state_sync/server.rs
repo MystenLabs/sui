@@ -47,10 +47,14 @@ where
 
         let checkpoint = request.into_inner();
 
-        self.peer_heights
+        if !self
+            .peer_heights
             .write()
             .unwrap()
-            .update_peer_height(peer_id, Some(checkpoint.clone()));
+            .update_peer_info(peer_id, checkpoint.clone())
+        {
+            return Ok(Response::new(()));
+        }
 
         let highest_verified_checkpoint = self
             .store
