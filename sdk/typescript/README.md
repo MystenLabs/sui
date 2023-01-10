@@ -164,7 +164,20 @@ const senderEvents = await provider.getEvents(
 );
 ```
 
-For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
+For any operations that involves signing or submitting transactions, you should use the `Signer` API. 
+
+Also, a keypair object is required. You can either create a new one:
+
+```typescript
+const keypair = new Ed25519Keypair();
+```
+
+or use an existing address and derive the keypair from the phrase:
+
+```typescript
+const keypair = Ed25519Keypair.deriveKeypair("alpha bravo charlie ....");
+```
+
 
 To transfer a `0x2::coin::Coin<SUI>`:
 
@@ -181,6 +194,8 @@ const transferTxn = await signer.transferObject({
 });
 console.log('transferTxn', transferTxn);
 ```
+
+
 
 To split a `0x2::coin::Coin<SUI>` into multiple coins
 
@@ -236,8 +251,9 @@ const moveCallTxn = await signer.executeMoveCall({
     'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
   ],
   gasBudget: 10000,
+}).then(function (result){
+    console.log(result);
 });
-console.log('moveCallTxn', moveCallTxn);
 ```
 
 Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
