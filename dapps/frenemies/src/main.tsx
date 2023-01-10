@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import '@fontsource/inter/variable.css';
 import "./index.css";
 import Plausible from 'plausible-tracker';
