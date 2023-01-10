@@ -83,7 +83,7 @@ mod test {
             LocalValidatorAggregatorProxy::from_network_config(
                 swarm.config(),
                 &registry,
-                fullnode_rpc_url,
+                Some(fullnode_rpc_url),
             )
             .await,
         );
