@@ -136,11 +136,12 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     // then the first parameter must be of a one-time witness type and must be passed by value. This
     // is checked by the verifier for pass one-time witness value (one_time_witness_verifier) -
     // please see the description of this pass for additional details.
-    if is_tx_context(view, &parameters[parameters.len() - 1]) {
+    if is_tx_context(view, &parameters[parameters.len() - 1]) != TxContextKind::None {
         Ok(())
     } else {
         Err(format!(
-            "Expected last parameter for {0}::{1} to be &mut {2}::{3}::{4} or &{2}::{3}::{4}, but found {5}",
+            "Expected last parameter for {0}::{1} to be &mut {2}::{3}::{4} or &{2}::{3}::{4}, \
+            but found {5}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,
@@ -160,7 +161,9 @@ fn verify_entry_function_impl(
     let params = view.signature_at(handle.parameters);
 
     let all_non_ctx_params = match params.0.last() {
-        Some(last_param) if is_tx_context(view, last_param) => &params.0[0..params.0.len() - 1],
+        Some(last_param) if is_tx_context(view, last_param) != TxContextKind::None => {
+            &params.0[0..params.0.len() - 1]
+        }
         _ => &params.0,
     };
     for param in all_non_ctx_params {
@@ -252,18 +255,40 @@ fn is_primitive(
     }
 }
 
-pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum TxContextKind {
+    // No TxContext
+    None,
+    // &mut TxContext
+    Mutable,
+    // &TxContext
+    Immutable,
+}
+
+// Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
+// a MutableReference, and Immutable otherwise.
+// Returns None for all other types
+pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> TxContextKind {
     match p {
         SignatureToken::MutableReference(m) | SignatureToken::Reference(m) => match &**m {
             SignatureToken::Struct(idx) => {
                 let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
-                module_name == TX_CONTEXT_MODULE_NAME
+                let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
                     && module_addr == &SUI_FRAMEWORK_ADDRESS
-                    && struct_name == TX_CONTEXT_STRUCT_NAME
+                    && struct_name == TX_CONTEXT_STRUCT_NAME;
+                if is_tx_context_type {
+                    match p {
+                        SignatureToken::MutableReference(_) => TxContextKind::Mutable,
+                        SignatureToken::Reference(_) => TxContextKind::Immutable,
+                        _ => unreachable!(),
+                    }
+                } else {
+                    TxContextKind::None
+                }
             }
-            _ => false,
+            _ => TxContextKind::None,
         },
-        _ => false,
+        _ => TxContextKind::None,
     }
 }
 

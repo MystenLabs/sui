@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
 use sui_types::base_types::ObjectRef;
@@ -96,6 +97,7 @@ pub(crate) fn check_dev_inspect_input_objects(
 
 pub async fn check_certificate_input(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     let gas_status = get_gas_status(store, &cert.data().intent_message.value).await?;
@@ -106,7 +108,7 @@ pub async fn check_certificate_input(
         // through sequencing, so we must bypass the sequence checks here.
         store.check_input_objects(&input_object_kinds)?
     } else {
-        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds)?
+        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
     let input_objects = check_objects(
         &cert.data().intent_message.value,

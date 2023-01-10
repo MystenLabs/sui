@@ -31,10 +31,13 @@ struct A {
 }
 ```
 defines a object type `A` that contains a field whose type is another object type `B`. In this case, we say an object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.
+
 Now back to the topic of object owned by another object. When an object is owned by another object, it's not wrapped. This means the child object still exists independently as a top-level object and can be accessed directly in the Sui storage. The ownership relationship is only tracked through the owner field of the child object. This can be useful if you still want to observe the child object or be able to use it in other transactions. We provide library APIs to make an object owned by another object. More details on how to do this can be found in the [Sui Move library](../build/move/sui-move-library.md).
 
 ### Immutable
-This means an object is immutable and cannot be mutated by anyone. Because of this, such an object doesn't have an exclusive owner. Anyone can use it in their Move calls. All Move packages are immutable objects: once published, they cannot be changed. A Move object can be turned into an immutable object through the [*freeze_object*](../build/move/sui-move-library.md) library API. An immutable object can only passed as a read-only reference (`&T`) in Move calls.
+You can't mutate an immutable object, and an immutable object doesn't have an exclusive owner. Anyone can use an immutable object in a Move call. 
+
+All Move packages are immutable objects: you can't change a Move package after you publish it. You can convert a Move object into an immutable object using the [*freeze_object*](../build/move/sui-move-library#immutable) operation. You can only pass an immutable object in Move calls as a read-only reference (`&T`).
 
 ### Shared
 An object can be shared, meaning that anyone can read or write this object. In contrast to mutable owned objects (which are single-writer), shared objects require [consensus](architecture/consensus.md) to sequence reads and writes. For an example of creating and accessing a shared object, see [Shared Object](../explore/move-examples/basics.md#shared-object).

@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use jsonrpsee::core::RpcResult;
-use jsonrpsee_proc_macros::rpc;
 use std::collections::BTreeMap;
-use sui_types::sui_system_state::SuiSystemState;
 
 use fastcrypto::encoding::Base64;
+use jsonrpsee::core::RpcResult;
+use jsonrpsee_proc_macros::rpc;
+
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
@@ -23,11 +23,15 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
+use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 /// Maximum number of events returned in an event query.
 /// This is equivalent to EVENT_QUERY_MAX_LIMIT in `sui-storage` crate.
@@ -280,7 +284,44 @@ pub trait RpcFullNodeReadApi {
         version: SequenceNumber,
     ) -> RpcResult<GetPastObjectDataResponse>;
 
-    /// Return the committee information for the asked epoch
+    /// Return the sequence number of the latest checkpoint that has been executed
+    #[method(name = "getLatestCheckpointSequenceNumber")]
+    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+
+    /// Return a checkpoint summary based on a checkpoint sequence number
+    #[method(name = "getCheckpointSummary")]
+    fn get_checkpoint_summary(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointSummary>;
+
+    /// Return contents of a checkpoint, namely a list of execution digests
+    #[method(name = "getCheckpointContents")]
+    fn get_checkpoint_contents(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> RpcResult<CheckpointContents>;
+
+    /// Return contents of a checkpoint based on its sequence number
+    #[method(name = "getCheckpointContentsBySequenceNumber")]
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointContents>;
+}
+
+#[open_rpc(namespace = "sui", tag = "Governance Read API")]
+#[rpc(server, client, namespace = "sui")]
+pub trait GovernanceReadApi {
+    /// Return all [DelegatedStake].
+    #[method(name = "getDelegatedStakes")]
+    async fn get_delegated_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
+
+    /// Return all validators available for stake delegation.
+    #[method(name = "getValidators")]
+    async fn get_validators(&self) -> RpcResult<Vec<ValidatorMetadata>>;
+
+    /// Return the committee information for the asked `epoch`.
     #[method(name = "getCommitteeInfo")]
     async fn get_committee_info(
         &self,
@@ -288,7 +329,7 @@ pub trait RpcFullNodeReadApi {
         epoch: Option<EpochId>,
     ) -> RpcResult<CommitteeInfoResponse>;
 
-    /// Return SuiSystemState
+    /// Return [SuiSystemState]
     #[method(name = "getSuiSystemState")]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
 }
@@ -495,6 +536,62 @@ pub trait RpcTransactionBuilder {
         /// Whether this is a regular transaction or a Dev Inspect Transaction
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
+
+    /// Add delegated stake to a validator's staking pool using multiple coins and amount.
+    #[method(name = "requestAddDelegation")]
+    async fn request_add_delegation(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// Coin<SUI> or LockedCoin<SUI> object to delegate
+        coins: Vec<ObjectID>,
+        /// delegation amount
+        amount: Option<u64>,
+        /// the validator's Sui address
+        validator: SuiAddress,
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    /// Withdraw some portion of a delegation from a validator's staking pool.
+    #[method(name = "requestWithdrawDelegation")]
+    async fn request_withdraw_delegation(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// Delegation object ID
+        delegation: ObjectID,
+        /// StakedSui object ID
+        staked_sui: ObjectID,
+        /// Principal amount to withdraw
+        principal_withdraw_amount: u64,
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
+    /// Switch delegation from the current validator to a new one.
+    #[method(name = "requestSwitchDelegation")]
+    async fn request_switch_delegation(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// Delegation object ID
+        delegation: ObjectID,
+        /// StakedSui object ID
+        staked_sui: ObjectID,
+        /// Validator to switch to
+        new_validator_address: SuiAddress,
+        /// Switching stake amount
+        switch_pool_token_amount: u64,
+        /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
 }
 
 #[open_rpc(namespace = "sui", tag = "BCS API")]
@@ -569,13 +666,9 @@ pub trait TransactionExecutionApi {
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
-        /// Flag of the signature scheme that is used.
-        sig_scheme: SignatureScheme,
-        /// Signature committed to the intent message of the transaction data, as base-64 encoded string.
+        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signature: Base64,
-        /// Signer's public key, as base-64 encoded string.
-        pub_key: Base64,
-        /// The request type.
+        /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
 

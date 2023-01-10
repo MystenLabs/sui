@@ -235,7 +235,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for cert in &sub_dag.certificates {
             let mut batches = Vec::with_capacity(num_batches);
             let output_cert = cert.clone();
-            for (digest, worker_id) in cert.header.payload.iter() {
+            for (digest, (worker_id, _)) in cert.header.payload.iter() {
                 self.metrics
                     .subscriber_current_round
                     .set(cert.round() as i64);

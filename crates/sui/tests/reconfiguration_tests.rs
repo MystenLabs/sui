@@ -12,6 +12,7 @@ use sui_core::authority_aggregator::{
     TransactionCertifier,
 };
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::{init_local_authorities, make_transfer_sui_transaction};
 use sui_macros::sim_test;
@@ -108,11 +109,9 @@ async fn advance_epoch_tx_test_impl(
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
+    // TODO remove this sleep when this test passes consistently
+    sleep(Duration::from_secs(1)).await;
     let authorities = spawn_test_authorities([].into_iter(), &test_authority_configs()).await;
-
-    // TODO: If this line is removed, the validators never advance to the next epoch
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
     trigger_reconfiguration(&authorities).await;
 }
 
@@ -136,7 +135,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         sender,
         &keypair,
     );
-    let net = AuthorityAggregator::new_from_system_state(
+    let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),
@@ -161,22 +160,32 @@ async fn reconfig_with_revert_end_to_end_test() {
     let cert = net.process_transaction(tx.clone()).await.unwrap();
 
     // Close epoch on 3 (2f+1) validators.
-    for handle in authorities.iter().skip(1) {
+    let mut reverting_authority_idx = None;
+    for (i, handle) in authorities.iter().enumerate() {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async {
+                if position_submit_certificate(&net.committee, &node.state().name, tx.digest())
+                    < (authorities.len() - 1)
+                {
+                    node.close_epoch().await.unwrap();
+                } else {
+                    // remember the authority that wouild submit it to consensus last.
+                    reverting_authority_idx = Some(i);
+                }
+            })
             .await;
     }
 
-    // handle transaction on authority 0
+    let reverting_authority_idx = reverting_authority_idx.unwrap();
     let client = net
-        .get_client(&authorities[0].with(|node| node.state().name))
+        .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
     client
         .handle_certificate(cert.clone().into_inner())
         .await
         .unwrap();
 
-    authorities[0]
+    authorities[reverting_authority_idx]
         .with_async(|node| async {
             let object = node
                 .state()
@@ -201,7 +210,7 @@ async fn reconfig_with_revert_end_to_end_test() {
                     if node.state().epoch() == 1 {
                         break;
                     }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             })
         })
@@ -273,7 +282,7 @@ async fn test_validator_resign_effects() {
         &keypair,
     );
     let registry = Registry::new();
-    let mut net = AuthorityAggregator::new_from_system_state(
+    let mut net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),
         &authorities[0].with(|node| node.state().committee_store().clone()),
         SafeClientMetricsBase::new(&registry),

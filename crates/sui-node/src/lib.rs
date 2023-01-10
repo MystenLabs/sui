@@ -19,19 +19,15 @@ use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::{
-    AuthAggMetrics, AuthorityAggregator, NetworkTransactionCertifier,
-};
+use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
@@ -52,8 +48,7 @@ use sui_storage::{
 };
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
-use sui_types::messages::VerifiedCertificate;
-use sui_types::messages::VerifiedCertifiedTransactionEffects;
+use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::mpsc::channel;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
@@ -74,11 +69,13 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{
     run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
 };
 use sui_json_rpc::coin_api::CoinReadApi;
+use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
@@ -91,13 +88,13 @@ pub struct ValidatorComponents {
     checkpoint_service_exit: watch::Sender<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
 }
+use sui_json_rpc::governance_api::GovernanceReadApi;
 
 pub struct SuiNode {
     config: NodeConfig,
     validator_components: Mutex<Option<ValidatorComponents>>,
     _json_rpc_service: Option<ServerHandle>,
     state: Arc<AuthorityState>,
-    active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
 
@@ -105,7 +102,7 @@ pub struct SuiNode {
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    _checkpoint_executor_handle: checkpoint_executor::Handle,
+    checkpoint_executor_handle: checkpoint_executor::Handle,
 
     reconfig_channel: Mutex<tokio::sync::broadcast::Receiver<Committee>>,
 
@@ -150,6 +147,16 @@ impl SuiNode {
             )
             .await?,
         );
+        let cur_epoch = store.get_recovery_epoch_at_restart()?;
+        let committee = committee_store
+            .get_committee(&cur_epoch)?
+            .expect("Committee of the current epoch must exist");
+        let epoch_store = AuthorityPerEpochStore::new(
+            committee,
+            &config.db_path().join("store"),
+            None,
+            EpochMetrics::new(&registry_service.default_registry()),
+        );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let state_sync_store = RocksDbStore::new(
@@ -183,13 +190,6 @@ impl SuiNode {
         let (p2p_network, discovery_handle, state_sync_handle) =
             Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
 
-        let net = AuthorityAggregator::new_from_system_state(
-            &store,
-            &committee_store,
-            SafeClientMetricsBase::new(&prometheus_registry),
-            AuthAggMetrics::new(&prometheus_registry),
-        )?;
-
         let transaction_streamer = if is_full_node {
             Some(Arc::new(TransactionStreamer::new()))
         } else {
@@ -200,10 +200,12 @@ impl SuiNode {
             config.protocol_public_key(),
             secret,
             store,
+            epoch_store,
             committee_store.clone(),
             index_store.clone(),
             event_store,
             transaction_streamer,
+            checkpoint_store.clone(),
             &prometheus_registry,
         )
         .await;
@@ -217,17 +219,16 @@ impl SuiNode {
         )
         .start()?;
 
-        let active_authority = Arc::new(ActiveAuthority::new(state.clone(), net.clone())?);
-
-        let arc_net = active_authority.agg_aggregator();
-
         let transaction_orchestrator = if is_full_node {
-            Some(Arc::new(TransactiondOrchestrator::new(
-                arc_net,
-                state.clone(),
-                config.db_path(),
-                &prometheus_registry,
-            )))
+            Some(Arc::new(
+                TransactiondOrchestrator::new_with_network_clients(
+                    state.clone(),
+                    // TODO: use an indirection layer for subscription but not checkpoint executor
+                    checkpoint_executor_handle.subscribe_to_end_of_epoch(),
+                    config.db_path(),
+                    &prometheus_registry,
+                )?,
+            ))
         } else {
             None
         };
@@ -260,7 +261,6 @@ impl SuiNode {
             validator_components: Mutex::new(validator_components),
             _json_rpc_service: json_rpc_service,
             state,
-            active: active_authority,
             transaction_orchestrator,
             registry_service,
 
@@ -268,7 +268,7 @@ impl SuiNode {
             _discovery: discovery_handle,
             state_sync: state_sync_handle,
             checkpoint_store,
-            _checkpoint_executor_handle: checkpoint_executor_handle,
+            checkpoint_executor_handle,
             reconfig_channel: Mutex::new(reconfig_channel),
 
             #[cfg(msim)]
@@ -283,7 +283,16 @@ impl SuiNode {
         Ok(node)
     }
 
+    pub async fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+        self.checkpoint_executor_handle.subscribe_to_end_of_epoch()
+    }
+
+    pub fn current_epoch(&self) -> EpochId {
+        self.state.epoch()
+    }
+
     pub async fn close_epoch(&self) -> SuiResult {
+        info!("close_epoch (current epoch = {})", self.state.epoch());
         self.validator_components
             .lock()
             .await
@@ -293,6 +302,15 @@ impl SuiNode {
             // TODO: If this function is ever called in non-testing code, we need to make sure this
             // function has no race with the passive reconfiguration.
             .close_epoch(&self.state.epoch_store())
+    }
+
+    pub fn is_transaction_executed_in_checkpoint_this_epoch(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.state
+            .epoch_store()
+            .is_transaction_executed_in_checkpoint(digest)
     }
 
     fn create_p2p_network(
@@ -451,7 +469,7 @@ impl SuiNode {
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store,
-            checkpoint_service,
+            checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
             state.metrics.clone(),
@@ -596,8 +614,25 @@ impl SuiNode {
         self.state.clone()
     }
 
-    pub fn active(&self) -> &Arc<ActiveAuthority<NetworkAuthorityClient>> {
-        &self.active
+    pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
+        self.state.committee_store().clone()
+    }
+
+    pub fn clone_authority_store(&self) -> Arc<AuthorityStore> {
+        self.state.db()
+    }
+
+    /// Clone an AuthorityAggregator currently used in this node's
+    /// QuorumDriver, if the node is a fullnode. After reconfig,
+    /// QuorumDriver builds a new AuthorityAggregator. The caller
+    /// of this function will mostly likely want to call this again
+    /// to get a fresh one.
+    pub fn clone_authority_aggregator(
+        &self,
+    ) -> Option<Arc<AuthorityAggregator<NetworkAuthorityClient>>> {
+        self.transaction_orchestrator
+            .as_ref()
+            .map(|to| to.clone_authority_aggregator())
     }
 
     pub fn transaction_orchestrator(
@@ -608,12 +643,7 @@ impl SuiNode {
 
     pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
-    ) -> Result<
-        tokio::sync::broadcast::Receiver<(
-            VerifiedCertificate,
-            VerifiedCertifiedTransactionEffects,
-        )>,
-    > {
+    ) -> Result<tokio::sync::broadcast::Receiver<QuorumDriverResponse>> {
         self.transaction_orchestrator
             .as_ref()
             .map(|to| to.subscribe_to_effects_queue())
@@ -638,18 +668,6 @@ impl SuiNode {
                 "Received reconfiguration signal. About to reconfigure the system."
             );
 
-            let system_state = self
-                .state
-                .get_sui_system_state_object()
-                .expect("Reading Sui system state object cannot fail");
-            let new_committee = system_state.get_current_epoch_committee();
-            assert_eq!(next_epoch, new_committee.committee.epoch);
-            self.state
-                .reconfigure(new_committee.committee)
-                .await
-                .expect("Reconfigure authority state cannot fail");
-            info!("Validator State has been reconfigured");
-
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
@@ -668,6 +686,8 @@ impl SuiNode {
                 info!("Sending shutdown signal to Narwhal");
                 narwhal_manager.tx_stop.send(()).await?;
                 // TODO: (Laura) wait for stop complete signal
+
+                self.reconfigure_state(next_epoch).await;
 
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator in the new epoch.
@@ -689,25 +709,43 @@ impl SuiNode {
                     info!("This node is no longer a validator after reconfiguration");
                     None
                 }
-            } else if self.state.is_validator() {
-                info!("Promoting the node from fullnode to validator, starting grpc server");
-
-                Some(
-                    Self::construct_validator_components(
-                        &self.config,
-                        self.state.clone(),
-                        self.checkpoint_store.clone(),
-                        self.state_sync.clone(),
-                        &self.registry_service,
-                    )
-                    .await?,
-                )
             } else {
-                None
+                self.reconfigure_state(next_epoch).await;
+
+                if self.state.is_validator() {
+                    info!("Promoting the node from fullnode to validator, starting grpc server");
+
+                    Some(
+                        Self::construct_validator_components(
+                            &self.config,
+                            self.state.clone(),
+                            self.checkpoint_store.clone(),
+                            self.state_sync.clone(),
+                            &self.registry_service,
+                        )
+                        .await?,
+                    )
+                } else {
+                    None
+                }
             };
             *self.validator_components.lock().await = new_validator_components;
             info!("Reconfiguration finished");
         }
+    }
+
+    async fn reconfigure_state(&self, next_epoch: EpochId) {
+        let system_state = self
+            .state
+            .get_sui_system_state_object()
+            .expect("Reading Sui system state object cannot fail");
+        let new_committee = system_state.get_current_epoch_committee();
+        assert_eq!(next_epoch, new_committee.committee.epoch);
+        self.state
+            .reconfigure(new_committee.committee)
+            .await
+            .expect("Reconfigure authority state cannot fail");
+        info!("Validator State has been reconfigured");
     }
 }
 
@@ -729,6 +767,7 @@ pub async fn build_server(
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
     server.register_module(FullNodeTransactionBuilderApi::new(state.clone()))?;
+    server.register_module(GovernanceReadApi::new(state.clone()))?;
 
     if let Some(transaction_orchestrator) = transaction_orchestrator {
         server.register_module(FullNodeTransactionExecutionApi::new(

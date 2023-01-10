@@ -62,11 +62,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
         <div data-testid="pageheader">
             <div className="mb-3 flex items-center gap-2">
                 <Icon className="text-steel" />
-                <Heading
-                    variant="heading4"
-                    weight="semibold"
-                    color="steel-darker"
-                >
+                <Heading variant="heading4/semibold" color="steel-darker">
                     {type}
                 </Heading>
             </div>
@@ -75,8 +71,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                     <div className="min-w-0 break-words">
                         <Heading
                             as="h2"
-                            variant="heading2"
-                            weight="semibold"
+                            variant="heading2/semibold"
                             color="gray-90"
                             mono
                         >
@@ -104,11 +99,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
             </div>
             {subtitle && (
                 <div className="mt-2 break-words">
-                    <Heading
-                        variant="heading4"
-                        weight="semibold"
-                        color="gray-75"
-                    >
+                    <Heading variant="heading4/semibold" color="gray-75">
                         {subtitle}
                     </Heading>
                 </div>

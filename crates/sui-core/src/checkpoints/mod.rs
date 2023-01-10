@@ -38,6 +38,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
+use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -265,7 +266,6 @@ pub struct CheckpointAggregator {
     notify: Arc<Notify>,
     exit: watch::Receiver<()>,
     current: Option<CheckpointSignatureAggregator>,
-    state: Arc<AuthorityState>,
     output: Box<dyn CertifiedCheckpointOutput>,
     metrics: Arc<CheckpointMetrics>,
 }
@@ -308,6 +308,14 @@ impl CheckpointBuilder {
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
         loop {
+            // Check whether an exit signal has been received, if so we break the loop.
+            // This gives us a chance to exit, in case checkpoint making keeps failing.
+            match self.exit.has_changed() {
+                Ok(true) | Err(_) => {
+                    break;
+                }
+                Ok(false) => (),
+            };
             let mut last_processed_height: Option<u64> = None;
             for (height, (roots, last_checkpoint_of_epoch)) in
                 self.epoch_store.get_pending_checkpoints()
@@ -327,13 +335,13 @@ impl CheckpointBuilder {
             debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
             match select(self.exit.changed().boxed(), self.notify.notified().boxed()).await {
                 Either::Left(_) => {
-                    // return on exit signal
-                    info!("Shutting down CheckpointBuilder");
-                    return;
+                    // break loop on exit signal
+                    break;
                 }
                 Either::Right(_) => {}
             }
         }
+        info!("Shutting down CheckpointBuilder");
     }
 
     async fn make_checkpoint(
@@ -357,6 +365,11 @@ impl CheckpointBuilder {
             .create_checkpoint(sorted, last_checkpoint_of_epoch)
             .await?;
         self.write_checkpoint(height, new_checkpoint).await?;
+        if last_checkpoint_of_epoch {
+            info!(epoch=?self.epoch_store.epoch(), "Last checkpoint of the epoch created");
+            self.epoch_store
+                .record_epoch_last_checkpoint_creation_time_metric();
+        }
         Ok(())
     }
 
@@ -444,6 +457,13 @@ impl CheckpointBuilder {
             .as_ref()
             .map(|(_, c)| c.sequence_number + 1)
             .unwrap_or_default();
+        if last_checkpoint_of_epoch {
+            info!(
+                ?sequence_number,
+                "creating last checkpoint of epoch {}",
+                self.epoch_store.epoch()
+            );
+        }
         let summary = CheckpointSummary::new(
             self.epoch_store.epoch(),
             sequence_number,
@@ -492,6 +512,7 @@ impl CheckpointBuilder {
         epoch_total_gas_cost: &GasCostSummary,
         effects: &mut Vec<TransactionEffects>,
     ) -> anyhow::Result<()> {
+        let timer = Instant::now();
         let cert = self
             .state
             .create_advance_epoch_tx_cert(
@@ -501,6 +522,10 @@ impl CheckpointBuilder {
                 self.transaction_certifier.deref(),
             )
             .await?;
+        self.epoch_store
+            .record_epoch_last_transaction_cert_creation_time_metric(
+                timer.elapsed().as_millis() as u64
+            );
         let signed_effect = self
             .state
             .try_execute_immediately(&cert, &self.epoch_store)
@@ -521,7 +546,10 @@ impl CheckpointBuilder {
             let mut pending = HashSet::new();
             for effect in roots {
                 let digest = effect.transaction_digest;
-                if self.epoch_store.tx_checkpointed_in_current_epoch(&digest)? {
+                if self
+                    .epoch_store
+                    .builder_included_transaction_in_checkpoint(&digest)?
+                {
                     continue;
                 }
                 for dependency in effect.dependencies.iter() {
@@ -559,7 +587,6 @@ impl CheckpointAggregator {
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         exit: watch::Receiver<()>,
-        state: Arc<AuthorityState>,
         output: Box<dyn CertifiedCheckpointOutput>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
@@ -570,7 +597,6 @@ impl CheckpointAggregator {
             notify,
             exit,
             current,
-            state,
             output,
             metrics,
         }
@@ -612,7 +638,7 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: StakeAggregator::new(self.state.clone_committee()),
+                    signatures: StakeAggregator::new(self.epoch_store.committee().clone()),
                 });
                 self.current.as_mut().unwrap()
             };
@@ -762,7 +788,7 @@ impl CheckpointService {
         let (exit_snd, exit_rcv) = watch::channel(());
 
         let builder = CheckpointBuilder::new(
-            state.clone(),
+            state,
             checkpoint_store.clone(),
             epoch_store.clone(),
             notify_builder.clone(),
@@ -781,7 +807,6 @@ impl CheckpointService {
             epoch_store.clone(),
             notify_aggregator.clone(),
             exit_rcv,
-            state,
             certified_checkpoint_output,
             metrics,
         );
@@ -874,7 +899,7 @@ impl CheckpointServiceNotify for CheckpointService {
             return Ok(());
         }
         debug!(
-            "Transaction roots for pending checkpoint {}: {:?}",
+            "Transaction roots for pending checkpoint at height {}: {:?}",
             index, roots
         );
         epoch_store.insert_pending_checkpoint(&index, &(roots, last_checkpoint_of_epoch))?;
@@ -959,8 +984,6 @@ mod tests {
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
-    use sui_types::committee::Committee;
-    use sui_types::crypto::AuthorityKeyPair;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -968,8 +991,15 @@ mod tests {
     #[tokio::test]
     pub async fn checkpoint_builder_test() {
         let tempdir = tempdir().unwrap();
-        let (keypair, committee) = committee();
-        let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, None).await;
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
+        let committee = genesis.committee().unwrap();
+        let keypair = network_config.validator_configs[0]
+            .protocol_key_pair()
+            .copy();
+        let state =
+            AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
 
         let mut store = HashMap::<TransactionDigest, SignedTransactionEffects>::new();
         store.insert(
@@ -1149,19 +1179,5 @@ mod tests {
             &*state.secret,
             state.name,
         )
-    }
-
-    fn committee() -> (AuthorityKeyPair, Committee) {
-        use std::collections::BTreeMap;
-        use sui_types::crypto::get_key_pair;
-        use sui_types::crypto::AuthorityPublicKeyBytes;
-
-        let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-        let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-        authorities.insert(
-            /* address */ authority_key.public().into(),
-            /* voting right */ 1,
-        );
-        (authority_key, Committee::new(0, authorities).unwrap())
     }
 }

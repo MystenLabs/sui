@@ -104,7 +104,7 @@ impl Primary {
         rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
-        mut tx_shutdown: PreSubscribedBroadcastSender,
+        tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
         // See comments in Subscriber::spawn
@@ -164,7 +164,7 @@ impl Primary {
             &primary_channel_metrics.tx_block_synchronizer_commands,
             &primary_channel_metrics.tx_block_synchronizer_commands_total,
         );
-        let (tx_state_handler, rx_state_handler) = channel_with_total(
+        let (tx_state_handler, _rx_state_handler) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_state_handler,
             &primary_channel_metrics.tx_state_handler_total,
@@ -501,7 +501,7 @@ impl Primary {
             // TODO: (Laura) pass shutdown signal here
             let block_remover = BlockRemover::new(
                 name.clone(),
-                worker_cache.clone(),
+                worker_cache,
                 certificate_store,
                 header_store,
                 payload_store,
@@ -530,10 +530,8 @@ impl Primary {
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
             name.clone(),
-            worker_cache,
             rx_committed_certificates,
-            rx_state_handler,
-            tx_shutdown,
+            tx_shutdown.subscribe(),
             Some(tx_committed_own_headers),
             network,
         );
@@ -1051,7 +1049,13 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             if let Some(certificate) = certificate_option {
                 let payload_available = match self
                     .payload_store
-                    .read_all(certificate.header.payload)
+                    .read_all(
+                        certificate
+                            .header
+                            .payload
+                            .into_iter()
+                            .map(|(batch, (worker_id, _))| (batch, worker_id)),
+                    )
                     .await
                 {
                     Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),

@@ -173,6 +173,17 @@ impl Default for NetworkAdminServerParameters {
     }
 }
 
+impl NetworkAdminServerParameters {
+    fn with_available_port(&self) -> Self {
+        let mut params = self.clone();
+        let default = Self::default();
+        params.primary_network_admin_server_port = default.primary_network_admin_server_port;
+        params.worker_network_admin_server_base_port =
+            default.worker_network_admin_server_base_port;
+        params
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PrometheusMetricsParameters {
     /// Socket address the server should be listening to.
@@ -187,6 +198,15 @@ impl Default for PrometheusMetricsParameters {
                 .parse()
                 .unwrap(),
         }
+    }
+}
+
+impl PrometheusMetricsParameters {
+    fn with_available_port(&self) -> Self {
+        let mut params = self.clone();
+        let default = Self::default();
+        params.socket_addr = default.socket_addr;
+        params
     }
 }
 
@@ -212,6 +232,15 @@ impl Default for ConsensusAPIGrpcParameters {
             get_collections_timeout: Duration::from_millis(5_000),
             remove_collections_timeout: Duration::from_millis(5_000),
         }
+    }
+}
+
+impl ConsensusAPIGrpcParameters {
+    fn with_available_port(&self) -> Self {
+        let mut params = self.clone();
+        let default = Self::default();
+        params.socket_addr = default.socket_addr;
+        params
     }
 }
 
@@ -313,6 +342,14 @@ impl Default for Parameters {
 }
 
 impl Parameters {
+    pub fn with_available_ports(&self) -> Self {
+        let mut params = self.clone();
+        params.consensus_api_grpc = params.consensus_api_grpc.with_available_port();
+        params.prometheus_metrics = params.prometheus_metrics.with_available_port();
+        params.network_admin_server = params.network_admin_server.with_available_port();
+        params
+    }
+
     pub fn tracing(&self) {
         info!(
             "Header number of batches threshold set to {}",

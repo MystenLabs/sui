@@ -16,8 +16,7 @@ axum = "0.5.16"
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 http = { version = "0.2.8" }
-
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 sui = { path = "../sui" }
 sui-faucet = { path = "../sui-faucet" }

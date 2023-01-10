@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use rand::seq::IteratorRandom;
+use tracing::info;
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -131,42 +132,38 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
             .choose(&mut rand::thread_rng())
             .unwrap();
         // create as many gas objects as there are number of transfer objects times number of accounts
-        eprintln!("Creating enough gas to transfer objects..");
+        info!("Creating enough gas to transfer objects..");
         let mut transfer_gas: Vec<Vec<Gas>> = vec![];
         for _i in 0..count {
             let mut account_transfer_gas = vec![];
             for (owner, _) in self.transfer_keypairs.iter() {
-                if let Some((updated, minted)) = transfer_sui_for_testing(
+                let (updated, minted) = transfer_sui_for_testing(
                     (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
                     &self.test_gas_keypair,
                     MAX_GAS_FOR_TESTING,
                     *owner,
                     proxy.clone(),
                 )
-                .await
-                {
-                    primary_gas_ref = updated;
-                    account_transfer_gas.push((minted, Owner::AddressOwner(*owner)));
-                }
+                .await;
+                primary_gas_ref = updated;
+                account_transfer_gas.push((minted, Owner::AddressOwner(*owner)));
             }
             transfer_gas.push(account_transfer_gas);
         }
-        eprintln!("Creating transfer object txns, almost done..");
+        info!("Creating transfer object txns, almost done..");
         // create transfer objects with 1 SUI value each
         let mut transfer_objects: Vec<Gas> = vec![];
         for _i in 0..count {
-            if let Some((updated, minted)) = transfer_sui_for_testing(
+            let (updated, minted) = transfer_sui_for_testing(
                 (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
                 &self.test_gas_keypair,
                 1,
                 owner,
                 proxy.clone(),
             )
-            .await
-            {
-                primary_gas_ref = updated;
-                transfer_objects.push((minted, Owner::AddressOwner(owner)));
-            }
+            .await;
+            primary_gas_ref = updated;
+            transfer_objects.push((minted, Owner::AddressOwner(owner)));
         }
         let refs: Vec<(Vec<Gas>, ObjectRef)> = transfer_gas
             .into_iter()

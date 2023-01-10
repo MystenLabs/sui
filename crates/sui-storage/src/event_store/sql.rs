@@ -122,6 +122,8 @@ impl SqlEventStore {
             // "wal_autocheckpoint" default to 1000 => auto checkpointing every 1000 pages
             .create_if_missing(true);
         options.log_statements(log::LevelFilter::Off);
+        // Duration is not relevant here, just is required
+        options.log_slow_statements(log::LevelFilter::Off, Duration::from_secs(1));
 
         let pool = PoolOptions::<Sqlite>::new()
             .max_connections(100)

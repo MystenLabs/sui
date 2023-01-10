@@ -27,6 +27,7 @@ use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -954,7 +955,10 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+    let QuorumDriverResponse {
+        tx_cert: certified_txn,
+        effects_cert: certified_txn_effects,
+    } = rx.recv().await.unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
@@ -976,7 +980,10 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
     let ExecuteTransactionResponse::EffectsCert(res) = res;
-    let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+    let QuorumDriverResponse {
+        tx_cert: certified_txn,
+        effects_cert: certified_txn_effects,
+    } = rx.recv().await.unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);

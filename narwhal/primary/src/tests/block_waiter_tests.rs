@@ -127,8 +127,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
         let batch_2 = fixture_batch_with_transactions(10);
 
         builder = builder
-            .with_payload_batch(batch_1.clone(), worker_id)
-            .with_payload_batch(batch_2.clone(), worker_id);
+            .with_payload_batch(batch_1.clone(), worker_id, 0)
+            .with_payload_batch(batch_2.clone(), worker_id, 0);
 
         for b in [batch_1.clone(), batch_2.clone()] {
             let digest = b.digest();
@@ -158,8 +158,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // batches will be used)
         if i > 5 {
             builder = builder
-                .with_payload_batch(common_batch_1.clone(), worker_id)
-                .with_payload_batch(common_batch_2.clone(), worker_id);
+                .with_payload_batch(common_batch_1.clone(), worker_id, 0)
+                .with_payload_batch(common_batch_2.clone(), worker_id, 0);
 
             for b in [common_batch_1.clone(), common_batch_2.clone()] {
                 let digest = b.digest();

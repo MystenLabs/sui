@@ -688,6 +688,15 @@ impl AsRef<[u8]> for Signature {
         }
     }
 }
+impl AsMut<[u8]> for Signature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        match self {
+            Signature::Ed25519SuiSignature(sig) => sig.as_mut(),
+            Signature::Secp256k1SuiSignature(sig) => sig.as_mut(),
+            Signature::Secp256r1SuiSignature(sig) => sig.as_mut(),
+        }
+    }
+}
 
 impl signature::Signature for Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
@@ -761,6 +770,12 @@ impl AsRef<[u8]> for Ed25519SuiSignature {
     }
 }
 
+impl AsMut<[u8]> for Ed25519SuiSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
 impl signature::Signature for Ed25519SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
         if bytes.len() != Self::LENGTH {
@@ -808,6 +823,12 @@ impl AsRef<[u8]> for Secp256k1SuiSignature {
     }
 }
 
+impl AsMut<[u8]> for Secp256k1SuiSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
 impl signature::Signature for Secp256k1SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
         if bytes.len() != Self::LENGTH {
@@ -852,6 +873,12 @@ impl SuiPublicKey for Secp256r1PublicKey {
 impl AsRef<[u8]> for Secp256r1SuiSignature {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+impl AsMut<[u8]> for Secp256r1SuiSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
     }
 }
 
@@ -1057,7 +1084,14 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
         message_index: usize,
     ) -> SuiResult<()> {
         let weight = committee.weight(&self.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+        fp_ensure!(
+            weight > 0,
+            SuiError::UnknownSigner {
+                signer: Some(self.authority.concise().to_string()),
+                index: None,
+                committee: committee.clone()
+            }
+        );
 
         obligation
             .public_keys
@@ -1193,13 +1227,25 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
             .ok_or(SuiError::InvalidAuthenticator)?;
 
         for authority_index in self.signers_map.iter() {
-            let authority = committee
-                .authority_by_index(authority_index)
-                .ok_or(SuiError::UnknownSigner)?;
+            let authority =
+                committee
+                    .authority_by_index(authority_index)
+                    .ok_or(SuiError::UnknownSigner {
+                        signer: None,
+                        index: Some(authority_index),
+                        committee: committee.clone(),
+                    })?;
 
             // Update weight.
             let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            fp_ensure!(
+                voting_rights > 0,
+                SuiError::UnknownSigner {
+                    signer: Some(authority.concise().to_string()),
+                    index: Some(authority_index),
+                    committee: committee.clone()
+                }
+            );
             weight += voting_rights;
 
             selected_public_keys.push(committee.public_key(authority)?);
@@ -1245,7 +1291,11 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             map.insert(
                 committee
                     .authority_index(pk)
-                    .ok_or(SuiError::UnknownSigner)? as u32,
+                    .ok_or(SuiError::UnknownSigner {
+                        signer: Some(pk.concise().to_string()),
+                        index: None,
+                        committee: committee.clone(),
+                    })? as u32,
             );
         }
         let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();

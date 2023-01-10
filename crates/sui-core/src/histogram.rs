@@ -174,6 +174,10 @@ impl Hash for HistogramLabelsInner {
 }
 
 impl Histogram {
+    pub fn new_in_registry(name: &str, desc: &str, registry: &Registry) -> Self {
+        HistogramVec::new_in_registry(name, desc, &[], registry).with_label_values(&[])
+    }
+
     pub fn report(&self, v: Point) {
         match self.channel.try_send((self.labels.clone(), v)) {
             Ok(()) => {}

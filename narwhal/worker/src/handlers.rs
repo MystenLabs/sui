@@ -15,10 +15,9 @@ use store::Store;
 use tokio::time::sleep;
 use tracing::{debug, error, info, trace, warn};
 use types::{
-    metered_channel::Sender, Batch, BatchDigest, PreSubscribedBroadcastSender, PrimaryToWorker,
-    RequestBatchRequest, RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerClient,
+    metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
+    RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -96,8 +95,6 @@ pub struct PrimaryReceiverHandler<V> {
     pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batch_retry_nodes: usize,
-    /// Send reconfiguration update to other tasks.
-    pub tx_shutdown: PreSubscribedBroadcastSender,
     // Validate incoming batches
     pub validator: V,
 }
@@ -108,10 +105,11 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         &self,
         _request: anemo::Request<WorkerReconfigureMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        // TODO: remove the endpoint on follow up PR
         // Notify all other tasks.
-        self.tx_shutdown
-            .send()
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        //self.tx_shutdown
+        //    .send()
+        //    .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
 
         Ok(anemo::Response::new(()))
     }

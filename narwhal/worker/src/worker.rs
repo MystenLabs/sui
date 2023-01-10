@@ -81,6 +81,7 @@ impl Worker {
         validator: impl TransactionValidator,
         store: Store<BatchDigest, Batch>,
         metrics: Metrics,
+        tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
         info!(
             "Boot worker node with id {} peer id {}",
@@ -118,7 +119,6 @@ impl Worker {
             &channel_metrics.tx_others_batch_total,
         );
 
-        let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
@@ -136,7 +136,6 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
-            tx_shutdown,
             validator: validator.clone(),
         });
 

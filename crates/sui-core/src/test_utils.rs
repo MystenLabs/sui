@@ -29,7 +29,7 @@ use sui_types::{
         TransactionDigest,
     },
     committee::Committee,
-    crypto::{get_key_pair_from_rng, AuthoritySignInfo, AuthoritySignature},
+    crypto::{AuthoritySignInfo, AuthoritySignature},
     gas::GasCostSummary,
     message_envelope::Message,
     messages::{CertifiedTransaction, ExecutionStatus, Transaction, TransactionEffects},
@@ -45,21 +45,20 @@ pub const MAX_GAS: u64 = 2_000;
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail
 #[allow(dead_code)]
-pub(crate) fn init_state_parameters_from_rng<R>(
-    rng: &mut R,
-) -> (Committee, SuiAddress, AuthorityKeyPair)
+pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Genesis, AuthorityKeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let (authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair_from_rng(rng);
-    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-    authorities.insert(
-        /* address */ authority_key.public().into(),
-        /* voting right */ 1,
-    );
-    let committee = Committee::new(0, authorities).unwrap();
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        .rng(rng)
+        .build();
+    let genesis = network_config.genesis;
+    let authority_key = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
 
-    (committee, authority_address, authority_key)
+    (genesis, authority_key)
 }
 
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
@@ -197,6 +196,9 @@ async fn init_genesis(
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);
         key_pairs.push((authority_name, key_pair));
+    }
+    for (_, key) in &key_pairs {
+        builder = builder.add_validator_signature(key);
     }
     let genesis = builder.build();
     (genesis, key_pairs, pkg_ref)

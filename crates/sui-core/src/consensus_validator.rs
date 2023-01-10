@@ -7,6 +7,7 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 
 use narwhal_worker::TransactionValidator;
+use sui_types::message_envelope::Message;
 use sui_types::{
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     messages::{ConsensusTransaction, ConsensusTransactionKind},
@@ -58,7 +59,7 @@ impl TransactionValidator for SuiTxValidator {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     self.metrics.certificate_signatures_verified.inc();
-                    // todo - verify user signature when we pin signature in certificate
+                    certificate.data().verify()?;
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
                     certificate.auth_sig().add_to_verification_obligation(
                         epoch_store.committee(),
@@ -115,17 +116,10 @@ impl SuiTxValidatorMetrics {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use fastcrypto::traits::KeyPair;
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;
-    use sui_types::{
-        base_types::AuthorityName,
-        committee::Committee,
-        crypto::{get_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes},
-        messages::ConsensusTransaction,
-    };
+    use sui_types::{base_types::AuthorityName, messages::ConsensusTransaction};
 
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
@@ -143,19 +137,18 @@ mod tests {
         let mut objects = test_gas_objects();
         objects.push(Object::shared_for_testing());
 
-        let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-        let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-        let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+            .with_objects(objects.clone())
+            .build();
+        let genesis = network_config.genesis;
+
+        let sec1 = network_config.validator_configs[0]
+            .protocol_key_pair()
+            .copy();
         let name1: AuthorityName = sec1.public().into();
-        let name2: AuthorityName = sec2.public().into();
 
-        authorities.insert(name1, 3);
-        authorities.insert(name2, 1);
-
-        let committee = Committee::new(0, authorities.clone()).unwrap();
-
-        let state =
-            init_state_with_objects_and_committee(objects, Some((committee.clone(), sec1))).await;
+        let state = init_state_with_objects_and_committee(objects, &genesis, &sec1).await;
         let certificates = test_certificates(&state).await;
 
         let first_transaction = certificates[0].clone();
@@ -169,6 +162,7 @@ mod tests {
         assert!(res.is_ok(), "{res:?}");
 
         let transaction_bytes: Vec<_> = certificates
+            .clone()
             .into_iter()
             .map(|cert| {
                 bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
@@ -179,5 +173,18 @@ mod tests {
         let batch = Batch::new(transaction_bytes);
         let res_batch = validator.validate_batch(&batch);
         assert!(res_batch.is_ok(), "{res_batch:?}");
+
+        let bogus_transaction_bytes: Vec<_> = certificates
+            .into_iter()
+            .map(|mut cert| {
+                cert.tx_signature.as_mut()[2] = cert.tx_signature.as_mut()[2].wrapping_add(1);
+                bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
+                    .unwrap()
+            })
+            .collect();
+
+        let batch = Batch::new(bogus_transaction_bytes);
+        let res_batch = validator.validate_batch(&batch);
+        assert!(res_batch.is_err());
     }
 }

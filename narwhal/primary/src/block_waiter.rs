@@ -126,7 +126,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
             .header
             .payload
             .iter()
-            .map(|(batch_digest, worker_id)| {
+            .map(|(batch_digest, (worker_id, _))| {
                 debug!("Sending batch {batch_digest} request to worker id {worker_id}");
                 let worker_name = self
                     .worker_cache

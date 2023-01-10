@@ -20,8 +20,7 @@ use sui_benchmark::workloads::{
 use sui_benchmark::FullNodeProxy;
 use sui_benchmark::LocalValidatorAggregatorProxy;
 use sui_benchmark::ValidatorProxy;
-use sui_core::authority_aggregator::reconfig_from_genesis;
-use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
+use sui_config::utils;
 use sui_node::metrics;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -29,10 +28,11 @@ use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
 use tokio::time::sleep;
 
 use sui_types::object::generate_test_gas_objects_with_owner;
-use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
+use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;
+use tracing::info;
 
 #[derive(Parser)]
 #[clap(name = "Stress Testing Framework")]
@@ -74,11 +74,20 @@ struct Opts {
     /// genesis_blob_path, keypair_path and primary_gas_id
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub local: bool,
-    /// If provided, use FullNodeProxy to submit transactions and read data.
+    /// Required in remote benchmark, namely when local = false
+    #[clap(long)]
+    pub fullnode_rpc_address: Option<String>,
+    /// Whether to submit transactions to a fullnode.
+    /// If true, use FullNodeProxy.
+    /// Otherwise, use LocalValidatorAggregatorProxy.
     /// This param only matters when local = false, namely local runs always
     /// use a LocalValidatorAggregatorProxy.
-    #[clap(long, global = true)]
-    pub fullnode_rpc_address: Option<String>,
+    #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+    pub use_fullnode_for_execution: bool,
+    /// True to use FullNodeReconfigObserver,
+    /// Otherwise use EmbeddedReconfigObserver,
+    #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+    pub use_fullnode_for_reconfig: bool,
     /// Default workload is 100% transfer object
     #[clap(subcommand)]
     run_spec: RunSpec,
@@ -201,12 +210,12 @@ async fn main() -> Result<()> {
             .parse()
             .unwrap(),
     );
-    let registry: Arc<Registry> = Arc::new(registry_service.default_registry());
+    let registry: Registry = registry_service.default_registry();
 
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let (primary_gas_id, owner, keypair, aggregator) = if opts.local {
-        eprintln!("Configuring local benchmark..");
+        info!("Configuring local benchmark..");
         let configs = {
             let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
             let mut metric_port = opts.server_metric_port;
@@ -226,15 +235,8 @@ async fn main() -> Result<()> {
         // Make the client runtime wait until we are done creating genesis objects
         let cloned_config = configs.clone();
         let cloned_gas = primary_gas;
-
-        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(&configs)
-            .with_registry(registry.clone())
-            .build()
-            .unwrap();
-
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(aggregator)),
-        );
+        let fullnode_ip = format!("{}", utils::get_local_ip_for_tests());
+        let fullnode_rpc_port = utils::get_available_port(&fullnode_ip);
 
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.
         // running forever
@@ -248,7 +250,9 @@ async fn main() -> Result<()> {
                 .unwrap();
             server_runtime.block_on(async move {
                 // Setup the network
-                let _nodes: Vec<_> = spawn_test_authorities(cloned_gas, &cloned_config).await;
+                let _validators: Vec<_> = spawn_test_authorities(cloned_gas, &cloned_config).await;
+                let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
+
                 cloned_barrier.wait().await;
 
                 // This thread cannot exit, otherwise validators will shutdown.
@@ -257,9 +261,22 @@ async fn main() -> Result<()> {
                 }
             });
         });
+
+        // Let fullnode be created.
+        sleep(Duration::from_secs(5)).await;
+        let fullnode_rpc_url = format!("http://{fullnode_ip}:{fullnode_rpc_port}");
+        info!("Fullnode rpc url: {fullnode_rpc_url}");
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_network_config(
+                &configs,
+                &registry,
+                Some(&fullnode_rpc_url),
+            )
+            .await,
+        );
         (primary_gas_id, owner, Arc::new(keypair), proxy)
     } else {
-        eprintln!("Configuring remote benchmark..");
+        info!("Configuring remote benchmark..");
         std::thread::spawn(move || {
             Builder::new_multi_thread()
                 .build()
@@ -269,24 +286,39 @@ async fn main() -> Result<()> {
                 });
         });
 
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
-            if let Some(fullnode_url) = opts.fullnode_rpc_address {
-                eprintln!("Using Full node: {fullnode_url}..");
-                Arc::new(FullNodeProxy::from_url(&fullnode_url).await.unwrap())
-            } else {
-                let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
-                let genesis = genesis.genesis()?;
-                let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
-                    .with_registry(registry.clone())
-                    .build()
-                    .unwrap();
-
-                let aggregator = reconfig_from_genesis(aggregator).await?;
-                Arc::new(LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(
-                    aggregator,
-                )))
-            };
-        eprintln!(
+        let fullnode_rpc_url = opts.fullnode_rpc_address;
+        info!("Fullnode rpc url: {:?}", fullnode_rpc_url);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if opts.use_fullnode_for_execution {
+            info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
+            Arc::new(
+                FullNodeProxy::from_url(&fullnode_rpc_url.expect(
+                    "fullnode-rpc-url is required when use-fullnode-for-execution is true",
+                ))
+                .await
+                .unwrap(),
+            )
+        } else {
+            info!("Using LocalValidatorAggregatorProxy");
+            let reconfig_fullnode_rpc_url =
+                if opts.use_fullnode_for_reconfig {
+                    Some(fullnode_rpc_url.expect(
+                        "fullnode-rpc-url is required when use-fullnode-for-reconfig is true",
+                    ))
+                } else {
+                    None
+                };
+            let genesis = sui_config::node::Genesis::new_from_file(&opts.genesis_blob_path);
+            let genesis = genesis.genesis()?;
+            Arc::new(
+                LocalValidatorAggregatorProxy::from_genesis(
+                    genesis,
+                    &registry,
+                    reconfig_fullnode_rpc_url.as_deref(),
+                )
+                .await,
+            )
+        };
+        info!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
             proxy.get_current_epoch(),
         );

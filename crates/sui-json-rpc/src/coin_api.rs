@@ -16,8 +16,8 @@ use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
-use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
+use sui_types::base_types::{ObjectID, ObjectType, SuiAddress};
+use sui_types::coin::{Coin, CoinMetadata, LockedCoin, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
 use sui_types::gas_coin::GAS;
@@ -41,14 +41,32 @@ impl CoinReadApi {
         Ok(self.state.get_object_read(object_id).await?.into_object()?)
     }
 
-    async fn get_coin(&self, coin_id: &ObjectID) -> Result<(StructTag, ObjectRef, Coin), Error> {
+    async fn get_coin(&self, coin_id: &ObjectID) -> Result<SuiCoin, Error> {
         let o = self.get_object(coin_id).await?;
         if let Some(move_object) = o.data.try_as_move() {
-            Ok((
-                move_object.type_.clone(),
-                o.compute_object_reference(),
-                bcs::from_bytes(move_object.contents())?,
-            ))
+            let (balance, locked_until_epoch) = if Coin::is_coin(&move_object.type_) {
+                let coin: Coin = bcs::from_bytes(move_object.contents())?;
+                (coin.balance.value(), None)
+            } else if LockedCoin::is_locked_coin(&move_object.type_) {
+                let locked_coin: LockedCoin = bcs::from_bytes(move_object.contents())?;
+                (
+                    locked_coin.balance.value(),
+                    Some(locked_coin.locked_until_epoch),
+                )
+            } else {
+                return Err(Error::SuiError(SuiError::ObjectDeserializationError {
+                    error: format!("{:?} is not a supported coin type", move_object.type_),
+                }));
+            };
+
+            Ok(SuiCoin {
+                coin_type: move_object.type_.type_params.first().unwrap().to_string(),
+                coin_object_id: o.id(),
+                version: o.version(),
+                digest: o.digest(),
+                balance,
+                locked_until_epoch,
+            })
         } else {
             Err(Error::UnexpectedError(format!(
                 "Provided object : [{coin_id}] is not a Move object."
@@ -75,18 +93,8 @@ impl CoinReadApi {
         coins.truncate(limit);
 
         let mut data = vec![];
-
         for coin in coins {
-            let (type_, oref, coin) = self.get_coin(&coin).await?;
-            // We have checked these are coin objects, safe to unwrap.
-            let coin_type = type_.type_params.first().unwrap().to_string();
-            data.push(SuiCoin {
-                coin_type,
-                coin_object_id: oref.0,
-                version: oref.1,
-                digest: oref.2,
-                balance: coin.balance.value(),
-            })
+            data.push(self.get_coin(&coin).await?)
         }
         Ok(CoinPage { data, next_cursor })
     }
@@ -179,11 +187,16 @@ impl CoinReadApiServer for CoinReadApi {
         // TODO: Add index to improve performance?
         let coins = self.get_owner_coin_iterator(owner, &coin_type)?;
         let mut total_balance = 0u128;
+        let mut locked_balance = HashMap::new();
         let mut coin_object_count = 0;
 
         for coin in coins {
-            let (_, _, coin) = self.get_coin(&coin).await?;
-            total_balance += coin.balance.value() as u128;
+            let coin = self.get_coin(&coin).await?;
+            if let Some(lock) = coin.locked_until_epoch {
+                *locked_balance.entry(lock).or_default() += coin.balance as u128
+            } else {
+                total_balance += coin.balance as u128;
+            }
             coin_object_count += 1;
         }
 
@@ -191,30 +204,32 @@ impl CoinReadApiServer for CoinReadApi {
             coin_type: coin_type.unwrap(),
             coin_object_count,
             total_balance,
+            locked_balance,
         })
     }
 
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
         // TODO: Add index to improve performance?
         let coins = self.get_owner_coin_iterator(owner, &None)?;
-        let mut data: HashMap<String, (u128, usize)> = HashMap::new();
+        let mut balances: HashMap<String, Balance> = HashMap::new();
 
         for coin in coins {
-            let (type_, _, coin) = self.get_coin(&coin).await?;
-            let coin_type = type_.type_params.first().unwrap().to_string();
-            let (amount, count) = data.entry(coin_type).or_default();
-            *amount += coin.balance.value() as u128;
-            *count += 1;
+            let coin = self.get_coin(&coin).await?;
+            let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
+                coin_type: coin.coin_type,
+                coin_object_count: 0,
+                total_balance: 0,
+                locked_balance: Default::default(),
+            });
+            if let Some(lock) = coin.locked_until_epoch {
+                *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
+            } else {
+                balance.total_balance += coin.balance as u128;
+            }
+            balance.coin_object_count += 1;
         }
 
-        Ok(data
-            .into_iter()
-            .map(|(coin_type, (total_balance, coin_object_count))| Balance {
-                coin_type,
-                coin_object_count,
-                total_balance,
-            })
-            .collect())
+        Ok(balances.into_values().collect())
     }
 
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<SuiCoinMetadata> {
@@ -272,7 +287,7 @@ impl CoinReadApiServer for CoinReadApi {
 }
 
 fn is_coin_type(type_: &StructTag, coin_type: &Option<String>) -> bool {
-    if Coin::is_coin(type_) {
+    if Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_) {
         return if let Some(coin_type) = coin_type {
             matches!(type_.type_params.first(), Some(TypeTag::Struct(type_)) if &type_.to_string() == coin_type)
         } else {

@@ -33,6 +33,7 @@ macro_rules! check_error {
     }
 }
 
+#[derive(Clone)]
 pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
@@ -242,6 +243,9 @@ impl<C> SafeClient<C> {
         } = response;
 
         let signed_transaction = if let Some(signed_transaction) = signed_transaction {
+            // TODO: add test case where validator epoch advances but client does not know
+            // `MissingCommitteeAtEpoch`
+            // In this case, quorum driver should pause submit tranasactions until it catches up
             committee = Some(self.get_committee(&signed_transaction.epoch())?);
             // Check the transaction signature
             let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;

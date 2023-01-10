@@ -12,7 +12,6 @@ use sui_adapter::execution_mode;
 use sui_json::SuiJsonValue;
 use sui_transaction_builder::TransactionBuilder;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
-use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
 use fastcrypto::encoding::Base64;
@@ -27,9 +26,11 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
-use sui_types::committee::EpochId;
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
+use sui_types::messages::TransactionData;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
@@ -410,18 +411,44 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .try_into()?)
     }
 
-    async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<CommitteeInfoResponse> {
+    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
         Ok(self
             .state
-            .handle_committee_info_request(&CommitteeInfoRequest { epoch })
-            .map_err(|e| anyhow!("{e}"))?)
+            .get_latest_checkpoint_sequence_number()
+            .map_err(|e| {
+                anyhow!("Latest checkpoint sequence number was not found with error :{e}")
+            })?)
     }
 
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
+    fn get_checkpoint_summary(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointSummary> {
+        Ok(self.state.get_checkpoint_summary(sequence_number)
+        .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> RpcResult<CheckpointContents> {
+        Ok(self.state.get_checkpoint_contents(digest).map_err(|e| {
+            anyhow!(
+                "Checkpoint contents based on digest: {:?} were not found with error: {}",
+                digest,
+                e
+            )
+        })?)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointContents> {
         Ok(self
             .state
-            .get_sui_system_state_object()
-            .map_err(|e| anyhow!("{e}"))?)
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+            .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
     }
 }
 

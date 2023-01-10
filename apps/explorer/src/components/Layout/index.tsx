@@ -9,6 +9,7 @@ import { Fragment } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Outlet } from 'react-router-dom';
 
+import { usePageView } from '../../hooks/usePageView';
 import Footer from '../footer/Footer';
 import Header from '../header/Header';
 
@@ -18,7 +19,7 @@ import { queryClient } from '~/utils/queryClient';
 
 export function Layout() {
     const [network, setNetwork] = useNetwork();
-
+    usePageView();
     return (
         // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
         <Fragment key={network}>

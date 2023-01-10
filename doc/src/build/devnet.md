@@ -140,7 +140,7 @@ https://explorer.sui.io/objects/EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 
 ## Publish a Move module
 
-This section describes hwo to publish a sample Move package using code developed in the [Sui Move tutorial](../build/move/write-package.md).  The instructions assume that you installed Sui in the default location.
+This section describes how to publish a sample Move package using code developed in the [Sui Move tutorial](../build/move/write-package.md).  The instructions assume that you installed Sui in the default location.
 ```shell
 sui client publish <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```

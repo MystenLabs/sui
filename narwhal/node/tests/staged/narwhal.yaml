@@ -48,7 +48,9 @@ Header:
         SEQ:
           TUPLE:
             - TYPENAME: BatchDigest
-            - U32
+            - TUPLE:
+                - U32
+                - U64
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
@@ -99,4 +101,3 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target: STR
-

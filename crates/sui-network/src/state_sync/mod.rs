@@ -296,6 +296,7 @@ where
     }
 
     fn handle_message(&mut self, message: StateSyncMessage) {
+        debug!("Received message: {:?}", message);
         match message {
             StateSyncMessage::StartSyncJob => self.maybe_start_checkpoint_summary_sync_task(),
             StateSyncMessage::VerifiedCheckpoint(checkpoint) => {
@@ -991,7 +992,7 @@ where
                 && effects.transaction_digest == digests.transaction
             {
                 // TODO this should just be a bare Transaction type and not a TransactionCertificate
-                // since Certificates are indended to be ephemeral and thrown away at the end of an
+                // since Certificates are intended to be ephemeral and thrown away at the end of an
                 // epoch
                 store
                     .insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(

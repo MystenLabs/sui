@@ -1,5 +1,15 @@
 # @mysten/sui.js
 
+## 0.22.0
+
+### Minor Changes
+
+- a55236e48: Add gas price field to RPC transaction data type
+
+### Patch Changes
+
+- 8ae226dae: Fix schema validation bug in Coin.newPayTransaction
+
 ## 0.21.0
 
 ### Minor Changes
