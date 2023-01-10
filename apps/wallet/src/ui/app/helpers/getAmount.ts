@@ -39,7 +39,7 @@ type FormattedBalance = {
 
 export function getAmount(
     txnData: SuiTransactionKind,
-    txnEffect?: TransactionEffects
+    txnEffect: TransactionEffects
 ): FormattedBalance | null {
     const txKindName = getTransactionKindName(txnData);
     if (txKindName === 'TransferObject') {

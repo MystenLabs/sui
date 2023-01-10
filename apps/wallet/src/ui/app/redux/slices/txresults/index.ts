@@ -140,12 +140,9 @@ export const getTransactionsByAddress = createAsyncThunk<
             const txn = txns[0];
             const txKind = getTransactionKindName(txn);
             const txTransferObject = getTransferObjectTransaction(txn);
-            const amountByRecipient = getAmount(txn);
+            const amountByRecipient = getAmount(txn, txEff.effects);
             const sender = getTransactionSender(txEff.certificate);
-            const amount = amountByRecipient?.find(
-                ({ recipientAddress }) => recipientAddress === sender
-            )?.amount;
-
+            const amount = amountByRecipient && amountByRecipient[0]?.amount;
             //TODO: Support multiple recipients
             const recipient =
                 amountByRecipient &&

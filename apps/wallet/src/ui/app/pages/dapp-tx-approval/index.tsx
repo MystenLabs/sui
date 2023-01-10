@@ -225,7 +225,10 @@ export function DappTxApprovalPage() {
                 const moveCallTxn = txRequest.tx.data
                     .data as MoveCallTransaction;
                 return [
-                    { label: 'Transaction Type', content: 'MoveCall' },
+                    {
+                        label: 'Transaction Type',
+                        content: txRequest.tx.data.kind,
+                    },
                     {
                         label: 'Function',
                         content: moveCallTxn.function,
