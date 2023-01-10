@@ -187,7 +187,7 @@ class Bench:
         for filename in primary_key_files:
             cmd = CommandMaker.generate_key(filename).split()
             subprocess.run(cmd, check=True)
-            cmd_pk = CommandMaker.get_pk(filename).split()
+            cmd_pk = CommandMaker.get_pub_key(filename).split()
             pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
             primary_names += [pk]
 
@@ -197,7 +197,7 @@ class Bench:
         for filename in primary_network_key_files:
             cmd = CommandMaker.generate_network_key(filename).split()
             subprocess.run(cmd, check=True)
-            cmd_pk = CommandMaker.get_pk(filename).split()
+            cmd_pk = CommandMaker.get_pub_key(filename).split()
             pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
             primary_network_names += [pk]
 
@@ -218,7 +218,7 @@ class Bench:
         for filename in worker_key_files:
             cmd = CommandMaker.generate_network_key(filename).split()
             subprocess.run(cmd, check=True)
-            cmd_pk = CommandMaker.get_pk(filename).split()
+            cmd_pk = CommandMaker.get_pub_key(filename).split()
             pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
             worker_names += [pk]
 

@@ -56,7 +56,7 @@ async fn main() -> Result<(), eyre::Report> {
             .args_from_usage("--filename=<FILE> 'The file where to save the encoded network key pair'"),
         )
         .subcommand(
-            SubCommand::with_name("get_pk")
+            SubCommand::with_name("get_pub_key")
                 .about("Get the public key from a keypair file")
                 .args_from_usage("--filename=<FILE> 'The file where the keypair is stored'"),
         )
@@ -114,7 +114,7 @@ async fn main() -> Result<(), eyre::Report> {
             let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
             write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), network_key_file).unwrap();
         }
-        ("get_pk", Some(sub_matches)) => {
+        ("get_pub_key", Some(sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let file = sub_matches.value_of("filename").unwrap();
             match read_network_keypair_from_file(file) {
