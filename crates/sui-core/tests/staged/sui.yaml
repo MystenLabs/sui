@@ -271,7 +271,7 @@ MoveLocation:
   STRUCT:
     - module:
         TYPENAME: ModuleId
-    - function: U16
+    - function_idx: U16
     - instruction: U16
 MoveModulePublish:
   STRUCT:

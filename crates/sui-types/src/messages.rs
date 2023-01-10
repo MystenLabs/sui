@@ -1363,7 +1363,7 @@ pub enum ExecutionFailureStatus {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct MoveLocation {
     pub module: ModuleId,
-    pub function: u16,
+    pub function_idx: u16,
     pub instruction: CodeOffset,
 }
 
@@ -1594,12 +1594,12 @@ impl Display for MoveLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Self {
             module,
-            function,
+            function_idx,
             instruction,
         } = self;
         write!(
             f,
-            "{module} in function definition {function} at offset {instruction}"
+            "{module} in function definition {function_idx} at offset {instruction}"
         )
     }
 }

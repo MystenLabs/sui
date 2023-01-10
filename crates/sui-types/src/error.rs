@@ -716,11 +716,11 @@ impl From<VMError> for ExecutionError {
             (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
                 let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
                 debug_assert!(offset.is_some(), "Move should set the location on aborts");
-                let (function, instruction) = offset.unwrap_or((0, 0));
+                let (function_idx, instruction) = offset.unwrap_or((0, 0));
                 ExecutionFailureStatus::MoveAbort(
                     MoveLocation {
                         module: id.clone(),
-                        function,
+                        function_idx,
                         instruction,
                     },
                     code,
@@ -737,10 +737,10 @@ impl From<VMError> for ExecutionError {
                                 offset.is_some(),
                                 "Move should set the location on all execution errors"
                             );
-                            let (function, instruction) = offset.unwrap_or((0, 0));
+                            let (function_idx, instruction) = offset.unwrap_or((0, 0));
                             Some(MoveLocation {
                                 module: id.clone(),
-                                function,
+                                function_idx,
                                 instruction,
                             })
                         }
