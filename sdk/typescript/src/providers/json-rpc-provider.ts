@@ -67,7 +67,6 @@ import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
 import { any, is, number, array } from 'superstruct';
 import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
-import { Option } from '../types/option';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -763,7 +762,8 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getDynamicFields(parent_object_id: ObjectId, cursor: Option<ObjectId>, limit: Option<number>): Promise<DynamicFieldPage> {
+  //Dynamic Fields
+  async getDynamicFields(parent_object_id: ObjectId, cursor: ObjectId | null = null, limit: number | null = null): Promise<DynamicFieldPage> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getDynamicFields',
