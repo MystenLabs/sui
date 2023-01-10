@@ -134,9 +134,6 @@ export function ValidatorFormDetail({
                             <StakeAmount
                                 balance={validatorData.pendingDelegationAmount}
                                 variant="body"
-                                size="body"
-                                color="steel-darker"
-                                symbolColor="steel-darker"
                             />
                         </>
                     }
@@ -177,9 +174,6 @@ export function ValidatorFormDetail({
                                 <StakeAmount
                                     balance={validatorData.totalStaked}
                                     variant="body"
-                                    size="body"
-                                    color="steel-darker"
-                                    symbolColor="steel-darker"
                                 />
                             </div>
                         )}

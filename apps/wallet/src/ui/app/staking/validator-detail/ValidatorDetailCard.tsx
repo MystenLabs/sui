@@ -139,20 +139,15 @@ export function ValidatorDetailCard({
                                                 balance={
                                                     totalStakedIncludingPending
                                                 }
-                                                variant="heading"
-                                                size="heading4"
-                                                color="gray-90"
-                                                symbolColor="steel"
+                                                variant="heading4"
                                             />
                                         </CardItem>
 
                                         <CardItem title="Earned">
                                             <StakeAmount
                                                 balance={suiEarned}
-                                                variant="heading"
-                                                symbolColor="gray-60"
-                                                size="heading4"
-                                                color="gray-60"
+                                                variant="heading4"
+                                                isEarnedRewards
                                             />
                                         </CardItem>
                                     </div>

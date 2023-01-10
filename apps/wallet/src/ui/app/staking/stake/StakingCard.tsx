@@ -124,7 +124,7 @@ function StakingCard() {
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
-                // Not sure if this is the best way to do this, but invalidate the query query for 0x5
+                //  invalidate the react query for 0x5
                 queryClient.invalidateQueries({
                     queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
                 });

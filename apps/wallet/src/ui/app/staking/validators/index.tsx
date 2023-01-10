@@ -1,36 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject } from '@mysten/sui.js';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { getName, STATE_OBJECT } from '../usePendingDelegation';
+import { usePendingDelegation } from '../usePendingDelegation';
 import { SelectValidatorCard } from './SelectValidatorCard';
 import { ValidatorsCard } from './ValidatorsCard';
-import {
-    activeDelegationIDsSelector,
-    totalActiveStakedSelector,
-} from '_app/staking/selectors';
+import { activeDelegationIDsSelector } from '_app/staking/selectors';
 import Alert from '_components/alert';
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
-import { useAppSelector, useObjectsState, useGetObject } from '_hooks';
-
-import type { ValidatorState } from '../ValidatorDataTypes';
-
-export type ValidatorsProp = {
-    name: string;
-    apy: number | string;
-    logo: string | null;
-    address: string;
-    pendingDelegationAmount: bigint;
-};
+import { useAppSelector, useObjectsState } from '_hooks';
 
 export function Validators() {
     const [showModal, setShowModal] = useState(true);
-
+    const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
+        usePendingDelegation();
     const navigate = useNavigate();
     const close = () => {
         navigate('/');
@@ -38,72 +25,9 @@ export function Validators() {
 
     const { loading, error } = useObjectsState();
     const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
-    const totalStaked = useAppSelector(totalActiveStakedSelector);
-    const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data, isLoading } = useGetObject(STATE_OBJECT);
 
-    const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
-            : null;
-
-    const validators = useMemo(() => {
-        if (!validatorsData) return [];
-        return validatorsData.validators.fields.active_validators
-            .map((av) => {
-                const rawName = av.fields.metadata.fields.name;
-                const {
-                    sui_balance,
-                    starting_epoch,
-                    pending_delegations,
-                    delegation_token_supply,
-                } = av.fields.delegation_staking_pool.fields;
-
-                const num_epochs_participated =
-                    validatorsData.epoch - starting_epoch;
-
-                const APY = Math.pow(
-                    1 +
-                        (sui_balance - delegation_token_supply.fields.value) /
-                            delegation_token_supply.fields.value,
-                    365 / num_epochs_participated - 1
-                );
-
-                const pending_delegationsByAddress = pending_delegations
-                    ? pending_delegations.filter(
-                          (d) => d.fields.delegator === accountAddress
-                      )
-                    : [];
-
-                return {
-                    name: getName(rawName),
-                    apy: APY > 0 ? APY : 'N/A',
-                    logo: null,
-                    address: av.fields.metadata.fields.sui_address,
-                    pendingDelegationAmount:
-                        pending_delegationsByAddress.reduce(
-                            (acc, fields) =>
-                                (acc += BigInt(fields.fields.sui_amount || 0n)),
-                            0n
-                        ),
-                };
-            })
-            .sort((a, b) => (a.name > b.name ? 1 : -1));
-    }, [accountAddress, validatorsData]);
-
-    // TODO - get this from the metadata
-    const earnedRewards = BigInt(0);
-
-    const totalStakedIncludingPending =
-        totalStaked +
-        validators.reduce(
-            (acc, { pendingDelegationAmount }) => acc + pendingDelegationAmount,
-            0n
-        );
-
-    const hasDelegations = Boolean(totalStakedIncludingPending);
+    const hasDelegations =
+        activeDelegationIDs.length > 0 || pendingDelegations.length > 0;
 
     const pageTitle = hasDelegations
         ? 'Stake & Earn SUI'
@@ -113,13 +37,13 @@ export function Validators() {
         <Overlay
             showModal={showModal}
             setShowModal={setShowModal}
-            title={isLoading ? 'Loading' : pageTitle}
+            title={pendingDelegationsLoading ? 'Loading' : pageTitle}
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
         >
             <div className="w-full flex flex-col flex-nowrap h-full overflow-x-scroll">
                 <Loading
-                    loading={isLoading || loading}
+                    loading={loading}
                     className="flex justify-center w-full items-center h-full"
                 >
                     {error ? (
@@ -132,12 +56,7 @@ export function Validators() {
                     ) : null}
 
                     {hasDelegations ? (
-                        <ValidatorsCard
-                            validators={validators}
-                            earnedRewards={earnedRewards}
-                            activeDelegationIDs={activeDelegationIDs}
-                            totalStaked={totalStakedIncludingPending}
-                        />
+                        <ValidatorsCard />
                     ) : (
                         <SelectValidatorCard />
                     )}
