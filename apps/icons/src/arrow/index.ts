@@ -1,5 +1,11 @@
+export { default as ArrowBottomLeft16 } from "./ArrowBottomLeft16";
 export { default as ArrowDown12 } from "./ArrowDown12";
+export { default as ArrowDown16 } from "./ArrowDown16";
 export { default as ArrowLeft12 } from "./ArrowLeft12";
+export { default as ArrowLeft16 } from "./ArrowLeft16";
 export { default as ArrowRight12 } from "./ArrowRight12";
+export { default as ArrowRight16 } from "./ArrowRight16";
+export { default as ArrowShowAndHide16 } from "./ArrowShowAndHide16";
 export { default as ArrowUp12 } from "./ArrowUp12";
 export { default as ArrowUpRight12 } from "./ArrowUpRight12";
+export { default as ArrowUpRight16 } from "./ArrowUpRight16";
