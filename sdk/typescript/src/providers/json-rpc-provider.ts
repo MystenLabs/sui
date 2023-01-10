@@ -582,22 +582,7 @@ export class JsonRpcProvider extends Provider {
   ): Promise<SuiExecuteTransactionResponse> {
     try {
       let resp;
-      let version = await this.getRpcApiVersion();
-      if (version?.major === 0 && version?.minor < 18) {
-        resp = await this.client.requestWithType(
-          'sui_executeTransaction',
-          [
-            txnBytes.toString(),
-            signatureScheme,
-            signature.toString(),
-            pubkey.toString(),
-            requestType,
-          ],
-          SuiExecuteTransactionResponse,
-          this.options.skipDataValidation
-        );
-      } else {
-        // Serialize sigature field as: `flag || signature || pubkey`
+      // Serialize sigature field as: `flag || signature || pubkey`
         const serialized_sig = new Uint8Array(
           1 + signature.getLength() + pubkey.toBytes().length
         );
@@ -615,7 +600,6 @@ export class JsonRpcProvider extends Provider {
           SuiExecuteTransactionResponse,
           this.options.skipDataValidation
         );
-      }
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);

@@ -27,10 +27,10 @@ use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
+use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature,
 };
-use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -71,7 +71,6 @@ impl RpcExampleProvider {
     pub fn examples(&mut self) -> BTreeMap<String, Vec<ExamplePairing>> {
         [
             self.batch_transaction_examples(),
-            self.execute_transaction_example(),
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_objects_owned_by_address(),
@@ -82,7 +81,7 @@ impl RpcExampleProvider {
             self.get_transaction_auth_signers(),
             self.get_transactions(),
             self.get_events(),
-            self.execute_transaction_serialized_sig_example(),
+            self.execute_transaction_example(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -168,41 +167,10 @@ impl RpcExampleProvider {
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signature, _, _, result, _) = self.get_transfer_data_response();
-
-        Examples::new(
-            "sui_executeTransaction",
-            vec![ExamplePairing::new(
-                "Execute an object transfer transaction",
-                vec![
-                    (
-                        "tx_bytes",
-                        json!(Base64::from_bytes(bcs::to_bytes(&data).unwrap().as_slice())),
-                    ),
-                    ("sig_scheme", json!(signature.scheme())),
-                    (
-                        "signature",
-                        json!(Base64::from_bytes(signature.signature_bytes())),
-                    ),
-                    (
-                        "pub_key",
-                        json!(Base64::from_bytes(signature.public_key_bytes())),
-                    ),
-                    (
-                        "request_type",
-                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
-                    ),
-                ],
-                json!(result),
-            )],
-        )
-    }
-
-    fn execute_transaction_serialized_sig_example(&mut self) -> Examples {
-        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_executeTransactionSerializedSig",
+            "sui_executeTransaction",
             vec![ExamplePairing::new(
                 "Execute an transaction with serialized signature",
                 vec![
