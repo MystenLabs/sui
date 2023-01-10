@@ -10,7 +10,7 @@ export interface DescriptionItemProps {
 
 export function DescriptionItem({ title, children }: DescriptionItemProps) {
     return (
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-10">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-10">
             <dt className="w-full text-p1 font-medium text-steel-darker md:w-50">
                 {title}
             </dt>
