@@ -1018,7 +1018,7 @@ impl AuthorityState {
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
     ) -> Result<SuiTransactionEffects, anyhow::Error> {
-        if !self.is_fullnode() && !cfg!(test) {
+        if !self.is_fullnode() {
             return Err(anyhow!("dry-exec is only support on fullnodes"));
         }
 
@@ -1051,7 +1051,7 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
         epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
-        if !self.is_fullnode() && !cfg!(test) {
+        if !self.is_fullnode() {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
@@ -1084,7 +1084,7 @@ impl AuthorityState {
         move_call: MoveCall,
         epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
-        if !self.is_fullnode() && !cfg!(test) {
+        if !self.is_fullnode() {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
