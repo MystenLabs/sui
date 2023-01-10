@@ -9,7 +9,11 @@ import { FEATURES } from '../../experimentation/features';
 import { ActiveDelegation } from '../home/ActiveDelegation';
 import { DelegationCard, DelegationState } from '../home/DelegationCard';
 import StakeAmount from '../home/StakeAmount';
-import { getName, STATE_OBJECT } from '../usePendingDelegation';
+import {
+    getName,
+    STATE_OBJECT,
+    usePendingDelegation,
+} from '../usePendingDelegation';
 import BottomMenuLayout, {
     Menu,
     Content,
@@ -32,6 +36,12 @@ export function ValidatorsCard() {
     const { data, isLoading } = useGetObject(STATE_OBJECT);
     const totalStaked = useAppSelector(totalActiveStakedSelector);
     const activeDelegationIDs = useAppSelector(activeDelegationIDsSelector);
+    const [pendingDelegations, { isLoading: pendingDelegationsLoading }] =
+        usePendingDelegation();
+
+    const totalStakedIncludingPending =
+        totalStaked +
+        pendingDelegations.reduce((acc, { staked }) => acc + staked, 0n);
 
     const validatorsData =
         data &&
@@ -92,7 +102,7 @@ export function ValidatorsCard() {
     ).length;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
-    if (isLoading) {
+    if (isLoading || pendingDelegationsLoading) {
         return (
             <div className="p-2 w-full flex justify-center item-center h-full">
                 <LoadingIndicator />
@@ -125,7 +135,7 @@ export function ValidatorsCard() {
                             <div className="flex divide-x divide-solid divide-gray-45 divide-y-0">
                                 <CardItem title="Your Stake">
                                     <StakeAmount
-                                        balance={totalStaked}
+                                        balance={totalStakedIncludingPending}
                                         variant="heading4"
                                     />
                                 </CardItem>
