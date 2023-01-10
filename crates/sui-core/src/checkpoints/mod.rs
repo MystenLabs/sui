@@ -28,7 +28,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
@@ -59,6 +59,9 @@ pub struct CheckpointStore {
     certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
     /// Map from checkpoint digest to certified checkpoint
     checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
+
+    /// A map from epoch ID to the sequence number of the last checkpoint in that epoch.
+    pub(crate) epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
 
     /// Watermarks used to determine the highest verified, fully synced, and
     /// fully executed checkpoints
@@ -174,7 +177,8 @@ impl CheckpointStore {
         &self,
         checkpoint: &CertifiedCheckpointSummary,
     ) -> Result<(), TypedStoreError> {
-        self.certified_checkpoints
+        let mut batch = self
+            .certified_checkpoints
             .batch()
             .insert_batch(
                 &self.certified_checkpoints,
@@ -183,8 +187,14 @@ impl CheckpointStore {
             .insert_batch(
                 &self.checkpoint_by_digest,
                 [(&checkpoint.digest(), checkpoint)],
-            )?
-            .write()
+            )?;
+        if checkpoint.next_epoch_committee().is_some() {
+            batch = batch.insert_batch(
+                &self.epoch_last_checkpoint_map,
+                [(&checkpoint.epoch(), &checkpoint.sequence_number())],
+            )?;
+        }
+        batch.write()
     }
 
     pub fn insert_verified_checkpoint(
@@ -237,6 +247,18 @@ impl CheckpointStore {
     ) -> Result<(), TypedStoreError> {
         self.checkpoint_content
             .insert(&contents.digest(), &contents)
+    }
+
+    pub fn get_epoch_last_checkpoint(
+        &self,
+        epoch_id: &EpochId,
+    ) -> SuiResult<Option<VerifiedCheckpoint>> {
+        let seq = self.epoch_last_checkpoint_map.get(epoch_id)?;
+        let checkpoint = match seq {
+            Some(seq) => self.get_checkpoint_by_sequence_number(seq)?,
+            None => None,
+        };
+        Ok(checkpoint)
     }
 }
 
