@@ -5297,6 +5297,8 @@ dependencies = [
  "serde-reflection",
  "serde_yaml",
  "structopt",
+ "sui-keys",
+ "sui-types",
  "telemetry-subscribers",
  "thiserror",
  "tokio",
