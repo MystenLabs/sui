@@ -65,7 +65,7 @@ impl RosettaOnlineServer {
             .route("/network/list", post(network::list))
             .route("/network/options", post(network::options))
             .layer(Extension(self.env))
-            .layer(Extension(Arc::new(self.context)));
+            .with_state(self.context);
         let server = axum::Server::bind(&addr).serve(app.into_make_service());
         info!(
             "Sui Rosetta online server listening on {}",

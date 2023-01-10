@@ -639,7 +639,11 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde 1.0.152",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower",
  "tower-http",
  "tower-layer",
@@ -675,6 +679,25 @@ dependencies = [
  "http-body",
  "mime",
  "rustversion",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "axum-extra"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9a320103719de37b7b4da4c8eb629d4573f6bcfd3dfe80d3208806895ccf81d"
+dependencies = [
+ "axum 0.6.2",
+ "bytes",
+ "futures-util",
+ "http",
+ "mime",
+ "pin-project-lite",
+ "tokio",
+ "tower",
+ "tower-http",
  "tower-layer",
  "tower-service",
 ]
@@ -7706,6 +7729,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26b04f22b563c91331a10074bda3dd5492e3cc39d56bd557e91c0af42b6c7341"
+dependencies = [
+ "serde 1.0.152",
+]
+
+[[package]]
 name = "serde_repr"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8947,7 +8979,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.5.17",
+ "axum 0.6.2",
+ "axum-extra",
  "bcs",
  "clap 3.2.23",
  "eyre",
@@ -10870,6 +10903,7 @@ dependencies = [
  "axum 0.6.2",
  "axum-core 0.2.9",
  "axum-core 0.3.1",
+ "axum-extra",
  "axum-server",
  "backoff",
  "backtrace",
@@ -11431,6 +11465,7 @@ dependencies = [
  "serde_derive",
  "serde_derive_internals",
  "serde_json",
+ "serde_path_to_error",
  "serde_repr",
  "serde_test",
  "serde_urlencoded",
