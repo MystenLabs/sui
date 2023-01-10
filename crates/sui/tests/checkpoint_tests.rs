@@ -48,7 +48,7 @@ async fn basic_checkpoints_integration_test() {
     for _ in 0..600 {
         let all_included = authorities.iter().all(|handle| {
             handle.with(|node| {
-                node.is_transaction_executed_in_checkpoint_this_epoch(tx.digest())
+                node.is_transaction_executed_in_checkpoint(tx.digest())
                     .unwrap()
             })
         });

@@ -574,6 +574,17 @@ impl CheckpointBuilder {
                 {
                     continue;
                 }
+                let executed_epoch = self.state.database.transaction_executed_in_epoch(&digest)?;
+                if let Some(executed_epoch) = executed_epoch {
+                    // Skip here if transaction was executed in previous epoch
+                    //
+                    // Do not skip if transaction was executed in this epoch -
+                    // we rely on builder_included_transaction_in_checkpoint instead for current epoch
+                    // because execution can run ahead checkpoint builder
+                    if executed_epoch < self.epoch_store.epoch() {
+                        continue;
+                    }
+                }
                 for dependency in effect.dependencies.iter() {
                     if seen.insert(*dependency) {
                         pending.insert(*dependency);
