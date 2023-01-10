@@ -465,6 +465,7 @@ impl CheckpointExecutorEventLoop {
                 epoch_store.clone(),
                 state.transaction_manager().clone(),
                 local_execution_timeout_sec,
+                &metrics,
             )
             .await
             {
@@ -521,6 +522,7 @@ pub async fn execute_checkpoint(
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     local_execution_timeout_sec: u64,
+    metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
     debug!(
         "Scheduling checkpoint {:?} for execution",
@@ -535,6 +537,15 @@ pub async fn execute_checkpoint(
             )
         })
         .into_inner();
+
+    let tx_count = txes.len();
+    debug!(
+        epoch=?epoch_store.epoch(),
+        checkpoint_sequence=?checkpoint.sequence_number(),
+        "Number of transactions in the checkpoint: {:?}",
+        tx_count
+    );
+    metrics.checkpoint_transaction_count.report(tx_count as u64);
 
     execute_transactions(
         txes,
