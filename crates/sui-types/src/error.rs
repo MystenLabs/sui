@@ -722,6 +722,7 @@ impl From<VMError> for ExecutionError {
                         module: id.clone(),
                         function_idx,
                         instruction,
+                        message: error.message().map(|m| m.into()),
                     },
                     code,
                 )
@@ -742,6 +743,7 @@ impl From<VMError> for ExecutionError {
                                 module: id.clone(),
                                 function_idx,
                                 instruction,
+                                message: error.message().map(|m| m.into()),
                             })
                         }
                         _ => None,
