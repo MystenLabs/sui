@@ -70,7 +70,7 @@ export function ValidatorFormDetail({
             apy: APY > 0 ? APY : 'N/A',
             logo: null,
             address: sui_address,
-            totalStaked: pending_delegations.reduce(
+            totalStaked: (pending_delegations || []).reduce(
                 (acc, fields) =>
                     (acc += BigInt(fields.fields.sui_amount || 0n)),
                 0n
@@ -109,12 +109,12 @@ export function ValidatorFormDetail({
                 <Card
                     titleDivider
                     header={
-                        <div className="flex py-2.5 gap-2 items-center capitalize">
+                        <div className="flex py-2.5 gap-2 items-center">
                             <ImageIcon
                                 src={validatorData.logo}
                                 alt={validatorData.name}
-                                size="small"
-                                variant="circle"
+                                size="sm"
+                                circle
                             />
                             <Text variant="body" weight="semibold">
                                 {validatorData.name}
@@ -156,7 +156,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {validatorData.apy}{' '}
+                                {validatorData.apy}
                                 {typeof validatorData.apy !== 'string' && '%'}
                             </Text>
                         </div>

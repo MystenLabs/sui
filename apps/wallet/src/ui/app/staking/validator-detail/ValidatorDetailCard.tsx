@@ -77,11 +77,12 @@ export function ValidatorDetailCard({
             apy: APY > 0 ? APY : 'N/A',
             logo: null,
             address: sui_address,
-            totalStaked: pending_delegations.reduce(
-                (acc, fields) =>
-                    (acc += BigInt(fields.fields.sui_amount || 0n)),
-                0n
-            ),
+            totalStaked:
+                pending_delegations?.reduce(
+                    (acc, fields) =>
+                        (acc += BigInt(fields.fields.sui_amount || 0n)),
+                    0n
+                ) || 0n,
             // TODO: Calculate suiEarned
             suiEarned: 0n,
             pendingDelegationAmount: pending_delegationsByAddress.reduce(

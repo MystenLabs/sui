@@ -51,7 +51,7 @@ export function DelegationCard({
             className="flex no-underline flex-col py-3 px-3.75 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/10 bg-transparent"
         >
             <div className="flex justify-between items-center mb-2">
-                <ImageIcon src={icon} alt={name} />
+                <ImageIcon src={icon} alt={name} circle />
 
                 <div className="text-gray-60 text-p1 opacity-0 group-hover:opacity-100">
                     <IconTooltip
@@ -61,7 +61,7 @@ export function DelegationCard({
                 </div>
             </div>
 
-            <div className="flex-1 capitalize">
+            <div className="flex-1">
                 <Text variant="subtitle" weight="semibold" color="gray-90">
                     {name}
                 </Text>

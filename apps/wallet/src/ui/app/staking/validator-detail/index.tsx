@@ -67,14 +67,19 @@ export function ValidatorDetail() {
             showModal={showModal}
             setShowModal={setShowModal}
             title={
-                <div className="flex gap-2 items-center capitalize">
-                    <ImageIcon
-                        src={validatorData?.logo}
-                        alt={validatorName}
-                        size="small"
-                    />
-                    {validatorName}
-                </div>
+                validatorData ? (
+                    <div className="flex gap-2 items-center">
+                        <ImageIcon
+                            src={validatorData.logo}
+                            alt={validatorData.name}
+                            size="sm"
+                            circle
+                        />
+                        {validatorName}
+                    </div>
+                ) : (
+                    'Loading...'
+                )
             }
             closeIcon={SuiIcons.Close}
             closeOverlay={close}
