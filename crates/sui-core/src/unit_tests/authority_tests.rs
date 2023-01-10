@@ -43,7 +43,7 @@ use sui_types::{
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use crate::epoch::epoch_metrics::EpochMetrics;
@@ -3867,4 +3867,37 @@ async fn test_consensus_message_processed() {
             .epoch_store_for_testing()
             .get_next_object_version(&shared_object_id),
     );
+}
+
+#[tokio::test]
+async fn test_blocked_move_calls() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let tx = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            authority_state.get_framework_object_ref().await.unwrap(),
+            ident_str!("sui_system").to_owned(),
+            ident_str!("request_remove_validator").to_owned(),
+            vec![],
+            authority_state
+                .get_object(&gas_object_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference(),
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            })],
+            MAX_GAS,
+        ),
+        &sender_key,
+    );
+    assert!(matches!(
+        authority_state.handle_transaction(tx).await,
+        Err(SuiError::BlockedMoveFunction)
+    ));
 }
