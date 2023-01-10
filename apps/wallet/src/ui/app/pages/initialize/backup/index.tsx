@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import Button from '_app/shared/button';
-import { Heading } from '_app/shared/heading';
+import CardLayout from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Alert from '_components/alert';
@@ -53,127 +53,110 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     }, [dispatch, mode, guardsLoading]);
     return (
         <Loading loading={guardsLoading}>
-            <div className="flex flex-col flex-nowrap items-center justify-center">
-                <div className="p-7.5 pt-10 rounded-20 bg-alice-blue shadow-wallet-content flex flex-col flex-nowrap items-center justify-center w-popup-width h-popup-height">
-                    <div className="text-center flex gap-1.25 flex-col justify-center items-center">
-                        <div className="rounded-full w-12 h-12 border-dotted border-success border-2 flex items-center justify-center mb-2.5 p-1">
-                            <div className="bg-success rounded-full h-8 w-8 flex items-center justify-center">
-                                <Icon
-                                    icon={SuiIcons.ThumbsUp}
-                                    className="text-white text-2xl"
-                                />
-                            </div>
+            <CardLayout
+                icon="success"
+                title={
+                    mode === 'imported'
+                        ? 'Wallet Imported Successfully!'
+                        : 'Wallet Created Successfully!'
+                }
+            >
+                {mode === 'created' ? (
+                    <>
+                        <div className="mb-1 mt-7.5">
+                            <Text
+                                variant="caption"
+                                color="steel-darker"
+                                weight="bold"
+                            >
+                                Recovery phrase
+                            </Text>
                         </div>
-                        <Heading
-                            variant="heading1"
-                            color="gray-90"
-                            as="h1"
-                            weight="bold"
-                            leading="none"
-                        >
-                            {mode === 'imported'
-                                ? 'Wallet Imported Successfully!'
-                                : 'Wallet Created Successfully!'}
-                        </Heading>
-                    </div>
-
-                    {mode === 'created' ? (
-                        <>
-                            <div className="mb-1 mt-7.5">
-                                <Text
-                                    variant="caption"
-                                    color="steel-darker"
-                                    weight="bold"
-                                >
-                                    Recovery phrase
-                                </Text>
-                            </div>
-                            <div className="mb-3.5 mt-2 text-center">
-                                <Text
-                                    variant="p2"
-                                    color="steel-dark"
-                                    weight="normal"
-                                >
-                                    Your recovery phrase makes it easy to back
-                                    up and restore your account.
-                                </Text>
-                            </div>
-                            <Loading loading={loading}>
-                                {mnemonic ? (
-                                    <div className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-[15px] bg-white border border-solid border-[#EBECED] shadow-button leading-snug">
-                                        {mnemonic}
-                                    </div>
-                                ) : (
-                                    <Alert>{error}</Alert>
-                                )}
-                            </Loading>
-                            <div className="mt-3.75 mb-1 text-center">
-                                <Text
-                                    variant="caption"
-                                    color="steel-dark"
-                                    weight="semibold"
-                                >
-                                    Warning
-                                </Text>
-                            </div>
-                            <div className="mb-1 text-center">
-                                <Text
-                                    variant="p2"
-                                    color="steel-dark"
-                                    weight="normal"
-                                >
-                                    Never disclose your secret recovery phrase.
-                                    Anyone with the passphrase can take over
-                                    your account forever.
-                                </Text>
-                            </div>
-                            <div className="flex-1" />
-                            <div className="w-full text-left flex mt-5">
-                                <label className="flex items-center justify-center h-5 mb-0 mr-5 text-sui-dark gap-1.25 relative cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        name="agree"
-                                        id="agree"
-                                        className="peer/agree invisible ml-2"
-                                        onChange={() =>
-                                            setPasswordCopied(!passwordCopied)
-                                        }
+                        <div className="mb-3.5 mt-2 text-center">
+                            <Text
+                                variant="p2"
+                                color="steel-dark"
+                                weight="normal"
+                            >
+                                Your recovery phrase makes it easy to back up
+                                and restore your account.
+                            </Text>
+                        </div>
+                        <Loading loading={loading}>
+                            {mnemonic ? (
+                                <div className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-[15px] bg-white border border-solid border-[#EBECED] shadow-button leading-snug">
+                                    {mnemonic}
+                                </div>
+                            ) : (
+                                <Alert>{error}</Alert>
+                            )}
+                        </Loading>
+                        <div className="mt-3.75 mb-1 text-center">
+                            <Text
+                                variant="caption"
+                                color="steel-dark"
+                                weight="semibold"
+                            >
+                                Warning
+                            </Text>
+                        </div>
+                        <div className="mb-1 text-center">
+                            <Text
+                                variant="p2"
+                                color="steel-dark"
+                                weight="normal"
+                            >
+                                Never disclose your secret recovery phrase.
+                                Anyone with the passphrase can take over your
+                                account forever.
+                            </Text>
+                        </div>
+                        <div className="flex-1" />
+                        <div className="w-full text-left flex mt-5">
+                            <label className="flex items-center justify-center h-5 mb-0 mr-5 text-sui-dark gap-1.25 relative cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="agree"
+                                    id="agree"
+                                    className="peer/agree invisible ml-2"
+                                    onChange={() =>
+                                        setPasswordCopied(!passwordCopied)
+                                    }
+                                />
+                                <div className="absolute top-0 left-0 h-5 w-5 bg-white peer-checked/agree:bg-success peer-checked/agree:shadow-none border-gray-50 border rounded shadow-button flex justify-center items-center">
+                                    <Icon
+                                        icon={SuiIcons.Checkmark}
+                                        className="text-white text-[8px] font-semibold"
                                     />
-                                    <div className="absolute top-0 left-0 h-5 w-5 bg-white peer-checked/agree:bg-success peer-checked/agree:shadow-none border-gray-50 border rounded shadow-button flex justify-center items-center">
-                                        <Icon
-                                            icon={SuiIcons.Checkmark}
-                                            className="text-white text-[8px] font-semibold"
-                                        />
-                                    </div>
+                                </div>
 
-                                    <Text
-                                        variant="bodySmall"
-                                        color="steel-dark"
-                                        weight="normal"
-                                    >
-                                        I saved my recovery passphrase
-                                    </Text>
-                                </label>
-                            </div>
-                        </>
-                    ) : null}
-                    <div className="flex-1" />
-                    <Button
-                        type="button"
-                        className="flex flex-nowrap self-stretch px-3.5 py-5"
-                        size="large"
-                        mode="primary"
-                        disabled={mode === 'created' && !passwordCopied}
-                        onClick={() => navigate('/')}
-                    >
-                        Open Sui Wallet
-                        <Icon
-                            icon={SuiIcons.ArrowLeft}
-                            className="text-p2 font-normal rotate-135"
-                        />
-                    </Button>
-                </div>
-            </div>
+                                <Text
+                                    variant="bodySmall"
+                                    color="steel-dark"
+                                    weight="normal"
+                                >
+                                    I saved my recovery passphrase
+                                </Text>
+                            </label>
+                        </div>
+                    </>
+                ) : null}
+                <div className="flex-1" />
+                <Button
+                    type="button"
+                    className="flex flex-nowrap self-stretch px-3.5 py-5"
+                    size="large"
+                    mode="primary"
+                    disabled={mode === 'created' && !passwordCopied}
+                    onClick={() => navigate('/')}
+                >
+                    Open Sui Wallet
+                    <Icon
+                        icon={SuiIcons.ArrowLeft}
+                        className="text-p2 font-normal rotate-135"
+                    />
+                </Button>
+            </CardLayout>
         </Loading>
     );
 };

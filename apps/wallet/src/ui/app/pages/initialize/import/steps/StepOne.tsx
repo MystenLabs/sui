@@ -40,7 +40,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                 setFieldValue,
                 handleBlur,
             }) => (
-                <Form className="flex flex-col flex-nowrap items-stretch flex-1 flex-grow">
+                <Form className="flex flex-col flex-nowrap items-stretch flex-1 flex-grow justify-between">
                     <FieldLabel txt="Enter Recovery Phrase">
                         <textarea
                             id="importMnemonicTxt"
@@ -67,7 +67,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                             <Alert>{errors?.mnemonic}</Alert>
                         )}
                     </FieldLabel>
-                    <div className="flex-1" />
+
                     <div className="flex flex-nowrap items-center mt-5 gap-2.5">
                         {mode === 'forgot' ? (
                             <Button
