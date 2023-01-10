@@ -30,7 +30,7 @@ struct A {
     b: B,
 }
 ```
-defines a object type `A` that contains a field whose type is another object type `B`. In this case, we say an object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.  
+defines a object type `A` that contains a field whose type is another object type `B`. In this case, we say an object of type `B` is wrapped into an object of type `A`. With object wrapping, the wrapped object (in this example, object `b`) is not stored as a top-level object in Sui storage, and it's not accessible by object ID. Instead, it's simply part of the serialized bytes content of an object of type `A`. You can think of the case of an object being wrapped similar to being deleted, except its content still exist somewhere in another object.
 Now back to the topic of object owned by another object. When an object is owned by another object, it's not wrapped. This means the child object still exists independently as a top-level object and can be accessed directly in the Sui storage. The ownership relationship is only tracked through the owner field of the child object. This can be useful if you still want to observe the child object or be able to use it in other transactions. We provide library APIs to make an object owned by another object. More details on how to do this can be found in the [Sui Move library](../build/move/sui-move-library.md).
 
 ### Immutable
