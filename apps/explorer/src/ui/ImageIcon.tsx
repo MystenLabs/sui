@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { useState } from 'react';
 
-import fallbackImage from "../assets/ImageIconfFallback.svg";
+import fallbackImage from '../assets/ImageIconfFallback.svg';
 
 const imageStyle = cva(
     [
@@ -35,19 +34,17 @@ export interface ImageIconProps extends VariantProps<typeof imageStyle> {
     src?: string | null;
     alt: string;
 }
-  
-export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
 
+export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
     return (
         <div role="img" className={imageStyle(styleProps)} aria-label={alt}>
             <img
-                src={src || ''} 
+                src={src || ''}
                 alt={alt}
                 aria-label={alt}
                 className="flex h-full w-full items-center justify-center"
-                onError={(e) => (e.currentTarget.src= fallbackImage)}
+                onError={(e) => (e.currentTarget.src = fallbackImage)}
             />
-          
         </div>
     );
 }

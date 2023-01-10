@@ -109,7 +109,12 @@ function ValidatorPageResult() {
                         number: index + 1,
                         name: (
                             <div className="flex items-center gap-2.5">
-                                <ImageIcon src={logo} size="sm" alt={name} circle />
+                                <ImageIcon
+                                    src={logo}
+                                    size="sm"
+                                    alt={name}
+                                    circle
+                                />
                                 <Text
                                     variant="bodySmall/medium"
                                     color="steel-darker"

@@ -19,19 +19,16 @@ export function DelegationAmount({ amount, isStats }: DelegationAmountProps) {
         CoinFormat.FULL
     );
 
-    return (
-        isStats ? (
-            <Heading as="div" variant="heading2/semibold" color="steel-darker">
-                {formattedAmount}
-            </Heading>
-        ) : (
-            <div className="flex h-full items-center gap-1">
+    return isStats ? (
+        <Heading as="div" variant="heading2/semibold" color="steel-darker">
+            {formattedAmount}
+        </Heading>
+    ) : (
+        <div className="flex h-full items-center gap-1">
             <div className="flex items-baseline gap-0.5 text-gray-90">
                 <Text variant="body/medium">{formattedAmount}</Text>
                 <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
         </div>
-        )
-        )
-    ;
+    );
 }
