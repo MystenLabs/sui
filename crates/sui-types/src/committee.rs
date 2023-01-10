@@ -342,7 +342,7 @@ impl Display for Committee {
         for (name, vote) in &self.voting_rights {
             write!(voting_rights, "{}: {}, ", name.concise(), vote)?;
         }
-        writeln!(
+        write!(
             f,
             "Committee (epoch={:?}, voting_rights=[{}])",
             self.epoch, voting_rights
@@ -359,6 +359,16 @@ pub struct CommitteeWithNetAddresses {
 impl CommitteeWithNetAddresses {
     pub fn digest(&self) -> CommitteeDigest {
         sha3_hash(self)
+    }
+}
+
+impl Display for CommitteeWithNetAddresses {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CommitteeWithNetAddresses (committee={}, net_addresses={:?})",
+            self.committee, self.net_addresses
+        )
     }
 }
 
