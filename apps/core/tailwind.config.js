@@ -97,7 +97,7 @@ module.exports = {
         subtitle: ["12px", "1"],
         subtitleSmall: ["11px", "1"],
         subtitleSmallExtra: ["10px", "1"],
-        extraSmall: '8px',
+
         caption: ["12px", "1"],
         captionSmall: ["11px", "1"],
         iconTextLarge: ["48px", "1"],
