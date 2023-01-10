@@ -19,7 +19,7 @@ use storage::CertificateStore;
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinError, JoinHandle},
-    time::{self, timeout, Instant},
+    time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
@@ -281,7 +281,7 @@ impl CertificateFetcher {
                         );
                     }
                     Err(e) => {
-                        debug!("Error from task to fetch certificates: {e}");
+                        warn!("Error from task to fetch certificates: {e}");
                     }
                 };
 
@@ -317,7 +317,7 @@ async fn run_fetch_task(
         .set_max_items(MAX_CERTIFICATES_TO_FETCH);
     let Some(response) =
         fetch_certificates_helper(&state.name, &state.network, &committee, request).await else {
-            return Ok(());
+            return Err(DagError::NoCertificateFetched);
         };
 
     // Process and store fetched certificates.
@@ -373,7 +373,7 @@ async fn fetch_certificates_helper(
                     result
                 }));
             }
-            let mut interval = Box::pin(time::sleep(request_interval));
+            let mut interval = Box::pin(sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {
                     Some(Ok(resp)) => {
@@ -386,9 +386,13 @@ async fn fetch_certificates_helper(
                     Some(Err(e)) => {
                         debug!("Failed to fetch certificates: {e}");
                         // Issue request to another primary immediately.
+                        continue;
                     }
                     None => {
-                        debug!("No certificate is fetched across all peers!");
+                        debug!("No peer can be reached for fetching certificates!");
+                        // Last or all requests to peers may have failed immediately, so wait
+                        // before returning to avoid retrying fetching immediately.
+                        sleep(request_interval).await;
                         return None;
                     }
                 },
