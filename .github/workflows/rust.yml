@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ main, extensions, devnet ]
+    branches: [main, extensions, devnet]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -36,10 +36,10 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-    - uses: actions/checkout@v3
-    - name: Detect Changes
-      uses: './.github/actions/diffs'
-      id: diff
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
 
   license-check:
     name: license-check
@@ -78,6 +78,7 @@ jobs:
       - name: benchmark (smoke)
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s
+          pushd narwhal/benchmark && fab local && popd
       - name: doctests
         run: |
           cargo test --doc
@@ -119,7 +120,6 @@ jobs:
         run: |
           cargo build --all-features
         shell: bash
-
 
   simtest:
     needs: diff
@@ -233,5 +233,5 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
-    - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: actions/checkout@v3
+      - uses: EmbarkStudios/cargo-deny-action@v1
