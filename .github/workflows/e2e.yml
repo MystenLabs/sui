@@ -4,6 +4,7 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     outputs:
+      isWallet: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-wallet')) || steps.diff.outputs.isRust }}
       isExplorer: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-explorer')) || steps.diff.outputs.isRust }}
       isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) || steps.diff.outputs.isRust }}
     steps:
@@ -47,8 +48,21 @@ jobs:
       - uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-explorer
           path: apps/explorer/playwright-report/
+          retention-days: 30
+
+      - name: Build Wallet
+        if: ${{ needs.diff.outputs.isWallet == 'true' }}
+        run: pnpm wallet build
+      - name: Run Wallet e2e tests
+        if: ${{ needs.diff.outputs.isWallet == 'true' }}
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: playwright-report-wallet
+          path: apps/wallet/playwright-report/
           retention-days: 30
 
   devnet:

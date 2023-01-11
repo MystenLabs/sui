@@ -20,13 +20,13 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
     intent::Intent,
-    messages::{ExecuteTransactionRequestType, Transaction, TransactionData},
+    messages::{ExecuteTransactionRequestType, Transaction, TransactionData, VerifiedTransaction},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
 };
-use tokio::time::Duration;
+use tokio::time::{timeout, Duration};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -180,18 +180,61 @@ impl SimpleFaucet {
 
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
-                let result = self
-                    .execute_pay_sui_txn_with_retrials(
+                let context = &self.wallet;
+                let tx_data = self
+                    .build_pay_sui_txn(
                         coin_id,
                         self.active_address,
                         recipient,
                         amounts,
                         DEFAULT_GAS_BUDGET,
-                        uuid,
                     )
-                    .await;
+                    .await
+                    .map_err(|e| FaucetError::Internal(format!("{}", e)))?;
+                let signature = context
+                    .config
+                    .keystore
+                    .sign_secure(&self.active_address, &tx_data, Intent::default())
+                    .map_err(|e| FaucetError::Internal(format!("{}", e)))?;
+                let tx = Transaction::from_data(tx_data, Intent::default(), signature)
+                    .verify()
+                    .unwrap();
+                let tx_digest = *tx.digest();
+                info!(
+                    ?tx_digest,
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "PaySui transaction in faucet."
+                );
+
+                let response = match timeout(
+                    Duration::from_secs(300),
+                    self.execute_pay_sui_txn_with_retries(&tx, coin_id, recipient, uuid),
+                )
+                .await
+                {
+                    Err(elapsed) => {
+                        warn!(
+                            ?recipient,
+                            ?coin_id,
+                            ?uuid,
+                            "Failed to execute PaySui transactions in faucet after {}. Coin will not be reused.",
+                            elapsed,
+                        );
+                        return Err(FaucetError::Transfer(
+                            "could not complete transfer within timeout".into(),
+                        ));
+                    }
+                    Ok(result) => result,
+                };
+
+                // Note: we do not recycle gas unless the transaction was successful - the faucet
+                // may run out of available coins due to errors, but this allows a human to
+                // intervene and attempt to fix things. If we re-use coins that had errors, we may
+                // lock them permanently.
                 self.recycle_gas_coin(coin_id, uuid).await;
-                self.check_and_map_transfer_gas_result(result, number_of_coins, &recipient)
+                self.check_and_map_transfer_gas_result(response, number_of_coins, &recipient)
                     .await
             }
 
@@ -232,55 +275,41 @@ impl SimpleFaucet {
         info!(?uuid, ?coin_id, "Recycled coin");
     }
 
-    async fn execute_pay_sui_txn_with_retrials(
+    async fn execute_pay_sui_txn_with_retries(
         &self,
+        tx: &VerifiedTransaction,
         coin_id: ObjectID,
-        signer: SuiAddress,
         recipient: SuiAddress,
-        amounts: &[u64],
-        budget: u64,
         uuid: Uuid,
-    ) -> Result<SuiTransactionResponse, anyhow::Error> {
-        let retry_intervals_ms = [Duration::from_millis(500), Duration::from_millis(1000)];
-        let mut retry_iter = retry_intervals_ms.iter();
-        let mut res = self
-            .execute_pay_sui_txn(coin_id, signer, recipient, amounts, budget, uuid)
-            .await;
-        while res.is_err() {
-            if let Some(interval) = retry_iter.next() {
-                tokio::time::sleep(*interval).await;
-                info!(
-                    ?recipient,
-                    ?coin_id,
-                    ?uuid,
-                    "Retrying executing PaySui transaction in faucet, previous error: {:?}",
-                    &res,
-                );
-                res = self
-                    .execute_pay_sui_txn(coin_id, signer, recipient, amounts, budget, uuid)
-                    .await;
-            } else {
-                warn!(
-                    ?recipient,
-                    ?coin_id,
-                    ?uuid,
-                    "Failed to execute PaySui transactions in faucet with {} retries and intervals {:?}",
-                    retry_intervals_ms.len(),
-                    &retry_intervals_ms
-                );
-                break;
+    ) -> SuiTransactionResponse {
+        let mut retry_delay = Duration::from_millis(500);
+
+        loop {
+            let res = self.execute_pay_sui_txn(tx, coin_id, recipient, uuid).await;
+
+            if let Ok(res) = res {
+                return res;
             }
+
+            info!(
+                ?recipient,
+                ?coin_id,
+                ?uuid,
+                ?retry_delay,
+                "PaySui transaction in faucet failed, previous error: {:?}",
+                &res,
+            );
+
+            tokio::time::sleep(retry_delay).await;
+            retry_delay *= 2;
         }
-        res
     }
 
     async fn execute_pay_sui_txn(
         &self,
+        tx: &VerifiedTransaction,
         coin_id: ObjectID,
-        signer: SuiAddress,
         recipient: SuiAddress,
-        amounts: &[u64],
-        budget: u64,
         uuid: Uuid,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
         self.metrics.current_executions_in_flight.inc();
@@ -288,29 +317,12 @@ impl SimpleFaucet {
             metrics.current_executions_in_flight.dec();
         });
 
-        let context = &self.wallet;
-        let tx_data = self
-            .build_pay_sui_txn(coin_id, signer, recipient, amounts, budget)
-            .await?;
-        let signature =
-            context
-                .config
-                .keystore
-                .sign_secure(&signer, &tx_data, Intent::default())?;
-        let tx = Transaction::from_data(tx_data, Intent::default(), signature).verify()?;
-        let tx_digest = *tx.digest();
-        info!(
-            ?tx_digest,
-            ?recipient,
-            ?coin_id,
-            ?uuid,
-            "PaySui transaction in faucet."
-        );
+        let tx_digest = tx.digest();
         let client = self.wallet.get_client().await?;
         let response = client
             .quorum_driver()
             .execute_transaction(
-                tx,
+                tx.clone(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
@@ -368,54 +380,46 @@ impl SimpleFaucet {
 
     async fn check_and_map_transfer_gas_result(
         &self,
-        result: Result<SuiTransactionResponse, anyhow::Error>,
+        res: SuiTransactionResponse,
         number_of_coins: usize,
         recipient: &SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>, Vec<u64>), FaucetError> {
-        match result {
-            Ok(res) => {
-                let txns = res.certificate.data.transactions;
-                if txns.len() != 1 {
-                    panic!(
-                        "PaySui Transaction should create one and exactly one txn, but got {:?}",
-                        txns
-                    );
-                }
-                let created = res.effects.created;
-                if created.len() != number_of_coins {
-                    panic!(
-                        "PaySui Transaction should create exact {:?} new coins, but got {:?}",
-                        number_of_coins, created
-                    );
-                }
-                let txn = &txns[0];
-                if let SuiTransactionKind::PaySui(SuiPaySui {
-                    // coins here are input coins, rather than the created coins under recipients.
-                    coins: _,
-                    recipients,
-                    amounts,
-                }) = txn
-                {
-                    assert!(recipients
-                        .iter()
-                        .all(|sent_recipient| sent_recipient == recipient));
-                    let coin_ids: Vec<ObjectID> = created
-                        .iter()
-                        .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
-                        .collect();
-                    Ok((
-                        res.certificate.transaction_digest,
-                        coin_ids,
-                        amounts.clone(),
-                    ))
-                } else {
-                    panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
-                }
-            }
-            Err(e) => Err(FaucetError::Internal(format!(
-                "Encountered error in transfer gases with err: {:?}.",
-                e
-            ))),
+        let txns = res.certificate.data.transactions;
+        if txns.len() != 1 {
+            panic!(
+                "PaySui Transaction should create one and exactly one txn, but got {:?}",
+                txns
+            );
+        }
+        let created = res.effects.created;
+        if created.len() != number_of_coins {
+            panic!(
+                "PaySui Transaction should create exact {:?} new coins, but got {:?}",
+                number_of_coins, created
+            );
+        }
+        let txn = &txns[0];
+        if let SuiTransactionKind::PaySui(SuiPaySui {
+            // coins here are input coins, rather than the created coins under recipients.
+            coins: _,
+            recipients,
+            amounts,
+        }) = txn
+        {
+            assert!(recipients
+                .iter()
+                .all(|sent_recipient| sent_recipient == recipient));
+            let coin_ids: Vec<ObjectID> = created
+                .iter()
+                .map(|created_coin_owner_ref| created_coin_owner_ref.reference.object_id)
+                .collect();
+            Ok((
+                res.certificate.transaction_digest,
+                coin_ids,
+                amounts.clone(),
+            ))
+        } else {
+            panic!("Expect SuiTransactionKind::PaySui(SuiPaySui) to send coins to address {} but got txn {:?}", recipient, txn);
         }
     }
 

@@ -54,7 +54,19 @@ a type originated from.
 
 </dd>
 <dt>
-<code>type: <a href="_String">ascii::String</a></code>
+<code>type: <a href="_TypeName">type_name::TypeName</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>package: <a href="_String">ascii::String</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>module_name: <a href="_String">ascii::String</a></code>
 </dt>
 <dd>
 
@@ -67,16 +79,6 @@ a type originated from.
 <a name="@Constants_0"></a>
 
 ## Constants
-
-
-<a name="0x2_publisher_ASCII_COLON"></a>
-
-ASCII character code for the <code>:</code> (colon) symbol.
-
-
-<pre><code><b>const</b> <a href="publisher.md#0x2_publisher_ASCII_COLON">ASCII_COLON</a>: u8 = 58;
-</code></pre>
-
 
 
 <a name="0x2_publisher_ENotOneTimeWitness"></a>
@@ -94,7 +96,8 @@ Tried to claim ownership using a type that isn't a one-time witness.
 ## Function `claim`
 
 Claim a Publisher object.
-Requires a One-Time-Witness to
+Requires a One-Time-Witness to prove ownership. Due to this constraint
+there can be only one Publisher object per module but multiple per package (!).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>
@@ -109,9 +112,13 @@ Requires a One-Time-Witness to
 <pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_claim">claim</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext): <a href="publisher.md#0x2_publisher_Publisher">Publisher</a> {
     <b>assert</b>!(<a href="types.md#0x2_types_is_one_time_witness">types::is_one_time_witness</a>(&otw), <a href="publisher.md#0x2_publisher_ENotOneTimeWitness">ENotOneTimeWitness</a>);
 
+    <b>let</b> type = <a href="_get">type_name::get</a>&lt;OTW&gt;();
+
     <a href="publisher.md#0x2_publisher_Publisher">Publisher</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        type: <a href="_into_string">type_name::into_string</a>(<a href="_get">type_name::get</a>&lt;OTW&gt;()),
+        package: <a href="_get_address">type_name::get_address</a>(&type),
+        module_name: <a href="_get_module">type_name::get_module</a>(&type),
+        type,
     }
 }
 </code></pre>
@@ -165,7 +172,7 @@ associated with it.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_burn">burn</a>(<a href="publisher.md#0x2_publisher">publisher</a>: <a href="publisher.md#0x2_publisher_Publisher">Publisher</a>) {
-    <b>let</b> <a href="publisher.md#0x2_publisher_Publisher">Publisher</a> { id, type: _ } = <a href="publisher.md#0x2_publisher">publisher</a>;
+    <b>let</b> <a href="publisher.md#0x2_publisher_Publisher">Publisher</a> { id, type: _, package: _, module_name: _ } = <a href="publisher.md#0x2_publisher">publisher</a>;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
 }
 </code></pre>
@@ -191,21 +198,9 @@ Check whether type belongs to the same package as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_package">is_package</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): bool {
-    <b>let</b> this = <a href="_as_bytes">ascii::as_bytes</a>(&<a href="publisher.md#0x2_publisher">publisher</a>.type);
-    <b>let</b> their = <a href="_as_bytes">ascii::as_bytes</a>(<a href="_borrow_string">type_name::borrow_string</a>(&<a href="_get">type_name::get</a>&lt;T&gt;()));
+    <b>let</b> type = <a href="_get">type_name::get</a>&lt;T&gt;();
 
-    <b>let</b> i = 0;
-
-    // 40 bytes =&gt; length of the HEX encoded <a href="">string</a>
-    <b>while</b> (i &lt; 40) {
-        <b>if</b> (<a href="_borrow">vector::borrow</a>&lt;u8&gt;(this, i) != <a href="_borrow">vector::borrow</a>&lt;u8&gt;(their, i)) {
-            <b>return</b> <b>false</b>
-        };
-
-        i = i + 1;
-    };
-
-    <b>true</b>
+    (<a href="_get_address">type_name::get_address</a>(&type) == <a href="publisher.md#0x2_publisher">publisher</a>.package)
 }
 </code></pre>
 
@@ -230,29 +225,10 @@ Check whether a type belogs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_module">is_module</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): bool {
-    <b>if</b> (!<a href="publisher.md#0x2_publisher_is_package">is_package</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>)) {
-        <b>return</b> <b>false</b>
-    };
+    <b>let</b> type = <a href="_get">type_name::get</a>&lt;T&gt;();
 
-    <b>let</b> this = <a href="_as_bytes">ascii::as_bytes</a>(&<a href="publisher.md#0x2_publisher">publisher</a>.type);
-    <b>let</b> their = <a href="_as_bytes">ascii::as_bytes</a>(<a href="_borrow_string">type_name::borrow_string</a>(&<a href="_get">type_name::get</a>&lt;T&gt;()));
-
-    // 42 bytes =&gt; length of the HEX encoded <a href="">string</a> + :: (double colon)
-    <b>let</b> i = 42;
-    <b>loop</b> {
-        <b>let</b> left = <a href="_borrow">vector::borrow</a>&lt;u8&gt;(this, i);
-        <b>let</b> right = <a href="_borrow">vector::borrow</a>&lt;u8&gt;(their, i);
-
-        <b>if</b> (left == &<a href="publisher.md#0x2_publisher_ASCII_COLON">ASCII_COLON</a> && right == &<a href="publisher.md#0x2_publisher_ASCII_COLON">ASCII_COLON</a>) {
-            <b>return</b> <b>true</b>
-        };
-
-        <b>if</b> (left != right) {
-            <b>return</b> <b>false</b>
-        };
-
-        i = i + 1;
-    }
+    (<a href="_get_address">type_name::get_address</a>(&type) == <a href="publisher.md#0x2_publisher">publisher</a>.package)
+        && (<a href="_get_module">type_name::get_module</a>(&type) == <a href="publisher.md#0x2_publisher">publisher</a>.module_name)
 }
 </code></pre>
 

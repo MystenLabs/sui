@@ -3,10 +3,10 @@
 
 //! SQL and SQLite-based Event Store
 
-use core::time::Duration;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -17,6 +17,7 @@ use sqlx::{
 };
 use sqlx::{ConnectOptions, Sqlite};
 use strum::{EnumMessage, IntoEnumIterator};
+use tokio::sync::RwLock;
 use tracing::{info, instrument, log, warn};
 
 use sui_types::base_types::SuiAddress;
@@ -35,6 +36,10 @@ use super::*;
 /// - fields is JSON for now (for easy JSON filtering) and contains all fields not in main columns
 pub struct SqlEventStore {
     pool: SqlitePool,
+    // Query lock is held for read by both read and write API calls. Periodically, a background
+    // task wakes up, acquires the lock for write (which excludes any access to the db) and attempts
+    // to compact the WAL, which otherwise may grow too large.
+    query_lock: RwLock<()>,
 }
 
 /// Important for updating Columns:
@@ -105,7 +110,11 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!("Created new in-memory SQLite EventStore for testing");
-        Ok(Self { pool })
+
+        Ok(Self {
+            pool,
+            query_lock: Default::default(),
+        })
     }
 
     /// Creates or opens a new SQLite database at a specific path
@@ -122,6 +131,8 @@ impl SqlEventStore {
             // "wal_autocheckpoint" default to 1000 => auto checkpointing every 1000 pages
             .create_if_missing(true);
         options.log_statements(log::LevelFilter::Off);
+        // Duration is not relevant here, just is required
+        options.log_slow_statements(log::LevelFilter::Off, Duration::from_secs(1));
 
         let pool = PoolOptions::<Sqlite>::new()
             .max_connections(100)
@@ -131,7 +142,10 @@ impl SqlEventStore {
 
         info!(?db_path, "Created/opened SQLite EventStore on disk");
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            query_lock: Default::default(),
+        })
     }
 
     /// Starts a WAL truncation/cleanup periodic task at interval duration
@@ -140,7 +154,10 @@ impl SqlEventStore {
             let mut interval = tokio::time::interval(cleanup_interval);
             loop {
                 interval.tick().await;
+                let start = Instant::now();
                 info!("Running SQLite WAL truncation...");
+                let _guard = self.query_lock.write().await;
+                info!("Acquired query_lock for write after {:?}", start.elapsed());
                 let _ = self.force_wal_truncation().await.map_err(|e| {
                     warn!("Unable to truncate Event Store SQLite WAL: {}", e);
                 });
@@ -153,10 +170,12 @@ impl SqlEventStore {
     /// grows too big.
     #[instrument(level = "debug", skip_all, err)]
     pub async fn force_wal_truncation(&self) -> Result<(), SuiError> {
-        self.pool
+        let res = self
+            .pool
             .execute("PRAGMA wal_checkpoint(TRUNCATE)")
             .await
             .map_err(convert_sqlx_err)?;
+        info!("force_wal_truncation result: {:?}", res);
         Ok(())
     }
 
@@ -361,6 +380,7 @@ const MAX_INSERT_BATCH: usize = 1000;
 impl EventStore for SqlEventStore {
     #[instrument(level = "debug", skip_all, err)]
     async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
+        let _guard = self.query_lock.read().await;
         let mut rows_affected = 0;
 
         if events.is_empty() {
@@ -413,6 +433,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
@@ -434,6 +455,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("tx_digest", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
@@ -456,6 +478,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("event_type", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
@@ -479,6 +502,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(
             vec![
                 ("timestamp", Comparator::MoreThanOrEq),
@@ -507,6 +531,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(
             vec![
                 ("package_id", Comparator::Equal),
@@ -536,6 +561,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("move_event_name", Comparator::Equal)], descending);
         // TODO: duplication: these 10 lines are repetitive (4 times) in this file.
         let rows = sqlx::query(&query)
@@ -559,6 +585,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("sender", Comparator::Equal)], descending);
         let sender_vec = sender.to_vec();
         let rows = sqlx::query(&query)
@@ -582,6 +609,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("recipient", Comparator::Equal)], descending);
         let recipient_str =
             serde_json::to_string(recipient).map_err(|e| SuiError::OwnerFailedToSerialize {
@@ -608,6 +636,7 @@ impl EventStore for SqlEventStore {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError> {
+        let _guard = self.query_lock.read().await;
         let query = get_event_query(vec![("object_id", Comparator::Equal)], descending);
         let object_vec = object.to_vec();
         let rows = sqlx::query(&query)

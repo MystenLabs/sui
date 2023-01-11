@@ -33,6 +33,11 @@ export class DAppInterface {
     private _messagesStream: WindowMessageStream;
 
     constructor() {
+        // eslint-disable-next-line no-console
+        console.warn(
+            'Your application is using the global `suiWindow` interface, which is not recommended for applications. Please migrate to Wallet Adapters: https://github.com/MystenLabs/sui/tree/main/sdk/wallet-adapter'
+        );
+
         this._messagesStream = new WindowMessageStream(
             'sui_in-page',
             'sui_content-script'
@@ -86,6 +91,11 @@ export class DAppInterface {
     }
 
     public executeMoveCall(transaction: MoveCallTransaction) {
+        // eslint-disable-next-line no-console
+        console.warn(
+            'You are using the deprecated `executeMoveCall` method on the `suiWallet` interface. This method will be removed in a future release of the Sui Wallet. Please migrate to the new `signAndExecuteTransaction` method.'
+        );
+
         return mapToPromise(
             this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
@@ -99,6 +109,11 @@ export class DAppInterface {
     }
 
     public executeSerializedMoveCall(tx: string | Uint8Array) {
+        // eslint-disable-next-line no-console
+        console.warn(
+            'You are using the deprecated `executeSerializedMoveCall` method on the `suiWallet` interface. This method will be removed in a future release of the Sui Wallet. Please migrate to the new `signAndExecuteTransaction` method.'
+        );
+
         const data =
             typeof tx === 'string' ? tx : Buffer.from(tx).toString('base64');
         return mapToPromise(

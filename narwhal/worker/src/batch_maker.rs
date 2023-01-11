@@ -26,8 +26,8 @@ use tokio::{
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction, TxResponse,
-    WorkerOurBatchMessage,
+    now, Batch, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction,
+    TxResponse, WorkerOurBatchMessage,
 };
 
 // The number of batches to store / transmit in parallel.
@@ -174,7 +174,7 @@ impl BatchMaker {
     async fn seal(
         &self,
         timeout: bool,
-        batch: Batch,
+        mut batch: Batch,
         size: usize,
         responses: Vec<TxResponse>,
     ) -> Option<impl Future<Output = ()>> {
@@ -267,6 +267,10 @@ impl BatchMaker {
         let store = self.store.clone();
         let worker_id = self.id;
         let tx_digest = self.tx_digest.clone();
+
+        // The batch has been sealed so we can officially set its creation time
+        // for latency calculations.
+        batch.metadata.created_at = now();
         let metadata = batch.metadata.clone();
 
         Some(async move {

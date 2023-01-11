@@ -59,8 +59,8 @@ async fn test_successful_headers_synchronization() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0)
-            .with_payload_batch(batch_2.clone(), worker_id_1)
+            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -200,8 +200,8 @@ async fn test_successful_payload_synchronization() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0)
-            .with_payload_batch(batch_2.clone(), worker_id_1)
+            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -373,7 +373,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         .map(|_| {
             let header = author
                 .header_builder(&committee)
-                .with_payload_batch(fixture_batch_with_transactions(10), 0)
+                .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
                 .build(author.keypair())
                 .unwrap();
 
@@ -508,7 +508,7 @@ async fn test_reply_with_certificates_already_in_storage() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0)
+            .with_payload_batch(batch.clone(), 0, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -607,7 +607,7 @@ async fn test_reply_with_payload_already_in_storage() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0)
+            .with_payload_batch(batch.clone(), 0, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -619,8 +619,8 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for entry in certificate.header.payload {
-                payload_store.async_write(entry, 1).await;
+            for (digest, (worker_id, _)) in certificate.header.payload {
+                payload_store.async_write((digest, worker_id), 1).await;
             }
         }
     }
@@ -710,7 +710,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 
         let header = primary
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0)
+            .with_payload_batch(batch.clone(), 0, 0)
             .build(primary.keypair())
             .unwrap();
 

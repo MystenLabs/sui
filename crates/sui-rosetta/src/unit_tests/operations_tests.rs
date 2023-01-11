@@ -4,7 +4,7 @@
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::messages::TransactionData;
 
-use crate::operations::Operation;
+use crate::operations::Operations;
 use crate::types::ConstructionMetadata;
 
 #[tokio::test]
@@ -26,12 +26,12 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
         1000,
     );
 
-    let ops = Operation::from_data(&data.clone().try_into()?)?;
+    let ops: Operations = data.clone().try_into()?;
     let metadata = ConstructionMetadata {
         sender_coins: vec![gas],
     };
 
-    let parsed_data = Operation::create_data(ops, metadata).await?;
+    let parsed_data = ops.into_transaction_data(metadata)?;
     assert_eq!(data, parsed_data);
 
     Ok(())

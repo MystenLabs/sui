@@ -59,9 +59,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    #[serde(default)]
-    pub enable_checkpoint: bool,
-
     /// Number of checkpoints per epoch.
     /// Some means reconfiguration is enabled.
     /// None means reconfiguration is disabled.
@@ -132,7 +129,8 @@ pub fn default_concurrency_limit() -> Option<usize> {
 }
 
 pub fn default_checkpoints_per_epoch() -> Option<u64> {
-    None
+    // Currently a checkpoint is ~3 seconds, 3000 checkpoints is 9000s, which is about 2.5 hours.
+    Some(3000)
 }
 
 pub fn bool_true() -> bool {

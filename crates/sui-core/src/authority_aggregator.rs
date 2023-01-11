@@ -246,7 +246,7 @@ pub struct AuthorityAggregator<A> {
     /// Metrics
     pub metrics: AuthAggMetrics,
     /// Metric base for the purpose of creating new safe clients during reconfiguration.
-    pub safe_client_metrics_base: Arc<SafeClientMetricsBase>,
+    pub safe_client_metrics_base: SafeClientMetricsBase,
     pub timeouts: TimeoutConfig,
     /// Store here for clone during re-config.
     pub committee_store: Arc<CommitteeStore>,
@@ -293,7 +293,7 @@ impl<A> AuthorityAggregator<A> {
                 })
                 .collect(),
             metrics: AuthAggMetrics::new(registry),
-            safe_client_metrics_base: Arc::new(safe_client_metrics_base),
+            safe_client_metrics_base,
             timeouts,
             committee_store,
         }
@@ -323,7 +323,7 @@ impl<A> AuthorityAggregator<A> {
                 })
                 .collect(),
             metrics: auth_agg_metrics,
-            safe_client_metrics_base: Arc::new(safe_client_metrics_base),
+            safe_client_metrics_base,
             timeouts: Default::default(),
             committee_store,
         }
@@ -331,19 +331,23 @@ impl<A> AuthorityAggregator<A> {
 
     /// This function recreates AuthorityAggregator with the given committee.
     /// It also updates committee store which impacts other of its references.
-    /// If it is called on a Validator/Fullnode, it **may** interleave with the the authority active's
-    /// reconfiguration process, and leave the commmittee store in an inconsistent state.
-    /// When catching up to the latest epoch, it should call `reconfig_from_genesis` first to fill in
+    /// When disallow_missing_intermediate_committees is true, it requires the
+    /// new committee needs to be current epoch + 1.
+    /// The function could be used along with `reconfig_from_genesis` to fill in
     /// all previous epoch's committee info.
     pub fn recreate_with_net_addresses(
         &self,
         committee: CommitteeWithNetAddresses,
         network_config: &Config,
+        disallow_missing_intermediate_committees: bool,
     ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
         let network_clients =
             make_network_authority_client_sets_from_committee(&committee, network_config).map_err(
                 |err| SuiError::GenericAuthorityError {
-                    error: format!("Failed to make authority clients from committee: {:?}", err),
+                    error: format!(
+                        "Failed to make authority clients from committee {committee}, err: {:?}",
+                        err
+                    ),
                 },
             )?;
 
@@ -365,15 +369,17 @@ impl<A> AuthorityAggregator<A> {
         // TODO: It's likely safer to do the following operations atomically, in case this function
         // gets called from different threads. It cannot happen today, but worth the caution.
         let new_committee = committee.committee;
-        fp_ensure!(
-            self.committee.epoch + 1 == new_committee.epoch,
-            SuiError::AdvanceEpochError {
-                error: format!(
-                    "Trying to advance from epoch {} to epoch {}",
-                    self.committee.epoch, new_committee.epoch
-                )
-            }
-        );
+        if disallow_missing_intermediate_committees {
+            fp_ensure!(
+                self.committee.epoch + 1 == new_committee.epoch,
+                SuiError::AdvanceEpochError {
+                    error: format!(
+                        "Trying to advance from epoch {} to epoch {}",
+                        self.committee.epoch, new_committee.epoch
+                    )
+                }
+            );
+        }
         // This call may return error if this committee is already inserted,
         // which is fine. We should continue to construct the new aggregator.
         // This is because there may be multiple AuthorityAggregators
@@ -411,6 +417,10 @@ impl<A> AuthorityAggregator<A> {
         }
         clients
     }
+
+    pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
+        self.committee_store.clone()
+    }
 }
 
 impl AuthorityAggregator<NetworkAuthorityClient> {
@@ -418,19 +428,33 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     /// network address information from the system state object on-chain.
     /// This function needs metrics parameters because registry will panic
     /// if we attempt to register already-registered metrics again.
-    pub fn new_from_system_state(
+    pub fn new_from_local_system_state(
         store: &Arc<AuthorityStore>,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
-        let net_config = default_mysten_network_config();
         let sui_system_state = store.get_sui_system_state_object()?;
+        Self::new_from_system_state(
+            &sui_system_state,
+            committee_store,
+            safe_client_metrics_base,
+            auth_agg_metrics,
+        )
+    }
+
+    pub fn new_from_system_state(
+        sui_system_state: &SuiSystemState,
+        committee_store: &Arc<CommitteeStore>,
+        safe_client_metrics_base: SafeClientMetricsBase,
+        auth_agg_metrics: AuthAggMetrics,
+    ) -> anyhow::Result<Self> {
+        let net_config = default_mysten_network_config();
         // TODO: the function returns on URL parsing errors. In this case we should
         // tolerate it as long as we have 2f+1 good validators.
         // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
-            make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)?;
+            make_network_authority_client_sets_from_system_state(sui_system_state, &net_config)?;
         Ok(Self::new_with_metrics(
             sui_system_state.get_current_epoch_committee().committee,
             committee_store.clone(),
@@ -448,7 +472,6 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
 /// However to make testing easier, we sometimes want to use local authority clients that do not
 /// involve full-fledged network Sui nodes (e.g. when we want to abstract out Narwhal). In order
 /// to support both network clients and local clients, this trait is defined to hide the difference.
-/// We implement this trait for both NetworkTransactionCertifier and LocalTransactionCertifier.
 #[async_trait]
 pub trait TransactionCertifier: Sync + Send + 'static {
     /// This function first loads the Sui system state object from `self_state`, get the committee
@@ -489,8 +512,9 @@ impl TransactionCertifier for NetworkTransactionCertifier {
         timeout: Duration,
     ) -> anyhow::Result<VerifiedCertificate> {
         let registry = Registry::new();
+        let sui_system_state = self_store.get_sui_system_state_object()?;
         let net = AuthorityAggregator::new_from_system_state(
-            self_store,
+            &sui_system_state,
             committee_store,
             SafeClientMetricsBase::new(&registry),
             AuthAggMetrics::new(&registry),
@@ -1089,8 +1113,6 @@ where
                 self.timeouts.pre_quorum_timeout,
             )
             .await?;
-
-        info!("have final state");
 
         let mut error_list = Vec::new();
         let mut object_map = BTreeMap::<
@@ -1943,14 +1965,14 @@ pub async fn reconfig_from_genesis(
         info!(epoch = cur_epoch, "Inserted committee");
     }
     // Now transit from latest_epoch - 1 to latest_epoch
-    aggregator.recreate_with_net_addresses(latest_committee, &network_config)
+    aggregator.recreate_with_net_addresses(latest_committee, &network_config, true)
 }
 
 pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     genesis: Option<&'a Genesis>,
     committee_store: Option<Arc<CommitteeStore>>,
-    registry: Option<Arc<Registry>>,
+    registry: Option<&'a Registry>,
 }
 
 impl<'a> AuthorityAggregatorBuilder<'a> {
@@ -1977,7 +1999,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         self
     }
 
-    pub fn with_registry(mut self, registry: Arc<Registry>) -> Self {
+    pub fn with_registry(mut self, registry: &'a Registry) -> Self {
         self.registry = Some(registry);
         self
     }
@@ -1996,9 +2018,10 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
         let committee = make_committee(0, validator_info)?;
-        let registry = self
-            .registry
-            .unwrap_or_else(|| Arc::new(prometheus::Registry::new()));
+        let mut registry = &prometheus::Registry::new();
+        if self.registry.is_some() {
+            registry = self.registry.unwrap();
+        }
 
         let auth_clients = make_authority_clients(
             validator_info,
@@ -2011,7 +2034,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             Arc::new(CommitteeStore::new_for_testing(&committee))
         };
         Ok((
-            AuthorityAggregator::new(committee, committee_store, auth_clients.clone(), &registry),
+            AuthorityAggregator::new(committee, committee_store, auth_clients.clone(), registry),
             auth_clients,
         ))
     }

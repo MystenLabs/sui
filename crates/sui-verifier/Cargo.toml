@@ -13,4 +13,4 @@ move-bytecode-verifier.workspace = true
 move-core-types.workspace = true
 
 sui-types = { path = "../sui-types" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

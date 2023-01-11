@@ -30,6 +30,8 @@ use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction};
 
+use self::reconfig_observer::ReconfigObserver;
+
 #[cfg(test)]
 mod tests;
 
@@ -135,6 +137,15 @@ impl<A> QuorumDriver<A> {
         let next_retry_after =
             Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times.into()));
         sleep_until(next_retry_after).await;
+
+        let tx_cert = match tx_cert {
+            // TxCert is only valid when its epoch matches current epoch.
+            // Note, it's impossible that TxCert's epoch is larger than current epoch
+            // because the TxCert will be considered invalid and cannot reach here.
+            Some(tx_cert) if tx_cert.epoch() == self.current_epoch() => Some(tx_cert),
+            _other => None,
+        };
+
         self.enqueue_task(QuorumDriverTask {
             transaction,
             tx_cert,
@@ -304,7 +315,7 @@ where
 
     pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
         info!(
-            "Quorum Drvier updating AuthorityAggregator with committee {:?}",
+            "Quorum Drvier updating AuthorityAggregator with committee {}",
             new_validators.committee
         );
         self.validators.store(new_validators);
@@ -468,6 +479,7 @@ pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     effects_subscriber: tokio::sync::broadcast::Receiver<QuorumDriverResponse>,
     quorum_driver_metrics: Arc<QuorumDriverMetrics>,
+    reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
     _processor_handle: JoinHandle<()>,
 }
 
@@ -475,47 +487,10 @@ impl<A> QuorumDriverHandler<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub(crate) fn new_with_notify_read(
+    pub(crate) fn new(
         validators: Arc<AuthorityAggregator<A>>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
-        metrics: Arc<QuorumDriverMetrics>,
-    ) -> Self {
-        Self::new_impl(validators, notifier, metrics)
-    }
-
-    pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: Arc<QuorumDriverMetrics>) -> Self {
-        Self::new_impl(
-            validators,
-            Arc::new(NotifyRead::<TransactionDigest, QuorumDriverResult>::new()),
-            metrics,
-        )
-    }
-
-    /// Used in tests when smaller number of retries is desired
-    pub fn new_with_max_retry_times(
-        validators: Arc<AuthorityAggregator<A>>,
-        metrics: Arc<QuorumDriverMetrics>,
-        max_retry_times: u8,
-    ) -> Self {
-        Self::new_impl_with_max_retry_times(
-            validators,
-            Arc::new(NotifyRead::<TransactionDigest, QuorumDriverResult>::new()),
-            metrics,
-            max_retry_times,
-        )
-    }
-
-    fn new_impl(
-        validators: Arc<AuthorityAggregator<A>>,
-        notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
-        metrics: Arc<QuorumDriverMetrics>,
-    ) -> Self {
-        Self::new_impl_with_max_retry_times(validators, notifier, metrics, TX_MAX_RETRY_TIMES)
-    }
-
-    fn new_impl_with_max_retry_times(
-        validators: Arc<AuthorityAggregator<A>>,
-        notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
+        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u8,
     ) -> Self {
@@ -531,7 +506,7 @@ where
             max_retry_times,
         ));
         let metrics_clone = metrics.clone();
-        let handle = {
+        let processor_handle = {
             let quorum_driver_clone = quorum_driver.clone();
             spawn_monitored_task!(Self::task_queue_processor(
                 quorum_driver_clone,
@@ -539,11 +514,22 @@ where
                 metrics_clone
             ))
         };
+        let reconfig_observer_clone = reconfig_observer.clone();
+        {
+            let quorum_driver_clone = quorum_driver.clone();
+            spawn_monitored_task!({
+                async move {
+                    let mut reconfig_observer_clone = reconfig_observer_clone.clone_boxed();
+                    reconfig_observer_clone.run(quorum_driver_clone).await;
+                }
+            });
+        };
         Self {
             quorum_driver,
-            _processor_handle: handle,
             effects_subscriber: subscriber_rx,
             quorum_driver_metrics: metrics,
+            reconfig_observer,
+            _processor_handle: processor_handle,
         }
     }
 
@@ -583,7 +569,7 @@ where
             max_retry_times: self.quorum_driver.max_retry_times,
         });
         let metrics = self.quorum_driver_metrics.clone();
-        let handle = {
+        let processor_handle = {
             let quorum_driver_copy = quorum_driver.clone();
             spawn_monitored_task!(Self::task_queue_processor(
                 quorum_driver_copy,
@@ -591,11 +577,23 @@ where
                 metrics,
             ))
         };
+        {
+            let quorum_driver_copy = quorum_driver.clone();
+            let reconfig_observer = self.reconfig_observer.clone();
+            spawn_monitored_task!({
+                async move {
+                    let mut reconfig_observer_clone = reconfig_observer.clone_boxed();
+                    reconfig_observer_clone.run(quorum_driver_copy).await;
+                }
+            })
+        };
+
         Self {
             quorum_driver,
-            _processor_handle: handle,
             effects_subscriber: subscriber_rx,
             quorum_driver_metrics: self.quorum_driver_metrics.clone(),
+            reconfig_observer: self.reconfig_observer.clone(),
+            _processor_handle: processor_handle,
         }
     }
 
@@ -739,5 +737,63 @@ fn convert_to_quorum_driver_error_if_nonretryable(
             debug!(?tx_digest, "Got retryable error when {action}: {err}");
             None
         }
+    }
+}
+
+pub struct QuorumDriverHandlerBuilder<A> {
+    validators: Arc<AuthorityAggregator<A>>,
+    metrics: Arc<QuorumDriverMetrics>,
+    notifier: Option<Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>>,
+    reconfig_observer: Option<Arc<dyn ReconfigObserver<A> + Sync + Send>>,
+    max_retry_times: u8,
+}
+
+impl<A> QuorumDriverHandlerBuilder<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    pub fn new(validators: Arc<AuthorityAggregator<A>>, metrics: Arc<QuorumDriverMetrics>) -> Self {
+        Self {
+            validators,
+            metrics,
+            notifier: None,
+            reconfig_observer: None,
+            max_retry_times: TX_MAX_RETRY_TIMES,
+        }
+    }
+
+    pub(crate) fn with_notifier(
+        mut self,
+        notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
+    ) -> Self {
+        self.notifier = Some(notifier);
+        self
+    }
+
+    pub fn with_reconfig_observer(
+        mut self,
+        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
+    ) -> Self {
+        self.reconfig_observer = Some(reconfig_observer);
+        self
+    }
+
+    /// Used in tests when smaller number of retries is desired
+    pub fn with_max_retry_times(mut self, max_retry_times: u8) -> Self {
+        self.max_retry_times = max_retry_times;
+        self
+    }
+
+    pub fn start(self) -> QuorumDriverHandler<A> {
+        QuorumDriverHandler::new(
+            self.validators,
+            self.notifier.unwrap_or_else(|| {
+                Arc::new(NotifyRead::<TransactionDigest, QuorumDriverResult>::new())
+            }),
+            self.reconfig_observer
+                .expect("Reconfig observer is missing"),
+            self.metrics,
+            self.max_retry_times,
+        )
     }
 }

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use serde_json::json;
 use strum::IntoEnumIterator;
 
@@ -35,9 +35,9 @@ pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListRespon
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkstatus)
 pub async fn status(
-    Json(request): Json<NetworkRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<NetworkRequest>, Error>,
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
@@ -83,8 +83,8 @@ pub async fn status(
 ///
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/NetworkApi.html#networkoptions)
 pub async fn options(
-    Json(request): Json<NetworkRequest>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<NetworkRequest>, Error>,
 ) -> Result<NetworkOptionsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 

@@ -62,8 +62,8 @@ async fn test_successful_blocks_delete() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0)
-            .with_payload_batch(batch_2.clone(), worker_id_1)
+            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -226,8 +226,8 @@ async fn test_failed_blocks_delete() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0)
-            .with_payload_batch(batch_2.clone(), worker_id_1)
+            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
             .build(author.keypair())
             .unwrap();
 

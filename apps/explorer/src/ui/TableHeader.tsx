@@ -14,12 +14,7 @@ export function TableHeader({ as = 'h3', children, after }: TableHeaderProps) {
     return (
         <div className="flex items-center border-0 border-b border-solid border-gray-45 pb-5">
             <div className="flex-1">
-                <Heading
-                    as={as}
-                    variant="heading4"
-                    weight="semibold"
-                    color="gray-90"
-                >
+                <Heading as={as} variant="heading4/semibold" color="gray-90">
                     {children}
                 </Heading>
             </div>

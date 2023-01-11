@@ -19,13 +19,10 @@ use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_core::authority_aggregator::{
-    AuthAggMetrics, AuthorityAggregator, NetworkTransactionCertifier,
-};
+use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -72,6 +69,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{
     run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
@@ -149,8 +147,20 @@ impl SuiNode {
             )
             .await?,
         );
+        let cur_epoch = store.get_recovery_epoch_at_restart()?;
+        let committee = committee_store
+            .get_committee(&cur_epoch)?
+            .expect("Committee of the current epoch must exist");
+        let epoch_store = AuthorityPerEpochStore::new(
+            committee,
+            &config.db_path().join("store"),
+            None,
+            EpochMetrics::new(&registry_service.default_registry()),
+        );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        checkpoint_store
+            .insert_genesis_checkpoint(genesis.checkpoint(), genesis.checkpoint_contents().clone());
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),
@@ -182,13 +192,6 @@ impl SuiNode {
         let (p2p_network, discovery_handle, state_sync_handle) =
             Self::create_p2p_network(config, state_sync_store, &prometheus_registry)?;
 
-        let arc_net = AuthorityAggregator::new_from_system_state(
-            &store,
-            &committee_store,
-            SafeClientMetricsBase::new(&prometheus_registry),
-            AuthAggMetrics::new(&prometheus_registry),
-        )?;
-
         let transaction_streamer = if is_full_node {
             Some(Arc::new(TransactionStreamer::new()))
         } else {
@@ -199,13 +202,30 @@ impl SuiNode {
             config.protocol_public_key(),
             secret,
             store,
+            epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
             event_store,
             transaction_streamer,
+            checkpoint_store.clone(),
             &prometheus_registry,
         )
         .await;
+
+        // ensure genesis txn was executed
+        if epoch_store.epoch() == 0 {
+            state
+                .execute_certificate(
+                    &genesis
+                        .transaction()
+                        .clone()
+                        .verify(epoch_store.committee())
+                        .unwrap(),
+                    &epoch_store,
+                )
+                .await
+                .unwrap();
+        }
 
         let (checkpoint_executor_handle, reconfig_channel) = CheckpointExecutor::new(
             state_sync_handle.subscribe_to_synced_checkpoints(),
@@ -217,12 +237,15 @@ impl SuiNode {
         .start()?;
 
         let transaction_orchestrator = if is_full_node {
-            Some(Arc::new(TransactiondOrchestrator::new(
-                Arc::new(arc_net),
-                state.clone(),
-                config.db_path(),
-                &prometheus_registry,
-            )))
+            Some(Arc::new(
+                TransactiondOrchestrator::new_with_network_clients(
+                    state.clone(),
+                    // TODO: use an indirection layer for subscription but not checkpoint executor
+                    checkpoint_executor_handle.subscribe_to_end_of_epoch(),
+                    config.db_path(),
+                    &prometheus_registry,
+                )?,
+            ))
         } else {
             None
         };
@@ -298,11 +321,13 @@ impl SuiNode {
             .close_epoch(&self.state.epoch_store())
     }
 
-    pub fn tx_checkpointed_in_current_epoch(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        Ok(self
-            .state
-            .epoch_store()
-            .tx_checkpointed_in_current_epoch(digest)?)
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.state
+            .database
+            .is_transaction_executed_in_checkpoint(digest)
     }
 
     fn create_p2p_network(
@@ -514,6 +539,11 @@ impl SuiNode {
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
+        // Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
+        #[cfg(test)]
+        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 2;
+        #[cfg(not(test))]
+        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
 
         CheckpointService::spawn(
             state.clone(),
@@ -524,6 +554,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             Box::new(NetworkTransactionCertifier::default()),
             checkpoint_metrics,
+            MAX_TRANSACTIONS_PER_CHECKPOINT,
         )
     }
 
@@ -616,7 +647,7 @@ impl SuiNode {
 
     /// Clone an AuthorityAggregator currently used in this node's
     /// QuorumDriver, if the node is a fullnode. After reconfig,
-    /// QuorumDrvier builds a new AuthorityAggregator. The caller
+    /// QuorumDriver builds a new AuthorityAggregator. The caller
     /// of this function will mostly likely want to call this again
     /// to get a fresh one.
     pub fn clone_authority_aggregator(

@@ -4,14 +4,11 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
+import { parseVariant, type SizeAndWeightVariant } from './utils/sizeAndWeight';
+
 const textStyles = cva([], {
     variants: {
-        weight: {
-            medium: 'font-medium',
-            semibold: 'font-semibold',
-            bold: 'font-bold',
-        },
-        variant: {
+        size: {
             body: 'text-body',
             bodySmall: 'text-bodySmall',
             subtitle: 'text-subtitle',
@@ -19,6 +16,11 @@ const textStyles = cva([], {
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
             captionSmall: 'uppercase text-captionSmall ',
+        },
+        weight: {
+            medium: 'font-medium',
+            semibold: 'font-semibold',
+            bold: 'font-bold',
         },
         color: {
             'gray-100': 'text-gray-100',
@@ -42,16 +44,25 @@ const textStyles = cva([], {
             false: 'font-sans',
         },
     },
-    defaultVariants: {
-        weight: 'medium',
-        variant: 'body',
-    },
 });
 
-export interface TextProps extends VariantProps<typeof textStyles> {
+type TextStylesProps = VariantProps<typeof textStyles>;
+
+export interface TextProps extends Omit<TextStylesProps, 'size' | 'weight'> {
+    variant: SizeAndWeightVariant<TextStylesProps>;
     children: ReactNode;
 }
 
-export function Text({ children, ...styleProps }: TextProps) {
-    return <div className={textStyles(styleProps)}>{children}</div>;
+export function Text({
+    children,
+    variant = 'body/medium',
+    ...styleProps
+}: TextProps) {
+    const [size, weight] = parseVariant<TextStylesProps>(variant);
+
+    return (
+        <div className={textStyles({ size, weight, ...styleProps })}>
+            {children}
+        </div>
+    );
 }

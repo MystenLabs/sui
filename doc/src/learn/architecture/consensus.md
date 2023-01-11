@@ -10,7 +10,7 @@ The names highlight that the components split the responsibilities of:
 
 In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
-Still, you may easily use Tusk instead of Bullshark by updating the order engine [here](https://github.com/MystenLabs/sui/blame/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191).
+Still, you may easily use Tusk instead of Bullshark by updating the order engine [in source](https://github.com/MystenLabs/sui/blob/0440605cbb45e6cdd790ab678f1f6409f1e938a3/narwhal/node/src/lib.rs#L191).
 
 Consensus is accomplished in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
 
