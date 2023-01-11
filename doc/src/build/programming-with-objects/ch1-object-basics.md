@@ -12,7 +12,7 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `UID` from the [object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move). A module from the core [Sui Move package/framework](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml).
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `UID` from the [object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) - a module from the core [Sui Framework](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml).
 ```rust
 use sui::object::UID;
 
