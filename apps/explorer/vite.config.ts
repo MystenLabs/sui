@@ -31,7 +31,7 @@ export default defineConfig({
         sourcemap: true,
     },
     resolve: {
-        mainFields: ['sui:source', 'module', 'jsnext:main', 'jsnext'],
+        conditions: ["source"],
         alias: {
             '~': new URL('./src', import.meta.url).pathname,
         },

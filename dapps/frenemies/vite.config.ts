@@ -8,6 +8,6 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    mainFields: ["sui:source", "module", "jsnext:main", "jsnext"],
+    conditions: ["source"],
   },
 });

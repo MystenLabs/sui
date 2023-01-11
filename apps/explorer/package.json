@@ -7,7 +7,7 @@
         "test": "pnpm test:unit",
         "test:unit": "vitest run",
         "typecheck": "tsc -b",
-        "playwright": "playwright",
+        "playwright": "NODE_OPTIONS='--conditions=source' playwright",
         "build": "pnpm typecheck && vite build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
         "eslint:fix": "pnpm eslint:check --fix",
