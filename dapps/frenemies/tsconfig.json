@@ -15,12 +15,12 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": {
-      "@mysten/sui.js": ["../../sdk/typescript/src/"],
-      "@mysten/wallet-kit": ["../../sdk/wallet-adapter/wallet-kit/src/"],
-    }
+    "baseUrl": "."
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    { "path": "../../sdk/typescript/" },
+    { "path": "../../sdk/wallet-adapter/wallet-kit/" }
+  ]
 }
