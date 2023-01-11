@@ -11,6 +11,7 @@ use crate::{
 };
 use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
+use anemo_tower::set_header::SetResponseHeaderLayer;
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
@@ -23,6 +24,7 @@ use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
+use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
@@ -152,6 +154,8 @@ impl Worker {
             .unwrap();
         let addr = network::multiaddr_to_address(&address).unwrap();
 
+        let epoch_string: String = committee.load().epoch.to_string();
+
         // Set up anemo Network.
         let our_primary_peer_id = committee
             .load()
@@ -163,12 +167,17 @@ impl Worker {
             // Add an Authorization Layer to ensure that we only service requests from our primary
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new([
                 our_primary_peer_id,
-            ])));
+            ])))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )));
+
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )))
             .merge(primary_to_worker_router);
-
-        let epoch_string: String = committee.load().epoch.to_string();
 
         let service = ServiceBuilder::new()
             .layer(
@@ -180,9 +189,9 @@ impl Worker {
                 inbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
-            .layer(SetRequestHeaderLayer::overriding(
-                "epoch".parse().unwrap(),
-                epoch_string,
+            .layer(SetResponseHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string.clone(),
             ))
             .service(routes);
 
@@ -196,6 +205,10 @@ impl Worker {
                 outbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string,
+            ))
             .into_inner();
 
         let anemo_config = {
