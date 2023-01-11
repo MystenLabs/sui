@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 pub type Accumulator = fastcrypto::hash::EllipticCurveMultisetHash;
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use crate::accumulator::Accumulator;
     use crate::base_types::ObjectDigest;
     use fastcrypto::hash::MultisetHash;
@@ -58,6 +59,50 @@ mod tests {
     }
 
     #[test]
+    fn test_accumulator_commutativity() {
+        let ref1 = ObjectDigest::random();
+        let ref2 = ObjectDigest::random();
+        let ref3 = ObjectDigest::random();
+
+        let mut a1 = Accumulator::default();
+        a1.remove(ref1);
+        a1.remove(ref2);
+        a1.insert(ref1);
+        a1.insert(ref2);
+
+        // Removal before insertion should yield the same result
+        assert_eq!(a1, Accumulator::default());
+
+        a1.insert(ref1);
+        a1.insert(ref2);
+
+        // Insertion out of order should arrive at the same result.
+        let mut a2 = Accumulator::default();
+        a2.remove(ref1);
+        a2.remove(ref2);
+
+        // Unioning where all objects from a are removed in b should
+        // result in empty accumulator
+        a1.union(&a2);
+        assert_eq!(a1, Accumulator::default());
+
+        a1.insert(ref1);
+        a1.insert(ref2);
+        a1.insert(ref3);
+
+        let mut a3 = Accumulator::default();
+        a3.insert(ref3);
+
+        // a1: (+ref1, +ref2, +ref3)
+        // a2: (-ref1, -ref2)
+        // a3: (+ref3)
+        // a1 + a2 = a3
+
+        a1.union(&a2);
+        assert_eq!(a1, a3);
+    }
+
+    #[test]
     fn test_accumulator_insert_stress() {
         let mut refs: Vec<_> = (0..100).map(|_| ObjectDigest::random()).collect();
         let mut accumulator = Accumulator::default();
@@ -88,5 +133,49 @@ mod tests {
             a.remove_all(&refs2);
             assert_eq!(accumulator, a);
         })
+    }
+
+    #[test]
+    fn test_benchmark() {
+        let (accumulators, mut durations): (Vec<Accumulator>, Vec<Duration>) = (0..100)
+            .map(|_| {
+                let digests: Vec<_> = (0..1_000).map(|_| ObjectDigest::random()).collect();
+                let mut accumulator = Accumulator::default();
+
+                let before = Instant::now();
+                accumulator.insert_all(&digests);
+                let elapsed = before.elapsed();
+
+                (accumulator, elapsed)
+            })
+            .unzip();
+
+        assert!(!durations.is_empty());
+        durations.sort();
+        let length = durations.len();
+        let p50 = durations[length / 2];
+        let p90 = durations[(length * 9) / 10];
+        let mean: Duration = Duration::from_millis(
+            (durations.iter().sum::<Duration>().as_millis() / (durations.len() as u128))
+                .try_into()
+                .unwrap(),
+        );
+        println!(
+            "Benchmark -- Accumulating 1,000 object digests took {:?} (p50), {:?} (p90), {:?} (mean)",
+            p50, p90, mean
+        );
+        assert!(p90 < Duration::from_millis(500));
+
+        let mut union_acc = Accumulator::default();
+
+        let before = Instant::now();
+        for acc in &accumulators {
+            union_acc.union(acc);
+        }
+        union_acc.digest();
+
+        let elapsed = before.elapsed();
+        println!("Benchmark -- Digesting 100 accumulators took {:?}", elapsed);
+        assert!(elapsed < Duration::from_millis(50));
     }
 }

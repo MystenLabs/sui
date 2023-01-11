@@ -747,6 +747,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bencher"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dfdb4953a096c551ce9ace855a604d702e6e62d77fac690575ae347571717f5"
+
+[[package]]
 name = "better_any"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9259,6 +9265,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "bencher",
  "bincode",
  "byteorder",
  "derive_more",

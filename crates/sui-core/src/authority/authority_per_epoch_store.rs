@@ -141,7 +141,7 @@ pub struct AuthorityEpochTables {
     /// This table is critical for crash recovery, because usually the consensus output progress
     /// is updated after a certificate is committed into this table.
     ///
-    /// If theory, this table may be superseded by storing consensus and checkpoint execution
+    /// In theory, this table may be superseded by storing consensus and checkpoint execution
     /// progress. But it is more complex, because it would be necessary to track inflight
     /// executions not ordered by indices. For now, tracking inflight certificates as a map
     /// seems easier.
