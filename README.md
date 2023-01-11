@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://docs.sui.io/">
-    <img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="80" height="80">
+    <img src="https://bafybeihxxjj7qoilkle7tu6mfvt5t66ydxxo2xc43sz5q6djcfsk3ojsly.ipfs.nftstorage.link/0pD8rO18_400x400.jpg" alt="Logo" width="80" height="80">
   </a>
   
   <h3 align="center">Sui</h3>
@@ -20,7 +20,7 @@
 
 |             |             |
 | ----------- | ----------- |
-| Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move)! Find everything you need within the [Sui Developer Guides](doc/src/learn/index.md) and supporting materials below.      | <img src="doc/static/Sui_Icon_Brand.png" alt="sui_icon" width="200"/>      |
+| Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move programming language](https://github.com/MystenLabs/awesome-move)! Find everything you need within the [Sui Developer Guides](doc/src/learn/index.md) and supporting materials below.      | <img src="https://bafybeihxxjj7qoilkle7tu6mfvt5t66ydxxo2xc43sz5q6djcfsk3ojsly.ipfs.nftstorage.link/0pD8rO18_400x400.jpg" alt="sui_icon" width="200"/>      |
 
 ## Quick links
 
