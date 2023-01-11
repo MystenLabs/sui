@@ -139,7 +139,9 @@ function ValidatorPageResult() {
                                 variant="bodySmall/medium"
                                 color="steel-darker"
                             >
-                                {commissionRate > 0 ? `${commissionRate}%` : '--' }
+                                {commissionRate > 0
+                                    ? `${commissionRate}%`
+                                    : '--'}
                             </Text>
                         ),
                         address: <ValidatorLink address={address} noTruncate />,
@@ -216,7 +218,10 @@ function ValidatorPageResult() {
                                             variant="heading2/semibold"
                                             color="steel-darker"
                                         >
-                                            {validatorsStats.lastEpochRewards > 0 ? `${validatorsStats.lastEpochRewards}%` : '--'}
+                                            {validatorsStats.lastEpochRewards >
+                                            0
+                                                ? `${validatorsStats.lastEpochRewards}%`
+                                                : '--'}
                                         </Heading>
                                     </Stats>
                                     <Stats
