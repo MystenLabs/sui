@@ -69,7 +69,7 @@ impl From<(TransactionDigest, i64)> for EventID {
 
 impl From<EventID> for String {
     fn from(id: EventID) -> Self {
-        format!("{}:{}", id.tx_digest, id.event_seq)
+        format!("{:?}:{}", id.tx_digest, id.event_seq)
     }
 }
 

@@ -694,7 +694,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         Some((tx_responses[16].tx_digest, 0).into()),
         page1.next_cursor
     );
-    assert_eq!(Some((17, 0).into()), page1.next_cursor);
+    //assert_eq!(Some((17, 0).into()), page1.next_cursor);
     let page2 = client
         .event_api()
         .get_events(
