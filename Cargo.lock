@@ -8402,7 +8402,6 @@ dependencies = [
  "serde_yaml",
  "shell-words",
  "signature",
- "sui-adapter",
  "sui-config",
  "sui-core",
  "sui-framework",

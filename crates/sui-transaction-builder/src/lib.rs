@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -53,9 +54,16 @@ pub trait DataReader {
 }
 
 #[derive(Clone)]
-pub struct TransactionBuilder(pub Arc<dyn DataReader + Sync + Send>);
+pub struct TransactionBuilder<Mode: ExecutionMode>(
+    Arc<dyn DataReader + Sync + Send>,
+    PhantomData<Mode>,
+);
 
-impl TransactionBuilder {
+impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
+    pub fn new(data_reader: Arc<dyn DataReader + Sync + Send>) -> Self {
+        Self(data_reader, PhantomData)
+    }
+
     async fn select_gas(
         &self,
         signer: SuiAddress,
@@ -223,7 +231,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn move_call<Mode: ExecutionMode>(
+    pub async fn move_call(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
@@ -235,14 +243,8 @@ impl TransactionBuilder {
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
         let single_move_call = SingleTransactionKind::Call(
-            self.single_move_call::<Mode>(
-                package_object_id,
-                module,
-                function,
-                type_args,
-                call_args,
-            )
-            .await?,
+            self.single_move_call(package_object_id, module, function, type_args, call_args)
+                .await?,
         );
         let input_objects = single_move_call
             .input_objects()?
@@ -265,7 +267,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn single_move_call<Mode: ExecutionMode>(
+    pub async fn single_move_call(
         &self,
         package_object_id: ObjectID,
         module: &str,
@@ -283,7 +285,7 @@ impl TransactionBuilder {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args::<Mode>(
+            .resolve_and_checks_json_args(
                 package_object_id,
                 &module,
                 &function,
@@ -324,7 +326,7 @@ impl TransactionBuilder {
         })
     }
 
-    async fn resolve_and_checks_json_args<Mode: ExecutionMode>(
+    async fn resolve_and_checks_json_args(
         &self,
         package_id: ObjectID,
         module: &Identifier,
@@ -493,7 +495,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn batch_transaction<Mode: ExecutionMode>(
+    pub async fn batch_transaction(
         &self,
         signer: SuiAddress,
         single_transaction_params: Vec<RPCTransactionRequestParams>,
@@ -516,7 +518,7 @@ impl TransactionBuilder {
                 }
                 RPCTransactionRequestParams::MoveCallRequestParams(param) => {
                     SingleTransactionKind::Call(
-                        self.single_move_call::<Mode>(
+                        self.single_move_call(
                             param.package_object_id,
                             &param.module,
                             &param.function,

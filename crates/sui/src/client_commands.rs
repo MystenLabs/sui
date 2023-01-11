@@ -25,8 +25,10 @@ use prettytable::Table;
 use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::json;
-use sui_adapter::execution_mode;
 use sui_framework::build_move_package;
+use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_types::error::SuiError;
+
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -36,9 +38,7 @@ use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
-use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::error::SuiError;
 use sui_types::intent::Intent;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -1413,7 +1413,7 @@ pub async fn call_move(
     let client = context.get_client().await?;
     let data = client
         .transaction_builder()
-        .move_call::<execution_mode::Normal>(
+        .move_call(
             sender,
             package,
             module,

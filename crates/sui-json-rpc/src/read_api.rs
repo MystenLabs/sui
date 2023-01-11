@@ -8,7 +8,6 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_adapter::execution_mode;
 use sui_json::SuiJsonValue;
 use sui_transaction_builder::TransactionBuilder;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
@@ -35,6 +34,7 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
+use sui_adapter::execution_mode::DevInspect;
 use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
@@ -50,7 +50,7 @@ pub struct ReadApi {
 
 pub struct FullNodeApi {
     pub state: Arc<AuthorityState>,
-    builder: TransactionBuilder,
+    dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
 impl FullNodeApi {
@@ -58,7 +58,7 @@ impl FullNodeApi {
         let reader = Arc::new(AuthorityStateDataReader::new(state.clone()));
         Self {
             state,
-            builder: TransactionBuilder(reader),
+            dev_inspect_builder: TransactionBuilder::new(reader),
         }
     }
 }
@@ -247,8 +247,8 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         arguments: Vec<SuiJsonValue>,
     ) -> RpcResult<DevInspectResults> {
         let move_call = self
-            .builder
-            .single_move_call::<execution_mode::DevInspect>(
+            .dev_inspect_builder
+            .single_move_call(
                 package_object_id,
                 &module,
                 &function,
