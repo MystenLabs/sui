@@ -34,6 +34,10 @@ procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: 
 procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}}) {
     var id: int;
     call id := $2_object_id_address{{S}}(obj);
+    if ($2_prover_owned({{T}}_$memory, id)) {
+        call $ExecFailureAbort();
+        return;
+    }
     {{T}}_$memory := share({{T}}_$memory, id, obj);
 }
 
