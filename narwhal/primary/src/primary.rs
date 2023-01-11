@@ -20,6 +20,7 @@ use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
     inflight_limit,
+    set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
@@ -245,6 +246,8 @@ impl Primary {
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 
+        let epoch_string: String = committee.load().epoch.to_string();
+
         let our_worker_peer_ids = worker_cache
             .load()
             .our_workers(&name)
@@ -272,6 +275,10 @@ impl Primary {
                 inbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                "epoch".parse().unwrap(),
+                epoch_string,
+            ))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
