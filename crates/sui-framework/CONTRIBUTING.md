@@ -6,7 +6,7 @@ If changes need to be made to the framework's Move code, additional actions need
 
 ### Snapshot tests update
 
-Run the following command in [crates/sui-cost](../sui-cost) and in [crates/sui-config](../sui-config) directories and accept the changes (if any):
+Run the following command in [crates/sui-cost](../sui-cost) and in [crates/sui-config](../sui-config) directories and accept the changes, if any (if you do not have `cargo-insta` command installed, please run the `cargo install cargo-insta` command first):
 
 ``` bash
 cargo insta test --review
