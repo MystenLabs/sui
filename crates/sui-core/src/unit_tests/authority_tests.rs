@@ -123,6 +123,8 @@ fn compare_transaction_info_responses(
     }
 }
 
+// TODO break this up into a cleaner set of components. It does a bit too much
+// currently
 async fn construct_shared_object_transaction_with_sequence_number(
     initial_shared_version_override: Option<SequenceNumber>,
 ) -> (
@@ -897,7 +899,44 @@ async fn test_dev_inspect_move_call() {
 }
 
 #[tokio::test]
-async fn test_developer_call_on_validator() {}
+async fn test_dev_inspect_on_validator() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (validator, object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+
+    // test normal call
+    let result = call_dev_inspect(
+        &validator,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "create",
+        vec![],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+        ],
+    )
+    .await;
+    assert!(result.is_err())
+}
+
+#[tokio::test]
+async fn test_dry_run_on_validator() {
+    let (validator, _fullnode, transaction, _gas_object_id, _shared_object_id) =
+        construct_shared_object_transaction_with_sequence_number(None).await;
+    let transaction_digest = *transaction.digest();
+    let response = validator
+        .dry_exec_transaction(
+            transaction.data().intent_message.value.clone(),
+            transaction_digest,
+        )
+        .await;
+    assert!(response.is_err());
+}
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_bad_signature() {
