@@ -12,7 +12,7 @@ use crate::{
 use anyhow::Result;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
-use fastcrypto::{hash::Hash as _, SignatureService};
+use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
 use futures::StreamExt;
 use futures::{future::OptionFuture, stream::FuturesUnordered};
 use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
@@ -25,13 +25,13 @@ use tokio::{
     sync::{oneshot, watch},
     task::{JoinHandle, JoinSet},
 };
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, enabled, error, info, instrument, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, CertificateDigest, Header, HeaderDigest, PrimaryToPrimaryClient,
-    ReconfigureNotification, RequestVoteRequest, Round, Timestamp, Vote,
+    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderDigest,
+    PrimaryToPrimaryClient, RequestVoteRequest, Round, Vote,
 };
 
 #[cfg(test)]
@@ -60,8 +60,8 @@ pub struct Core {
     /// The depth of the garbage collector.
     gc_depth: Round,
 
-    /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Receiver for certificates.
     rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
     /// Receives loopback certificates from the `CertificateFetcher`.
@@ -112,7 +112,7 @@ impl Core {
         rx_consensus_round_updates: watch::Receiver<Round>,
         rx_narwhal_round_updates: watch::Receiver<Round>,
         gc_depth: Round,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificates: Receiver<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
         rx_certificates_loopback: Receiver<CertificateLoopbackMessage>,
         rx_headers: Receiver<Header>,
@@ -134,7 +134,7 @@ impl Core {
                     rx_consensus_round_updates,
                     rx_narwhal_round_updates,
                     gc_depth,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_certificates,
                     rx_certificates_loopback,
                     rx_headers,
@@ -366,7 +366,7 @@ impl Core {
                                 &header,
                             )?;
                         },
-                        Some(Err(e)) => debug!("failed to get vote for header {header}: {e:?}"),
+                        Some(Err(e)) => debug!("failed to get vote for header {header:?}: {e:?}"),
                         None => break,
                     }
                 },
@@ -377,9 +377,28 @@ impl Core {
             }
         }
 
-        // Check if we successfully formed a certificate.
-        let certificate =
-            certificate.ok_or_else(|| DagError::CouldNotFormCertificate(header.digest()))?;
+        let certificate = certificate.ok_or_else(|| {
+            // Log detailed header info if we failed to form a certificate.
+            if enabled!(tracing::Level::WARN) {
+                let mut msg = format!(
+                    "Failed to form certificate from header {header:?} with parent certificates:\n"
+                );
+                for parent_digest in header.parents.iter() {
+                    let parent_msg = match certificate_store.read(*parent_digest) {
+                        Ok(Some(cert)) => format!("{cert:?}\n"),
+                        Ok(None) => {
+                            format!("!!!missing certificate for digest {parent_digest:?}!!!\n")
+                        }
+                        Err(e) => format!(
+                            "!!!error retrieving certificate for digest {parent_digest:?}: {e:?}\n"
+                        ),
+                    };
+                    msg.push_str(&parent_msg);
+                }
+                warn!(msg);
+            }
+            DagError::CouldNotFormCertificate(header.digest())
+        })?;
         debug!("Assembled {certificate:?}");
 
         Ok(certificate)
@@ -401,12 +420,15 @@ impl Core {
         let mut join_all = futures::future::try_join_all(tasks);
         loop {
             tokio::select! {
-                _result = &mut join_all => {
+                _ = &mut join_all => {
                     // Reliable broadcast will not return errors.
                     return Ok(())
                 },
                 result = rx_narwhal_round_updates.changed() => {
-                    result.unwrap();
+                    if result.is_err() {
+                        // this happens during reconfig when the other side hangs up.
+                        return Ok(());
+                    }
                     narwhal_round = *rx_narwhal_round_updates.borrow();
                     if narwhal_round > certificate_round {
                         // Round has advanced. No longer need to broadcast this cert to
@@ -424,22 +446,25 @@ impl Core {
         match self.process_certificate_internal(certificate.clone()).await {
             Ok(()) => Ok(()),
             result @ Err(DagError::ShuttingDown) => result,
-            _ => panic!("Failed to process locally-created certificate"),
+            Err(e) => panic!("Failed to process locally-created certificate: {e}"),
         }?;
 
         // Broadcast the certificate.
         let epoch = certificate.epoch();
         let round = certificate.header.round;
-        let created_at = certificate.header.created_at;
+        let header_to_certificate_duration =
+            Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
+                .as_secs_f64();
         let network_keys = self
             .committee
             .others_primaries(&self.name)
             .into_iter()
             .map(|(_, _, network_key)| network_key)
             .collect();
-        let tasks = self
-            .network
-            .broadcast(network_keys, &PrimaryMessage::Certificate(certificate));
+        let tasks = self.network.broadcast(
+            network_keys,
+            &PrimaryMessage::Certificate(certificate.clone()),
+        );
         self.background_tasks
             .spawn(Self::send_certificates_while_current(
                 round,
@@ -459,7 +484,16 @@ impl Core {
         self.metrics
             .header_to_certificate_latency
             .with_label_values(&[&epoch.to_string()])
-            .observe(created_at.elapsed().as_secs_f64());
+            .observe(header_to_certificate_duration);
+
+        // NOTE: This log entry is used to compute performance.
+        debug!(
+            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            certificate.header.digest(),
+            header_to_certificate_duration,
+            certificate.digest()
+        );
+
         Ok(())
     }
 
@@ -470,18 +504,26 @@ impl Core {
         notify: Option<oneshot::Sender<DagResult<()>>>,
     ) -> DagResult<()> {
         let digest = certificate.digest();
-        match self.process_certificate_internal(certificate).await {
-            Ok(()) => {
-                if let Some(notify) = notify {
-                    let _ = notify.send(Ok(())); // no problem if remote side isn't listening
-                }
-                if let Some(notifies) = self.pending_certificates.remove(&digest) {
-                    for notify in notifies {
-                        let _ = notify.send(Ok(())); // no problem if remote side isn't listening
-                    }
-                }
-                Ok(())
+        if self.certificate_store.read(digest)?.is_some() {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.metrics
+                .duplicate_certificates_processed
+                .with_label_values(&[&certificate.epoch().to_string()])
+                .inc();
+            if let Some(notify) = notify {
+                let _ = notify.send(Ok(())); // no problem if remote side isn't listening
             }
+            return Ok(());
+        }
+
+        if let Err(e) = self.sanitize_certificate(&certificate).await {
+            if let Some(notify) = notify {
+                let _ = notify.send(Err(e.clone())); // no problem if remote side isn't listening
+            }
+            return Err(e);
+        }
+
+        match self.process_certificate_internal(certificate).await {
             Err(DagError::Suspended) => {
                 if let Some(notify) = notify {
                     self.pending_certificates
@@ -491,20 +533,22 @@ impl Core {
                 }
                 Ok(())
             }
-            Err(e) => Err(e),
+            result => {
+                if let Some(notify) = notify {
+                    let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+                }
+                if let Some(notifies) = self.pending_certificates.remove(&digest) {
+                    for notify in notifies {
+                        let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+                    }
+                }
+                result
+            }
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
-        if self.certificate_store.read(certificate.digest())?.is_some() {
-            trace!(
-                "Certificate {} has already been processed. Skip processing.",
-                certificate.digest()
-            );
-            return Ok(());
-        }
-
         debug!(
             "Processing certificate {:?} round:{:?}",
             certificate,
@@ -612,9 +656,6 @@ impl Core {
     }
 
     async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
-        if certificate.epoch() > self.committee.epoch() {
-            self.try_update_committee().await;
-        }
         ensure!(
             self.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -635,28 +676,6 @@ impl Core {
         certificate
             .verify(&self.committee, self.worker_cache.clone())
             .map_err(DagError::from)
-    }
-
-    /// If a new committee is available, update our internal state.
-    async fn try_update_committee(&mut self) {
-        if self
-            .rx_reconfigure
-            .has_changed()
-            .expect("Reconfigure channel dropped")
-        {
-            let message = self.rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::NewEpoch(new_committee) = message {
-                self.change_epoch(new_committee).await;
-                // Mark the value as seen.
-                let _ = self.rx_reconfigure.borrow_and_update();
-            }
-        }
-    }
-
-    /// Update the committee and cleanup internal state.
-    async fn change_epoch(&mut self, committee: Committee) {
-        self.certificates_aggregators.clear();
-        self.committee = committee;
     }
 
     // Logs Core errors as appropriate.
@@ -683,18 +702,7 @@ impl Core {
         loop {
             let result = tokio::select! {
                 Some((certificate, notify)) = self.rx_certificates.recv() => {
-                    match self.sanitize_certificate(&certificate).await {
-                        Ok(()) =>  self.process_certificate(certificate, notify).await,
-                        error => {
-                            // `error` is consumed by the notify, so we process it first manually
-                            // and then just return Ok.
-                            Self::process_result(&error);
-                            if let Some(notify) = notify {
-                                let _ = notify.send(error);
-                            }
-                            Ok(())
-                        },
-                    }
+                    self.process_certificate(certificate, notify).await
                 },
 
                 // Here loopback certificates from the `CertificateFetcher` are received. These are
@@ -702,14 +710,11 @@ impl Core {
                 Some(message) = self.rx_certificates_loopback.recv() => {
                     let mut result = Ok(());
                     for cert in message.certificates {
-                        result = match self.sanitize_certificate(&cert).await {
-                            // TODO: consider moving some checks to CertificateFetcher, and skipping
-                            // those checks here?
-                            Ok(()) => self.process_certificate(cert, None).await,
+                        result = match self.process_certificate(cert, None).await {
                             // It is possible that subsequent certificates are above GC round,
                             // so not stopping early.
                             Err(DagError::TooOld(_, _, _)) => continue,
-                            error => error
+                            result => result
                         };
                         if result.is_err() {
                             break;
@@ -726,8 +731,6 @@ impl Core {
                         let _ = cancel.send(());
                     }
                     self.cancel_proposed_header = Some(tx_cancel);
-
-                    self.try_update_committee().await;
 
                     let name = self.name.clone();
                     let committee = self.committee.clone();
@@ -769,32 +772,9 @@ impl Core {
                     result.unwrap()  // propagate any panics
                 },
 
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.change_epoch(new_committee).await;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            // Update the committee.
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::Shutdown => {
-                            if self.cancel_proposed_header.is_some() {
-                                let cancel = std::mem::replace(
-                                    &mut self.cancel_proposed_header,
-                                    None
-                                );
-                                let _ = cancel.unwrap().send(());
-                            }
-                            return
-                        }
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-                    Ok(())
-                },
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
+                }
 
                 // Check whether the consensus round has changed, to clean up structures
                 Ok(()) = self.rx_consensus_round_updates.changed() => {

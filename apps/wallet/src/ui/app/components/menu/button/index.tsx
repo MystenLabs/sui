@@ -18,6 +18,7 @@ function MenuButton({ className }: MenuButtonProps) {
     const menuUrl = useNextMenuUrl(!isOpen, '/');
     return (
         <Link
+            data-testid="menu"
             className={cl(st.button, { [st.open]: isOpen }, className)}
             to={menuUrl}
         >

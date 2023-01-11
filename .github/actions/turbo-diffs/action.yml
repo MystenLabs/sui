@@ -1,0 +1,22 @@
+name: Detect Changes in Turbo Workspace
+description: Defines variables indicating the parts of the turbo workspace have changed
+outputs:
+  packages:
+    description: A list of packages that have changed.
+    value: ${{ steps.changes.outputs.packages }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: pnpm/action-setup@v2.2.2
+      with:
+        version: 7
+    - id: changes
+      name: Detect changes
+      shell: bash
+      run: echo "packages=$(pnpm --silent dlx turbo run build --filter="...[origin/main]" --dry=json | jq -c ".packages")" >> $GITHUB_OUTPUT
+    - name: Print changes for easy debugging
+      shell: bash
+      run: echo ${{ steps.changes.outputs.packages }}

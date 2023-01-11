@@ -7,6 +7,7 @@ use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
+use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
@@ -26,7 +27,7 @@ use tonic::transport::Channel;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
-    ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
+    PreSubscribedBroadcastSender, ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult,
     Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
@@ -63,7 +64,7 @@ async fn test_get_collections() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id)
+            .with_payload_batch(batch.clone(), worker_id, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -104,8 +105,8 @@ async fn test_get_collections() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -128,7 +129,7 @@ async fn test_get_collections() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -136,6 +137,7 @@ async fn test_get_collections() {
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -148,6 +150,7 @@ async fn test_get_collections() {
         TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics,
+        &mut tx_shutdown_worker,
     );
 
     // Wait for tasks to start
@@ -264,7 +267,7 @@ async fn test_remove_collections() {
 
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id)
+            .with_payload_batch(batch.clone(), worker_id, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -302,8 +305,8 @@ async fn test_remove_collections() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     Primary::spawn(
         name.clone(),
@@ -322,7 +325,7 @@ async fn test_remove_collections() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -334,8 +337,8 @@ async fn test_remove_collections() {
     // Test gRPC server with client call
     let mut client = connect_to_validator_client(parameters.clone());
 
-    // Test remove 1 collection without spawning worker. Should result in a timeout error
-    // when trying to remove batches.
+    // Test remove 1 collection without spawning worker. Should result in a connection error
+    // when trying to connect to the worker to remove batches.
     let block_to_be_removed = collection_digests.remove(0);
     let request = tonic::Request::new(RemoveCollectionsRequest {
         collection_ids: vec![block_to_be_removed.into()],
@@ -343,9 +346,13 @@ async fn test_remove_collections() {
 
     let status = client.remove_collections(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Timeout, no result has been received in time"));
+    assert!(
+        status
+            .message()
+            .contains("Removal Error: Network has no connection with peer"),
+        "Actual: {:?}",
+        status
+    );
     assert!(
         store
             .certificate_store
@@ -357,6 +364,7 @@ async fn test_remove_collections() {
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -369,6 +377,7 @@ async fn test_remove_collections() {
         TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics,
+        &mut tx_shutdown_worker,
     );
 
     // Test remove no collections
@@ -378,9 +387,30 @@ async fn test_remove_collections() {
 
     let status = client.remove_collections(request).await.unwrap_err();
 
-    assert!(status
-        .message()
-        .contains("Attempted to remove no collections!"));
+    assert!(
+        status
+            .message()
+            .contains("Attempted to remove no collections!"),
+        "Actual: {:?}",
+        status
+    );
+
+    // Wait until worker is ready. Use at most 10 attempts.
+    let mut iter = 0;
+    loop {
+        iter += 1;
+        let request = tonic::Request::new(GetCollectionsRequest {
+            collection_ids: vec![block_to_be_removed.into()],
+        });
+        let status = client.get_collections(request).await;
+        if status.is_ok() {
+            break;
+        }
+        if iter == 10 {
+            panic!("Last failure: {:?}", status);
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
 
     // Test remove 1 collection
     let request = tonic::Request::new(RemoveCollectionsRequest {
@@ -508,8 +538,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -536,7 +565,7 @@ async fn test_read_causal_signed_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -548,8 +577,7 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -580,7 +608,7 @@ async fn test_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -730,8 +758,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
@@ -751,7 +778,7 @@ async fn test_read_causal_unsigned_certificates() {
         rx_consensus_round_updates,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -763,8 +790,7 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -788,7 +814,7 @@ async fn test_read_causal_unsigned_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -933,8 +959,8 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_feedback_1, rx_feedback_1) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -957,7 +983,7 @@ async fn test_get_collections_with_missing_certificates() {
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
         None,
@@ -965,6 +991,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     let registry_1 = Registry::new();
     let metrics_1 = initialise_metrics(&registry_1);
+    let mut tx_shutdown_worker_1 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
@@ -977,6 +1004,7 @@ async fn test_get_collections_with_missing_certificates() {
         TrivialTransactionValidator::default(),
         store_primary_1.batch_store,
         metrics_1,
+        &mut tx_shutdown_worker_1,
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
@@ -985,8 +1013,7 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let parameters_2 = Parameters {
         batch_size: 200, // Two transactions.
@@ -1018,7 +1045,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -1026,6 +1053,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     let registry_2 = Registry::new();
     let metrics_2 = initialise_metrics(&registry_2);
+    let mut tx_shutdown_worker_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
@@ -1038,6 +1066,7 @@ async fn test_get_collections_with_missing_certificates() {
         TrivialTransactionValidator::default(),
         store_primary_2.batch_store,
         metrics_2,
+        &mut tx_shutdown_worker_2,
     );
 
     // Wait for tasks to start
@@ -1110,7 +1139,7 @@ async fn fixture_certificate(
     let batch_digest = batch.digest();
 
     let mut payload = IndexMap::new();
-    payload.insert(batch_digest, worker_id);
+    payload.insert(batch_digest, (worker_id, 0));
 
     let header = authority
         .header_builder(committee)

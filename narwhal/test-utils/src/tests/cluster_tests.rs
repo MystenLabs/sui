@@ -11,7 +11,7 @@ async fn basic_cluster_setup() {
     let mut cluster = Cluster::new(None, true);
 
     // start the cluster will all the possible nodes
-    cluster.start(None, None, None).await;
+    cluster.start(Some(4), Some(1), None).await;
 
     // give some time for nodes to bootstrap
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -23,7 +23,7 @@ async fn basic_cluster_setup() {
 
     // fetch their workers transactions address
     for authority in cluster.authorities().await {
-        assert_eq!(authority.worker_transaction_addresses().await.len(), 4);
+        assert_eq!(authority.worker_transaction_addresses().await.len(), 1);
     }
 
     // now stop all authorities

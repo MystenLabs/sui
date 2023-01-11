@@ -4,7 +4,7 @@
 
 use crate::{
     base_types::*,
-    committee::{EpochId, StakeUnit},
+    committee::{Committee, EpochId, StakeUnit},
     messages::{ExecutionFailureStatus, MoveLocation},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
@@ -76,8 +76,6 @@ pub enum SuiError {
     NotSharedObjectError,
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
-    #[error("The shared locks for this transaction have not yet been set.")]
-    SharedObjectLockNotSetError,
     #[error("Invalid Batch Transaction: {}", error)]
     InvalidBatchTransaction { error: String },
     #[error(
@@ -96,9 +94,14 @@ pub enum SuiError {
     SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
-    #[error("Value was not signed by a known authority")]
-    UnknownSigner,
-    // Certificate verification
+    #[error("Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}", signer, index)]
+    UnknownSigner {
+        signer: Option<String>,
+        index: Option<u32>,
+        committee: Committee,
+    },
+
+    // Certificate verification and execution
     #[error(
         "Signature or certificate from wrong epoch, expected {expected_epoch}, got {actual_epoch}"
     )]
@@ -120,12 +123,16 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Unexpected validator response from handle_transaction: {err}")]
-    UnexpectedResultFromValidatorHandleTransaction { err: String },
     #[error("Transaction certificate processing failed: {err}")]
     ErrorWhileProcessingCertificate { err: String },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
+        "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
+    )]
+    QuorumFailedToFormEffectsCertWhenProcessingTransaction {
+        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+    },
+    #[error(
+        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:?}. Validator errors: {:?}",
         conflicting_tx_digests,
         errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
@@ -136,16 +143,18 @@ pub enum SuiError {
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects, but retried a conflicting transaction {:?}, success: {}",
-        conflicting_tx_digest,
-        conflicting_tx_retry_success
+        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
+        conflicting_txes,
+        retried_tx_digest,
+        retried_tx_success
     )]
-    QuorumFailedToProcessTransactionWithConflictingTransactionRetried {
-        conflicting_tx_digest: TransactionDigest,
-        conflicting_tx_retry_success: bool,
+    QuorumFailedToProcessTransactionWithConflictingTransactions {
+        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        retried_tx_digest: Option<TransactionDigest>,
+        retried_tx_success: Option<bool>,
     },
     #[error(
-    "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",
+    "Failed to execute certificate on a quorum of validators. Validator errors: {:?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
@@ -169,6 +178,11 @@ pub enum SuiError {
         effects_digests: Vec<TransactionEffectsDigest>,
         checkpoint: CheckpointSequenceNumber,
     },
+    #[error("The shared locks for this transaction have not yet been set.")]
+    SharedObjectLockNotSetError,
+    #[error("The certificate needs to be sequenced by Narwhal before execution: {digest:?}")]
+    CertificateNotSequencedError { digest: TransactionDigest },
+
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
@@ -303,10 +317,23 @@ pub enum SuiError {
     },
 
     // Gas related errors
-    #[error("Gas budget set higher than max: {error:?}.")]
-    GasBudgetTooHigh { error: String },
-    #[error("Insufficient gas: {error:?}.")]
-    InsufficientGas { error: String },
+    #[error("Gas object is not an owned object with owner: {:?}.", owner)]
+    GasObjectNotOwnedObject { owner: Owner },
+    #[error("Gas budget: {:?} is higher than max: {:?}.", gas_budget, max_budget)]
+    GasBudgetTooHigh { gas_budget: u64, max_budget: u64 },
+    #[error("Gas budget: {:?} is lower than min: {:?}.", gas_budget, min_budget)]
+    GasBudgetTooLow { gas_budget: u64, min_budget: u64 },
+    #[error(
+        "Balance of gas object {:?} is lower than gas budget: {:?}, with gas price: {:?}.",
+        gas_balance,
+        gas_budget,
+        gas_price
+    )]
+    GasBalanceTooLowToCoverGasBudget {
+        gas_balance: u128,
+        gas_budget: u128,
+        gas_price: u64,
+    },
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
@@ -527,6 +554,9 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
+    #[error("This Move function is currently disabled and not available for call")]
+    BlockedMoveFunction,
+
     #[error("unknown error: {0}")]
     Unknown(String),
 }
@@ -602,10 +632,7 @@ impl SuiError {
         match self {
             SuiError::QuorumFailedToProcessTransaction { errors, .. }
             | SuiError::QuorumFailedToExecuteCertificate { errors, .. } => {
-                errors.iter().any(|err| {
-                    matches!(err, SuiError::ValidatorHaltedAtEpochEnd)
-                        || matches!(self, SuiError::MissingCommitteeAtEpoch(_))
-                })
+                errors.iter().any(|err| err.indicates_epoch_change())
             }
             SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
             _ => false,

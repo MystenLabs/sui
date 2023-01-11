@@ -218,7 +218,7 @@ impl<F: Future> Future for MonitoredScopeFuture<F> {
     }
 }
 
-type RegistryID = Uuid;
+pub type RegistryID = Uuid;
 
 /// A service to manage the prometheus registries. This service allow us to create
 /// a new Registry on demand and keep it accessible for processing/polling.

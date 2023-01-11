@@ -33,14 +33,23 @@ pub const MAX_BASIC_BLOCKS: usize = 1024;
 /// Maximum stack size value. Enforced by the Move bytecode verifier.
 pub const MAX_VALUE_STACK_SIZE: usize = 1024;
 
-/// Maximum number of type nodes. Enforced by the Move bytecode verifier.
+/// Maximum number of "type nodes", a metric for how big a SignatureToken will be when expanded into a fully qualified type. Enforced by the Move bytecode verifier.
 pub const MAX_TYPE_NODES: usize = 256;
 
-/// Maximum number of pushes in one function. Enforced by the Move bytecode verifier.
+/// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
 pub const MAX_PUSH_SIZE: usize = 10000;
 
-/// Maximum dependency depth. Enforced by the Move bytecode verifier.
-pub const MAX_DEPENDENCY_DEPTH: u64 = 100;
+/// Maximum number of struct definitions in a module. Enforced by the Move bytecode verifier.
+pub const MAX_STRUCT_DEFINITIONS: usize = 200;
+
+/// Maximum number of function definitions in a module. Enforced by the Move bytecode verifier.
+pub const MAX_FUNCTION_DEFINITIONS: usize = 1000;
+
+/// Maximum number of fields allowed in a struct definition. Enforced by the Move bytecode verifier.
+pub const MAX_FIELDS_IN_STRUCT: usize = 32;
+
+/// Maximum dependency depth. Enforced by the Move linker when loading dependent modules.
+pub const MAX_DEPENDENCY_DEPTH: usize = 100;
 
 /// Maximum number of events that a single Move function can emit. Enforced by the Sui adapter during execution.
 // TODO: is this per Move function, or per transaction? And if per-function, can't I get around the limit by calling
@@ -51,19 +60,15 @@ pub const MAX_NUM_EVENT_EMIT: u64 = 256;
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
 
 /// Base cost for any Sui transaction
-pub const BASE_TX_COST_FIXED: u64 = 10_000;
-
-/// Additional cost for Move call transactions that use a shared object.
-/// i.e., the base cost of such a transaction is BASE_TX_COST_FIXED + CONSENSUS_COST
-pub const CONSENSUS_COST: u64 = 100_000;
-
-/// Cost per byte of a Move call transaction
-/// i.e., the cost of such a transaction is base_cost + (BASE_TX_COST_PER_BYTE * size)
-pub const BASE_TX_COST_PER_BYTE: u64 = 0;
+pub const BASE_TX_COST_FIXED: u64 = 110_000;
 
 /// Additional cost for a transaction that publishes a package
 /// i.e., the base cost of such a transaction is BASE_TX_COST_FIXED + PACKAGE_PUBLISH_COST_FIXED
 pub const PACKAGE_PUBLISH_COST_FIXED: u64 = 1_000;
+
+/// Cost per byte of a Move call transaction
+/// i.e., the cost of such a transaction is base_cost + (BASE_TX_COST_PER_BYTE * size)
+pub const BASE_TX_COST_PER_BYTE: u64 = 0;
 
 /// Cost per byte for a transaction that publishes a package
 pub const PACKAGE_PUBLISH_COST_PER_BYTE: u64 = 80;

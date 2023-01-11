@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store::ObjectKey, *};
+use super::*;
+use crate::authority::authority_store::LockDetails;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
-use sui_types::base_types::{ExecutionDigests, SequenceNumber};
-use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
 use typed_store::rocks::{DBMap, DBOptions};
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
+
+const CURRENT_EPOCH_KEY: u64 = 0;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
@@ -29,6 +31,15 @@ pub struct AuthorityPerpetualTables {
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
     pub(crate) objects: DBMap<ObjectKey, Object>,
+
+    /// This is a map between object references of currently active objects that can be mutated,
+    /// and the transaction that they are lock on for use by this specific authority. Where an object
+    /// lock exists for an object version, but no transaction has been seen using it the lock is set
+    /// to None. The safety of consistent broadcast depend on each honest authority never changing
+    /// the lock once it is set. After a certificate for this object is processed it can be
+    /// forgotten.
+    #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
+    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -60,25 +71,15 @@ pub struct AuthorityPerpetualTables {
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
-    // Tables used for authority batch structure
-    // TODO: executed_sequence and batches both conceptually belong in AuthorityEpochTables,
-    // but we currently require that effects and executed_sequence are written atomically.
-    // See https://github.com/MystenLabs/sui/pull/4395 for the reason why.
-    //
-    // This can be addressed when we do the WAL rework. Something similar to the following flow
-    // would be required:
-    // 1. First execute the tx and store the outputs in an intermediate location.
-    // 2. Note that execution has finished (e.g. in the WAL.)
-    // 3. Write intermediate outputs to their permanent locations.
-    // 4. Mark the tx as finished in the WAL.
-    // 5. Crucially: If step 3 is interrupted, we must restart at step 3 based solely on the fact
-    //    that the WAL indicates the tx is not written yet. This fixes the root cause of the issue,
-    //    which is that we currently exit early if effects have been written.
-    /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
+    /// When transaction is executed via checkpoint executor, we store association here
+    pub(crate) executed_transactions_to_checkpoint:
+        DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
-    /// A sequence of batches indexing into the sequence of executed transactions.
-    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+    /// A singleton table that stores the current epoch number. This is used only for the purpose of
+    /// crash recovery so that when we restart we know which epoch we are at. This is needed because
+    /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.
+    /// This number should match the epoch of the per-epoch table in the authority store.
+    current_epoch: DBMap<u64, u64>,
 }
 
 impl AuthorityPerpetualTables {
@@ -180,15 +181,16 @@ impl AuthorityPerpetualTables {
         Ok(result)
     }
 
-    pub fn get_epoch(&self) -> SuiResult<EpochId> {
-        Ok(self.get_sui_system_state_object()?.epoch)
+    pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
+        Ok(self
+            .current_epoch
+            .get(&CURRENT_EPOCH_KEY)?
+            .expect("Must have current epoch."))
     }
 
-    pub fn get_committee(&self) -> SuiResult<Committee> {
-        Ok(self
-            .get_sui_system_state_object()?
-            .get_current_epoch_committee()
-            .committee)
+    pub fn set_recovery_epoch(&self, epoch: EpochId) -> SuiResult {
+        self.current_epoch.insert(&CURRENT_EPOCH_KEY, &epoch)?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
@@ -202,6 +204,9 @@ impl AuthorityPerpetualTables {
 }
 
 // These functions are used to initialize the DB tables
+fn owned_object_transaction_locks_table_default_config() -> DBOptions {
+    default_db_options(None, None).1
+}
 fn objects_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }

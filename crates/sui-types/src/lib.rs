@@ -22,7 +22,6 @@ pub mod error;
 pub mod accumulator;
 pub mod balance;
 pub mod base_types;
-pub mod batch;
 pub mod certificate_proof;
 pub mod chain_id;
 pub mod coin;
@@ -33,6 +32,7 @@ pub mod dynamic_field;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
+pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
 pub mod intent;
@@ -42,6 +42,7 @@ pub mod messages_checkpoint;
 pub mod move_package;
 pub mod object;
 pub mod query;
+pub mod quorum_driver_types;
 pub mod signature_seed;
 pub mod storage;
 pub mod sui_serde;
@@ -56,6 +57,7 @@ pub mod utils;
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID
 pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
+pub const MOVE_STDLIB_OBJECT_ID: ObjectID = ObjectID::from_single_byte(1);
 
 /// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID

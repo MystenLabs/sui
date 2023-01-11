@@ -9,6 +9,7 @@ use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
     Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
@@ -16,8 +17,9 @@ use sui_json_rpc_types::{
     SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
-use sui_types::batch::TxSequenceNumber;
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
@@ -25,13 +27,15 @@ use sui_types::messages::{
     CommitteeInfoResponse, ExecuteTransactionRequestType, VerifiedTransaction,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
 use futures::StreamExt;
 use sui_json_rpc::api::{
     CoinReadApiClient, EventReadApiClient, EventStreamingApiClient, RpcBcsApiClient,
     RpcFullNodeReadApiClient, RpcReadApiClient, TransactionExecutionApiClient,
 };
+use sui_types::governance::DelegatedStake;
+
 #[derive(Debug)]
 pub struct ReadApi {
     api: Arc<RpcClient>,
@@ -199,6 +203,15 @@ impl CoinReadApi {
             .await?)
     }
 
+    pub async fn get_all_coins(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+    ) -> SuiRpcResult<CoinPage> {
+        Ok(self.api.http.get_all_coins(owner, cursor, limit).await?)
+    }
+
     pub fn get_coins_stream(
         &self,
         owner: SuiAddress,
@@ -225,12 +238,16 @@ impl CoinReadApi {
         )
     }
 
-    pub async fn get_balances(
+    pub async fn get_balance(
         &self,
         owner: SuiAddress,
         coin_type: Option<String>,
-    ) -> SuiRpcResult<Vec<Balance>> {
-        Ok(self.api.http.get_balances(owner, coin_type).await?)
+    ) -> SuiRpcResult<Balance> {
+        Ok(self.api.http.get_balance(owner, coin_type).await?)
+    }
+
+    pub async fn get_all_balances(&self, owner: SuiAddress) -> SuiRpcResult<Vec<Balance>> {
+        Ok(self.api.http.get_all_balances(owner).await?)
     }
 
     pub async fn get_coin_metadata(&self, coin_type: String) -> SuiRpcResult<SuiCoinMetadata> {
@@ -332,42 +349,18 @@ impl QuorumDriver {
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<TransactionExecutionResult> {
-        let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
+        let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
-        let resp = TransactionExecutionApiClient::execute_transaction(
+        let resp = TransactionExecutionApiClient::execute_transaction_serialized_sig(
             &self.api.http,
             tx_bytes,
-            flag,
             signature,
-            pub_key,
             request_type.clone(),
         )
         .await?;
 
         Ok(match (request_type, resp) {
-            (
-                ExecuteTransactionRequestType::ImmediateReturn,
-                SuiExecuteTransactionResponse::ImmediateReturn { tx_digest },
-            ) => TransactionExecutionResult {
-                tx_digest,
-                tx_cert: None,
-                effects: None,
-                confirmed_local_execution: false,
-                timestamp_ms: None,
-                parsed_data: None,
-            },
-            (
-                ExecuteTransactionRequestType::WaitForTxCert,
-                SuiExecuteTransactionResponse::TxCert { certificate },
-            ) => TransactionExecutionResult {
-                tx_digest: certificate.transaction_digest,
-                tx_cert: Some(certificate),
-                effects: None,
-                confirmed_local_execution: false,
-                timestamp_ms: None,
-                parsed_data: None,
-            },
             (
                 ExecuteTransactionRequestType::WaitForEffectsCert,
                 SuiExecuteTransactionResponse::EffectsCert {
@@ -404,12 +397,6 @@ impl QuorumDriver {
                     parsed_data: None,
                 }
             }
-            (other_request_type, other_resp) => {
-                return Err(RpcError::InvalidTransactionResponse(
-                    other_resp,
-                    other_request_type,
-                ))
-            }
         })
     }
 
@@ -437,5 +424,43 @@ impl QuorumDriver {
                 ));
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GovernanceApi {
+    api: Arc<RpcClient>,
+}
+
+impl GovernanceApi {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
+
+    /// Return all [DelegatedStake].
+    pub async fn get_delegated_stakes(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiRpcResult<Vec<DelegatedStake>> {
+        Ok(self.api.http.get_delegated_stakes(owner).await?)
+    }
+
+    /// Return all validators available for stake delegation.
+    pub async fn get_validators(&self) -> SuiRpcResult<Vec<ValidatorMetadata>> {
+        Ok(self.api.http.get_validators().await?)
+    }
+
+    /// Return the committee information for the asked `epoch`.
+    /// `epoch`: The epoch of interest. If None, default to the latest epoch
+    pub async fn get_committee_info(
+        &self,
+        epoch: Option<EpochId>,
+    ) -> SuiRpcResult<CommitteeInfoResponse> {
+        Ok(self.api.http.get_committee_info(epoch).await?)
+    }
+
+    /// Return [SuiSystemState]
+    pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
+        Ok(self.api.http.get_sui_system_state().await?)
     }
 }

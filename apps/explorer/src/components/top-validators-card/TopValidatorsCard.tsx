@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    Base64DataBuffer,
-    isSuiObject,
-    isSuiMoveObject,
-    SUI_TYPE_ARG,
-} from '@mysten/sui.js';
+import { Base64DataBuffer, is, SuiObject, SUI_TYPE_ARG } from '@mysten/sui.js';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
@@ -126,10 +121,10 @@ function StakeColumn({ stake }: { stake: bigint }) {
     const [amount, symbol] = useFormatCoin(stake, SUI_TYPE_ARG);
     return (
         <div className="flex items-end gap-0.5">
-            <Text variant="bodySmall" color="steel-darker">
+            <Text variant="bodySmall/medium" color="steel-darker">
                 {amount}
             </Text>
-            <Text variant="captionSmall" color="steel-dark">
+            <Text variant="captionSmall/medium" color="steel-dark">
                 {symbol}
             </Text>
         </div>
@@ -178,17 +173,13 @@ const validatorsTable = (validatorsData: ValidatorState, limit?: number) => {
         data: validatorsItems.map((validator) => {
             return {
                 name: (
-                    <Text
-                        variant="bodySmall"
-                        color="steel-darker"
-                        weight="medium"
-                    >
+                    <Text variant="bodySmall/medium" color="steel-darker">
                         {validator.name}
                     </Text>
                 ),
                 stake: <StakeColumn stake={validator.stake} />,
                 delegation: (
-                    <Text variant="bodySmall" color="steel-darker">
+                    <Text variant="bodySmall/medium" color="steel-darker">
                         {validator.stake.toString()}
                     </Text>
                 ),
@@ -222,7 +213,9 @@ export function TopValidatorsCard({ limit }: { limit?: number }) {
         useGetObject(VALIDATORS_OBJECT_ID);
 
     const validatorData =
-        data && isSuiObject(data.details) && isSuiMoveObject(data.details.data)
+        data &&
+        is(data.details, SuiObject) &&
+        data.details.data.dataType === 'moveObject'
             ? (data.details.data.fields as ValidatorState)
             : null;
 

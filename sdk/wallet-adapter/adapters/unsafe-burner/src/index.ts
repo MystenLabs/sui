@@ -37,7 +37,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     this.connected = false;
 
     console.warn(
-      "Your application is presently configured to use the `UnsafeBurnerWalletAdapter`. Ensure that this adapter is removed for production."
+      "Your application is currently using the `UnsafeBurnerWalletAdapter`. Make sure that this adapter is not included in production."
     );
   }
 

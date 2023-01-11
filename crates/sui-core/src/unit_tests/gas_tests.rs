@@ -18,6 +18,7 @@ use sui_types::{
     crypto::get_key_pair,
     gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
 };
+use sui_types::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -29,11 +30,9 @@ async fn test_tx_less_than_minimum_gas_budget() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas budget is {}, smaller than minimum requirement {}",
-                budget, *MIN_GAS_BUDGET
-            )
+        SuiError::GasBudgetTooLow {
+            gas_budget: budget,
+            min_budget: *MIN_GAS_BUDGET
         }
     );
 }
@@ -48,8 +47,9 @@ async fn test_tx_more_than_maximum_gas_budget() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!("Gas budget set too high; maximum is {}", *MAX_GAS_BUDGET)
+        SuiError::GasBudgetTooHigh {
+            gas_budget: budget,
+            max_budget: *MAX_GAS_BUDGET
         }
     );
 }
@@ -66,13 +66,10 @@ async fn test_tx_gas_balance_less_than_budget() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                gas_balance,
-                gas_price * budget,
-                gas_price
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: gas_balance as u128,
+            gas_budget: (gas_price * budget) as u128,
+            gas_price
         }
     );
 }
@@ -82,7 +79,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
     let result = execute_transfer(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
+    let effects = result.response.unwrap().1.unwrap().into_data();
     let gas_cost = effects.gas_used;
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
     assert!(gas_cost.storage_cost > 0);
@@ -125,12 +122,12 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_price_2 = gas_price_1 * 2;
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, gas_price_1, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
+    let effects = result.response.unwrap().1.unwrap().into_data();
     let gas_summary_1 = effects.gas_cost_summary();
 
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET / 2, gas_price_2, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
+    let effects = result.response.unwrap().1.unwrap().into_data();
     let gas_summary_2 = effects.gas_cost_summary();
 
     assert_eq!(
@@ -146,13 +143,10 @@ async fn test_native_transfer_gas_price_is_used() {
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
-        SuiError::InsufficientGas {
-            error: format!(
-                "Gas balance is {}, not enough to pay {} with gas price of {}",
-                gas_balance,
-                (gas_budget as u128) * (gas_price as u128),
-                gas_price
-            )
+        SuiError::GasBalanceTooLowToCoverGasBudget {
+            gas_balance: (gas_balance as u128),
+            gas_budget: (gas_budget as u128) * (gas_price as u128),
+            gas_price
         }
     );
 }
@@ -162,7 +156,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 50);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 110);
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
@@ -171,13 +165,11 @@ async fn test_transfer_sui_insufficient_gas() {
         recipient,
         amount: None,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 50, 1);
+    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 110, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
         .await
-        .unwrap()
-        .signed_effects
         .unwrap()
         .into_data();
     // We expect this to fail due to insufficient gas.
@@ -197,7 +189,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     let balance = *MIN_GAS_BUDGET + 1;
     let result = execute_transfer(balance, balance, true).await;
     // The transaction should still execute to effects, but with execution status as failure.
-    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
+    let effects = result.response.unwrap().1.unwrap().into_data();
     assert_eq!(
         effects.status.unwrap_err(),
         ExecutionFailureStatus::InsufficientGas
@@ -214,14 +206,14 @@ async fn test_native_transfer_insufficient_gas_execution() {
     let total_gas = result
         .response
         .unwrap()
-        .signed_effects
+        .1
         .unwrap()
         .data()
         .gas_used
         .gas_used();
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true).await;
-    let effects = result.response.unwrap().signed_effects.unwrap().into_data();
+    let effects = result.response.unwrap().1.unwrap().into_data();
     // We won't drain the entire budget because we don't charge for storage if tx failed.
     assert!(effects.gas_used.gas_used() < budget);
     let gas_object = result
@@ -260,7 +252,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         GAS_VALUE_FOR_TESTING,
     )
     .await;
-    let effects = response.signed_effects.unwrap().into_data();
+    let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
     assert!(gas_cost.storage_cost > 0);
 
@@ -276,9 +268,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     let genesis_objects = genesis::clone_genesis_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response
-        .certified_transaction
-        .as_ref()
-        .unwrap()
+        .0
         .data()
         .intent_message
         .value
@@ -298,7 +288,14 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     gas_status.charge_storage_read(
         genesis_objects
             .iter()
-            .map(|o| o.object_size_for_gas_metering())
+            // do not charge for loads of the Sui Framework
+            .filter_map(|o| {
+                if o.id() != SUI_FRAMEWORK_OBJECT_ID && o.id() != MOVE_STDLIB_OBJECT_ID {
+                    Some(o.object_size_for_gas_metering())
+                } else {
+                    None
+                }
+            })
             .sum(),
     )?;
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
@@ -328,7 +325,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         budget,
     )
     .await;
-    let effects = response.signed_effects.unwrap().into_data();
+    let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
 
@@ -359,7 +356,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         budget,
     )
     .await;
-    let effects = response.signed_effects.unwrap().into_data();
+    let effects = response.1.into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
     assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
@@ -395,7 +392,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
-    let effects = response.signed_effects.unwrap().into_data();
+    let effects = response.into_data();
     let created_object_ref = effects.created[0].0;
     assert!(effects.status.is_ok());
     let gas_cost = effects.gas_used;
@@ -458,7 +455,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.signed_effects.unwrap().into_data();
+    let effects = response.into_data();
     assert!(effects.status.is_ok());
     let gas_cost = effects.gas_used;
     // storage_cost should be less than rebate because for object deletion, we only
@@ -484,7 +481,7 @@ async fn test_move_call_gas() -> SuiResult {
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.signed_effects.unwrap().into_data();
+    let effects = response.into_data();
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
     // We will run out of gas during VM execution.
@@ -519,7 +516,7 @@ struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub object_id: ObjectID,
     pub gas_object_id: ObjectID,
-    pub response: SuiResult<VerifiedTransactionInfoResponse>,
+    pub response: SuiResult<(Option<SignedTransaction>, Option<SignedTransactionEffects>)>,
 }
 
 async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) -> TransferResult {
@@ -555,9 +552,14 @@ async fn execute_transfer_with_price(
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let response = if run_confirm {
-        send_and_confirm_transaction(&authority_state, tx).await
+        send_and_confirm_transaction(&authority_state, tx)
+            .await
+            .map(|effects| (None, Some(effects)))
     } else {
-        authority_state.handle_transaction(tx).await
+        authority_state
+            .handle_transaction(tx)
+            .await
+            .map(|response| (response.signed_transaction.map(|tx| tx.into_inner()), None))
     };
     TransferResult {
         authority_state,

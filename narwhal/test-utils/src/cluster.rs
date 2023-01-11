@@ -8,11 +8,10 @@ use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
 use multiaddr::Multiaddr;
-use node::{
-    execution_state::SimpleExecutionState,
-    metrics::{primary_metrics_registry, worker_metrics_registry},
-    Node,
-};
+use mysten_metrics::RegistryService;
+use node::primary_node::PrimaryNode;
+use node::worker_node::WorkerNode;
+use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_registry};
 use prometheus::{proto::Metric, Registry};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 use storage::NodeStorage;
@@ -45,6 +44,9 @@ impl Cluster {
     /// create all the authorities (primaries & workers) that are defined under
     /// the committee structure, but none of them will be started.
     ///
+    /// Fields passed in via Parameters will be used, expect specified ports which have to be
+    /// different for each instance. If None, the default Parameters will be used.
+    ///
     /// When the `internal_consensus_enabled` is true then the standard internal
     /// consensus engine will be enabled. If false, then the internal consensus will
     /// be disabled and the gRPC server will be enabled to manage the Collections & the
@@ -68,7 +70,7 @@ impl Cluster {
                 authority_fixture.keypair().copy(),
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
-                params.clone(),
+                params.with_available_ports(),
                 shared_committee.clone(),
                 shared_worker_cache.clone(),
                 internal_consensus_enabled,
@@ -245,7 +247,7 @@ impl Cluster {
 
         for authority in self.authorities().await {
             let primary = authority.primary().await;
-            if let Some(metric) = primary.metric("narwhal_primary_last_committed_round") {
+            if let Some(metric) = primary.metric("narwhal_primary_last_committed_round").await {
                 let value = metric.get_gauge().get_value();
 
                 authorities_latest_commit.insert(primary.id, value);
@@ -275,11 +277,11 @@ pub struct PrimaryNodeDetails {
     pub key_pair: Arc<KeyPair>,
     pub network_key_pair: Arc<NetworkKeyPair>,
     pub tx_transaction_confirmation: Sender<SerializedTransaction>,
-    registry: Registry,
+    node: PrimaryNode,
     store_path: PathBuf,
+    parameters: Parameters,
     committee: SharedCommittee,
     worker_cache: SharedWorkerCache,
-    parameters: Parameters,
     handlers: Rc<RefCell<Vec<JoinHandle<()>>>>,
     internal_consensus_enabled: bool,
 }
@@ -297,36 +299,43 @@ impl PrimaryNodeDetails {
         // used just to initialise the struct value
         let (tx, _) = tokio::sync::broadcast::channel(1);
 
+        let registry_service = RegistryService::new(Registry::new());
+
+        let node = PrimaryNode::new(
+            parameters.clone(),
+            internal_consensus_enabled,
+            registry_service,
+        );
+
         Self {
             id,
             key_pair: Arc::new(key_pair),
             network_key_pair: Arc::new(network_key_pair),
-            registry: Registry::new(),
             store_path: temp_dir(),
             tx_transaction_confirmation: tx,
             committee,
             worker_cache,
-            parameters,
             handlers: Rc::new(RefCell::new(Vec::new())),
             internal_consensus_enabled,
+            node,
+            parameters,
         }
     }
 
     /// Returns the metric - if exists - identified by the provided name.
     /// If metric has not been found then None is returned instead.
-    pub fn metric(&self, name: &str) -> Option<Metric> {
-        let metrics = self.registry.gather();
+    pub async fn metric(&self, name: &str) -> Option<Metric> {
+        let (_registry_id, registry) = self.node.registry().await.unwrap();
+        let metrics = registry.gather();
 
         let metric = metrics.into_iter().find(|m| m.get_name() == name);
         metric.map(|m| m.get_metric().first().unwrap().clone())
     }
 
     async fn start(&mut self, preserve_store: bool) {
-        if self.is_running() {
+        if self.is_running().await {
             panic!("Tried to start a node that is already running");
         }
-
-        let registry = primary_metrics_registry(self.key_pair.public().clone());
 
         // Make the data store.
         let store_path = if preserve_store {
@@ -342,25 +351,22 @@ impl PrimaryNodeDetails {
         );
 
         // The channel returning the result for each transaction's execution.
-        let (tx_transaction_confirmation, mut rx_transaction_confirmation) =
-            channel(Node::CHANNEL_CAPACITY);
+        let (tx_transaction_confirmation, mut rx_transaction_confirmation) = channel(100);
 
         // Primary node
         let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone());
-        let mut primary_handlers = Node::spawn_primary(
-            self.key_pair.copy(),
-            self.network_key_pair.copy(),
-            self.committee.clone(),
-            self.worker_cache.clone(),
-            &primary_store,
-            self.parameters.clone(),
-            /* consensus */ self.internal_consensus_enabled,
-            /* execution_state */
-            Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
-            &registry,
-        )
-        .await
-        .unwrap();
+
+        self.node
+            .start(
+                self.key_pair.copy(),
+                self.network_key_pair.copy(),
+                self.committee.clone(),
+                self.worker_cache.clone(),
+                &primary_store,
+                Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
+            )
+            .await
+            .unwrap();
 
         let (tx, _) = tokio::sync::broadcast::channel(primary::CHANNEL_CAPACITY);
         let transactions_sender = tx.clone();
@@ -375,15 +381,13 @@ impl PrimaryNodeDetails {
 
         // add the tasks's handle to the primary's handle so can be shutdown
         // with the others.
-        primary_handlers.push(h);
-
-        self.handlers.replace(primary_handlers);
+        self.handlers.replace(vec![h]);
         self.store_path = store_path;
-        self.registry = registry;
         self.tx_transaction_confirmation = tx;
     }
 
-    fn stop(&self) {
+    async fn stop(&self) {
+        self.node.shutdown().await;
         self.handlers.borrow().iter().for_each(|h| h.abort());
         info!("Aborted primary node for id {}", self.id);
     }
@@ -392,12 +396,8 @@ impl PrimaryNodeDetails {
     /// iterate over all the handlers and check whether there is still any
     /// that is not finished. If we find at least one, then we report the
     /// node as still running.
-    pub fn is_running(&self) -> bool {
-        if self.handlers.borrow().is_empty() {
-            return false;
-        }
-
-        self.handlers.borrow().iter().any(|h| !h.is_finished())
+    pub async fn is_running(&self) -> bool {
+        self.node.is_running().await
     }
 }
 
@@ -407,11 +407,10 @@ pub struct WorkerNodeDetails {
     pub transactions_address: Multiaddr,
     pub registry: Registry,
     name: PublicKey,
+    node: WorkerNode,
     committee: SharedCommittee,
     worker_cache: SharedWorkerCache,
-    parameters: Parameters,
     store_path: PathBuf,
-    handlers: Arc<ArcSwap<Vec<JoinHandle<()>>>>,
 }
 
 impl WorkerNodeDetails {
@@ -423,6 +422,9 @@ impl WorkerNodeDetails {
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
     ) -> Self {
+        let registry_service = RegistryService::new(Registry::new());
+        let node = WorkerNode::new(id, parameters, registry_service);
+
         Self {
             id,
             name,
@@ -431,14 +433,13 @@ impl WorkerNodeDetails {
             transactions_address,
             committee,
             worker_cache,
-            parameters,
-            handlers: Arc::new(ArcSwap::from_pointee(Vec::new())),
+            node,
         }
     }
 
     /// Starts the node. When preserve_store is true then the last used
     async fn start(&mut self, keypair: NetworkKeyPair, preserve_store: bool) {
-        if self.is_running() {
+        if self.is_running().await {
             panic!(
                 "Worker with id {} is already running, can't start again",
                 self.id
@@ -455,24 +456,25 @@ impl WorkerNodeDetails {
         };
 
         let worker_store = NodeStorage::reopen(store_path.clone());
-        let worker_handlers = Node::spawn_workers(
-            self.name.clone(),
-            vec![(self.id, keypair)],
-            self.committee.clone(),
-            self.worker_cache.clone(),
-            &worker_store,
-            self.parameters.clone(),
-            TrivialTransactionValidator::default(),
-            &registry,
-        );
+        self.node
+            .start(
+                self.name.clone(),
+                keypair,
+                self.committee.clone(),
+                self.worker_cache.clone(),
+                &worker_store,
+                TrivialTransactionValidator::default(),
+                None,
+            )
+            .await
+            .unwrap();
 
-        self.handlers.swap(Arc::new(worker_handlers));
         self.store_path = store_path;
         self.registry = registry;
     }
 
-    fn stop(&self) {
-        self.handlers.load().iter().for_each(|h| h.abort());
+    async fn stop(&self) {
+        self.node.shutdown().await;
         info!("Aborted worker node for id {}", self.id);
     }
 
@@ -480,8 +482,8 @@ impl WorkerNodeDetails {
     /// iterate over all the handlers and check whether there is still any
     /// that is not finished. If we find at least one, then we report the
     /// node as still running.
-    pub fn is_running(&self) -> bool {
-        self.handlers.load().iter().any(|h| !h.is_finished())
+    pub async fn is_running(&self) -> bool {
+        self.node.is_running().await
     }
 }
 
@@ -590,7 +592,7 @@ impl AuthorityDetails {
     pub async fn stop_primary(&self) {
         let internal = self.internal.read().await;
 
-        internal.primary.stop();
+        internal.primary.stop().await;
     }
 
     pub async fn start_all_workers(&self, preserve_store: bool) {
@@ -629,17 +631,18 @@ impl AuthorityDetails {
             .workers
             .get(&id)
             .unwrap_or_else(|| panic!("Worker with id {} not found ", id))
-            .stop();
+            .stop()
+            .await;
     }
 
     /// Stops all the nodes (primary & workers).
     pub async fn stop_all(&self) {
         let internal = self.internal.read().await;
 
-        internal.primary.stop();
+        internal.primary.stop().await;
 
         for (_, worker) in internal.workers.iter() {
-            worker.stop();
+            worker.stop().await;
         }
     }
 
@@ -697,18 +700,15 @@ impl AuthorityDetails {
     /// Returns all the running workers
     async fn workers(&self) -> Vec<WorkerNodeDetails> {
         let internal = self.internal.read().await;
+        let mut workers = Vec::new();
 
-        internal
-            .workers
-            .iter()
-            .filter_map(|(_, worker)| {
-                if worker.is_running() {
-                    Some(worker.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
+        for worker in internal.workers.values() {
+            if worker.is_running().await {
+                workers.push(worker.clone());
+            }
+        }
+
+        workers
     }
 
     /// Creates a new proposer client that connects to the corresponding client.
@@ -778,12 +778,12 @@ impl AuthorityDetails {
     async fn is_running(&self) -> bool {
         let internal = self.internal.read().await;
 
-        if internal.primary.is_running() {
+        if internal.primary.is_running().await {
             return true;
         }
 
         for (_, worker) in internal.workers.iter() {
-            if worker.is_running() {
+            if worker.is_running().await {
                 return true;
             }
         }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::encoding::{Base58, Encoding, Hex};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
@@ -10,14 +10,17 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::sui_serde::Readable;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, Bytes};
 
 pub type CheckpointSequenceNumber = u64;
 
@@ -96,8 +99,15 @@ impl AuthenticatedCheckpoint {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct CheckpointDigest(pub [u8; 32]);
+#[serde_as]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointDigest(
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
+    pub [u8; 32],
+);
 
 impl AsRef<[u8]> for CheckpointDigest {
     fn as_ref(&self) -> &[u8] {
@@ -111,8 +121,15 @@ impl AsRef<[u8; 32]> for CheckpointDigest {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct CheckpointContentsDigest(pub [u8; 32]);
+#[serde_as]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointContentsDigest(
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
+    pub [u8; 32],
+);
 
 impl AsRef<[u8]> for CheckpointContentsDigest {
     fn as_ref(&self) -> &[u8] {
@@ -128,10 +145,13 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
 
 // The constituent parts of checkpoints, signed and certified
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
+    /// Total number of transactions committed since genesis, including those in this
+    /// checkpoint.
+    pub network_total_transactions: u64,
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
     /// The running total gas costs of all transactions included in the current epoch so far
@@ -151,6 +171,7 @@ impl CheckpointSummary {
     pub fn new(
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
+        network_total_transactions: u64,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
@@ -161,6 +182,7 @@ impl CheckpointSummary {
         Self {
             epoch,
             sequence_number,
+            network_total_transactions,
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
@@ -242,6 +264,7 @@ impl SignedCheckpointSummary {
     pub fn new(
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
+        network_total_transactions: u64,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
@@ -252,6 +275,7 @@ impl SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
             epoch,
             sequence_number,
+            network_total_transactions,
             transactions,
             previous_digest,
             epoch_rolling_gas_cost_summary,
@@ -430,7 +454,7 @@ pub struct CheckpointSignatureMessage {
 /// They must have already been causally ordered. Since the causal order algorithm
 /// is the same among validators, we expect all honest validators to come up with
 /// the same order for each checkpoint content.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
 }
@@ -444,15 +468,30 @@ impl CheckpointSignatureMessage {
 impl CheckpointContents {
     pub fn new_with_causally_ordered_transactions<T>(contents: T) -> Self
     where
-        T: Iterator<Item = ExecutionDigests>,
+        T: IntoIterator<Item = ExecutionDigests>,
     {
         Self {
-            transactions: contents.collect(),
+            transactions: contents.into_iter().collect(),
         }
     }
 
     pub fn iter(&self) -> Iter<'_, ExecutionDigests> {
         self.transactions.iter()
+    }
+
+    /// Return an iterator that enumerates the transactions in the contents.
+    /// The iterator item is a tuple of (sequence_number, &ExecutionDigests),
+    /// where the sequence_number indicates the index of the transaction in the
+    /// global ordering of executed transactions since genesis.
+    pub fn enumerate_transactions(
+        &self,
+        ckpt: &CheckpointSummary,
+    ) -> impl Iterator<Item = (u64, &ExecutionDigests)> {
+        let start = ckpt.network_total_transactions - self.size() as u64;
+
+        (0u64..)
+            .zip(self.iter())
+            .map(move |(i, digests)| (i + start, digests))
     }
 
     pub fn into_inner(self) -> Vec<ExecutionDigests> {
@@ -502,6 +541,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
@@ -539,6 +579,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,
@@ -567,6 +608,7 @@ mod tests {
                 SignedCheckpointSummary::new(
                     committee.epoch,
                     1,
+                    0,
                     name,
                     k,
                     &set,

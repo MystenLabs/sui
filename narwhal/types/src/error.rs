@@ -29,7 +29,7 @@ macro_rules! ensure {
 
 pub type DagResult<T> = Result<T, DagError>;
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum DagError {
     #[error("Channel {0} has closed unexpectedly")]
     ClosedChannel(String),
@@ -38,13 +38,10 @@ pub enum DagError {
     InvalidBitmap(String),
 
     #[error("Invalid signature")]
-    InvalidSignature(#[from] signature::Error),
+    InvalidSignature,
 
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
-
-    #[error("Serialization error: {0}")]
-    SerializationError(#[from] Box<bincode::ErrorKind>),
 
     #[error("Invalid header digest")]
     InvalidHeaderDigest,
@@ -102,6 +99,9 @@ pub enum DagError {
         created_time: TimestampMs,
         local_time: TimestampMs,
     },
+
+    #[error("No peer can be reached for fetching certificates! Check if network is healthy.")]
+    NoCertificateFetched,
 
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),

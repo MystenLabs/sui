@@ -2,13 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority::AuthorityState,
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
-};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_metrics::spawn_monitored_task;
 use narwhal_types::TransactionsClient;
@@ -16,24 +11,29 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::*;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::{error::*, messages::*};
 use tap::TapFallible;
-use tokio::{task::JoinHandle, time::sleep};
-use tracing::{debug, info, Instrument};
+use tokio::task::JoinHandle;
+use tracing::{info, Instrument};
+
+use crate::{
+    authority::AuthorityState,
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+};
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
 
-const MIN_BATCH_SIZE: u64 = 1000;
-const MAX_DELAY_MILLIS: u64 = 5_000; // 5 sec
+// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
+// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
+const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
@@ -69,8 +69,6 @@ pub struct AuthorityServer {
     address: Multiaddr,
     pub state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    min_batch_size: u64,
-    max_delay: Duration,
     pub metrics: Arc<ValidatorServiceMetrics>,
 }
 
@@ -96,25 +94,8 @@ impl AuthorityServer {
             address,
             state,
             consensus_adapter,
-            min_batch_size: MIN_BATCH_SIZE,
-            max_delay: Duration::from_millis(MAX_DELAY_MILLIS),
             metrics,
         }
-    }
-
-    /// Create a batch subsystem, register it with the authority state, and
-    /// launch a task that manages it. Return the join handle of this task.
-    pub async fn spawn_batch_subsystem(
-        &self,
-        min_batch_size: u64,
-        max_delay: Duration,
-    ) -> SuiResult<JoinHandle<()>> {
-        // Start the batching subsystem, and register the handles with the authority.
-        let state = self.state.clone();
-        let batch_join_handle =
-            spawn_monitored_task!(state.run_batch_service(min_batch_size, max_delay));
-
-        Ok(batch_join_handle)
     }
 
     pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
@@ -126,11 +107,6 @@ impl AuthorityServer {
         self,
         address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
-        // Start the batching subsystem
-        let _join_handle = self
-            .spawn_batch_subsystem(self.min_batch_size, self.max_delay)
-            .await;
-
         let mut server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
@@ -294,11 +270,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::debug_span!(
-            "validator_state_process_tx",
-            ?tx_digest,
-            tx_kind = transaction.data().intent_message.value.kind_as_str()
-        );
+        let span = tracing::debug_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)
@@ -319,7 +291,7 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
         let certificate = request.into_inner();
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -331,87 +303,87 @@ impl ValidatorService {
                 .start_timer()
         };
 
+        let epoch_store = state.epoch_store();
+
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
-        if let Some(response) = state.get_tx_info_already_executed(&tx_digest).await? {
-            return Ok(tonic::Response::new(response.into()));
+        if let Some(signed_effects) =
+            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+        {
+            return Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects,
+            }));
         }
 
-        // 2) Verify cert signatures
-        let cert_verif_metrics_guard = metrics.cert_verification_latency.start_timer();
+        // 2) Validate if cert can be executed, and verify the cert.
+        if state.is_fullnode() {
+            return Err(tonic::Status::unimplemented(format!(
+                "Cannot execute certificate without effects on fullnode! {:?}",
+                certificate.digest()
+            )));
+        }
+        if certificate.is_system_tx() {
+            return Err(tonic::Status::invalid_argument(format!(
+                "Cannot execute system certificate via RPC interface! {certificate:?}"
+            )));
+        }
+        // code block within reconfiguration lock
         let certificate = {
-            let epoch_store = state.epoch_store();
-            certificate.verify(epoch_store.committee())?
-        };
-        cert_verif_metrics_guard.stop_and_record();
+            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            if !reconfiguration_lock.should_accept_user_certs() {
+                metrics.num_rejected_cert_in_epoch_boundary.inc();
+                return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
+            }
 
-        // 3) All certificates are sent to consensus (at least by some authorities)
-        // For shared objects this will wait until either timeout or we have heard back from consensus.
-        // For owned objects this will return without waiting for certificate to be sequenced
-        // First do quick dirty non-async check
-        if !state.consensus_message_processed(&certificate)? {
-            let _metrics_guard = if shared_object_tx {
-                Some(metrics.consensus_latency.start_timer())
-            } else {
-                None
+            let certificate = {
+                let _timer = metrics.cert_verification_latency.start_timer();
+                certificate.verify(epoch_store.committee())?
             };
-            let transaction = ConsensusTransaction::new_certificate_message(
-                &state.name,
-                certificate.clone().into(),
-            );
-            let waiter = consensus_adapter.submit(transaction).tap_err(|e| {
-                if let SuiError::ValidatorHaltedAtEpochEnd = e {
-                    metrics.num_rejected_cert_in_epoch_boundary.inc();
-                }
-            })?;
-            if certificate.contains_shared_object() {
-                // This is expect on tokio JoinHandle result, not SuiResult
-                waiter
-                    .await
-                    .expect("Tokio runtime failure when waiting for consensus result");
-            }
-        }
 
-        // 4) Execute the certificate.
-        // Often we cannot execute a cert due to dependenties haven't been executed, and we will
-        // observe TransactionInputObjectsErrors. In such case, we can wait and retry. It should eventually
-        // succeed.
-        // TODO: call execute_certificate_internal() instead and remove retries.
-        let mut retry_delay_ms = 200;
-        loop {
-            let span = tracing::debug_span!(
-                "handle_certificate_execution",
-                ?tx_digest,
-                tx_kind = certificate.data().intent_message.value.kind_as_str()
-            );
-            match state
-                .execute_certificate_internal(&certificate)
-                .instrument(span)
-                .await
-            {
-                // For owned object certificates, we could also be getting this error
-                // if this validator hasn't executed some of the causal dependencies.
-                // And that's ok because there must exist 2f+1 that has. So we can
-                // afford this validator returning error.
-                err @ Err(SuiError::TransactionInputObjectsErrors { .. }) if shared_object_tx => {
-                    if retry_delay_ms >= 12800 {
-                        return Err(tonic::Status::from(err.unwrap_err()));
-                    }
-                    debug!(
-                        ?tx_digest,
-                        ?retry_delay_ms,
-                        "Certificate failed due to missing dependencies, wait and retry",
-                    );
-                    sleep(Duration::from_millis(retry_delay_ms)).await;
-                    retry_delay_ms *= 2;
+            // 3) All certificates are sent to consensus (at least by some authorities)
+            // For shared objects this will wait until either timeout or we have heard back from consensus.
+            // For owned objects this will return without waiting for certificate to be sequenced
+            // First do quick dirty non-async check
+            if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
+                if consensus_adapter.num_inflight_transactions()
+                    > MAX_PENDING_CONSENSUS_TRANSACTIONS
+                {
+                    return Err(tonic::Status::resource_exhausted(format!(
+                        "Reached {} transactions pending in consensus. Consensus is overloaded.",
+                        MAX_PENDING_CONSENSUS_TRANSACTIONS
+                    )));
                 }
-                Err(e) => {
-                    return Err(tonic::Status::from(e));
-                }
-                Ok(response) => {
-                    return Ok(tonic::Response::new(response.into()));
-                }
+                let _metrics_guard = if shared_object_tx {
+                    Some(metrics.consensus_latency.start_timer())
+                } else {
+                    None
+                };
+                let transaction = ConsensusTransaction::new_certificate_message(
+                    &state.name,
+                    certificate.clone().into(),
+                );
+                consensus_adapter.submit(transaction, Some(&reconfiguration_lock), &epoch_store)?;
+                // Do not wait for the result, because the transaction might have already executed.
+                // Instead, check or wait for the existence of certificate effects below.
             }
+            drop(reconfiguration_lock);
+            certificate
+        };
+
+        // 4) Execute the certificate if it contains only owned object transactions, or wait for
+        // the execution results if it contains shared objects.
+        let res = if certificate.contains_shared_object() {
+            // The transaction needs sequencing by Narwhal before it can be sent for execution.
+            // So rely on the submission to consensus above to execute the certificate.
+            state.notify_read_effects(&certificate).await
+        } else {
+            state.execute_certificate(&certificate, &epoch_store).await
+        };
+        match res {
+            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects,
+            })),
+            Err(e) => Err(tonic::Status::from(e)),
         }
     }
 }
@@ -435,7 +407,7 @@ impl Validator for ValidatorService {
     async fn handle_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
         let state = self.state.clone();
         let consensus_adapter = self.consensus_adapter.clone();
 
@@ -483,21 +455,6 @@ impl Validator for ValidatorService {
         let response = self.state.handle_transaction_info_request(request).await?;
 
         Ok(tonic::Response::new(response.into()))
-    }
-
-    type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
-
-    async fn batch_info(
-        &self,
-        request: tonic::Request<BatchInfoRequest>,
-    ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
-        let request = request.into_inner();
-
-        let xstream = self.state.handle_batch_streaming(request).await?;
-
-        let response = xstream.map_err(tonic::Status::from);
-
-        Ok(tonic::Response::new(Box::pin(response)))
     }
 
     async fn checkpoint(

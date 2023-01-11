@@ -33,16 +33,17 @@ pub trait SecureIntent: Serialize + private::SealedIntent {}
 pub enum IntentScope {
     TransactionData = 0,
     TransactionEffects = 1,
-    AuthorityBatch = 2,
+    // deleted
+    // AuthorityBatch = 2,
     CheckpointSummary = 3,
     PersonalMessage = 4,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]
 pub struct Intent {
-    scope: IntentScope,
-    version: IntentVersion,
-    app_id: AppId,
+    pub scope: IntentScope,
+    pub version: IntentVersion,
+    pub app_id: AppId,
 }
 
 impl Intent {

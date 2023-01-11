@@ -55,11 +55,13 @@ pub async fn execution_process(
             return;
         };
 
+        let epoch_store = authority.epoch_store();
+
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
 
         // Process any tx that failed to commit.
-        if let Err(err) = authority.process_tx_recovery_log(None).await {
+        if let Err(err) = authority.process_tx_recovery_log(None, &epoch_store).await {
             tracing::error!("Error processing tx recovery log: {:?}", err);
         }
 
@@ -77,7 +79,9 @@ pub async fn execution_process(
             let mut attempts = 0;
             loop {
                 attempts += 1;
-                let res = authority.execute_certificate_internal(&certificate).await;
+                let res = authority
+                    .try_execute_immediately(&certificate, &epoch_store)
+                    .await;
                 if let Err(e) = res {
                     if attempts == EXECUTION_MAX_ATTEMPTS {
                         error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
@@ -94,7 +98,7 @@ pub async fn execution_process(
             }
 
             // Remove the certificate that finished execution from the pending_certificates table.
-            authority.certificate_executed(&digest).await;
+            authority.certificate_executed(&digest, &epoch_store);
 
             authority
                 .metrics

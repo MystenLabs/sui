@@ -45,16 +45,50 @@ impl CasualOrder {
 
     // effect is already removed from self.not_seen at this point
     fn insert(&mut self, effect: TransactionEffects) {
-        for dep in effect.dependencies.iter() {
-            if let Some(dep) = self.not_seen.remove(dep.as_ref()) {
-                self.insert(dep);
+        let initial_state = InsertState::new(effect);
+        let mut states = vec![initial_state];
+
+        while let Some(state) = states.last_mut() {
+            if let Some(new_state) = state.process(self) {
+                // This is essentially a 'recursive call' but using heap instead of stack to store state
+                states.push(new_state);
+            } else {
+                // Done with current state, remove it
+                states.pop().expect("Should contain an element");
             }
         }
-        self.output.push(effect)
     }
 
     fn into_list(self) -> Vec<TransactionEffects> {
         self.output
+    }
+}
+
+struct InsertState {
+    dependencies: Vec<TransactionDigest>,
+    effect: Option<TransactionEffects>,
+}
+
+impl InsertState {
+    pub fn new(effect: TransactionEffects) -> Self {
+        Self {
+            dependencies: effect.dependencies.clone(),
+            effect: Some(effect),
+        }
+    }
+
+    pub fn process(&mut self, casual_order: &mut CasualOrder) -> Option<InsertState> {
+        while let Some(dep) = self.dependencies.pop() {
+            if let Some(dep_effect) = casual_order.not_seen.remove(dep.as_ref()) {
+                return Some(InsertState::new(dep_effect));
+            }
+        }
+        let effect = self
+            .effect
+            .take()
+            .expect("Can't use InsertState after it is finished");
+        casual_order.output.push(effect);
+        None
     }
 }
 

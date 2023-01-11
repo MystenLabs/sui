@@ -11,15 +11,16 @@ use fastcrypto::{
     hash::Hash,
 };
 use futures::stream::FuturesOrdered;
-use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
+use primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::Registry;
 use std::time::Duration;
 use storage::NodeStorage;
 use store::rocks;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
+use tokio::sync::watch;
 use types::{
-    MockWorkerToPrimary, MockWorkerToWorker, TransactionsClient, WorkerBatchMessage,
-    WorkerToPrimaryServer, WorkerToWorkerClient,
+    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionsClient,
+    WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
 };
 
 // A test validator that rejects every transaction / batch
@@ -59,6 +60,8 @@ async fn reject_invalid_clients_transactions() {
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
 
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     // Spawn a `Worker` instance with a reject-all validator.
     Worker::spawn(
         name.clone(),
@@ -70,6 +73,7 @@ async fn reject_invalid_clients_transactions() {
         NilTxValidator,
         store,
         metrics,
+        &mut tx_shutdown,
     );
 
     // Wait till other services have been able to start up
@@ -143,6 +147,8 @@ async fn handle_clients_transactions() {
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
 
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     // Spawn a `Worker` instance.
     Worker::spawn(
         name.clone(),
@@ -154,6 +160,7 @@ async fn handle_clients_transactions() {
         TrivialTransactionValidator::default(),
         store,
         metrics,
+        &mut tx_shutdown,
     );
 
     // Spawn a network listener to receive our batch's digest.
@@ -251,8 +258,7 @@ async fn get_network_peers_from_admin_server() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -276,7 +282,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -287,6 +293,7 @@ async fn get_network_peers_from_admin_server() {
 
     let registry_1 = Registry::new();
     let metrics_1 = initialise_metrics(&registry_1);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let worker_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -304,6 +311,7 @@ async fn get_network_peers_from_admin_server() {
         TrivialTransactionValidator::default(),
         store.batch_store.clone(),
         metrics_1.clone(),
+        &mut tx_shutdown,
     );
 
     let primary_1_peer_id = Hex::encode(authority_1.network_keypair().copy().public().0.as_bytes());
@@ -365,8 +373,8 @@ async fn get_network_peers_from_admin_server() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
-    let (tx_reconfigure_2, _rx_reconfigure_2) = watch::channel(initial_committee);
+
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -390,7 +398,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_reconfigure_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -407,6 +415,8 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
         name_2,
@@ -418,6 +428,7 @@ async fn get_network_peers_from_admin_server() {
         TrivialTransactionValidator::default(),
         store.batch_store,
         metrics_2.clone(),
+        &mut tx_shutdown_worker,
     );
 
     // Wait for tasks to start. Sleeping longer here to ensure all primaries and workers

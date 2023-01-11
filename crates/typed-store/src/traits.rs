@@ -95,6 +95,14 @@ where
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
 }
 
+pub struct TableSummary {
+    pub num_keys: u64,
+    pub key_bytes_total: usize,
+    pub value_bytes_total: usize,
+    pub key_hist: hdrhistogram::Histogram<u64>,
+    pub value_hist: hdrhistogram::Histogram<u64>,
+}
+
 pub trait TypedStoreDebug {
     /// Dump a DB table with pagination
     fn dump_table(
@@ -112,4 +120,7 @@ pub trait TypedStoreDebug {
 
     /// Count the entries in the table
     fn count_table_keys(&self, table_name: String) -> eyre::Result<usize>;
+
+    /// Return table summary of the input table
+    fn table_summary(&self, table_name: String) -> eyre::Result<TableSummary>;
 }

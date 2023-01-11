@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
@@ -16,16 +18,18 @@ use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
+use sui_node::SuiNodeHandle;
 use sui_sdk::SuiClient;
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
+use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 
 const NUM_VALIDAOTR: usize = 4;
 
 pub struct FullNodeHandle {
-    pub sui_node: SuiNode,
+    pub sui_node: Arc<SuiNode>,
     pub sui_client: SuiClient,
     pub rpc_client: HttpClient,
     pub rpc_url: String,
@@ -107,6 +111,7 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
+    checkpoints_per_epoch: Option<u64>,
 }
 
 impl TestClusterBuilder {
@@ -116,6 +121,7 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
+            checkpoints_per_epoch: None,
         }
     }
 
@@ -136,6 +142,11 @@ impl TestClusterBuilder {
 
     pub fn enable_fullnode_events(mut self) -> Self {
         self.enable_fullnode_events = true;
+        self
+    }
+
+    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
+        self.checkpoints_per_epoch = Some(ckpts);
         self
     }
 
@@ -197,6 +208,10 @@ impl TestClusterBuilder {
             builder = builder.initial_accounts_config(genesis_config);
         }
 
+        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
+            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
+        }
+
         let mut swarm = builder.build();
         swarm.launch().await?;
 
@@ -255,4 +270,23 @@ pub async fn start_fullnode_from_config(
         ws_client,
         ws_url,
     })
+}
+
+pub async fn wait_for_nodes_transition_to_epoch<'a>(
+    nodes: impl Iterator<Item = &'a SuiNodeHandle>,
+    expected_epoch: EpochId,
+) {
+    let handles: Vec<_> = nodes
+        .map(|handle| {
+            handle.with_async(|node| async move {
+                let mut rx = node.subscribe_to_epoch_change().await;
+                let epoch = node.current_epoch();
+                if epoch != expected_epoch {
+                    let committee = rx.recv().await.unwrap();
+                    assert_eq!(committee.epoch, expected_epoch);
+                }
+            })
+        })
+        .collect();
+    join_all(handles).await;
 }

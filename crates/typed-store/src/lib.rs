@@ -9,7 +9,6 @@
 )]
 
 use eyre::Result;
-use rocksdb::MultiThreaded;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     cmp::Eq,
@@ -26,6 +25,7 @@ pub mod traits;
 pub use traits::Map;
 pub mod metrics;
 pub mod rocks;
+use crate::rocks::RocksDB;
 pub use metrics::DBMetrics;
 
 #[cfg(test)]
@@ -55,7 +55,7 @@ pub enum StoreCommand<Key, Value> {
 #[derive(Clone)]
 pub struct Store<K, V> {
     channel: Sender<StoreCommand<K, V>>,
-    pub rocksdb: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
+    pub rocksdb: Arc<RocksDB>,
 }
 
 impl<Key, Value> Store<Key, Value>

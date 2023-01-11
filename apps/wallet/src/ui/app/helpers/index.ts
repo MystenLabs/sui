@@ -3,3 +3,4 @@
 
 export { default as formatDate } from './formatDate';
 export { default as notEmpty } from './notEmptyCheck';
+export { parseAmount } from './parseAmount';

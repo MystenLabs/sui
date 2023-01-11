@@ -15,6 +15,8 @@ module sui::validator_set {
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::VecSet;
+    use sui::table_vec::{Self, TableVec};
+    use sui::event;
 
     friend sui::sui_system;
 
@@ -26,7 +28,7 @@ module sui::validator_set {
         /// at the beginning of the epoch.
         total_validator_stake: u64,
 
-        /// Total amount of stake from delegation, at the beginning of the epoch.
+        /// Total amount of stake from delegation, at the   beginning of the epoch.
         total_delegation_stake: u64,
 
         /// The amount of accumulated stake to reach a quorum among all active validators.
@@ -51,12 +53,20 @@ module sui::validator_set {
 
         /// Delegation switches requested during the current epoch, processed at epoch boundaries
         /// so that all the rewards with be added to the new delegation.
-        pending_delegation_switches: VecMap<ValidatorPair, vector<PendingWithdrawEntry>>,
+        pending_delegation_switches: VecMap<ValidatorPair, TableVec<PendingWithdrawEntry>>,
     }
 
     struct ValidatorPair has store, copy, drop {
         from: address,
         to: address,
+    }
+
+    /// Event emitted when a new delegation request is received.
+    struct DelegationRequestEvent has copy, drop {
+        validator_address: address,
+        delegator_address: address,
+        epoch: u64,
+        amount: u64,
     }
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
@@ -161,8 +171,18 @@ module sui::validator_set {
         ctx: &mut TxContext,
     ) {
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
+        let delegator_address = tx_context::sender(ctx);
+        let amount = balance::value(&delegated_stake);
         validator::request_add_delegation(validator, delegated_stake, locking_period, tx_context::sender(ctx), ctx);
         self.next_epoch_validators = derive_next_epoch_validators(self);
+        event::emit(
+            DelegationRequestEvent {
+                validator_address,
+                delegator_address,
+                epoch: tx_context::epoch(ctx),
+                amount,
+            }
+        );
     }
     
     /// Called by `sui_system`, to withdraw some share of a delegation from the validator. The share to withdraw 
@@ -176,7 +196,7 @@ module sui::validator_set {
         principal_withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let validator_address = staking_pool::validator_address(delegation);
+        let validator_address = staking_pool::validator_address(staked_sui);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
 
         assert!(option::is_some(&validator_index_opt), 0); 
@@ -203,7 +223,7 @@ module sui::validator_set {
         switch_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
-        let current_validator_address = staking_pool::validator_address(delegation);
+        let current_validator_address = staking_pool::validator_address(staked_sui);
 
         // check that the validators are not the same and they are both active.
         assert!(current_validator_address != new_validator_address, 0);
@@ -225,10 +245,10 @@ module sui::validator_set {
         let key = ValidatorPair { from: current_validator_address, to: new_validator_address };
         let entry = staking_pool::new_pending_withdraw_entry(delegator,principal_sui_amount, current_validator_pool_token);
         if (!vec_map::contains(&self.pending_delegation_switches, &key)) {
-            vec_map::insert(&mut self.pending_delegation_switches, key, vector::singleton(entry));
+            vec_map::insert(&mut self.pending_delegation_switches, key, table_vec::singleton(entry, ctx));
         } else {
             let entries = vec_map::get_mut(&mut self.pending_delegation_switches, &key);
-            vector::push_back(entries, entry);
+            table_vec::push_back(entries, entry);
         };
 
         self.next_epoch_validators = derive_next_epoch_validators(self);
@@ -239,7 +259,7 @@ module sui::validator_set {
     public(friend) fun request_set_gas_price(
         self: &mut ValidatorSet,
         new_gas_price: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
@@ -249,7 +269,7 @@ module sui::validator_set {
     public(friend) fun request_set_commission_rate(
         self: &mut ValidatorSet,
         new_commission_rate: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
@@ -661,6 +681,11 @@ module sui::validator_set {
             i = i + 1;
         };
         result
+    }
+
+    /// Return the active validators in `self`
+    public fun active_validators(self: &ValidatorSet): &vector<Validator> {
+        &self.active_validators
     }
 
     #[test_only]

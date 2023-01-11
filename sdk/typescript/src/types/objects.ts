@@ -1,152 +1,108 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner } from './common';
-import { TransactionDigest } from './common';
+import {
+  any,
+  array,
+  assign,
+  boolean,
+  Infer,
+  literal,
+  number,
+  object,
+  optional,
+  record,
+  string,
+  union,
+} from 'superstruct';
+import { ObjectId, ObjectOwner, TransactionDigest } from './common';
 
-export type SuiObjectRef = {
+export const ObjectType = union([literal('moveObject'), literal('package')]);
+export type ObjectType = Infer<typeof ObjectType>;
+
+export const SuiObjectRef = object({
   /** Base64 string representing the object digest */
-  digest: TransactionDigest;
+  digest: TransactionDigest,
   /** Hex code as string representing the object id */
-  objectId: string;
+  objectId: string(),
   /** Object version */
-  version: number;
-};
+  version: number(),
+});
+export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
-export type SuiObjectInfo = SuiObjectRef & {
-  type: string;
-  owner: ObjectOwner;
-  previousTransaction: TransactionDigest;
-};
-
-export type ObjectContentFields = Record<string, any>;
-
-export type MovePackageContent = Record<string, string>;
-
-export type SuiData = { dataType: ObjectType } & (
-  | SuiMoveObject
-  | SuiMovePackage
+export const SuiObjectInfo = assign(
+  SuiObjectRef,
+  object({
+    type: string(),
+    owner: ObjectOwner,
+    previousTransaction: TransactionDigest,
+  })
 );
+export type SuiObjectInfo = Infer<typeof SuiObjectInfo>;
 
-export type SuiMoveObject = {
+export const ObjectContentFields = record(string(), any());
+export type ObjectContentFields = Infer<typeof ObjectContentFields>;
+
+export const MovePackageContent = record(string(), string());
+export type MovePackageContent = Infer<typeof MovePackageContent>;
+
+export const SuiMoveObject = object({
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
-  type: string;
+  type: string(),
   /** Fields and values stored inside the Move object */
-  fields: ObjectContentFields;
-  has_public_transfer?: boolean;
-};
+  fields: ObjectContentFields,
+  has_public_transfer: optional(boolean()),
+});
+export type SuiMoveObject = Infer<typeof SuiMoveObject>;
 
-export const MIST_PER_SUI: BigInt = BigInt(1000000000);
-
-export type SuiMovePackage = {
+export const SuiMovePackage = object({
   /** A mapping from module name to disassembled Move bytecode */
-  disassembled: MovePackageContent;
-};
+  disassembled: MovePackageContent,
+});
+export type SuiMovePackage = Infer<typeof SuiMovePackage>;
 
-export type SuiMoveFunctionArgTypesResponse = SuiMoveFunctionArgType[];
+export const SuiData = union([
+  assign(SuiMoveObject, object({ dataType: literal('moveObject') })),
+  assign(SuiMovePackage, object({ dataType: literal('package') })),
+]);
+export type SuiData = Infer<typeof SuiData>;
 
-export type SuiMoveFunctionArgType = string | { Object: string };
+export const MIST_PER_SUI = BigInt(1000000000);
 
-export type SuiMoveFunctionArgTypes = SuiMoveFunctionArgType[];
-
-export type SuiMoveNormalizedModules = Record<string, SuiMoveNormalizedModule>;
-
-export type SuiMoveNormalizedModule = {
-  file_format_version: number;
-  address: string;
-  name: string;
-  friends: SuiMoveModuleId[];
-  structs: Record<string, SuiMoveNormalizedStruct>;
-  exposed_functions: Record<string, SuiMoveNormalizedFunction>;
-};
-
-export type SuiMoveModuleId = {
-  address: string;
-  name: string;
-};
-
-export type SuiMoveNormalizedStruct = {
-  abilities: SuiMoveAbilitySet;
-  type_parameters: SuiMoveStructTypeParameter[];
-  fields: SuiMoveNormalizedField[];
-};
-
-export type SuiMoveStructTypeParameter = {
-  constraints: SuiMoveAbilitySet;
-  is_phantom: boolean;
-};
-
-export type SuiMoveNormalizedField = {
-  name: string;
-  type_: SuiMoveNormalizedType;
-};
-
-export type SuiMoveNormalizedFunction = {
-  visibility: SuiMoveVisibility;
-  is_entry: boolean;
-  type_parameters: SuiMoveAbilitySet[];
-  parameters: SuiMoveNormalizedType[];
-  return_: SuiMoveNormalizedType[];
-};
-
-export type SuiMoveVisibility = 'Private' | 'Public' | 'Friend';
-
-export type SuiMoveTypeParameterIndex = number;
-
-export type SuiMoveAbilitySet = {
-  abilities: string[];
-};
-
-export type SuiMoveNormalizedType =
-  | string
-  | SuiMoveNormalizedTypeParameterType
-  | { Reference: SuiMoveNormalizedType }
-  | { MutableReference: SuiMoveNormalizedType }
-  | { Vector: SuiMoveNormalizedType }
-  | SuiMoveNormalizedStructType;
-
-export type SuiMoveNormalizedTypeParameterType = {
-  TypeParameter: SuiMoveTypeParameterIndex;
-};
-
-export type SuiMoveNormalizedStructType = {
-  Struct: {
-    address: string;
-    module: string;
-    name: string;
-    type_arguments: SuiMoveNormalizedType[];
-  };
-};
-
-export type SuiObject = {
+export const SuiObject = object({
   /** The meat of the object */
-  data: SuiData;
+  data: SuiData,
   /** The owner of the object */
-  owner: ObjectOwner;
+  owner: ObjectOwner,
   /** The digest of the transaction that created or last mutated this object */
-  previousTransaction: TransactionDigest;
+  previousTransaction: TransactionDigest,
   /**
    * The amount of SUI we would rebate if this object gets deleted.
    * This number is re-calculated each time the object is mutated based on
    * the present storage gas price.
    */
-  storageRebate: number;
-  reference: SuiObjectRef;
-};
+  storageRebate: number(),
+  reference: SuiObjectRef,
+});
+export type SuiObject = Infer<typeof SuiObject>;
 
-export type ObjectStatus = 'Exists' | 'NotExists' | 'Deleted';
-export type ObjectType = 'moveObject' | 'package';
+export const ObjectStatus = union([
+  literal('Exists'),
+  literal('NotExists'),
+  literal('Deleted'),
+]);
+export type ObjectStatus = Infer<typeof ObjectStatus>;
 
-export type GetOwnedObjectsResponse = SuiObjectInfo[];
+export const GetOwnedObjectsResponse = array(SuiObjectInfo);
+export type GetOwnedObjectsResponse = Infer<typeof GetOwnedObjectsResponse>;
 
-export type GetObjectDataResponse = {
-  status: ObjectStatus;
-  details: SuiObject | ObjectId | SuiObjectRef;
-};
+export const GetObjectDataResponse = object({
+  status: ObjectStatus,
+  details: union([SuiObject, ObjectId, SuiObjectRef]),
+});
+export type GetObjectDataResponse = Infer<typeof GetObjectDataResponse>;
 
 export type ObjectDigest = string;
-export type ObjectId = string;
-export type SequenceNumber = number;
 export type Order = 'ascending' | 'descending';
 
 /* -------------------------------------------------------------------------- */
@@ -286,41 +242,4 @@ export function getMovePackageContent(
     return undefined;
   }
   return (suiObject.data as SuiMovePackage).disassembled;
-}
-
-export function extractMutableReference(
-  normalizedType: SuiMoveNormalizedType
-): SuiMoveNormalizedType | undefined {
-  return typeof normalizedType === 'object' &&
-    'MutableReference' in normalizedType
-    ? normalizedType.MutableReference
-    : undefined;
-}
-
-export function extractReference(
-  normalizedType: SuiMoveNormalizedType
-): SuiMoveNormalizedType | undefined {
-  return typeof normalizedType === 'object' && 'Reference' in normalizedType
-    ? normalizedType.Reference
-    : undefined;
-}
-
-export function extractStructTag(
-  normalizedType: SuiMoveNormalizedType
-): SuiMoveNormalizedStructType | undefined {
-  if (typeof normalizedType === 'object' && 'Struct' in normalizedType) {
-    return normalizedType;
-  }
-
-  const ref = extractReference(normalizedType);
-  const mutRef = extractMutableReference(normalizedType);
-
-  if (typeof ref === 'object' && 'Struct' in ref) {
-    return ref;
-  }
-
-  if (typeof mutRef === 'object' && 'Struct' in mutRef) {
-    return mutRef;
-  }
-  return undefined;
 }

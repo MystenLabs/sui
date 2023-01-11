@@ -16,9 +16,7 @@ use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
-use rand::Rng;
 use tokio::sync::OnceCell;
-use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
@@ -29,11 +27,12 @@ use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::messages::VerifiedTransaction;
 use tokio::sync::Barrier;
 use tokio::time;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use super::BenchmarkStats;
 use super::Interval;
@@ -51,8 +50,6 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
-const RECONFIG_QUIESCENCE_TIME_SEC: u64 = 10;
-
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
         BenchMetrics {
@@ -66,7 +63,7 @@ impl BenchMetrics {
             num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
-                &["workload", "error_type"],
+                &["workload"],
                 registry,
             )
             .unwrap(),
@@ -127,7 +124,7 @@ enum NextOp {
 async fn print_and_start_benchmark() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move {
-        eprintln!("Starting benchmark!");
+        info!("Starting benchmark!");
         Instant::now()
     })
     .await
@@ -228,6 +225,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         show_progress: bool,
         run_duration: Interval,
     ) -> Result<BenchmarkStats, anyhow::Error> {
+        info!("Running BenchDriver");
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
@@ -241,7 +239,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
-        eprintln!("Setting up workers...");
+        info!("Setting up workers...");
         let progress = Arc::new(match run_duration {
             Interval::Count(count) => ProgressBar::new(count)
                 .with_prefix("Running benchmark(count):")
@@ -277,7 +275,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted = 0;
                 let mut latency_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
+                    hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
                 let mut request_interval =
                     time::interval(Duration::from_micros(request_delay_micros));
                 request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
@@ -327,7 +325,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(proxy.clone_committee());
-                                let proxy_clone = proxy.clone();
                                 let start = Arc::new(Instant::now());
                                 let res = proxy
                                     .execute_transaction(b.0.clone().into())
@@ -341,7 +338,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                                 metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
-                                                cert.auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                                let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
+                                                auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                                 if let Some(sig_info) = effects.quorum_sig() {
                                                     sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
                                                 }
@@ -352,16 +350,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 ))
                                             }
                                             Err(err) => {
-                                                if err.indicates_epoch_change() {
-                                                    let mut rng = rand::rngs::OsRng;
-                                                    let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
-                                                    sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
-
-                                                    proxy_clone.reconfig().await;
-                                                } else {
-                                                    error!("{}", err);
-                                                    metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string(), err.as_ref()]).inc();
-                                                }
+                                                error!("{}", err);
+                                                metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                                 NextOp::Retry(b)
                                             }
                                         }
@@ -382,7 +372,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                 let tx = payload.make_transaction();
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
-                                let proxy_clone = proxy.clone();
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(proxy.clone_committee());
                                 let res = proxy
@@ -397,7 +386,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
                                             metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
-                                            cert.auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                            let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
+                                            auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
@@ -405,16 +395,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             )))
                                         }
                                         Err(err) => {
-                                            if err.indicates_epoch_change() {
-                                                let mut rng = rand::rngs::OsRng;
-                                                let jitter = rng.gen_range(0..RECONFIG_QUIESCENCE_TIME_SEC);
-                                                sleep(Duration::from_secs(RECONFIG_QUIESCENCE_TIME_SEC + jitter)).await;
-
-                                                proxy_clone.reconfig().await;
-                                            } else {
-                                                error!("Retry due to error: {}", err);
-                                                metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string(), err.as_ref()]).inc();
-                                            }
+                                            error!("Retry due to error: {}", err);
+                                            metrics_cloned.num_error.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                                             NextOp::Retry(Box::new((tx, payload)))
                                         }
                                     }
@@ -435,7 +417,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                     num_success += 1;
                                     num_in_flight -= 1;
                                     free_pool.push(new_payload);
-                                    latency_histogram.record(latency.as_millis().try_into().unwrap()).unwrap();
+                                    latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
                                     BenchDriver::update_progress(*start_time, run_duration, progress.clone());
                                     if progress.is_finished() {
                                         break;
@@ -479,7 +461,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 num_error: 0,
                 num_success: 0,
                 latency_ms: HistogramWrapper {
-                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap(),
+                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap(),
                 },
             };
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
@@ -502,7 +484,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut num_success: u64 = 0;
                 let mut num_error: u64 = 0;
                 let mut latency_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(100000, 2).unwrap();
+                    hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;

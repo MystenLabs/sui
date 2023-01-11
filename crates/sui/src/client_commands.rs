@@ -10,6 +10,7 @@ use std::{
     time::Instant,
 };
 
+use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
@@ -20,23 +21,24 @@ use fastcrypto::{
 };
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
+use prettytable::Table;
+use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::json;
+use sui_adapter::execution_mode;
 use sui_framework::build_move_package;
-use sui_source_validation::BytecodeSourceVerifier;
-use tokio::sync::RwLock;
-use tracing::{info, warn};
-
-use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
+use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::error::SuiError;
 use sui_types::intent::Intent;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -49,6 +51,8 @@ use sui_types::{
     crypto::{Signature, SignatureScheme},
     intent::IntentMessage,
 };
+use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 use sui_sdk::SuiClient;
 
@@ -99,6 +103,10 @@ pub enum SuiClientCommands {
         /// Object ID of the object to fetch
         #[clap(name = "object_id")]
         id: ObjectID,
+
+        /// Return the bcs serialized version of the object
+        #[clap(long)]
+        bcs: bool,
     },
 
     /// Publish Move modules
@@ -130,6 +138,36 @@ pub enum SuiClientCommands {
         /// dependency found on-chain.
         #[clap(long)]
         verify_dependencies: bool,
+    },
+
+    /// Verify local Move packages against on-chain packages, and optionally their dependencies.
+    #[clap(name = "verify-source")]
+    VerifySource {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+
+        /// Verify on-chain dependencies.
+        #[clap(long)]
+        verify_deps: bool,
+
+        /// Don't verify source (only valid if --verify-deps is enabled).
+        #[clap(long)]
+        skip_source: bool,
+
+        /// If specified, override the addresses for the package's own modules with this address.
+        /// Only works for unpublished modules (whose addresses are currently 0x0).
+        #[clap(long)]
+        address_override: Option<ObjectID>,
     },
 
     /// Call Move function
@@ -301,6 +339,20 @@ pub enum SuiClientCommands {
         address: Option<SuiAddress>,
     },
 
+    /// Query a dynamic field by its address.
+    #[clap(name = "dynamic-field")]
+    DynamicFieldQuery {
+        ///The ID of the parent object
+        #[clap(name = "object_id")]
+        id: ObjectID,
+        /// Optional paging cursor
+        #[clap(long)]
+        cursor: Option<ObjectID>,
+        /// Maximum item returned per page
+        #[clap(long, default_value = "50")]
+        limit: usize,
+    },
+
     /// Split a coin object into multiple coins.
     #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
@@ -421,12 +473,25 @@ impl SuiClientCommands {
                     },
                 )?;
 
+                if !compiled_package.is_framework() {
+                    if let Some(already_published) = compiled_package.published_root_module() {
+                        return Err(SuiError::ModulePublishFailure {
+                            error: format!(
+                                "Modules must all have 0x0 as their addresses. \
+                                 Violated by module {:?}",
+                                already_published.self_id(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
+
                 let compiled_modules = compiled_package.get_package_bytes();
 
                 let client = context.get_client().await?;
                 if verify_dependencies {
                     BytecodeSourceVerifier::new(client.read_api(), false)
-                        .verify_deployed_dependencies(&compiled_package.package)
+                        .verify_package_deps(&compiled_package.package)
                         .await?;
                     println!("Successfully verified dependencies on-chain against source.");
                 }
@@ -449,12 +514,22 @@ impl SuiClientCommands {
                 SuiClientCommandResult::Publish(response)
             }
 
-            SuiClientCommands::Object { id } => {
+            SuiClientCommands::Object { id, bcs } => {
                 // Fetch the object ref
                 let client = context.get_client().await?;
                 let object_read = client.read_api().get_parsed_object(id).await?;
-                SuiClientCommandResult::Object(object_read)
+                SuiClientCommandResult::Object(object_read, bcs)
             }
+
+            SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
+                let client = context.get_client().await?;
+                let df_read = client
+                    .read_api()
+                    .get_dynamic_fields(id, cursor, Some(limit))
+                    .await?;
+                SuiClientCommandResult::DynamicFieldQuery(df_read)
+            }
+
             SuiClientCommands::Call {
                 package,
                 module,
@@ -847,13 +922,10 @@ impl SuiClientCommands {
                     .await?;
                 let data1 = data.clone();
                 let intent_msg = IntentMessage::new(Intent::default(), data);
-                info!(
-                    "Transaction bytes : {}",
-                    Base64::encode(&bcs::to_bytes(&data1).unwrap())
-                );
-                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
-                    bcs::to_bytes(&intent_msg)?.as_slice(),
-                ))
+                SuiClientCommandResult::SerializeTransferSui(
+                    Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
+                    Base64::encode(&bcs::to_bytes(&data1).unwrap()),
+                )
             }
 
             SuiClientCommands::ExecuteSignedTx {
@@ -899,6 +971,44 @@ impl SuiClientCommands {
                 context.config.envs.clone(),
                 context.config.active_env.clone(),
             ),
+            SuiClientCommands::VerifySource {
+                package_path,
+                build_config,
+                verify_deps,
+                skip_source,
+                address_override,
+            } => {
+                if skip_source && !verify_deps {
+                    return Err(anyhow!(
+                        "Source skipped and not verifying deps: Nothing to verify."
+                    ));
+                }
+
+                let compiled_package = build_move_package(
+                    &package_path,
+                    BuildConfig {
+                        config: build_config,
+                        run_bytecode_verifier: true,
+                        print_diags_to_stderr: true,
+                    },
+                )?;
+
+                let client = context.get_client().await?;
+
+                BytecodeSourceVerifier::new(client.read_api(), false)
+                    .verify_package(
+                        &compiled_package.package,
+                        verify_deps,
+                        match (skip_source, address_override) {
+                            (true, _) => SourceMode::Skip,
+                            (false, None) => SourceMode::Verify,
+                            (false, Some(addr)) => SourceMode::VerifyAt(addr.into()),
+                        },
+                    )
+                    .await?;
+
+                SuiClientCommandResult::VerifySource
+            }
         });
         ret
     }
@@ -1099,8 +1209,18 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, "{}", parsed_resp)?;
                 }
             }
-            SuiClientCommandResult::Object(object_read) => {
-                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
+            SuiClientCommandResult::Object(object_read, bcs) => {
+                let object = if *bcs {
+                    match object_read.object() {
+                        Ok(v) => {
+                            let bcs_bytes = bcs::to_bytes(v).unwrap();
+                            format!("{:?}\nNumber of bytes: {}", bcs_bytes, bcs_bytes.len())
+                        }
+                        Err(err) => format!("{err}").red().to_string(),
+                    }
+                } else {
+                    unwrap_err_to_string(|| Ok(object_read.object()?))
+                };
                 writeln!(writer, "{}", object)?;
             }
             SuiClientCommandResult::Call(cert, effects) => {
@@ -1153,6 +1273,35 @@ impl Display for SuiClientCommandResult {
                     )?
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
+            }
+            SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
+                let mut table: Table = table!([
+                    "Name",
+                    "Type",
+                    "Object Type",
+                    "Object Id",
+                    "Version",
+                    "Digest"
+                ]);
+                for df_ref in df_refs.data.iter() {
+                    let df_type = match df_ref.type_ {
+                        DynamicFieldType::DynamicField => "DynamicField",
+                        DynamicFieldType::DynamicObject => "DynamicObject",
+                    };
+                    table.add_row(row![
+                        df_ref.name,
+                        df_type,
+                        df_ref.object_type,
+                        df_ref.object_id,
+                        df_ref.version.value(),
+                        Base64::encode(df_ref.digest)
+                    ]);
+                }
+                write!(writer, "{table}")?;
+                writeln!(writer, "Showing {} results.", df_refs.data.len())?;
+                if let Some(cursor) = df_refs.next_cursor {
+                    writeln!(writer, "Next cursor: {cursor}")?;
+                }
             }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -1221,8 +1370,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, "{}", parsed_resp)?;
                 }
             }
-            SuiClientCommandResult::SerializeTransferSui(res) => {
-                write!(writer, "Data to sign: {}", res)?;
+            SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
+                writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
+                writeln!(writer, "Raw transaction to execute: {}", data_to_execute)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1238,6 +1388,9 @@ impl Display for SuiClientCommandResult {
                     }
                     writeln!(writer)?;
                 }
+            }
+            SuiClientCommandResult::VerifySource => {
+                writeln!(writer, "Source verification succeeded!")?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -1260,7 +1413,7 @@ pub async fn call_move(
     let client = context.get_client().await?;
     let data = client
         .transaction_builder()
-        .move_call(
+        .move_call::<execution_mode::Normal>(
             sender,
             package,
             module,
@@ -1312,9 +1465,13 @@ fn write_cert_and_effects(
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
-            SuiClientCommandResult::Object(object_read) => {
+            SuiClientCommandResult::Object(object_read, bcs) => {
                 let object = object_read.object()?;
-                Ok(serde_json::to_string_pretty(&object)?)
+                if *bcs {
+                    Ok(serde_json::to_string_pretty(&bcs::to_bytes(&object)?)?)
+                } else {
+                    Ok(serde_json::to_string_pretty(&object)?)
+                }
             }
             _ => Ok(serde_json::to_string_pretty(self)?),
         });
@@ -1349,7 +1506,8 @@ impl SuiClientCommandResult {
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
-    Object(GetObjectDataResponse),
+    VerifySource,
+    Object(GetObjectDataResponse, bool),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -1363,6 +1521,7 @@ pub enum SuiClientCommandResult {
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
+    DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
@@ -1373,7 +1532,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
-    SerializeTransferSui(String),
+    SerializeTransferSui(String, String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),
 }

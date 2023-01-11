@@ -4,6 +4,7 @@
 use fastcrypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
 use sui_config::genesis::Genesis;
+use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
@@ -108,6 +109,7 @@ async fn test_open_manager() {
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -148,6 +150,7 @@ async fn test_open_manager() {
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -184,6 +187,7 @@ async fn test_open_manager() {
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),
@@ -218,6 +222,7 @@ async fn test_batch_manager_happy_path() {
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -301,6 +306,7 @@ async fn test_batch_manager_out_of_order() {
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -378,6 +384,7 @@ async fn test_batch_manager_drop_out_of_order() {
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),
@@ -756,6 +763,7 @@ async fn test_safe_batch_stream() {
             None,
             &committee,
             &Genesis::get_default_genesis(),
+            &AuthorityStorePruningConfig::default(),
         )
         .await
         .unwrap(),

@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { trimStdLibPrefix, alttextgen } from '../../../utils/stringUtils';
+import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import DisplayBox from '../../displaybox/DisplayBox';
-import Longtext from '../../longtext/Longtext';
 import { type DataType } from '../OwnedObjectConstants';
 
 import styles from '../styles/OwnedObjects.module.css';
+
+import { ObjectLink } from '~/ui/InternalLink';
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
     return (
@@ -21,11 +22,7 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                             <div className={styles.name}>{entryObj.name}</div>
                         )}
                         <div>
-                            <Longtext
-                                text={entryObj.id}
-                                category="object"
-                                alttext={alttextgen(entryObj.id)}
-                            />
+                            <ObjectLink objectId={entryObj.id} />
                         </div>
                         <div className={styles.typevalue}>
                             {trimStdLibPrefix(entryObj.Type)}

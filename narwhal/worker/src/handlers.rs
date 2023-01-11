@@ -4,26 +4,20 @@
 use anemo::types::response::StatusCode;
 use anyhow::Result;
 use async_trait::async_trait;
-use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
+use config::{SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 
 use rand::seq::SliceRandom;
-use std::{
-    collections::{BTreeMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashSet, time::Duration};
 use store::Store;
-use tap::TapOptional;
-use tokio::{sync::watch, time::sleep};
+use tokio::time::sleep;
 use tracing::{debug, error, info, trace, warn};
 use types::{
-    metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, ReconfigureNotification,
-    RequestBatchRequest, RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerClient,
+    metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
+    RequestBatchResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -101,8 +95,6 @@ pub struct PrimaryReceiverHandler<V> {
     pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batch_retry_nodes: usize,
-    /// Send reconfiguration update to other tasks.
-    pub tx_reconfigure: watch::Sender<ReconfigureNotification>,
     // Validate incoming batches
     pub validator: V,
 }
@@ -111,27 +103,13 @@ pub struct PrimaryReceiverHandler<V> {
 impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
     async fn reconfigure(
         &self,
-        request: anemo::Request<WorkerReconfigureMessage>,
+        _request: anemo::Request<WorkerReconfigureMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body().message;
-        match &message {
-            ReconfigureNotification::NewEpoch(new_committee) => {
-                self.committee.swap(Arc::new(new_committee.clone()));
-                self.update_worker_cache(new_committee);
-                tracing::debug!("Committee updated to {}", self.committee);
-            }
-            ReconfigureNotification::UpdateCommittee(new_committee) => {
-                self.committee.swap(Arc::new(new_committee.clone()));
-                self.update_worker_cache(new_committee);
-                tracing::debug!("Committee updated to {}", self.committee);
-            }
-            ReconfigureNotification::Shutdown => (), // no-op
-        };
-
+        // TODO: remove the endpoint on follow up PR
         // Notify all other tasks.
-        self.tx_reconfigure
-            .send(message)
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        //self.tx_shutdown
+        //    .send()
+        //    .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
 
         Ok(anemo::Response::new(()))
     }
@@ -299,33 +277,5 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?;
 
         Ok(anemo::Response::new(()))
-    }
-}
-
-impl<V: TransactionValidator> PrimaryReceiverHandler<V> {
-    fn update_worker_cache(&self, new_committee: &Committee) {
-        self.worker_cache.swap(Arc::new(WorkerCache {
-            epoch: new_committee.epoch,
-            workers: new_committee
-                .keys()
-                .iter()
-                .map(|key| {
-                    (
-                        (*key).clone(),
-                        self.worker_cache
-                            .load()
-                            .workers
-                            .get(key)
-                            .tap_none(|| {
-                                warn!(
-                                    "Worker cache does not have a key for the new committee member"
-                                )
-                            })
-                            .unwrap_or(&WorkerIndex(BTreeMap::new()))
-                            .clone(),
-                    )
-                })
-                .collect(),
-        }));
     }
 }

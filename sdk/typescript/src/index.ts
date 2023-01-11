@@ -18,6 +18,7 @@ export * from './serialization/hex';
 export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
 export * from './signers/txn-data-serializers/txn-data-serializer';
 export * from './signers/txn-data-serializers/local-txn-data-serializer';
+export * from './signers/txn-data-serializers/type-tag-serializer';
 
 export * from './signers/signer';
 export * from './signers/raw-signer';
@@ -25,4 +26,5 @@ export * from './signers/signer-with-provider';
 
 export * from './types';
 export * from './utils/api-endpoints';
-export * from './types/index.guard';
+
+export { is, assert } from 'superstruct';

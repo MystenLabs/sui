@@ -8,26 +8,36 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::future::join_all;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
 use sui_adapter::adapter::resolve_and_type_check;
-use sui_adapter::execution_mode;
+use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiData, SuiTypeTag};
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
+use sui_types::coin::{Coin, LockedCoin};
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, InputObjectKind, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
+
+use sui_types::governance::{
+    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
+    SWITCH_DELEGATION_FUN_NAME, WITHDRAW_DELEGATION_FUN_NAME,
+};
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
-use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::{
+    coin, fp_ensure, parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 
 #[async_trait]
 pub trait DataReader {
@@ -213,7 +223,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn move_call(
+    pub async fn move_call<Mode: ExecutionMode>(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
@@ -224,9 +234,16 @@ impl TransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let single_move_call = self
-            .single_move_call(package_object_id, module, function, type_args, call_args)
-            .await?;
+        let single_move_call = SingleTransactionKind::Call(
+            self.single_move_call::<Mode>(
+                package_object_id,
+                module,
+                function,
+                type_args,
+                call_args,
+            )
+            .await?,
+        );
         let input_objects = single_move_call
             .input_objects()?
             .iter()
@@ -248,14 +265,14 @@ impl TransactionBuilder {
         ))
     }
 
-    async fn single_move_call(
+    pub async fn single_move_call<Mode: ExecutionMode>(
         &self,
         package_object_id: ObjectID,
         module: &str,
         function: &str,
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
-    ) -> anyhow::Result<SingleTransactionKind> {
+    ) -> anyhow::Result<MoveCall> {
         let package_ref = self.get_object_ref(package_object_id).await?;
         let module = Identifier::from_str(module)?;
         let function = Identifier::from_str(function)?;
@@ -266,7 +283,7 @@ impl TransactionBuilder {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args(
+            .resolve_and_checks_json_args::<Mode>(
                 package_object_id,
                 &module,
                 &function,
@@ -275,13 +292,13 @@ impl TransactionBuilder {
             )
             .await?;
 
-        Ok(SingleTransactionKind::Call(MoveCall {
+        Ok(MoveCall {
             package: package_ref,
             module,
             function,
             type_arguments: type_args,
             arguments: call_args,
-        }))
+        })
     }
 
     async fn get_object_arg(
@@ -307,7 +324,7 @@ impl TransactionBuilder {
         })
     }
 
-    async fn resolve_and_checks_json_args(
+    async fn resolve_and_checks_json_args<Mode: ExecutionMode>(
         &self,
         package_id: ObjectID,
         module: &Identifier,
@@ -329,6 +346,7 @@ impl TransactionBuilder {
             function.clone(),
             type_args,
             json_args,
+            Mode::allow_arbitrary_function_calls(),
         )?;
         let mut args = Vec::new();
         let mut objects = BTreeMap::new();
@@ -350,7 +368,7 @@ impl TransactionBuilder {
         let compiled_module = package.deserialize_module(module)?;
 
         // TODO set the Mode from outside?
-        resolve_and_type_check::<execution_mode::Normal>(
+        resolve_and_type_check::<Mode>(
             &objects,
             &compiled_module,
             function,
@@ -475,7 +493,7 @@ impl TransactionBuilder {
         ))
     }
 
-    pub async fn batch_transaction(
+    pub async fn batch_transaction<Mode: ExecutionMode>(
         &self,
         signer: SuiAddress,
         single_transaction_params: Vec<RPCTransactionRequestParams>,
@@ -497,14 +515,16 @@ impl TransactionBuilder {
                         .await?
                 }
                 RPCTransactionRequestParams::MoveCallRequestParams(param) => {
-                    self.single_move_call(
-                        param.package_object_id,
-                        &param.module,
-                        &param.function,
-                        param.type_arguments,
-                        param.arguments,
+                    SingleTransactionKind::Call(
+                        self.single_move_call::<Mode>(
+                            param.package_object_id,
+                            &param.module,
+                            &param.function,
+                            param.type_arguments,
+                            param.arguments,
+                        )
+                        .await?,
                     )
-                    .await?
                 }
             };
             tx_kinds.push(single_tx);
@@ -533,14 +553,158 @@ impl TransactionBuilder {
         ))
     }
 
+    pub async fn request_add_delegation(
+        &self,
+        signer: SuiAddress,
+        mut coins: Vec<ObjectID>,
+        amount: Option<u64>,
+        validator: SuiAddress,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        let gas = self
+            .select_gas(signer, gas, gas_budget, coins.clone())
+            .await?;
+
+        let mut obj_vec = vec![];
+        let coin = coins
+            .pop()
+            .ok_or_else(|| anyhow!("Coins input should contain at lease one coin object."))?;
+        let (oref, coin_type) = self.get_object_ref_and_type(coin).await?;
+        obj_vec.push(ObjectArg::ImmOrOwnedObject(oref));
+
+        let ObjectType::Struct(type_) = &coin_type else{
+            return Err(anyhow!("Provided object [{coin}] is not a move object."))
+        };
+        ensure!(
+            Coin::is_coin(type_) || LockedCoin::is_locked_coin(type_),
+            "Expecting either Coin<T> or LockedCoin<T> as input coin objects. Received [{type_}]"
+        );
+
+        for coin in coins {
+            let (oref, type_) = self.get_object_ref_and_type(coin).await?;
+            ensure!(
+                type_ == coin_type,
+                "All coins should be the same type, expecting {coin_type}, got {type_}."
+            );
+            obj_vec.push(ObjectArg::ImmOrOwnedObject(oref))
+        }
+
+        let function = if Coin::is_coin(type_) {
+            ADD_DELEGATION_MUL_COIN_FUN_NAME
+        } else {
+            ADD_DELEGATION_LOCKED_COIN_FUN_NAME
+        }
+        .to_owned();
+
+        Ok(TransactionData::new_move_call(
+            signer,
+            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            function,
+            vec![],
+            gas,
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                }),
+                CallArg::ObjVec(obj_vec),
+                CallArg::Pure(bcs::to_bytes(&amount)?),
+                CallArg::Pure(bcs::to_bytes(&validator)?),
+            ],
+            gas_budget,
+        ))
+    }
+
+    pub async fn request_withdraw_delegation(
+        &self,
+        signer: SuiAddress,
+        delegation: ObjectID,
+        staked_sui: ObjectID,
+        principal_withdraw_amount: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        let delegation = self.get_object_ref(delegation).await?;
+        let staked_sui = self.get_object_ref(staked_sui).await?;
+        let gas = self.select_gas(signer, gas, gas_budget, vec![]).await?;
+
+        Ok(TransactionData::new_move_call(
+            signer,
+            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            WITHDRAW_DELEGATION_FUN_NAME.to_owned(),
+            vec![],
+            gas,
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                }),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
+                CallArg::Pure(bcs::to_bytes(&principal_withdraw_amount)?),
+            ],
+            gas_budget,
+        ))
+    }
+
+    pub async fn request_switch_delegation(
+        &self,
+        signer: SuiAddress,
+        delegation: ObjectID,
+        staked_sui: ObjectID,
+        new_validator_address: SuiAddress,
+        switch_pool_token_amount: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        let delegation = self.get_object_ref(delegation).await?;
+        let staked_sui = self.get_object_ref(staked_sui).await?;
+        let gas = self.select_gas(signer, gas, gas_budget, vec![]).await?;
+
+        Ok(TransactionData::new_move_call(
+            signer,
+            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            SWITCH_DELEGATION_FUN_NAME.to_owned(),
+            vec![],
+            gas,
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                }),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
+                CallArg::Pure(bcs::to_bytes(&new_validator_address)?),
+                CallArg::Pure(bcs::to_bytes(&switch_pool_token_amount)?),
+            ],
+            gas_budget,
+        ))
+    }
+
     // TODO: we should add retrial to reduce the transaction building error rate
     async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
-        Ok(self
-            .0
-            .get_object(object_id)
-            .await?
-            .object()?
-            .reference
-            .to_object_ref())
+        self.get_object_ref_and_type(object_id)
+            .await
+            .map(|(oref, _)| oref)
+    }
+
+    async fn get_object_ref_and_type(
+        &self,
+        object_id: ObjectID,
+    ) -> anyhow::Result<(ObjectRef, ObjectType)> {
+        let object = self.0.get_object(object_id).await?.into_object()?;
+
+        let object_type = object
+            .data
+            .type_()
+            .map(parse_sui_struct_tag)
+            .transpose()?
+            .map_or(ObjectType::Package, ObjectType::Struct);
+
+        Ok((object.reference.to_object_ref(), object_type))
     }
 }

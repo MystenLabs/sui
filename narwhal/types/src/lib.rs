@@ -22,3 +22,6 @@ pub use worker::*;
 mod serde;
 
 pub mod metered_channel;
+
+mod pre_subscribed_broadcast;
+pub use pre_subscribed_broadcast::*;

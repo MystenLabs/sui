@@ -151,6 +151,10 @@ impl PeerHeights {
             .and_then(|digest| self.unprocessed_checkpoints.get(digest))
     }
 
+    pub fn highest_known_checkpoint_sequence_number(&self) -> Option<CheckpointSequenceNumber> {
+        self.heights.values().max().and_then(Clone::clone)
+    }
+
     pub fn update_peer_height(&mut self, peer_id: PeerId, checkpoint: Option<Checkpoint>) {
         use std::collections::hash_map::Entry;
 
@@ -292,6 +296,7 @@ where
     }
 
     fn handle_message(&mut self, message: StateSyncMessage) {
+        debug!("Received message: {:?}", message);
         match message {
             StateSyncMessage::StartSyncJob => self.maybe_start_checkpoint_summary_sync_task(),
             StateSyncMessage::VerifiedCheckpoint(checkpoint) => {
@@ -371,6 +376,12 @@ where
 
             self.spawn_notify_peers_of_checkpoint(checkpoint);
         } else {
+            // Ensure that if consensus sends us a checkpoint that we expect to be the next one,
+            // that it isn't on a fork
+            if checkpoint.sequence_number() == next_sequence_number {
+                assert_eq!(checkpoint.previous_digest(), previous_digest);
+            }
+
             // Otherwise stick it with the other unprocessed checkpoints and we can try to sync the missing
             // ones
             self.peer_heights
@@ -486,6 +497,15 @@ where
             > highest_synced_checkpoint
                 .as_ref()
                 .map(|x| x.sequence_number())
+            // skip if we aren't connected to any peers that can help
+            && self
+                .peer_heights
+                .read()
+                .unwrap()
+                .highest_known_checkpoint_sequence_number()
+                > highest_synced_checkpoint
+                    .as_ref()
+                    .map(|x| x.sequence_number())
         {
             let task = sync_checkpoint_contents(
                 self.network.clone(),
@@ -495,6 +515,7 @@ where
                 self.checkpoint_event_sender.clone(),
                 self.metrics.clone(),
                 self.config.transaction_download_concurrency(),
+                self.config.checkpoint_content_download_concurrency(),
                 // The if condition should ensure that this is Some
                 highest_verified_checkpoint.unwrap(),
             );
@@ -718,7 +739,7 @@ where
         // Verify the checkpoint
         let checkpoint = {
             let checkpoint = maybe_checkpoint
-                .ok_or_else(|| anyhow::anyhow!("no peers where able to help sync"))?;
+                .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
 
             if checkpoint.sequence_number() != next
                 || current.as_ref().map(|x| x.digest()) != checkpoint.previous_digest()
@@ -781,34 +802,54 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_event_sender: broadcast::Sender<VerifiedCheckpoint>,
     metrics: Metrics,
     transaction_download_concurrency: usize,
+    checkpoint_content_download_concurrency: usize,
     target_checkpoint: VerifiedCheckpoint,
 ) where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
 {
-    let mut highest_synced = None;
-
-    let start = store
+    let mut highest_synced = store
         .get_highest_synced_checkpoint()
-        .expect("store operation should not fail")
+        .expect("store operation should not fail");
+
+    let start = highest_synced
+        .as_ref()
         .map(|x| x.sequence_number().saturating_add(1))
         .unwrap_or(0);
-    for checkpoint in (start..=target_checkpoint.sequence_number()).map(|next| {
-        store
-            .get_checkpoint_by_sequence_number(next)
-            .expect("store operation should not fail")
-            .expect("BUG: store should have all checkpoints older than highest_verified_checkpoint")
-    }) {
-        match sync_one_checkpoint_contents(
-            network.clone(),
-            &store,
-            peer_heights.clone(),
-            transaction_download_concurrency,
-            checkpoint,
-        )
-        .await
-        {
-            Ok(checkpoint) => {
+
+    let mut checkpoint_contents_stream = (start..=target_checkpoint.sequence_number())
+        .map(|next| {
+            store
+                .get_checkpoint_by_sequence_number(next)
+                .expect("store operation should not fail")
+                .expect(
+                    "BUG: store should have all checkpoints older than highest_verified_checkpoint",
+                )
+        })
+        .map(|checkpoint| {
+            sync_one_checkpoint_contents(
+                network.clone(),
+                &store,
+                peer_heights.clone(),
+                transaction_download_concurrency,
+                checkpoint,
+            )
+        })
+        .pipe(futures::stream::iter)
+        .buffered(checkpoint_content_download_concurrency);
+
+    while let Some(maybe_checkpoint) = checkpoint_contents_stream.next().await {
+        match maybe_checkpoint {
+            Ok((checkpoint, num_txns)) => {
+                if let Some(highest_synced) = &highest_synced {
+                    // if this fails, there is a bug in checkpoint construction (or the chain is
+                    // corrupted)
+                    assert_eq!(
+                        highest_synced.summary.network_total_transactions + num_txns,
+                        checkpoint.summary.network_total_transactions
+                    );
+                }
+
                 store
                     .update_highest_synced_checkpoint(&checkpoint)
                     .expect("store operation should not fail");
@@ -839,7 +880,7 @@ async fn sync_one_checkpoint_contents<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     transaction_download_concurrency: usize,
     checkpoint: VerifiedCheckpoint,
-) -> Result<VerifiedCheckpoint>
+) -> Result<(VerifiedCheckpoint, u64)>
 where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -863,6 +904,8 @@ where
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
 
+    let num_txns = contents.size() as u64;
+
     // Sync transactions and effects
     let mut stream = contents
         .into_inner()
@@ -875,7 +918,7 @@ where
         result?;
     }
 
-    Ok(checkpoint)
+    Ok((checkpoint, num_txns))
 }
 
 async fn get_checkpoint_contents<S>(
@@ -955,7 +998,7 @@ where
                 && effects.transaction_digest == digests.transaction
             {
                 // TODO this should just be a bare Transaction type and not a TransactionCertificate
-                // since Certificates are indended to be ephemeral and thrown away at the end of an
+                // since Certificates are intended to be ephemeral and thrown away at the end of an
                 // epoch
                 store
                     .insert_transaction(sui_types::messages::VerifiedCertificate::new_unchecked(

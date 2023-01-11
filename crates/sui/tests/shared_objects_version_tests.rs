@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_macros::*;
 use sui_node::SuiNodeHandle;
-use sui_types::base_types::{ObjectRef, SequenceNumber};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::error::SuiResult;
 use sui_types::messages::{
     CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, TransactionEffects,
 };
@@ -17,6 +18,7 @@ use test_utils::messages::move_transaction;
 use test_utils::transaction::{
     publish_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
+use tokio::time::timeout;
 
 #[sim_test]
 async fn fresh_shared_object_initial_version_matches_current() {
@@ -54,7 +56,7 @@ async fn shared_object_owner_doesnt_change_on_write() {
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
     // let (_, new_owner) = env
-    //     .increment_shared_counter(old_counter, old_counter.1)
+    //     .increment_shared_counter(counter.0, counter.1)
     //     .await
     //     .expect("Successful shared increment");
 
@@ -72,17 +74,6 @@ async fn initial_shared_version_mismatch_start_version() {
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
-
-    // let fx = env
-    //     .increment_shared_counter(counter, OBJECT_START_VERSION)
-    //     .await;
-
-    // let err = fx.expect_err("Transaction fails");
-    // assert!(
-    //     is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"),
-    //     "{}",
-    //     err
-    // );
 }
 
 #[sim_test]
@@ -95,40 +86,22 @@ async fn initial_shared_version_mismatch_current_version() {
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
-    // let (counter, _) = env
-    //     .increment_shared_counter(counter, counter.1)
-    //     .await
-    //     .unwrap();
-
-    // let fx = env.increment_shared_counter(counter, counter.1).await;
-    // let err = fx.expect_err("Transaction fails");
-    // assert!(
-    //     is_txn_input_error(&err, "SharedObjectStartingVersionMismatch"),
-    //     "{}",
-    //     err
-    // );
 }
 
 #[sim_test]
-async fn initial_shared_version_mismatch_arbitrary() {
+async fn shared_object_not_found() {
     let mut env = TestEnvironment::new().await;
-    let (counter, _) = env.create_shared_counter().await;
-
-    let fx = env
-        .increment_shared_counter(counter, SequenceNumber::from_u64(42))
-        .await;
-    let err = fx.expect_err("Transaction fails");
-    assert!(
-        is_txn_input_error(&err, "SharedObjectPriorVersionsPendingExecution"),
-        "{}",
-        err
-    );
-}
-
-fn is_txn_input_error(err: &SuiError, err_case: &str) -> bool {
-    err.to_string().contains(&format!(
-        "Error checking transaction input objects: [{err_case}"
-    ))
+    let nonexistent_id = ObjectID::random();
+    let initial_shared_seq = SequenceNumber::from_u64(42);
+    if timeout(
+        Duration::from_secs(10),
+        env.increment_shared_counter(nonexistent_id, initial_shared_seq),
+    )
+    .await
+    .is_ok()
+    {
+        panic!("Executing transaction with nonexistent input should not return!");
+    };
 }
 
 fn is_shared_at(owner: &Owner, version: SequenceNumber) -> bool {
@@ -263,14 +236,14 @@ impl TestEnvironment {
 
     async fn increment_shared_counter(
         &mut self,
-        counter: ObjectRef,
+        counter: ObjectID,
         initial_shared_version: SequenceNumber,
     ) -> SuiResult<(ObjectRef, Owner)> {
         let fx = self
             .shared_move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::SharedObject {
-                    id: counter.0,
+                    id: counter,
                     initial_shared_version,
                 })],
             )
@@ -281,7 +254,7 @@ impl TestEnvironment {
         Ok(*fx
             .mutated
             .iter()
-            .find(|(obj, _)| obj.0 == counter.0)
+            .find(|(obj, _)| obj.0 == counter)
             .expect("Counter modified"))
     }
 }

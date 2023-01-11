@@ -36,10 +36,14 @@ pub type ComputeGasPricePerUnit = GasQuantity<UnitDiv<GasUnit, GasUnit>>;
 pub type GasPrice = GasQuantity<GasPriceUnit>;
 pub type SuiGas = GasQuantity<SuiGasUnit>;
 
-macro_rules! ok_or_gas_error {
-    ($cond:expr, $e:expr) => {
-        if !($cond) {
-            Err(SuiError::InsufficientGas { error: $e })
+macro_rules! ok_or_gas_balance_error {
+    ($balance:expr, $budget:expr, $price:expr) => {
+        if $balance < $budget {
+            Err(SuiError::GasBalanceTooLowToCoverGasBudget {
+                gas_balance: $balance,
+                gas_budget: $budget,
+                gas_price: $price,
+            })
         } else {
             Ok(())
         }
@@ -163,9 +167,6 @@ pub struct SuiCostTable {
     /// Per byte cost to write objects to the store. This is computation cost instead of
     /// storage cost because it does not change the amount of data stored on the db.
     pub object_mutation_per_byte_cost: ComputationCostPerByte,
-    /// Cost to use shared objects in a transaction, which requires full consensus.
-    pub consensus_cost: FixedCost,
-
     /// Unit cost of a byte in the storage. This will be used both for charging for
     /// new storage as well as rebating for deleting storage. That is, we expect users to
     /// get full refund on the object storage when it's deleted.
@@ -181,8 +182,6 @@ pub static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     package_publish_per_byte_cost: ComputationCostPerByte::new(PACKAGE_PUBLISH_COST_PER_BYTE),
     object_read_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_READ_PER_BYTE),
     object_mutation_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_MUTATE_PER_BYTE),
-    consensus_cost: FixedCost::new(CONSENSUS_COST),
-
     storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
@@ -251,10 +250,6 @@ impl<'a> SuiGasStatus<'a> {
 
     pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {
         self.deduct_computation_cost(INIT_SUI_COST_TABLE.min_transaction_cost.deref())
-    }
-
-    pub fn charge_consensus(&mut self) -> Result<(), ExecutionError> {
-        self.deduct_computation_cost(&INIT_SUI_COST_TABLE.consensus_cost)
     }
 
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
@@ -399,21 +394,25 @@ pub fn check_gas_balance(
     extra_amount: u64,
     extra_objs: Vec<Object>,
 ) -> SuiResult {
-    ok_or_gas_error!(
-        matches!(gas_object.owner, Owner::AddressOwner(_)),
-        "Gas object must be owned Move object".to_owned()
-    )?;
-    ok_or_gas_error!(
-        gas_budget <= *MAX_GAS_BUDGET,
-        format!("Gas budget set too high; maximum is {}", *MAX_GAS_BUDGET)
-    )?;
-    ok_or_gas_error!(
-        gas_budget >= *MIN_GAS_BUDGET,
-        format!(
-            "Gas budget is {}, smaller than minimum requirement {}",
-            gas_budget, *MIN_GAS_BUDGET
-        )
-    )?;
+    if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
+        return Err(SuiError::GasObjectNotOwnedObject {
+            owner: gas_object.owner,
+        });
+    }
+
+    if gas_budget > *MAX_GAS_BUDGET {
+        return Err(SuiError::GasBudgetTooHigh {
+            gas_budget,
+            max_budget: *MAX_GAS_BUDGET,
+        });
+    }
+
+    if gas_budget < *MIN_GAS_BUDGET {
+        return Err(SuiError::GasBudgetTooLow {
+            gas_budget,
+            min_budget: *MIN_GAS_BUDGET,
+        });
+    }
 
     // TODO: remove this check if gas payment with multiple coins is supported.
     // This check is necessary now because, when transactions failed due to execution error,
@@ -422,10 +421,8 @@ pub fn check_gas_balance(
     // to pay for gas cost before execution error occurs.
     let gas_balance = get_gas_balance(gas_object)?;
     let gas_budget_amount = (gas_budget as u128) * (gas_price as u128);
-    ok_or_gas_error!(
-        (gas_balance as u128) >= gas_budget_amount,
-        format!("Gas balance is {gas_balance}, not enough to pay {gas_budget_amount} with gas price of {gas_price}")
-    )?;
+
+    ok_or_gas_balance_error!((gas_balance as u128), gas_budget_amount, gas_price)?;
 
     let mut total_balance = gas_balance as u128;
     for extra_obj in extra_objs {
@@ -433,10 +430,7 @@ pub fn check_gas_balance(
     }
 
     let total_amount = gas_budget_amount + extra_amount as u128;
-    ok_or_gas_error!(
-        total_balance >= total_amount,
-        format!("Total balance is {total_balance}, not enough to pay {total_amount} with gas price of {gas_price}")
-    )
+    ok_or_gas_balance_error!(total_balance, total_amount, gas_price)
 }
 
 /// Create a new gas status with the given `gas_budget`, and charge the transaction flat fee.

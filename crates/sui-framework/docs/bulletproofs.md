@@ -37,6 +37,18 @@ Only bit_length = 64, 32, 16, 8 will work.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_bulletproofs_verify_full_range_proof"></a>
 
 ## Function `verify_full_range_proof`

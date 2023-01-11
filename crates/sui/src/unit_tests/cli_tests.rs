@@ -280,10 +280,21 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     // Check log output contains all object ids.
     let object_id = object_refs.first().unwrap().object_id;
 
-    SuiClientCommands::Object { id: object_id }
-        .execute(context)
-        .await?
-        .print(true);
+    SuiClientCommands::Object {
+        id: object_id,
+        bcs: false,
+    }
+    .execute(context)
+    .await?
+    .print(true);
+
+    SuiClientCommands::Object {
+        id: object_id,
+        bcs: true,
+    }
+    .execute(context)
+    .await?
+    .print(true);
 
     Ok(())
 }
@@ -596,29 +607,41 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         };
 
     // Check the objects
-    let resp = SuiClientCommands::Object { id: mut_obj1 }
-        .execute(context)
-        .await?;
-    let mut_obj1 =
-        if let SuiClientCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp {
-            object
-        } else {
-            // Fail this way because Panic! causes test issues
-            assert!(false);
-            panic!()
-        };
+    let resp = SuiClientCommands::Object {
+        id: mut_obj1,
+        bcs: false,
+    }
+    .execute(context)
+    .await?;
+    let mut_obj1 = if let SuiClientCommandResult::Object(
+        GetObjectDataResponse::Exists(object),
+        false,
+    ) = resp
+    {
+        object
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+        panic!()
+    };
 
-    let resp = SuiClientCommands::Object { id: mut_obj2 }
-        .execute(context)
-        .await?;
-    let mut_obj2 =
-        if let SuiClientCommandResult::Object(GetObjectDataResponse::Exists(object)) = resp {
-            object
-        } else {
-            // Fail this way because Panic! causes test issues
-            assert!(false);
-            panic!()
-        };
+    let resp = SuiClientCommands::Object {
+        id: mut_obj2,
+        bcs: false,
+    }
+    .execute(context)
+    .await?;
+    let mut_obj2 = if let SuiClientCommandResult::Object(
+        GetObjectDataResponse::Exists(object),
+        false,
+    ) = resp
+    {
+        object
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+        panic!()
+    };
 
     let (gas, obj) = if mut_obj1.owner.get_owner_address().unwrap() == address {
         (mut_obj1, mut_obj2)
@@ -668,7 +691,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = SuiClientCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()));
+    let read =
+        SuiClientCommandResult::Object(GetObjectDataResponse::NotExists(ObjectID::random()), false);
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();

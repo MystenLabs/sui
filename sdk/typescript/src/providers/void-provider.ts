@@ -4,6 +4,7 @@
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
 import { Base64DataBuffer } from '../serialization/base64';
+import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   CertifiedTransaction,
   TransactionDigest,
@@ -33,6 +34,7 @@ import {
   Order,
   TransactionEffects,
   CoinMetadata,
+  DevInspectResults,
 } from '../types';
 import { Provider } from './provider';
 
@@ -113,6 +115,17 @@ export class VoidProvider extends Provider {
     _requestType: ExecuteTransactionRequestType
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
+  }
+
+  devInspectTransaction(_txBytes: string): Promise<DevInspectResults> {
+    throw this.newError('devInspectTransaction');
+  }
+
+  async devInspectMoveCall(
+    _sender: SuiAddress,
+    _moveCall: RawMoveCall
+  ): Promise<DevInspectResults> {
+    throw this.newError('devInspectMoveCall');
   }
 
   dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {

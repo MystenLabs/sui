@@ -19,7 +19,7 @@ serde_with = "2.1.0"
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 parking_lot = "0.12.1"
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 tempfile = "3.3.0"
 itertools = "0.10.4"
 strum_macros = "^0.24"
@@ -58,13 +58,14 @@ narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
+narwhal-test-utils = { path = "../../narwhal/test-utils" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
 mysten-network.workspace = true
 
 fastcrypto.workspace = true
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 thiserror = "1.0.34"
 eyre = "0.6.8"
 num_cpus = "1.14.0"
@@ -75,7 +76,8 @@ reqwest = { version = "0.11.13", features = ["json"] }
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
-
+fs_extra = "1.2.0"
+more-asserts="0.3.1"
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"

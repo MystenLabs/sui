@@ -276,6 +276,7 @@ mod tests {
                 None,
                 &committee,
                 &Genesis::get_default_genesis(),
+                &AuthorityStorePruningConfig::default(),
             )
             .await
             .unwrap(),

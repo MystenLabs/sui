@@ -4,6 +4,7 @@
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
 import { Base64DataBuffer } from '../serialization/base64';
+import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
@@ -32,6 +33,7 @@ import {
   Order,
   TransactionEffects,
   CoinMetadata,
+  DevInspectResults,
 } from '../types';
 
 ///////////////////////////////
@@ -246,7 +248,27 @@ export abstract class Provider {
    * @param id - subscription id to unsubscribe from (previously received from subscribeEvent)
    */
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
-  // TODO: add more interface methods
 
+  /**
+   * Similar to dryRunTransaction, but lets you call any Move function(including non-entry function)
+   * with arbitrary values.
+   */
+  abstract devInspectTransaction(txBytes: string): Promise<DevInspectResults>;
+
+  /**
+   * Similar to devInspectTransaction, but lets you call any Move function without a gas object and
+   * budget
+   */
+  abstract devInspectMoveCall(
+    sender: SuiAddress,
+    moveCall: RawMoveCall
+  ): Promise<DevInspectResults>;
+
+  /**
+   * Execute the transaction without committing any state changes on chain. This is useful for estimating
+   * gas budget and the transaction effects
+   * @param txBytes
+   */
   abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+  // TODO: add more interface methods
 }

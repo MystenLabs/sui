@@ -3,8 +3,8 @@
 
 use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::authority_client::LocalAuthorityClient;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use signature::Signer;
@@ -14,16 +14,20 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_framework_build::compiled_package::BuildConfig;
-use sui_types::base_types::ObjectRef;
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
+use sui_types::messages::{TransactionData, VerifiedTransaction};
 use sui_types::utils::create_fake_transaction;
+use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{random_object_ref, AuthorityName, ExecutionDigests, TransactionDigest},
+    base_types::{
+        random_object_ref, AuthorityName, ExecutionDigests, ObjectRef, SuiAddress,
+        TransactionDigest,
+    },
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     gas::GasCostSummary,
@@ -35,6 +39,27 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+/// The maximum gas per transaction.
+pub const MAX_GAS: u64 = 2_000;
+
+// note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
+// adding #[cfg(test)] causes other targets to fail
+#[allow(dead_code)]
+pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Genesis, AuthorityKeyPair)
+where
+    R: rand::CryptoRng + rand::RngCore,
+{
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        .rng(rng)
+        .build();
+    let genesis = network_config.genesis;
+    let authority_key = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+
+    (genesis, authority_key)
+}
 
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
@@ -118,6 +143,14 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
     }
 }
 
+pub fn compile_basics_package() -> CompiledPackage {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sui_programmability/examples/basics");
+
+    let build_config = BuildConfig::default();
+    sui_framework::build_move_package(&path, build_config).unwrap()
+}
+
 async fn init_genesis(
     committee_size: usize,
     mut genesis_objects: Vec<Object>,
@@ -127,17 +160,13 @@ async fn init_genesis(
     ObjectRef,
 ) {
     // add object_basics package object to genesis
-    let build_config = BuildConfig::default();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
+    let modules = compile_basics_package()
         .get_modules()
         .into_iter()
         .cloned()
         .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
+    let pkg_id = pkg.id();
     genesis_objects.push(pkg);
 
     let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
@@ -168,7 +197,16 @@ async fn init_genesis(
         builder = builder.add_validator(validator_info, pop);
         key_pairs.push((authority_name, key_pair));
     }
+    for (_, key) in &key_pairs {
+        builder = builder.add_validator_signature(key);
+    }
     let genesis = builder.build();
+    let pkg_ref = genesis
+        .objects()
+        .iter()
+        .find(|o| o.id() == pkg_id)
+        .unwrap()
+        .compute_object_reference();
     (genesis, key_pairs, pkg_ref)
 }
 
@@ -178,11 +216,12 @@ pub async fn init_local_authorities(
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
+    Genesis,
     ObjectRef,
 ) {
     let (genesis, key_pairs, pkg_ref) = init_genesis(committee_size, genesis_objects).await;
     let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
-    (aggregator, authorities, pkg_ref)
+    (aggregator, authorities, genesis, pkg_ref)
 }
 
 pub async fn init_local_authorities_with_genesis(
@@ -198,13 +237,7 @@ pub async fn init_local_authorities_with_genesis(
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
     for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new_with_objects(
-            committee.clone(),
-            secret,
-            genesis.objects().to_owned(),
-            genesis,
-        )
-        .await;
+        let client = LocalAuthorityClient::new(committee.clone(), secret, genesis).await;
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
@@ -226,4 +259,26 @@ pub async fn init_local_authorities_with_genesis(
         ),
         states,
     )
+}
+
+pub fn make_transfer_sui_transaction(
+    gas_object: ObjectRef,
+    recipient: SuiAddress,
+    amount: Option<u64>,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+) -> VerifiedTransaction {
+    let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
+    to_sender_signed_transaction(data, keypair)
+}
+
+pub fn make_transfer_object_transaction(
+    object_ref: ObjectRef,
+    gas_object: ObjectRef,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    recipient: SuiAddress,
+) -> VerifiedTransaction {
+    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    to_sender_signed_transaction(data, keypair)
 }

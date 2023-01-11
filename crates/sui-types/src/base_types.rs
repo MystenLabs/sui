@@ -54,6 +54,8 @@ mod base_types_tests;
 )]
 pub struct SequenceNumber(u64);
 
+pub type TxSequenceNumber = u64;
+
 impl fmt::Display for SequenceNumber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#x}", self.0)
@@ -481,21 +483,6 @@ impl AsRef<[u8]> for TransactionDigest {
     }
 }
 
-impl fmt::Display for TransactionDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
-    }
-}
-
-impl fmt::LowerHex for TransactionDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self))
-    }
-}
-
 /// Returns a Context for OpenTelemetry tracing from a TransactionDigest
 // NOTE: See https://github.com/MystenLabs/sui/issues/852
 // The current code doesn't really work.  Maybe the traceparent needs to be a specific format,
@@ -751,6 +738,7 @@ impl ObjectID {
     pub const LENGTH: usize = AccountAddress::LENGTH;
     /// Hex address: 0x0
     pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
+    pub const MAX: Self = Self::new([0xff; Self::LENGTH]);
     /// Creates a new ObjectID
     pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
         Self(AccountAddress::new(obj_id))

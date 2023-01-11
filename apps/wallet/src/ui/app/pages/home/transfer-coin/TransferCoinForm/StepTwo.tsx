@@ -6,13 +6,13 @@ import cl from 'classnames';
 import { Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo, useMemo } from 'react';
 
-import { parseAmount } from './utils';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import AddressInput from '_components/address-input';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { parseAmount } from '_helpers';
 import { useCoinDecimals, useFormatCoin } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 

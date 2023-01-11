@@ -13,7 +13,7 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    StakingPool, SuiSystemState, Validator, ValidatorMetadata, ValidatorSet,
+    StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata, ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
@@ -27,6 +27,7 @@ pub fn test_validatdor_metadata(
         sui_address,
         pubkey_bytes: pubkey_bytes.as_bytes().to_vec(),
         network_pubkey_bytes: network_keypair.public().as_bytes().to_vec(),
+        worker_pubkey_bytes: vec![],
         proof_of_possession_bytes: vec![],
         name: to_bytes("zero_commission").unwrap(),
         net_address,
@@ -46,8 +47,8 @@ pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPo
         sui_balance,
         rewards_pool: Balance::new(0),
         delegation_token_supply: Supply { value: 0 },
-        pending_delegations: vec![],
-        pending_withdraws: vec![],
+        pending_delegations: TableVec::default(),
+        pending_withdraws: TableVec::default(),
     }
 }
 
@@ -94,5 +95,10 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         },
         reference_gas_price: 1,
         validator_report_records: VecMap { contents: vec![] },
+        stake_subsidy: StakeSubsidy {
+            epoch_counter: 0,
+            balance: Balance::new(0),
+            current_epoch_amount: 0,
+        },
     }
 }

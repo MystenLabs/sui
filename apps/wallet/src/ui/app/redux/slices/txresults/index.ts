@@ -15,7 +15,8 @@ import {
     getObjectId,
     getObjectFields,
     Coin,
-    isSuiObject,
+    is,
+    SuiObject,
     getPaySuiTransaction,
     getPayTransaction,
 } from '@mysten/sui.js';
@@ -241,11 +242,11 @@ export const getTransactionsByAddress = createAsyncThunk<
 
             const coinType =
                 txnObjects &&
-                isSuiObject(details) &&
+                is(details, SuiObject) &&
                 Coin.getCoinTypeArg(txnObjects);
 
             const fields =
-                txnObjects && isSuiObject(details)
+                txnObjects && is(details, SuiObject)
                     ? getObjectFields(txnObjects)
                     : null;
 

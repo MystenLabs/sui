@@ -115,58 +115,9 @@ procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int
 
 {%- endfor %}
 
-
-// ==================================================================================
-// Native bls12381
-
-procedure {:inline 1} $2_bls12381_bls12381_min_sig_verify(hash: Vec (int), public_key: Vec (int), msg: Vec (int)) returns (res: bool);
-
-procedure {:inline 1} $2_bls12381_bls12381_min_pk_verify(hash: Vec (int), public_key: Vec (int), msg: Vec (int)) returns (res: bool);
-
-// ==================================================================================
-// Native ed25519
-
-procedure {:inline 1} $2_ed25519_ed25519_verify(signature: Vec (int), public_key: Vec (int), msg: Vec (int)) returns (res: bool);
-
-// ==================================================================================
-// Native bulletproofs
-
-procedure {:inline 1} $2_bulletproofs_native_verify_full_range_proof(proof: Vec (int), commitment: Vec (int), bit_length: int) returns (res: bool);
-
-// ==================================================================================
-// Native elliptic_curve
-
-procedure {:inline 1} $2_elliptic_curve_native_create_pedersen_commitment(value: Vec (int), blinding_factor: Vec (int)) returns (res: Vec (int));
-
-procedure {:inline 1} $2_elliptic_curve_native_add_ristretto_point(point1: Vec (int), point2: Vec (int)) returns (res: Vec (int));
-
-procedure {:inline 1} $2_elliptic_curve_native_subtract_ristretto_point(point1: Vec (int), point2: Vec (int)) returns (res: Vec (int));
-
-procedure {:inline 1} $2_elliptic_curve_native_scalar_from_u64(value: int) returns (res: Vec (int));
-
-procedure {:inline 1} $2_elliptic_curve_native_scalar_from_bytes(bytes: Vec (int)) returns (res: Vec (int));
-
-// ==================================================================================
-// Native hmac
-
-procedure {:inline 1} $2_hmac_native_hmac_sha3_256(key: Vec (int), msg: Vec (int)) returns (res: Vec (int));
-
-// ==================================================================================
-// Native groth
-
-procedure {:inline 1} $2_groth16_prepare_verifying_key(verifying_key: Vec (int)) returns (res: $2_groth16_PreparedVerifyingKey);
-
-procedure {:inline 1} $2_groth16_verify_groth16_proof_internal(vk_gamma_abc_g1_bytes: Vec (int), alpha_g1_beta_g2_bytes: Vec (int), gamma_g2_neg_pc_bytes: Vec (int), delta_g2_neg_pc_bytes: Vec (int), public_proof_inputs: Vec (int), proof_points: Vec (int)) returns (res: bool);
-
 // ==================================================================================
 // Reads and writes to dynamic fields (skeletons)
 
 function GetDynField<T, V>(o: T, addr: int): V;
 
 function UpdateDynField<T, V>(o: T, addr: int, v: V): T;
-
-// ==================================================================================
-// Intrinsics bcs
-
-// placeholder - need to add support for bitwise operators in Boogie to implement this
-procedure {:inline 1} $2_bcs_peel_vec_length(bcs: $Mutation $2_bcs_BCS) returns (res: int, m: $Mutation $2_bcs_BCS);

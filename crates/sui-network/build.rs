@@ -36,7 +36,7 @@ fn main() -> Result<()> {
                 .name("handle_certificate")
                 .route_name("CertifiedTransaction")
                 .input_type("sui_types::messages::CertifiedTransaction")
-                .output_type("sui_types::messages::TransactionInfoResponse")
+                .output_type("sui_types::messages::HandleCertificateResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -73,16 +73,6 @@ fn main() -> Result<()> {
                 .route_name("Checkpoint")
                 .input_type("sui_types::messages_checkpoint::CheckpointRequest")
                 .output_type("sui_types::messages_checkpoint::CheckpointResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
-                .name("batch_info")
-                .route_name("FollowTxStream")
-                .input_type("sui_types::messages::BatchInfoRequest")
-                .output_type("sui_types::messages::BatchInfoResponseItem")
-                .server_streaming()
                 .codec_path(codec_path)
                 .build(),
         )

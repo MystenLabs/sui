@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::extract::rejection::JsonRejection;
 use std::fmt::Debug;
 
 use axum::http::StatusCode;
@@ -20,6 +21,8 @@ use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
 use strum_macros::Display;
 use strum_macros::EnumDiscriminants;
 use thiserror::Error;
+use typed_store::rocks::TypedStoreError;
+
 /// Sui-Rosetta specific error types.
 /// This contains all the errors returns by the sui-rosetta server.
 #[derive(Debug, Error, EnumDiscriminants)]
@@ -68,6 +71,10 @@ pub enum Error {
     SuiRpcError(#[from] sui_sdk::error::RpcError),
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
+    #[error(transparent)]
+    DBError(#[from] TypedStoreError),
+    #[error(transparent)]
+    JsonExtractorRejection(#[from] JsonRejection),
 }
 
 impl Serialize for ErrorType {

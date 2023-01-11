@@ -27,6 +27,7 @@ use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    QuorumDriverResponse,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
@@ -57,18 +58,16 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
+    // TODO: test fails on CI due to flakiness without this. Once https://github.com/MystenLabs/sui/pull/7056 is
+    // merged we should be able to root out the flakiness.
+    sleep(Duration::from_millis(10)).await;
+
     let (transferred_object, _, receiver, digest, _, _) = transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
     // A small delay is needed for post processing operations following the transaction to finish.
     sleep(Duration::from_secs(1)).await;
-
-    // verify that the intermediate sync data is cleared.
-    let sync_store = node.state().node_sync_store.clone();
-    let epoch_id = 0;
-    assert!(sync_store.get_cert(epoch_id, &digest).unwrap().is_none());
-    assert!(sync_store.get_effects(epoch_id, &digest).unwrap().is_none());
 
     // verify that the node has seen the transfer
     let object_read = node.state().get_object_read(&transferred_object).await?;
@@ -79,8 +78,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     // timestamp is recorded
     let ts = node.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
-
-    assert_eq!(node.state().metrics.num_post_processing_tasks.get(), 1);
 
     Ok(())
 }
@@ -198,8 +195,8 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         None,
         false,
     )?;
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1], digest);
 
     let txes =
         node.state()
@@ -210,16 +207,16 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let txes =
         node.state()
             .get_transactions(TransactionQuery::ToAddress(receiver), None, None, false)?;
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1], digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
     let txes =
         node.state()
             .get_transactions(TransactionQuery::ToAddress(sender), None, None, false)?;
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1], digest);
 
     // No transactions have originated from the receiver
     let txes = node.state().get_transactions(
@@ -283,14 +280,15 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
                 end_time: ts.unwrap() + HOUR_MS,
             },
             None,
-            10,
+            100,
             false,
         )
         .await?;
+    let all_events = &all_events[all_events.len() - 3..];
     assert_eq!(all_events[0].1.tx_digest.unwrap(), digest);
     let all_events = all_events
-        .into_iter()
-        .map(|(_, envelope)| envelope.event)
+        .iter()
+        .map(|(_, envelope)| envelope.event.clone())
         .collect::<Vec<_>>();
     assert_eq!(all_events.len(), 3);
     assert_eq!(
@@ -348,23 +346,22 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .get_events(
             EventQuery::Recipient(Owner::AddressOwner(receiver)),
             None,
-            10,
+            100,
             false,
         )
         .await?;
-    assert_eq!(events_by_recipient[0].1.tx_digest.unwrap(), digest);
-    let events_by_recipient = events_by_recipient
-        .into_iter()
-        .map(|(_, envelope)| envelope.event)
-        .collect::<Vec<_>>();
-    assert_eq!(events_by_recipient.len(), 1);
-    assert_eq!(events_by_recipient, vec![recipient_event.clone()]);
+    assert_eq!(
+        events_by_recipient.last().unwrap().1.tx_digest.unwrap(),
+        digest
+    );
+    assert_eq!(events_by_recipient.last().unwrap().1.event, recipient_event,);
 
     // query by object
-    let events_by_object = node
+    let mut events_by_object = node
         .state()
-        .get_events(EventQuery::Object(transferred_object), None, 10, false)
+        .get_events(EventQuery::Object(transferred_object), None, 100, false)
         .await?;
+    let events_by_object = events_by_object.split_off(events_by_object.len() - 2);
     assert_eq!(events_by_object[0].1.tx_digest.unwrap(), digest);
     let events_by_object = events_by_object
         .into_iter()
@@ -816,14 +813,16 @@ async fn test_full_node_event_read_api_ok() {
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(events_by_recipient.data[0].tx_digest.unwrap(), digest);
+    assert_eq!(
+        events_by_recipient.data.last().unwrap().tx_digest.unwrap(),
+        digest
+    );
     let events_by_recipient = events_by_recipient
         .data
         .into_iter()
         .map(|envelope| envelope.event)
         .collect::<Vec<_>>();
-    assert_eq!(events_by_recipient.len(), 1);
-    assert_eq!(events_by_recipient, vec![recipient_event.clone()]);
+    assert_eq!(events_by_recipient.last().unwrap(), &recipient_event);
 
     // query by object
     let params = rpc_params![
@@ -836,17 +835,18 @@ async fn test_full_node_event_read_api_ok() {
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(events_by_object.data[0].tx_digest.unwrap(), digest);
+    assert_eq!(
+        events_by_object.data.last().unwrap().tx_digest.unwrap(),
+        digest
+    );
     let events_by_object = events_by_object
         .data
         .into_iter()
         .map(|envelope| envelope.event)
         .collect::<Vec<_>>();
-    assert_eq!(events_by_object.len(), 2);
-    assert_eq!(
-        events_by_object,
-        vec![sender_event.clone(), recipient_event.clone()]
-    );
+    assert_eq!(events_by_object.len(), 3);
+    assert_eq!(events_by_object[1], sender_event);
+    assert_eq!(events_by_object[2], recipient_event);
 
     // query by transaction module
     let params = rpc_params![
@@ -878,7 +878,7 @@ async fn test_full_node_event_read_api_ok() {
     wait_for_tx(digest2, node.state().clone()).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(5)).await;
 
     // query by move event struct name
     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
@@ -903,16 +903,16 @@ async fn test_full_node_event_read_api_ok() {
             end_time: ts2.unwrap() + HOUR_MS
         },
         None::<u64>,
-        10,
+        100,
         false
     ];
     let all_events: EventPage = jsonrpc_client
         .request("sui_getEvents", params)
         .await
         .unwrap();
+    // genesis txn
     // The first txn emits TransferObject(sender), TransferObject(recipient), Gas
     // The second txn emits MoveEvent, NewObject and Gas
-    assert_eq!(all_events.data.len(), 6);
     let tx_digests: Vec<TransactionDigest> = all_events
         .data
         .iter()
@@ -920,7 +920,7 @@ async fn test_full_node_event_read_api_ok() {
         .collect();
     // Sorted in ascending time
     assert_eq!(
-        tx_digests,
+        tx_digests[tx_digests.len() - 6..],
         vec![digest, digest, digest, digest2, digest2, digest2]
     );
 }
@@ -957,25 +957,19 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    match res {
-        ExecuteTransactionResponse::EffectsCert(res) => {
-            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
-            let (ct, cte, is_executed_locally) = *res;
-            assert_eq!(*ct.digest(), digest);
-            assert_eq!(*certified_txn.digest(), digest);
-            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
-            assert!(is_executed_locally);
-            // verify that the node has sequenced and executed the txn
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
-        }
-        other => {
-            panic!(
-                "WaitForLocalExecution should get EffectCerts, but got: {:?}",
-                other
-            );
-        }
-    };
+    let ExecuteTransactionResponse::EffectsCert(res) = res;
+    let QuorumDriverResponse {
+        tx_cert: certified_txn,
+        effects_cert: certified_txn_effects,
+    } = rx.recv().await.unwrap();
+    let (ct, cte, is_executed_locally) = *res;
+    assert_eq!(*ct.digest(), digest);
+    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert!(is_executed_locally);
+    // verify that the node has sequenced and executed the txn
+    node.state().get_transaction(digest).await
+        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
 
     // Test WaitForEffectsCert
     let txn = txns.swap_remove(0);
@@ -988,79 +982,19 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         .await
         .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
 
-    match res {
-        ExecuteTransactionResponse::EffectsCert(res) => {
-            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
-            let (ct, cte, is_executed_locally) = *res;
-            assert_eq!(*ct.digest(), digest);
-            assert_eq!(*certified_txn.digest(), digest);
-            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
-            assert!(!is_executed_locally);
-            wait_for_tx(digest, node.state().clone()).await;
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
-        }
-        other => {
-            panic!(
-                "WaitForEffectsCert should get EffectCerts, but got: {:?}",
-                other
-            );
-        }
-    };
-
-    // Test WaitForTxCert
-    let txn = txns.swap_remove(0);
-    let digest = *txn.digest();
-    let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn.into(),
-            request_type: ExecuteTransactionRequestType::WaitForTxCert,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-
-    match res {
-        ExecuteTransactionResponse::TxCert(res) => {
-            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
-            let ct = *res;
-            assert_eq!(*ct.digest(), digest);
-            assert_eq!(*certified_txn.digest(), digest);
-            wait_for_tx(digest, node.state().clone()).await;
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForTxCert: {:?}", digest, e));
-        }
-        other => {
-            panic!("WaitForTxCert should get TxCert, but got: {:?}", other);
-        }
-    };
-
-    // Test ImmediateReturn
-    let txn = txns.swap_remove(0);
-    let digest = *txn.digest();
-    let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: txn.into(),
-            request_type: ExecuteTransactionRequestType::ImmediateReturn,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
-
-    match res {
-        ExecuteTransactionResponse::ImmediateReturn => {
-            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
-            assert_eq!(*certified_txn.digest(), digest);
-
-            wait_for_tx(digest, node.state().clone()).await;
-            node.state().get_transaction(digest).await
-                .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
-        }
-        other => {
-            panic!(
-                "ImmediateReturn should get ImmediateReturn, but got: {:?}",
-                other
-            );
-        }
-    };
+    let ExecuteTransactionResponse::EffectsCert(res) = res;
+    let QuorumDriverResponse {
+        tx_cert: certified_txn,
+        effects_cert: certified_txn_effects,
+    } = rx.recv().await.unwrap();
+    let (ct, cte, is_executed_locally) = *res;
+    assert_eq!(*ct.digest(), digest);
+    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert!(!is_executed_locally);
+    wait_for_tx(digest, node.state().clone()).await;
+    node.state().get_transaction(digest).await
+        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForEffectsCert: {:?}", digest, e));
 
     Ok(())
 }
@@ -1110,17 +1044,13 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             .await
             .unwrap();
 
-        if let SuiExecuteTransactionResponse::EffectsCert {
+        let SuiExecuteTransactionResponse::EffectsCert {
             certificate,
             effects: _,
             confirmed_local_execution,
-        } = response
-        {
-            assert_eq!(&certificate.transaction_digest, tx_digest);
-            assert!(confirmed_local_execution);
-        } else {
-            panic!("Expect EffectsCert but got {:?}", response);
-        }
+        } = response;
+        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert!(confirmed_local_execution);
     }
     Ok(())
 }
@@ -1154,17 +1084,13 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    if let SuiExecuteTransactionResponse::EffectsCert {
+    let SuiExecuteTransactionResponse::EffectsCert {
         certificate,
         effects: _,
         confirmed_local_execution,
-    } = response
-    {
-        assert_eq!(&certificate.transaction_digest, tx_digest);
-        assert!(confirmed_local_execution);
-    } else {
-        panic!("Expect EffectsCert but got {:?}", response);
-    }
+    } = response;
+    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert!(confirmed_local_execution);
 
     let _response: SuiTransactionResponse = jsonrpc_client
         .request("sui_getTransaction", rpc_params![*tx_digest])
@@ -1183,60 +1109,13 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    if let SuiExecuteTransactionResponse::EffectsCert {
+    let SuiExecuteTransactionResponse::EffectsCert {
         certificate,
         effects: _,
         confirmed_local_execution,
-    } = response
-    {
-        assert_eq!(&certificate.transaction_digest, tx_digest);
-        assert!(!confirmed_local_execution);
-    } else {
-        panic!("Expect EffectsCert but got {:?}", response);
-    }
-
-    // Test request with ExecuteTransactionRequestType::WaitForTxCert
-    let txn = txns.swap_remove(0);
-    let tx_digest = txn.digest();
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
-    let params = rpc_params![
-        tx_bytes,
-        signature,
-        ExecuteTransactionRequestType::WaitForTxCert
-    ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransactionSerializedSig", params)
-        .await
-        .unwrap();
-
-    if let SuiExecuteTransactionResponse::TxCert { certificate } = response {
-        assert_eq!(&certificate.transaction_digest, tx_digest);
-    } else {
-        panic!("Expect TxCert but got {:?}", response);
-    }
-
-    // Test request with ExecuteTransactionRequestType::ImmediateReturn
-    let txn = txns.swap_remove(0);
-    let tx_digest = txn.digest();
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
-    let params = rpc_params![
-        tx_bytes,
-        signature,
-        ExecuteTransactionRequestType::ImmediateReturn
-    ];
-    let response: SuiExecuteTransactionResponse = jsonrpc_client
-        .request("sui_executeTransactionSerializedSig", params)
-        .await
-        .unwrap();
-
-    if let SuiExecuteTransactionResponse::ImmediateReturn {
-        tx_digest: transaction_digest,
-    } = response
-    {
-        assert_eq!(&transaction_digest, tx_digest);
-    } else {
-        panic!("Expect ImmediateReturn but got {:?}", response);
-    }
+    } = response;
+    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert!(!confirmed_local_execution);
 
     Ok(())
 }
@@ -1274,7 +1153,7 @@ async fn get_past_obj_read_from_node(
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let node = test_cluster.start_fullnode().await.unwrap().sui_node;
+    let node = test_cluster.fullnode_handle.sui_node.clone();
     let context = &mut test_cluster.wallet;
 
     // Create the object

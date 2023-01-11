@@ -13,8 +13,9 @@ use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
+    signature_service::SignatureService,
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    SignatureService, Verifier,
+    Verifier,
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -159,7 +160,7 @@ pub struct Header {
     pub epoch: Epoch,
     pub created_at: TimestampMs,
     #[serde(with = "indexmap::serde_seq")]
-    pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
@@ -192,13 +193,18 @@ impl HeaderBuilder {
     }
 
     // helper method to set directly values to the payload
-    pub fn with_payload_batch(mut self, batch: Batch, worker_id: WorkerId) -> Self {
+    pub fn with_payload_batch(
+        mut self,
+        batch: Batch,
+        worker_id: WorkerId,
+        created_at: TimestampMs,
+    ) -> Self {
         if self.payload.is_none() {
             self.payload = Some(Default::default());
         }
         let payload = self.payload.as_mut().unwrap();
 
-        payload.insert(batch.digest(), worker_id);
+        payload.insert(batch.digest(), (worker_id, created_at));
 
         self
     }
@@ -209,7 +215,7 @@ impl Header {
         author: PublicKey,
         round: Round,
         epoch: Epoch,
-        payload: IndexMap<BatchDigest, WorkerId>,
+        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
         parents: BTreeSet<CertificateDigest>,
         signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
@@ -260,7 +266,7 @@ impl Header {
         );
 
         // Ensure all worker ids are correct.
-        for worker_id in self.payload.values() {
+        for (worker_id, _) in self.payload.values() {
             worker_cache
                 .load()
                 .worker(&self.author, worker_id)
@@ -271,7 +277,7 @@ impl Header {
         let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.author
             .verify(digest.as_ref(), &self.signature)
-            .map_err(DagError::from)
+            .map_err(|_| DagError::InvalidSignature)
     }
 }
 
@@ -322,9 +328,10 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
         hasher.update(self.round.to_le_bytes());
         hasher.update(self.epoch.to_le_bytes());
         hasher.update(self.created_at.to_le_bytes());
-        for (x, y) in self.payload.iter() {
+        for (x, (y, z)) in self.payload.iter() {
             hasher.update(Digest::from(*x));
             hasher.update(y.to_le_bytes());
+            hasher.update(z.to_le_bytes());
         }
         for x in self.parents.iter() {
             hasher.update(Digest::from(*x))
@@ -431,7 +438,7 @@ impl Vote {
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
         self.author
             .verify(vote_digest.as_ref(), &self.signature)
-            .map_err(DagError::from)
+            .map_err(|_| DagError::InvalidSignature)
     }
 }
 #[derive(
@@ -599,8 +606,7 @@ impl Certificate {
             AggregateSignature::aggregate::<Signature, Vec<&Signature>>(
                 sigs.iter().map(|(_, sig)| sig).collect(),
             )
-            .map_err(|_| signature::Error::new())
-            .map_err(DagError::InvalidSignature)?
+            .map_err(|_| DagError::InvalidSignature)?
         };
 
         Ok(Certificate {
@@ -669,8 +675,7 @@ impl Certificate {
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
             .verify(&pks[..], certificate_digest.as_ref())
-            .map_err(|_| signature::Error::new())
-            .map_err(DagError::from)?;
+            .map_err(|_| DagError::InvalidSignature)?;
 
         Ok(())
     }
@@ -930,10 +935,6 @@ impl PayloadAvailabilityResponse {
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ReconfigureNotification {
-    /// Indicate the committee has changed. This happens at epoch change.
-    NewEpoch(Committee),
-    /// Update some network information of the committee.
-    UpdateCommittee(Committee),
     /// Indicate a shutdown.
     Shutdown,
 }

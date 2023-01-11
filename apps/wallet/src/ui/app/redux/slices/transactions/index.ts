@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getTransactionDigest,
-    isSuiMoveObject,
-    Coin as CoinAPI,
-} from '@mysten/sui.js';
+import { getTransactionDigest, Coin as CoinAPI } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -21,8 +17,8 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import type {
     SuiAddress,
-    SuiMoveObject,
     SuiExecuteTransactionResponse,
+    SuiMoveObject,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -66,6 +62,7 @@ export const sendTokens = createAsyncThunk<
 type StakeTokensTXArgs = {
     tokenTypeArg: string;
     amount: bigint;
+    validatorAddress: SuiAddress;
 };
 
 export const stakeTokens = createAsyncThunk<
@@ -75,7 +72,7 @@ export const stakeTokens = createAsyncThunk<
 >(
     'sui-objects/stake',
     async (
-        { tokenTypeArg, amount },
+        { tokenTypeArg, amount, validatorAddress },
         { getState, extra: { api, keypairVault }, dispatch }
     ) => {
         const state = getState();
@@ -85,18 +82,11 @@ export const stakeTokens = createAsyncThunk<
             .selectAll(state)
             .filter(
                 (anObj) =>
-                    isSuiMoveObject(anObj.data) && anObj.data.type === coinType
+                    anObj.data.dataType === 'moveObject' &&
+                    anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
 
-        // TODO: fetch the first active validator for now,
-        // repalce it with the user picked one
-        const activeValidators = await Coin.getActiveValidators(
-            api.instance.fullNode
-        );
-        const first_validator = activeValidators[0];
-        const metadata = (first_validator as SuiMoveObject).fields.metadata;
-        const validatorAddress = (metadata as SuiMoveObject).fields.sui_address;
         const response = await Coin.stakeCoin(
             api.getSignerInstance(keypairVault.getKeypair()),
             coins,

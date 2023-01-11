@@ -7,7 +7,7 @@ use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use sui_core::authority::AuthorityState;
 use sui_core::event_handler::EventHandler;
@@ -102,6 +102,13 @@ impl EventReadApiServer for EventReadApiImpl {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
+        debug!(
+            ?query,
+            ?cursor,
+            ?limit,
+            ?descending_order,
+            "get_events query"
+        );
         let descending = descending_order.unwrap_or_default();
         let limit = cap_page_limit(limit);
         // Retrieve 1 extra item for next cursor

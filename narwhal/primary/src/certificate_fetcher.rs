@@ -19,13 +19,13 @@ use storage::CertificateStore;
 use tokio::{
     sync::{oneshot, watch},
     task::{JoinError, JoinHandle},
-    time::{self, timeout, Instant},
+    time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, FetchCertificatesRequest, FetchCertificatesResponse, ReconfigureNotification,
+    Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
     Round,
 };
 
@@ -67,8 +67,8 @@ pub(crate) struct CertificateFetcher {
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
-    /// Watch channel notifying of epoch changes, it is only used for cleanup.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives certificates with missing parents from the `Synchronizer`.
     rx_certificate_fetcher: Receiver<Certificate>,
     /// Map of validator to target rounds that local store must catch up to.
@@ -103,7 +103,7 @@ impl CertificateFetcher {
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificate_fetcher: Receiver<Certificate>,
         tx_certificates_loopback: Sender<CertificateLoopbackMessage>,
         metrics: Arc<PrimaryMetrics>,
@@ -124,7 +124,7 @@ impl CertificateFetcher {
                     certificate_store,
                     rx_consensus_round_updates,
                     gc_depth,
-                    rx_reconfigure,
+                    rx_shutdown,
                     rx_certificate_fetcher,
                     targets: BTreeMap::new(),
                     fetch_certificates_task,
@@ -196,23 +196,9 @@ impl CertificateFetcher {
                         self.kickstart();
                     }
                 },
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow_and_update().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(committee) => {
-                            self.committee = committee;
-                            self.targets.clear();
-                            self.fetch_certificates_task = FuturesUnordered::new();
-                        },
-                        ReconfigureNotification::UpdateCommittee(committee) => {
-                            self.committee = committee;
-                            // There should be no committee membership change so self.targets does
-                            // not need to be updated.
-                        },
-                        ReconfigureNotification::Shutdown => return
-                    }
-                    debug!("Committee updated to {}", self.committee);
+
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
                 }
             }
         }
@@ -295,7 +281,7 @@ impl CertificateFetcher {
                         );
                     }
                     Err(e) => {
-                        debug!("Error from task to fetch certificates: {e}");
+                        warn!("Error from task to fetch certificates: {e}");
                     }
                 };
 
@@ -331,7 +317,7 @@ async fn run_fetch_task(
         .set_max_items(MAX_CERTIFICATES_TO_FETCH);
     let Some(response) =
         fetch_certificates_helper(&state.name, &state.network, &committee, request).await else {
-            return Ok(());
+            return Err(DagError::NoCertificateFetched);
         };
 
     // Process and store fetched certificates.
@@ -387,7 +373,7 @@ async fn fetch_certificates_helper(
                     result
                 }));
             }
-            let mut interval = Box::pin(time::sleep(request_interval));
+            let mut interval = Box::pin(sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {
                     Some(Ok(resp)) => {
@@ -400,9 +386,13 @@ async fn fetch_certificates_helper(
                     Some(Err(e)) => {
                         debug!("Failed to fetch certificates: {e}");
                         // Issue request to another primary immediately.
+                        continue;
                     }
                     None => {
-                        debug!("No certificate is fetched across all peers!");
+                        debug!("No peer can be reached for fetching certificates!");
+                        // Last or all requests to peers may have failed immediately, so wait
+                        // before returning to avoid retrying fetching immediately.
+                        sleep(request_interval).await;
                         return None;
                     }
                 },

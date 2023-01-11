@@ -1,13 +1,12 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
+use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SignatureScheme, SuiSignature,
-    SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -17,7 +16,9 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use crate::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
@@ -38,9 +39,24 @@ use std::fmt::{Debug, Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
+    iter,
 };
 use strum::IntoStaticStr;
+use tap::Pipe;
 use tracing::debug;
+
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 2] = [
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_add_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_remove_validator",
+    ),
+];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -163,6 +179,27 @@ pub struct ChangeEpoch {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct GenesisTransaction {
+    pub objects: Vec<GenesisObject>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum GenesisObject {
+    RawObject {
+        data: crate::object::Data,
+        owner: crate::object::Owner,
+    },
+}
+
+impl GenesisObject {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            GenesisObject::RawObject { data, .. } => data.id(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -189,7 +226,58 @@ pub enum SingleTransactionKind {
     /// A validator will not sign a transaction of this kind from outside. It only
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
+    Genesis(GenesisTransaction),
     // .. more transaction types go here
+}
+
+impl MoveCall {
+    pub fn input_objects(&self) -> Vec<InputObjectKind> {
+        let MoveCall {
+            arguments, package, ..
+        } = self;
+        arguments
+            .iter()
+            .filter_map(|arg| match arg {
+                CallArg::Pure(_) => None,
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
+                    Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
+                }
+                CallArg::Object(ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                }) => {
+                    let id = *id;
+                    let initial_shared_version = *initial_shared_version;
+                    Some(vec![InputObjectKind::SharedMoveObject {
+                        id,
+                        initial_shared_version,
+                    }])
+                }
+                CallArg::ObjVec(vec) => Some(
+                    vec.iter()
+                        .map(|obj_arg| match obj_arg {
+                            ObjectArg::ImmOrOwnedObject(object_ref) => {
+                                InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
+                            }
+                            ObjectArg::SharedObject {
+                                id,
+                                initial_shared_version,
+                            } => {
+                                let id = *id;
+                                let initial_shared_version = *initial_shared_version;
+                                InputObjectKind::SharedMoveObject {
+                                    id,
+                                    initial_shared_version,
+                                }
+                            }
+                        })
+                        .collect(),
+                ),
+            })
+            .flatten()
+            .chain([InputObjectKind::MovePackage(package.0)])
+            .collect()
+    }
 }
 
 impl SingleTransactionKind {
@@ -198,6 +286,21 @@ impl SingleTransactionKind {
     }
 
     pub fn shared_input_objects(
+        &self,
+    ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
+        match &self {
+            Self::Call(_) | Self::ChangeEpoch(_) => {
+                Either::Left(self.all_move_call_shared_input_objects())
+            }
+            _ => Either::Right(iter::empty()),
+        }
+    }
+
+    /// Returns an iterator of all shared input objects used by this transaction.
+    /// It covers both Call and ChangeEpoch transaction kind, because both makes Move calls.
+    /// This function is split out of shared_input_objects because Either type only supports
+    /// two variants, while we need to be able to return three variants (Flatten, Once, Empty).
+    fn all_move_call_shared_input_objects(
         &self,
     ) -> impl Iterator<Item = (&ObjectID, /* shared at version */ &SequenceNumber)> {
         match &self {
@@ -228,7 +331,11 @@ impl SingleTransactionKind {
                     })
                     .flatten(),
             ),
-            _ => Either::Right(std::iter::empty()),
+            Self::ChangeEpoch(_) => Either::Right(iter::once((
+                &SUI_SYSTEM_STATE_OBJECT_ID,
+                &SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            ))),
+            _ => unreachable!(),
         }
     }
 
@@ -248,50 +355,7 @@ impl SingleTransactionKind {
             Self::TransferObject(TransferObject { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
-            Self::Call(MoveCall {
-                arguments, package, ..
-            }) => arguments
-                .iter()
-                .filter_map(|arg| match arg {
-                    CallArg::Pure(_) => None,
-                    CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                        Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
-                    }
-                    CallArg::Object(ObjectArg::SharedObject {
-                        id,
-                        initial_shared_version,
-                    }) => {
-                        let id = *id;
-                        let initial_shared_version = *initial_shared_version;
-                        Some(vec![InputObjectKind::SharedMoveObject {
-                            id,
-                            initial_shared_version,
-                        }])
-                    }
-                    CallArg::ObjVec(vec) => Some(
-                        vec.iter()
-                            .map(|obj_arg| match obj_arg {
-                                ObjectArg::ImmOrOwnedObject(object_ref) => {
-                                    InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
-                                }
-                                ObjectArg::SharedObject {
-                                    id,
-                                    initial_shared_version,
-                                } => {
-                                    let id = *id;
-                                    let initial_shared_version = *initial_shared_version;
-                                    InputObjectKind::SharedMoveObject {
-                                        id,
-                                        initial_shared_version,
-                                    }
-                                }
-                            })
-                            .collect(),
-                    ),
-                })
-                .flatten()
-                .chain([InputObjectKind::MovePackage(package.0)])
-                .collect(),
+            Self::Call(move_call) => move_call.input_objects(),
             Self::Publish(MoveModulePublish { modules }) => {
                 // For module publishing, all the dependent packages are implicit input objects
                 // because they must all be on-chain in order for the package to publish.
@@ -330,6 +394,9 @@ impl SingleTransactionKind {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                 }]
+            }
+            Self::Genesis(_) => {
+                vec![]
             }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -431,6 +498,9 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
                 writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
+            Self::Genesis(_) => {
+                writeln!(writer, "Transaction Kind: Genesis")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -503,6 +573,7 @@ impl TransactionKind {
         matches!(
             self,
             TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
+                | TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
     }
 
@@ -513,45 +584,11 @@ impl TransactionKind {
         )
     }
 
-    pub fn validity_check(&self) -> SuiResult {
-        match self {
-            Self::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Publish(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
-                    }
-                );
-            }
-            Self::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::PaySui(_)
-                | SingleTransactionKind::PayAllSui(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_) => (),
-            },
-        }
-        Ok(())
+    pub fn is_genesis_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::Genesis(_))
+        )
     }
 }
 
@@ -722,11 +759,6 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
-    /// Returns the transaction kind as a &str (variant name, no fields)
-    pub fn kind_as_str(&self) -> &'static str {
-        (&self.kind).into()
-    }
-
     pub fn gas(&self) -> ObjectRef {
         self.gas_payment
     }
@@ -768,15 +800,45 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
         match &self.kind {
-            TransactionKind::Batch(_) => (),
+            TransactionKind::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = b.iter().all(|s| match s {
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::Publish(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                    }
+                );
+            }
             TransactionKind::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
                 | SingleTransactionKind::Call(_)
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
                 | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_) => (),
+                | SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::Genesis(_) => (),
                 SingleTransactionKind::PaySui(p) => {
                     fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
                     fp_ensure!(
@@ -796,6 +858,17 @@ impl TransactionData {
             },
         }
         Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        self.kind.single_transactions().any(|tx| match tx {
+            SingleTransactionKind::Call(call) => {
+                let (package, module, func) =
+                    (call.package.0, call.module.as_str(), call.function.as_str());
+                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+            }
+            _ => false,
+        })
     }
 }
 
@@ -898,20 +971,7 @@ impl Transaction {
         Self::new(SenderSignedData::new(data, intent, signature))
     }
 
-    // TODO(joyqvq): remove and prefer to_tx_bytes_and_signature()
-    pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
-        (
-            Base64::from_bytes(
-                bcs::to_bytes(&self.intent_message.value)
-                    .unwrap()
-                    .as_slice(),
-            ),
-            self.tx_signature.scheme(),
-            Base64::from_bytes(self.tx_signature.signature_bytes()),
-            Base64::from_bytes(self.tx_signature.public_key_bytes()),
-        )
-    }
-
+    /// Returns the Base64 encoded tx_bytes and the Base64 encoded serialized signature (`flag || sig || pk`).
     pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
@@ -927,28 +987,41 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
+        ChangeEpoch {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
             storage_rebate,
-        }));
-        // For the ChangeEpoch transaction, we do not care about the sender and the gas.
-        let data = TransactionData::new(
-            kind,
-            SuiAddress::default(),
-            (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-            0,
-        );
-        let signed_data = SenderSignedData {
-            // Default intent
-            intent_message: IntentMessage::new(Intent::default(), data),
-            // Arbitrary keypair
-            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                .unwrap()
-                .into(),
-        };
-        Self::new_from_verified(Transaction::new(signed_data))
+        }
+        .pipe(SingleTransactionKind::ChangeEpoch)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_genesis_transaction(objects: Vec<GenesisObject>) -> Self {
+        GenesisTransaction { objects }
+            .pipe(SingleTransactionKind::Genesis)
+            .pipe(Self::new_system_transaction)
+    }
+
+    fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
+        system_transaction
+            .pipe(TransactionKind::Single)
+            .pipe(|kind| {
+                TransactionData::new(
+                    kind,
+                    SuiAddress::default(),
+                    (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
+                    0,
+                )
+            })
+            .pipe(|data| SenderSignedData {
+                intent_message: IntentMessage::new(Intent::default(), data),
+                tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                    .unwrap()
+                    .into(),
+            })
+            .pipe(Transaction::new)
+            .pipe(Self::new_from_verified)
     }
 }
 
@@ -983,23 +1056,6 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
 }
-
-/// An information Request for batches, and their associated transactions
-///
-/// This reads historic data and sends the batch and transactions in the
-/// database starting at the batch that includes `start`,
-/// and then listens to new transactions until a batch equal or
-/// is over the batch end marker.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct BatchInfoRequest {
-    // The sequence number at which to start the sequence to return, or None for the latest.
-    pub start: Option<TxSequenceNumber>,
-    // The total number of items to receive. Could receive a bit more or a bit less.
-    pub length: u64,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct BatchInfoResponseItem(pub UpdateItem);
 
 /// Subscribe to notifications when new checkpoint certificates are available.
 ///
@@ -1165,6 +1221,16 @@ impl From<TransactionDigest> for TransactionInfoRequest {
     fn from(transaction_digest: TransactionDigest) -> Self {
         TransactionInfoRequest { transaction_digest }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
+}
+
+#[derive(Clone, Debug)]
+pub struct VerifiedHandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1420,9 +1486,9 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),  
-            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),       
-            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),       
+            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
+            ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
+            ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
             ExecutionFailureStatus::InvalidTransferObject => write!(
@@ -1896,6 +1962,7 @@ pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
 pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
+pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
@@ -2086,11 +2153,23 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
+}
+
+impl Debug for ConsensusTransactionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Certificate(digest) => write!(f, "Certificate({:?})", digest),
+            Self::CheckpointSignature(name, seq) => {
+                write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
+            }
+            Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -2180,8 +2259,6 @@ impl ConsensusTransaction {
 
 #[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
 pub enum ExecuteTransactionRequestType {
-    ImmediateReturn,
-    WaitForTxCert,
     WaitForEffectsCert,
     WaitForLocalExecution,
 }
@@ -2200,8 +2277,6 @@ pub type IsTransactionExecutedLocally = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
-    ImmediateReturn,
-    TxCert(Box<CertifiedTransaction>),
     EffectsCert(
         Box<(
             CertifiedTransaction,
@@ -2211,24 +2286,15 @@ pub enum ExecuteTransactionResponse {
     ),
 }
 
-#[derive(Clone, Debug, schemars::JsonSchema)]
-pub enum QuorumDriverRequestType {
-    ImmediateReturn,
-    WaitForTxCert,
-    WaitForEffectsCert,
-}
-
 #[derive(Clone, Debug)]
 pub struct QuorumDriverRequest {
     pub transaction: VerifiedTransaction,
-    pub request_type: QuorumDriverRequestType,
 }
 
-#[derive(Clone, Debug)]
-pub enum QuorumDriverResponse {
-    ImmediateReturn,
-    TxCert(Box<VerifiedCertificate>),
-    EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
+#[derive(Debug, Clone)]
+pub struct QuorumDriverResponse {
+    pub tx_cert: VerifiedCertificate,
+    pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

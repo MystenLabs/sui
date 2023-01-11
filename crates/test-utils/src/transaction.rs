@@ -8,10 +8,10 @@ use tracing::{debug, info};
 
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_adapter::execution_mode;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
-pub use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
-use sui_framework_build::compiled_package::BuildConfig;
+pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::SuiTransactionEffects;
@@ -24,11 +24,11 @@ use sui_types::crypto::{deterministic_random_account_key, AuthorityKeyPair};
 use sui_types::error::SuiResult;
 use sui_types::intent::Intent;
 use sui_types::message_envelope::Message;
-use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages::{
     CallArg, ObjectArg, ObjectInfoRequest, ObjectInfoResponse, Transaction, TransactionData,
-    TransactionEffects, TransactionInfoResponse, VerifiedTransaction,
+    TransactionEffects, VerifiedTransaction,
 };
+use sui_types::messages::{ExecuteTransactionRequestType, HandleCertificateResponse};
 use sui_types::object::{Object, Owner};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
@@ -75,19 +75,14 @@ pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInf
     publish_package(gas_object, path, configs).await
 }
 
-pub fn compile_basics_package() -> Vec<Vec<u8>> {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sui_programmability/examples/basics");
-
-    let build_config = BuildConfig::default();
-    sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes()
-}
-
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
-    publish_package_with_wallet(context, sender, compile_basics_package()).await
+    publish_package_with_wallet(
+        context,
+        sender,
+        compile_basics_package().get_package_bytes(),
+    )
+    .await
 }
 
 /// Returns the published package's ObjectRef.
@@ -148,7 +143,7 @@ pub async fn submit_move_transaction(
     let client = context.get_client().await.unwrap();
     let data = client
         .transaction_builder()
-        .move_call(
+        .move_call::<execution_mode::Normal>(
             sender,
             package_ref.0,
             module,
@@ -490,10 +485,10 @@ pub async fn submit_shared_object_transaction_with_committee(
     replies.map(get_unique_effects)
 }
 
-pub fn get_unique_effects(replies: Vec<TransactionInfoResponse>) -> TransactionEffects {
+pub fn get_unique_effects(replies: Vec<HandleCertificateResponse>) -> TransactionEffects {
     let mut all_effects = HashMap::new();
     for reply in replies {
-        let effects = reply.signed_effects.unwrap().into_data();
+        let effects = reply.signed_effects.into_data();
         all_effects.insert(effects.digest(), effects);
     }
     assert_eq!(all_effects.len(), 1);

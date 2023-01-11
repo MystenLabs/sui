@@ -15,6 +15,7 @@ use typed_store::rocks::be_fix_int_ser;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::traits::Map;
+use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Store;
 use typed_store_derive::DBMapUtils;
@@ -117,14 +118,14 @@ async fn macro_test() {
     assert_eq!(7, tbls_secondary.count_keys("table2").unwrap());
 
     // check raw byte sizes of key and values
-    let (count, key_bytes, value_bytes) = tbls_secondary.table_summary("table1").unwrap();
-    assert_eq!(9, count);
-    assert_eq!(raw_key_bytes1, key_bytes);
-    assert_eq!(raw_value_bytes1, value_bytes);
-    let (count, key_bytes, value_bytes) = tbls_secondary.table_summary("table2").unwrap();
-    assert_eq!(7, count);
-    assert_eq!(raw_key_bytes2, key_bytes);
-    assert_eq!(raw_value_bytes2, value_bytes);
+    let summary1 = tbls_secondary.table_summary("table1").unwrap();
+    assert_eq!(9, summary1.num_keys);
+    assert_eq!(raw_key_bytes1, summary1.key_bytes_total);
+    assert_eq!(raw_value_bytes1, summary1.value_bytes_total);
+    let summary2 = tbls_secondary.table_summary("table2").unwrap();
+    assert_eq!(7, summary2.num_keys);
+    assert_eq!(raw_key_bytes2, summary2.key_bytes_total);
+    assert_eq!(raw_value_bytes2, summary2.value_bytes_total);
 
     // Test all entries
     let m = tbls_secondary.dump("table1", 100, 0).unwrap();
@@ -156,6 +157,24 @@ async fn macro_test() {
     assert_eq!(3, m.len());
     assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
     assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+}
+
+#[tokio::test]
+async fn macro_transactional_test() {
+    let key = "key".to_string();
+    let primary_path = temp_dir();
+    let tables = Tables::open_tables_transactional(primary_path, None, None);
+    let mut transaction = tables
+        .table1
+        .transaction()
+        .expect("failed to init transaction");
+    transaction = transaction
+        .insert_batch(&tables.table1, vec![(key.to_string(), "1".to_string())])
+        .unwrap();
+    transaction
+        .commit()
+        .expect("failed to commit first transaction");
+    assert_eq!(tables.table1.get(&key), Ok(Some("1".to_string())));
 }
 
 /// We show that custom functions can be applied
@@ -225,21 +244,6 @@ struct TablesMemUsage {
     table2: DBMap<i32, String>,
     table3: DBMap<i32, String>,
     table4: DBMap<i32, String>,
-}
-
-#[tokio::test]
-async fn macro_test_get_memory_usage() {
-    let primary_path = temp_dir();
-    let tables = TablesMemUsage::open_tables_read_write(primary_path, None, None);
-
-    let keys_vals_1 = (1..1000).map(|i| (i.to_string(), i.to_string()));
-    tables
-        .table1
-        .multi_insert(keys_vals_1)
-        .expect("Failed to multi-insert");
-
-    let (mem_table, _) = tables.get_memory_usage().unwrap();
-    assert!(mem_table > 0);
 }
 
 #[derive(DBMapUtils)]

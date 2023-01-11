@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
 use sui_types::base_types::ObjectRef;
@@ -30,7 +31,7 @@ async fn get_gas_status(
     };
     let extra_gas_object_refs = gas_object_refs.into_iter().skip(1).collect();
 
-    let mut gas_status = check_gas(
+    check_gas(
         store,
         gas_object_ref,
         transaction.gas_budget,
@@ -38,15 +39,7 @@ async fn get_gas_status(
         &transaction.kind,
         extra_gas_object_refs,
     )
-    .await?;
-
-    if transaction.contains_shared_object() {
-        // It's important that we do this here to make sure there is enough
-        // gas to cover shared objects, before we lock all objects.
-        gas_status.charge_consensus()?;
-    }
-
-    Ok(gas_status)
+    .await
 }
 
 #[instrument(level = "trace", skip_all)]
@@ -55,7 +48,6 @@ pub async fn check_transaction_input(
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction.validity_check()?;
-    transaction.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
@@ -71,9 +63,19 @@ pub(crate) async fn check_dev_inspect_input(
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction.validity_check()?;
-    transaction.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
+    let input_objects = check_dev_inspect_input_objects(store, input_objects)?;
+    Ok((gas_status, input_objects))
+}
+
+#[instrument(level = "trace", skip_all)]
+/// WARNING! This should only be used for the dev-inspect transaction. This transaction type
+/// bypasses many of the normal object checks
+pub(crate) fn check_dev_inspect_input_objects(
+    store: &AuthorityStore,
+    input_objects: Vec<InputObjectKind>,
+) -> SuiResult<InputObjects> {
     let objects = store.check_input_objects(&input_objects)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
@@ -86,12 +88,14 @@ pub(crate) async fn check_dev_inspect_input(
             );
         }
     }
-    let input_objects = InputObjects::new(input_objects.into_iter().zip(objects).collect());
-    Ok((gas_status, input_objects))
+    Ok(InputObjects::new(
+        input_objects.into_iter().zip(objects).collect(),
+    ))
 }
 
 pub async fn check_certificate_input(
     store: &AuthorityStore,
+    epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedCertificate,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     let gas_status = get_gas_status(store, &cert.data().intent_message.value).await?;
@@ -102,7 +106,7 @@ pub async fn check_certificate_input(
         // through sequencing, so we must bypass the sequence checks here.
         store.check_input_objects(&input_object_kinds)?
     } else {
-        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds)?
+        store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
     let input_objects = check_objects(
         &cert.data().intent_message.value,
@@ -245,7 +249,9 @@ async fn check_objects(
     if !errors.is_empty() {
         return Err(SuiError::TransactionInputObjectsErrors { errors });
     }
-    fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
+    if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
+        return Err(SuiError::ObjectInputArityViolation);
+    }
 
     Ok(InputObjects::new(all_objects))
 }

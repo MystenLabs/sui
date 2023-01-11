@@ -167,10 +167,10 @@ fn verify_init_single_param(
     let fn_sig = view.signature_at(fn_handle.parameters);
     if fn_sig.len() != 1 {
         return Err(format!(
-            "Expected last (and at most second) parameter for {}::{} to be &mut {}::{}::{}; \
-             optional first parameter must be of one-time witness type whose name is the same as \
-             the capitalized module name ({}::{}) and which has no fields or a single field of type \
-             bool",
+            "Expected last (and at most second) parameter for {0}::{1} to be &mut {2}::{3}::{4} or \
+             &{2}::{3}::{4}; optional first parameter must be of one-time witness type whose name \
+             is the same as the capitalized module name ({5}::{6}) and which has no fields or a \
+             single field of type bool",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,

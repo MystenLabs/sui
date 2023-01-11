@@ -119,7 +119,10 @@ where
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let started_at = Instant::now();
         let metrics = self.metrics.clone();
-        let mut inner = self.inner.clone();
+        let clone = self.inner.clone();
+        // take the service that was ready
+        // https://docs.rs/tower/latest/tower/trait.Service.html#be-careful-when-cloning-inner-services
+        let mut inner = std::mem::replace(&mut self.inner, clone);
         let whitelist = self.method_whitelist.clone();
 
         let res_fut = async move {

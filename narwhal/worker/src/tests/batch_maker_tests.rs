@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use crate::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use store::rocks;
 use test_utils::{temp_dir, transaction, CommitteeFixture};
+use types::PreSubscribedBroadcastSender;
 
 fn create_batches_store() -> Store<BatchDigest, Batch> {
     let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
@@ -17,8 +19,7 @@ async fn make_batch() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let store = create_batches_store();
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
     let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
@@ -32,7 +33,7 @@ async fn make_batch() {
         /* max_batch_size */ 200,
         /* max_batch_delay */
         Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
-        rx_reconfiguration,
+        tx_shutdown.subscribe(),
         rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
@@ -78,8 +79,7 @@ async fn batch_timeout() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let store = create_batches_store();
-    let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
@@ -93,7 +93,7 @@ async fn batch_timeout() {
         /* max_batch_size */ 200,
         /* max_batch_delay */
         Duration::from_millis(50), // Ensure the timer is triggered.
-        rx_reconfiguration,
+        tx_shutdown.subscribe(),
         rx_batch_maker,
         tx_message,
         Arc::new(node_metrics),
