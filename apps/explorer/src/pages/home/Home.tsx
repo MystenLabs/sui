@@ -14,7 +14,7 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-const TXN_PER_PAGE = 25;
+const TXN_PER_PAGE = 22;
 
 function Home() {
     return (
@@ -40,7 +40,7 @@ function Home() {
                         <TabPanels>
                             <TabPanel>
                                 <ErrorBoundary>
-                                    <TopValidatorsCard limit={10} />
+                                    <TopValidatorsCard limit={10} showIcon />
                                 </ErrorBoundary>
                             </TabPanel>
                         </TabPanels>

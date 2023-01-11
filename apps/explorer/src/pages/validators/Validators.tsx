@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { is, SuiObject } from '@mysten/sui.js';
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useState, useMemo } from 'react';
+
+import Pagination from '../../components/pagination/Pagination';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
@@ -25,7 +27,7 @@ import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 import { getStakedPercent } from '~/utils/getStakedPercent';
 
-const NUMBER_OF_VALIDATORS = 10;
+const NUMBER_OF_VALIDATORS = 20;
 
 const ValidatorMap = lazy(
     () => import('../../components/validator-map/ValidatorMap')
@@ -34,6 +36,8 @@ const ValidatorMap = lazy(
 function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
+
+    const [validatorsPageNumber, setValidatorsPageNumber] = useState(1);
 
     const validatorsData =
         data &&
@@ -50,8 +54,6 @@ function ValidatorPageResult() {
             validatorsData.validators.fields.total_delegation_stake;
         const validators = validatorsData.validators.fields.active_validators
             .map((av) => {
-                const rawName = av.fields.metadata.fields.name;
-
                 const {
                     sui_balance,
                     starting_epoch,
@@ -70,7 +72,7 @@ function ValidatorPageResult() {
                 );
 
                 return {
-                    name: getName(rawName),
+                    name: getName(av.fields.metadata.fields.name),
                     stake: av.fields.stake_amount,
                     stakePercent: getStakedPercent(
                         av.fields.stake_amount,
@@ -185,47 +187,52 @@ function ValidatorPageResult() {
 
             <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
                 <div className="basis-full md:basis-1/2">
-                    {isSuccess && validatorsStats && (
-                        <Card spacing="lg">
-                            <div className="flex min-h-[156px] max-w-full flex-col flex-nowrap justify-between gap-1.5 md:flex-row md:gap-0.5">
-                                <Stats
-                                    label="Participation"
-                                    tooltip="Coming soon"
-                                >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >{`${validatorsStats.participation}%`}</Heading>
-                                </Stats>
-                                <Stats label="Total Staked">
-                                    <DelegationAmount
-                                        amount={validatorsStats.totalStake}
-                                        isStats
-                                    />
-                                </Stats>
-                                <Stats
-                                    label="Last Epoch Reward"
-                                    tooltip="Coming soon"
-                                >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
+                    <ErrorBoundary>
+                        {isSuccess && validatorsStats && (
+                            <Card spacing="lg">
+                                <div className="flex min-h-[156px] max-w-full flex-col flex-nowrap justify-between gap-1.5 md:flex-row md:gap-0.5">
+                                    <Stats
+                                        label="Participation"
+                                        tooltip="Coming soon"
                                     >
-                                        {validatorsStats.lastEpochRewards}
-                                    </Heading>
-                                </Stats>
-                                <Stats label="AVG APY" tooltip="Average APY">
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >{`${validatorsStats.averageAPY}%`}</Heading>
-                                </Stats>
-                            </div>
-                        </Card>
-                    )}
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
+                                        >{`${validatorsStats.participation}%`}</Heading>
+                                    </Stats>
+                                    <Stats label="Total Staked">
+                                        <DelegationAmount
+                                            amount={validatorsStats.totalStake}
+                                            isStats
+                                        />
+                                    </Stats>
+                                    <Stats
+                                        label="Last Epoch Reward"
+                                        tooltip="Coming soon"
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
+                                        >
+                                            {validatorsStats.lastEpochRewards}
+                                        </Heading>
+                                    </Stats>
+                                    <Stats
+                                        label="AVG APY"
+                                        tooltip="Average APY"
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
+                                        >{`${validatorsStats.averageAPY}%`}</Heading>
+                                    </Stats>
+                                </div>
+                            </Card>
+                        )}
+                    </ErrorBoundary>
                 </div>
 
                 <div className="basis-full md:basis-1/2">
@@ -249,10 +256,34 @@ function ValidatorPageResult() {
                     )}
 
                     {isSuccess && validatorsTableData?.data && (
-                        <TableCard
-                            data={validatorsTableData?.data}
-                            columns={validatorsTableData.columns}
-                        />
+                        <>
+                            <TableCard
+                                data={validatorsTableData.data.filter(
+                                    (_, index) =>
+                                        index >=
+                                            (validatorsPageNumber - 1) *
+                                                NUMBER_OF_VALIDATORS &&
+                                        index <
+                                            validatorsPageNumber *
+                                                NUMBER_OF_VALIDATORS
+                                )}
+                                columns={validatorsTableData.columns}
+                            />
+
+                            {validatorsTableData.data.length >
+                                NUMBER_OF_VALIDATORS && (
+                                <Pagination
+                                    totalItems={validatorsTableData.data.length}
+                                    itemsPerPage={NUMBER_OF_VALIDATORS}
+                                    currentPage={validatorsPageNumber}
+                                    onPagiChangeFn={setValidatorsPageNumber}
+                                    stats={{
+                                        stats_text: 'Total Validators',
+                                        count: validatorsTableData.data.length,
+                                    }}
+                                />
+                            )}
+                        </>
                     )}
                 </ErrorBoundary>
             </div>

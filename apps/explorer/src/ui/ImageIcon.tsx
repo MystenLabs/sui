@@ -36,7 +36,7 @@ export interface ImageIconProps extends VariantProps<typeof imageStyle> {
 
 function FallBackAvatar({ str }: { str: string }) {
     return (
-        <div className="h-full w-full flex items-center justify-center">
+        <div className="flex h-full w-full items-center justify-center">
             {str.slice(0, 2)}
         </div>
     );
