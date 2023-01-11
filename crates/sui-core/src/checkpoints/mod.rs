@@ -14,6 +14,9 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
+use crate::state_accumulator::{State, StateAccumulator, StateAccumulatorService};
+use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::hash::MultisetHash;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
@@ -65,6 +68,22 @@ pub struct PendingCheckpointInfo {
 pub struct PendingCheckpoint {
     pub roots: Vec<TransactionDigest>,
     pub details: PendingCheckpointInfo,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointWatermark {
+    // highest checkpoint available in the network with
+    // a quorum of signatures
+    HighestVerified,
+
+    // highest checkpoint downloaded and persisted locally
+    HighestSynced,
+
+    // highest checkpoint executed
+    HighestExecuted,
+
+    // highest checkpoint with accumulated state
+    HighestAccumulated,
 }
 
 #[derive(DBMapUtils)]
@@ -396,6 +415,7 @@ pub struct CheckpointBuilder {
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     effects_store: Box<dyn EffectsNotifyRead>,
+    accumulator: Arc<StateAccumulatorService>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
@@ -428,6 +448,7 @@ impl CheckpointBuilder {
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         effects_store: Box<dyn EffectsNotifyRead>,
+        accumulator: Arc<StateAccumulatorService>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
         notify_aggregator: Arc<Notify>,
@@ -441,6 +462,7 @@ impl CheckpointBuilder {
             epoch_store,
             notify,
             effects_store,
+            accumulator,
             output,
             exit,
             notify_aggregator,
@@ -600,6 +622,7 @@ impl CheckpointBuilder {
                     .record_epoch_first_checkpoint_creation_time_metric();
             }
             let last_checkpoint_of_epoch = details.last_of_epoch && index == chunks_count - 1;
+
             let digests_without_epoch_augment: Vec<_> =
                 effects.iter().map(|e| e.transaction_digest).collect();
             debug!("Waiting for checkpoint user signatures for certificates {:?} to appear in consensus", digests_without_epoch_augment);
@@ -642,6 +665,29 @@ impl CheckpointBuilder {
                 None
             };
 
+            let root_state_digest = if last_checkpoint_of_epoch {
+                let state = State {
+                    effects: effects.clone(),
+                    checkpoint_seq_num: sequence_number,
+                    epoch,
+                    end_of_epoch_flag: true,
+                };
+                self.accumulator.enqueue(state).await?;
+                Some(
+                    self.accumulator
+                        .store
+                        .notify_read_root_state_hash(epoch)
+                        .await
+                        .expect("Failed to read root state digest for epoch {epoch}")
+                        .digest(),
+                )
+            } else {
+                None
+            };
+
+            // for now, just log this value, and insert None into the checkpoint summary
+            info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
+
             let contents =
                 CheckpointContents::new_with_causally_ordered_transactions_and_signatures(
                     effects.iter().map(TransactionEffects::execution_digests),
@@ -664,6 +710,7 @@ impl CheckpointBuilder {
                 previous_digest,
                 epoch_rolling_gas_cost_summary,
                 next_epoch_committee,
+                None, // root_state_digest
                 timestamp_ms,
             );
             if last_checkpoint_of_epoch {
@@ -1024,6 +1071,7 @@ impl CheckpointService {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         effects_store: Box<dyn EffectsNotifyRead>,
+        accumulator: Arc<StateAccumulatorService>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         transaction_certifier: Box<dyn TransactionCertifier>,
@@ -1041,6 +1089,7 @@ impl CheckpointService {
             epoch_store.clone(),
             notify_builder.clone(),
             effects_store,
+            accumulator,
             checkpoint_output,
             exit_rcv.clone(),
             notify_aggregator.clone(),
@@ -1292,12 +1341,17 @@ mod tests {
         let store = Box::new(store);
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
+
+        let accumulator = StateAccumulator::new_for_tests(100);
+        let (accumulator, _handle) = accumulator.start();
+
         let epoch_store = state.epoch_store_for_testing();
         let (checkpoint_service, _exit) = CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             epoch_store.clone(),
             store,
+            Arc::new(accumulator),
             Box::new(output),
             Box::new(certified_output),
             Box::<NetworkTransactionCertifier>::default(),

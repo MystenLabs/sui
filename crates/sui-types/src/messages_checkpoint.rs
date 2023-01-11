@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::{Base58, Encoding, Hex};
+use fastcrypto::hash::Digest;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -75,6 +77,13 @@ pub struct CheckpointSummary {
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     pub epoch_rolling_gas_cost_summary: GasCostSummary,
+
+    /// The digest of the union of all checkpoint accumulators,
+    /// representing the state of the system at the end of the epoch.
+    /// None if this is not the last checkpoint of the epoch
+    #[schemars(with = "Option<[u8; 32]>")]
+    pub root_state_digest: Option<Digest<32>>,
+
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
@@ -99,6 +108,7 @@ impl CheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
+        root_state_digest: Option<Digest<32>>,
         timestamp_ms: CheckpointTimestamp,
     ) -> CheckpointSummary {
         let content_digest = transactions.digest();
@@ -114,6 +124,7 @@ impl CheckpointSummary {
                 next_epoch_committee: c.voting_rights,
                 next_epoch_protocol_version: c.protocol_version,
             }),
+            root_state_digest,
             timestamp_ms,
             version_specific_data: Vec::new(),
         }
@@ -207,6 +218,7 @@ impl SignedCheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
+        root_state_digest: Option<Digest<32>>,
         timestamp_ms: CheckpointTimestamp,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
@@ -217,6 +229,7 @@ impl SignedCheckpointSummary {
             previous_digest,
             epoch_rolling_gas_cost_summary,
             next_epoch_committee,
+            root_state_digest,
             timestamp_ms,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
@@ -511,6 +524,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    None,
                     0,
                 )
             })
@@ -550,6 +564,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    None,
                     0,
                 )
             })
@@ -579,6 +594,7 @@ mod tests {
                     &set,
                     None,
                     GasCostSummary::default(),
+                    None,
                     None,
                     0,
                 )

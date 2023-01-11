@@ -22,6 +22,7 @@ mod notify_once;
 pub mod quorum_driver;
 pub mod safe_client;
 mod stake_aggregator;
+pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
 pub mod tbls;
