@@ -8,7 +8,7 @@ pub mod narwhal_manager_tests;
 use arc_swap::ArcSwap;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
-use mysten_metrics::RegistryService;
+use mysten_metrics::{monitored_scope, RegistryService};
 use narwhal_config::{Committee, Parameters, SharedWorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
@@ -86,6 +86,8 @@ impl<TxValidator: TransactionValidator> NarwhalManager<TxValidator> {
             return;
         }
 
+        let _guard = monitored_scope("NarwhalManagerStart");
+
         // Create a new store
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("epoch{}", committee.epoch()));
@@ -141,6 +143,8 @@ impl<TxValidator: TransactionValidator> NarwhalManager<TxValidator> {
     // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
     // have shutdown.
     pub async fn shutdown(&self) {
+        let _guard = monitored_scope("NarwhalManagerShutdown");
+
         let mut running = self.running.lock().await;
 
         let now = Instant::now();
