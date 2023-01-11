@@ -32,18 +32,18 @@ module std::type_name {
     /// Get Address string (Base16 encoded), first part of the TypeName.
     public fun get_address(self: &TypeName): String {
         // Base16 (string) representation of an address has 2 symbols per byte.
-        let i = address::length() * 2;
+        let len = address::length() * 2;
         let str_bytes = ascii::as_bytes(&self.name);
         let addr_bytes = vector[];
+        let i = 0;
 
-        // Reverse-read string from the last byte pushing the value
-        // into the end of `addr_bytes` vector.
-        while (i > 0) {
-            i = i - 1;
+        // Read `len` bytes from the type name and push them to addr_bytes.
+        while (i < len) {
             vector::push_back(
                 &mut addr_bytes,
                 *vector::borrow(str_bytes, i)
             );
+            i = i + 1;
         };
 
         ascii::string(addr_bytes)
@@ -66,7 +66,6 @@ module std::type_name {
             }
         };
 
-        vector::reverse(&mut module_name);
         ascii::string(module_name)
     }
 

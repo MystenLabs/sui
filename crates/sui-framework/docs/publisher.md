@@ -15,6 +15,8 @@ in the module initializer.
 -  [Function `burn`](#0x2_publisher_burn)
 -  [Function `is_package`](#0x2_publisher_is_package)
 -  [Function `is_module`](#0x2_publisher_is_module)
+-  [Function `module_name`](#0x2_publisher_module_name)
+-  [Function `package`](#0x2_publisher_package)
 
 
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
@@ -49,12 +51,6 @@ a type originated from.
 <dl>
 <dt>
 <code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>type: <a href="_TypeName">type_name::TypeName</a></code>
 </dt>
 <dd>
 
@@ -118,7 +114,6 @@ there can be only one Publisher object per module but multiple per package (!).
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
         package: <a href="_get_address">type_name::get_address</a>(&type),
         module_name: <a href="_get_module">type_name::get_module</a>(&type),
-        type,
     }
 }
 </code></pre>
@@ -162,7 +157,7 @@ Destroy a Publisher object effectively removing all privileges
 associated with it.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_burn">burn</a>(<a href="publisher.md#0x2_publisher">publisher</a>: <a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_burn">burn</a>(self: <a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>)
 </code></pre>
 
 
@@ -171,8 +166,8 @@ associated with it.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_burn">burn</a>(<a href="publisher.md#0x2_publisher">publisher</a>: <a href="publisher.md#0x2_publisher_Publisher">Publisher</a>) {
-    <b>let</b> <a href="publisher.md#0x2_publisher_Publisher">Publisher</a> { id, type: _, package: _, module_name: _ } = <a href="publisher.md#0x2_publisher">publisher</a>;
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_burn">burn</a>(self: <a href="publisher.md#0x2_publisher_Publisher">Publisher</a>) {
+    <b>let</b> <a href="publisher.md#0x2_publisher_Publisher">Publisher</a> { id, package: _, module_name: _ } = self;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
 }
 </code></pre>
@@ -188,7 +183,7 @@ associated with it.
 Check whether type belongs to the same package as the publisher object.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_package">is_package</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_package">is_package</a>&lt;T&gt;(self: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): bool
 </code></pre>
 
 
@@ -197,10 +192,10 @@ Check whether type belongs to the same package as the publisher object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_package">is_package</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_package">is_package</a>&lt;T&gt;(self: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): bool {
     <b>let</b> type = <a href="_get">type_name::get</a>&lt;T&gt;();
 
-    (<a href="_get_address">type_name::get_address</a>(&type) == <a href="publisher.md#0x2_publisher">publisher</a>.package)
+    (<a href="_get_address">type_name::get_address</a>(&type) == self.package)
 }
 </code></pre>
 
@@ -215,7 +210,7 @@ Check whether type belongs to the same package as the publisher object.
 Check whether a type belogs to the same module as the publisher object.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_module">is_module</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_module">is_module</a>&lt;T&gt;(self: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): bool
 </code></pre>
 
 
@@ -224,11 +219,61 @@ Check whether a type belogs to the same module as the publisher object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_module">is_module</a>&lt;T&gt;(<a href="publisher.md#0x2_publisher">publisher</a>: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_module">is_module</a>&lt;T&gt;(self: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): bool {
     <b>let</b> type = <a href="_get">type_name::get</a>&lt;T&gt;();
 
-    (<a href="_get_address">type_name::get_address</a>(&type) == <a href="publisher.md#0x2_publisher">publisher</a>.package)
-        && (<a href="_get_module">type_name::get_module</a>(&type) == <a href="publisher.md#0x2_publisher">publisher</a>.module_name)
+    (<a href="_get_address">type_name::get_address</a>(&type) == self.package)
+        && (<a href="_get_module">type_name::get_module</a>(&type) == self.module_name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_publisher_module_name"></a>
+
+## Function `module_name`
+
+Read the name of the module.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_module_name">module_name</a>(self: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): &<a href="_String">ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_module_name">module_name</a>(self: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): &String {
+    &self.module_name
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_publisher_package"></a>
+
+## Function `package`
+
+Read the package address string.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_package">package</a>(self: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): &<a href="_String">ascii::String</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_package">package</a>(self: &<a href="publisher.md#0x2_publisher_Publisher">Publisher</a>): &String {
+    &self.package
 }
 </code></pre>
 
