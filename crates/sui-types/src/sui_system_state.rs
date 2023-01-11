@@ -199,20 +199,6 @@ impl SuiSystemState {
         }
     }
 
-    pub fn get_next_epoch_committee(&self) -> Committee {
-        Committee::new(
-            self.epoch + 1,
-            self.validators
-                .next_epoch_validators
-                .iter()
-                .map(ValidatorMetadata::to_next_epoch_validator_and_stake_pair)
-                .collect(),
-        )
-        // unwrap is safe because we should have verified the committee on-chain.
-        // TODO: Make sure we actually verify it.
-        .unwrap()
-    }
-
     pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();

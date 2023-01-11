@@ -355,6 +355,9 @@ The amount of stake in the <code><a href="validator.md#0x2_validator">validator<
         ctx
     );
 
+    // TODO: We need <b>to</b> verify the <a href="validator.md#0x2_validator">validator</a> metadata.
+    // https://github.com/MystenLabs/<a href="sui.md#0x2_sui">sui</a>/issues/7323
+
     <a href="validator_set.md#0x2_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="validator.md#0x2_validator">validator</a>);
 }
 </code></pre>
@@ -786,7 +789,7 @@ Withdraw some portion of a delegation from a validator's staking pool.
 ## Function `report_validator`
 
 Report a validator as a bad or non-performant actor in the system.
-Suceeds iff both the sender and the input <code>validator_addr</code> are active validators
+Succeeds iff both the sender and the input <code>validator_addr</code> are active validators
 and they are not the same address. This function is idempotent within an epoch.
 
 
