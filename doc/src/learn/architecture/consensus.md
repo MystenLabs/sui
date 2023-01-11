@@ -2,7 +2,7 @@
 title: Narwhal, Bullshark, and Tusk, Sui's Mempool and Consensus Engines
 ---
 
-This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs and used in Sui. As of Dec 2022, Sui uses Narwhal as the mempool and Bullshark as the consensu engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
+This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2209.05633), the high-throughput mempool and consensus engines offered by Mysten Labs and used in Sui. As of Dec 2022, Sui uses Narwhal as the mempool and Bullshark as the consensus engine by default, to sequence transactions that require a total ordering, synchronize transactions between validators and periodically checkpoint the network's state.
 
 The names highlight that the components split the responsibilities of:
 - ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
