@@ -14,7 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
-use crate::state_accumulator::{State, StateAccumulatorService};
+use crate::state_accumulator::{State, StateAccumulator, StateAccumulatorService};
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::MultisetHash;
 use futures::future::{select, Either};
@@ -67,6 +67,22 @@ pub struct PendingCheckpointInfo {
 pub struct PendingCheckpoint {
     pub roots: Vec<TransactionDigest>,
     pub details: PendingCheckpointInfo,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointWatermark {
+    // highest checkpoint available in the network with
+    // a quorum of signatures
+    HighestVerified,
+
+    // highest checkpoint downloaded and persisted locally
+    HighestSynced,
+
+    // highest checkpoint executed
+    HighestExecuted,
+
+    // highest checkpoint with accumulated state
+    HighestAccumulated,
 }
 
 #[derive(DBMapUtils)]
@@ -358,13 +374,6 @@ impl CheckpointStore {
                 .computation_cost,
         })
     }
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointWatermark {
-    HighestVerified,
-    HighestSynced,
-    HighestExecuted,
 }
 
 pub struct CheckpointBuilder {
