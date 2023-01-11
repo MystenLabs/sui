@@ -51,6 +51,7 @@ export function ActiveDelegation({ id }: Props) {
             staked={delegation.delegateAmount()}
             state={DelegationState.EARNING}
             address={validatorAddress}
+            icon={null}
         />
     );
 }

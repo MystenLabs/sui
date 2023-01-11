@@ -65,11 +65,16 @@ export function ValidatorDetailCard({
                     delegation_token_supply.fields.value,
             365 / num_epochs_participated - 1
         );
-        const pending_delegationsByAddress = pending_delegations
-            ? pending_delegations.filter(
+        console.log(pending_delegations, 'pending_delegations');
+        const pending_delegationsByAddress = [] as {
+            delegator: string;
+            sui_amount: bigint;
+        }[];
+        /* pending_delegations
+            ? (pending_delegations || []).filter(
                   (d) => d.fields.delegator === accountAddress
               )
-            : [];
+            : [];*/
 
         return {
             name: getName(rawName),
@@ -85,13 +90,9 @@ export function ValidatorDetailCard({
                 ) || 0n,
             // TODO: Calculate suiEarned
             suiEarned: 0n,
-            pendingDelegationAmount: pending_delegationsByAddress.reduce(
-                (acc, fields) =>
-                    (acc += BigInt(fields.fields.sui_amount || 0n)),
-                0n
-            ),
+            pendingDelegationAmount: 0n,
         };
-    }, [accountAddress, validatorAddress, validatorsData]);
+    }, [validatorAddress, validatorsData]);
 
     const totalStaked = useAppSelector(totalActiveStakedSelector);
     const pendingStake = validatorData?.pendingDelegationAmount || 0n;
@@ -108,7 +109,7 @@ export function ValidatorDetailCard({
 
     if (isLoading) {
         return (
-            <div className="p-2 w-full flex justify-center item-center h-full">
+            <div className="p-2 w-full flex justify-center items-center h-full">
                 <LoadingIndicator />
             </div>
         );

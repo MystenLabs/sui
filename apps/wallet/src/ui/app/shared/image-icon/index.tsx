@@ -30,7 +30,7 @@ const imageStyle = cva(
 );
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
-    src?: string | null;
+    src: string | null;
     alt: string;
 }
 
@@ -52,7 +52,6 @@ export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
                 <img
                     src={src || ''}
                     alt={alt}
-                    aria-label={alt}
                     className="flex h-full w-full items-center justify-center"
                     onError={() => setError(true)}
                 />

@@ -20,7 +20,7 @@ interface DelegationCardProps {
     staked: number | bigint;
     state: DelegationState;
     rewards?: number | bigint;
-    icon?: string | null;
+    icon: string | null;
     address: string;
 }
 

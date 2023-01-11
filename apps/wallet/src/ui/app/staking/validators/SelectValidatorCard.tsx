@@ -71,7 +71,7 @@ export function SelectValidatorCard() {
 
     if (isLoading) {
         return (
-            <div className="p-2 w-full flex justify-center item-center h-full">
+            <div className="p-2 w-full flex justify-center items-center h-full">
                 <LoadingIndicator />
             </div>
         );

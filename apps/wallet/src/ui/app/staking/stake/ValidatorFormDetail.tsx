@@ -59,33 +59,36 @@ export function ValidatorFormDetail({
                     delegation_token_supply.fields.value,
             365 / num_epochs_participated - 1
         );
-        const pending_delegationsByAddress = pending_delegations
-            ? pending_delegations.filter(
+        console.log(pending_delegations, 'padding delegations');
+
+        const pending_delegationsByAddress = [] as {
+            delegator: string;
+            sui_amount: bigint;
+        }[];
+
+        /*` pending_delegations
+            ? (pending_delegations || []).filter(
                   (d) => d.fields.delegator === accountAddress
               )
-            : [];
+            : []`; */
 
         return {
             name: getName(rawName),
             apy: APY > 0 ? APY : 'N/A',
             logo: null,
             address: sui_address,
-            totalStaked: (pending_delegations || []).reduce(
+            totalStaked: 0n /*(pending_delegations || []).reduce(
                 (acc, fields) =>
                     (acc += BigInt(fields.fields.sui_amount || 0n)),
                 0n
-            ),
-            pendingDelegationAmount: pending_delegationsByAddress.reduce(
-                (acc, fields) =>
-                    (acc += BigInt(fields.fields.sui_amount || 0n)),
-                0n
-            ),
+            )*/,
+            pendingDelegationAmount: 0n,
         };
-    }, [accountAddress, validatorAddress, validatorsData]);
+    }, [validatorAddress, validatorsData]);
 
     if (isLoading) {
         return (
-            <div className="p-2 w-full flex justify-center item-center h-full">
+            <div className="p-2 w-full flex justify-center items-center h-full">
                 <LoadingIndicator />
             </div>
         );

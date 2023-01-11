@@ -16,7 +16,7 @@ const TRUNCATE_PREFIX_LENGTH = 6;
 
 type ValidatorListItemProp = {
     name: string;
-    logo?: string | null;
+    logo: string | null;
     address: string;
     selected?: boolean;
     // APY can be N/A

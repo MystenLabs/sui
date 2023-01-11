@@ -129,12 +129,13 @@ function StakingCard() {
                     queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
                 });
                 resetForm();
+                console.log(response);
 
-                navigate(
+                /*navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
                     }).toString()}`
-                );
+                );*/
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
