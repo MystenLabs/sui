@@ -11,6 +11,7 @@ use crate::util::generate_all_gas_for_test;
 use crate::workloads::shared_counter::SharedCounterWorkload;
 use crate::workloads::transfer_object::TransferObjectWorkload;
 
+use crate::workloads::delegation::DelegationWorkload;
 use crate::workloads::workload::WorkloadInfo;
 use crate::workloads::{
     make_combination_workload, make_shared_counter_workload, make_transfer_object_workload, Gas,
@@ -41,6 +42,7 @@ impl WorkloadConfiguration {
                 in_flight_ratio,
                 shared_counter,
                 transfer_object,
+                delegation,
                 shared_counter_hotness_factor,
                 ..
             } => match self {
@@ -50,6 +52,7 @@ impl WorkloadConfiguration {
                         opts.num_transfer_accounts,
                         shared_counter,
                         transfer_object,
+                        delegation,
                         shared_counter_hotness_factor,
                         target_qps,
                         in_flight_ratio,
@@ -66,6 +69,7 @@ impl WorkloadConfiguration {
                         opts.num_transfer_accounts,
                         shared_counter,
                         transfer_object,
+                        delegation,
                         shared_counter_hotness_factor,
                         target_qps,
                         in_flight_ratio,
@@ -86,6 +90,7 @@ impl WorkloadConfiguration {
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
         transfer_object_weight: u32,
+        delegation_weight: u32,
         shared_counter_hotness_factor: u32,
         target_qps: u64,
         in_flight_ratio: u64,
@@ -119,6 +124,11 @@ impl WorkloadConfiguration {
                 max_ops,
             ))
         };
+        let delegation_gas_configs = if delegation_weight > 0 {
+            DelegationWorkload::generate_gas_config_for_payloads(max_ops)
+        } else {
+            vec![]
+        };
         let (shared_counter_workload_init_gas_config, shared_counter_workload_payload_gas_config) =
             all_shared_counter_coin_configs.unwrap_or((vec![], vec![]));
         let (transfer_object_workload_tokens, transfer_object_workload_payload_gas_config) =
@@ -133,6 +143,7 @@ impl WorkloadConfiguration {
                 shared_counter_workload_payload_gas_config,
                 transfer_object_workload_tokens,
                 transfer_object_workload_payload_gas_config,
+                delegation_gas_configs,
             },
         )
         .await?;
@@ -143,6 +154,7 @@ impl WorkloadConfiguration {
             num_transfer_accounts,
             shared_counter_weight,
             transfer_object_weight,
+            delegation_weight,
             workload_payload_gas,
         );
         combination_workload
@@ -158,6 +170,7 @@ impl WorkloadConfiguration {
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
         transfer_object_weight: u32,
+        delegation_weight: u32,
         shared_counter_hotness_factor: u32,
         target_qps: u64,
         in_flight_ratio: u64,
@@ -212,6 +225,11 @@ impl WorkloadConfiguration {
                     transfer_object_max_ops,
                 )
             };
+        let delegation_gas_configs = if delegation_weight > 0 {
+            DelegationWorkload::generate_gas_config_for_payloads(num_transfer_accounts)
+        } else {
+            vec![]
+        };
         let (workload_init_gas, workload_payload_gas) = generate_all_gas_for_test(
             proxy.clone(),
             gas,
@@ -222,6 +240,7 @@ impl WorkloadConfiguration {
                 shared_counter_workload_payload_gas_config,
                 transfer_object_workload_tokens,
                 transfer_object_workload_payload_gas_config,
+                delegation_gas_configs,
             },
         )
         .await?;
@@ -233,6 +252,7 @@ impl WorkloadConfiguration {
                 transfer_tokens: vec![],
                 transfer_object_payload_gas: vec![],
                 shared_counter_payload_gas: workload_payload_gas.shared_counter_payload_gas,
+                delegation_payload_gas: vec![],
             },
         ) {
             shared_counter_workload
@@ -250,6 +270,7 @@ impl WorkloadConfiguration {
                 transfer_tokens: workload_payload_gas.transfer_tokens,
                 transfer_object_payload_gas: workload_payload_gas.transfer_object_payload_gas,
                 shared_counter_payload_gas: vec![],
+                delegation_payload_gas: vec![],
             },
         ) {
             transfer_object_workload

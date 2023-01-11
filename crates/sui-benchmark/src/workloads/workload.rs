@@ -21,6 +21,7 @@ pub enum WorkloadType {
     SharedCounter,
     TransferObject,
     Combination,
+    Delegation,
 }
 
 impl fmt::Display for WorkloadType {
@@ -29,6 +30,7 @@ impl fmt::Display for WorkloadType {
             WorkloadType::SharedCounter => write!(f, "shared_counter"),
             WorkloadType::TransferObject => write!(f, "transfer_object"),
             WorkloadType::Combination => write!(f, "combination"),
+            WorkloadType::Delegation => write!(f, "delegation"),
         }
     }
 }

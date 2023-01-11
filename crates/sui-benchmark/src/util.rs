@@ -193,6 +193,7 @@ pub async fn generate_all_gas_for_test(
             .iter()
             .cloned(),
     );
+    coin_configs.extend(workload_gas_config.delegation_gas_configs.iter().cloned());
 
     let (_updated_primary_gas, mut new_gas_coins) = split_coin_and_pay(
         proxy.clone(),
@@ -249,6 +250,18 @@ pub async fn generate_all_gas_for_test(
         })
         .collect();
 
+    let delegation_payload_gas = workload_gas_config
+        .delegation_gas_configs
+        .iter()
+        .map(|c| {
+            let (index, _) = new_gas_coins
+                .iter()
+                .find_position(|g| g.1.get_owner_address().unwrap() == c.address)
+                .unwrap();
+            new_gas_coins.remove(index)
+        })
+        .collect();
+
     let workload_init_config = WorkloadInitGas {
         shared_counter_init_gas,
     };
@@ -257,6 +270,7 @@ pub async fn generate_all_gas_for_test(
         transfer_tokens,
         transfer_object_payload_gas,
         shared_counter_payload_gas,
+        delegation_payload_gas,
     };
 
     Ok((workload_init_config, workload_payload_config))

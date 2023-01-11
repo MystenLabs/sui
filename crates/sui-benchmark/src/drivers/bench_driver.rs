@@ -352,7 +352,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 }
                                                 NextOp::Response(Some((
                                                     latency,
-                                                    b.1.make_new_payload(new_version, effects.gas_object().0),
+                                                    b.1.make_new_payload(new_version, effects.gas_object().0, &effects),
                                                 ),
                                                 ))
                                             }
@@ -398,7 +398,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
-                                                payload.make_new_payload(new_version, effects.gas_object().0),
+                                                payload.make_new_payload(new_version, effects.gas_object().0, &effects),
                                             )))
                                         }
                                         Err(err) => {
