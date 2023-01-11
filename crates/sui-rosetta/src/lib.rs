@@ -12,7 +12,6 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
-use sui_config::genesis::Genesis;
 use sui_sdk::SuiClient;
 
 use crate::errors::Error;
@@ -40,12 +39,8 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: SuiClient, genesis: Genesis, data_path: &Path) -> Self {
-        let blocks = Arc::new(PseudoBlockProvider::spawn(
-            client.clone(),
-            genesis,
-            data_path,
-        ));
+    pub fn new(env: SuiEnv, client: SuiClient, data_path: &Path) -> Self {
+        let blocks = Arc::new(PseudoBlockProvider::spawn(client.clone(), data_path));
         Self {
             env,
             context: OnlineServerContext::new(client, blocks),
