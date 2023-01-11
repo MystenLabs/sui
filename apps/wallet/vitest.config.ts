@@ -14,6 +14,6 @@ export default defineConfig({
         setupFiles: ['./testSetup.ts'],
     },
     resolve: {
-        conditions: ["source"],
+        conditions: ['source'],
     },
 });

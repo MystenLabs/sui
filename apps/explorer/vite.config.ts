@@ -31,7 +31,7 @@ export default defineConfig({
         sourcemap: true,
     },
     resolve: {
-        conditions: ["source"],
+        conditions: ['source'],
         alias: {
             '~': new URL('./src', import.meta.url).pathname,
         },
