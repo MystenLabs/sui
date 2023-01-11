@@ -1500,10 +1500,24 @@ impl AuthorityState {
 
     pub fn handle_checkpoint_request(
         &self,
-        _request: &CheckpointRequest,
+        request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        Err(SuiError::UnsupportedFeatureError {
-            error: "Re-enable this once we can serve them from checkpoint v2".to_string(),
+        let summary = match request.sequence_number {
+            Some(seq) => self
+                .checkpoint_store
+                .get_checkpoint_by_sequence_number(seq)?,
+            None => self.checkpoint_store.get_latest_certified_checkpoint(),
+        }
+        .map(|v| v.into_inner());
+        let contents = match &summary {
+            Some(s) => self
+                .checkpoint_store
+                .get_checkpoint_contents(&s.content_digest())?,
+            None => None,
+        };
+        Ok(CheckpointResponse {
+            checkpoint: summary,
+            contents,
         })
     }
 
