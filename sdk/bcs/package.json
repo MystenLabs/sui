@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "source": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
@@ -19,6 +20,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
+    "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
     "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "prepublishOnly": "pnpm build",
