@@ -221,7 +221,7 @@ impl Proposer {
             this_epoch,
             digests
                 .iter()
-                .map(|(digest, worker_id, _)| (*digest, *worker_id))
+                .map(|(digest, worker_id, created_at)| (*digest, (*worker_id, *created_at)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
             &self.signature_service,
@@ -478,7 +478,7 @@ impl Proposer {
                         }
 
                         digests_to_resend.extend(
-                            header.payload.iter().map(|(digest, worker)| (*digest, *worker, 0))
+                            header.payload.iter().map(|(digest, (worker, created_at))| (*digest, *worker, *created_at))
                         );
                         retransmit_rounds.push(*round_header);
                     }

@@ -161,16 +161,23 @@ This will tell you the current client address.
 
 First, we need to publish the code on-chain. Assuming the path to the root of the repository containing Sui source code is $ROOT:
 ```
-$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
-You can find the published package object ID in the **Publish Results** output:
+You can find the published package object ID in the **Transaction Effects** output:
 ```
------ Publish Results ----
-The newly published package object: (0x57258f32746fd1443f2a077c0c6ec03282087c19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
+Transaction Kind : Publish
+ ----- Transaction Effects ----
+ Status : Success
+ Created Objects:
+   - ID: 0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69 , Owner: Immutable
+ Mutated Objects:
+   - ID: 0x91dfb762ebd7acd718828d72898ab8977d75b0eb , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 ```
-Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
+ Note that the exact data you see will be different. One of the **Immutable** objects in **Created Objects** is the package object ID (`0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69` in this case). And the other object ID in **Mutated Objects** is your gas coin object ID (`0x91dfb762ebd7acd718828d72898ab8977d75b0eb` in this case) which is owned by your account address.
+
+ For convenience, let's save it to an environment variable:
 ```
-$ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
+$ export PACKAGE=0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69
 ```
 Next we can call the function to create a color object:
 ```
@@ -180,11 +187,11 @@ In the **Transaction Effects** portion of the output, you will see an object sho
 
 ```
 Created Objects:
-0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
+  - ID: 0xe00d82272758565829feade95023e9257f442c98 , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 ```
 Again, for convenience, let's save the object ID:
 ```
-$ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
+$ export OBJECT=0xe00d82272758565829feade95023e9257f442c98
 ```
 We can inspect this object and see what kind of object it is:
 ```
@@ -192,11 +199,17 @@ $ sui client object $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
-Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
+----- Move Object (0xe00d82272758565829feade95023e9257f442c98[1]) -----
+Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 Version: 1
-ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
-Readonly: false
-Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
+Storage Rebate: 14
+Previous Transaction: T8j4wil5wrDjFz2nqJCIZnZurD9vBKENo7zy32FYcdU=
+----- Data -----
+type: 0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69::color_object::ColorObject
+blue: 0
+green: 255
+id: 0xe00d82272758565829feade95023e9257f442c98
+red: 0
 ```
 As we can see, it's owned by the current default client address that we saw earlier. And the type of this object is `ColorObject`!
 

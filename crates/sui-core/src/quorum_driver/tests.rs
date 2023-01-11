@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_notify_read::Registration;
-use crate::quorum_driver::AuthorityAggregator;
+use crate::quorum_driver::reconfig_observer::DummyReconfigObserver;
+use crate::quorum_driver::{AuthorityAggregator, QuorumDriverHandlerBuilder};
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::make_transfer_sui_transaction;
 use crate::{
-    authority::authority_notify_read::NotifyRead,
-    quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics},
+    authority::authority_notify_read::NotifyRead, quorum_driver::QuorumDriverMetrics,
     test_utils::init_local_authorities,
 };
 use std::time::Duration;
@@ -26,9 +26,15 @@ async fn setup() -> (
 ) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(sender);
-    let (aggregator, _, _) = init_local_authorities(4, vec![gas_object.clone()]).await;
+    let (aggregator, _, genesis, _) = init_local_authorities(4, vec![gas_object.clone()]).await;
 
-    let tx = make_tx(&gas_object, sender, &keypair);
+    let gas_object = genesis
+        .objects()
+        .iter()
+        .find(|o| o.id() == gas_object.id())
+        .unwrap();
+
+    let tx = make_tx(gas_object, sender, &keypair);
     (aggregator, tx)
 }
 
@@ -46,11 +52,15 @@ fn make_tx(gas: &Object, sender: SuiAddress, keypair: &AccountKeyPair) -> Verifi
 async fn test_quorum_driver_submit_transaction() {
     let (aggregator, tx) = setup().await;
     let digest = *tx.digest();
-    let quorum_driver_handler = Arc::new(QuorumDriverHandler::new(
-        Arc::new(aggregator),
-        Arc::new(QuorumDriverMetrics::new_for_tests()),
-    ));
 
+    let quorum_driver_handler = Arc::new(
+        QuorumDriverHandlerBuilder::new(
+            Arc::new(aggregator),
+            Arc::new(QuorumDriverMetrics::new_for_tests()),
+        )
+        .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+        .start(),
+    );
     // Test submit_transaction
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
@@ -71,10 +81,15 @@ async fn test_quorum_driver_submit_transaction() {
 async fn test_quorum_driver_submit_transaction_no_ticket() {
     let (aggregator, tx) = setup().await;
     let digest = *tx.digest();
-    let quorum_driver_handler = Arc::new(QuorumDriverHandler::new(
-        Arc::new(aggregator),
-        Arc::new(QuorumDriverMetrics::new_for_tests()),
-    ));
+
+    let quorum_driver_handler = Arc::new(
+        QuorumDriverHandlerBuilder::new(
+            Arc::new(aggregator),
+            Arc::new(QuorumDriverMetrics::new_for_tests()),
+        )
+        .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+        .start(),
+    );
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
         let QuorumDriverResponse {
@@ -108,11 +123,17 @@ async fn test_quorum_driver_with_given_notify_read() {
     let (aggregator, tx) = setup().await;
     let digest = *tx.digest();
     let notifier = Arc::new(NotifyRead::new());
-    let quorum_driver_handler = Arc::new(QuorumDriverHandler::new_with_notify_read(
-        Arc::new(aggregator),
-        notifier.clone(),
-        Arc::new(QuorumDriverMetrics::new_for_tests()),
-    ));
+
+    let quorum_driver_handler = Arc::new(
+        QuorumDriverHandlerBuilder::new(
+            Arc::new(aggregator),
+            Arc::new(QuorumDriverMetrics::new_for_tests()),
+        )
+        .with_notifier(notifier.clone())
+        .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+        .start(),
+    );
+
     let qd_clone = quorum_driver_handler.clone();
     let handle = tokio::task::spawn(async move {
         let QuorumDriverResponse {
@@ -136,11 +157,17 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
     telemetry_subscribers::init_for_testing();
     let (mut aggregator, tx) = setup().await;
     let arc_aggregator = Arc::new(aggregator.clone());
-    let quorum_driver_handler = QuorumDriverHandler::new_with_max_retry_times(
-        arc_aggregator.clone(),
-        Arc::new(QuorumDriverMetrics::new_for_tests()),
-        3, // retry for 3 times at most, expect to get a failure in a couple of seconds
+
+    let quorum_driver_handler = Arc::new(
+        QuorumDriverHandlerBuilder::new(
+            arc_aggregator.clone(),
+            Arc::new(QuorumDriverMetrics::new_for_tests()),
+        )
+        .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+        .with_max_retry_times(3)
+        .start(),
     );
+
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let quorum_driver_clone = quorum_driver.clone();
     let handle = tokio::task::spawn(async move {
@@ -173,15 +200,34 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
 
 #[tokio::test]
 async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error> {
-    let mut gas_objects = generate_test_gas_objects();
+    let gas_objects = generate_test_gas_objects();
     let (sender, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
 
-    let (aggregator, _, _) = init_local_authorities(4, gas_objects.clone()).await;
+    let (aggregator, _, genesis, _) = init_local_authorities(4, gas_objects.clone()).await;
+
+    let mut gas_objects = gas_objects
+        .into_iter()
+        .map(|o| {
+            genesis
+                .objects()
+                .iter()
+                .find(|go| go.id() == o.id())
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+
     let aggregator = Arc::new(aggregator);
-    let quorum_driver_handler = QuorumDriverHandler::new(
-        aggregator.clone(),
-        Arc::new(QuorumDriverMetrics::new_for_tests()),
+
+    let quorum_driver_handler = Arc::new(
+        QuorumDriverHandlerBuilder::new(
+            aggregator.clone(),
+            Arc::new(QuorumDriverMetrics::new_for_tests()),
+        )
+        .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+        .start(),
     );
+
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
 
     let gas = gas_objects.pop().unwrap();
@@ -355,11 +401,15 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
 #[tokio::test]
 async fn test_quorum_driver_not_retry_on_object_locked() -> Result<(), anyhow::Error> {
     let (auth_agg, _) = setup().await;
-    let quorum_driver_handler = QuorumDriverHandler::new_with_notify_read(
+
+    let quorum_driver_handler = QuorumDriverHandlerBuilder::new(
         Arc::new(auth_agg.clone()),
-        Arc::new(NotifyRead::new()),
         Arc::new(QuorumDriverMetrics::new_for_tests()),
-    );
+    )
+    .with_notifier(Arc::new(NotifyRead::new()))
+    .with_reconfig_observer(Arc::new(DummyReconfigObserver {}))
+    .start();
+
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let validity = quorum_driver
         .authority_aggregator()

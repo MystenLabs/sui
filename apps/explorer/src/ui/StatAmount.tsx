@@ -19,8 +19,7 @@ export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
                 <div className="flex flex-col items-baseline gap-2.5">
                     <Heading
                         as="h4"
-                        variant="heading4"
-                        weight="semibold"
+                        variant="heading4/semibold"
                         color="gray-90"
                         fixed
                     >
@@ -31,7 +30,7 @@ export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
                 </div>
             </div>
             {dollarAmount && (
-                <Text variant="bodySmall" weight="semibold" color="steel-dark">
+                <Text variant="bodySmall/semibold" color="steel-dark">
                     {new Intl.NumberFormat(undefined, {
                         style: 'currency',
                         currency: 'USD',

@@ -254,16 +254,16 @@ function GasAmount({
     return (
         <div className="flex h-full items-center gap-1">
             <div className="flex items-baseline gap-0.5 text-gray-90">
-                <Text variant="body">{formattedAmount}</Text>
-                <Text variant="subtitleSmall">{symbol}</Text>
+                <Text variant="body/medium">{formattedAmount}</Text>
+                <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
 
-            <Text variant="bodySmall">
+            <Text variant="bodySmall/medium">
                 <div className="flex items-center text-steel">
                     (
                     <div className="flex items-baseline gap-0.5">
                         <div>{amount?.toLocaleString()}</div>
-                        <Text variant="subtitleSmall">MIST</Text>
+                        <Text variant="subtitleSmall/medium">MIST</Text>
                     </div>
                     )
                 </div>
@@ -575,8 +575,7 @@ function TransactionView({
                                 <DescriptionItem
                                     title={
                                         <Text
-                                            variant="body"
-                                            weight="semibold"
+                                            variant="body/semibold"
                                             color="steel-darker"
                                         >
                                             Total Gas Fee

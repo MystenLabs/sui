@@ -100,6 +100,9 @@ pub enum DagError {
         local_time: TimestampMs,
     },
 
+    #[error("No peer can be reached for fetching certificates! Check if network is healthy.")]
+    NoCertificateFetched,
+
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),
 

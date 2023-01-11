@@ -71,6 +71,10 @@ pub struct AuthorityPerpetualTables {
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
+    /// When transaction is executed via checkpoint executor, we store association here
+    pub(crate) executed_transactions_to_checkpoint:
+        DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
+
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because
     /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.

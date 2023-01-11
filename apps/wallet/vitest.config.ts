@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { pathAlias } from '@mysten/core/vite.config';
-import { defineConfig } from 'vitest/config';
+import { defineConfig, configDefaults } from 'vitest/config';
 
 export default defineConfig({
     plugins: [],
     test: {
+        exclude: [...configDefaults.exclude, 'tests/**'],
         // TODO: Create custom extension environment.
         environment: 'happy-dom',
         minThreads: 1,

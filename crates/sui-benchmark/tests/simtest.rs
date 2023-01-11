@@ -8,7 +8,6 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
     use sui_config::SUI_KEYSTORE_FILENAME;
-    use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
     use test_utils::{messages::get_gas_object_with_wallet_context, network::TestClusterBuilder};
 
     use sui_benchmark::{
@@ -49,14 +48,20 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load() {
-        let test_cluster = TestClusterBuilder::new()
-            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 4))
-            .build()
-            .await
-            .unwrap();
+        let mut builder = TestClusterBuilder::new()
+            .with_num_validators(get_var("SIM_STRESS_TEST_NUM_VALIDATORS", 7));
+
+        let checkpoints_per_epoch = get_var("CHECKPOINTS_PER_EPOCH", 0);
+        if checkpoints_per_epoch > 0 {
+            builder = builder.with_checkpoints_per_epoch(30);
+        }
+
+        let test_cluster = builder.build().await.unwrap();
+
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
         let sender = test_cluster.get_address_0();
+        let fullnode_rpc_url = &test_cluster.fullnode_handle.rpc_url;
 
         let keystore_path = swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let ed25519_keypair = get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap();
@@ -78,12 +83,14 @@ mod test {
             1,  // shared_counter_weight
             1,  // transfer_object_weight
         )];
-
-        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(swarm.config())
-            .build()
-            .unwrap();
+        let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_auth_agg(Arc::new(aggregator)),
+            LocalValidatorAggregatorProxy::from_network_config(
+                swarm.config(),
+                &registry,
+                Some(fullnode_rpc_url),
+            )
+            .await,
         );
 
         for w in workloads.iter_mut() {
@@ -96,7 +103,6 @@ mod test {
         }
 
         let driver = BenchDriver::new(5);
-        let registry = prometheus::Registry::new();
 
         // Use 0 for unbounded
         let test_duration_secs = get_var("SIM_STRESS_TEST_DURATION_SECS", 10);

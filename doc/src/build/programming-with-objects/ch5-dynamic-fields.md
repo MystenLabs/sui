@@ -128,9 +128,9 @@ public entry fun mutate_child_via_parent(parent: &mut Parent) {
 }
 ```
 
-The first function accepts a mutable reference to the `Child` object directly, and can be called with `Child` objects that haven't been added as fields to `Parent` objects. Its body is empty since what we care about here is not how it is mutated, but whether the function can be called at all.
+The first function accepts a mutable reference to the `Child` object directly, and can be called with `Child` objects that haven't been added as fields to `Parent` objects.
 
-The second functions accepts a mutable reference to the `Parent` object and accesses its dynamic field using `borrow_mut`, to pass to `mutate_child`. This can only be called on `Parent` objects that have a `b"child"` field defined. A `Child` object that has been added to a `Parent` *must* be accessed via its dynamic field, so it can only by mutated using `mutate_child_via_parent`, not `mutate_child`, even if its ID is known.
+The second function accepts a mutable reference to the `Parent` object and accesses its dynamic field using `borrow_mut`, to pass to `mutate_child`. This can only be called on `Parent` objects that have a `b"child"` field defined. A `Child` object that has been added to a `Parent` *must* be accessed via its dynamic field, so it can only by mutated using `mutate_child_via_parent`, not `mutate_child`, even if its ID is known.
 
 > :warning: A transaction that attempts to borrow a field that does not exist will abort.
 

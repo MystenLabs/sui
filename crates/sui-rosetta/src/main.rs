@@ -19,7 +19,7 @@ use tracing::log::warn;
 use sui_config::genesis::Genesis;
 use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_node::{metrics, SuiNode};
-use sui_rosetta::types::{AccountIdentifier, CurveType, PrefundedAccount, SuiEnv};
+use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
@@ -226,7 +226,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
             };
             PrefundedAccount {
                 privkey,
-                account_identifier: AccountIdentifier { address },
+                account_identifier: address.into(),
                 curve_type,
                 currency: SUI.clone(),
             }

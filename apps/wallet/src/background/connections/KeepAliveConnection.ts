@@ -17,8 +17,10 @@ export class KeepAliveConnection {
         null
     );
     private autoDisconnectTimeout: number | null = null;
+    private port: Runtime.Port;
 
-    constructor(private port: Runtime.Port) {
+    constructor(port: Runtime.Port) {
+        this.port = port;
         if (IS_SESSION_STORAGE_SUPPORTED) {
             this.forcePortDisconnect(false);
             return;

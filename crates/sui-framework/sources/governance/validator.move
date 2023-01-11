@@ -282,6 +282,11 @@ module sui::validator {
         staking_pool::sui_balance(&self.delegation_staking_pool)
     }
 
+    /// Return the total amount staked with this validator, including both validator stake and deledgated stake
+    public fun total_stake(self: &Validator): u64 {
+        stake_amount(self) + delegate_amount(self)
+    }
+
     public fun pending_stake_amount(self: &Validator): u64 {
         self.pending_stake
     }

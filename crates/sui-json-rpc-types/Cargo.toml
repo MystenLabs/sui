@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 anyhow = "1.0.64"
 fastcrypto = { workspace = true }
 schemars = { version = "0.8.10", features = ["either"] }
@@ -26,4 +26,4 @@ move-bytecode-utils.workspace = true
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -9,7 +9,7 @@ use backoff::ExponentialBackoff;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
-use tracing::info;
+use tracing::{info, warn};
 
 pub mod errors;
 pub mod models;
@@ -21,11 +21,14 @@ pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 use errors::IndexerError;
 
+pub const RPC_CLIENT_URL: &str = "https://fullnode.devnet.sui.io:443";
+
 pub async fn new_rpc_client(http_url: String) -> Result<SuiClient, IndexerError> {
-    info!("Getting new rpc client...");
+    info!("Getting new RPC client...");
     SuiClient::new(http_url.as_str(), None, None)
         .await
         .map_err(|e| {
+            warn!("Failed to get new RPC client with error: {:?}", e);
             IndexerError::RpcClientInitError(format!(
                 "Failed to initialize fullnode RPC client with error: {:?}",
                 e

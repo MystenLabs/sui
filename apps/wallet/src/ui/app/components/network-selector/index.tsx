@@ -59,6 +59,7 @@ const NetworkSelector = () => {
                 return;
             }
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
+
             dispatch(changeRPCNetwork(apiEnv));
         },
         [customRPC, dispatch]

@@ -6,8 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SignatureScheme, SuiSignature,
-    SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -17,7 +16,9 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use crate::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
@@ -43,6 +44,19 @@ use std::{
 use strum::IntoStaticStr;
 use tap::Pipe;
 use tracing::debug;
+
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 2] = [
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_add_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_remove_validator",
+    ),
+];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -185,7 +199,7 @@ impl GenesisObject {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -570,47 +584,11 @@ impl TransactionKind {
         )
     }
 
-    pub fn validity_check(&self) -> SuiResult {
-        match self {
-            Self::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
-                    }
-                );
-            }
-            Self::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::PaySui(_)
-                | SingleTransactionKind::PayAllSui(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::Genesis(_) => (),
-            },
-        }
-        Ok(())
+    pub fn is_genesis_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::Genesis(_))
+        )
     }
 }
 
@@ -781,11 +759,6 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
-    /// Returns the transaction kind as a &str (variant name, no fields)
-    pub fn kind_as_str(&self) -> &'static str {
-        (&self.kind).into()
-    }
-
     pub fn gas(&self) -> ObjectRef {
         self.gas_payment
     }
@@ -827,8 +800,37 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
         match &self.kind {
-            TransactionKind::Batch(_) => (),
+            TransactionKind::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = b.iter().all(|s| match s {
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::Publish(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                    }
+                );
+            }
             TransactionKind::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
                 | SingleTransactionKind::Call(_)
@@ -856,6 +858,17 @@ impl TransactionData {
             },
         }
         Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        self.kind.single_transactions().any(|tx| match tx {
+            SingleTransactionKind::Call(call) => {
+                let (package, module, func) =
+                    (call.package.0, call.module.as_str(), call.function.as_str());
+                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+            }
+            _ => false,
+        })
     }
 }
 
@@ -958,20 +971,7 @@ impl Transaction {
         Self::new(SenderSignedData::new(data, intent, signature))
     }
 
-    // TODO(joyqvq): remove and prefer to_tx_bytes_and_signature()
-    pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
-        (
-            Base64::from_bytes(
-                bcs::to_bytes(&self.intent_message.value)
-                    .unwrap()
-                    .as_slice(),
-            ),
-            self.tx_signature.scheme(),
-            Base64::from_bytes(self.tx_signature.signature_bytes()),
-            Base64::from_bytes(self.tx_signature.public_key_bytes()),
-        )
-    }
-
+    /// Returns the Base64 encoded tx_bytes and the Base64 encoded serialized signature (`flag || sig || pk`).
     pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),

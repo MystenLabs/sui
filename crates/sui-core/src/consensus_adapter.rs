@@ -37,7 +37,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
 use tokio::time::{timeout, Duration};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -234,31 +234,12 @@ impl ConsensusAdapter {
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
     ) -> Duration {
-        let position = Self::position_submit_certificate(committee, ourselves, tx_digest);
+        let position = position_submit_certificate(committee, ourselves, tx_digest);
         const MAX_DELAY_MUL: usize = 10;
         // DELAY_STEP is chosen as 1.5 * mean consensus delay
         // In the future we can actually use information about consensus rounds instead of this delay
         const DELAY_STEP: Duration = Duration::from_secs(7);
         DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32
-    }
-
-    /// Returns a position of the current validator in ordered list of validator to submit transaction
-    fn position_submit_certificate(
-        committee: &Committee,
-        ourselves: &AuthorityName,
-        tx_digest: &TransactionDigest,
-    ) -> usize {
-        // the 32 is as requirement of the deault StdRng::from_seed choice
-        let digest_bytes = tx_digest.into_bytes();
-
-        // permute the validators deterministically, based on the digest
-        let mut rng = StdRng::from_seed(digest_bytes);
-        let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
-        let (position, _) = validators
-            .into_iter()
-            .find_position(|a| a == ourselves)
-            .expect("Could not find ourselves in shuffled committee");
-        position
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -320,6 +301,11 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
+            info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
+            epoch_store.record_epoch_pending_certs_process_time_metric();
+        }
+
         let _guard = InflightDropGuard::acquire(&self);
         let processed_waiter = epoch_store
             .consensus_message_processed_notify(transaction.key())
@@ -410,6 +396,25 @@ impl ConsensusAdapter {
     }
 }
 
+/// Returns a position of the current validator in ordered list of validator to submit transaction
+pub fn position_submit_certificate(
+    committee: &Committee,
+    ourselves: &AuthorityName,
+    tx_digest: &TransactionDigest,
+) -> usize {
+    // the 32 is as requirement of the deault StdRng::from_seed choice
+    let digest_bytes = tx_digest.into_bytes();
+
+    // permute the validators deterministically, based on the digest
+    let mut rng = StdRng::from_seed(digest_bytes);
+    let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+    let (position, _) = validators
+        .into_iter()
+        .find_position(|a| a == ourselves)
+        .expect("Could not find ourselves in shuffled committee");
+    position
+}
+
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
@@ -498,7 +503,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
 
 #[cfg(test)]
 mod adapter_tests {
-    use super::ConsensusAdapter;
+    use super::position_submit_certificate;
     use fastcrypto::traits::KeyPair;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
     use sui_types::{
@@ -536,7 +541,7 @@ mod adapter_tests {
 
             let mut zero_found = false;
             for (name, _) in authorities.iter() {
-                let f = ConsensusAdapter::position_submit_certificate(&committee, name, &tx_digest);
+                let f = position_submit_certificate(&committee, name, &tx_digest);
                 assert!(f < committee.num_members());
                 if f == 0 {
                     // One and only one validator gets position 0

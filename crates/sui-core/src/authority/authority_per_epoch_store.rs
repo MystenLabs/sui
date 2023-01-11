@@ -26,7 +26,7 @@ use sui_types::messages::{
     SenderSignedData, SignedTransactionEffects, TransactionEffects, TrustedCertificate,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
@@ -36,6 +36,7 @@ use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
+use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::notify_once::NotifyOnce;
 use crate::stake_aggregator::StakeAggregator;
@@ -44,9 +45,12 @@ use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+};
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
+use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
 
@@ -67,6 +71,10 @@ pub struct ExecutionIndicesWithHash {
 pub struct AuthorityPerEpochStore {
     committee: Committee,
     tables: AuthorityEpochTables,
+
+    // needed for re-opening epoch db.
+    parent_path: PathBuf,
+    db_options: Option<Options>,
 
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
@@ -89,6 +97,17 @@ pub struct AuthorityPerEpochStore {
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
     wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
+
+    /// The moment when the current epoch started locally on this validator. Note that this
+    /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
+    /// ok because this is used for metric purposes and we could tolerate some skews occasionally.
+    epoch_open_time: Instant,
+
+    /// The moment when epoch is closed. We don't care much about crash recovery because it's
+    /// a metric that doesn't have to be available for each epoch, and it's only used during
+    /// the last few seconds of an epoch.
+    epoch_close_time: RwLock<Option<Instant>>,
+    metrics: Arc<EpochMetrics>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -177,8 +196,8 @@ pub struct AuthorityEpochTables {
     /// The boolean value indicates whether this is the last checkpoint of the epoch.
     pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
 
-    /// Lists all transaction digests included in checkpoints
-    digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
+    /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
+    builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
     /// Stores pending signatures
     /// The key in this table is checkpoint sequence number and an arbitrary integer
@@ -216,9 +235,15 @@ impl AuthorityEpochTables {
 }
 
 impl AuthorityPerEpochStore {
-    pub fn new(committee: Committee, parent_path: &Path, db_options: Option<Options>) -> Self {
+    pub fn new(
+        committee: Committee,
+        parent_path: &Path,
+        db_options: Option<Options>,
+        metrics: Arc<EpochMetrics>,
+    ) -> Arc<Self> {
+        let current_time = Instant::now();
         let epoch_id = committee.epoch;
-        let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options);
+        let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
         let reconfig_state = tables
@@ -238,9 +263,12 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
-        Self {
+        metrics.current_epoch.set(epoch_id as i64);
+        Arc::new(Self {
             committee,
             tables,
+            parent_path: parent_path.to_path_buf(),
+            db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
@@ -248,7 +276,22 @@ impl AuthorityPerEpochStore {
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             wal,
-        }
+            epoch_open_time: current_time,
+            epoch_close_time: Default::default(),
+            metrics,
+        })
+    }
+
+    pub fn new_at_next_epoch(&self, new_committee: Committee) -> Arc<Self> {
+        assert_eq!(self.epoch() + 1, new_committee.epoch);
+        self.record_reconfig_halt_duration_metric();
+        self.record_epoch_total_duration_metric();
+        Self::new(
+            new_committee,
+            &self.parent_path,
+            self.db_options.clone(),
+            self.metrics.clone(),
+        )
     }
 
     pub fn wal(
@@ -316,7 +359,7 @@ impl AuthorityPerEpochStore {
         self.tables.transactions.remove(transaction).unwrap();
     }
 
-    pub fn get_transaction(
+    pub fn get_signed_transaction(
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
@@ -413,22 +456,6 @@ impl AuthorityPerEpochStore {
         self.tables.next_shared_object_versions.get(obj).unwrap()
     }
 
-    pub fn delete_shared_object_versions(
-        &self,
-        executed_transaction: &TransactionDigest,
-        deleted_objects: &[ObjectID],
-    ) -> SuiResult {
-        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
-        write_batch = write_batch.delete_batch(
-            &self.tables.assigned_shared_object_versions,
-            iter::once(executed_transaction),
-        )?;
-        write_batch =
-            write_batch.delete_batch(&self.tables.next_shared_object_versions, deleted_objects)?;
-        write_batch.write()?;
-        Ok(())
-    }
-
     // For each id in objects_to_init, return the next version for that id as recorded in the
     // next_shared_object_versions table.
     //
@@ -437,7 +464,7 @@ impl AuthorityPerEpochStore {
     // epoch, and we initialize next_shared_object_versions to that value. If no version of the
     // object has yet been written, we initialize the object to the initial version recorded in the
     // certificate (which is a function of the lamport version computation of the transaction that
-    // created the shared object originally - which transaction may not yet have been execugted on
+    // created the shared object originally - which transaction may not yet have been executed on
     // this node).
     //
     // Because all paths that assign shared locks for a shared object transaction call this
@@ -580,7 +607,6 @@ impl AuthorityPerEpochStore {
         effects: &TransactionEffects,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult {
-        let _tx_lock = self.acquire_tx_lock(certificate.digest()).await;
         self.set_assigned_shared_object_versions(
             certificate,
             &effects
@@ -795,19 +821,6 @@ impl AuthorityPerEpochStore {
                ?assigned_versions, ?next_version,
                "locking shared objects");
 
-        // Make an iterator to update the last consensus index.
-
-        // Holding _tx_lock avoids the following race:
-        // - we check effects_exist, returns false
-        // - another task (starting from CheckpointExecutor) writes effects,
-        //    and then deletes locks from assigned_shared_object_versions
-        // - we write to assigned_object versions, re-creating the locks that were just deleted
-        // - now it's possible to run a new tx against old versions of the shared objects.
-        let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
-
-        // Note: if we crash here we are not in an inconsistent state since
-        //       it is ok to just update the pending list without updating the sequence.
-
         self.finish_assign_shared_object_versions(
             transaction.key(),
             certificate,
@@ -989,7 +1002,6 @@ impl AuthorityPerEpochStore {
         self.reconfig_state_mem.write()
     }
 
-    // This method can only be called from ConsensusAdapter::begin_reconfiguration
     pub fn close_user_certs(
         &self,
         mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
@@ -997,6 +1009,13 @@ impl AuthorityPerEpochStore {
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
+
+        // Set epoch_close_time for metric purpose.
+        let mut epoch_close_time = self.epoch_close_time.write();
+        if epoch_close_time.is_none() {
+            // Only update it the first time epoch is closed.
+            *epoch_close_time = Some(Instant::now());
+        }
     }
 
     /// Notify epoch is terminated, can only be called once on epoch store
@@ -1221,6 +1240,12 @@ impl AuthorityPerEpochStore {
                 None => false,
             };
             checkpoint_service.notify_checkpoint(self, index, roots, final_checkpoint)?;
+            if final_checkpoint {
+                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                self.record_end_of_message_quorum_time_metric();
+            } else {
+                self.record_epoch_first_checkpoint_creation_time_metric();
+            }
         }
         self.record_checkpoint_boundary(round)
     }
@@ -1249,25 +1274,29 @@ impl AuthorityPerEpochStore {
     pub fn process_pending_checkpoint(
         &self,
         commit_height: CheckpointCommitHeight,
-        content_info: Option<(CheckpointSequenceNumber, Vec<TransactionDigest>)>,
+        content_info: &[(CheckpointSummary, CheckpointContents)],
     ) -> Result<(), TypedStoreError> {
         let mut batch = self.tables.pending_checkpoints.batch();
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
-        if let Some((seq, transactions)) = content_info {
+        for (summary, transactions) in content_info {
             batch = batch.insert_batch(
-                &self.tables.digest_to_checkpoint,
-                transactions.iter().map(|tx| (*tx, seq)),
+                &self.tables.builder_digest_to_checkpoint,
+                transactions
+                    .iter()
+                    .map(|tx| (tx.transaction, summary.sequence_number)),
             )?;
         }
 
         batch.write()
     }
 
-    pub fn tx_checkpointed_in_current_epoch(
+    pub fn builder_included_transaction_in_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> Result<bool, TypedStoreError> {
-        self.tables.digest_to_checkpoint.contains_key(digest)
+        self.tables
+            .builder_digest_to_checkpoint
+            .contains_key(digest)
     }
 
     pub fn get_pending_checkpoint_signatures_iter(
@@ -1305,6 +1334,64 @@ impl AuthorityPerEpochStore {
         self.tables
             .pending_checkpoint_signatures
             .insert(&(checkpoint_seq, index), info)
+    }
+
+    pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_pending_certs_processed_time_since_epoch_close_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    fn record_end_of_message_quorum_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_end_of_publish_quorum_time_since_epoch_close_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    pub(crate) fn record_epoch_last_checkpoint_creation_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_last_transaction_cert_creation_time_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    pub(crate) fn record_epoch_reconfig_start_time_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_reconfig_start_time_since_epoch_close_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    fn record_reconfig_halt_duration_metric(&self) {
+        if let Some(epoch_close_time) = *self.epoch_close_time.read() {
+            self.metrics
+                .epoch_validator_halt_duration_ms
+                .report(epoch_close_time.elapsed().as_millis() as u64);
+        }
+    }
+
+    fn record_epoch_first_checkpoint_creation_time_metric(&self) {
+        self.metrics
+            .epoch_first_checkpoint_ready_time_since_epoch_begin_ms
+            .report(self.epoch_open_time.elapsed().as_millis() as u64);
+    }
+
+    pub(crate) fn record_epoch_last_transaction_cert_creation_time_metric(&self, elapsed_ms: u64) {
+        self.metrics
+            .epoch_last_transaction_cert_creation_time_ms
+            .report(elapsed_ms);
+    }
+
+    fn record_epoch_total_duration_metric(&self) {
+        self.metrics
+            .epoch_total_duration
+            .report(self.epoch_open_time.elapsed().as_millis() as u64);
     }
 }
 

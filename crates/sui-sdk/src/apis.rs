@@ -349,15 +349,13 @@ impl QuorumDriver {
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<TransactionExecutionResult> {
-        let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
+        let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
-        let resp = TransactionExecutionApiClient::execute_transaction(
+        let resp = TransactionExecutionApiClient::execute_transaction_serialized_sig(
             &self.api.http,
             tx_bytes,
-            flag,
             signature,
-            pub_key,
             request_type.clone(),
         )
         .await?;
