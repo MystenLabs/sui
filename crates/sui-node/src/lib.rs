@@ -159,8 +159,11 @@ impl SuiNode {
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
-        checkpoint_store
-            .insert_genesis_checkpoint(genesis.checkpoint(), genesis.checkpoint_contents().clone());
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),

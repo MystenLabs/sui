@@ -83,7 +83,20 @@ impl CheckpointStore {
         &self,
         checkpoint: VerifiedCheckpoint,
         contents: CheckpointContents,
+        epoch_store: &AuthorityPerEpochStore,
     ) {
+        for transaction in contents.iter() {
+            debug!(
+                "Manually inserting genesis transaction in checkpoint DB: {:?}",
+                transaction.transaction
+            );
+            epoch_store
+                .put_genesis_transaction_in_builder_digest_to_checkpoint(
+                    transaction.transaction,
+                    checkpoint.sequence_number(),
+                )
+                .unwrap();
+        }
         self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
         self.insert_checkpoint_contents(contents).unwrap();
         self.update_highest_synced_checkpoint(&checkpoint).unwrap();
