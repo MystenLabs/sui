@@ -3003,12 +3003,6 @@
           }
         }
       },
-      "ChainId": {
-        "description": "Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware that this field maybe updated to be uleb64 in the future",
-        "type": "integer",
-        "format": "uint8",
-        "minimum": 0.0
-      },
       "CheckpointContents": {
         "description": "CheckpointContents are the transactions included in an upcoming checkpoint. They must have already been causally ordered. Since the causal order algorithm is the same among validators, we expect all honest validators to come up with the same order for each checkpoint content.",
         "type": "object",
@@ -5788,7 +5782,6 @@
         "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
         "type": "object",
         "required": [
-          "chain_id",
           "epoch",
           "info",
           "parameters",
@@ -5800,9 +5793,6 @@
           "validators"
         ],
         "properties": {
-          "chain_id": {
-            "$ref": "#/components/schemas/ChainId"
-          },
           "epoch": {
             "type": "integer",
             "format": "uint64",

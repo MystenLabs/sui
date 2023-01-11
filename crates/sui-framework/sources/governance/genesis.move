@@ -31,7 +31,6 @@ module sui::genesis {
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
     fun create(
-        chain_id: u8,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
         validator_worker_pubkeys: vector<vector<u8>>,
@@ -106,7 +105,6 @@ module sui::genesis {
             i = i + 1;
         };
         sui_system::create(
-            chain_id,
             validators,
             sui_supply,
             storage_fund,
@@ -119,13 +117,11 @@ module sui::genesis {
 
     #[test_only]
     public fun create_for_testing(ctx: &mut TxContext) {
-        let chain_id = 1;
         let validators = vector[];
         let sui_supply = sui::new(ctx);
         let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
 
         sui_system::create(
-            chain_id,
             validators,
             sui_supply,
             storage_fund,

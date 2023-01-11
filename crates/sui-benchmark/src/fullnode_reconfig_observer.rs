@@ -64,11 +64,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                 Ok(sui_system_state) => {
                     let epoch_id = sui_system_state.epoch;
                     if epoch_id > quorum_driver.current_epoch() {
-                        debug!(
-                            chain_id=?sui_system_state.chain_id,
-                            epoch_id,
-                            "Got SuiSystemState in newer epoch"
-                        );
+                        debug!(epoch_id, "Got SuiSystemState in newer epoch");
                         let new_committee = match self
                             .fullnode_client
                             .read_api()
@@ -106,7 +102,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                         }
                     } else {
                         trace!(
-                            chain_id=?sui_system_state.chain_id,
                             epoch_id,
                             "Ignored SystemState from a previous or current epoch",
                         );
