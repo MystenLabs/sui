@@ -17,6 +17,7 @@ use types::{
 pub type PayloadToken = u8;
 
 /// All the data stores of the node.
+#[derive(Clone)]
 pub struct NodeStorage {
     pub proposer_store: ProposerStore,
     pub vote_digest_store: Store<PublicKey, VoteInfo>,

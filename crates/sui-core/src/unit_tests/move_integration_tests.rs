@@ -21,7 +21,7 @@ use sui_types::{
     messages::ExecutionStatus,
 };
 
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
 
 const MAX_GAS: u64 = 10000;
@@ -540,16 +540,27 @@ async fn test_create_then_delete_parent_child_wrap() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+    // Modifies the gas object
+    assert_eq!(effects.mutated.len(), 1);
     // Creates 3 objects, the parent, a field, and the child
     assert_eq!(effects.created.len(), 2);
     // not wrapped as it wasn't first created
     assert_eq!(effects.wrapped.len(), 0);
     assert_eq!(effects.events.len(), 3);
 
+    let gas_ref = effects.mutated[0].0;
+
     let parent = effects
         .created
         .iter()
         .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap()
+        .0;
+
+    let field = effects
+        .created
+        .iter()
+        .find(|((id, _, _), _)| id != &parent.0)
         .unwrap()
         .0;
 
@@ -568,9 +579,24 @@ async fn test_create_then_delete_parent_child_wrap() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
-    // Check that both objects were deleted.
-    assert_eq!(effects.deleted.len(), 3);
-    assert_eq!(effects.events.len(), 4);
+
+    // The parent and field are considered deleted, the child doesn't count because it wasn't
+    // considered created in the first place.
+    assert_eq!(effects.deleted.len(), 2);
+    assert_eq!(effects.events.len(), 3);
+
+    assert_eq!(
+        effects
+            .modified_at_versions
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>(),
+        HashSet::from([
+            (gas_ref.0, gas_ref.1),
+            (parent.0, parent.1),
+            (field.0, field.1)
+        ]),
+    );
 }
 
 #[tokio::test]

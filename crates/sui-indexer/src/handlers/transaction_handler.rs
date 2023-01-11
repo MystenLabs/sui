@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::{SuiTransactionResponse, TransactionsPage};
@@ -12,6 +13,7 @@ use tokio::time::sleep;
 use tracing::info;
 
 use sui_indexer::errors::IndexerError;
+use sui_indexer::metrics::IndexerTransactionHandlerMetrics;
 use sui_indexer::models::transaction_logs::{commit_transction_log, read_transaction_log};
 use sui_indexer::models::transactions::commit_transactions;
 use sui_indexer::utils::log_errors_to_pg;
@@ -24,13 +26,19 @@ const TRANSACTION_PAGE_SIZE: usize = 100;
 pub struct TransactionHandler {
     rpc_client: SuiClient,
     pg_connection_pool: Arc<PgConnectionPool>,
+    pub transaction_handler_metrics: IndexerTransactionHandlerMetrics,
 }
 
 impl TransactionHandler {
-    pub fn new(rpc_client: SuiClient, pg_connection_pool: Arc<PgConnectionPool>) -> Self {
+    pub fn new(
+        rpc_client: SuiClient,
+        pg_connection_pool: Arc<PgConnectionPool>,
+        prometheus_registry: &Registry,
+    ) -> Self {
         Self {
             rpc_client,
             pg_connection_pool,
+            transaction_handler_metrics: IndexerTransactionHandlerMetrics::new(prometheus_registry),
         }
     }
 
@@ -57,9 +65,18 @@ impl TransactionHandler {
         }
 
         loop {
+            self.transaction_handler_metrics
+                .total_transaction_page_fetch_attempt
+                .inc();
             let page = self.get_transaction_page(next_cursor).await?;
+            self.transaction_handler_metrics
+                .total_transaction_page_received
+                .inc();
             let txn_digest_vec = page.data;
             let txn_count = txn_digest_vec.len();
+            self.transaction_handler_metrics
+                .total_transactions_received
+                .inc_by(txn_count as u64);
             let txn_response_res_vec = join_all(
                 txn_digest_vec
                     .into_iter()
@@ -75,10 +92,23 @@ impl TransactionHandler {
 
             log_errors_to_pg(&mut pg_pool_conn, errors);
             commit_transactions(&mut pg_pool_conn, resp_vec)?;
-            // canonical txn digest is Base64 encoded
-            commit_transction_log(&mut pg_pool_conn, page.next_cursor.map(|d| d.encode()))?;
-            next_cursor = page.next_cursor;
-            if txn_count < TRANSACTION_PAGE_SIZE {
+            // Transaction page's next cursor can be None when latest transaction page is
+            // reached, if we use the None cursor to read transactions, it will read from genesis,
+            // thus here we do not commit / use the None cursor.
+            // This will cause duplidate run of the current batch, but will not cause duplidate rows
+            // b/c of the uniqueness restriction of the table.
+            if let Some(next_cursor_val) = page.next_cursor {
+                // canonical txn digest is Base64 encoded
+                commit_transction_log(&mut pg_pool_conn, Some(next_cursor_val.encode()))?;
+                next_cursor = page.next_cursor;
+            }
+            self.transaction_handler_metrics
+                .total_transaction_page_committed
+                .inc();
+            self.transaction_handler_metrics
+                .total_transactions_processed
+                .inc_by(txn_count as u64);
+            if txn_count < TRANSACTION_PAGE_SIZE || page.next_cursor.is_none() {
                 sleep(Duration::from_secs_f32(0.1)).await;
             }
         }

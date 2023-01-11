@@ -2,7 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 pub mod authority;
-pub mod authority_active;
 pub mod authority_aggregator;
 pub mod authority_client;
 pub mod authority_server;

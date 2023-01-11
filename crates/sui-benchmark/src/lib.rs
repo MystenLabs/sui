@@ -1,33 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{collections::BTreeMap, sync::Arc};
-
 use anyhow::bail;
 use async_trait::async_trait;
+use embedded_reconfig_observer::EmbeddedReconfigObserver;
+use fullnode_reconfig_observer::FullNodeReconfigObserver;
+use prometheus::Registry;
+use std::{collections::BTreeMap, sync::Arc};
+use sui_config::genesis::Genesis;
+use sui_config::NetworkConfig;
 use sui_core::{
-    authority_aggregator::AuthorityAggregator,
+    authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
-    quorum_driver::{QuorumDriver, QuorumDriverHandler, QuorumDriverMetrics},
+    quorum_driver::{
+        QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+    },
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
-use sui_network::default_mysten_network_config;
 use sui_sdk::SuiClient;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
-    error::SuiError,
     messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
     object::{Object, ObjectRead},
 };
 use sui_types::{
-    base_types::ObjectRef,
-    crypto::AuthorityStrongQuorumSignInfo,
-    messages::{ExecuteTransactionRequestType, QuorumDriverRequest},
-    object::Owner,
+    base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
+    messages::ExecuteTransactionRequestType, object::Owner,
 };
 use tracing::{error, info};
 
 pub mod drivers;
+pub mod embedded_reconfig_observer;
+pub mod fullnode_reconfig_observer;
 pub mod util;
 pub mod workloads;
 
@@ -97,9 +101,7 @@ pub trait ValidatorProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError>;
-
-    async fn reconfig(&self);
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
 
     fn clone_committee(&self) -> Committee;
 
@@ -114,8 +116,62 @@ pub struct LocalValidatorAggregatorProxy {
 }
 
 impl LocalValidatorAggregatorProxy {
-    pub fn from_auth_agg(agg: Arc<AuthorityAggregator<NetworkAuthorityClient>>) -> Self {
-        let qd_handler = QuorumDriverHandler::new(agg, QuorumDriverMetrics::new_for_tests());
+    pub async fn from_genesis(
+        genesis: &Genesis,
+        registry: &Registry,
+        reconfig_fullnode_rpc_url: Option<&str>,
+    ) -> Self {
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
+            .with_registry(registry)
+            .build()
+            .unwrap();
+
+        Self::new_impl(aggregator, registry, reconfig_fullnode_rpc_url).await
+    }
+
+    pub async fn from_network_config(
+        configs: &NetworkConfig,
+        registry: &Registry,
+        reconfig_fullnode_rpc_url: Option<&str>,
+    ) -> Self {
+        let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
+            .with_registry(registry)
+            .build()
+            .unwrap();
+        Self::new_impl(aggregator, registry, reconfig_fullnode_rpc_url).await
+    }
+
+    async fn new_impl(
+        aggregator: AuthorityAggregator<NetworkAuthorityClient>,
+        registry: &Registry,
+        reconfig_fullnode_rpc_url: Option<&str>,
+    ) -> Self {
+        let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
+        let qd_handler_builder =
+            QuorumDriverHandlerBuilder::new(Arc::new(aggregator.clone()), quorum_driver_metrics);
+
+        let qd_handler = (if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
+            info!(
+                "Using FullNodeReconfigObserver: {:?}",
+                reconfig_fullnode_rpc_url
+            );
+            let committee_store = aggregator.clone_committee_store();
+            let reconfig_observer = Arc::new(
+                FullNodeReconfigObserver::new(
+                    reconfig_fullnode_rpc_url,
+                    committee_store,
+                    aggregator.safe_client_metrics_base.clone(),
+                    aggregator.metrics.clone(),
+                )
+                .await,
+            );
+            qd_handler_builder.with_reconfig_observer(reconfig_observer)
+        } else {
+            info!("Using EmbeddedReconfigObserver");
+            qd_handler_builder.with_reconfig_observer(Arc::new(EmbeddedReconfigObserver::new()))
+        })
+        .start();
+
         let qd = qd_handler.clone_quorum_driver();
         Self {
             _qd_handler: qd_handler,
@@ -137,55 +193,34 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError> {
-        let QuorumDriverResponse::EffectsCert(result) = self
-            .qd
-            .execute_transaction(QuorumDriverRequest {
-                transaction: tx.verify()?,
-            })
-            .await?;
-        let (tx_cert, effects_cert) = *result;
-        let tx_cert: SuiCertifiedTransaction = tx_cert.try_into().unwrap();
-        let effects = ExecutionEffects::CertifiedTransactionEffects(effects_cert.into());
-        Ok((tx_cert, effects))
-    }
-
-    async fn reconfig(&self) {
-        let auth_agg = self.qd.authority_aggregator().load();
-        match auth_agg
-            .get_committee_with_net_addresses(self.qd.current_epoch())
-            .await
-        {
-            Err(err) => {
-                error!(
-                    "Reconfiguration - Failed to get committee with network address: {}",
-                    err
-                )
-            }
-            Ok(committee_info) => {
-                let network_config = default_mysten_network_config();
-                let new_epoch = committee_info.committee.epoch;
-                // Check if we already advanced.
-                let cur_epoch = self.qd.current_epoch();
-                if new_epoch <= cur_epoch {
-                    return;
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+        let tx_digest = *tx.digest();
+        let tx = tx.verify()?;
+        let mut retry_cnt = 0;
+        while retry_cnt < 3 {
+            let ticket = self.qd.submit_transaction(tx.clone()).await?;
+            // The ticket only times out when QuorumDriver exceeds the retry times
+            match ticket.await {
+                Ok(resp) => {
+                    let QuorumDriverResponse {
+                        tx_cert,
+                        effects_cert,
+                    } = resp;
+                    return Ok((
+                        tx_cert.try_into().unwrap(),
+                        ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
+                    ));
                 }
-                info!("Reconfiguration - Observed a new epoch {new_epoch}, attempting to reconfig from current epoch: {cur_epoch}");
-                match auth_agg.recreate_with_net_addresses(committee_info, &network_config) {
-                    Err(err) => error!(
-                        "Reconfiguration - Error when cloning authority aggregator with committee: {}",
-                        err
-                    ),
-                    Ok(auth_agg) => {
-                        if let Err(err) = self.qd.update_validators(Arc::new(auth_agg)).await {
-                            error!("Reconfiguration - Error when updating authority aggregator in quorum driver: {}", err);
-                        } else {
-                            info!("Reconfiguration - Reconfiguration to epoch {new_epoch} is done");
-                        }
-                    }
+                Err(err) => {
+                    error!(
+                        ?tx_digest,
+                        retry_cnt, "Transaction failed with err: {:?}", err
+                    );
+                    retry_cnt += 1;
                 }
             }
         }
+        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
     fn clone_committee(&self) -> Committee {
@@ -213,6 +248,7 @@ pub struct FullNodeProxy {
 
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
+        // Each request times out after 60s (default value)
         let sui_client = SuiClient::new(http_url, None, None).await?;
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
@@ -247,29 +283,38 @@ impl ValidatorProxy for FullNodeProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<(SuiCertifiedTransaction, ExecutionEffects), SuiError> {
-        let result = self
-            .sui_client
-            .quorum_driver()
-            // We need to use WaitForLocalExecution to make sure objects are updated on FN
-            .execute_transaction(
-                tx.verify()?,
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await
-            // TODO make sure RpcExecuteTransactionError covers epoch change identified on FN
-            .map_err(|e| SuiError::RpcExecuteTransactionError {
-                error: e.to_string(),
-            })?;
-        let tx_cert = result.tx_cert.unwrap();
-        let effects = ExecutionEffects::SuiTransactionEffects(result.effects.unwrap());
-        Ok((tx_cert, effects))
-    }
-
-    async fn reconfig(&self) {
-        // TODO poll FN until it has proceeds to next epoch
-        // and update self.committee
-        return;
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+        let tx_digest = *tx.digest();
+        let tx = tx.verify()?;
+        let mut retry_cnt = 0;
+        while retry_cnt < 10 {
+            // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
+            // SuiClient times out after 60s
+            match self
+                .sui_client
+                .quorum_driver()
+                .execute_transaction(
+                    tx.clone(),
+                    // We need to use WaitForLocalExecution to make sure objects are updated on FN
+                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+                )
+                .await
+            {
+                Ok(resp) => {
+                    let tx_cert = resp.tx_cert.unwrap();
+                    let effects = ExecutionEffects::SuiTransactionEffects(resp.effects.unwrap());
+                    return Ok((tx_cert, effects));
+                }
+                Err(err) => {
+                    error!(
+                        ?tx_digest,
+                        retry_cnt, "Transaction failed with err: {:?}", err
+                    );
+                    retry_cnt += 1;
+                }
+            }
+        }
+        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
     fn clone_committee(&self) -> Committee {

@@ -6,8 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SignatureScheme, SuiSignature,
-    SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -17,7 +16,9 @@ use crate::messages_checkpoint::{
 };
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use crate::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
@@ -41,7 +42,21 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
+use tap::Pipe;
 use tracing::debug;
+
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 2] = [
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_add_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_remove_validator",
+    ),
+];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -164,6 +179,27 @@ pub struct ChangeEpoch {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct GenesisTransaction {
+    pub objects: Vec<GenesisObject>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum GenesisObject {
+    RawObject {
+        data: crate::object::Data,
+        owner: crate::object::Owner,
+    },
+}
+
+impl GenesisObject {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            GenesisObject::RawObject { data, .. } => data.id(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -190,6 +226,7 @@ pub enum SingleTransactionKind {
     /// A validator will not sign a transaction of this kind from outside. It only
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
+    Genesis(GenesisTransaction),
     // .. more transaction types go here
 }
 
@@ -358,6 +395,9 @@ impl SingleTransactionKind {
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                 }]
             }
+            Self::Genesis(_) => {
+                vec![]
+            }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -458,6 +498,9 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
                 writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
             }
+            Self::Genesis(_) => {
+                writeln!(writer, "Transaction Kind: Genesis")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -530,6 +573,7 @@ impl TransactionKind {
         matches!(
             self,
             TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
+                | TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
     }
 
@@ -540,45 +584,11 @@ impl TransactionKind {
         )
     }
 
-    pub fn validity_check(&self) -> SuiResult {
-        match self {
-            Self::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Publish(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
-                    }
-                );
-            }
-            Self::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::PaySui(_)
-                | SingleTransactionKind::PayAllSui(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_) => (),
-            },
-        }
-        Ok(())
+    pub fn is_genesis_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::Genesis(_))
+        )
     }
 }
 
@@ -749,11 +759,6 @@ impl TransactionData {
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 
-    /// Returns the transaction kind as a &str (variant name, no fields)
-    pub fn kind_as_str(&self) -> &'static str {
-        (&self.kind).into()
-    }
-
     pub fn gas(&self) -> ObjectRef {
         self.gas_payment
     }
@@ -795,15 +800,45 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
         match &self.kind {
-            TransactionKind::Batch(_) => (),
+            TransactionKind::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = b.iter().all(|s| match s {
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::Publish(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                    }
+                );
+            }
             TransactionKind::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
                 | SingleTransactionKind::Call(_)
                 | SingleTransactionKind::Publish(_)
                 | SingleTransactionKind::TransferObject(_)
                 | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_) => (),
+                | SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::Genesis(_) => (),
                 SingleTransactionKind::PaySui(p) => {
                     fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
                     fp_ensure!(
@@ -823,6 +858,17 @@ impl TransactionData {
             },
         }
         Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        self.kind.single_transactions().any(|tx| match tx {
+            SingleTransactionKind::Call(call) => {
+                let (package, module, func) =
+                    (call.package.0, call.module.as_str(), call.function.as_str());
+                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+            }
+            _ => false,
+        })
     }
 }
 
@@ -925,20 +971,7 @@ impl Transaction {
         Self::new(SenderSignedData::new(data, intent, signature))
     }
 
-    // TODO(joyqvq): remove and prefer to_tx_bytes_and_signature()
-    pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
-        (
-            Base64::from_bytes(
-                bcs::to_bytes(&self.intent_message.value)
-                    .unwrap()
-                    .as_slice(),
-            ),
-            self.tx_signature.scheme(),
-            Base64::from_bytes(self.tx_signature.signature_bytes()),
-            Base64::from_bytes(self.tx_signature.public_key_bytes()),
-        )
-    }
-
+    /// Returns the Base64 encoded tx_bytes and the Base64 encoded serialized signature (`flag || sig || pk`).
     pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
@@ -954,28 +987,41 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
+        ChangeEpoch {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
             storage_rebate,
-        }));
-        // For the ChangeEpoch transaction, we do not care about the sender and the gas.
-        let data = TransactionData::new(
-            kind,
-            SuiAddress::default(),
-            (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-            0,
-        );
-        let signed_data = SenderSignedData {
-            // Default intent
-            intent_message: IntentMessage::new(Intent::default(), data),
-            // Arbitrary keypair
-            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                .unwrap()
-                .into(),
-        };
-        Self::new_from_verified(Transaction::new(signed_data))
+        }
+        .pipe(SingleTransactionKind::ChangeEpoch)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_genesis_transaction(objects: Vec<GenesisObject>) -> Self {
+        GenesisTransaction { objects }
+            .pipe(SingleTransactionKind::Genesis)
+            .pipe(Self::new_system_transaction)
+    }
+
+    fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
+        system_transaction
+            .pipe(TransactionKind::Single)
+            .pipe(|kind| {
+                TransactionData::new(
+                    kind,
+                    SuiAddress::default(),
+                    (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
+                    0,
+                )
+            })
+            .pipe(|data| SenderSignedData {
+                intent_message: IntentMessage::new(Intent::default(), data),
+                tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                    .unwrap()
+                    .into(),
+            })
+            .pipe(Transaction::new)
+            .pipe(Self::new_from_verified)
     }
 }
 
@@ -2107,11 +2153,23 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
+}
+
+impl Debug for ConsensusTransactionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Certificate(digest) => write!(f, "Certificate({:?})", digest),
+            Self::CheckpointSignature(name, seq) => {
+                write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
+            }
+            Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -2233,9 +2291,10 @@ pub struct QuorumDriverRequest {
     pub transaction: VerifiedTransaction,
 }
 
-#[derive(Clone, Debug)]
-pub enum QuorumDriverResponse {
-    EffectsCert(Box<(VerifiedCertificate, VerifiedCertifiedTransactionEffects)>),
+#[derive(Debug, Clone)]
+pub struct QuorumDriverResponse {
+    pub tx_cert: VerifiedCertificate,
+    pub effects_cert: VerifiedCertifiedTransactionEffects,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

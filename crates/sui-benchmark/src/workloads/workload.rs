@@ -10,10 +10,8 @@ use sui_types::{
     object::Owner,
 };
 
-use futures::FutureExt;
 use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::{base_types::SuiAddress, crypto::AccountKeyPair, messages::VerifiedTransaction};
-use tracing::error;
 
 use rand::{prelude::*, rngs::OsRng};
 use rand_distr::WeightedAliasIndex;
@@ -34,7 +32,7 @@ pub async fn transfer_sui_for_testing(
     value: u64,
     address: SuiAddress,
     proxy: Arc<dyn ValidatorProxy + Sync + Send>,
-) -> Option<UpdatedAndNewlyMinted> {
+) -> UpdatedAndNewlyMinted {
     let tx = make_transfer_sui_transaction(
         gas.0,
         address,
@@ -42,25 +40,25 @@ pub async fn transfer_sui_for_testing(
         gas.1.get_owner_address().unwrap(),
         keypair,
     );
-    proxy
-        .execute_transaction(tx.into())
-        .map(move |res| match res {
-            Ok((_, effects)) => {
-                let minted = effects.created().get(0).unwrap().0;
-                let updated = effects
-                    .mutated()
-                    .iter()
-                    .find(|(k, _)| k.0 == gas.0 .0)
-                    .unwrap()
-                    .0;
-                Some((updated, minted))
-            }
-            Err(err) => {
-                error!("Error while transferring sui: {:?}", err);
-                None
-            }
-        })
+    let tx_digest = *tx.digest();
+    // Intensive retry is done by proxy
+    let (_, effects) = proxy
+        .execute_transaction(tx.clone().into())
         .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to finish transfer_sui_for_testing {:?}, err: {:?}",
+                tx_digest, e
+            )
+        });
+    let minted = effects.created().get(0).unwrap().0;
+    let updated = effects
+        .mutated()
+        .iter()
+        .find(|(k, _)| k.0 == gas.0 .0)
+        .unwrap()
+        .0;
+    (updated, minted)
 }
 
 pub trait Payload: Send + Sync {

@@ -142,7 +142,7 @@ impl Synchronizer {
         );
 
         let mut missing = HashMap::new();
-        for (digest, worker_id) in header.payload.iter() {
+        for (digest, (worker_id, _)) in header.payload.iter() {
             // Check whether we have the batch. If one of our worker has the batch, the primary stores the pair
             // (digest, worker_id) in its own storage. It is important to verify that we received the batch
             // from the correct worker id to prevent the following attack:

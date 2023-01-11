@@ -26,6 +26,7 @@
 -  [Function `sui_address`](#0x2_validator_sui_address)
 -  [Function `stake_amount`](#0x2_validator_stake_amount)
 -  [Function `delegate_amount`](#0x2_validator_delegate_amount)
+-  [Function `total_stake`](#0x2_validator_total_stake)
 -  [Function `pending_stake_amount`](#0x2_validator_pending_stake_amount)
 -  [Function `pending_withdraw`](#0x2_validator_pending_withdraw)
 -  [Function `gas_price`](#0x2_validator_gas_price)
@@ -784,6 +785,31 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_delegate_amount">delegate_amount</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
     <a href="staking_pool.md#0x2_staking_pool_sui_balance">staking_pool::sui_balance</a>(&self.delegation_staking_pool)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_total_stake"></a>
+
+## Function `total_stake`
+
+Return the total amount staked with this validator, including both validator stake and deledgated stake
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_total_stake">total_stake</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_total_stake">total_stake</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    <a href="validator.md#0x2_validator_stake_amount">stake_amount</a>(self) + <a href="validator.md#0x2_validator_delegate_amount">delegate_amount</a>(self)
 }
 </code></pre>
 

@@ -60,7 +60,7 @@ module sui::sui_system {
         parameters: SystemParameters,
         /// The reference gas price for the current epoch.
         reference_gas_price: u64,
-        /// A map storing the records of validator reporting each other during the current epoch. 
+        /// A map storing the records of validator reporting each other during the current epoch.
         /// There is an entry in the map for each validator that has been reported
         /// at least once. The entry VecSet contains all the validators that reported
         /// them. If a validator has never been reported they don't have an entry in this map.
@@ -163,6 +163,9 @@ module sui::sui_system {
             commission_rate,
             ctx
         );
+
+        // TODO: We need to verify the validator metadata.
+        // https://github.com/MystenLabs/sui/issues/7323
 
         validator_set::request_add_validator(&mut self.validators, validator);
     }
@@ -347,7 +350,7 @@ module sui::sui_system {
     }
 
     /// Report a validator as a bad or non-performant actor in the system.
-    /// Suceeds iff both the sender and the input `validator_addr` are active validators
+    /// Succeeds iff both the sender and the input `validator_addr` are active validators
     /// and they are not the same address. This function is idempotent within an epoch.
     public entry fun report_validator(
         self: &mut SuiSystemState,
@@ -358,7 +361,7 @@ module sui::sui_system {
         // Both the reporter and the reported have to be validators.
         assert!(validator_set::is_active_validator(&self.validators, sender), ENOT_VALIDATOR);
         assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENOT_VALIDATOR);
-        assert!(sender != validator_addr, ECANNOT_REPORT_ONESELF); 
+        assert!(sender != validator_addr, ECANNOT_REPORT_ONESELF);
 
         if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
             vec_map::insert(&mut self.validator_report_records, validator_addr, vec_set::singleton(sender));
@@ -389,7 +392,7 @@ module sui::sui_system {
     /// It does the following things:
     /// 1. Add storage charge to the storage fund.
     /// 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
-    ///    gas coins. 
+    ///    gas coins.
     /// 3. Distribute computation charge to validator stake and delegation stake.
     /// 4. Update all validators.
     public entry fun advance_epoch(
@@ -398,7 +401,7 @@ module sui::sui_system {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
-        storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested 
+        storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         ctx: &mut TxContext,
     ) {
@@ -425,7 +428,7 @@ module sui::sui_system {
 
         let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
         let storage_fund_reward = balance::split(&mut computation_reward, (storage_fund_reward_amount as u64));
-        let storage_fund_reinvestment_amount = 
+        let storage_fund_reinvestment_amount =
             storage_fund_reward_amount * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
         let storage_fund_reinvestment = balance::split(
             &mut storage_fund_reward,
@@ -447,7 +450,7 @@ module sui::sui_system {
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `delegator_reward`, `storage_fund_reward` and `computation_reward`. 
+        // remaining balance in `delegator_reward`, `storage_fund_reward` and `computation_reward`.
         // All of these go to the storage fund.
         balance::join(&mut self.storage_fund, delegator_reward);
         balance::join(&mut self.storage_fund, storage_fund_reward);
@@ -464,7 +467,7 @@ module sui::sui_system {
 
     spec advance_epoch {
         /// Total supply of SUI increases by the amount of stake subsidy we minted.
-        ensures balance::supply_value(self.sui_supply) 
+        ensures balance::supply_value(self.sui_supply)
             == old(balance::supply_value(self.sui_supply)) + old(stake_subsidy::current_epoch_subsidy_amount(self.stake_subsidy));
     }
 
@@ -506,13 +509,13 @@ module sui::sui_system {
             let amount = option::destroy_some(amount);
             let balance = balance::split(&mut total_balance, amount);
             // transfer back the remainder if non zero.
-            if (balance::value(&total_balance) > 0){
+            if (balance::value(&total_balance) > 0) {
                 transfer::transfer(coin::from_balance(total_balance, ctx), tx_context::sender(ctx));
-            }else{
+            } else {
                 balance::destroy_zero(total_balance);
             };
             balance
-        }else {
+        } else {
             total_balance
         }
     }
@@ -539,15 +542,20 @@ module sui::sui_system {
         if (option::is_some(&amount)){
             let amount = option::destroy_some(amount);
             let balance = balance::split(&mut total_balance, amount);
-            if (balance::value(&total_balance) > 0){
+            if (balance::value(&total_balance) > 0) {
                 locked_coin::new_from_balance(total_balance, first_lock, tx_context::sender(ctx), ctx);
-            }else{
+            } else {
                 balance::destroy_zero(total_balance);
             };
             (balance, first_lock)
-        }else{
+        } else{
             (total_balance, first_lock)
         }
+    }
+
+    /// Return the current validator set
+    public fun validators(self: &SuiSystemState): &ValidatorSet {
+        &self.validators
     }
 
     #[test_only]

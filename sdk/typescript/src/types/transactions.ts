@@ -106,6 +106,8 @@ export const SuiTransactionData = object({
   transactions: array(SuiTransactionKind),
   sender: SuiAddress,
   gasPayment: SuiObjectRef,
+  // TODO: remove optional after 0.21.0 is released
+  gasPrice: optional(number()),
   gasBudget: number(),
 });
 export type SuiTransactionData = Infer<typeof SuiTransactionData>;
@@ -380,6 +382,10 @@ export function getTransactionGasObject(
   tx: CertifiedTransaction
 ): SuiObjectRef {
   return tx.data.gasPayment;
+}
+
+export function getTransactionGasPrice(tx: CertifiedTransaction) {
+  return tx.data.gasPrice;
 }
 
 export function getTransactionGasBudget(tx: CertifiedTransaction): number {

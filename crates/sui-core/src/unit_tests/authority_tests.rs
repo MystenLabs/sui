@@ -24,7 +24,6 @@ use rand::{
     prelude::StdRng,
     Rng, SeedableRng,
 };
-use std::collections::BTreeMap;
 use std::fs;
 use std::future::Future;
 use std::pin::Pin;
@@ -36,6 +35,7 @@ use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_macros::sim_test;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
+use sui_types::object::Data;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -43,10 +43,10 @@ use sui_types::{
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
+use crate::epoch::epoch_metrics::EpochMetrics;
 use sui_types::dynamic_field::DynamicFieldType;
 use tracing::info;
 
@@ -909,13 +909,19 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
@@ -1015,13 +1021,19 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
@@ -1091,12 +1103,18 @@ async fn test_handle_transfer_transaction_ok() {
 
     // Check the initial state of the locks
     assert!(authority_state
-        .get_transaction_lock(&(object_id, before_object_version, object.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, before_object_version, object.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .unwrap()
         .is_none());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, after_object_version, object.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, after_object_version, object.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .is_err());
 
@@ -1106,7 +1124,10 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap();
 
     let pending_confirmation = authority_state
-        .get_transaction_lock(&object.compute_object_reference(), 0)
+        .get_transaction_lock(
+            &object.compute_object_reference(),
+            &authority_state.epoch_store_for_testing(),
+        )
         .await
         .unwrap()
         .unwrap();
@@ -1119,7 +1140,7 @@ async fn test_handle_transfer_transaction_ok() {
     // Check the final state of the locks
     let Some(envelope) = authority_state.get_transaction_lock(
         &(object_id, before_object_version, object.digest()),
-        0,
+        &authority_state.epoch_store_for_testing(),
     ).await.unwrap() else {
         panic!("No verified envelope for transaction");
     };
@@ -1241,7 +1262,7 @@ pub async fn send_and_confirm_transaction_with_shared(
     let vote = response.signed_transaction.unwrap().into_inner();
 
     // Collect signatures from a quorum of authorities
-    let committee = authority.clone_committee();
+    let committee = authority.clone_committee_for_testing();
     let certificate = CertifiedTransaction::new(
         transaction.into_message(),
         vec![vote.auth_sig().clone()],
@@ -1576,6 +1597,7 @@ async fn test_conflicting_transactions() {
                 gas_object.compute_object_reference(),
                 object.compute_object_reference(),
             ],
+            &authority_state.epoch_store_for_testing(),
         );
     }
 }
@@ -1791,11 +1813,17 @@ async fn test_handle_confirmation_transaction_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 1.into(), old_account.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, 1.into(), old_account.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .is_err());
     assert!(authority_state
-        .get_transaction_lock(&(object_id, 2.into(), new_account.digest()), 0)
+        .get_transaction_lock(
+            &(object_id, 2.into(), new_account.digest()),
+            &authority_state.epoch_store_for_testing()
+        )
         .await
         .expect("Exists")
         .is_none());
@@ -1851,10 +1879,8 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
 
     // We repeatedly timeout certs after a variety of delays, using LimitedPoll to ensure that we
     // interrupt the future at every point at which it is possible to be interrupted.
-    // At the time of writing this comment, there is only 1 point at which the future is
-    // interruptible (probably when it contacts the lock service), so the loop below runs
-    // only once. However, if more .await points are added later, this test will automatically
-    // exercise them.
+    // When .await points are added, this test will automatically exercise them.
+    // The loop below terminates after all await points have been checked.
     let delays: Vec<_> = (1..100).collect();
 
     let mut objects: Vec<_> = delays
@@ -1879,7 +1905,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     authority_state.insert_genesis_object(shared_object).await;
 
     let mut interrupted_count = 0;
-    for (limit, _) in delays.iter().zip(objects) {
+    for limit in &delays {
         info!("Testing with poll limit {}", limit);
         let gas_object = authority_state
             .get_object(&gas_object_id)
@@ -1907,11 +1933,10 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         let clone1 = shared_object_cert.clone();
         let state1 = authority_state.clone();
 
-        let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
+        let res = Box::pin(LimitedPoll::new(*limit, async move {
             state1.try_execute_for_test(&clone1).await.unwrap();
-        }));
-
-        let res = limited_fut.await;
+        }))
+        .await;
         if res.is_some() {
             info!(?limit, "limit was high enough that future completed");
             break;
@@ -1928,16 +1953,12 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         assert_eq!(g.retry_num(), 1);
         std::mem::drop(g);
 
-        // Now run the tx to completion
-        //
-        // NOTE: this test fails if execute_certificate() is used here instead, while keeping
-        // try_execute_for_test() above. This is because owned object locks are not cleared
-        // atomically after a transaction completes, causing inconsistency when TransactionManager
-        // calls get_missing_input_objects(). This would be an issue for crash recovery too.
-        // TODO: fix the issue and test interrupting both execute_certificate() and
-        // try_execute_for_test(), and calling execute_certificate() again.
+        // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
         authority_state
-            .try_execute_for_test(&shared_object_cert)
+            .execute_certificate(
+                &shared_object_cert,
+                &authority_state.epoch_store_for_testing(),
+            )
             .await
             .unwrap();
     }
@@ -2402,22 +2423,38 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_path).unwrap();
         let committee_store = Arc::new(CommitteeStore::new(epoch_path, &committee, None));
 
+        let epoch_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&epoch_store_path).unwrap();
+        let registry = Registry::new();
+        let epoch_store = AuthorityPerEpochStore::new(
+            committee,
+            &epoch_store_path,
+            None,
+            EpochMetrics::new(&registry),
+        );
+
+        let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&checkpoint_store_path).unwrap();
+        let checkpoint_store = CheckpointStore::new(&checkpoint_store_path);
+
         AuthorityState::new(
             name,
             secrete,
             store,
+            epoch_store,
             committee_store,
             None,
             None,
             None,
-            &prometheus::Registry::new(),
+            checkpoint_store,
+            &registry,
         )
         .await
     }
 
     let seed = [1u8; 32];
-    let (committee, _, authority_key) =
-        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let committee = genesis.committee().unwrap();
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -2430,7 +2467,7 @@ async fn test_authority_persist() {
             &path,
             None,
             &committee,
-            &Genesis::get_default_genesis(),
+            &genesis,
             &AuthorityStorePruningConfig::default(),
         )
         .await
@@ -2455,14 +2492,14 @@ async fn test_authority_persist() {
 
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
-    let (committee, _, authority_key) =
-        init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
+    let committee = genesis.committee().unwrap();
     let store = Arc::new(
         AuthorityStore::open_with_committee_for_testing(
             &path,
             None,
             &committee,
-            &Genesis::get_default_genesis(),
+            &genesis,
             &AuthorityStorePruningConfig::default(),
         )
         .await
@@ -3176,27 +3213,23 @@ pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> 
 
 #[cfg(test)]
 pub async fn init_state() -> Arc<AuthorityState> {
-    init_state_with_committee(None).await
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+
+    init_state_with_committee(&genesis, &keypair).await
 }
 
 #[cfg(test)]
 pub async fn init_state_with_committee(
-    committee: Option<(Committee, AuthorityKeyPair)>,
+    genesis: &Genesis,
+    authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
-    let (committee, authority_key): (_, AuthorityKeyPair) = match committee {
-        Some(c) => c,
-        None => {
-            let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-            let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-            authorities.insert(
-                /* address */ authority_key.public().into(),
-                /* voting right */ 1,
-            );
-            (Committee::new(0, authorities).unwrap(), authority_key)
-        }
-    };
-
-    AuthorityState::new_for_testing(committee, &authority_key, None, None).await
+    AuthorityState::new_for_testing(genesis.committee().unwrap(), authority_key, None, genesis)
+        .await
 }
 
 #[cfg(test)]
@@ -3258,14 +3291,21 @@ pub async fn init_state_with_ids_and_versions<
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(
     objects: I,
 ) -> Arc<AuthorityState> {
-    init_state_with_objects_and_committee(objects, None).await
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    init_state_with_objects_and_committee(objects, &genesis, &keypair).await
 }
 
 pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
     objects: I,
-    committee_and_keypair: Option<(Committee, AuthorityKeyPair)>,
+    genesis: &Genesis,
+    authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
-    let state = init_state_with_committee(committee_and_keypair).await;
+    let state = init_state_with_committee(genesis, authority_key).await;
     for o in objects {
         state.insert_genesis_object(o).await;
     }
@@ -3607,7 +3647,7 @@ async fn make_test_transaction(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
 
-    let committee = authorities[0].clone_committee();
+    let committee = authorities[0].clone_committee_for_testing();
     let mut sigs = vec![];
 
     for authority in authorities {
@@ -3672,8 +3712,7 @@ async fn test_shared_object_transaction() {
 
     // Verify shared locks are now set for the transaction.
     let shared_object_version = authority
-        .db()
-        .epoch_store()
+        .epoch_store_for_testing()
         .get_shared_locks(transaction_digest)
         .expect("Reading shared locks should not fail")
         .into_iter()
@@ -3709,14 +3748,6 @@ async fn test_consensus_message_processed() {
 
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
-    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
-    authorities.insert(sec1.public().into(), 1);
-    authorities.insert(sec2.public().into(), 1);
-
-    let committee = Committee::new(0, authorities.clone()).unwrap();
-
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let mut gas_object_ref = gas_object.compute_object_reference();
@@ -3732,14 +3763,30 @@ async fn test_consensus_message_processed() {
     };
     let initial_shared_version = shared_object.version();
 
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        .committee_size(2.try_into().unwrap())
+        .with_objects(vec![gas_object.clone(), shared_object.clone()])
+        .build();
+    let genesis = network_config.genesis;
+
+    let sec1 = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    let sec2 = network_config.validator_configs[1]
+        .protocol_key_pair()
+        .copy();
+
     let authority1 = init_state_with_objects_and_committee(
         vec![gas_object.clone(), shared_object.clone()],
-        Some((committee.clone(), sec1)),
+        &genesis,
+        &sec1,
     )
     .await;
     let authority2 = init_state_with_objects_and_committee(
         vec![gas_object.clone(), shared_object.clone()],
-        Some((committee.clone(), sec2)),
+        &genesis,
+        &sec2,
     )
     .await;
 
@@ -3820,4 +3867,37 @@ async fn test_consensus_message_processed() {
             .epoch_store_for_testing()
             .get_next_object_version(&shared_object_id),
     );
+}
+
+#[tokio::test]
+async fn test_blocked_move_calls() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let tx = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            authority_state.get_framework_object_ref().await.unwrap(),
+            ident_str!("sui_system").to_owned(),
+            ident_str!("request_remove_validator").to_owned(),
+            vec![],
+            authority_state
+                .get_object(&gas_object_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .compute_object_reference(),
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            })],
+            MAX_GAS,
+        ),
+        &sender_key,
+    );
+    assert!(matches!(
+        authority_state.handle_transaction(tx).await,
+        Err(SuiError::BlockedMoveFunction)
+    ));
 }

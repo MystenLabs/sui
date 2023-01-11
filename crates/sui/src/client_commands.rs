@@ -10,6 +10,7 @@ use std::{
     time::Instant,
 };
 
+use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
@@ -20,25 +21,24 @@ use fastcrypto::{
 };
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
+use prettytable::Table;
+use prettytable::{row, table};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use sui_framework::build_move_package;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
-use tokio::sync::RwLock;
-use tracing::{info, warn};
 
-use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
-use sui_adapter::execution_mode;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -51,6 +51,8 @@ use sui_types::{
     crypto::{Signature, SignatureScheme},
     intent::IntentMessage,
 };
+use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 use sui_sdk::SuiClient;
 
@@ -337,6 +339,20 @@ pub enum SuiClientCommands {
         address: Option<SuiAddress>,
     },
 
+    /// Query a dynamic field by its address.
+    #[clap(name = "dynamic-field")]
+    DynamicFieldQuery {
+        ///The ID of the parent object
+        #[clap(name = "object_id")]
+        id: ObjectID,
+        /// Optional paging cursor
+        #[clap(long)]
+        cursor: Option<ObjectID>,
+        /// Maximum item returned per page
+        #[clap(long, default_value = "50")]
+        limit: usize,
+    },
+
     /// Split a coin object into multiple coins.
     #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
@@ -504,6 +520,16 @@ impl SuiClientCommands {
                 let object_read = client.read_api().get_parsed_object(id).await?;
                 SuiClientCommandResult::Object(object_read, bcs)
             }
+
+            SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
+                let client = context.get_client().await?;
+                let df_read = client
+                    .read_api()
+                    .get_dynamic_fields(id, cursor, Some(limit))
+                    .await?;
+                SuiClientCommandResult::DynamicFieldQuery(df_read)
+            }
+
             SuiClientCommands::Call {
                 package,
                 module,
@@ -896,13 +922,10 @@ impl SuiClientCommands {
                     .await?;
                 let data1 = data.clone();
                 let intent_msg = IntentMessage::new(Intent::default(), data);
-                info!(
-                    "Transaction bytes : {}",
-                    Base64::encode(&bcs::to_bytes(&data1).unwrap())
-                );
-                SuiClientCommandResult::SerializeTransferSui(Base64::encode(
-                    bcs::to_bytes(&intent_msg)?.as_slice(),
-                ))
+                SuiClientCommandResult::SerializeTransferSui(
+                    Base64::encode(bcs::to_bytes(&intent_msg)?.as_slice()),
+                    Base64::encode(&bcs::to_bytes(&data1).unwrap()),
+                )
             }
 
             SuiClientCommands::ExecuteSignedTx {
@@ -1251,6 +1274,35 @@ impl Display for SuiClientCommandResult {
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
+            SuiClientCommandResult::DynamicFieldQuery(df_refs) => {
+                let mut table: Table = table!([
+                    "Name",
+                    "Type",
+                    "Object Type",
+                    "Object Id",
+                    "Version",
+                    "Digest"
+                ]);
+                for df_ref in df_refs.data.iter() {
+                    let df_type = match df_ref.type_ {
+                        DynamicFieldType::DynamicField => "DynamicField",
+                        DynamicFieldType::DynamicObject => "DynamicObject",
+                    };
+                    table.add_row(row![
+                        df_ref.name,
+                        df_type,
+                        df_ref.object_type,
+                        df_ref.object_id,
+                        df_ref.version.value(),
+                        Base64::encode(df_ref.digest)
+                    ]);
+                }
+                write!(writer, "{table}")?;
+                writeln!(writer, "Showing {} results.", df_refs.data.len())?;
+                if let Some(cursor) = df_refs.next_cursor {
+                    writeln!(writer, "Next cursor: {cursor}")?;
+                }
+            }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
@@ -1318,8 +1370,9 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, "{}", parsed_resp)?;
                 }
             }
-            SuiClientCommandResult::SerializeTransferSui(res) => {
-                write!(writer, "Data to sign: {}", res)?;
+            SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
+                writeln!(writer, "Intent message to sign: {}", data_to_sign)?;
+                writeln!(writer, "Raw transaction to execute: {}", data_to_execute)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1354,13 +1407,19 @@ pub async fn call_move(
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
 ) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
+    // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
+    let args = args
+        .into_iter()
+        .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
+        .collect::<Result<_, _>>()?;
+
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
     let client = context.get_client().await?;
     let data = client
         .transaction_builder()
-        .move_call::<execution_mode::Normal>(
+        .move_call(
             sender,
             package,
             module,
@@ -1388,6 +1447,19 @@ pub async fn call_move(
         return Err(anyhow!("Error calling module: {:#?}", effects.status));
     }
     Ok((cert, effects))
+}
+
+fn convert_number_to_string(value: Value) -> Value {
+    match value {
+        Value::Number(n) => Value::String(n.to_string()),
+        Value::Array(a) => Value::Array(a.into_iter().map(convert_number_to_string).collect()),
+        Value::Object(o) => Value::Object(
+            o.into_iter()
+                .map(|(k, v)| (k, convert_number_to_string(v)))
+                .collect(),
+        ),
+        _ => value,
+    }
 }
 
 fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
@@ -1468,6 +1540,7 @@ pub enum SuiClientCommandResult {
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
+    DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
@@ -1478,7 +1551,7 @@ pub enum SuiClientCommandResult {
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(GetObjectDataResponse),
-    SerializeTransferSui(String),
+    SerializeTransferSui(String, String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),
 }

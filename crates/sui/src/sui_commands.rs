@@ -149,10 +149,22 @@ impl SuiCommand {
 
                 swarm.launch().await?;
 
-                let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
+                let mut unhealthy_cnt = 0;
                 loop {
-                    for node in swarm.validators_mut() {
-                        node.health_check(true).await?;
+                    for node in swarm.validators() {
+                        if let Err(err) = node.health_check(true).await {
+                            unhealthy_cnt += 1;
+                            if unhealthy_cnt > 3 {
+                                // The network could temporarily go down during reconfiguration.
+                                // If we detect a failed validator 3 times in a row, give up.
+                                return Err(err.into());
+                            }
+                            // Break the inner loop so that we could retry latter.
+                            break;
+                        } else {
+                            unhealthy_cnt = 0;
+                        }
                     }
 
                     interval.tick().await;

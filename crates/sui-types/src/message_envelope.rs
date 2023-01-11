@@ -12,7 +12,7 @@ use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 pub trait Message {
     type DigestType: Clone + Debug;
@@ -288,6 +288,12 @@ impl<T: Message, S> Deref for Envelope<T, S> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.data
+    }
+}
+
+impl<T: Message, S> DerefMut for Envelope<T, S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }
 

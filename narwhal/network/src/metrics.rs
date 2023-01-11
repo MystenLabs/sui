@@ -3,15 +3,17 @@
 use anemo_tower::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramTimer, HistogramVec, IntCounterVec, IntGaugeVec,
-    Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramTimer,
+    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct NetworkConnectionMetrics {
-    /// The connection status of a peer. 0 if not connected, 1 if connected.
+    /// The connection status of known peers. 0 if not connected, 1 if connected.
     pub network_peer_connected: IntGaugeVec,
+    /// The number of connected peers
+    pub network_peers: IntGauge,
 }
 
 impl NetworkConnectionMetrics {
@@ -21,6 +23,12 @@ impl NetworkConnectionMetrics {
                 format!("{node}_network_peer_connected"),
                 "The connection status of a peer. 0 if not connected, 1 if connected",
                 &["peer_id", "type"],
+                registry
+            )
+            .unwrap(),
+            network_peers: register_int_gauge_with_registry!(
+                format!("{node}_network_peers"),
+                "The number of connected peers.",
                 registry
             )
             .unwrap(),

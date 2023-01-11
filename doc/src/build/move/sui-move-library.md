@@ -3,6 +3,7 @@ title: Use Sui Move Library
 ---
 
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
+You can view source code for the implementation of the core Sui Move framework in the [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources).
 
 ## Object ownership
 Objects in Sui can have different ownership types. Specifically, they are:
@@ -60,7 +61,8 @@ To make an object `obj` immutable, one can call:
 ```
 transfer::freeze_object(obj);
 ```
-After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
+
+After this call, `obj` becomes immutable, meaning you can't mutate or delete it. This process is also irreversible: once an object is frozen, it stays frozen forever. Anyone can use an immutable object as a reference in their Move call.
 
 ### Shared
 To make an object `obj` shared, one can call:

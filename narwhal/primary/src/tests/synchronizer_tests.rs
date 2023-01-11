@@ -201,7 +201,7 @@ async fn sync_batches_drops_old() {
     for _ in 0..3 {
         let header = author
             .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -210,15 +210,15 @@ async fn sync_batches_drops_old() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for payload in certificate.header.payload {
-            payload_store.async_write(payload, 1).await;
+        for (digest, (worker_id, _)) in certificate.header.payload {
+            payload_store.async_write((digest, worker_id), 1).await;
         }
     }
     let test_header = author
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .build(author.keypair())
         .unwrap();
 

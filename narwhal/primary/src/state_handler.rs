@@ -1,31 +1,24 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::SharedWorkerCache;
 use crypto::PublicKey;
 use mysten_metrics::spawn_logged_monitored_task;
-use network::{CancelOnDropHandler, ReliableNetwork};
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use types::{
     metered_channel::{Receiver, Sender},
-    Certificate, PreSubscribedBroadcastSender, ReconfigureNotification, Round,
-    WorkerReconfigureMessage,
+    Certificate, ConditionalBroadcastReceiver, Round,
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct StateHandler {
     /// The public key of this authority.
     name: PublicKey,
-    /// The worker information cache.
-    worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
     rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-    /// Receives notifications to reconfigure the system.
-    rx_state_handler: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.
-    tx_shutdown: PreSubscribedBroadcastSender,
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// A channel to update the committed rounds
     tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
@@ -36,10 +29,8 @@ impl StateHandler {
     #[must_use]
     pub fn spawn(
         name: PublicKey,
-        worker_cache: SharedWorkerCache,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
-        rx_state_handler: Receiver<ReconfigureNotification>,
-        tx_shutdown: PreSubscribedBroadcastSender,
+        rx_shutdown: ConditionalBroadcastReceiver,
         tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
@@ -47,10 +38,8 @@ impl StateHandler {
             async move {
                 Self {
                     name,
-                    worker_cache,
                     rx_committed_certificates,
-                    rx_state_handler,
-                    tx_shutdown,
+                    rx_shutdown,
                     tx_commited_own_headers,
                     network,
                 }
@@ -85,23 +74,6 @@ impl StateHandler {
         }
     }
 
-    fn notify_our_workers(
-        &mut self,
-        message: ReconfigureNotification,
-    ) -> Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>> {
-        let message = WorkerReconfigureMessage { message };
-        let our_workers = self
-            .worker_cache
-            .load()
-            .our_workers(&self.name)
-            .unwrap()
-            .into_iter()
-            .map(|info| info.name)
-            .collect();
-
-        self.network.broadcast(our_workers, &message)
-    }
-
     async fn run(mut self) {
         info!(
             "StateHandler on node {} has started successfully.",
@@ -113,42 +85,15 @@ impl StateHandler {
                     self.handle_sequenced(commit_round, certificates).await;
                 },
 
-                Some(message) = self.rx_state_handler.recv() => {
-                    // Notify our workers
-                    let notify_handlers = self.notify_our_workers(message.to_owned());
-
-
-
-                    // Notify all other tasks.
-                    self.tx_shutdown
-                        .send()
-                        .expect("Shutdown channel dropped");
-
-                    warn!("Waiting to broadcast shutdown message to workers");
-
-                    // wait for all the workers to eventually receive the message
-                    // TODO: this request will be removed https://mysten.atlassian.net/browse/SUI-984
-                    let join_all = futures::future::try_join_all(notify_handlers);
-                    join_all.await.expect("Error while sending reconfiguration message to the workers");
-
-                    warn!("Successfully broadcasted reconfigure message to workers");
-
-                    // Exit only when we are sure that all the other tasks received
-                    // the shutdown message.
-
-                    // shutdown network as well
+                _ = self.rx_shutdown.receiver.recv() => {
+                    // shutdown network
                     let _ = self.network.shutdown().await.tap_err(|err|{
                         error!("Error while shutting down network: {err}")
                     });
 
                     warn!("Network has shutdown");
 
-                    // self.tx_shutdown.closed().await;
-
-                    //warn!("All reconfiguration receivers dropped");
-
                     return;
-
                 }
             }
         }

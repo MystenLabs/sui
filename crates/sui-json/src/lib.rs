@@ -22,7 +22,8 @@ use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
-    is_tx_context, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
+    is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
+    RESOLVED_UTF8_STR,
 };
 
 const HEX_PREFIX: &str = "0x";
@@ -455,8 +456,10 @@ pub fn primitive_type(
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 // there is no MoveLayout for this so while we can still report whether a type
                 // is primitive or not, we can't return the layout
-                let (is_primitive, _) = primitive_type(view, type_args, &targs[0]);
-                (is_primitive, None)
+                let (is_primitive, inner_layout) = primitive_type(view, type_args, &targs[0]);
+                let layout =
+                    inner_layout.map(|inner_layout| MoveTypeLayout::Vector(Box::new(inner_layout)));
+                (is_primitive, layout)
             } else {
                 (false, None)
             }
@@ -655,7 +658,7 @@ pub fn resolve_move_function_args(
 
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if is_tx_context(&view, param) => parameters.len() - 1,
+        Some(param) if is_tx_context(&view, param) != TxContextKind::None => parameters.len() - 1,
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {

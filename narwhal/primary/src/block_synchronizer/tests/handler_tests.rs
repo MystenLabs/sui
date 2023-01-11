@@ -276,8 +276,8 @@ async fn test_synchronize_block_payload() {
         .build(author.keypair())
         .unwrap();
     let cert_stored = fixture.certificate(&header);
-    for e in cert_stored.clone().header.payload {
-        payload_store.async_write(e, 1).await;
+    for (digest, (worker_id, _)) in cert_stored.clone().header.payload {
+        payload_store.async_write((digest, worker_id), 1).await;
     }
 
     // AND a certificate with payload NOT available

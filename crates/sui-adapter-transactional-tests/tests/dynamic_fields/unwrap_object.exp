@@ -27,7 +27,7 @@ written: object(111)
 
 task 6 'run'. lines 52-52:
 written: object(112), object(114)
-deleted: object(_), object(113)
+deleted: object(113)
 
 task 7 'run'. lines 55-55:
 created: object(116), object(117)

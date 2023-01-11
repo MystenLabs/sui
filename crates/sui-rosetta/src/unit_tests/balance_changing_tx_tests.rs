@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -15,6 +15,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
     OwnedObjectRef, SuiData, SuiEvent, SuiExecutionStatus, SuiTransactionEffects,
+    SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
@@ -28,9 +29,7 @@ use sui_types::messages::{
 };
 use test_utils::network::TestClusterBuilder;
 
-use crate::operations::Operation;
 use crate::state::extract_balance_changes_from_ops;
-use crate::types::SignedValue;
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -379,34 +378,36 @@ async fn test_transaction(
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
 
-    let effect = response.effects.clone().unwrap();
+    let effects = response.effects.clone().unwrap();
 
     assert_eq!(
         SuiExecutionStatus::Success,
-        effect.status,
+        effects.status,
         "TX execution failed for {:#?}",
         data
     );
 
-    let ops = Operation::from_data_and_events(
-        &data.try_into().unwrap(),
-        &SuiExecutionStatus::Success,
-        &effect.events,
-    )
-    .unwrap();
+    let tx_response = SuiTransactionResponse {
+        certificate: response.tx_cert.clone().unwrap(),
+        effects: effects.clone(),
+        timestamp_ms: None,
+        parsed_data: None,
+    };
+
+    let ops = tx_response.try_into().unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();
 
     // get actual balance changed after transaction
-    let mut actual_balance_change = BTreeMap::new();
+    let mut actual_balance_change = HashMap::new();
     for (addr, balance) in balances {
-        let new_balance = get_balance(client, addr).await as i64;
-        let balance_changed = new_balance - balance as i64;
-        actual_balance_change.insert(addr, SignedValue::from(balance_changed));
+        let new_balance = get_balance(client, addr).await as i128;
+        let balance_changed = new_balance - balance as i128;
+        actual_balance_change.insert(addr, balance_changed);
     }
     assert_eq!(
         actual_balance_change, balances_from_ops,
         "balance check failed for tx: {}\neffect:{:#?}",
-        tx, effect
+        tx, effects
     );
     response
 }

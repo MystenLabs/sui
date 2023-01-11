@@ -11,7 +11,7 @@ pub fn map_certificate_batches_by_worker(
 ) -> HashMap<WorkerId, Vec<BatchDigest>> {
     let mut batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
     for certificate in certificates.iter() {
-        for (batch_id, worker_id) in &certificate.header.payload {
+        for (batch_id, (worker_id, _)) in &certificate.header.payload {
             batches_by_worker
                 .entry(*worker_id)
                 .or_default()

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -17,9 +18,11 @@ use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
+use sui_node::SuiNodeHandle;
 use sui_sdk::SuiClient;
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
+use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 
@@ -267,4 +270,23 @@ pub async fn start_fullnode_from_config(
         ws_client,
         ws_url,
     })
+}
+
+pub async fn wait_for_nodes_transition_to_epoch<'a>(
+    nodes: impl Iterator<Item = &'a SuiNodeHandle>,
+    expected_epoch: EpochId,
+) {
+    let handles: Vec<_> = nodes
+        .map(|handle| {
+            handle.with_async(|node| async move {
+                let mut rx = node.subscribe_to_epoch_change().await;
+                let epoch = node.current_epoch();
+                if epoch != expected_epoch {
+                    let committee = rx.recv().await.unwrap();
+                    assert_eq!(committee.epoch, expected_epoch);
+                }
+            })
+        })
+        .collect();
+    join_all(handles).await;
 }

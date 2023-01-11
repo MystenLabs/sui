@@ -7,6 +7,7 @@
 
 -  [Struct `ValidatorSet`](#0x2_validator_set_ValidatorSet)
 -  [Struct `ValidatorPair`](#0x2_validator_set_ValidatorPair)
+-  [Struct `DelegationRequestEvent`](#0x2_validator_set_DelegationRequestEvent)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_validator_set_new)
 -  [Function `request_add_validator`](#0x2_validator_set_request_add_validator)
@@ -41,12 +42,14 @@
 -  [Function `compute_reward_distribution`](#0x2_validator_set_compute_reward_distribution)
 -  [Function `distribute_reward`](#0x2_validator_set_distribute_reward)
 -  [Function `derive_next_epoch_validators`](#0x2_validator_set_derive_next_epoch_validators)
+-  [Function `active_validators`](#0x2_validator_set_active_validators)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
+<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="priority_queue.md#0x2_priority_queue">0x2::priority_queue</a>;
 <b>use</b> <a href="stake.md#0x2_stake">0x2::stake</a>;
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
@@ -87,7 +90,7 @@
 <code>total_delegation_stake: u64</code>
 </dt>
 <dd>
- Total amount of stake from delegation, at the beginning of the epoch.
+ Total amount of stake from delegation, at the   beginning of the epoch.
 </dd>
 <dt>
 <code>quorum_stake_threshold: u64</code>
@@ -123,6 +126,7 @@
 <dd>
  The metadata of the validator set for the next epoch. This is kept up-to-dated.
  Everytime a change request is received, this set is updated.
+ TODO: This is currently not used. We may use it latter for enforcing min/max stake.
 </dd>
 <dt>
 <code>pending_delegation_switches: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="validator_set.md#0x2_validator_set_ValidatorPair">validator_set::ValidatorPair</a>, <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;&gt;</code>
@@ -160,6 +164,52 @@
 </dd>
 <dt>
 <code><b>to</b>: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_set_DelegationRequestEvent"></a>
+
+## Struct `DelegationRequestEvent`
+
+Event emitted when a new delegation request is received.
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x2_validator_set_DelegationRequestEvent">DelegationRequestEvent</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>delegator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>amount: u64</code>
 </dt>
 <dd>
 
@@ -390,8 +440,18 @@ TODO: impl max stake requirement.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
+    <b>let</b> delegator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&delegated_stake);
     <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(<a href="validator.md#0x2_validator">validator</a>, delegated_stake, locking_period, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx), ctx);
     self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
+    <a href="event.md#0x2_event_emit">event::emit</a>(
+        <a href="validator_set.md#0x2_validator_set_DelegationRequestEvent">DelegationRequestEvent</a> {
+            validator_address,
+            delegator_address,
+            epoch: <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+            amount,
+        }
+    );
 }
 </code></pre>
 
@@ -624,7 +684,7 @@ It does the following things:
 
     <a href="validator_set.md#0x2_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(&<b>mut</b> self.active_validators);
 
-    // Delegation switches must be processed before delgation deposits and withdraws so that the
+    // Delegation switches must be processed before delegation deposits and withdraws so that the
     // rewards portion of the delegation switch can be added <b>to</b> the new <a href="validator.md#0x2_validator">validator</a>'s pool when we
     // process pending delegations.
     <a href="validator_set.md#0x2_validator_set_process_pending_delegation_switches">process_pending_delegation_switches</a>(self, ctx);
@@ -1420,6 +1480,31 @@ TODO: If we want to enforce a % on stake threshold, this is the function to do i
         i = i + 1;
     };
     result
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_active_validators"></a>
+
+## Function `active_validators`
+
+Return the active validators in <code>self</code>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_active_validators">active_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_active_validators">active_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>): &<a href="">vector</a>&lt;Validator&gt; {
+    &self.active_validators
 }
 </code></pre>
 

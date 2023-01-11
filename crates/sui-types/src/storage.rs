@@ -83,6 +83,9 @@ impl SingleTxContext {
     pub fn gas(sender: SuiAddress) -> Self {
         Self::sui_transaction(ident_str!("gas"), sender)
     }
+    pub fn genesis() -> Self {
+        Self::sui_transaction(ident_str!("genesis"), SuiAddress::ZERO)
+    }
     fn sui_transaction(ident: &IdentStr, sender: SuiAddress) -> Self {
         Self {
             package_id: SUI_FRAMEWORK_OBJECT_ID,
@@ -161,6 +164,12 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &S {
+    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::read_child_object(*self, parent, child)
+    }
+}
+
+impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         ChildObjectResolver::read_child_object(*self, parent, child)
     }
