@@ -456,8 +456,10 @@ pub fn primitive_type(
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 // there is no MoveLayout for this so while we can still report whether a type
                 // is primitive or not, we can't return the layout
-                let (is_primitive, _) = primitive_type(view, type_args, &targs[0]);
-                (is_primitive, None)
+                let (is_primitive, inner_layout) = primitive_type(view, type_args, &targs[0]);
+                let layout =
+                    inner_layout.map(|inner_layout| MoveTypeLayout::Vector(Box::new(inner_layout)));
+                (is_primitive, layout)
             } else {
                 (false, None)
             }

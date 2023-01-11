@@ -24,7 +24,7 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
 use prettytable::{row, table};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use sui_framework::build_move_package;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
@@ -1407,6 +1407,12 @@ pub async fn call_move(
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
 ) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
+    // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
+    let args = args
+        .into_iter()
+        .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
+        .collect::<Result<_, _>>()?;
+
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
@@ -1441,6 +1447,19 @@ pub async fn call_move(
         return Err(anyhow!("Error calling module: {:#?}", effects.status));
     }
     Ok((cert, effects))
+}
+
+fn convert_number_to_string(value: Value) -> Value {
+    match value {
+        Value::Number(n) => Value::String(n.to_string()),
+        Value::Array(a) => Value::Array(a.into_iter().map(convert_number_to_string).collect()),
+        Value::Object(o) => Value::Object(
+            o.into_iter()
+                .map(|(k, v)| (k, convert_number_to_string(v)))
+                .collect(),
+        ),
+        _ => value,
+    }
 }
 
 fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
