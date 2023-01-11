@@ -248,9 +248,8 @@ async fn reconfig_with_revert_end_to_end_test() {
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
-//#[sim_test]
-//#[ignore] // test is flaky right now
-#[tokio::test]
+#[sim_test]
+#[ignore] // test is flaky right now
 async fn test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
 
