@@ -17,7 +17,7 @@ use storage::CertificateStore;
 use tokio::task::JoinSet;
 use tokio::{
     sync::{oneshot, watch},
-    task::{JoinError, JoinHandle},
+    task::JoinHandle,
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
@@ -199,8 +199,6 @@ impl CertificateFetcher {
                     }
                 },
                 _ = self.rx_shutdown.receiver.recv() => {
-                    // abort the tasks in the list and then exit
-                    self.fetch_certificates_task.iter().for_each(|h|h.abort());
                     return
                 }
             }
@@ -273,9 +271,7 @@ impl CertificateFetcher {
                 .inc();
 
             let now = Instant::now();
-            match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
-                .await
-            {
+            match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds).await {
                 Ok(_) => {
                     debug!(
                         "Finished task to fetch certificates successfully, elapsed = {}s",
