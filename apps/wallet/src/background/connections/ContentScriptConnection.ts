@@ -127,7 +127,6 @@ export class ContentScriptConnection extends Connection {
                 this.sendNotAllowedError(msg.id);
             }
         } else if (isStakeRequest(payload)) {
-            // TODO: Should this check permissions?
             const window = new Window(
                 Browser.runtime.getURL('ui.html') +
                     `#/stake/new?address=${encodeURIComponent(
