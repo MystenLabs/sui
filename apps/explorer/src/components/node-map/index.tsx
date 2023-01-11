@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, { useCallback, useMemo } from 'react';
+import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
@@ -29,7 +29,7 @@ const DATE_FILTER_TO_WINDOW = {
     ALL: 'all',
 };
 
-function NodeStat({ title, children }: any) {
+function NodeStat({ title, children }: { title: string; children: ReactNode }) {
     return (
         <div className="space-y-1.5">
             <Heading variant="heading2/semibold" color="steel-darker">
@@ -127,7 +127,7 @@ export default function NodeMap() {
     return (
         <Card spacing="none">
             <div className="relative flex min-h-[320px] flex-col justify-end">
-                <div className="flex-1 pointer-events-none relative z-10 flex flex-col justify-between gap-8 p-6">
+                <div className="pointer-events-none relative z-10 flex flex-1 flex-col justify-between gap-8 p-6">
                     <Heading variant="heading4/semibold" color="steel-darker">
                         Sui Nodes
                     </Heading>
