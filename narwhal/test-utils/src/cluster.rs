@@ -247,7 +247,7 @@ impl Cluster {
 
         for authority in self.authorities().await {
             let primary = authority.primary().await;
-            if let Some(metric) = primary.metric("narwhal_primary_last_committed_round").await {
+            if let Some(metric) = primary.metric("last_committed_round").await {
                 let value = metric.get_gauge().get_value();
 
                 authorities_latest_commit.insert(primary.id, value);
