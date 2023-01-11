@@ -9,6 +9,7 @@ use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use storage::NodeStorage;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
@@ -104,6 +105,7 @@ impl WorkerNodeInner {
             return;
         }
 
+        let now = Instant::now();
         if let Some(tx_shutdown) = self.tx_shutdown.as_ref() {
             tx_shutdown
                 .send()
@@ -116,7 +118,11 @@ impl WorkerNodeInner {
 
         self.swap_registry(None);
 
-        info!("Narwhal worker {} shutdown is complete", self.id);
+        info!(
+            "Narwhal worker {} shutdown is complete - took {} seconds",
+            self.id,
+            now.elapsed().as_secs_f64()
+        );
     }
 
     // If any of the underlying handles haven't still finished, then this method will return

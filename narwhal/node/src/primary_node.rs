@@ -13,6 +13,7 @@ use mysten_metrics::{RegistryID, RegistryService};
 use primary::{NetworkModel, Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
+use std::time::Instant;
 use storage::NodeStorage;
 use tokio::sync::{oneshot, watch, RwLock};
 use tokio::task::JoinHandle;
@@ -110,6 +111,7 @@ impl PrimaryNodeInner {
         }
 
         // send the shutdown signal to the node
+        let now = Instant::now();
         info!("Sending shutdown message to primary node");
 
         if let Some(tx_shutdown) = self.tx_shutdown.as_ref() {
@@ -124,7 +126,10 @@ impl PrimaryNodeInner {
 
         self.swap_registry(None);
 
-        info!("Narwhal primary shutdown is complete");
+        info!(
+            "Narwhal primary shutdown is complete - took {} seconds",
+            now.elapsed().as_secs_f64()
+        );
     }
 
     // Helper method useful to wait on the execution of the primary node

@@ -70,6 +70,7 @@ pub fn start_admin_server(
                     }
                     Err(err) => {
                         if total_retries == 0 {
+                            error!("{}", err);
                             panic!("Failed to boot admin {}: {}", socket_address, err);
                         }
 
