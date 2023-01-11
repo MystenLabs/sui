@@ -14,7 +14,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@mysten/sui.js": ["../../sdk/typescript/src/"],
+      "@mysten/wallet-kit": ["../../sdk/wallet-adapter/wallet-kit/src/"],
+    }
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

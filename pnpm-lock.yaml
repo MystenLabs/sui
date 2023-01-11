@@ -283,6 +283,7 @@ importers:
       typescript: ^4.9.4
       uuid: ^8.3.2
       vite: ^4.0.4
+      vite-tsconfig-paths: ^4.0.3
       vitest: ^0.26.3
       web-ext: ^7.4.0
       webextension-polyfill: ^0.9.0
@@ -395,6 +396,7 @@ importers:
       tsconfig-paths: 4.1.2
       typescript: 4.9.4
       vite: 4.0.4_3c6ud2xtewcqbnmrhimtoerdcy
+      vite-tsconfig-paths: 4.0.3_gl4qsmwzp7wy5uclz4tx77gbli
       vitest: 0.26.3_veiboesjwrhiet7xfg5dz532om
       web-ext: 7.4.0
       webpack: 5.74.0_webpack-cli@4.10.0
@@ -406,8 +408,8 @@ importers:
       '@fontsource/inter': ^4.5.14
       '@headlessui/react': ^1.7.7
       '@hookform/resolvers': ^2.9.10
-      '@mysten/sui.js': ^0.22.0
-      '@mysten/wallet-kit': ^0.2.1
+      '@mysten/sui.js': workspace:*
+      '@mysten/wallet-kit': workspace:*
       '@tanstack/react-query': ^4.22.0
       '@tanstack/react-query-devtools': ^4.22.0
       '@types/react': ^18.0.26
@@ -6727,7 +6729,7 @@ packages:
       '@babel/plugin-transform-react-jsx-source': 7.19.6_@babel+core@7.20.12
       magic-string: 0.27.0
       react-refresh: 0.14.0
-      vite: 4.0.4_@types+node@18.11.18
+      vite: 4.0.4
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -7525,7 +7527,7 @@ packages:
   /axios/0.25.0_debug@4.3.4:
     resolution: {integrity: sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.4
     transitivePeerDependencies:
       - debug
     dev: true
@@ -7533,7 +7535,7 @@ packages:
   /axios/0.27.2:
     resolution: {integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==}
     dependencies:
-      follow-redirects: 1.15.1
+      follow-redirects: 1.15.1_debug@4.3.4
       form-data: 4.0.0
     transitivePeerDependencies:
       - debug
@@ -10982,7 +10984,7 @@ packages:
     engines: {node: '>=8.9.0'}
     dev: true
 
-  /follow-redirects/1.15.1:
+  /follow-redirects/1.15.1_debug@4.3.4:
     resolution: {integrity: sha512-yLAMQs+k0b2m7cVxpS1VKJVvoz7SS9Td1zss3XRwXj+ZDH00RJgnuLx7E44wx02kQLrdM3aOOy+FpzS7+8OizA==}
     engines: {node: '>=4.0'}
     peerDependencies:
@@ -10990,6 +10992,8 @@ packages:
     peerDependenciesMeta:
       debug:
         optional: true
+    dependencies:
+      debug: 4.3.4
     dev: true
 
   /for-each/0.3.3:
@@ -11517,6 +11521,10 @@ packages:
 
   /globjoin/0.1.4:
     resolution: {integrity: sha512-xYfnw62CKG8nLkZBfWbhWwDw02CHty86jfPcc2cr3ZfeuK9ysoVPPEUxf21bAD/rWAgk52SuBrLJlefNy8mvFg==}
+    dev: true
+
+  /globrex/0.1.2:
+    resolution: {integrity: sha512-uHJgbwAMwNFf5mLst7IWLNg14x1CkeqglJb/K3doi4dw6q2IvAAmM/Y81kevy83wP+Sst+nutFTYOGg3d1lsxg==}
     dev: true
 
   /goober/2.1.11:
@@ -17747,6 +17755,19 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
+  /tsconfck/2.0.2_typescript@4.9.4:
+    resolution: {integrity: sha512-H3DWlwKpow+GpVLm/2cpmok72pwRr1YFROV3YzAmvzfGFiC1zEM/mc9b7+1XnrxuXtEbhJ7xUSIqjPFbedp7aQ==}
+    engines: {node: ^14.13.1 || ^16 || >=18, pnpm: ^7.18.0}
+    hasBin: true
+    peerDependencies:
+      typescript: ^4.3.5
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+    dependencies:
+      typescript: 4.9.4
+    dev: true
+
   /tsconfig-paths/3.14.1:
     resolution: {integrity: sha512-fxDhWnFSLt3VuTwtvJt5fpwxBHg5AdKWMsgcPOOIilyjymcYVZoCQF8fvFRezCNfblEXmi+PcM1eYHeOAgXCOQ==}
     dependencies:
@@ -18445,6 +18466,20 @@ packages:
     transitivePeerDependencies:
       - rollup
       - supports-color
+    dev: true
+
+  /vite-tsconfig-paths/4.0.3_gl4qsmwzp7wy5uclz4tx77gbli:
+    resolution: {integrity: sha512-gRO2Q/tOkV+9kMht5tz90+IaEKvW2zCnvwJV3tp2ruPNZOTM5rF+yXorJT4ggmAMYEaJ3nyXjx5P5jY5FwiZ+A==}
+    peerDependencies:
+      vite: '>2.0.0-0'
+    dependencies:
+      debug: 4.3.4
+      globrex: 0.1.2
+      tsconfck: 2.0.2_typescript@4.9.4
+      vite: 4.0.4_3c6ud2xtewcqbnmrhimtoerdcy
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
     dev: true
 
   /vite/4.0.4:
