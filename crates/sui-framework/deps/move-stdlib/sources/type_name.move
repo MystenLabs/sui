@@ -23,6 +23,9 @@ module std::type_name {
 
     /// Return a value representation of the type `T`.
     public native fun get<T>(): TypeName;
+    spec get {
+        pragma opaque;
+    }
 
     /// Get the String representation of `self`
     public fun borrow_string(self: &TypeName): &String {
