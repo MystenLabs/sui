@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::errors::{Error, ErrorType};
-use crate::operations::{Operation, Operations};
+use crate::operations::Operations;
 use crate::SUI;
 use axum::response::{IntoResponse, Response};
 use fastcrypto::encoding::Hex;
@@ -20,6 +20,7 @@ use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
+use sui_types::messages::{PaySui, SingleTransactionKind, TransactionData, TransactionKind};
 
 pub type BlockHeight = u64;
 
@@ -325,7 +326,6 @@ pub enum OperationType {
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
-    GasBudget,
     // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
@@ -446,13 +446,9 @@ pub struct TransactionIdentifier {
 #[derive(Deserialize)]
 pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub max_fee: Vec<Amount>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub suggested_fee_multiplier: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -465,8 +461,7 @@ pub struct ConstructionPreprocessResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct MetadataOptions {
-    pub sender: SuiAddress,
-    pub amount: u128,
+    pub internal_operation: InternalOperation,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -498,13 +493,20 @@ pub struct ConstructionMetadataResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConstructionMetadata {
-    pub sender_coins: Vec<ObjectRef>,
+    pub tx_metadata: TransactionMetadata,
+    pub sender: SuiAddress,
+    pub gas: ObjectRef,
+    pub budget: u64,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
     }
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub enum TransactionMetadata {
+    PaySui(Vec<ObjectRef>),
 }
 
 #[derive(Deserialize)]
@@ -740,4 +742,44 @@ pub struct PrefundedAccount {
     pub account_identifier: AccountIdentifier,
     pub curve_type: CurveType,
     pub currency: Currency,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum InternalOperation {
+    PaySui {
+        sender: SuiAddress,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+    },
+}
+
+impl InternalOperation {
+    pub fn sender(&self) -> SuiAddress {
+        match self {
+            InternalOperation::PaySui { sender, .. } => *sender,
+        }
+    }
+
+    pub fn into_data(self, metadata: ConstructionMetadata) -> TransactionData {
+        let single_tx = match (self, metadata.tx_metadata) {
+            (
+                Self::PaySui {
+                    recipients,
+                    amounts,
+                    ..
+                },
+                TransactionMetadata::PaySui(coins),
+            ) => SingleTransactionKind::PaySui(PaySui {
+                coins,
+                recipients,
+                amounts,
+            }),
+        };
+        TransactionData::new(
+            TransactionKind::Single(single_tx),
+            metadata.sender,
+            metadata.gas,
+            metadata.budget,
+        )
+    }
 }

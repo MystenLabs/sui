@@ -12,7 +12,7 @@ use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
-use crate::error::{RpcError, SuiRpcResult};
+use crate::error::{Error, SuiRpcResult};
 use rpc_types::{SuiCertifiedTransaction, SuiParsedTransactionResponse, SuiTransactionEffects};
 use serde_json::Value;
 use sui_adapter::execution_mode::Normal;
@@ -78,7 +78,7 @@ impl RpcClient {
         http: &str,
         ws: Option<&str>,
         request_timeout: Option<Duration>,
-    ) -> Result<Self, RpcError> {
+    ) -> Result<Self, Error> {
         let mut http_builder = HttpClientBuilder::default();
         if let Some(request_timeout) = request_timeout {
             http_builder = http_builder.request_timeout(request_timeout);
@@ -102,15 +102,13 @@ impl RpcClient {
     async fn get_server_info(
         http: &HttpClient,
         ws: &Option<WsClient>,
-    ) -> Result<ServerInfo, RpcError> {
+    ) -> Result<ServerInfo, Error> {
         let rpc_spec: Value = http.request("rpc.discover", rpc_params![]).await?;
         let version = rpc_spec
             .pointer("/info/version")
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                RpcError::DataError(
-                    "Fail parsing server version from rpc.discover endpoint.".into(),
-                )
+                Error::DataError("Fail parsing server version from rpc.discover endpoint.".into())
             })?;
         let rpc_methods = Self::parse_methods(&rpc_spec)?;
 
@@ -127,12 +125,12 @@ impl RpcClient {
         })
     }
 
-    fn parse_methods(server_spec: &Value) -> Result<Vec<String>, RpcError> {
+    fn parse_methods(server_spec: &Value) -> Result<Vec<String>, Error> {
         let methods = server_spec
             .pointer("/methods")
             .and_then(|methods| methods.as_array())
             .ok_or_else(|| {
-                RpcError::DataError(
+                Error::DataError(
                     "Fail parsing server information from rpc.discover endpoint.".into(),
                 )
             })?;
@@ -150,7 +148,7 @@ impl SuiClient {
         http_url: &str,
         ws_url: Option<&str>,
         request_timeout: Option<Duration>,
-    ) -> Result<Self, RpcError> {
+    ) -> Result<Self, Error> {
         let rpc = RpcClient::new(http_url, ws_url, request_timeout).await?;
         let api = Arc::new(rpc);
         let read_api = Arc::new(ReadApi::new(api.clone()));
@@ -187,7 +185,7 @@ impl SuiClient {
         let server_version = self.api_version();
         let client_version = env!("CARGO_PKG_VERSION");
         if server_version != client_version {
-            return Err(RpcError::ServerVersionMismatch {
+            return Err(Error::ServerVersionMismatch {
                 client_version: client_version.to_string(),
                 server_version: server_version.to_string(),
             });

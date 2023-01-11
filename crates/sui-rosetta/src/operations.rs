@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::str::FromStr;
-use std::{iter, vec};
+use std::vec;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -12,15 +11,15 @@ use sui_sdk::rpc_types::{
     SuiEvent, SuiTransactionData, SuiTransactionKind, SuiTransactionResponse,
 };
 
-use sui_types::base_types::{ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
 
 use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier,
-    ConstructionMetadata, OperationIdentifier, OperationStatus, OperationType,
+    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
+    OperationIdentifier, OperationStatus, OperationType,
 };
 use crate::Error;
 
@@ -66,66 +65,47 @@ impl Operations {
         self
     }
 
+    pub fn type_(&self) -> Option<OperationType> {
+        self.0.first().map(|op| op.type_)
+    }
+
     /// Parse operation input from rosetta to Sui transaction
-    pub fn into_transaction_data(
-        self,
-        metadata: ConstructionMetadata,
-    ) -> Result<TransactionData, Error> {
-        let mut type_ = None;
+    pub fn into_internal(self) -> Result<InternalOperation, Error> {
+        match self
+            .type_()
+            .ok_or_else(|| Error::MissingInput("Operation type".into()))?
+        {
+            OperationType::PaySui => self.pay_sui_ops_to_internal(),
+            op => Err(Error::UnsupportedOperation(op)),
+        }
+    }
+
+    fn pay_sui_ops_to_internal(self) -> Result<InternalOperation, Error> {
         let mut recipients = vec![];
         let mut amounts = vec![];
         let mut sender = None;
-        let mut budget = None;
         for op in self {
-            // Currently only PaySui is support,
-            if op.type_ != OperationType::PaySui && op.type_ != OperationType::GasBudget {
-                return Err(Error::UnsupportedOperation(op.type_));
-            }
-            if type_.is_none() && op.type_ != OperationType::GasBudget {
-                type_ = Some(op.type_)
-            }
-            if op.type_ == OperationType::GasBudget {
-                let budget_value = op
-                    .metadata
-                    .clone()
-                    .and_then(|v| v.pointer("/budget").cloned())
-                    .ok_or_else(|| Error::MissingInput("gas budget".to_string()))?;
-                budget = Some(
-                    budget_value
-                        .as_u64()
-                        .or_else(|| budget_value.as_str().and_then(|s| u64::from_str(s).ok()))
-                        .ok_or_else(|| Error::InvalidInput(format!("{budget_value}")))?,
-                );
-            } else if op.type_ == OperationType::PaySui {
-                if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
-                    if amount.value.is_negative() {
-                        sender = Some(account.address)
-                    } else {
-                        recipients.push(account.address);
-                        let amount = amount.value.abs();
-                        if amount > u64::MAX as i128 {
-                            return Err(Error::InvalidInput(
-                                "Input amount exceed u64::MAX".to_string(),
-                            ));
-                        }
-                        amounts.push(amount as u64)
+            if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
+                if amount.value.is_negative() {
+                    sender = Some(account.address)
+                } else {
+                    recipients.push(account.address);
+                    let amount = amount.value.abs();
+                    if amount > u64::MAX as i128 {
+                        return Err(Error::InvalidInput(
+                            "Input amount exceed u64::MAX".to_string(),
+                        ));
                     }
+                    amounts.push(amount as u64)
                 }
             }
         }
-
-        let address = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
-        let gas = metadata.sender_coins[0];
-        let budget = budget.ok_or_else(|| Error::MissingInput("gas budget".to_string()))?;
-
-        Ok(TransactionData::new_pay_sui(
-            address,
-            metadata.sender_coins,
+        let sender = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
+        Ok(InternalOperation::PaySui {
+            sender,
             recipients,
             amounts,
-            gas,
-            budget,
-        ))
+        })
     }
 
     fn from_transaction(
@@ -223,16 +203,9 @@ impl TryFrom<SuiTransactionData> for Operations {
 
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
         let sender = data.sender;
-        let gas = Operation::gas_budget(
-            None,
-            data.gas_payment.to_object_ref(),
-            data.gas_budget,
-            sender,
-        );
         data.transactions
             .iter()
             .map(|tx| Self::from_transaction(tx, sender, None))
-            .chain(iter::once(Ok(vec![gas])))
             .collect()
     }
 }
@@ -344,28 +317,6 @@ impl Operation {
             amount: Some(Amount::new(amount)),
             coin_change: None,
             metadata: None,
-        }
-    }
-
-    fn gas_budget(
-        status: Option<OperationStatus>,
-        gas: ObjectRef,
-        budget: u64,
-        sender: SuiAddress,
-    ) -> Self {
-        Self {
-            operation_identifier: Default::default(),
-            type_: OperationType::GasBudget,
-            status,
-            account: Some(sender.into()),
-            amount: None,
-            coin_change: Some(CoinChange {
-                coin_identifier: CoinIdentifier {
-                    identifier: gas.into(),
-                },
-                coin_action: CoinAction::CoinSpent,
-            }),
-            metadata: Some(json!({ "budget": budget })),
         }
     }
 
