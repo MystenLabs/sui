@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::operations::{Operation, Operations};
+use crate::operations::Operations;
 use crate::types::{
     Block, BlockHash, BlockHeight, BlockIdentifier, BlockResponse, OperationType, Transaction,
     TransactionIdentifier,
@@ -18,11 +18,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use sui_config::genesis::Genesis;
+use sui_sdk::rpc_types::SuiTransactionKind;
 use sui_sdk::SuiClient;
 use sui_storage::default_db_options;
-use sui_types::base_types::{SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
-use sui_types::gas_coin::GasCoin;
+use sui_types::base_types::SuiAddress;
 use sui_types::query::TransactionQuery;
 use tracing::{debug, error, info};
 use typed_store::rocks::{DBMap, DBOptions};
@@ -60,7 +59,7 @@ pub trait BlockProvider {
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error>;
     async fn current_block(&self) -> Result<BlockResponse, Error>;
     fn genesis_block_identifier(&self) -> BlockIdentifier;
-    async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
+    fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn get_balance_at_block(
         &self,
@@ -73,7 +72,6 @@ pub trait BlockProvider {
 pub struct PseudoBlockProvider {
     database: Arc<BlockProviderTables>,
     client: SuiClient,
-    genesis: Genesis,
 }
 
 #[async_trait]
@@ -123,13 +121,10 @@ impl BlockProvider for PseudoBlockProvider {
     }
 
     fn genesis_block_identifier(&self) -> BlockIdentifier {
-        BlockIdentifier {
-            index: 0,
-            hash: BlockHash::new([0u8; TRANSACTION_DIGEST_LENGTH]),
-        }
+        self.oldest_block_identifier().unwrap()
     }
 
-    async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error> {
+    fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error> {
         self.database
             .blocks
             .iter()
@@ -168,11 +163,10 @@ impl BlockProvider for PseudoBlockProvider {
 }
 
 impl PseudoBlockProvider {
-    pub fn spawn(client: SuiClient, genesis: Genesis, db_path: &Path) -> Self {
+    pub fn spawn(client: SuiClient, db_path: &Path) -> Self {
         let blocks = Self {
             database: Arc::new(BlockProviderTables::open(db_path, None)),
             client: client.clone(),
-            genesis,
         };
 
         let block_interval = option_env!("SUI_BLOCK_INTERVAL")
@@ -184,23 +178,9 @@ impl PseudoBlockProvider {
         let f = blocks.clone();
         spawn_monitored_task!(async move {
             if f.database.is_empty() {
-                info!("Database is empty, indexing genesis block...");
-                let genesis = genesis_block(&f.genesis);
-                let genesis_txs = genesis
-                    .block
-                    .transactions
-                    .iter()
-                    .flat_map(|tx| tx.operations.clone())
-                    .collect();
-
-                f.add_block_index(
-                    &genesis.block.block_identifier,
-                    &genesis.block.parent_block_identifier,
-                )
-                .unwrap();
-                if let Err(e) = f.update_balance(0, genesis_txs).await {
-                    error!("Error updating balance, cause: {e:?}")
-                }
+                // We expect creating genesis block to success.
+                info!("Datastore is empty, processing genesis block.");
+                process_genesis_block(&client, &f).await.unwrap()
             } else {
                 let current_block = f.current_block_identifier().await.unwrap();
                 info!("Resuming from block {}", current_block.index);
@@ -218,7 +198,8 @@ impl PseudoBlockProvider {
 
     async fn create_next_block(&self, client: &SuiClient) -> Result<(), Error> {
         let current_block = self.current_block_identifier().await?;
-        let total_tx = client.read_api().get_total_transaction_number().await?;
+        // Sui get_total_transaction_number starts from 1.
+        let total_tx = client.read_api().get_total_transaction_number().await? - 1;
         if total_tx == 0 {
             return Ok(());
         }
@@ -328,10 +309,6 @@ impl PseudoBlockProvider {
         parent_block_identifier: BlockIdentifier,
         timestamp: u64,
     ) -> Result<BlockResponse, Error> {
-        if block_identifier.index == 0 {
-            return Ok(genesis_block(&self.genesis));
-        }
-
         let tx = self
             .client
             .read_api()
@@ -373,10 +350,7 @@ fn extract_balance_changes_from_ops(
     ops.into_iter()
         .try_fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
             match op.type_ {
-                OperationType::SuiBalanceChange
-                | OperationType::Gas
-                | OperationType::Genesis
-                | OperationType::PaySui => {
+                OperationType::SuiBalanceChange | OperationType::Gas | OperationType::PaySui => {
                     let addr = op
                         .account
                         .ok_or_else(|| {
@@ -394,46 +368,39 @@ fn extract_balance_changes_from_ops(
         })
 }
 
-fn genesis_block(genesis: &Genesis) -> BlockResponse {
-    let id = BlockIdentifier {
-        index: 0,
-        hash: BlockHash::new([0u8; TRANSACTION_DIGEST_LENGTH]),
-    };
+async fn process_genesis_block(client: &SuiClient, f: &PseudoBlockProvider) -> Result<(), Error> {
+    let digest = *client
+        .read_api()
+        .get_transactions(TransactionQuery::All, None, Some(1), false)
+        .await?
+        .data
+        .first()
+        .ok_or_else(|| Error::InternalError(anyhow!("Cannot find genesis transaction.")))?;
 
-    let operations = genesis
-        .objects()
+    let response = client.read_api().get_transaction(digest).await?;
+    if !response
+        .certificate
+        .data
+        .transactions
         .iter()
-        .flat_map(|o| {
-            GasCoin::try_from(o)
-                .ok()
-                .and_then(|coin| o.owner.get_owner_address().ok().map(|addr| (addr, coin)))
-        })
-        .enumerate()
-        .map(|(index, (address, coin))| Operation::genesis(index as u64, address, coin))
-        .collect();
-
-    let transaction = Transaction {
-        transaction_identifier: TransactionIdentifier {
-            hash: TransactionDigest::new([0; 32]),
-        },
-        operations,
-        related_transactions: vec![],
-        metadata: None,
+        .any(|tx| matches!(tx, SuiTransactionKind::Genesis(_)))
+    {
+        return Err(Error::InternalError(anyhow!(
+            "Transaction [{digest:?}] is not a Genesis transaction."
+        )));
+    }
+    let operations = response.try_into()?;
+    let block_identifier = BlockIdentifier {
+        index: 0,
+        hash: digest,
     };
 
-    BlockResponse {
-        block: Block {
-            block_identifier: id,
-            parent_block_identifier: id,
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-            transactions: vec![transaction],
-            metadata: None,
-        },
-        other_transactions: vec![],
-    }
+    f.add_block_index(&block_identifier, &block_identifier)?;
+    f.update_balance(0, operations)
+        .await
+        .map_err(|e| anyhow!("Failed to update balance, cause : {e}",))?;
+
+    Ok(())
 }
 
 #[derive(DBMapUtils)]
