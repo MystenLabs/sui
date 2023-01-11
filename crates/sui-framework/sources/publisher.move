@@ -7,16 +7,12 @@
 module sui::publisher {
     use sui::object::{Self, UID};
     use sui::tx_context::{TxContext, sender};
-    use std::ascii::{Self, String};
-    use std::type_name;
-    use std::vector;
+    use std::type_name::{Self, TypeName};
+    use std::ascii::String;
     use sui::types;
 
     /// Tried to claim ownership using a type that isn't a one-time witness.
     const ENotOneTimeWitness: u64 = 0;
-
-    /// ASCII character code for the `:` (colon) symbol.
-    const ASCII_COLON: u8 = 58;
 
     /// This type can only be created in the transaction that
     /// generates a module, by consuming its one-time witness, so it
@@ -24,17 +20,24 @@ module sui::publisher {
     /// a type originated from.
     struct Publisher has key, store {
         id: UID,
-        type: String
+        type: TypeName,
+        package: String,
+        module_name: String,
     }
 
     /// Claim a Publisher object.
-    /// Requires a One-Time-Witness to
+    /// Requires a One-Time-Witness to prove ownership. Due to this constraint
+    /// there can be only one Publisher object per module but multiple per package (!).
     public fun claim<OTW: drop>(otw: OTW, ctx: &mut TxContext): Publisher {
         assert!(types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
+        let type = type_name::get<OTW>();
+
         Publisher {
             id: object::new(ctx),
-            type: type_name::into_string(type_name::get<OTW>()),
+            package: type_name::get_address(&type),
+            module_name: type_name::get_module(&type),
+            type,
         }
     }
 
@@ -48,62 +51,35 @@ module sui::publisher {
     /// Destroy a Publisher object effectively removing all privileges
     /// associated with it.
     public fun burn(publisher: Publisher) {
-        let Publisher { id, type: _ } = publisher;
+        let Publisher { id, type: _, package: _, module_name: _ } = publisher;
         object::delete(id);
     }
 
     /// Check whether type belongs to the same package as the publisher object.
     public fun is_package<T>(publisher: &Publisher): bool {
-        let this = ascii::as_bytes(&publisher.type);
-        let their = ascii::as_bytes(type_name::borrow_string(&type_name::get<T>()));
+        let type = type_name::get<T>();
 
-        let i = 0;
-
-        // 40 bytes => length of the HEX encoded string
-        while (i < 40) {
-            if (vector::borrow<u8>(this, i) != vector::borrow<u8>(their, i)) {
-                return false
-            };
-
-            i = i + 1;
-        };
-
-        true
+        (type_name::get_address(&type) == publisher.package)
     }
 
     /// Check whether a type belogs to the same module as the publisher object.
     public fun is_module<T>(publisher: &Publisher): bool {
-        if (!is_package<T>(publisher)) {
-            return false
-        };
+        let type = type_name::get<T>();
 
-        let this = ascii::as_bytes(&publisher.type);
-        let their = ascii::as_bytes(type_name::borrow_string(&type_name::get<T>()));
-
-        // 42 bytes => length of the HEX encoded string + :: (double colon)
-        let i = 42;
-        loop {
-            let left = vector::borrow<u8>(this, i);
-            let right = vector::borrow<u8>(their, i);
-
-            if (left == &ASCII_COLON && right == &ASCII_COLON) {
-                return true
-            };
-
-            if (left != right) {
-                return false
-            };
-
-            i = i + 1;
-        }
+        (type_name::get_address(&type) == publisher.package)
+            && (type_name::get_module(&type) == publisher.module_name)
     }
 
     #[test_only]
     /// Test-only function to claim a Publisher object bypassing OTW check.
     public fun test_claim<OTW: drop>(_: OTW, ctx: &mut TxContext): Publisher {
+        let type = type_name::get<OTW>();
+
         Publisher {
             id: object::new(ctx),
-            type: type_name::into_string(type_name::get<OTW>()),
+            package: type_name::get_address(&type),
+            module_name: type_name::get_module(&type),
+            type,
         }
     }
 }

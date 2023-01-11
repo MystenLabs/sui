@@ -3,7 +3,12 @@
 
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
-    use std::ascii::String;
+    use std::ascii::{Self, String};
+    use std::address;
+    use std::vector;
+
+    /// ASCII Character code for the `:` (colon) symbol.
+    const ASCII_COLON: u8 = 58;
 
     struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
@@ -22,6 +27,47 @@ module std::type_name {
     /// Get the String representation of `self`
     public fun borrow_string(self: &TypeName): &String {
         &self.name
+    }
+
+    /// Get Address string (Base16 encoded), first part of the TypeName.
+    public fun get_address(self: &TypeName): String {
+        // Base16 (string) representation of an address has 2 symbols per byte.
+        let i = address::length() * 2;
+        let str_bytes = ascii::as_bytes(&self.name);
+        let addr_bytes = vector[];
+
+        // Reverse-read string from the last byte pushing the value
+        // into the end of `addr_bytes` vector.
+        while (i > 0) {
+            i = i - 1;
+            vector::push_back(
+                &mut addr_bytes,
+                *vector::borrow(str_bytes, i)
+            );
+        };
+
+        ascii::string(addr_bytes)
+    }
+
+    /// Get name of the module.
+    public fun get_module(self: &TypeName): String {
+        // Starts after address and a double colon: `<addr as HEX>::`
+        let i = address::length() * 2 + 2;
+        let str_bytes = ascii::as_bytes(&self.name);
+        let module_name = vector[];
+
+        loop {
+            let char = vector::borrow(str_bytes, i);
+            if (char != &ASCII_COLON) {
+                vector::push_back(&mut module_name, *char);
+                i = i + 1;
+            } else {
+                break
+            }
+        };
+
+        vector::reverse(&mut module_name);
+        ascii::string(module_name)
     }
 
     /// Convert `self` into its inner String

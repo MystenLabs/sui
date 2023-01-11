@@ -134,16 +134,6 @@ For when bytes length is less than required for deserialization.
 
 
 
-<a name="0x2_bcs_SUI_ADDRESS_LENGTH"></a>
-
-Address length in Sui is 20 bytes.
-
-
-<pre><code><b>const</b> <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>: u64 = 20;
-</code></pre>
-
-
-
 <a name="0x2_bcs_to_bytes"></a>
 
 ## Function `to_bytes`
@@ -242,13 +232,13 @@ Read address from the bcs-serialized bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <b>address</b> {
-    <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= <a href="bcs.md#0x2_bcs_SUI_ADDRESS_LENGTH">SUI_ADDRESS_LENGTH</a>, <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
+    <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= <a href="_length">address::length</a>(), <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
     <b>let</b> (addr_bytes, i) = (v::empty(), 0);
     <b>while</b> (i &lt; 20) {
         v::push_back(&<b>mut</b> addr_bytes, v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes));
         i = i + 1;
     };
-    <a href="address.md#0x2_address_from_bytes">address::from_bytes</a>(addr_bytes)
+    address::from_bytes(addr_bytes)
 }
 </code></pre>
 
