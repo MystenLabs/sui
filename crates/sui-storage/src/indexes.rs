@@ -19,7 +19,7 @@ use typed_store_derive::DBMapUtils;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
-use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::fp_ensure;
 use sui_types::object::Owner;
@@ -554,7 +554,7 @@ impl IndexStore {
     pub fn get_dynamic_field_object_id(
         &self,
         object: ObjectID,
-        name: &str,
+        name: &DynamicFieldName,
     ) -> SuiResult<Option<ObjectID>> {
         debug!(?object, "get_dynamic_field_object_id");
         Ok(self
@@ -563,7 +563,11 @@ impl IndexStore {
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(object, ObjectID::ZERO))?
-            .find(|((object_owner, _), info)| (object_owner == &object && info.name == name))
+            .find(|((object_owner, _), info)| {
+                object_owner == &object
+                    && info.name.type_ == name.type_
+                    && info.name.value == name.value
+            })
             .map(|(_, object_info)| object_info.object_id))
     }
 

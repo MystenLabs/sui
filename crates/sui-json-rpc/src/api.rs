@@ -23,6 +23,7 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::committee::EpochId;
+use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
 use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
@@ -164,7 +165,7 @@ pub trait RpcReadApi {
         /// The ID of the queried parent object
         parent_object_id: ObjectID,
         /// The Name of the dynamic field
-        name: String,
+        name: DynamicFieldName,
     ) -> RpcResult<GetObjectDataResponse>;
 }
 

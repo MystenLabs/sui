@@ -34,6 +34,8 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
+use sui_adapter::execution_mode::DevInspect;
+use sui_types::dynamic_field::DynamicFieldName;
 use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
@@ -132,14 +134,14 @@ impl RpcReadApiServer for ReadApi {
     async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
-        name: String,
+        name: DynamicFieldName,
     ) -> RpcResult<GetObjectDataResponse> {
         let id = self
             .state
             .get_dynamic_field_object_id(parent_object_id, &name)
             .map_err(|e| anyhow!("{e}"))?
             .ok_or_else(|| {
-                anyhow!("Cannot find dynamic field [{name}] for object [{parent_object_id}].")
+                anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
             })?;
         self.get_object(id).await
     }

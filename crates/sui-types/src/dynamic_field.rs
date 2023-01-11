@@ -1,25 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::ObjectDigest;
+use crate::error::{SuiError, SuiResult};
+use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
+use std::fmt::{Display, Formatter};
 
-use crate::base_types::ObjectDigest;
-use crate::error::{SuiError, SuiResult};
-use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
-
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
-    pub name: String,
+    pub name: DynamicFieldName,
     pub type_: DynamicFieldType,
     pub object_type: String,
     pub object_id: ObjectID,
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+}
+
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicFieldName {
+    pub type_: String,
+    // Bincode does not like serde_json::Value, rocksdb will not insert the value without this hack.
+    #[schemars(with = "Value")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub value: Value,
+}
+
+impl Display for DynamicFieldName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.type_, self.value)
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -38,7 +58,7 @@ impl DynamicFieldInfo {
 
     pub fn parse_move_object(
         move_struct: &MoveStruct,
-    ) -> SuiResult<(String, DynamicFieldType, ObjectID)> {
+    ) -> SuiResult<(MoveValue, DynamicFieldType, ObjectID)> {
         let name = extract_field_from_move_struct(move_struct, "name").ok_or_else(|| {
             SuiError::ObjectDeserializationError {
                 error: "Cannot extract [name] field from sui::dynamic_field::Field".to_string(),
@@ -70,7 +90,7 @@ impl DynamicFieldInfo {
                         sui::dynamic_field::Field, {value:?}"
                     ),
                 })?;
-            (name.to_string(), DynamicFieldType::DynamicObject, object_id)
+            (name.clone(), DynamicFieldType::DynamicObject, object_id)
         } else {
             // ID of the Field object
             let object_id = extract_object_id(move_struct).ok_or_else(|| {
@@ -81,7 +101,7 @@ impl DynamicFieldInfo {
                     ),
                 }
             })?;
-            (name.to_string(), DynamicFieldType::DynamicField, object_id)
+            (name.clone(), DynamicFieldType::DynamicField, object_id)
         })
     }
 }
