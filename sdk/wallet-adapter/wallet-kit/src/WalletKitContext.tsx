@@ -22,6 +22,7 @@ export const WalletKitContext = createContext<WalletKitCore | null>(null);
 
 interface WalletKitProviderProps {
   adapters?: WalletAdapterList;
+  preferredWallets?: string[];
   /** Enable the development-only unsafe burner wallet, which is can be useful for testing. */
   enableUnsafeBurner?: boolean;
   children: ReactNode;
@@ -29,6 +30,7 @@ interface WalletKitProviderProps {
 
 export function WalletKitProvider({
   adapters: configuredAdapters,
+  preferredWallets,
   children,
   enableUnsafeBurner,
 }: WalletKitProviderProps) {
@@ -43,7 +45,7 @@ export function WalletKitProvider({
 
   const walletKitRef = useRef<WalletKitCore | null>(null);
   if (!walletKitRef.current) {
-    walletKitRef.current = createWalletKitCore({ adapters });
+    walletKitRef.current = createWalletKitCore({ adapters, preferredWallets });
   }
 
   return (

@@ -15,6 +15,7 @@ import {
 
 export interface WalletKitCoreOptions {
   adapters: WalletAdapterList;
+  preferredWallets?: string[];
 }
 
 export enum WalletKitCoreConnectionStatus {
@@ -52,19 +53,34 @@ export interface WalletKitCore {
 export type SubscribeHandler = (state: WalletKitCoreState) => void;
 export type Unsubscribe = () => void;
 
+const SUI_WALLET_NAME = "Sui Wallet";
+
+function sortWallets(wallets: WalletAdapter[], preferredWallets: string[]) {
+  return [
+    // Preferred wallets, in order:
+    ...(preferredWallets
+      .map((name) => wallets.find((wallet) => wallet.name === name))
+      .filter(Boolean) as WalletAdapter[]),
+
+    // Wallets in default order:
+    ...wallets.filter((wallet) => !preferredWallets.includes(wallet.name)),
+  ];
+}
+
 // TODO: Support autoconnect.
 // TODO: Support lazy loaded adapters, where we'll resolve the adapters only once we attempt to use them.
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
 export function createWalletKitCore({
   adapters,
+  preferredWallets = [SUI_WALLET_NAME],
 }: WalletKitCoreOptions): WalletKitCore {
   const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
 
   let internalState: InternalWalletKitCoreState = {
     accounts: [],
     currentAccount: null,
-    wallets: resolveAdapters(adapters),
+    wallets: sortWallets(resolveAdapters(adapters), preferredWallets),
     currentWallet: null,
     status: WalletKitCoreConnectionStatus.DISCONNECTED,
   };
@@ -98,7 +114,9 @@ export function createWalletKitCore({
   if (providers.length) {
     providers.map((provider) =>
       provider.on("changed", () => {
-        setState({ wallets: resolveAdapters(adapters) });
+        setState({
+          wallets: sortWallets(resolveAdapters(adapters), preferredWallets),
+        });
       })
     );
   }
