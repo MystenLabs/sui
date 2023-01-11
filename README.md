@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://docs.sui.io/">
-    <img src="https://bafybeihxxjj7qoilkle7tu6mfvt5t66ydxxo2xc43sz5q6djcfsk3ojsly.ipfs.nftstorage.link/0pD8rO18_400x400.jpg" alt="Logo" width="80" height="80">
+    <img src="https://bafybeibzmgcxkrsvccuupszl66dr7ta63jlggp7s27hu7fvavxw6ejoiru.ipfs.nftstorage.link/dK8glmZ3_400x400.jpeg" alt="Logo" width="80" height="80">
   </a>
   
   <h3 align="center">Sui</h3>
