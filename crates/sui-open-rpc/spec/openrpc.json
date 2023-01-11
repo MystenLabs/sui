@@ -932,7 +932,7 @@
             {
               "name": "cursor",
               "value": {
-                "txDigest": "BEq7zDLoAQYesW7napSoEwAaurhRRuzJ5hfjaHcsGi63",
+                "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                 "eventSeq": 10
               }
             },
@@ -953,7 +953,7 @@
                   "timestamp": 0,
                   "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                   "id": {
-                    "txDigest": "BEq7zDLoAQYesW7napSoEwAaurhRRuzJ5hfjaHcsGi63",
+                    "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                     "eventSeq": 0
                   },
                   "event": {

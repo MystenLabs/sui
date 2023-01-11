@@ -147,12 +147,8 @@ export type EventQuery =
   | { Object: ObjectId }
   | { TimeRange: { start_time: number; end_time: number } };
 
-export type EventId = {
-  txDigest: TransactionDigest,
-  eventSeq: number,
-}
 export const EventId = object({
-  txSeq: number(),
+  txDigest: TransactionDigest,
   eventSeq: number(),
 });
 
@@ -182,16 +178,10 @@ export type SuiEventFilter =
   | { And: [SuiEventFilter, SuiEventFilter] }
   | { Or: [SuiEventFilter, SuiEventFilter] };
 
-export type SuiEventEnvelope = {
-  timestamp: number;
-  txDigest: TransactionDigest;
-  id: EventId;  // tx_digest:event_seq
-  event: SuiEvent;
-};
 export const SuiEventEnvelope = object({
   timestamp: number(),
   txDigest: TransactionDigest,
-  id: EventId,
+  id: EventId,  // tx_digest:event_seq
   event: SuiEvent,
 });
 

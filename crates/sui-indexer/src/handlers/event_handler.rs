@@ -60,7 +60,7 @@ impl EventHandler {
                 event_page
                     .next_cursor
                     .clone()
-                    .map(|c| Base58::encode(&c.tx_digest)),
+                    .map(|c| Base58::encode(c.tx_digest)),
                 event_page.next_cursor.clone().map(|c| c.event_seq),
             )?;
             next_cursor = event_page.next_cursor;
