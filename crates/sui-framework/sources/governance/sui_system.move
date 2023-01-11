@@ -164,6 +164,9 @@ module sui::sui_system {
             ctx
         );
 
+        // TODO: We need to verify the validator metadata.
+        // https://github.com/MystenLabs/sui/issues/7323
+
         validator_set::request_add_validator(&mut self.validators, validator);
     }
 
@@ -347,7 +350,7 @@ module sui::sui_system {
     }
 
     /// Report a validator as a bad or non-performant actor in the system.
-    /// Suceeds iff both the sender and the input `validator_addr` are active validators
+    /// Succeeds iff both the sender and the input `validator_addr` are active validators
     /// and they are not the same address. This function is idempotent within an epoch.
     public entry fun report_validator(
         self: &mut SuiSystemState,

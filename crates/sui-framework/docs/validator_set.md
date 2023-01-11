@@ -126,6 +126,7 @@
 <dd>
  The metadata of the validator set for the next epoch. This is kept up-to-dated.
  Everytime a change request is received, this set is updated.
+ TODO: This is currently not used. We may use it latter for enforcing min/max stake.
 </dd>
 <dt>
 <code>pending_delegation_switches: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="validator_set.md#0x2_validator_set_ValidatorPair">validator_set::ValidatorPair</a>, <a href="table_vec.md#0x2_table_vec_TableVec">table_vec::TableVec</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;&gt;</code>
@@ -683,7 +684,7 @@ It does the following things:
 
     <a href="validator_set.md#0x2_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(&<b>mut</b> self.active_validators);
 
-    // Delegation switches must be processed before delgation deposits and withdraws so that the
+    // Delegation switches must be processed before delegation deposits and withdraws so that the
     // rewards portion of the delegation switch can be added <b>to</b> the new <a href="validator.md#0x2_validator">validator</a>'s pool when we
     // process pending delegations.
     <a href="validator_set.md#0x2_validator_set_process_pending_delegation_switches">process_pending_delegation_switches</a>(self, ctx);
