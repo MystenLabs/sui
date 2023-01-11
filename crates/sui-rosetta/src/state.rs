@@ -204,26 +204,17 @@ impl PseudoBlockProvider {
             return Ok(());
         }
         if current_block.index < total_tx {
-            let tx_digests = if current_block.index == 0 {
-                client
-                    .read_api()
-                    .get_transactions(TransactionQuery::All, None, None, false)
-                    .await?
-                    .data
-            } else {
-                let cursor = current_block.hash;
-                let mut tx_digests = client
-                    .read_api()
-                    .get_transactions(TransactionQuery::All, Some(cursor), None, false)
-                    .await?
-                    .data;
-                if tx_digests.remove(0) != cursor {
-                    return Err(Error::DataError(
-                        "Incorrect transaction data returned from Sui.".to_string(),
-                    ));
-                }
-                tx_digests
-            };
+            let cursor = current_block.hash;
+            let mut tx_digests = client
+                .read_api()
+                .get_transactions(TransactionQuery::All, Some(cursor), None, false)
+                .await?
+                .data;
+            if tx_digests.remove(0) != cursor {
+                return Err(Error::DataError(
+                    "Incorrect transaction data returned from Sui.".to_string(),
+                ));
+            }
 
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
