@@ -680,7 +680,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    assert_eq!(16, page2.data.len());
+    assert_eq!(15, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get all events descending
