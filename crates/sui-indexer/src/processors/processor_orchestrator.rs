@@ -4,6 +4,7 @@
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use futures::future::try_join_all;
+use prometheus::Registry;
 use std::sync::Arc;
 use sui_indexer::PgConnectionPool;
 use sui_sdk::SuiClient;
@@ -16,27 +17,42 @@ use crate::processors::package_processor::PackageProcessor;
 pub struct ProcessorOrchestrator {
     rpc_client: SuiClient,
     conn_pool: Arc<PgConnectionPool>,
+    prometheus_registry: Registry,
 }
 
 impl ProcessorOrchestrator {
-    pub fn new(rpc_client: SuiClient, conn_pool: Arc<PgConnectionPool>) -> Self {
+    pub fn new(
+        rpc_client: SuiClient,
+        conn_pool: Arc<PgConnectionPool>,
+        prometheus_registry: Registry,
+    ) -> Self {
         Self {
             rpc_client,
             conn_pool,
+            prometheus_registry,
         }
     }
 
     pub async fn run_forever(&mut self) {
         info!("Processor orchestrator started...");
-        let address_processor = AddressProcessor::new(self.conn_pool.clone());
-        let object_processor = ObjectProcessor::new(self.conn_pool.clone());
-        let package_processor =
-            PackageProcessor::new(self.rpc_client.clone(), self.conn_pool.clone());
+        let address_processor =
+            AddressProcessor::new(self.conn_pool.clone(), &self.prometheus_registry);
+        let object_processor =
+            ObjectProcessor::new(self.conn_pool.clone(), &self.prometheus_registry);
+        let package_processor = PackageProcessor::new(
+            self.rpc_client.clone(),
+            self.conn_pool.clone(),
+            &self.prometheus_registry,
+        );
 
         let addr_handle = tokio::task::spawn(async move {
             let addr_result = retry(ExponentialBackoff::default(), || async {
                 let addr_processor_exec_res = address_processor.start().await;
                 if let Err(e) = addr_processor_exec_res.clone() {
+                    address_processor
+                        .address_processor_metrics
+                        .total_address_processor_error
+                        .inc();
                     warn!(
                         "Indexer address processor failed with error: {:?}, retrying...",
                         e
@@ -56,6 +72,10 @@ impl ProcessorOrchestrator {
             let obj_result = retry(ExponentialBackoff::default(), || async {
                 let obj_processor_exec_res = object_processor.start().await;
                 if let Err(e) = obj_processor_exec_res.clone() {
+                    object_processor
+                        .object_processor_metrics
+                        .total_object_processor_error
+                        .inc();
                     warn!(
                         "Indexer object processor failed with error: {:?}, retrying...",
                         e
@@ -75,6 +95,10 @@ impl ProcessorOrchestrator {
             let pkg_result = retry(ExponentialBackoff::default(), || async {
                 let pkg_processor_exec_res = package_processor.start().await;
                 if let Err(e) = pkg_processor_exec_res.clone() {
+                    package_processor
+                        .package_processor_metrics
+                        .total_package_processor_error
+                        .inc();
                     warn!(
                         "Indexer package processor failed with error: {:?}, retrying...",
                         e
