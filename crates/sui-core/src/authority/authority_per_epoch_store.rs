@@ -32,7 +32,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
-use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify};
+use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify, EpochStats};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -1243,8 +1243,6 @@ impl AuthorityPerEpochStore {
             if final_checkpoint {
                 info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
                 self.record_end_of_message_quorum_time_metric();
-            } else {
-                self.record_epoch_first_checkpoint_creation_time_metric();
             }
         }
         self.record_checkpoint_boundary(round)
@@ -1340,7 +1338,7 @@ impl AuthorityPerEpochStore {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_pending_certs_processed_time_since_epoch_close_ms
-                .report(epoch_close_time.elapsed().as_millis() as u64);
+                .set(epoch_close_time.elapsed().as_millis() as i64);
         }
     }
 
@@ -1348,23 +1346,33 @@ impl AuthorityPerEpochStore {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_end_of_publish_quorum_time_since_epoch_close_ms
-                .report(epoch_close_time.elapsed().as_millis() as u64);
+                .set(epoch_close_time.elapsed().as_millis() as i64);
         }
     }
 
-    pub(crate) fn record_epoch_last_checkpoint_creation_time_metric(&self) {
+    pub(crate) fn report_epoch_metrics_at_last_checkpoint(&self, stats: EpochStats) {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
-                .epoch_last_transaction_cert_creation_time_ms
-                .report(epoch_close_time.elapsed().as_millis() as u64);
+                .epoch_last_checkpoint_created_time_since_epoch_close_ms
+                .set(epoch_close_time.elapsed().as_millis() as i64);
         }
+        info!(epoch=?self.epoch(), "Epoch statistics: checkpoint_count={:?}, transaction_count={:?}, total_gas_reward={:?}", stats.checkpoint_count, stats.transaction_count, stats.total_gas_reward);
+        self.metrics
+            .epoch_checkpoint_count
+            .set(stats.checkpoint_count as i64);
+        self.metrics
+            .epoch_transaction_count
+            .set(stats.transaction_count as i64);
+        self.metrics
+            .epoch_total_gas_reward
+            .set(stats.total_gas_reward as i64);
     }
 
     pub(crate) fn record_epoch_reconfig_start_time_metric(&self) {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_reconfig_start_time_since_epoch_close_ms
-                .report(epoch_close_time.elapsed().as_millis() as u64);
+                .set(epoch_close_time.elapsed().as_millis() as i64);
         }
     }
 
@@ -1372,26 +1380,27 @@ impl AuthorityPerEpochStore {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_validator_halt_duration_ms
-                .report(epoch_close_time.elapsed().as_millis() as u64);
+                .set(epoch_close_time.elapsed().as_millis() as i64);
         }
     }
 
-    fn record_epoch_first_checkpoint_creation_time_metric(&self) {
+    pub(crate) fn record_epoch_first_checkpoint_creation_time_metric(&self) {
         self.metrics
             .epoch_first_checkpoint_ready_time_since_epoch_begin_ms
-            .report(self.epoch_open_time.elapsed().as_millis() as u64);
+            .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 
-    pub(crate) fn record_epoch_last_transaction_cert_creation_time_metric(&self, elapsed_ms: u64) {
+    pub(crate) fn record_epoch_last_transaction_cert_creation_time_metric(&self, elapsed_ms: i64) {
         self.metrics
             .epoch_last_transaction_cert_creation_time_ms
-            .report(elapsed_ms);
+            .set(elapsed_ms);
     }
 
     fn record_epoch_total_duration_metric(&self) {
+        self.metrics.current_epoch.set(self.epoch() as i64);
         self.metrics
             .epoch_total_duration
-            .report(self.epoch_open_time.elapsed().as_millis() as u64);
+            .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 }
 
