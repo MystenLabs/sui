@@ -14,6 +14,7 @@ use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
+    set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
@@ -167,6 +168,8 @@ impl Worker {
             .add_rpc_service(worker_service)
             .merge(primary_to_worker_router);
 
+        let epoch_string: String = committee.load().epoch.to_string();
+
         let service = ServiceBuilder::new()
             .layer(
                 TraceLayer::new_for_server_errors()
@@ -177,6 +180,10 @@ impl Worker {
                 inbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                "epoch".parse().unwrap(),
+                epoch_string,
+            ))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
