@@ -48,13 +48,14 @@ export function getName(rawName: string | number[]) {
     if (Array.isArray(rawName)) {
         name = String.fromCharCode(...rawName);
     } else {
-        name = Buffer.from(rawName, 'base64').toString();
+        name = decodeURIComponent(atob(rawName));
         if (!VALDIATOR_NAME.test(name)) {
             name = rawName;
         }
     }
     return name;
 }
+
 interface PendingDelegation {
     name: string;
     staked: bigint;
