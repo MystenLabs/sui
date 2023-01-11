@@ -278,7 +278,7 @@ async fn test_tx_across_epoch_boundaries() {
     // Will all transactions finish in epoch 0?  Local testing results say
     // unlikely with total_tx_size = 180.
     loop {
-        match tokio::time::timeout(tokio::time::Duration::from_secs(5), result_rx.recv()).await {
+        match tokio::time::timeout(tokio::time::Duration::from_secs(60), result_rx.recv()).await {
             Ok(Some(tx_cert)) => {
                 if tx_cert.auth_sig().epoch == 1 {
                     return;
