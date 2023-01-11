@@ -779,18 +779,24 @@ It does the following things:
     reward_slashing_rate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
+    // Use the report records for the epoch <b>to</b> compute validators that will be
+    // punished and the sum of their stakes.
     <b>let</b> (slashed_validators, total_slashed_validator_stake) =
         <a href="validator_set.md#0x2_validator_set_process_and_empty_validator_report_records">process_and_empty_validator_report_records</a>(
             self,
             validator_report_records,
             reward_slashing_threshold_bps,
         );
+
+    // Compute the <a href="stake.md#0x2_stake">stake</a> adjustments of slashed validators, <b>to</b> be taken into
+    // account in reward computation.
     <b>let</b> (total_adjustment, individual_adjustments) =
         <a href="validator_set.md#0x2_validator_set_compute_stake_adjustments">compute_stake_adjustments</a>(
             self,
             slashed_validators,
             reward_slashing_rate,
         );
+
     // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` <b>to</b>
     // make sure we are using the current epoch's <a href="stake.md#0x2_stake">stake</a> information <b>to</b> compute reward distribution.
     <b>let</b> reward_amounts = <a href="validator_set.md#0x2_validator_set_compute_reward_distribution">compute_reward_distribution</a>(
@@ -1682,10 +1688,13 @@ due to integer division loss.
         // Use u128 <b>to</b> avoid multiplication overflow.
         <b>let</b> stake_amount: u128 = (<a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>) <b>as</b> u128);
         <b>let</b> adjusted_stake_amount =
+            // If the <a href="validator.md#0x2_validator">validator</a> is one of the slashed ones, then subtract the adjustment.
             <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&stake_adjustments, &validator_address)) {
                 <b>let</b> adjustment = *<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(&stake_adjustments, &validator_address);
                 stake_amount - (adjustment <b>as</b> u128)
             } <b>else</b> {
+                // Otherwise the slashed rewards should be distributed among the unslashed
+                // validators so add the corresponding adjustment.
                 <b>let</b> adjustment = (total_stake_adjustment <b>as</b> u128) * stake_amount
                                / (total_unslashed_validator_stake <b>as</b> u128);
                 stake_amount + adjustment

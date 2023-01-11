@@ -324,18 +324,24 @@ module sui::validator_set {
         reward_slashing_rate: u64,
         ctx: &mut TxContext,
     ) {
+        // Use the report records for the epoch to compute validators that will be
+        // punished and the sum of their stakes.
         let (slashed_validators, total_slashed_validator_stake) = 
             process_and_empty_validator_report_records(
                 self,
                 validator_report_records,
                 reward_slashing_threshold_bps,
             );
+
+        // Compute the stake adjustments of slashed validators, to be taken into
+        // account in reward computation.
         let (total_adjustment, individual_adjustments) = 
             compute_stake_adjustments(
                 self,
                 slashed_validators,
                 reward_slashing_rate,
             );
+
         // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` to 
         // make sure we are using the current epoch's stake information to compute reward distribution.
         let reward_amounts = compute_reward_distribution(
@@ -733,10 +739,13 @@ module sui::validator_set {
             // Use u128 to avoid multiplication overflow.
             let stake_amount: u128 = (validator::total_stake_amount(validator) as u128);
             let adjusted_stake_amount = 
+                // If the validator is one of the slashed ones, then subtract the adjustment.
                 if (vec_map::contains(&stake_adjustments, &validator_address)) {
                     let adjustment = *vec_map::get(&stake_adjustments, &validator_address);
                     stake_amount - (adjustment as u128)
                 } else {
+                    // Otherwise the slashed rewards should be distributed among the unslashed
+                    // validators so add the corresponding adjustment.
                     let adjustment = (total_stake_adjustment as u128) * stake_amount
                                    / (total_unslashed_validator_stake as u128);
                     stake_amount + adjustment
