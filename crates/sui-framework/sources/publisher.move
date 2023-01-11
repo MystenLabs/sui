@@ -113,8 +113,6 @@ module sui::test_publisher {
 
         assert!(&ascii::string(b"0000000000000000000000000000000000000002") == publisher::package(&pub), 0);
 
-        std::debug::print(publisher::package(&pub));
-
         publisher::burn(pub);
         test::end(test);
     }
