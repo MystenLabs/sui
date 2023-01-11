@@ -10,12 +10,12 @@ import {
   getMoveObjectType,
   getObjectId,
 } from './objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
+import { normalizeSuiObjectId, ObjectId, SuiAddress, TransactionDigest } from './common';
 
 import { getOption, Option } from './option';
 import { StructTag } from './sui-bcs';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
-import { Infer, literal, number, object, string, union } from 'superstruct';
+import { array, Infer, literal, number, object, optional, string, union } from 'superstruct';
 
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
@@ -44,10 +44,29 @@ export const CoinMetadataStruct = object({
 
 export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
 
+export const CoinInfo = object({
+  coinType: string(),
+  coin_object_id: union([ObjectId, literal(null)]),
+  version: number(),
+  digest: TransactionDigest,
+  balance: number(),
+  locked_until_epoch: optional(number()),
+});
+
+export type CoinInfo = Infer<typeof CoinInfo>;
+
+export const PaginatedCoins = object({
+  data: array(CoinInfo),
+  nextCursor: union([ObjectId, literal(null)]),
+});
+
+export type PaginatedCoins = Infer<typeof PaginatedCoins>;
+
 /**
  * Utility class for 0x2::coin
  * as defined in https://github.com/MystenLabs/sui/blob/ca9046fd8b1a9e8634a4b74b0e7dabdc7ea54475/sui_programmability/framework/sources/Coin.move#L4
  */
+
 export class Coin {
   static isCoin(data: ObjectData): boolean {
     return Coin.getType(data)?.match(COIN_TYPE_ARG_REGEX) != null;
