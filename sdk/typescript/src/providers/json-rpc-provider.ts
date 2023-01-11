@@ -45,6 +45,7 @@ import {
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
+  PaginatedCoins,
   GetObjectDataResponse,
   GetOwnedObjectsResponse,
 } from '../types';
@@ -683,6 +684,27 @@ export class JsonRpcProvider extends Provider {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     return this.wsClient.unsubscribeEvent(id);
+  }
+
+  // Coins
+  async getCoins(
+    owner: SuiAddress,
+    coinType: String | null,
+    cursor: ObjectId | null,
+    limit: number | null
+  ) : Promise<PaginatedCoins> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getCoins',
+        [owner, coinType, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting coins: ${err} for owner ${owner}`
+      );
+    }
   }
 
   async devInspectTransaction(txBytes: string): Promise<DevInspectResults> {
