@@ -193,27 +193,8 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "devInspectTransaction")]
     async fn dev_inspect_transaction(
         &self,
-        tx_bytes: Base64,
-        /// The epoch to perform the call. Will be set from the system state object if not provided
-        epoch: Option<EpochId>,
-    ) -> RpcResult<DevInspectResults>;
-
-    /// Similar to `dev_inspect_transaction` but do not require gas object and budget
-    #[method(name = "devInspectMoveCall")]
-    async fn dev_inspect_move_call(
-        &self,
-        /// the caller's Sui address
         sender_address: SuiAddress,
-        /// the Move package ID, e.g. `0x2`
-        package_object_id: ObjectID,
-        /// the Move module name, e.g. `devnet_nft`
-        module: String,
-        /// the move function name, e.g. `mint`
-        function: String,
-        /// the type arguments of the Move function
-        type_arguments: Vec<SuiTypeTag>,
-        /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
-        arguments: Vec<SuiJsonValue>,
+        tx_bytes: Base64,
         /// The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;

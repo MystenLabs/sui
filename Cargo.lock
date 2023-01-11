@@ -7771,9 +7771,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "2.2.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1966009f3c05f095697c537312f5415d1e3ed31ce0a56942bac4c771c5c335e"
+checksum = "e3452b4c0f6c1e357f73fdb87cd1efabaa12acf328c7a528e252893baeb3f4aa"
 dependencies = [
  "darling",
  "proc-macro2 1.0.49",
@@ -8785,6 +8785,7 @@ dependencies = [
  "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-protocol-constants",
  "sui-sdk",
  "sui-simulator",
  "sui-transaction-builder",
@@ -9403,9 +9404,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.27.6"
+version = "0.27.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c215311383d25d03753375c53ab9fad8fc0cf46953c409211e065edeabf577ee"
+checksum = "975fe381e0ecba475d4acff52466906d95b153a40324956552e027b2a9eaa89e"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",

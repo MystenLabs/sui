@@ -7,7 +7,6 @@ use crate::execution_mode::{self, ExecutionMode};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_types::base_types::{ObjectDigest, SequenceNumber};
-use sui_types::crypto::sha3_hash;
 use tracing::{debug, instrument};
 
 use crate::adapter;
@@ -37,7 +36,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionData, TransactionEffects, TransferObject, TransferSui,
+        TransactionEffects, TransferObject, TransferSui,
     },
     object::Object,
     storage::BackingPackageStore,
@@ -57,7 +56,9 @@ pub fn execute_transaction_to_effects<
 >(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
-    transaction_data: TransactionData,
+    transaction_kind: TransactionKind,
+    transaction_signer: SuiAddress,
+    gas_object_ref: ObjectRef,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
@@ -69,12 +70,11 @@ pub fn execute_transaction_to_effects<
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
+    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch);
 
-    let gas_object_ref = *transaction_data.gas_payment_object_ref();
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
-        transaction_data,
+        transaction_kind,
         gas_object_ref.0,
         &mut tx_ctx,
         move_vm,
@@ -134,7 +134,7 @@ fn execute_transaction<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_data: TransactionData,
+    transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -150,7 +150,7 @@ fn execute_transaction<
     let mut result = result.and_then(|()| {
         let execution_result = execution_loop::<Mode, _>(
             temporary_store,
-            transaction_data,
+            transaction_kind,
             gas_object_id,
             tx_ctx,
             move_vm,
@@ -182,7 +182,7 @@ fn execution_loop<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_data: TransactionData,
+    transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -192,7 +192,7 @@ fn execution_loop<
     let mut results = Mode::empty_results();
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    for (idx, single_tx) in transaction_data.kind.into_single_transactions().enumerate() {
+    for (idx, single_tx) in transaction_kind.into_single_transactions().enumerate() {
         match single_tx {
             SingleTransactionKind::TransferObject(TransferObject {
                 recipient,
@@ -698,83 +698,11 @@ fn transfer_sui<S>(
     Ok(())
 }
 
-const FAKE_GAS_OBJECT: ObjectRef = (
+pub const FAKE_GAS_OBJECT: ObjectRef = (
     ObjectID::ZERO,
     SequenceNumber::from_u64(0),
     ObjectDigest::MIN,
 );
-
-pub fn manual_execute_move_call_fake_txn_digest(
-    sender: SuiAddress,
-    move_call: MoveCall,
-) -> TransactionDigest {
-    let txn_data = TransactionData::new_with_dummy_gas_price(
-        TransactionKind::Single(SingleTransactionKind::Call(move_call)),
-        sender,
-        FAKE_GAS_OBJECT,
-        MAX_TX_GAS,
-    );
-    TransactionDigest::new(sha3_hash(&txn_data))
-}
-
-pub fn manual_execute_move_call<
-    Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
->(
-    shared_object_refs: Vec<ObjectRef>,
-    mut temporary_store: TemporaryStore<S>,
-    sender: SuiAddress,
-    move_call: MoveCall,
-    transaction_digest: TransactionDigest,
-    mut transaction_dependencies: BTreeSet<TransactionDigest>,
-    move_vm: &Arc<MoveVM>,
-    mut gas_status: SuiGasStatus,
-    epoch: EpochId,
-) -> (
-    TransactionEffects,
-    Result<Mode::ExecutionResults, ExecutionError>,
-) {
-    let mut tx_ctx = TxContext::new(&sender, &transaction_digest, epoch);
-
-    let MoveCall {
-        package,
-        module,
-        function,
-        type_arguments,
-        arguments,
-    } = move_call;
-    let module_id = ModuleId::new(package.0.into(), module);
-    let execution_result = adapter::execute::<Mode, _, _>(
-        move_vm,
-        &mut temporary_store,
-        module_id,
-        &function,
-        type_arguments,
-        arguments,
-        gas_status.create_move_gas_status(),
-        &mut tx_ctx,
-    )
-    .map(|result| {
-        let mut results = Mode::empty_results();
-        Mode::add_result(&mut results, 0, result);
-        results
-    });
-    let gas_cost_summary = gas_status.summary(execution_result.is_ok());
-    let status = match &execution_result {
-        Ok(_) => ExecutionStatus::Success,
-        Err(error) => ExecutionStatus::new_failure(error.to_execution_status()),
-    };
-    transaction_dependencies.remove(&TransactionDigest::genesis());
-    let (_inner, effects) = temporary_store.to_effects(
-        shared_object_refs,
-        &transaction_digest,
-        transaction_dependencies.into_iter().collect(),
-        gas_cost_summary,
-        status,
-        FAKE_GAS_OBJECT,
-    );
-    (effects, execution_result)
-}
 
 #[test]
 fn test_pay_empty_coins() {

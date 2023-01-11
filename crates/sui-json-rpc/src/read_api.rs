@@ -8,8 +8,8 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_json::SuiJsonValue;
-use sui_transaction_builder::TransactionBuilder;
+use sui_adapter::execution_engine::FAKE_GAS_OBJECT;
+use sui_protocol_constants::MAX_TX_GAS;
 use sui_types::committee::EpochId;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
@@ -21,13 +21,13 @@ use sui_json_rpc_types::{
     DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
     MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
-    SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::TransactionData;
+use sui_types::messages::{TransactionData, TransactionKind};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary,
@@ -36,12 +36,10 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
-use sui_adapter::execution_mode::DevInspect;
 use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
 use crate::api::{cap_page_limit, RpcReadApiServer};
-use crate::transaction_builder_api::AuthorityStateDataReader;
 use crate::SuiRpcModule;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -52,16 +50,11 @@ pub struct ReadApi {
 
 pub struct FullNodeApi {
     pub state: Arc<AuthorityState>,
-    dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
 impl FullNodeApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
-        let reader = Arc::new(AuthorityStateDataReader::new(state.clone()));
-        Self {
-            state,
-            dev_inspect_builder: TransactionBuilder::new(reader),
-        }
+        Self { state }
     }
 
     fn get_sui_system_state_object_epoch(&self) -> RpcResult<EpochId> {
@@ -241,6 +234,7 @@ impl SuiRpcModule for ReadApi {
 impl RpcFullNodeReadApiServer for FullNodeApi {
     async fn dev_inspect_transaction(
         &self,
+        sender_address: SuiAddress,
         tx_bytes: Base64,
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
@@ -248,40 +242,22 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             None => self.get_sui_system_state_object_epoch()?,
             Some(n) => n,
         };
-        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
+        let tx_kind: TransactionKind =
+            bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
+        let tx_data =
+            TransactionData::new(tx_kind.clone(), sender_address, FAKE_GAS_OBJECT, MAX_TX_GAS);
+        let intent_msg = IntentMessage::new(
+            Intent {
+                version: IntentVersion::V0,
+                scope: IntentScope::TransactionData,
+                app_id: AppId::Sui,
+            },
+            tx_data,
+        );
+        let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
         Ok(self
             .state
-            .dev_inspect_transaction(txn_data, txn_digest, epoch)
-            .await?)
-    }
-
-    async fn dev_inspect_move_call(
-        &self,
-        sender_address: SuiAddress,
-        package_object_id: ObjectID,
-        module: String,
-        function: String,
-        type_arguments: Vec<SuiTypeTag>,
-        arguments: Vec<SuiJsonValue>,
-        epoch: Option<EpochId>,
-    ) -> RpcResult<DevInspectResults> {
-        let epoch = match epoch {
-            None => self.get_sui_system_state_object_epoch()?,
-            Some(n) => n,
-        };
-        let move_call = self
-            .dev_inspect_builder
-            .single_move_call(
-                package_object_id,
-                &module,
-                &function,
-                type_arguments,
-                arguments,
-            )
-            .await?;
-        Ok(self
-            .state
-            .dev_inspect_move_call(sender_address, move_call, epoch)
+            .dev_inspect_transaction(sender_address, tx_kind, txn_digest, epoch)
             .await?)
     }
 

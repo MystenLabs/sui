@@ -66,22 +66,11 @@ pub async fn check_transaction_input(
 /// bypasses many of the normal object checks
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
-    transaction: &TransactionData,
-) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction.validity_check()?;
-    let gas_status = get_gas_status(store, transaction).await?;
-    let input_objects = transaction.input_objects()?;
-    let input_objects = check_dev_inspect_input_objects(store, input_objects)?;
-    Ok((gas_status, input_objects))
-}
-
-#[instrument(level = "trace", skip_all)]
-/// WARNING! This should only be used for the dev-inspect transaction. This transaction type
-/// bypasses many of the normal object checks
-pub(crate) fn check_dev_inspect_input_objects(
-    store: &AuthorityStore,
-    input_objects: Vec<InputObjectKind>,
+    kind: &TransactionKind,
+    gas_object: &ObjectRef,
 ) -> SuiResult<InputObjects> {
+    TransactionData::validity_check_impl(kind, gas_object)?;
+    let input_objects = kind.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
