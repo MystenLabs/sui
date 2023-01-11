@@ -17,6 +17,7 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
+use move_core_types::identifier::IdentStr;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
@@ -25,6 +26,7 @@ use rand::{
     prelude::StdRng,
     Rng, SeedableRng,
 };
+use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
 use std::future::Future;
@@ -3183,84 +3185,29 @@ async fn test_store_revert_unwrap_move_call() {
 }
 #[tokio::test]
 async fn test_store_get_dynamic_object() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
-
-    let create_outer_effects = create_move_object(
-        &object_basics.0,
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-    )
-    .await
-    .unwrap();
-
-    assert!(create_outer_effects.status.is_ok());
-    assert_eq!(create_outer_effects.created.len(), 1);
-
-    let create_inner_effects = create_move_object(
-        &object_basics.0,
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-    )
-    .await
-    .unwrap();
-
-    assert!(create_inner_effects.status.is_ok());
-    assert_eq!(create_inner_effects.created.len(), 1);
-
-    let outer_v0 = create_outer_effects.created[0].0;
-    let inner_v0 = create_inner_effects.created[0].0;
-
-    let add_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call_with_dummy_gas_price(
-            sender,
-            object_basics.0,
-            ident_str!("object_basics").to_owned(),
-            ident_str!("add_ofield").to_owned(),
-            vec![],
-            create_inner_effects.gas_object.0,
-            vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
-            ],
-            MAX_GAS,
-        ),
-        &sender_key,
-    );
-
-    let add_cert = init_certified_transaction(add_txn, &authority_state);
-
-    let add_effects = authority_state
-        .try_execute_for_test(&add_cert)
-        .await
-        .unwrap()
-        .into_message();
-
-    assert!(add_effects.status.is_ok());
-    assert_eq!(add_effects.created.len(), 1);
-
-    let fields = authority_state
-        .get_dynamic_fields(outer_v0.0, None, usize::MAX)
-        .unwrap();
+    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield")).await;
     assert_eq!(fields.len(), 1);
     assert_eq!(fields[0].type_, DynamicFieldType::DynamicObject);
 }
 
 #[tokio::test]
 async fn test_store_get_dynamic_field() {
+    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_field")).await;
+
+    assert_eq!(fields.len(), 1);
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
+    assert_eq!(json!(true), fields[0].name.value);
+    assert_eq!("bool", fields[0].name.type_)
+}
+
+async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<DynamicFieldInfo>) {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_outer_effects = create_move_object(
-        &object_basics.0,
+        &object_basics,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -3293,7 +3240,7 @@ async fn test_store_get_dynamic_field() {
             sender,
             object_basics.0,
             ident_str!("object_basics").to_owned(),
-            ident_str!("add_field").to_owned(),
+            function.to_owned(),
             vec![],
             create_inner_effects.gas_object.0,
             vec![
@@ -3316,11 +3263,44 @@ async fn test_store_get_dynamic_field() {
     assert!(add_effects.status.is_ok());
     assert_eq!(add_effects.created.len(), 1);
 
-    let fields = authority_state
-        .get_dynamic_fields(outer_v0.0, None, usize::MAX)
-        .unwrap();
+    (
+        sender,
+        authority_state
+            .get_dynamic_fields(outer_v0.0, None, usize::MAX)
+            .unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn test_dynamic_field_struct_name_parsing() {
+    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_field_with_struct_name")).await;
+
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
+    assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
+    assert_eq!("0x0::object_basics::Name", fields[0].name.type_)
+}
+
+#[tokio::test]
+async fn test_dynamic_field_bytearray_name_parsing() {
+    let (_, fields) =
+        create_and_retrieve_df_info(ident_str!("add_field_with_bytearray_name")).await;
+
+    assert_eq!(fields.len(), 1);
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
+    assert_eq!("Vec<u8>", fields[0].name.type_);
+    assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
+}
+
+#[tokio::test]
+async fn test_dynamic_field_address_name_parsing() {
+    let (sender, fields) =
+        create_and_retrieve_df_info(ident_str!("add_field_with_address_name")).await;
+
+    assert_eq!(fields.len(), 1);
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
+    assert_eq!("Address", fields[0].name.type_);
+    assert_eq!(json!(sender), fields[0].name.value);
 }
 
 #[tokio::test]
