@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use config::{Parameters, SharedCommittee, SharedWorkerCache};
 use consensus::bullshark::Bullshark;
@@ -70,7 +71,7 @@ impl PrimaryNodeInner {
         }
 
         // create a new registry
-        let registry = Registry::new();
+        let registry = new_registry(committee.load().epoch);
 
         // create the channel to send the shutdown signal
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);

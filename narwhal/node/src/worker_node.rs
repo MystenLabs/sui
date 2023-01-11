@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use arc_swap::{ArcSwap, ArcSwapOption};
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
@@ -63,7 +64,7 @@ impl WorkerNodeInner {
             (metrics, None)
         } else {
             // create a new registry
-            let registry = Registry::new();
+            let registry = new_registry(committee.load().epoch);
 
             (initialise_metrics(&registry), Some(registry))
         };
@@ -264,7 +265,7 @@ impl WorkerNodes {
         }
 
         // create the registry first
-        let registry = Registry::new();
+        let registry = new_registry(committee.load().epoch);
 
         let metrics = initialise_metrics(&registry);
 
