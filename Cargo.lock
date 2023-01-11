@@ -8791,6 +8791,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "narwhal-network",
+ "prometheus",
  "serde 1.0.152",
  "serde_json",
  "sui",

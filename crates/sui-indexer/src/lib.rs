@@ -12,6 +12,7 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use tracing::{info, warn};
 
 pub mod errors;
+pub mod metrics;
 pub mod models;
 pub mod schema;
 pub mod utils;
@@ -20,8 +21,6 @@ pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 use errors::IndexerError;
-
-pub const RPC_CLIENT_URL: &str = "https://fullnode.devnet.sui.io:443";
 
 pub async fn new_rpc_client(http_url: String) -> Result<SuiClient, IndexerError> {
     info!("Getting new RPC client...");
