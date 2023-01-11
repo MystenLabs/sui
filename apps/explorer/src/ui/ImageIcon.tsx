@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cva, type VariantProps } from 'class-variance-authority';
-
-import fallbackImage from '../assets/ImageIconfFallback.svg';
+import { useState } from 'react';
 
 const imageStyle = cva(
     [
@@ -13,7 +12,7 @@ const imageStyle = cva(
         variants: {
             size: {
                 sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
-                md: 'w-8 h-8 font-medium text-body',
+                md: 'w-7.5 h-7.5 font-medium text-body',
                 lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading4 md:text-3xl',
                 xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-heading4 md:text-5xl',
             },
@@ -35,16 +34,29 @@ export interface ImageIconProps extends VariantProps<typeof imageStyle> {
     alt: string;
 }
 
+function FallBackAvatar({ str }: { str: string }) {
+    return (
+        <div className="h-full w-full flex items-center justify-center">
+            {str.slice(0, 2)}
+        </div>
+    );
+}
+
 export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
+    const [error, setError] = useState(false);
     return (
         <div role="img" className={imageStyle(styleProps)} aria-label={alt}>
-            <img
-                src={src || ''}
-                alt={alt}
-                aria-label={alt}
-                className="flex h-full w-full items-center justify-center"
-                onError={(e) => (e.currentTarget.src = fallbackImage)}
-            />
+            {error ? (
+                <FallBackAvatar str={alt} />
+            ) : (
+                <img
+                    src={src || ''}
+                    alt={alt}
+                    aria-label={alt}
+                    className="flex h-full w-full items-center justify-center"
+                    onError={() => setError(true)}
+                />
+            )}
         </div>
     );
 }
