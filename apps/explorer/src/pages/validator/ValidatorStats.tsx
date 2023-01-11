@@ -75,7 +75,7 @@ export function ValidatorStats({
                                     variant="heading2/semibold"
                                     color="steel-darker"
                                 >
-                                    {validator.apy ? `${validator.apy}%` : '--'}
+                                    {validator.apy}%
                                 </Heading>
                             </Stats>
                             <Stats label="Total Staked" tooltip="Coming soon">
