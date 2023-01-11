@@ -6,7 +6,7 @@
         "dev:static": "VITE_NETWORK=STATIC vite --port 8080",
         "test": "pnpm test:unit",
         "test:unit": "vitest run",
-        "typecheck": "tsc --noEmit",
+        "typecheck": "tsc -b",
         "playwright": "playwright",
         "build": "pnpm typecheck && vite build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",

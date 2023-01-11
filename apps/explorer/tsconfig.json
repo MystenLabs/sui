@@ -17,10 +17,12 @@
         "jsx": "react-jsx",
         "baseUrl": ".",
         "paths": {
-            "~/*": ["./src/*"],
-            "@mysten/sui.js": ["../../sdk/typescript/src/"],
-            "@mysten/wallet-kit": ["../../sdk/wallet-adapter/wallet-kit/src/"]
+            "~/*": ["./src/*"]
         }
     },
-    "include": ["src", "tests"]
+    "include": ["src", "tests"],
+    "references": [
+        { "path": "../../sdk/typescript/" },
+        { "path": "../../sdk/wallet-adapter/wallet-kit/" }
+    ]
 }
