@@ -47,6 +47,12 @@ use typed_store_derive::DBMapUtils;
 
 pub type CheckpointCommitHeight = u64;
 
+pub struct EpochStats {
+    pub checkpoint_count: u64,
+    pub transaction_count: u64,
+    pub total_gas_reward: u64,
+}
+
 #[derive(DBMapUtils)]
 pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
@@ -61,7 +67,7 @@ pub struct CheckpointStore {
     checkpoint_by_digest: DBMap<CheckpointDigest, CertifiedCheckpointSummary>,
 
     /// A map from epoch ID to the sequence number of the last checkpoint in that epoch.
-    pub(crate) epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
+    epoch_last_checkpoint_map: DBMap<EpochId, CheckpointSequenceNumber>,
 
     /// Watermarks used to determine the highest verified, fully synced, and
     /// fully executed checkpoints
@@ -273,6 +279,32 @@ impl CheckpointStore {
         };
         Ok(checkpoint)
     }
+
+    /// Given the epoch ID, and the last checkpoint of the epoch, derive a few statistics of the epoch.
+    pub fn get_epoch_stats(
+        &self,
+        epoch: EpochId,
+        last_checkpoint: &CheckpointSummary,
+    ) -> Option<EpochStats> {
+        let (first_checkpoint, prev_epoch_network_transactions) = if epoch == 0 {
+            (0, 0)
+        } else if let Ok(Some(checkpoint)) = self.get_epoch_last_checkpoint(&(epoch - 1)) {
+            (
+                checkpoint.summary.sequence_number + 1,
+                checkpoint.summary.network_total_transactions,
+            )
+        } else {
+            return None;
+        };
+        Some(EpochStats {
+            checkpoint_count: last_checkpoint.sequence_number - first_checkpoint + 1,
+            transaction_count: last_checkpoint.network_total_transactions
+                - prev_epoch_network_transactions,
+            total_gas_reward: last_checkpoint
+                .epoch_rolling_gas_cost_summary
+                .computation_cost,
+        })
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -403,11 +435,6 @@ impl CheckpointBuilder {
             .create_checkpoints(sorted, last_checkpoint_of_epoch)
             .await?;
         self.write_checkpoints(height, new_checkpoint).await?;
-        if last_checkpoint_of_epoch {
-            info!(epoch=?self.epoch_store.epoch(), "Last checkpoint of the epoch created");
-            self.epoch_store
-                .record_epoch_last_checkpoint_creation_time_metric();
-        }
         Ok(())
     }
 
@@ -479,7 +506,17 @@ impl CheckpointBuilder {
             total,
             last_checkpoint.as_ref().map(|(seq, _)| *seq)
         );
+        let epoch = self.epoch_store.epoch();
         for (index, mut effects) in chunks.into_iter().enumerate() {
+            let first_checkpoint_of_epoch = index == 0
+                && last_checkpoint
+                    .as_ref()
+                    .map(|(_, c)| c.epoch != epoch)
+                    .unwrap_or(true);
+            if first_checkpoint_of_epoch {
+                self.epoch_store
+                    .record_epoch_first_checkpoint_creation_time_metric();
+            }
             let last_checkpoint_of_epoch = last_pending_of_epoch && index == chunks_count - 1;
             let epoch_rolling_gas_cost_summary =
                 self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
@@ -504,15 +541,8 @@ impl CheckpointBuilder {
                 .as_ref()
                 .map(|(_, c)| c.sequence_number + 1)
                 .unwrap_or_default();
-            if last_checkpoint_of_epoch {
-                info!(
-                    ?sequence_number,
-                    "creating last checkpoint of epoch {}",
-                    self.epoch_store.epoch()
-                );
-            }
             let summary = CheckpointSummary::new(
-                self.epoch_store.epoch(),
+                epoch,
                 sequence_number,
                 network_total_transactions,
                 &contents,
@@ -530,6 +560,16 @@ impl CheckpointBuilder {
                     None
                 },
             );
+            if last_checkpoint_of_epoch {
+                info!(
+                    ?sequence_number,
+                    "creating last checkpoint of epoch {}", epoch
+                );
+                if let Some(stats) = self.tables.get_epoch_stats(epoch, &summary) {
+                    self.epoch_store
+                        .report_epoch_metrics_at_last_checkpoint(stats);
+                }
+            }
             last_checkpoint = Some((sequence_number, summary.clone()));
             checkpoints.push((summary, contents));
         }
@@ -575,7 +615,7 @@ impl CheckpointBuilder {
             .await?;
         self.epoch_store
             .record_epoch_last_transaction_cert_creation_time_metric(
-                timer.elapsed().as_millis() as u64
+                timer.elapsed().as_millis() as i64
             );
         let signed_effect = self
             .state
