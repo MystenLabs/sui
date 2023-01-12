@@ -199,7 +199,7 @@ async fn test_transaction_orchestrator_reconfig() {
 #[tokio::test]
 async fn test_tx_across_epoch_boundaries() {
     telemetry_subscribers::init_for_testing();
-    let total_tx_cnt = 180;
+    let total_tx_cnt = 1800;
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
     let gas_objects = generate_test_gas_objects_with_owner(total_tx_cnt, sender);
     let (result_tx, mut result_rx) =
