@@ -40,8 +40,10 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 use typed_store::{rocks::TypedStoreError, Map};
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
+use crate::authority::{
+    authority_per_epoch_store::AuthorityPerEpochStore, authority_store::EffectsStore,
+};
 use crate::transaction_manager::TransactionManager;
 use crate::{
     authority::{AuthorityState, EffectsNotifyRead},
@@ -214,12 +216,15 @@ impl CheckpointExecutorEventLoop {
 
     pub async fn handle_crash_recovery(&self) -> SuiResult {
         let local_epoch = self.authority_state.epoch();
+        let mut highest_executed_metric = 0;
 
         match self.checkpoint_store.get_highest_executed_checkpoint()? {
             // TODO this invariant may no longer hold once we introduce snapshots
             None => assert_eq!(local_epoch, 0),
 
             Some(last_checkpoint) => {
+                highest_executed_metric = last_checkpoint.sequence_number();
+
                 match last_checkpoint.next_epoch_committee() {
                     // Make sure there was not an epoch change in this case
                     None => assert_eq!(local_epoch, last_checkpoint.epoch()),
@@ -238,6 +243,10 @@ impl CheckpointExecutorEventLoop {
                 }
             }
         }
+
+        self.metrics
+            .last_executed_checkpoint
+            .set(highest_executed_metric as i64);
         Ok(())
     }
 
@@ -456,6 +465,7 @@ impl CheckpointExecutorEventLoop {
                 epoch_store.clone(),
                 state.transaction_manager().clone(),
                 local_execution_timeout_sec,
+                &metrics,
             )
             .await
             {
@@ -485,11 +495,17 @@ impl CheckpointExecutorEventLoop {
         let next_epoch = current_epoch + 1;
         let end_of_epoch_message = Committee::new(next_epoch, next_committee.into_iter().collect())
             .unwrap_or_else(|err| panic!("Failed to create new committee object: {:?}", err));
+
+        // Save the reference to the epoch store before signaling end of epoch to ensure that
+        // we await on the old epoch store
+        let epoch_store = self
+            .authority_state
+            .load_epoch_store(current_epoch)
+            .expect("Current epoch does not epoch store epoch");
+
+        epoch_store.record_epoch_reconfig_start_time_metric();
         let _ = self.end_of_epoch_event_sender.send(end_of_epoch_message);
-        self.authority_state
-            .epoch_store()
-            .wait_epoch_terminated()
-            .await;
+        epoch_store.wait_epoch_terminated().await;
 
         self.metrics.current_local_epoch.set(next_epoch as i64);
         info!(
@@ -506,6 +522,7 @@ pub async fn execute_checkpoint(
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     local_execution_timeout_sec: u64,
+    metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
     debug!(
         "Scheduling checkpoint {:?} for execution",
@@ -521,12 +538,22 @@ pub async fn execute_checkpoint(
         })
         .into_inner();
 
+    let tx_count = txes.len();
+    debug!(
+        epoch=?epoch_store.epoch(),
+        checkpoint_sequence=?checkpoint.sequence_number(),
+        "Number of transactions in the checkpoint: {:?}",
+        tx_count
+    );
+    metrics.checkpoint_transaction_count.report(tx_count as u64);
+
     execute_transactions(
         txes,
         authority_store,
         epoch_store,
         transaction_manager,
         local_execution_timeout_sec,
+        checkpoint.sequence_number(),
     )
     .await
 }
@@ -537,6 +564,7 @@ async fn execute_transactions(
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
+    checkpoint_sequence: CheckpointSequenceNumber,
 ) -> SuiResult {
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
@@ -581,7 +609,7 @@ async fn execute_transactions(
     }
     epoch_store.insert_pending_certificates(&synced_txns)?;
 
-    transaction_manager.enqueue(synced_txns)?;
+    transaction_manager.enqueue(synced_txns, &epoch_store)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
@@ -592,14 +620,38 @@ async fn execute_transactions(
 
         match timeout(log_timeout_sec, effects_future).await {
             Err(_elapsed) => {
+                let missing_digests: Vec<TransactionDigest> =
+                    EffectsStore::get_effects(&authority_store, all_tx_digests.clone().iter())
+                        .expect("Failed to get effects")
+                        .iter()
+                        .zip(all_tx_digests.clone())
+                        .filter_map(
+                            |(fx, digest)| {
+                                if fx.is_none() {
+                                    Some(digest)
+                                } else {
+                                    None
+                                }
+                            },
+                        )
+                        .collect();
+
                 warn!(
-                    "Transaction effects for checkpoint not present within {:?}. ",
+                    "Transaction effects for tx digests {:?} checkpoint not present within {:?}. ",
+                    missing_digests,
                     log_timeout_sec * periods,
                 );
                 periods += 1;
             }
             Ok(Err(err)) => return Err(err),
-            Ok(Ok(_)) => return Ok(()),
+            Ok(Ok(_)) => {
+                authority_store.insert_executed_transactions(
+                    &all_tx_digests,
+                    epoch_store.epoch(),
+                    checkpoint_sequence,
+                )?;
+                return Ok(());
+            }
         }
     }
 }

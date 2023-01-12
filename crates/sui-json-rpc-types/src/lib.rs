@@ -4,7 +4,7 @@
 /// This file contain response types used by RPC, most of the types mirrors it's internal type counterparts.
 /// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
 ///
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -29,6 +29,8 @@ use serde_json::Value;
 use serde_with::serde_as;
 
 use fastcrypto::encoding::{Base64, Encoding};
+use tracing::warn;
+
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -36,7 +38,7 @@ use sui_types::base_types::{
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
+use sui_types::crypto::{Signature, SuiAuthorityStrongQuorumSignInfo};
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
@@ -46,8 +48,8 @@ use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
-    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui,
-    SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
+    ExecutionStatus, GenesisObject, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PayAllSui,
+    PaySui, SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
     VerifiedCertificate,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -56,7 +58,6 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
-use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -74,6 +75,7 @@ pub struct Balance {
     pub coin_type: String,
     pub coin_object_count: usize,
     pub total_balance: u128,
+    pub locked_balance: HashMap<EpochId, u128>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -84,6 +86,7 @@ pub struct Coin {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
     pub balance: u64,
+    pub locked_until_epoch: Option<EpochId>,
 }
 
 impl Coin {
@@ -585,6 +588,16 @@ pub struct SuiObjectRef {
 impl SuiObjectRef {
     pub fn to_object_ref(&self) -> ObjectRef {
         (self.object_id, self.version, self.digest)
+    }
+}
+
+impl Display for SuiObjectRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Object ID: {}, version: {}, digest: {}",
+            self.object_id, self.version, self.digest
+        )
     }
 }
 
@@ -1512,6 +1525,7 @@ pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
     pub gas_payment: SuiObjectRef,
+    pub gas_price: u64,
     pub gas_budget: u64,
 }
 
@@ -1527,6 +1541,10 @@ impl Display for SuiTransactionData {
                 writeln!(writer, "{}", kind)?;
             }
         }
+        writeln!(writer, "Sender: {}", self.sender)?;
+        writeln!(writer, "Gas Payment: {}", self.gas_payment)?;
+        writeln!(writer, "Gas Price: {}", self.gas_price)?;
+        writeln!(writer, "Gas Budget: {}", self.gas_budget)?;
         write!(f, "{}", writer)
     }
 }
@@ -1548,9 +1566,15 @@ impl TryFrom<TransactionData> for SuiTransactionData {
             transactions,
             sender: data.signer(),
             gas_payment: data.gas().into(),
+            gas_price: data.gas_price,
             gas_budget: data.gas_budget,
         })
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SuiGenesisTransaction {
+    pub objects: Vec<ObjectID>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1574,6 +1598,8 @@ pub enum SuiTransactionKind {
     TransferSui(SuiTransferSui),
     /// A system transaction that will update epoch information on-chain.
     ChangeEpoch(SuiChangeEpoch),
+    /// A system transaction used for initializing the initial state of the chain.
+    Genesis(SuiGenesisTransaction),
     // .. more transaction types go here
 }
 
@@ -1661,6 +1687,9 @@ impl Display for SuiTransactionKind {
                 writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
                 writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
             }
+            Self::Genesis(_) => {
+                writeln!(writer, "Transaction Kind: Genesis Transaction")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -1715,6 +1744,9 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
             }),
+            SingleTransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
+                objects: g.objects.iter().map(GenesisObject::id).collect(),
+            }),
         })
     }
 }
@@ -1747,7 +1779,7 @@ pub struct SuiCertifiedTransaction {
     /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
     pub tx_signature: Signature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
-    pub auth_sign_info: AuthorityStrongQuorumSignInfo,
+    pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }
 
 impl Display for SuiCertifiedTransaction {
@@ -1771,11 +1803,15 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
     fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
         let digest = *cert.digest();
         let (data, sig) = cert.into_data_and_sig();
+        // We should always have a signature here.
+        if sig.signature.sig.is_none() {
+            return Err(anyhow::anyhow!("Certified transaction is not signed"));
+        }
         Ok(Self {
             transaction_digest: digest,
             data: data.intent_message.value.try_into()?,
             tx_signature: data.tx_signature,
-            auth_sign_info: sig,
+            auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&sig),
         })
     }
 }
@@ -1795,7 +1831,7 @@ pub struct SuiCertifiedTransactionEffects {
     pub transaction_effects_digest: TransactionEffectsDigest,
     pub effects: SuiTransactionEffects,
     /// authority signature information signed by the quorum of the validators.
-    pub auth_sign_info: AuthorityStrongQuorumSignInfo,
+    pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }
 
 impl Display for SuiCertifiedTransactionEffects {
@@ -1823,10 +1859,14 @@ impl SuiCertifiedTransactionEffects {
     ) -> Result<Self, anyhow::Error> {
         let digest = *cert.digest();
         let (effects, auth_sign_info) = cert.into_data_and_sig();
+        // We should always have a signature here.
+        if auth_sign_info.signature.sig.is_none() {
+            return Err(anyhow::anyhow!("No quorum signature."));
+        }
         Ok(Self {
             transaction_effects_digest: digest,
             effects: SuiTransactionEffects::try_from(effects, resolver)?,
-            auth_sign_info,
+            auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&auth_sign_info),
         })
     }
 }
@@ -2089,7 +2129,7 @@ impl From<GasCostSummary> for SuiGasCostSummary {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "ObjectRef")]
+#[serde(rename = "OwnedObjectRef")]
 pub struct OwnedObjectRef {
     pub owner: Owner,
     pub reference: SuiObjectRef,

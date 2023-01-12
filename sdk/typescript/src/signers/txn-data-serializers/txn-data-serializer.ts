@@ -95,6 +95,14 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+export interface RawMoveCall {
+  packageObjectId: ObjectId;
+  module: string;
+  function: string;
+  typeArguments: string[];
+  arguments: SuiJsonValue[];
+}
+
 export type UnserializedSignableTransaction =
   | {
       kind: 'moveCall';

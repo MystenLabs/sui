@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::api::CoinReadApiClient;
+use crate::api::GovernanceReadApiClient;
+use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
+use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 use std::path::Path;
 
+#[cfg(not(msim))]
 use std::str::FromStr;
-
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::SuiObjectInfo;
 use sui_json_rpc_types::{
     Balance, CoinPage, GetObjectDataResponse, SuiCoinMetadata, SuiEvent,
     SuiExecuteTransactionResponse, SuiExecutionStatus, SuiTransactionResponse, TransactionBytes,
@@ -16,20 +20,18 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
+use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::sui_system_state::ValidatorMetadata;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
 
-use crate::api::CoinReadApiClient;
-use crate::api::{RpcFullNodeReadApiClient, TransactionExecutionApiClient};
-use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
-
 use sui_macros::sim_test;
+use sui_types::governance::{DelegatedStake, DelegationStatus};
 
 use tokio::time::{sleep, Duration};
 
@@ -71,7 +73,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
 
     let tx_response: SuiExecuteTransactionResponse = http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes1,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -109,7 +111,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -160,7 +162,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
-        .execute_transaction_serialized_sig(
+        .execute_transaction(
             tx_bytes,
             signature_bytes,
             ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -264,14 +266,12 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
         .execute_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signature,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -325,14 +325,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
         .execute_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signature,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -405,14 +403,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = transaction_bytes.to_data()?;
 
     let tx = to_sender_signed_transaction(tx, keystore.get_key(address)?);
-    let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
+    let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
 
     let tx_response = http_client
         .execute_transaction(
             tx_bytes,
-            sig_scheme,
-            signature_bytes,
-            pub_key,
+            signature,
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
@@ -450,7 +446,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
 
         let response = http_client
-            .execute_transaction_serialized_sig(
+            .execute_transaction(
                 tx_bytes,
                 signature_bytes,
                 ExecuteTransactionRequestType::WaitForLocalExecution,
@@ -461,7 +457,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     }
     // test get_transactions_in_range
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(0, 10).await?;
-    assert_eq!(4, tx.len());
+    assert_eq!(5, tx.len());
 
     // test get_transactions_in_range with smaller range
     let tx: Vec<TransactionDigest> = http_client.get_transactions_in_range(1, 3).await?;
@@ -542,7 +538,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         .get_transactions(TransactionQuery::All, first_page.next_cursor, None, false)
         .await
         .unwrap();
-    assert_eq!(15, second_page.data.len());
+    assert_eq!(16, second_page.data.len());
     assert!(second_page.next_cursor.is_none());
 
     let mut all_txs_rev = first_page.data.clone();
@@ -671,7 +667,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .get_events(EventQuery::All, Some((5, 0).into()), Some(20), false)
         .await
         .unwrap();
-    assert_eq!(15, page2.data.len());
+    assert_eq!(16, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get all events descending
@@ -681,7 +677,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((16, 0).into()), page1.next_cursor);
+    assert_eq!(Some((17, 0).into()), page1.next_cursor);
     let page2 = client
         .event_api()
         .get_events(EventQuery::All, Some((16, 0).into()), None, true)
@@ -714,7 +710,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    assert_eq!(4, page.data.len());
+    assert_eq!(9, page.data.len());
 
     let object = client
         .read_api()
@@ -731,7 +727,285 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .get_events(EventQuery::Object(object), None, Some(10), false)
         .await
         .unwrap();
-    assert_eq!(4, page.data.len());
+    assert_eq!(5, page.data.len());
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_locked_sui() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+    // verify coins and balance before test
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    let balance: Vec<Balance> = http_client.get_all_balances(*address).await?;
+
+    assert_eq!(5, coins.data.len());
+    for coin in &coins.data {
+        assert!(coin.locked_until_epoch.is_none());
+    }
+
+    assert_eq!(1, balance.len());
+    assert!(balance[0].locked_balance.is_empty());
+
+    // lock one coin
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            LOCKED_COIN_MODULE_NAME.to_string(),
+            "lock_coin".to_string(),
+            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
+            vec![
+                SuiJsonValue::from_str(&coins.data[0].coin_object_id.to_string())?,
+                SuiJsonValue::from_str(&format!("{address}"))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
+            ],
+            None,
+            1000,
+            None,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let balances: Vec<Balance> = http_client.get_all_balances(*address).await?;
+
+    assert_eq!(1, balance.len());
+
+    let balance = balances.first().unwrap();
+
+    assert_eq!(5, balance.coin_object_count);
+    assert_eq!(1, balance.locked_balance.len());
+    assert!(balance.locked_balance.contains_key(&20));
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delegation() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![objects[0].object_id],
+            Some(1000000),
+            validators[0].sui_address,
+            None,
+            10000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delegation_multiple_coins() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(5, coins.data.len());
+
+    let genesis_coin_amount = coins.data[0].balance;
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![
+                coins.data[0].coin_object_id,
+                coins.data[1].coin_object_id,
+                coins.data[2].coin_object_id,
+            ],
+            Some(1000000),
+            validators[0].sui_address,
+            None,
+            10000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert!(staked_sui[0].staked_sui.sui_token_lock().is_none());
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
+
+    // Coins should be merged into one and returned to the sender.
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(3, coins.data.len());
+
+    // Find the new coin
+    let new_coin = coins
+        .data
+        .iter()
+        .find(|coin| coin.balance > genesis_coin_amount)
+        .unwrap();
+    assert_eq!((genesis_coin_amount * 3) - 1000000, new_coin.balance);
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: Vec<SuiObjectInfo> = http_client.get_objects_owned_by_address(*address).await?;
+    assert_eq!(5, objects.len());
+
+    // lock some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .move_call(
+            *address,
+            SUI_FRAMEWORK_ADDRESS.into(),
+            LOCKED_COIN_MODULE_NAME.to_string(),
+            "lock_coin".to_string(),
+            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
+            vec![
+                SuiJsonValue::from_str(&objects[0].object_id.to_string())?,
+                SuiJsonValue::from_str(&format!("{address}"))?,
+                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
+            ],
+            None,
+            1000,
+            None,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    let validators: Vec<ValidatorMetadata> = http_client.get_validators().await?;
+
+    // Delegate some locked SUI
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    let locked_sui = coins
+        .data
+        .iter()
+        .find_map(|coin| coin.locked_until_epoch.map(|_| coin.coin_object_id))
+        .unwrap();
+
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_delegation(
+            *address,
+            vec![locked_sui],
+            Some(1000000),
+            validators[0].sui_address,
+            None,
+            10000,
+        )
+        .await?;
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+    let (tx_bytes, signature_bytes) = tx.to_tx_bytes_and_signature();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signature_bytes,
+            ExecuteTransactionRequestType::WaitForLocalExecution,
+        )
+        .await?;
+
+    // Check StakedSui object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_delegated_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].staked_sui.principal());
+    assert_eq!(Some(20), staked_sui[0].staked_sui.sui_token_lock());
+
+    assert!(matches!(
+        staked_sui[0].delegation_status,
+        DelegationStatus::Pending
+    ));
 
     Ok(())
 }

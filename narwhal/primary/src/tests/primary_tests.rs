@@ -81,7 +81,7 @@ async fn get_network_peers_from_admin_server() {
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 1
@@ -105,7 +105,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown,
+        &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
         None,
@@ -122,6 +122,8 @@ async fn get_network_peers_from_admin_server() {
         ..Parameters::default()
     };
 
+    let mut tx_shutdown_worker = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
         name_1,
@@ -133,6 +135,7 @@ async fn get_network_peers_from_admin_server() {
         TrivialTransactionValidator::default(),
         store.batch_store,
         metrics_1,
+        &mut tx_shutdown_worker,
     );
 
     // Test getting all known peers for primary 1
@@ -194,7 +197,7 @@ async fn get_network_peers_from_admin_server() {
         .unwrap(),
     );
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-    let tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+    let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -218,7 +221,7 @@ async fn get_network_peers_from_admin_server() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
-        tx_shutdown_2,
+        &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
         None,
@@ -326,7 +329,7 @@ async fn test_request_vote_missing_parents() {
     for i in 0..10 {
         let header = author
             .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -340,8 +343,8 @@ async fn test_request_vote_missing_parents() {
         // should be returned back as non found.
         if i < 5 {
             certificate_store.write(certificate.clone()).unwrap();
-            for payload in certificate.header.payload {
-                payload_store.async_write(payload, 1).await;
+            for (digest, (worker_id, _)) in certificate.header.payload {
+                payload_store.async_write((digest, worker_id), 1).await;
             }
         } else {
             missing_certificates.insert(digest, certificate.clone());
@@ -359,7 +362,7 @@ async fn test_request_vote_missing_parents() {
                 .cloned()
                 .collect(),
         )
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
         .build(author.keypair())
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
@@ -491,7 +494,7 @@ async fn test_request_vote_missing_batches() {
     for primary in fixture.authorities().filter(|a| a.public_key() != name) {
         let header = primary
             .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(primary.keypair())
             .unwrap();
 
@@ -500,15 +503,15 @@ async fn test_request_vote_missing_batches() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for payload in certificate.header.payload {
-            payload_store.async_write(payload, 1).await;
+        for (digest, (worker_id, _)) in certificate.header.payload {
+            payload_store.async_write((digest, worker_id), 1).await;
         }
     }
     let test_header = author
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .build(author.keypair())
         .unwrap();
     let test_digests: HashSet<_> = test_header
@@ -610,7 +613,7 @@ async fn test_request_vote_already_voted() {
     for primary in fixture.authorities().filter(|a| a.public_key() != name) {
         let header = primary
             .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(primary.keypair())
             .unwrap();
 
@@ -619,8 +622,8 @@ async fn test_request_vote_already_voted() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for payload in certificate.header.payload {
-            payload_store.async_write(payload, 1).await;
+        for (digest, (worker_id, _)) in certificate.header.payload {
+            payload_store.async_write((digest, worker_id), 1).await;
         }
     }
 
@@ -646,7 +649,7 @@ async fn test_request_vote_already_voted() {
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .build(author.keypair())
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
@@ -689,7 +692,7 @@ async fn test_request_vote_already_voted() {
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .build(author.keypair())
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
@@ -926,7 +929,7 @@ async fn test_process_payload_availability_success() {
     for i in 0..10 {
         let header = author
             .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -942,8 +945,8 @@ async fn test_process_payload_availability_success() {
             // write the certificate
             certificate_store.write(certificate.clone()).unwrap();
 
-            for payload in certificate.header.payload {
-                payload_store.async_write(payload, 1).await;
+            for (digest, (worker_id, _)) in certificate.header.payload {
+                payload_store.async_write((digest, worker_id), 1).await;
             }
         } else {
             missing_certificates.insert(digest);
@@ -1068,7 +1071,7 @@ async fn test_process_payload_availability_when_failures() {
     for _ in 0..10 {
         let header = author
             .header_builder(&committee)
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(author.keypair())
             .unwrap();
 
@@ -1160,7 +1163,7 @@ async fn test_request_vote_created_at_in_future() {
     for primary in fixture.authorities().filter(|a| a.public_key() != name) {
         let header = primary
             .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0)
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
             .build(primary.keypair())
             .unwrap();
 
@@ -1169,8 +1172,8 @@ async fn test_request_vote_created_at_in_future() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for payload in certificate.header.payload {
-            payload_store.async_write(payload, 1).await;
+        for (digest, (worker_id, _)) in certificate.header.payload {
+            payload_store.async_write((digest, worker_id), 1).await;
         }
     }
 
@@ -1200,7 +1203,7 @@ async fn test_request_vote_created_at_in_future() {
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
         .build(author.keypair())
         .unwrap();
@@ -1230,7 +1233,7 @@ async fn test_request_vote_created_at_in_future() {
         .header_builder(&fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1)
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
         .build(author.keypair())
         .unwrap();

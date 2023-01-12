@@ -122,13 +122,10 @@ pub enum ToolCommand {
     /// Fetch authenticated checkpoint information at a specific sequence number.
     /// If sequence number is not specified, get the latest authenticated checkpoint.
     #[clap(name = "fetch-checkpoint")]
-    FetchAuthenticatedCheckpoint {
+    FetchCheckpoint {
         #[clap(long = "genesis")]
         genesis: PathBuf,
-        #[clap(
-            long,
-            help = "Fetch authenticated checkpoint at a specific sequence number"
-        )]
+        #[clap(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
     },
 }
@@ -621,32 +618,27 @@ impl ToolCommand {
                 let genesis = Genesis::load(genesis)?;
                 println!("{:#?}", genesis);
             }
-            ToolCommand::FetchAuthenticatedCheckpoint {
+            ToolCommand::FetchCheckpoint {
                 genesis,
                 sequence_number,
             } => {
-                let clients = make_clients(genesis.clone())?;
-                let genesis = Genesis::load(genesis)?;
-                let committee = genesis.committee()?;
+                let clients = make_clients(genesis)?;
 
                 for (name, (_val, client)) in clients {
                     let resp = client
-                        .handle_checkpoint(CheckpointRequest::authenticated(sequence_number, true))
+                        .handle_checkpoint(CheckpointRequest {
+                            sequence_number,
+                            request_content: true,
+                        })
                         .await
                         .unwrap();
+                    let CheckpointResponse {
+                        checkpoint,
+                        contents,
+                    } = resp;
                     println!("Validator: {:?}\n", name.concise());
-                    match resp {
-                        CheckpointResponse::AuthenticatedCheckpoint {
-                            checkpoint,
-                            contents,
-                        } => {
-                            println!("Checkpoint: {:?}\n", checkpoint);
-                            println!("Content: {:?}\n", contents);
-                            if let Some(c) = checkpoint {
-                                c.verify(&committee, contents.as_ref())?;
-                            }
-                        }
-                    }
+                    println!("Checkpoint: {:?}\n", checkpoint);
+                    println!("Content: {:?}\n", contents);
                 }
             }
         };

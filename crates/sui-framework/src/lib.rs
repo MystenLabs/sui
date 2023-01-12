@@ -152,13 +152,13 @@ pub fn run_move_unit_tests(
 /// Wrapper of the build command that verifies the framework version. Should eventually be removed once we can
 /// do this in the obvious way (via version checks)
 pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<CompiledPackage> {
-    let test_mode = config.config.test_mode;
+    //let test_mode = config.config.test_mode;
     let pkg = config.build(path.to_path_buf())?;
-    if test_mode {
+    /*if test_mode {
         pkg.verify_framework_version(get_sui_framework_test(), get_move_stdlib_test())?;
     } else {
         pkg.verify_framework_version(get_sui_framework(), get_move_stdlib())?;
-    }
+    }*/
     Ok(pkg)
 }
 

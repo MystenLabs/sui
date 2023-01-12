@@ -59,9 +59,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    #[serde(default)]
-    pub enable_checkpoint: bool,
-
     /// Number of checkpoints per epoch.
     /// Some means reconfiguration is enabled.
     /// None means reconfiguration is disabled.
@@ -132,7 +129,8 @@ pub fn default_concurrency_limit() -> Option<usize> {
 }
 
 pub fn default_checkpoints_per_epoch() -> Option<u64> {
-    None
+    // Currently a checkpoint is ~3 seconds, 3000 checkpoints is 9000s, which is about 2.5 hours.
+    Some(3000)
 }
 
 pub fn bool_true() -> bool {
@@ -297,7 +295,7 @@ impl AuthorityStorePruningConfig {
     }
     pub fn fullnode_config() -> Self {
         Self {
-            objects_num_latest_versions_to_retain: 5,
+            objects_num_latest_versions_to_retain: u64::MAX,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
         }
@@ -584,7 +582,7 @@ mod tests {
     };
 
     use super::Genesis;
-    use crate::{genesis, NodeConfig};
+    use crate::NodeConfig;
 
     #[test]
     fn serialize_genesis_config_from_file() {
@@ -598,7 +596,11 @@ mod tests {
 
     #[test]
     fn serialize_genesis_config_in_place() {
-        let g = Genesis::new(genesis::Genesis::get_default_genesis());
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
+
+        let g = Genesis::new(genesis);
 
         let mut s = serde_yaml::to_string(&g).unwrap();
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
@@ -615,7 +617,9 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         let genesis_config = Genesis::new_from_file(file.path());
 
-        let genesis = genesis::Genesis::get_default_genesis();
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
         genesis.save(file.path()).unwrap();
 
         let loaded_genesis = genesis_config.genesis().unwrap();
@@ -656,7 +660,7 @@ mod tests {
         .unwrap();
         write_keypair_to_file(&account_key_pair, &PathBuf::from("account.key")).unwrap();
 
-        const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+        const TEMPLATE: &str = include_str!("../data/fullnode-template-with-path.yaml");
         let template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
         assert_eq!(
             template.protocol_key_pair().public(),

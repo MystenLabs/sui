@@ -40,7 +40,7 @@ pub fn derive_key_pair_from_path(
             let derived = derive_ed25519_private_key(seed, &indexes);
             let sk = Ed25519PrivateKey::from_bytes(&derived)
                 .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-            let kp = Ed25519KeyPair::from(sk);
+            let kp: Ed25519KeyPair = sk.into();
             Ok((kp.public().into(), SuiKeyPair::Ed25519(kp)))
         }
         SignatureScheme::Secp256k1 => {

@@ -17,6 +17,7 @@ use types::{
 pub type PayloadToken = u8;
 
 /// All the data stores of the node.
+#[derive(Clone)]
 pub struct NodeStorage {
     pub proposer_store: ProposerStore,
     pub vote_digest_store: Store<PublicKey, VoteInfo>,
@@ -43,7 +44,7 @@ impl NodeStorage {
     const TEMP_BATCH_CF: &'static str = "temp_batches";
 
     /// Open or reopen all the storage of the node.
-    pub fn reopen<Path: AsRef<std::path::Path>>(store_path: Path) -> Self {
+    pub fn reopen<Path: AsRef<std::path::Path> + Send>(store_path: Path) -> Self {
         let rocksdb = open_cf(
             store_path,
             None,

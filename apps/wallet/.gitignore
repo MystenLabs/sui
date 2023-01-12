@@ -12,3 +12,6 @@ font-icons/output/*
 !font-icons/output/sui-icons.woff2
 !font-icons/output/sui-icons.svg
 web-ext-artifacts
+/test-results/
+/playwright-report/
+/playwright/.cache/

@@ -8,6 +8,9 @@ import {
   LocalTxnDataSerializer,
   SignableTransaction,
   RawSigner,
+  JsonRpcProvider,
+  SuiAddress,
+  RawMoveCall,
 } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
@@ -91,6 +94,13 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         kind: 'moveCall',
         data: moveCall,
       });
+
+      await validateDevInspectMoveCall(
+        toolbox.provider,
+        await signer.getAddress(),
+        moveCall,
+        'success'
+      );
     });
 
     it('Move Call that aborts', async () => {
@@ -110,6 +120,12 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         kind: 'moveCall',
         data: moveCall,
       });
+      await validateDevInspectMoveCall(
+        toolbox.provider,
+        await signer.getAddress(),
+        moveCall,
+        'failure'
+      );
     });
   }
 );
@@ -121,4 +137,14 @@ async function validateDevInspectTransaction(
   const localDigest = await signer.getTransactionDigest(txn);
   const result = await signer.devInspectTransaction(txn);
   expect(localDigest).toEqual(result.effects.transactionDigest);
+}
+
+async function validateDevInspectMoveCall(
+  provider: JsonRpcProvider,
+  address: SuiAddress,
+  moveCall: RawMoveCall,
+  status: 'success' | 'failure'
+) {
+  const result = await provider.devInspectMoveCall(address, moveCall);
+  expect(result.effects.status.status).toEqual(status);
 }

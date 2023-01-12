@@ -2,7 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 pub mod authority;
-pub mod authority_active;
 pub mod authority_aggregator;
 pub mod authority_client;
 pub mod authority_server;
@@ -34,5 +33,6 @@ pub mod validator_info;
 #[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
+pub mod test_authority_clients;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

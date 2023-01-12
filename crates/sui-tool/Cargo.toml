@@ -35,4 +35,4 @@ telemetry-subscribers.workspace = true
 typed-store.workspace = true
 
 colored = "2.0.0"
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

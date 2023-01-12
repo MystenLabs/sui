@@ -4,7 +4,7 @@
 
 use crate::{
     base_types::*,
-    committee::{EpochId, StakeUnit},
+    committee::{Committee, EpochId, StakeUnit},
     messages::{ExecutionFailureStatus, MoveLocation},
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
@@ -94,8 +94,12 @@ pub enum SuiError {
     SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
-    #[error("Value was not signed by a known authority")]
-    UnknownSigner,
+    #[error("Value was not signed by a known authority. signer: {:?}, index: {:?}, committee: {committee}", signer, index)]
+    UnknownSigner {
+        signer: Option<String>,
+        index: Option<u32>,
+        committee: Committee,
+    },
 
     // Certificate verification and execution
     #[error(
@@ -119,12 +123,16 @@ pub enum SuiError {
     },
     #[error("Invalid Authority Bitmap: {}", error)]
     InvalidAuthorityBitmap { error: String },
-    #[error("Unexpected validator response from handle_transaction: {err}")]
-    UnexpectedResultFromValidatorHandleTransaction { err: String },
     #[error("Transaction certificate processing failed: {err}")]
     ErrorWhileProcessingCertificate { err: String },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:#?}. Validator errors: {:#?}",
+        "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
+    )]
+    QuorumFailedToFormEffectsCertWhenProcessingTransaction {
+        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+    },
+    #[error(
+        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:?}. Validator errors: {:?}",
         conflicting_tx_digests,
         errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
@@ -135,16 +143,18 @@ pub enum SuiError {
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects, but retried a conflicting transaction {:?}, success: {}",
-        conflicting_tx_digest,
-        conflicting_tx_retry_success
+        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
+        conflicting_txes,
+        retried_tx_digest,
+        retried_tx_success
     )]
-    QuorumFailedToProcessTransactionWithConflictingTransactionRetried {
-        conflicting_tx_digest: TransactionDigest,
-        conflicting_tx_retry_success: bool,
+    QuorumFailedToProcessTransactionWithConflictingTransactions {
+        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        retried_tx_digest: Option<TransactionDigest>,
+        retried_tx_success: Option<bool>,
     },
     #[error(
-    "Failed to execute certificate on a quorum of validators. Validator errors: {:#?}",
+    "Failed to execute certificate on a quorum of validators. Validator errors: {:?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
     )]
     QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
@@ -543,6 +553,9 @@ pub enum SuiError {
 
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
+
+    #[error("This Move function is currently disabled and not available for call")]
+    BlockedMoveFunction,
 
     #[error("unknown error: {0}")]
     Unknown(String),

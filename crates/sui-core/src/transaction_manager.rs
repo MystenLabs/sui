@@ -12,6 +12,7 @@ use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::Verif
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
 
 /// TransactionManager is responsible for managing pending certificates and publishes a stream
@@ -49,6 +50,7 @@ impl TransactionManager {
     /// other persistent data.
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
+        epoch_store: &AuthorityPerEpochStore,
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
@@ -59,13 +61,7 @@ impl TransactionManager {
             tx_ready_certificates,
         };
         transaction_manager
-            .enqueue(
-                transaction_manager
-                    .authority_store
-                    .epoch_store()
-                    .all_pending_certificates()
-                    .unwrap(),
-            )
+            .enqueue(epoch_store.all_pending_certificates().unwrap(), epoch_store)
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -79,30 +75,42 @@ impl TransactionManager {
     /// TODO: it may be less error prone to take shared object locks inside this function, or
     /// require shared object lock versions get passed in as input. But this function should not
     /// have many callsites. Investigate the alternatives here.
-    pub(crate) fn enqueue(&self, certs: Vec<VerifiedCertificate>) -> SuiResult<()> {
+    pub(crate) fn enqueue(
+        &self,
+        certs: Vec<VerifiedCertificate>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult<()> {
         let inner = &mut self.inner.lock();
         for cert in certs {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
             // don't race with a concurrent execution of this tx.
-            let epoch_store = self.authority_store.epoch_store();
             let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
             // skip already pending txes
             if inner.pending_certificates.contains_key(&digest) {
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_pending"])
+                    .inc();
                 continue;
             }
             // skip already executing txes
             if inner.executing_certificates.contains(&digest) {
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executing"])
+                    .inc();
                 continue;
             }
             // skip already executed txes
             if self.authority_store.effects_exists(&digest)? {
                 // also ensure the transaction will not be retried after restart.
-                let _ = self
-                    .authority_store
-                    .epoch_store()
-                    .remove_pending_certificate(&digest);
+                let _ = epoch_store.remove_pending_certificate(&digest);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
                 continue;
             }
 
@@ -111,6 +119,7 @@ impl TransactionManager {
                 .get_missing_input_objects(
                     &digest,
                     &cert.data().intent_message.value.input_objects()?,
+                    epoch_store,
                 )
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
@@ -118,6 +127,10 @@ impl TransactionManager {
                 debug!(tx_digest = ?digest, "certificate ready");
                 assert!(inner.executing_certificates.insert(digest));
                 self.certificate_ready(cert);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["ready"])
+                    .inc();
                 continue;
             }
 
@@ -133,18 +146,31 @@ impl TransactionManager {
 
             for objkey in missing.iter() {
                 debug!(?objkey, ?digest, "adding missing object entry");
-                inner
-                    .missing_inputs
-                    .entry(*objkey)
-                    .or_default()
-                    .insert(digest);
+                assert!(
+                    inner
+                        .missing_inputs
+                        .entry(*objkey)
+                        .or_default()
+                        .insert(digest),
+                    "Duplicated certificate {:?} for missing object {:?}",
+                    digest,
+                    objkey
+                );
             }
 
-            inner
-                .pending_certificates
-                .entry(digest)
-                .or_default()
-                .extend(missing);
+            assert!(
+                inner
+                    .pending_certificates
+                    .insert(digest, missing.into_iter().collect())
+                    .is_none(),
+                "Duplicated pending certificate {:?}",
+                digest
+            );
+
+            self.metrics
+                .transaction_manager_num_enqueued_certificates
+                .with_label_values(&["pending"])
+                .inc();
         }
 
         self.metrics
@@ -157,7 +183,11 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager that the given objects have been committed.
-    pub(crate) fn objects_committed(&self, object_keys: Vec<ObjectKey>) {
+    pub(crate) fn objects_committed(
+        &self,
+        object_keys: Vec<ObjectKey>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) {
         let mut ready_digests = Vec::new();
 
         {
@@ -196,11 +226,7 @@ impl TransactionManager {
         for digest in ready_digests.iter() {
             // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
             // Otherwise, this has to crash.
-            let cert = match self
-                .authority_store
-                .epoch_store()
-                .get_pending_certificate(digest)
-            {
+            let cert = match epoch_store.get_pending_certificate(digest) {
                 Ok(Some(cert)) => cert,
                 Ok(None) => {
                     error!(tx_digest = ?digest,
@@ -221,7 +247,11 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager about a certificate that has been executed.
-    pub(crate) fn certificate_executed(&self, digest: &TransactionDigest) {
+    pub(crate) fn certificate_executed(
+        &self,
+        digest: &TransactionDigest,
+        epoch_store: &AuthorityPerEpochStore,
+    ) {
         {
             let inner = &mut self.inner.lock();
             inner.executing_certificates.remove(digest);
@@ -229,10 +259,7 @@ impl TransactionManager {
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
         }
-        let _ = self
-            .authority_store
-            .epoch_store()
-            .remove_pending_certificate(digest);
+        let _ = epoch_store.remove_pending_certificate(digest);
     }
 
     /// Sends the ready certificate for execution.

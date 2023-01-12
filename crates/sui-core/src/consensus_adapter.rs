@@ -17,6 +17,7 @@ use prometheus::{register_histogram_with_registry, register_int_counter_with_reg
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::future::Future;
+use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -35,8 +36,8 @@ use crate::authority::AuthorityState;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
-use tokio::time::Duration;
-use tracing::{error, warn};
+use tokio::time::{timeout, Duration};
+use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -131,10 +132,16 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         let serialized =
             bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
-        self.clone()
-            .submit_transaction(TransactionProto { transaction: bytes })
-            .await
-            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+        let r = timeout(
+            Duration::from_secs(10),
+            self.clone()
+                .submit_transaction(TransactionProto { transaction: bytes }),
+        )
+        .await;
+        let r = r.map_err(|_| {
+            SuiError::ConsensusConnectionBroken("Timeout when sending to narwhal".to_string())
+        })?;
+        r.map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
             .tap_err(|r| {
                 error!("Submit transaction failed with: {:?}", r);
             })?;
@@ -227,31 +234,12 @@ impl ConsensusAdapter {
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
     ) -> Duration {
-        let position = Self::position_submit_certificate(committee, ourselves, tx_digest);
+        let position = position_submit_certificate(committee, ourselves, tx_digest);
         const MAX_DELAY_MUL: usize = 10;
         // DELAY_STEP is chosen as 1.5 * mean consensus delay
         // In the future we can actually use information about consensus rounds instead of this delay
         const DELAY_STEP: Duration = Duration::from_secs(7);
         DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32
-    }
-
-    /// Returns a position of the current validator in ordered list of validator to submit transaction
-    fn position_submit_certificate(
-        committee: &Committee,
-        ourselves: &AuthorityName,
-        tx_digest: &TransactionDigest,
-    ) -> usize {
-        // the 32 is as requirement of the deault StdRng::from_seed choice
-        let digest_bytes = tx_digest.into_bytes();
-
-        // permute the validators deterministically, based on the digest
-        let mut rng = StdRng::from_seed(digest_bytes);
-        let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
-        let (position, _) = validators
-            .into_iter()
-            .find_position(|a| a == ourselves)
-            .expect("Could not find ourselves in shuffled committee");
-        position
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -313,6 +301,11 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
+            info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
+            epoch_store.record_epoch_pending_certs_process_time_metric();
+        }
+
         let _guard = InflightDropGuard::acquire(&self);
         let processed_waiter = epoch_store
             .consensus_message_processed_notify(transaction.key())
@@ -329,7 +322,19 @@ impl ConsensusAdapter {
             }
             Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
+        let transaction_key = transaction.key();
+        let _monitor = CancelOnDrop(spawn_monitored_task!(async {
+            let mut i = 0u64;
+            loop {
+                i += 1;
+                const WARN_DELAY_S: u64 = 30;
+                tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
+                let total_wait = i * WARN_DELAY_S;
+                warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
+            }
+        }));
         if let Some(processed_waiter) = processed_waiter {
+            debug!("Submitting {transaction_key:?} to consensus");
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             let _timer = self
@@ -350,10 +355,12 @@ impl ConsensusAdapter {
                 });
                 time::sleep(Duration::from_secs(10)).await;
             }
+            debug!("Submitted {transaction_key:?} to consensus");
             processed_waiter
                 .await
                 .expect("Storage error when waiting for consensus message processed");
         }
+        debug!("{transaction_key:?} processed by consensus");
         epoch_store
             .remove_pending_consensus_transaction(&transaction.key())
             .expect("Storage error when removing consensus transaction");
@@ -389,6 +396,25 @@ impl ConsensusAdapter {
     }
 }
 
+/// Returns a position of the current validator in ordered list of validator to submit transaction
+pub fn position_submit_certificate(
+    committee: &Committee,
+    ourselves: &AuthorityName,
+    tx_digest: &TransactionDigest,
+) -> usize {
+    // the 32 is as requirement of the deault StdRng::from_seed choice
+    let digest_bytes = tx_digest.into_bytes();
+
+    // permute the validators deterministically, based on the digest
+    let mut rng = StdRng::from_seed(digest_bytes);
+    let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+    let (position, _) = validators
+        .into_iter()
+        .find_position(|a| a == ourselves)
+        .expect("Could not find ourselves in shuffled committee");
+    position
+}
+
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
@@ -410,6 +436,22 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             }
         }
         Ok(())
+    }
+}
+
+struct CancelOnDrop<T>(JoinHandle<T>);
+
+impl<T> Deref for CancelOnDrop<T> {
+    type Target = JoinHandle<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Drop for CancelOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
     }
 }
 
@@ -461,7 +503,7 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
 
 #[cfg(test)]
 mod adapter_tests {
-    use super::ConsensusAdapter;
+    use super::position_submit_certificate;
     use fastcrypto::traits::KeyPair;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
     use sui_types::{
@@ -499,7 +541,7 @@ mod adapter_tests {
 
             let mut zero_found = false;
             for (name, _) in authorities.iter() {
-                let f = ConsensusAdapter::position_submit_certificate(&committee, name, &tx_digest);
+                let f = position_submit_certificate(&committee, name, &tx_digest);
                 assert!(f < committee.num_members());
                 if f == 0 {
                     // One and only one validator gets position 0

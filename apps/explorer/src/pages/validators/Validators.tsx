@@ -9,7 +9,7 @@ import { Heading } from '~/ui/Heading';
 function ValidatorPageResult() {
     return (
         <div>
-            <Heading as="h1" variant="heading2" weight="bold">
+            <Heading as="h1" variant="heading2/bold">
                 Validators
             </Heading>
             <div className="mt-8">

@@ -37,6 +37,7 @@ export function useNetwork(): [string, (network: Network | string) => void] {
         // When resetting the network, we reset the query client at the same time:
         queryClient.cancelQueries();
         queryClient.clear();
+
         setSearchParams({ network: network.toLowerCase() });
     };
 

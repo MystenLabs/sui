@@ -8,11 +8,10 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_adapter::execution_mode;
 use sui_json::SuiJsonValue;
 use sui_transaction_builder::TransactionBuilder;
+use sui_types::committee::EpochId;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
-use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
 use fastcrypto::encoding::Base64;
@@ -27,13 +26,16 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
-use sui_types::committee::EpochId;
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::{CommitteeInfoRequest, CommitteeInfoResponse, TransactionData};
+use sui_types::messages::TransactionData;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
+use sui_adapter::execution_mode::DevInspect;
 use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
@@ -49,7 +51,7 @@ pub struct ReadApi {
 
 pub struct FullNodeApi {
     pub state: Arc<AuthorityState>,
-    builder: TransactionBuilder,
+    dev_inspect_builder: TransactionBuilder<DevInspect>,
 }
 
 impl FullNodeApi {
@@ -57,8 +59,16 @@ impl FullNodeApi {
         let reader = Arc::new(AuthorityStateDataReader::new(state.clone()));
         Self {
             state,
-            builder: TransactionBuilder(reader),
+            dev_inspect_builder: TransactionBuilder::new(reader),
         }
+    }
+
+    fn get_sui_system_state_object_epoch(&self) -> RpcResult<EpochId> {
+        Ok(self
+            .state
+            .get_sui_system_state_object()
+            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?
+            .epoch)
     }
 }
 
@@ -228,11 +238,19 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
-    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults> {
+    async fn dev_inspect_transaction(
+        &self,
+        tx_bytes: Base64,
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults> {
+        let epoch = match epoch {
+            None => self.get_sui_system_state_object_epoch()?,
+            Some(n) => n,
+        };
         let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
         Ok(self
             .state
-            .dev_inspect_transaction(txn_data, txn_digest)
+            .dev_inspect_transaction(txn_data, txn_digest, epoch)
             .await?)
     }
 
@@ -244,10 +262,15 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         function: String,
         type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
+        let epoch = match epoch {
+            None => self.get_sui_system_state_object_epoch()?,
+            Some(n) => n,
+        };
         let move_call = self
-            .builder
-            .single_move_call::<execution_mode::DevInspect>(
+            .dev_inspect_builder
+            .single_move_call(
                 package_object_id,
                 &module,
                 &function,
@@ -257,7 +280,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .await?;
         Ok(self
             .state
-            .dev_inspect_move_call(sender_address, move_call)
+            .dev_inspect_move_call(sender_address, move_call, epoch)
             .await?)
     }
 
@@ -410,18 +433,44 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .try_into()?)
     }
 
-    async fn get_committee_info(&self, epoch: Option<EpochId>) -> RpcResult<CommitteeInfoResponse> {
+    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
         Ok(self
             .state
-            .handle_committee_info_request(&CommitteeInfoRequest { epoch })
-            .map_err(|e| anyhow!("{e}"))?)
+            .get_latest_checkpoint_sequence_number()
+            .map_err(|e| {
+                anyhow!("Latest checkpoint sequence number was not found with error :{e}")
+            })?)
     }
 
-    async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
+    fn get_checkpoint_summary(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointSummary> {
+        Ok(self.state.get_checkpoint_summary(sequence_number)
+        .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> RpcResult<CheckpointContents> {
+        Ok(self.state.get_checkpoint_contents(digest).map_err(|e| {
+            anyhow!(
+                "Checkpoint contents based on digest: {:?} were not found with error: {}",
+                digest,
+                e
+            )
+        })?)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointContents> {
         Ok(self
             .state
-            .get_sui_system_state_object()
-            .map_err(|e| anyhow!("{e}"))?)
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+            .map_err(|e| anyhow!("Checkpoint contents based on seq number: {sequence_number} were not found with error: {e}"))?)
     }
 }
 

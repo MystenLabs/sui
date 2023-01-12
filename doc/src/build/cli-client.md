@@ -30,7 +30,7 @@ The Sui Client CLI supports the following commands:
 | `objects` | Obtain all objects owned by the address |
 | `pay` | Pay SUI to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts |
 | `pay_all_sui` | Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required |
-| `pay_sui` | Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required |
+| `pay_sui` | Pay SUI coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required |
 | `publish` | Publish Move modules|
 | `serialize-transfer-sui` | Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere
 | `split-coin` | Split a coin object into multiple coins |
@@ -303,7 +303,7 @@ OPTIONS:
             Coin to merge into, in 20 bytes Hex string
 ```
 
-You need at lease three coin objects to merge coins, two coins to merge and one to pay for gas payment. When you merge a coin, you specify maximum gas budget allowed for the merge transaction.
+You need at least three coin objects to merge coins, two coins to merge and one to pay for gas payment. When you merge a coin, you specify maximum gas budget allowed for the merge transaction.
 
 Use the following command to view the objects that the specified address owns.
 
@@ -407,6 +407,24 @@ the sui module using the following Sui client command:
 
 ```shell
 sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
+```
+
+or using environment variables:
+```shell
+export OBJECT_ID=0x471c8e241d0473c34753461529b70f9c4ed3151b
+```
+
+```shell
+export RECIPIENT=0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+```
+
+```shell
+echo $OBJECT_ID
+echo $RECIPIENT
+```
+
+```shell
+sui client call --function transfer --module sui --package 0x2 --args $OBJECT_ID $RECIPIENT --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its

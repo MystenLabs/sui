@@ -13,6 +13,11 @@ import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
+    // Skip automatically opening the onboarding in end-to-end tests.
+    if (navigator.userAgent === 'Playwright') {
+        return;
+    }
+
     // TODO: Our versions don't use semver, and instead are date-based. Instead of using the semver
     // library, we can use some combination of parsing into a date + inspecting patch.
     const previousVersionSemver = coerce(previousVersion)?.version;

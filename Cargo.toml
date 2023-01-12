@@ -30,6 +30,7 @@ members = [
     "crates/sui-node",
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
+    "crates/sui-proc-macros",
     "crates/sui-protocol-constants",
     "crates/sui-rosetta",
     "crates/sui-sdk",
@@ -68,7 +69,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
-version = "0.20.0"
+version = "0.21.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -101,7 +102,7 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 
-tokio = "1.22.0"
+tokio = "1.24.1"
 
 # Move dependencies
 move-binary-format = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
@@ -125,8 +126,8 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "f64e36ceed674ccd46938cfd9645a2d32a923656" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "f64e36ceed674ccd46938cfd9645a2d32a923656", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "f451422b7f15e75e055a1830cbe5d1547fa87b74" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "f451422b7f15e75e055a1830cbe5d1547fa87b74", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "ccfb77628ec1883121079f1ae9c65e9c716709c8" }

@@ -63,6 +63,7 @@ import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
 import { any, number } from 'superstruct';
+import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -581,22 +582,7 @@ export class JsonRpcProvider extends Provider {
   ): Promise<SuiExecuteTransactionResponse> {
     try {
       let resp;
-      let version = await this.getRpcApiVersion();
-      if (version?.major === 0 && version?.minor < 18) {
-        resp = await this.client.requestWithType(
-          'sui_executeTransaction',
-          [
-            txnBytes.toString(),
-            signatureScheme,
-            signature.toString(),
-            pubkey.toString(),
-            requestType,
-          ],
-          SuiExecuteTransactionResponse,
-          this.options.skipDataValidation
-        );
-      } else {
-        // Serialize sigature field as: `flag || signature || pubkey`
+      // Serialize sigature field as: `flag || signature || pubkey`
         const serialized_sig = new Uint8Array(
           1 + signature.getLength() + pubkey.toBytes().length
         );
@@ -614,7 +600,6 @@ export class JsonRpcProvider extends Provider {
           SuiExecuteTransactionResponse,
           this.options.skipDataValidation
         );
-      }
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);
@@ -713,6 +698,30 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error dev inspect transaction with request type: ${err}`
       );
+    }
+  }
+
+  async devInspectMoveCall(
+    sender: SuiAddress,
+    moveCall: RawMoveCall
+  ): Promise<DevInspectResults> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_devInspectMoveCall',
+        [
+          sender,
+          moveCall.packageObjectId,
+          moveCall.module,
+          moveCall.function,
+          moveCall.typeArguments,
+          moveCall.arguments,
+        ],
+        DevInspectResults,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error dev inspect move call with request type: ${err}`);
     }
   }
 

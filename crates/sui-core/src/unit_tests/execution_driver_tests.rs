@@ -7,8 +7,8 @@ use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
     transfer_object_move_transaction,
 };
-use crate::authority_client::LocalAuthorityClient;
 use crate::safe_client::SafeClient;
+use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::init_local_authorities;
 
 use std::collections::BTreeSet;
@@ -295,7 +295,7 @@ async fn test_transaction_manager() {
         .collect_vec();
     let all_gas_objects = gas_objects.clone().into_iter().flatten().collect_vec();
 
-    let (aggregator, authorities, framework_obj_ref) =
+    let (aggregator, authorities, _genesis, framework_obj_ref) =
         init_local_authorities(4, all_gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()

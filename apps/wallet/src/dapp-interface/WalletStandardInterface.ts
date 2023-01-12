@@ -31,6 +31,7 @@ import {
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
 import type {
+    StakeRequest,
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
 } from '_payloads/transactions';
@@ -41,6 +42,14 @@ type WalletEventsMap = {
 
 // NOTE: Because this runs in a content script, we can't fetch the manifest.
 const name = process.env.APP_NAME || 'Sui Wallet';
+
+type StakeInput = { validatorAddress: string };
+type SuiWalletStakeFeature = {
+    'suiWallet:stake': {
+        version: '0.0.1';
+        stake: (input: StakeInput) => Promise<void>;
+    };
+};
 
 export class SuiWallet implements Wallet {
     readonly #events: Emitter<WalletEventsMap>;
@@ -68,7 +77,8 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        SuiSignAndExecuteTransactionFeature {
+        SuiSignAndExecuteTransactionFeature &
+        SuiWalletStakeFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -81,6 +91,10 @@ export class SuiWallet implements Wallet {
             'sui:signAndExecuteTransaction': {
                 version: '1.0.0',
                 signAndExecuteTransaction: this.#signAndExecuteTransaction,
+            },
+            'suiWallet:stake': {
+                version: '0.0.1',
+                stake: this.#stake,
             },
         };
     }
@@ -165,6 +179,13 @@ export class SuiWallet implements Wallet {
             }),
             (response) => response.result
         );
+    };
+
+    #stake = async (input: StakeInput) => {
+        this.#send<StakeRequest, void>({
+            type: 'stake-request',
+            validatorAddress: input.validatorAddress,
+        });
     };
 
     #hasPermissions(permissions: HasPermissionsRequest['permissions']) {

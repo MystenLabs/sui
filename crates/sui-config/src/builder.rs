@@ -12,6 +12,7 @@ use crate::{
 };
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
+use narwhal_config::{NetworkAdminServerParameters, Parameters as ConsensusParameters};
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -22,6 +23,7 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
     SuiKeyPair,
 };
+use sui_types::object::Object;
 
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
@@ -39,6 +41,7 @@ pub struct ConfigBuilder<R = OsRng> {
     randomize_ports: bool,
     committee: Option<CommitteeConfig>,
     initial_accounts_config: Option<GenesisConfig>,
+    additional_objects: Vec<Object>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
     checkpoints_per_epoch: Option<u64>,
@@ -52,6 +55,7 @@ impl ConfigBuilder {
             randomize_ports: true,
             committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
             initial_accounts_config: None,
+            additional_objects: vec![],
             with_swarm: false,
             // Set a sensible default here so that most tests can run with or without the
             // simulator.
@@ -96,6 +100,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
+        self.additional_objects.extend(objects);
+        self
+    }
+
     pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
         self.checkpoints_per_epoch = Some(ckpts);
         self
@@ -108,6 +117,7 @@ impl<R> ConfigBuilder<R> {
             randomize_ports: self.randomize_ports,
             committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
+            additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
             checkpoints_per_epoch: self.checkpoints_per_epoch,
@@ -265,10 +275,15 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
         let genesis = {
             let mut builder = genesis::Builder::new()
                 .with_parameters(initial_accounts_config.parameters)
-                .add_objects(objects);
+                .add_objects(objects)
+                .add_objects(self.additional_objects);
 
             for (validator, proof_of_possession) in validator_set {
                 builder = builder.add_validator(validator, proof_of_possession);
+            }
+
+            for validator in &validators {
+                builder = builder.add_validator_signature(&validator.genesis_info.key_pair);
             }
 
             builder.build()
@@ -295,7 +310,23 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     db_path: consensus_db_path,
                     internal_worker_address,
                     timeout_secs: Some(60),
-                    narwhal_config: Default::default(),
+                    narwhal_config: ConsensusParameters {
+                        network_admin_server: match self.validator_ip_sel {
+                            ValidatorIpSelection::Simulator => NetworkAdminServerParameters {
+                                primary_network_admin_server_port: 8889,
+                                worker_network_admin_server_base_port: 8890,
+                            },
+                            _ => NetworkAdminServerParameters {
+                                primary_network_admin_server_port: utils::get_available_port(
+                                    "127.0.0.1",
+                                ),
+                                worker_network_admin_server_base_port: utils::get_available_port(
+                                    "127.0.0.1",
+                                ),
+                            },
+                        },
+                        ..Default::default()
+                    },
                 };
 
                 let p2p_config = P2pConfig {
@@ -323,11 +354,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: utils::available_local_socket_address(),
                     // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
                     // provide the entire socket address here to avoid confusion.
-                    admin_interface_port: utils::get_available_port("127.0.0.1"),
+                    admin_interface_port: match self.validator_ip_sel {
+                        ValidatorIpSelection::Simulator => 8888,
+                        _ => utils::get_available_port("127.0.0.1"),
+                    },
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
-                    enable_checkpoint: false,
                     checkpoints_per_epoch: self.checkpoints_per_epoch,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,

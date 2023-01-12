@@ -10,8 +10,7 @@ use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-    CheckpointSequenceNumber,
+    CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
@@ -33,6 +32,7 @@ macro_rules! check_error {
     }
 }
 
+#[derive(Clone)]
 pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
@@ -242,6 +242,9 @@ impl<C> SafeClient<C> {
         } = response;
 
         let signed_transaction = if let Some(signed_transaction) = signed_transaction {
+            // TODO: add test case where validator epoch advances but client does not know
+            // `MissingCommitteeAtEpoch`
+            // In this case, quorum driver should pause submit tranasactions until it catches up
             committee = Some(self.get_committee(&signed_transaction.epoch())?);
             // Check the transaction signature
             let signed_transaction = signed_transaction.verify(committee.as_ref().unwrap())?;
@@ -620,7 +623,7 @@ where
     fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
-        checkpoint: &Option<AuthenticatedCheckpoint>,
+        checkpoint: &Option<CertifiedCheckpointSummary>,
     ) -> SuiResult {
         let observed_seq = checkpoint.as_ref().map(|c| c.summary().sequence_number);
 
@@ -657,24 +660,20 @@ where
         response: &CheckpointResponse,
     ) -> SuiResult {
         // Verify response data was correct for request
-        match &request.request_type {
-            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
-                let CheckpointResponse::AuthenticatedCheckpoint {
-                    checkpoint,
-                    contents,
-                } = &response;
-                // Checks that the sequence number is correct.
-                self.verify_checkpoint_sequence(*seq, checkpoint)?;
-                self.verify_contents_exist(request.detail, checkpoint, contents)?;
-                // Verify signature.
-                match checkpoint {
-                    Some(c) => {
-                        let epoch_id = c.summary().epoch;
-                        c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
-                    }
-                    None => Ok(()),
-                }
+        let CheckpointResponse {
+            checkpoint,
+            contents,
+        } = &response;
+        // Checks that the sequence number is correct.
+        self.verify_checkpoint_sequence(request.sequence_number, checkpoint)?;
+        self.verify_contents_exist(request.request_content, checkpoint, contents)?;
+        // Verify signature.
+        match checkpoint {
+            Some(c) => {
+                let epoch_id = c.summary().epoch;
+                c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
             }
+            None => Ok(()),
         }
     }
 
