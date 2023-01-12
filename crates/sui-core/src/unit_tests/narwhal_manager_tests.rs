@@ -163,6 +163,10 @@ async fn test_narwhal_manager() {
         // stop narwhal instance
         narwhal_manager.shutdown().await;
 
+        // ensure that no primary or worker node is running
+        assert_eq!(narwhal_manager.primary_node.is_running().await, false);
+        assert!(narwhal_manager.worker_nodes.workers_running().await.is_empty());
+
         let system_state = state
             .get_sui_system_state_object()
             .expect("Reading Sui system state object cannot fail");

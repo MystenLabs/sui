@@ -330,7 +330,7 @@ impl WorkerNodes {
     }
 
     // returns the worker ids that are currently running
-    async fn workers_running(&self) -> Vec<WorkerId> {
+    pub async fn workers_running(&self) -> Vec<WorkerId> {
         let mut worker_ids = Vec::new();
 
         for (id, worker) in self.workers.load_full().as_ref() {
