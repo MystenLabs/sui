@@ -5,7 +5,7 @@ use futures::future::join_all;
 use prometheus::Registry;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_core::authority::AuthorityState;
 use sui_core::authority_aggregator::{
     AuthAggMetrics, AuthorityAggregator, LocalTransactionCertifier, NetworkTransactionCertifier,
@@ -27,6 +27,7 @@ use test_utils::{
     network::TestClusterBuilder,
 };
 use tokio::time::{sleep, timeout};
+use tracing::info;
 
 #[sim_test]
 async fn local_advance_epoch_tx_test() {
@@ -309,12 +310,17 @@ async fn test_validator_resign_effects() {
 }
 
 async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
+    info!("Starting reconfiguration");
+    let start = Instant::now();
+
     // Close epoch on 3 (2f+1) validators.
     for handle in authorities.iter().skip(1) {
         handle
             .with_async(|node| async { node.close_epoch().await.unwrap() })
             .await;
     }
+    info!("close_epoch complete after {:?}", start.elapsed());
+
     // Wait for all nodes to reach the next epoch.
     let handles: Vec<_> = authorities
         .iter()
@@ -330,7 +336,9 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
         })
         .collect();
 
-    timeout(Duration::from_secs(60), join_all(handles))
+    timeout(Duration::from_secs(40), join_all(handles))
         .await
         .expect("timed out waiting for reconfiguration to complete");
+
+    info!("reconfiguration complete after {:?}", start.elapsed());
 }

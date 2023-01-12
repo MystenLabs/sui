@@ -4998,7 +4998,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=f591ab0b1e56435fe7b354f02131fe104bd825e7#f591ab0b1e56435fe7b354f02131fe104bd825e7"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=030cd3036f35d9625bf733d0ef33bc7316c32001#030cd3036f35d9625bf733d0ef33bc7316c32001"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -5018,6 +5018,7 @@ dependencies = [
  "real_tokio",
  "serde 1.0.152",
  "socket2",
+ "tap",
  "tokio-util 0.7.4 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8b166d79d8b7d81ce9b6db87c3aa8ab53b2d3082)",
  "toml",
  "tracing",
@@ -5027,7 +5028,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=f591ab0b1e56435fe7b354f02131fe104bd825e7#f591ab0b1e56435fe7b354f02131fe104bd825e7"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=030cd3036f35d9625bf733d0ef33bc7316c32001#030cd3036f35d9625bf733d0ef33bc7316c32001"
 dependencies = [
  "darling",
  "proc-macro2 1.0.49",
