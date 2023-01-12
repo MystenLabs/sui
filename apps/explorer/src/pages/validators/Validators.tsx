@@ -193,48 +193,59 @@ function ValidatorPageResult() {
                     <ErrorBoundary>
                         {isSuccess && validatorsStats && (
                             <Card spacing="lg">
-                                <div className="flex min-h-[156px] max-w-full flex-col flex-nowrap justify-between gap-1.5 md:flex-row md:gap-0.5">
-                                    <Stats
-                                        label="Participation"
-                                        tooltip="Coming soon"
+                                <div className="flex max-w-full flex-col gap-8">
+                                    <Heading
+                                        as="div"
+                                        variant="heading4/semibold"
+                                        color="steel-darker"
                                     >
-                                        <Heading
-                                            as="h3"
-                                            variant="heading2/semibold"
-                                            color="steel-darker"
-                                        >{`${validatorsStats.participation}%`}</Heading>
-                                    </Stats>
-                                    <Stats label="Total Staked">
-                                        <DelegationAmount
-                                            amount={validatorsStats.totalStake}
-                                            isStats
-                                        />
-                                    </Stats>
-                                    <Stats
-                                        label="Last Epoch Reward"
-                                        tooltip="Coming soon"
-                                    >
-                                        <Heading
-                                            as="h3"
-                                            variant="heading2/semibold"
-                                            color="steel-darker"
+                                        Validators
+                                    </Heading>
+                                    <div className="grid-col grid grid-flow-row grid-rows-2 justify-between gap-2.5 md:grid-cols-2 md:flex-row md:gap-8">
+                                        <Stats
+                                            label="Participation"
+                                            tooltip="Coming soon"
                                         >
-                                            {validatorsStats.lastEpochRewards >
-                                            0
-                                                ? `${validatorsStats.lastEpochRewards}%`
-                                                : '--'}
-                                        </Heading>
-                                    </Stats>
-                                    <Stats
-                                        label="AVG APY"
-                                        tooltip="Average APY"
-                                    >
-                                        <Heading
-                                            as="h3"
-                                            variant="heading2/semibold"
-                                            color="steel-darker"
-                                        >{`${validatorsStats.averageAPY}%`}</Heading>
-                                    </Stats>
+                                            <Heading
+                                                as="h3"
+                                                variant="heading2/semibold"
+                                                color="steel-darker"
+                                            >{`${validatorsStats.participation}%`}</Heading>
+                                        </Stats>
+                                        <Stats label="Total Staked">
+                                            <DelegationAmount
+                                                amount={
+                                                    validatorsStats.totalStake
+                                                }
+                                                isStats
+                                            />
+                                        </Stats>
+                                        <Stats
+                                            label="Last Epoch Reward"
+                                            tooltip="Coming soon"
+                                        >
+                                            <Heading
+                                                as="h3"
+                                                variant="heading2/semibold"
+                                                color="steel-darker"
+                                            >
+                                                {validatorsStats.lastEpochRewards >
+                                                0
+                                                    ? `${validatorsStats.lastEpochRewards}%`
+                                                    : '--'}
+                                            </Heading>
+                                        </Stats>
+                                        <Stats
+                                            label="AVG APY"
+                                            tooltip="Average APY"
+                                        >
+                                            <Heading
+                                                as="h3"
+                                                variant="heading2/semibold"
+                                                color="steel-darker"
+                                            >{`${validatorsStats.averageAPY}%`}</Heading>
+                                        </Stats>
+                                    </div>
                                 </div>
                             </Card>
                         )}
