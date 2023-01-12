@@ -83,6 +83,11 @@ impl TransactionHandler {
                     .map(|tx_digest| self.get_transaction_response(tx_digest)),
             )
             .await;
+            info!(
+                "Received transaction responses for {} transactions with next cursor: {:?}",
+                txn_response_res_vec.len(),
+                page.next_cursor,
+            );
 
             let mut errors = vec![];
             let resp_vec: Vec<SuiTransactionResponse> = txn_response_res_vec
@@ -100,14 +105,14 @@ impl TransactionHandler {
             if let Some(next_cursor_val) = page.next_cursor {
                 // canonical txn digest is Base64 encoded
                 commit_transction_log(&mut pg_pool_conn, Some(next_cursor_val.encode()))?;
+                self.transaction_handler_metrics
+                    .total_transactions_processed
+                    .inc_by(txn_count as u64);
                 next_cursor = page.next_cursor;
             }
             self.transaction_handler_metrics
                 .total_transaction_page_committed
                 .inc();
-            self.transaction_handler_metrics
-                .total_transactions_processed
-                .inc_by(txn_count as u64);
             if txn_count < TRANSACTION_PAGE_SIZE || page.next_cursor.is_none() {
                 sleep(Duration::from_secs_f32(0.1)).await;
             }
