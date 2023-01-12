@@ -14,6 +14,18 @@ use sui_types::storage::{ReadStore, WriteStore};
 #[cfg(test)]
 mod tests;
 
+/// A Light Client is a client that's connected to the Sui p2p network, and able to keep up with
+/// the epoch and committee information of the network. This will enable verification of any data
+/// structure in the network with minimum overhead.
+/// It's built on top of the state_sync component that downloads checkpoint headers in order to
+/// obtain epoch and committee information. Checkpoint content sync is disabled by default.
+/// TODO: There are a few things we can add to the Light Client to enable more use cases:
+///   1. We could add a new epoch/committee subscription channel, allowing components to get
+///      notifications from the Light Client when a new committee is available.
+///   2. We could add a checkpoint content query API to the Light Client, that could allow us to
+///      actively sync a specific checkpoint content for checkpoint inclusion proof.
+///   3. We could also make the checkpoint content sync configurable, in case a client has a frequent
+///      need to lookup different checkpoint contents.
 pub struct LightClient<S> {
     _network: Network,
     state_sync_store: S,
