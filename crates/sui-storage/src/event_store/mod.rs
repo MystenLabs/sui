@@ -59,7 +59,7 @@ pub struct StoredEvent {
     /// Seq_num
     seq_num: i64,
     /// Not present for non-transaction System events (eg EpochChange)
-    tx_digest: Option<TransactionDigest>,
+    tx_digest: TransactionDigest,
     /// The variant name from SuiEvent, eg MoveEvent, Publish, etc.
     event_type: SharedStr,
     /// Package ID if available

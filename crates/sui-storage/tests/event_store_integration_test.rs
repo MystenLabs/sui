@@ -84,7 +84,7 @@ async fn insert_and_fetch_by_tx_digest_then_compare(
     event_envelope: EventEnvelope,
     db: &SqlEventStore,
 ) -> Result<(), anyhow::Error> {
-    let tx_digest = event_envelope.tx_digest.unwrap();
+    let tx_digest = event_envelope.tx_digest;
     assert_eq!(db.add_events(&vec![event_envelope.clone()]).await?, 1);
 
     let mut events = db.events_by_transaction(tx_digest, 0, 0, 10, false).await?;

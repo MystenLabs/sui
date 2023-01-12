@@ -38,8 +38,8 @@ use crate::{
 pub struct EventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     pub timestamp: u64,
-    /// Transaction digest of associated transaction, if any
-    pub tx_digest: Option<TransactionDigest>,
+    /// Transaction digest of associated transaction
+    pub tx_digest: TransactionDigest,
     /// Transaction sequence number, must be nondecreasing for event ingestion idempotency
     pub seq_num: u64,
     /// Consecutive per-tx counter assigned to this event.
@@ -90,7 +90,7 @@ impl TryFrom<String> for EventID {
 impl EventEnvelope {
     pub fn new(
         timestamp: u64,
-        tx_digest: Option<TransactionDigest>,
+        tx_digest: TransactionDigest,
         seq_num: u64,
         event_num: u64,
         event: Event,

@@ -453,7 +453,7 @@ impl RpcExampleProvider {
         };
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),
-            tx_digest: Some(*tx_digest),
+            tx_digest: *tx_digest,
             id: EventID::from((*tx_digest, 0)),
             event: sui_event.clone(),
         }];

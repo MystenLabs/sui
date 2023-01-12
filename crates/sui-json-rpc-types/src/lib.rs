@@ -2140,8 +2140,8 @@ pub struct OwnedObjectRef {
 pub struct SuiEventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     pub timestamp: u64,
-    /// Transaction digest of associated transaction, if any
-    pub tx_digest: Option<TransactionDigest>,
+    /// Transaction digest of associated transaction
+    pub tx_digest: TransactionDigest,
     /// Sequential event ID, ie (transaction seq number, event seq number).
     /// 1) Serves as a unique event ID for each fullnode
     /// 2) Also serves to sequence events for the purposes of pagination and querying.

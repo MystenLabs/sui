@@ -359,7 +359,7 @@ impl From<SqliteRow> for StoredEvent {
             id: (tx_digest.unwrap(), event_num).into(),
             timestamp: timestamp as u64,
             seq_num,
-            tx_digest,
+            tx_digest: tx_digest.unwrap(),
             event_type: SharedStr::from(Event::name_from_ordinal(event_type as usize)),
             package_id,
             module_name: module_name.map(|s| s.into()),
@@ -397,7 +397,7 @@ impl EventStore for SqlEventStore {
                 b.push_bind(event.timestamp as i64)
                     .push_bind(event.seq_num as i64)
                     .push_bind(event.event_num as i64)
-                    .push_bind(event.tx_digest.map(|txd| txd.to_bytes()))
+                    .push_bind(event.tx_digest.to_bytes())
                     .push_bind(event_type as u16)
                     .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
                     .push_bind(event.event.module_name())
@@ -907,7 +907,7 @@ mod tests {
 
         // Query for transfer event
         let mut events = db
-            .events_by_transaction(target_event.tx_digest.unwrap(), 0, 0, 10, false)
+            .events_by_transaction(target_event.tx_digest, 0, 0, 10, false)
             .await?;
         assert_eq!(events.len(), 1); // Should be no more events, just that one
         let transfer_event = events.pop().unwrap();
@@ -1139,7 +1139,7 @@ mod tests {
 
         // Query for the Move event and validate basic fields
         let events = db
-            .events_by_transaction(to_insert[5].tx_digest.unwrap(), 0, 0, 10, false)
+            .events_by_transaction(to_insert[5].tx_digest, 0, 0, 10, false)
             .await?;
         let move_event = &events[0];
         assert_eq!(events.len(), 1); // Should be no more events, just that one
@@ -1376,7 +1376,7 @@ mod tests {
         db.add_events(&to_insert).await?;
 
         let events = db
-            .events_by_transaction(to_insert[0].tx_digest.unwrap(), 0, 0, 10, false)
+            .events_by_transaction(to_insert[0].tx_digest, 0, 0, 10, false)
             .await?;
         assert_eq!(events.len(), 1);
         info!("events[0]: {:?}", events[0]);
