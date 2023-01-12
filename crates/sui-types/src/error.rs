@@ -14,7 +14,7 @@ use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
-use strum_macros::AsRefStr;
+use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
 use typed_store::rocks::TypedStoreError;
@@ -52,7 +52,9 @@ macro_rules! exit_main {
 }
 
 /// Custom error type for Sui.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
+#[derive(
+    Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
+)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -128,36 +130,9 @@ pub enum SuiError {
     #[error(
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
-    QuorumFailedToFormEffectsCertWhenProcessingTransaction {
+    QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
         effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
     },
-    #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate. Locked objects: {:?}. Validator errors: {:?}",
-        conflicting_tx_digests,
-        errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
-    )]
-    QuorumFailedToProcessTransaction {
-        good_stake: StakeUnit,
-        errors: Vec<SuiError>,
-        conflicting_tx_digests:
-            BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-    },
-    #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
-        conflicting_txes,
-        retried_tx_digest,
-        retried_tx_success
-    )]
-    QuorumFailedToProcessTransactionWithConflictingTransactions {
-        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
-        retried_tx_digest: Option<TransactionDigest>,
-        retried_tx_success: Option<bool>,
-    },
-    #[error(
-    "Failed to execute certificate on a quorum of validators. Validator errors: {:?}",
-    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
-    )]
-    QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]
@@ -628,15 +603,11 @@ impl From<&str> for SuiError {
 }
 
 impl SuiError {
-    pub fn indicates_epoch_change(&self) -> bool {
-        match self {
-            SuiError::QuorumFailedToProcessTransaction { errors, .. }
-            | SuiError::QuorumFailedToExecuteCertificate { errors, .. } => {
-                errors.iter().any(|err| err.indicates_epoch_change())
-            }
-            SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
-            _ => false,
-        }
+    pub fn individual_error_indicates_epoch_change(&self) -> bool {
+        matches!(
+            self,
+            SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_)
+        )
     }
 
     // Collapse TransactionInputObjectsErrors into a single SuiError

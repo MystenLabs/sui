@@ -5,6 +5,7 @@ use crate::test_utils::make_transfer_sui_transaction;
 use bcs::to_bytes;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use multiaddr::Multiaddr;
+use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -260,10 +261,11 @@ where
     panic!("Object not found!");
 }
 
+/// Returns false if errs out, true if succeed
 async fn execute_transaction_with_fault_configs(
     configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
     configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
-) -> SuiResult {
+) -> bool {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
@@ -284,7 +286,9 @@ async fn execute_transaction_with_fault_configs(
         gas_object1.compute_object_reference(),
         gas_object2.compute_object_reference(),
     );
-    let cert = authorities.process_transaction(tx).await?;
+    let Ok(cert) = authorities.process_transaction(tx).await else {
+        return false;
+    };
 
     for client in authorities.authority_clients.values_mut() {
         client.authority_client_mut().fault_config.reset();
@@ -293,8 +297,7 @@ async fn execute_transaction_with_fault_configs(
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
 
-    authorities.process_certificate(cert.into()).await?;
-    Ok(())
+    authorities.process_certificate(cert.into()).await.is_ok()
 }
 
 /// The intent of this is to test whether client side timeouts
@@ -336,7 +339,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     assert!(certified_effects.is_err());
     assert!(matches!(
         certified_effects,
-        Err(SuiError::QuorumFailedToExecuteCertificate { .. })
+        Err(QuorumExecuteCertificateError { .. })
     ));
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
     let tx_info = TransactionInfoRequest {
@@ -543,12 +546,13 @@ async fn test_process_transaction_fault_success() {
         } else {
             config_before_process_certificate.fail_after_handle_confirmation = true;
         }
-        execute_transaction_with_fault_configs(
-            &[(0, config_before_process_transaction)],
-            &[(1, config_before_process_certificate)],
-        )
-        .await
-        .unwrap();
+        assert!(
+            execute_transaction_with_fault_configs(
+                &[(0, config_before_process_transaction)],
+                &[(1, config_before_process_certificate)],
+            )
+            .await
+        );
     }
 }
 
@@ -561,29 +565,31 @@ async fn test_process_transaction_fault_fail() {
         fail_before_handle_transaction: true,
         ..Default::default()
     };
-    assert!(execute_transaction_with_fault_configs(
-        &[
-            (0, fail_before_process_transaction_config),
-            (1, fail_before_process_transaction_config),
-        ],
-        &[],
-    )
-    .await
-    .is_err());
+    assert!(
+        !execute_transaction_with_fault_configs(
+            &[
+                (0, fail_before_process_transaction_config),
+                (1, fail_before_process_transaction_config),
+            ],
+            &[],
+        )
+        .await
+    );
 
     let fail_before_process_certificate_config = LocalAuthorityClientFaultConfig {
         fail_before_handle_confirmation: true,
         ..Default::default()
     };
-    assert!(execute_transaction_with_fault_configs(
-        &[],
-        &[
-            (0, fail_before_process_certificate_config),
-            (1, fail_before_process_certificate_config),
-        ],
-    )
-    .await
-    .is_err());
+    assert!(
+        !execute_transaction_with_fault_configs(
+            &[],
+            &[
+                (0, fail_before_process_certificate_config),
+                (1, fail_before_process_certificate_config),
+            ],
+        )
+        .await
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -1011,11 +1017,16 @@ async fn test_handle_transaction_response() {
         &sender_kp,
     );
     // Case 0
-    // Validator will give invalid response because of the initial value set for their responses.
+    // Validators give invalid response because of the initial value set for their responses.
     let agg = get_agg(authorities.clone(), clients.clone(), 0);
 
-    assert_resp_err(&agg, tx.clone(), |e| {
-        matches!(e, SuiError::ByzantineAuthoritySuspicion { .. })
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1);
+        let (names, stake) = &errors[*BYZANTINE_SUSPICION_STR];
+        assert!(
+            HashSet::from_iter(names.iter()).is_subset(&authorities.keys().collect::<HashSet<_>>()),
+        );
+        assert_eq!(*stake, 3);
     })
     .await;
 
@@ -1027,7 +1038,7 @@ async fn test_handle_transaction_response() {
     let cert_epoch_0 = agg.process_transaction(tx.clone()).await.unwrap();
 
     // Case 2
-    // Validator returns signed-tx with epoch 0, client expects 1
+    // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
     let committee_1 = Committee::new(1, authorities.clone()).unwrap();
     agg.committee_store
@@ -1035,9 +1046,15 @@ async fn test_handle_transaction_response() {
         .unwrap();
     agg.committee = committee_1;
 
-    assert_resp_err(&agg, tx.clone(),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
-    ).await;
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1);
+        let (names, stake) = &errors[*WRONG_EPOCH_STR];
+        assert!(
+            HashSet::from_iter(names.iter()).is_subset(&authorities.keys().collect::<HashSet<_>>()),
+        );
+        assert_eq!(*stake, 3);
+    })
+    .await;
 
     // Case 3
     // Val-0 returns tx-cert
@@ -1071,15 +1088,19 @@ async fn test_handle_transaction_response() {
     agg.process_transaction(tx.clone()).await.unwrap();
 
     // Case 4
-    // Validator returns signed-tx with epoch 1, client expects 0
+    // Validators return signed-tx with epoch 1, client expects 0
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 1);
 
     let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
-    assert_resp_err(
-        &agg,
-        tx.clone(),
-        |e| matches!(e, SuiError::MissingCommitteeAtEpoch(e) if *e == 1),
-    )
+
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1);
+        let (names, stake) = &errors[*MISSING_COMMITTEE_STR];
+        assert!(
+            HashSet::from_iter(names.iter()).is_subset(&authorities.keys().collect::<HashSet<_>>()),
+        );
+        assert_eq!(*stake, 3);
+    })
     .await;
 
     let committee_1 = Committee::new(1, authorities.clone()).unwrap();
@@ -1090,7 +1111,7 @@ async fn test_handle_transaction_response() {
     let cert_epoch_1 = agg.process_transaction(tx.clone()).await.unwrap();
 
     // Case 5
-    // Validator returns tx-cert with epoch 0, client expects 1
+    // Validators return tx-cert with epoch 0, client expects 1
     let effects = TransactionEffects {
         transaction_digest: *cert_epoch_0.digest(),
         ..Default::default()
@@ -1110,9 +1131,15 @@ async fn test_handle_transaction_response() {
         .unwrap();
     agg.committee = committee_1.clone();
     // Err because either cert or signed effects is in epoch 0
-    assert_resp_err(&agg, tx.clone(),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
-    ).await;
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1);
+        let (names, stake) = &errors[*WRONG_EPOCH_STR];
+        assert!(
+            HashSet::from_iter(names.iter()).is_subset(&authorities.keys().collect::<HashSet<_>>()),
+        );
+        assert_eq!(*stake, 3);
+    })
+    .await;
 
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
@@ -1126,11 +1153,11 @@ async fn test_handle_transaction_response() {
         .insert_new_committee(&committee_1)
         .unwrap();
     agg.committee = committee_1.clone();
-    // We have 2f+1 signed effects, so we are good.
+    // We have 2f+1 signed effects on epoch 1, so we are good.
     agg.process_transaction(tx.clone()).await.unwrap();
 
     // Case 6
-    // Validator 2 and 3 returns tx-cert with epoch 0, but different signed effects
+    // Validators 2 and 3 returns tx-cert with epoch 1, but different signed effects from 0 and 1
     let effects = TransactionEffects {
         transaction_digest: *cert_epoch_0.digest(),
         status: ExecutionStatus::Failure {
@@ -1151,16 +1178,20 @@ async fn test_handle_transaction_response() {
         .insert_new_committee(&committee_1)
         .unwrap();
     agg.committee = committee_1.clone();
-    assert_resp_err(&agg, tx.clone(), |e| {
-        matches!(
-            e,
-            SuiError::QuorumFailedToFormEffectsCertWhenProcessingTransaction { .. }
-        )
+
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1, "{:?}", errors);
+        let (no_effects_cert_names, no_effects_cert_stake) =
+            &errors[*FAILED_TO_GET_EFFECTS_QUORUM_STR];
+        assert!(HashSet::from_iter(no_effects_cert_names.iter())
+            .is_subset(&authorities.keys().collect::<HashSet<_>>()),);
+        // We don't know the absence of quorum until all validators return responses
+        assert_eq!(*no_effects_cert_stake, 4)
     })
     .await;
 
     // Case 7
-    // Validator returns tx-cert with epoch 1, client expects 0
+    // Validators return tx-cert with epoch 1, client expects 0
     let effects = TransactionEffects {
         transaction_digest: *cert_epoch_1.digest(),
         ..Default::default()
@@ -1173,41 +1204,75 @@ async fn test_handle_transaction_response() {
         1,
     );
     let agg = get_agg(authorities.clone(), clients.clone(), 0);
-    assert_resp_err(
-        &agg,
-        tx.clone(),
-        |e| matches!(e, SuiError::MissingCommitteeAtEpoch(e) if *e == 1),
-    )
+
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1);
+        let (names, stake) = &errors[*MISSING_COMMITTEE_STR];
+        assert!(
+            HashSet::from_iter(names.iter()).is_subset(&authorities.keys().collect::<HashSet<_>>()),
+        );
+        assert_eq!(*stake, 3);
+    })
     .await;
 
     // Update committee store, now SafeClinet will pass
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
-    assert_resp_err(
-        &agg,
-        tx.clone(),
-        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
-    )
+
+    assert_resp_err(&agg, tx.clone(), |errors| {
+        assert_eq!(errors.len(), 1);
+        let (names, stake) = &errors[*WRONG_EPOCH_STR];
+        assert!(
+            HashSet::from_iter(names.iter()).is_subset(&authorities.keys().collect::<HashSet<_>>()),
+        );
+        assert_eq!(*stake, 3);
+    })
     .await;
 }
+
+static WRONG_EPOCH_STR: Lazy<&'static str> = Lazy::new(|| {
+    SuiError::WrongEpoch {
+        expected_epoch: 0,
+        actual_epoch: 0,
+    }
+    .into()
+});
+
+static FAILED_TO_GET_EFFECTS_QUORUM_STR: Lazy<&'static str> = Lazy::new(|| {
+    SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
+        effects_map: BTreeMap::new(),
+    }
+    .into()
+});
+
+static MISSING_COMMITTEE_STR: Lazy<&'static str> =
+    Lazy::new(|| SuiError::MissingCommitteeAtEpoch(0).into());
+
+static BYZANTINE_SUSPICION_STR: Lazy<&'static str> = Lazy::new(|| {
+    SuiError::ByzantineAuthoritySuspicion {
+        authority: AuthorityName::default(),
+        reason: "".into(),
+    }
+    .into()
+});
 
 async fn assert_resp_err<F>(
     agg: &AuthorityAggregator<HandleTransactionTestAuthorityClient>,
     tx: VerifiedTransaction,
     checker: F,
 ) where
-    F: Fn(&SuiError) -> bool,
+    F: Fn(&BTreeMap<String, (Vec<AuthorityName>, StakeUnit)>),
 {
     match agg.process_transaction(tx).await {
-        Err(SuiError::QuorumFailedToProcessTransaction {
+        Err(QuorumExecuteTransactionError {
             good_stake,
             errors,
             conflicting_tx_digests,
         }) => {
             assert_eq!(good_stake, 0);
             assert!(conflicting_tx_digests.is_empty());
-            assert!(errors.iter().all(checker));
+            checker(&errors);
         }
         other => {
             panic!(

@@ -404,7 +404,7 @@ where {
     // this is probably derivable, but we'd rather have it explicitly laid out for instructional purposes,
     // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
     #[allow(dead_code)]
-    fn default() -> Self {
+    pub fn default() -> Self {
         Self([0u8; AuthorityPublicKey::LENGTH])
     }
 }
