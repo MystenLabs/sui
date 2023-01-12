@@ -3,6 +3,7 @@
 
 import { useMemo } from 'react';
 
+import { apyCalc } from '../validator/ApyCalulator';
 import { DelegationAmount } from './DelegationAmount';
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
@@ -33,19 +34,10 @@ export function ValidatorStats({
     //  const tallyingScore =  0;
     //  const lastNarwhalRound = 0;
 
-    const apy = useMemo(() => {
-        const { sui_balance, starting_epoch, delegation_token_supply } =
-            validatorData.fields.delegation_staking_pool.fields;
-
-        const num_epochs_participated = +epoch - +starting_epoch;
-        const apy = Math.pow(
-            1 +
-                (+sui_balance - +delegation_token_supply.fields.value) /
-                    +delegation_token_supply.fields.value,
-            365 / num_epochs_participated - 1
-        );
-        return apy ? apy : 0;
-    }, [validatorData, epoch]);
+    const apy = useMemo(
+        () => apyCalc(validatorData, +epoch),
+        [validatorData, epoch]
+    );
 
     const totalStake = validatorData.fields.stake_amount;
     const delegatedStakePercentage = useMemo(

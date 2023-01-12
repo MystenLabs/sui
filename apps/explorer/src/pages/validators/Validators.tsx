@@ -4,9 +4,10 @@
 import { is, SuiObject } from '@mysten/sui.js';
 import { lazy, Suspense, useState, useMemo } from 'react';
 
-import Pagination from '../../components/pagination/Pagination';
+import { apyCalc } from '../validator/ApyCalulator';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
+import Pagination from '~/components/pagination/Pagination';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { useGetObject } from '~/hooks/useGetObject';
 import { DelegationAmount } from '~/pages/validator/DelegationAmount';
@@ -51,23 +52,9 @@ function ValidatorPageResult() {
         if (!validatorsData) return 0;
         const validators = validatorsData.validators.fields.active_validators;
 
-        const validatorsApy = validators.map((av) => {
-            const { sui_balance, starting_epoch, delegation_token_supply } =
-                av.fields.delegation_staking_pool.fields;
-
-            const num_epochs_participated =
-                +validatorsData.epoch - +starting_epoch;
-
-            const apy = Math.pow(
-                1 +
-                    (+sui_balance - +delegation_token_supply.fields.value) /
-                        Number(delegation_token_supply.fields.value),
-                365 / num_epochs_participated - 1
-            );
-
-            return apy ? apy : 0;
-        });
-
+        const validatorsApy = validators.map((av) =>
+            apyCalc(av, +validatorsData.epoch)
+        );
         return (
             validatorsApy.reduce((acc, cur) => acc + cur, 0) /
             validatorsApy.length
@@ -85,7 +72,7 @@ function ValidatorPageResult() {
                     validator.fields.metadata.fields.name
                 );
 
-                const commissionRate = Number(validator.fields.commission_rate);
+                const commissionRate = +validator.fields.commission_rate;
 
                 return {
                     number: index + 1,
