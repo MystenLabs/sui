@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
+use std::collections::HashSet;
 use std::net::IpAddr;
 use std::time::Duration;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, NodeConfig, ValidatorInfo};
@@ -14,6 +16,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::crypto::TEST_COMMITTEE_SIZE;
 use sui_types::messages::{ObjectInfoRequest, ObjectInfoRequestKind};
 use sui_types::object::Object;
+use tokio::time::timeout;
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -155,6 +158,40 @@ pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> Su
 
     let fullnode_config = builder.build().unwrap();
     start_node(&fullnode_config, registry_service).await
+}
+
+pub async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
+    let current_epochs: HashSet<_> = authorities
+        .iter()
+        .map(|handle| handle.with(|node| node.current_epoch()))
+        .collect();
+    // All validators should be at the same epoch when this function is called.
+    assert_eq!(current_epochs.len(), 1);
+    let current_epoch = *current_epochs.iter().next().unwrap();
+    // Close epoch on 3 (2f+1) validators.
+    for handle in authorities.iter().skip(1) {
+        handle
+            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .await;
+    }
+    // Wait for all nodes to reach the next epoch.
+    let handles: Vec<_> = authorities
+        .iter()
+        .map(|handle| {
+            handle.with_async(|node| async {
+                loop {
+                    if node.state().epoch_store_for_testing().epoch() == current_epoch + 1 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            })
+        })
+        .collect();
+
+    timeout(Duration::from_secs(20), join_all(handles))
+        .await
+        .expect("timed out waiting for reconfiguration to complete");
 }
 
 /// Get a network client to communicate with the consensus.

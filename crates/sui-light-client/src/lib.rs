@@ -6,17 +6,19 @@ use prometheus::Registry;
 use std::net::SocketAddr;
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::utils;
-use sui_network::create_p2p_network;
-use sui_network::state_sync::Handle;
+use sui_network::{create_p2p_network, discovery, state_sync};
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::NetworkKeyPair;
-use sui_types::error::SuiResult;
 use sui_types::storage::{ReadStore, WriteStore};
 
+#[cfg(test)]
+mod tests;
+
 pub struct LightClient<S> {
-    network: Network,
+    _network: Network,
     state_sync_store: S,
-    state_sync_handle: Handle,
+    _discovery_handle: discovery::Handle,
+    _state_sync_handle: state_sync::Handle,
 }
 
 impl<S> LightClient<S>
@@ -41,16 +43,17 @@ where
             }),
             ..Default::default()
         };
-        let (network, _, state_sync_handle) = create_p2p_network(
+        let (_network, _discovery_handle, _state_sync_handle) = create_p2p_network(
             p2p_config,
             state_sync_store.clone(),
             network_key_pair,
             prometheus_registry,
         )?;
         Ok(Self {
-            network,
+            _network,
             state_sync_store,
-            state_sync_handle,
+            _discovery_handle,
+            _state_sync_handle,
         })
     }
 

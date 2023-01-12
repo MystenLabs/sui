@@ -8995,9 +8995,17 @@ dependencies = [
  "anemo",
  "anyhow",
  "prometheus",
+ "rand 0.8.5",
  "sui-config",
+ "sui-core",
+ "sui-macros",
  "sui-network",
+ "sui-simulator",
  "sui-types",
+ "telemetry-subscribers",
+ "test-utils",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

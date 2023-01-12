@@ -16,17 +16,17 @@ use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::{init_local_authorities, make_transfer_sui_transaction};
 use sui_macros::sim_test;
-use sui_node::SuiNodeHandle;
 use sui_types::crypto::get_account_key_pair;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::VerifiedTransaction;
 use sui_types::object::Object;
+use test_utils::authority::trigger_reconfiguration;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     network::TestClusterBuilder,
 };
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 
 #[sim_test]
 async fn local_advance_epoch_tx_test() {
@@ -306,31 +306,4 @@ async fn test_validator_resign_effects() {
     // Ensure that we are able to form a new effects cert in the new epoch.
     assert_eq!(effects1.epoch(), 1);
     assert_eq!(effects0.into_message(), effects1.into_message());
-}
-
-async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
-    // Close epoch on 3 (2f+1) validators.
-    for handle in authorities.iter().skip(1) {
-        handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
-            .await;
-    }
-    // Wait for all nodes to reach the next epoch.
-    let handles: Vec<_> = authorities
-        .iter()
-        .map(|handle| {
-            handle.with_async(|node| async {
-                loop {
-                    if node.state().epoch_store_for_testing().epoch() == 1 {
-                        break;
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            })
-        })
-        .collect();
-
-    timeout(Duration::from_secs(20), join_all(handles))
-        .await
-        .expect("timed out waiting for reconfiguration to complete");
 }

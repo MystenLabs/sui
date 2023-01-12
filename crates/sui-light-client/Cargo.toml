@@ -15,3 +15,14 @@ prometheus = "0.13.3"
 sui-config = { path = "../sui-config" }
 sui-network = { path = "../sui-network" }
 sui-types = { path = "../sui-types" }
+
+[dev-dependencies]
+rand = "0.8.5"
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+sui-core = { path = "../sui-core" }
+sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }
+test-utils = { path = "../test-utils" }
+tracing = "0.1.36"
