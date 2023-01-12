@@ -19,7 +19,7 @@ use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
-use sui_types::crypto::AuthoritySignInfo;
+use sui_types::crypto::{AuthoritySignInfo, Signature};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
@@ -203,6 +203,10 @@ pub struct AuthorityEpochTables {
     /// The key in this table is checkpoint sequence number and an arbitrary integer
     pending_checkpoint_signatures:
         DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
+
+    /// When we see certificate through consensus for the first time, we record
+    /// user signature for this transaction here. This will be included in the checkpoint later.
+    user_signatures_for_checkpoints: DBMap<TransactionDigest, Signature>,
 }
 
 impl AuthorityEpochTables {
@@ -713,6 +717,31 @@ impl AuthorityPerEpochStore {
             .contains_key(authority))
     }
 
+    /// Note: this is async function as it waits for certificates to be processed by
+    /// consensus before returning
+    pub async fn user_signatures_for_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Signature>> {
+        // todo - use NotifyRead::register_all might be faster
+        for digest in digests {
+            self.consensus_message_processed_notify(ConsensusTransactionKey::Certificate(*digest))
+                .await?;
+        }
+        let signatures = self
+            .tables
+            .user_signatures_for_checkpoints
+            .multi_get(digests)?;
+        let mut result = Vec::with_capacity(digests.len());
+        for (signature, digest) in signatures.into_iter().zip(digests.iter()) {
+            let Some(signature) = signature else {
+                return Err(SuiError::from(format!("Can not find user signature for checkpoint for transaction {:?}", digest).as_str()));
+            };
+            result.push(signature);
+        }
+        Ok(result)
+    }
+
     /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
     pub fn record_end_of_publish(
         &self,
@@ -911,6 +940,19 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn test_insert_user_signature(&self, digest: TransactionDigest, signature: &Signature) {
+        self.tables
+            .user_signatures_for_checkpoints
+            .insert(&digest, signature)
+            .unwrap();
+        let key = ConsensusTransactionKey::Certificate(digest);
+        self.tables
+            .consensus_message_processed
+            .insert(&key, &true)
+            .unwrap();
+        self.consensus_notify_read.notify(&key, &());
+    }
+
     fn finish_consensus_certificate_process_with_batch(
         &self,
         batch: DBBatch,
@@ -926,6 +968,16 @@ impl AuthorityPerEpochStore {
         let batch = batch.insert_batch(
             &self.tables.pending_certificates,
             [(*certificate.digest(), certificate.clone().serializable())],
+        )?;
+        // User signatures are written in the same batch as consensus certificate processed flag,
+        // which means we won't attempt to insert this twice for the same tx digest
+        debug_assert!(!self
+            .tables
+            .user_signatures_for_checkpoints
+            .contains_key(certificate.digest())?);
+        let batch = batch.insert_batch(
+            &self.tables.user_signatures_for_checkpoints,
+            [(*certificate.digest(), certificate.tx_signature.clone())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
     }

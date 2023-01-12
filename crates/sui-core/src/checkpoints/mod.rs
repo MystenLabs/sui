@@ -539,6 +539,17 @@ impl CheckpointBuilder {
                     .record_epoch_first_checkpoint_creation_time_metric();
             }
             let last_checkpoint_of_epoch = last_pending_of_epoch && index == chunks_count - 1;
+            let digests_without_epoch_augment: Vec<_> =
+                effects.iter().map(|e| e.transaction_digest).collect();
+            debug!("Waiting for checkpoint user signatures for certificates {:?} to appear in consensus", digests_without_epoch_augment);
+            let signatures = self
+                .epoch_store
+                .user_signatures_for_checkpoint(&digests_without_epoch_augment)
+                .await?;
+            debug!(
+                "Received {} checkpoint user signatures from consensus",
+                signatures.len()
+            );
             let epoch_rolling_gas_cost_summary =
                 self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
             if last_checkpoint_of_epoch {
@@ -546,9 +557,11 @@ impl CheckpointBuilder {
                     .await?;
             }
 
-            let contents = CheckpointContents::new_with_causally_ordered_transactions(
-                effects.iter().map(TransactionEffects::execution_digests),
-            );
+            let contents =
+                CheckpointContents::new_with_causally_ordered_transactions_and_signatures(
+                    effects.iter().map(TransactionEffects::execution_digests),
+                    signatures,
+                );
 
             let num_txns = contents.size() as u64;
 
@@ -1109,6 +1122,7 @@ mod tests {
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
+    use sui_types::crypto::Signature;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -1158,6 +1172,13 @@ mod tests {
                 d(i),
                 e(&state, d(i), vec![], GasCostSummary::new(41, 42, 43)),
             );
+        }
+        let all_digests: Vec<_> = store.iter().map(|(k, _v)| *k).collect();
+        for digest in all_digests {
+            let signature = Signature::Ed25519SuiSignature(Default::default());
+            state
+                .epoch_store()
+                .test_insert_user_signature(digest, &signature);
         }
 
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
