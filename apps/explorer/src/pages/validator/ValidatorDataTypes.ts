@@ -6,8 +6,6 @@
 export const VALIDATORS_OBJECT_ID = '0x5';
 export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
 
-// TODO: sum of the string string values are numbers | bigint
-
 export interface Validators {
     dataType: string;
     type: string;

@@ -47,36 +47,32 @@ function ValidatorPageResult() {
 
     const totalStake = validatorsData?.validators.fields.total_validator_stake;
 
-    const validatorsAPYs = useMemo(() => {
-        if (!validatorsData) return [];
+    const averageAPY = useMemo(() => {
+        if (!validatorsData) return 0;
         const validators = validatorsData.validators.fields.active_validators;
 
-        return validators.map((av) => {
+        const validatorsApy = validators.map((av) => {
             const { sui_balance, starting_epoch, delegation_token_supply } =
                 av.fields.delegation_staking_pool.fields;
 
             const num_epochs_participated =
-                ~validatorsData.epoch - ~starting_epoch;
+                +validatorsData.epoch - +starting_epoch;
 
-            const APY = Math.pow(
+            const apy = Math.pow(
                 1 +
-                    (~sui_balance - ~delegation_token_supply.fields.value) /
+                    (+sui_balance - +delegation_token_supply.fields.value) /
                         Number(delegation_token_supply.fields.value),
                 365 / num_epochs_participated - 1
             );
 
-            return APY ? APY : 0;
+            return apy ? apy : 0;
         });
-    }, [validatorsData]);
-
-    const averageAPY = useMemo(() => {
-        if (!validatorsAPYs.length) return 0;
 
         return (
-            validatorsAPYs.reduce((acc, cur) => acc + cur, 0) /
-            validatorsAPYs.length
+            validatorsApy.reduce((acc, cur) => acc + cur, 0) /
+            validatorsApy.length
         );
-    }, [validatorsAPYs]);
+    }, [validatorsData]);
 
     const validatorsTableData = useMemo(() => {
         if (!validatorsData) return null;
