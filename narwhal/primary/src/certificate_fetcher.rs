@@ -265,11 +265,7 @@ impl CertificateFetcher {
         self.fetch_certificates_task
             .spawn(monitored_future!(async move {
                 let _scope = monitored_scope("CertificatesFetching");
-                state
-                    .metrics
-                    .certificate_fetcher_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .inc();
+                state.metrics.certificate_fetcher_inflight_fetch.inc();
 
                 let now = Instant::now();
                 match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
@@ -286,11 +282,7 @@ impl CertificateFetcher {
                     }
                 };
 
-                state
-                    .metrics
-                    .certificate_fetcher_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .dec();
+                state.metrics.certificate_fetcher_inflight_fetch.dec();
             }));
     }
 
@@ -325,7 +317,6 @@ async fn run_fetch_task(
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
-        .with_label_values(&[&committee.epoch().to_string()])
         .add(num_certs_fetched as i64);
 
     debug!("Successfully fetched and processed {num_certs_fetched} certificates");
