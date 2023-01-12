@@ -44,7 +44,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     size="xl"
                 />
                 <div className="mt-1 flex flex-col gap-2.5 pl-2 md:gap-3.5">
-                    <Heading as="h1" variant="heading2/bold" color="gray-100">
+                    <Heading as="h1" variant="heading2/bold" color="gray-90">
                         {validatorName}
                     </Heading>
                 </div>
