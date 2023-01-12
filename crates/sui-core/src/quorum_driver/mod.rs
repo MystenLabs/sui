@@ -15,6 +15,7 @@ use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
 use tap::TapFallible;
+use thiserror::Error;
 use tokio::time::{sleep_until, Instant};
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -23,7 +24,9 @@ use tracing::Instrument;
 use tracing::{debug, error, info, warn};
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
-use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_aggregator::{
+    AuthorityAggregator, QuorumExecuteCertificateError, QuorumExecuteTransactionError,
+};
 use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
@@ -38,6 +41,27 @@ mod tests;
 const TASK_QUEUE_SIZE: usize = 10000;
 const EFFECTS_QUEUE_SIZE: usize = 1000;
 const TX_MAX_RETRY_TIMES: u8 = 10;
+
+/// Quorum Driver Internal types
+#[derive(Error, Debug)]
+pub(crate) enum QuorumDriverInternalError {
+    #[error(
+        "Failed to execute transaction on a quorum of validators. Validator errors: {:?}",
+        0
+    )]
+    TransactionError(QuorumExecuteTransactionError),
+    #[error(
+        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
+        conflicting_txes,
+        retried_tx_digest,
+        retried_tx_success
+    )]
+    TransactionErrorWithConflictingTransactions {
+        conflicting_txes: BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
+        retried_tx_digest: Option<TransactionDigest>,
+        retried_tx_success: Option<bool>,
+    },
+}
 
 #[derive(Clone)]
 pub struct QuorumDriverTask {
@@ -224,10 +248,10 @@ where
         .await
     }
 
-    pub async fn process_transaction(
+    pub(crate) async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<VerifiedCertificate> {
+    ) -> Result<VerifiedCertificate, QuorumDriverInternalError> {
         let tx_digest = *transaction.digest();
         let result = self
             .validators
@@ -237,7 +261,7 @@ where
             .await;
 
         match result {
-            Err(SuiError::QuorumFailedToProcessTransaction {
+            Err(QuorumExecuteTransactionError {
                 good_stake,
                 errors: _errors,
                 conflicting_tx_digests,
@@ -286,7 +310,7 @@ where
                                 .inc();
                         }
                         return Err(
-                            SuiError::QuorumFailedToProcessTransactionWithConflictingTransactions {
+                            QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
                                 conflicting_txes: conflicting_tx_digests,
                                 retried_tx_digest: Some(retried_tx_digest),
                                 retried_tx_success: Some(success),
@@ -295,23 +319,24 @@ where
                     }
                 }
                 Err(
-                    SuiError::QuorumFailedToProcessTransactionWithConflictingTransactions {
+                    QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
                         conflicting_txes: conflicting_tx_digests,
                         retried_tx_digest: None,
                         retried_tx_success: None,
                     },
                 )
             }
+            Ok(resp) => Ok(resp),
             // TODO: we are particularly interested in what other errors could be returned
             // and use that to shape the retry strategy
-            other => other,
+            Err(err) => Err(QuorumDriverInternalError::TransactionError(err)),
         }
     }
 
     pub async fn process_certificate(
         &self,
         certificate: VerifiedCertificate,
-    ) -> SuiResult<QuorumDriverResponse> {
+    ) -> Result<QuorumDriverResponse, QuorumExecuteCertificateError> {
         let effects = self
             .validators
             .load()
@@ -726,13 +751,13 @@ where
 
 // TODO: categorize all possible SuiErrors
 fn convert_to_quorum_driver_error_if_nonretryable(
-    err: SuiError,
+    err: QuorumDriverInternalError,
     tx_digest: &TransactionDigest,
     action: &'static str,
 ) -> Option<QuorumDriverError> {
     match &err {
         // TODO: rewrite the equivocation detection code to make it more deterministic
-        SuiError::QuorumFailedToProcessTransactionWithConflictingTransactions {
+        QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
             conflicting_txes,
             retried_tx_digest,
             retried_tx_success,
