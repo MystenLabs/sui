@@ -1,0 +1,17 @@
+[package]
+name = "sui-light-client"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anemo.workspace = true
+
+anyhow = "1.0.65"
+prometheus = "0.13.3"
+
+sui-config = { path = "../sui-config" }
+sui-network = { path = "../sui-network" }
+sui-types = { path = "../sui-types" }

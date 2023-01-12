@@ -8992,8 +8992,12 @@ dependencies = [
 name = "sui-light-client"
 version = "0.21.0"
 dependencies = [
+ "anemo",
+ "anyhow",
+ "prometheus",
  "sui-config",
  "sui-network",
+ "sui-types",
 ]
 
 [[package]]
