@@ -3714,7 +3714,8 @@
         "required": [
           "event",
           "id",
-          "timestamp"
+          "timestamp",
+          "txDigest"
         ],
         "properties": {
           "event": {
@@ -3740,13 +3741,10 @@
             "minimum": 0.0
           },
           "txDigest": {
-            "description": "Transaction digest of associated transaction, if any",
-            "anyOf": [
+            "description": "Transaction digest of associated transaction",
+            "allOf": [
               {
                 "$ref": "#/components/schemas/TransactionDigest"
-              },
-              {
-                "type": "null"
               }
             ]
           }
