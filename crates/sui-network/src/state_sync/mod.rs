@@ -310,7 +310,9 @@ where
             }
 
             self.maybe_start_checkpoint_summary_sync_task();
-            self.maybe_start_checkpoint_contents_sync_task();
+            if !self.config.disable_checkpoint_sync {
+                self.maybe_start_checkpoint_contents_sync_task();
+            }
         }
 
         info!("State-Synchronizer ended");

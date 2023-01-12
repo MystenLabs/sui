@@ -92,6 +92,16 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `100`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_download_concurrency: Option<usize>,
+
+    /// Whether to disable checkpoint content sync. This is false by default, and hence we always
+    /// sync checkpoint content by default. In some clients (e.g. light client) we may not want to
+    /// actively sync checkpoint content.
+    #[serde(skip_serializing_if = "is_false")]
+    pub disable_checkpoint_sync: bool,
+}
+
+fn is_false(it: &bool) -> bool {
+    !*it
 }
 
 impl StateSyncConfig {
@@ -145,7 +155,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interval_period_ms: Option<u64>,
 
-    /// Target number of conncurrent connections to establish.
+    /// Target number of concurrent connections to establish.
     ///
     /// If unspecified, this will default to `4`.
     #[serde(skip_serializing_if = "Option::is_none")]
