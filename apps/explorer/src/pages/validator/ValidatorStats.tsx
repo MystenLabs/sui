@@ -57,8 +57,8 @@ export function ValidatorStats({
     );
 
     return (
-        <div className="flex w-full flex-col gap-5 md:mt-8 md:flex-row">
-            <div className="max-w-md basis-full md:basis-2/5">
+        <div className="flex w-full flex-col gap-5 md:mt-8 md:flex-row lg:basis-10/12">
+            <div className=" basis-full md:basis-2/5">
                 <Card spacing="lg">
                     <div className="flex max-w-full flex-col flex-nowrap gap-8">
                         <Heading
@@ -68,7 +68,7 @@ export function ValidatorStats({
                         >
                             SUI Staked on Validator
                         </Heading>
-                        <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
+                        <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
                             <Stats label="Staking APY" tooltip="Coming soon">
                                 <Heading
                                     as="h3"
@@ -82,8 +82,8 @@ export function ValidatorStats({
                                 <DelegationAmount amount={totalStake} isStats />
                             </Stats>
                         </div>
-                        <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
-                            <Stats label="Delegators" tooltip="Delegators">
+                        <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                            <Stats label="Delegators" tooltip="Coming soon">
                                 <Heading
                                     as="h3"
                                     variant="heading3/semibold"
@@ -119,7 +119,7 @@ export function ValidatorStats({
             </div>
             <div className="basis-full md:basis-1/4">
                 <Card spacing="lg">
-                    <div className="flex  max-w-full flex-col flex-nowrap gap-8">
+                    <div className="flex max-w-full flex-col flex-nowrap gap-8">
                         <Heading
                             as="div"
                             variant="heading4/semibold"
@@ -150,7 +150,7 @@ export function ValidatorStats({
                     </div>
                 </Card>
             </div>
-            <div className="max-w-[432px] basis-full md:basis-1/3">
+            <div className="basis-full md:basis-1/3">
                 <Card spacing="lg">
                     <div className="flex  max-w-full flex-col flex-nowrap gap-8">
                         <Heading
