@@ -693,7 +693,7 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         Some((tx_responses[16].tx_digest, 0).into()),
         page1.next_cursor
     );
-    //assert_eq!(Some((17, 0).into()), page1.next_cursor);
+
     let page2 = client
         .event_api()
         .get_events(
@@ -704,11 +704,9 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    println!("Tx_Responses are: {:?}", tx_responses);
-    println!("Page 2 is: {:?}", page2);
-    println!("Page 2 next cursor is: {:?}", page2.next_cursor);
 
-    assert_eq!(17, page2.data.len());
+    // reason why we get 18 events is that the first event commited was event:Publish
+    assert_eq!(18, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get sender events
