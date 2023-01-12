@@ -9,13 +9,14 @@ use crate::committee::StakeUnit;
 use crate::error::SuiError;
 use crate::messages::QuorumDriverResponse;
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 use thiserror::Error;
 
 pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
 
 /// Client facing errors regarding transaction submission via Quorum Driver.
 /// Every invariant needs detailed documents to instruct client handling.
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr)]
 pub enum QuorumDriverError {
     #[error(
         "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
