@@ -17,7 +17,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject } from '_hooks';
 
-import type { ValidatorState } from '../ValidatorDataTypes';
+import type { ValidatorsFields } from '../ValidatorDataTypes';
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
@@ -29,7 +29,7 @@ export function SelectValidatorCard() {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
+            ? (data.details.data.fields as ValidatorsFields)
             : null;
 
     const validators = useMemo(() => {
@@ -46,12 +46,12 @@ export function SelectValidatorCard() {
                 } = av.fields.delegation_staking_pool.fields;
 
                 const num_epochs_participated =
-                    validatorsData.epoch - starting_epoch;
+                    ~validatorsData.epoch - ~starting_epoch;
 
                 const APY = Math.pow(
                     1 +
-                        (sui_balance - delegation_token_supply.fields.value) /
-                            delegation_token_supply.fields.value,
+                        (~sui_balance - ~delegation_token_supply.fields.value) /
+                            ~delegation_token_supply.fields.value,
                     365 / num_epochs_participated - 1
                 );
 
