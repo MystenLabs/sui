@@ -28,7 +28,7 @@ use std::fs;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use sui_json_rpc_types::SuiExecutionResult;
+use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus};
 use sui_types::utils::to_sender_signed_transaction;
 
 use std::{convert::TryInto, env};
@@ -124,41 +124,72 @@ fn compare_transaction_info_responses(
     }
 }
 
+// TODO break this up into a cleaner set of components. It does a bit too much
+// currently
 async fn construct_shared_object_transaction_with_sequence_number(
-    sequence_number: SequenceNumber,
-) -> (Arc<AuthorityState>, VerifiedTransaction, ObjectID, ObjectID) {
+    initial_shared_version_override: Option<SequenceNumber>,
+) -> (
+    Arc<AuthorityState>,
+    Arc<AuthorityState>,
+    VerifiedTransaction,
+    ObjectID,
+    ObjectID,
+) {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let gas_object_ref = gas_object.compute_object_reference();
-
-    let shared_object_id = ObjectID::random();
-    let shared_object = {
-        use sui_types::object::MoveObject;
-        let obj = MoveObject::new_gas_coin(sequence_number, shared_object_id, 10);
-        Object::new_move(
-            obj,
-            Owner::Shared {
-                initial_shared_version: sequence_number,
-            },
-            TransactionDigest::genesis(),
+    let (shared_object_id, shared_object) = {
+        let (authority, package) =
+            init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+        let effects = call_move_(
+            &authority,
+            None,
+            &gas_object_id,
+            &sender,
+            &keypair,
+            &package,
+            "object_basics",
+            "share",
+            vec![],
+            vec![],
+            true,
         )
+        .await
+        .unwrap();
+        let shared_object_id = effects.created[0].0 .0;
+        let mut shared_object = authority
+            .get_object(&shared_object_id)
+            .await
+            .unwrap()
+            .unwrap();
+        if let Some(initial_shared_version) = initial_shared_version_override {
+            shared_object
+                .data
+                .try_as_move_mut()
+                .unwrap()
+                .increment_version_to(initial_shared_version);
+            shared_object.owner = Owner::Shared {
+                initial_shared_version,
+            };
+        }
+        shared_object.previous_transaction = TransactionDigest::genesis();
+        (shared_object_id, shared_object)
     };
     let initial_shared_version = shared_object.version();
-    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
 
     // Make a sample transaction.
-    let module = "object_basics";
-    let function = "create";
-    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
-
+    let (validator, fullnode, package) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+    validator.insert_genesis_object(shared_object.clone()).await;
+    fullnode.insert_genesis_object(shared_object).await;
+    let gas_object = validator.get_object(&gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let data = TransactionData::new_move_call(
         sender,
-        package_object_ref,
-        ident_str!(module).to_owned(),
-        ident_str!(function).to_owned(),
+        package,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("set_value").to_owned(),
         /* type_args */ vec![],
         gas_object_ref,
         /* args */
@@ -168,12 +199,12 @@ async fn construct_shared_object_transaction_with_sequence_number(
                 initial_shared_version,
             }),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
-            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],
         MAX_GAS,
     );
     (
-        authority,
+        validator,
+        fullnode,
         to_sender_signed_transaction(data, &keypair),
         gas_object_id,
         shared_object_id,
@@ -182,46 +213,53 @@ async fn construct_shared_object_transaction_with_sequence_number(
 
 #[tokio::test]
 async fn test_dry_run_transaction() {
-    let (authority, transaction, gas_object_id, shared_object_id) =
-        construct_shared_object_transaction_with_sequence_number(SequenceNumber::MIN).await;
+    let (validator, fullnode, transaction, gas_object_id, shared_object_id) =
+        construct_shared_object_transaction_with_sequence_number(None).await;
+    let initial_shared_object_version = validator
+        .get_object(&shared_object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
 
     let transaction_digest = *transaction.digest();
 
-    let response = authority
+    let response = fullnode
         .dry_exec_transaction(
             transaction.data().intent_message.value.clone(),
             transaction_digest,
         )
-        .await;
-    assert!(response.is_ok());
+        .await
+        .unwrap();
+    assert_eq!(response.status, SuiExecutionStatus::Success);
 
     // Make sure that objects are not mutated after dry run.
-    let gas_object_version = authority
+    let gas_object_version = fullnode
         .get_object(&gas_object_id)
         .await
         .unwrap()
         .unwrap()
         .version();
     assert_eq!(gas_object_version, OBJECT_START_VERSION);
-    let shared_object_version = authority
+    let shared_object_version = fullnode
         .get_object(&shared_object_id)
         .await
         .unwrap()
         .unwrap()
         .version();
-    assert_eq!(shared_object_version, SequenceNumber::MIN);
+    assert_eq!(shared_object_version, initial_shared_object_version);
 }
 
 #[tokio::test]
 async fn test_dev_inspect_object_by_bytes() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let (validator, fullnode, object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // test normal call
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -252,8 +290,9 @@ async fn test_dev_inspect_object_by_bytes() {
     assert!(return_values.is_empty());
 
     // actually make the call to make an object
-    let effects = call_move(
-        &authority_state,
+    let effects = call_move_(
+        &validator,
+        Some(&fullnode),
         &gas_object_id,
         &sender,
         &sender_key,
@@ -265,11 +304,12 @@ async fn test_dev_inspect_object_by_bytes() {
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
+        false,
     )
     .await
     .unwrap();
     let created_object_id = effects.created[0].0 .0;
-    let created_object = authority_state
+    let created_object = validator
         .get_object(&created_object_id)
         .await
         .unwrap()
@@ -283,7 +323,7 @@ async fn test_dev_inspect_object_by_bytes() {
 
     // use the created object directly, via its bytes
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -317,8 +357,9 @@ async fn test_dev_inspect_object_by_bytes() {
     let updated_reference_bytes = &mutable_reference_outputs[0].1;
 
     // make the same call with the object id
-    let effects = call_move(
-        &authority_state,
+    let effects = call_move_(
+        &validator,
+        Some(&fullnode),
         &gas_object_id,
         &sender,
         &sender_key,
@@ -330,6 +371,7 @@ async fn test_dev_inspect_object_by_bytes() {
             TestCallArg::Object(created_object_id),
             TestCallArg::Pure(bcs::to_bytes(&100_u64).unwrap()),
         ],
+        false,
     )
     .await
     .unwrap();
@@ -338,7 +380,7 @@ async fn test_dev_inspect_object_by_bytes() {
     assert!(effects.deleted.is_empty());
 
     // compare the bytes
-    let updated_object = authority_state
+    let updated_object = validator
         .get_object(&created_object_id)
         .await
         .unwrap()
@@ -351,13 +393,13 @@ async fn test_dev_inspect_object_by_bytes() {
 async fn test_dev_inspect_unowned_gas() {
     let (alice, _alice_key): (_, AccountKeyPair) = get_key_pair();
     let alice_gas_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(alice, alice_gas_id)]).await;
+    let (_validator, full_node, object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(alice, alice_gas_id)]).await;
     let (bob, bob_key): (_, AccountKeyPair) = get_key_pair();
 
     // bob uses dev inspect with alice's gas
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &authority_state,
+        &full_node,
         &alice_gas_id,
         &bob,
         &bob_key,
@@ -392,13 +434,14 @@ async fn test_dev_inspect_unowned_gas() {
 async fn test_dev_inspect_unowned_object() {
     let (alice, alice_key): (_, AccountKeyPair) = get_key_pair();
     let alice_gas_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(alice, alice_gas_id)]).await;
+    let (validator, fullnode, object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(alice, alice_gas_id)]).await;
     let (bob, _bob_key): (_, AccountKeyPair) = get_key_pair();
 
     // make an object, send it to bob
-    let effects = call_move(
-        &authority_state,
+    let effects = call_move_(
+        &validator,
+        Some(&fullnode),
         &alice_gas_id,
         &alice,
         &alice_key,
@@ -410,11 +453,12 @@ async fn test_dev_inspect_unowned_object() {
             TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&bob).unwrap()),
         ],
+        false,
     )
     .await
     .unwrap();
     let created_object_id = effects.created[0].0 .0;
-    let created_object = authority_state
+    let created_object = validator
         .get_object(&created_object_id)
         .await
         .unwrap()
@@ -424,7 +468,7 @@ async fn test_dev_inspect_unowned_object() {
 
     // alice uses the object with dev inspect, despite not being the owner
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &alice_gas_id,
         &alice,
         &alice_key,
@@ -464,12 +508,14 @@ async fn test_dev_inspect_dynamic_field() {
     let (test_object1_bytes, test_object2_bytes) = {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
-        let (authority_state, object_basics) =
-            init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+        let (validator, fullnode, object_basics) =
+            init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)])
+                .await;
         macro_rules! mk_obj {
             () => {{
-                let effects = call_move(
-                    &authority_state,
+                let effects = call_move_(
+                    &validator,
+                    Some(&fullnode),
                     &gas_object_id,
                     &sender,
                     &sender_key,
@@ -481,11 +527,12 @@ async fn test_dev_inspect_dynamic_field() {
                         TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
                         TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
                     ],
+                    false,
                 )
                 .await
                 .unwrap();
                 let created_object_id = effects.created[0].0 .0;
-                let created_object = authority_state
+                let created_object = validator
                     .get_object(&created_object_id)
                     .await
                     .unwrap()
@@ -503,12 +550,12 @@ async fn test_dev_inspect_dynamic_field() {
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let (_validator, fullnode, object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // add a dynamic field to itself
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -528,7 +575,7 @@ async fn test_dev_inspect_dynamic_field() {
 
     // add a dynamic field to an object
     let DevInspectResults { effects, results } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -563,13 +610,14 @@ async fn test_dev_inspect_dynamic_field() {
 async fn test_dev_inspect_return_values() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let (validator, fullnode, object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // make an object
     let init_value = 16_u64;
-    let effects = call_move(
-        &authority_state,
+    let effects = call_move_(
+        &validator,
+        Some(&fullnode),
         &gas_object_id,
         &sender,
         &sender_key,
@@ -581,11 +629,12 @@ async fn test_dev_inspect_return_values() {
             TestCallArg::Pure(bcs::to_bytes(&(init_value)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
+        false,
     )
     .await
     .unwrap();
     let created_object_id = effects.created[0].0 .0;
-    let created_object = authority_state
+    let created_object = validator
         .get_object(&created_object_id)
         .await
         .unwrap()
@@ -599,7 +648,7 @@ async fn test_dev_inspect_return_values() {
 
     // mutably borrow a value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -629,7 +678,7 @@ async fn test_dev_inspect_return_values() {
 
     // borrow a value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -659,7 +708,7 @@ async fn test_dev_inspect_return_values() {
 
     // read one value from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -689,7 +738,7 @@ async fn test_dev_inspect_return_values() {
 
     // read two values from it's bytes
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -722,13 +771,14 @@ async fn test_dev_inspect_return_values() {
 async fn test_dev_inspect_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let (validator, fullnode, object_basics) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // make an object
     let init_value = 16_u64;
-    let effects = call_move(
-        &authority_state,
+    let effects = call_move_(
+        &validator,
+        Some(&fullnode),
         &gas_object_id,
         &sender,
         &sender_key,
@@ -740,11 +790,12 @@ async fn test_dev_inspect_move_call() {
             TestCallArg::Pure(bcs::to_bytes(&(init_value)).unwrap()),
             TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
+        false,
     )
     .await
     .unwrap();
     let created_object_id = effects.created[0].0 .0;
-    let created_object = authority_state
+    let created_object = validator
         .get_object(&created_object_id)
         .await
         .unwrap()
@@ -758,7 +809,7 @@ async fn test_dev_inspect_move_call() {
 
     // borrow a value from it's bytes via a direct move call
     let DevInspectResults { results, effects } = call_dev_inspect_move_call(
-        &authority_state,
+        &fullnode,
         sender,
         &object_basics,
         "object_basics",
@@ -797,7 +848,7 @@ async fn test_dev_inspect_move_call() {
 
     // read two values from it's bytes via direct move call
     let DevInspectResults { results, .. } = call_dev_inspect_move_call(
-        &authority_state,
+        &fullnode,
         sender,
         &object_basics,
         "object_basics",
@@ -825,7 +876,7 @@ async fn test_dev_inspect_move_call() {
 
     // read two values from it's bytes via a normal transaction
     let DevInspectResults { results, .. } = call_dev_inspect(
-        &authority_state,
+        &fullnode,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -846,6 +897,46 @@ async fn test_dev_inspect_move_call() {
     let (return_value_3, _return_type) = return_values.pop().unwrap();
     // check the value is the same as via the direct move call
     assert_eq!(return_value_3, return_value_2);
+}
+
+#[tokio::test]
+async fn test_dev_inspect_on_validator() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (validator, object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+
+    // test normal call
+    let result = call_dev_inspect(
+        &validator,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "create",
+        vec![],
+        vec![
+            TestCallArg::Pure(bcs::to_bytes(&(16_u64)).unwrap()),
+            TestCallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+        ],
+    )
+    .await;
+    assert!(result.is_err())
+}
+
+#[tokio::test]
+async fn test_dry_run_on_validator() {
+    let (validator, _fullnode, transaction, _gas_object_id, _shared_object_id) =
+        construct_shared_object_transaction_with_sequence_number(None).await;
+    let transaction_digest = *transaction.digest();
+    let response = validator
+        .dry_exec_transaction(
+            transaction.data().intent_message.value.clone(),
+            transaction_digest,
+        )
+        .await;
+    assert!(response.is_err());
 }
 
 #[tokio::test]
@@ -969,8 +1060,8 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_shared_object_with_max_sequence_number() {
-    let (authority, transaction, _, _) =
-        construct_shared_object_transaction_with_sequence_number(SequenceNumber::MAX).await;
+    let (authority, _fullnode, transaction, _, _) =
+        construct_shared_object_transaction_with_sequence_number(Some(SequenceNumber::MAX)).await;
     // Submit the transaction and assemble a certificate.
     let response = authority.handle_transaction(transaction.clone()).await;
     assert!(response.is_err());
@@ -1244,16 +1335,18 @@ pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: VerifiedTransaction,
 ) -> Result<SignedTransactionEffects, SuiError> {
-    send_and_confirm_transaction_with_shared(
+    send_and_confirm_transaction_(
         authority,
+        None, /* no fullnode_key_pair */
         transaction,
         false, /* no shared objects */
     )
     .await
 }
 
-pub async fn send_and_confirm_transaction_with_shared(
+pub async fn send_and_confirm_transaction_(
     authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
     transaction: VerifiedTransaction,
     with_shared: bool, // transaction includes shared objects
 ) -> Result<SignedTransactionEffects, SuiError> {
@@ -1278,7 +1371,11 @@ pub async fn send_and_confirm_transaction_with_shared(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.try_execute_for_test(&certificate).await
+    let result = authority.try_execute_for_test(&certificate).await?;
+    if let Some(fullnode) = fullnode {
+        fullnode.try_execute_for_test(&certificate).await?;
+    }
+    Ok(result)
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -3224,6 +3321,23 @@ pub async fn init_state() -> Arc<AuthorityState> {
 }
 
 #[cfg(test)]
+pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {
+    use sui_types::crypto::get_authority_key_pair;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+
+    let validator = init_state_with_committee(&genesis, &keypair).await;
+    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode = init_state_with_committee(&genesis, &fullnode_key_pair).await;
+    (validator, fullnode)
+}
+
+#[cfg(test)]
 pub async fn init_state_with_committee(
     genesis: &Genesis,
     authority_key: &AuthorityKeyPair,
@@ -3272,6 +3386,38 @@ pub async fn init_state_with_ids_and_object_basics<
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
+}
+
+#[cfg(test)]
+pub async fn init_state_with_ids_and_object_basics_with_fullnode<
+    I: IntoIterator<Item = (SuiAddress, ObjectID)>,
+>(
+    objects: I,
+) -> (Arc<AuthorityState>, Arc<AuthorityState>, ObjectRef) {
+    use sui_framework_build::compiled_package::BuildConfig;
+
+    let (validator, fullnode) = init_state_validator_with_fullnode().await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        validator.insert_genesis_object(obj.clone()).await;
+        fullnode.insert_genesis_object(obj).await;
+    }
+
+    // add object_basics package object to genesis, since lots of test use it
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/object_basics");
+    let modules = BuildConfig::default()
+        .build(path)
+        .unwrap()
+        .get_modules()
+        .into_iter()
+        .cloned()
+        .collect();
+    let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
+    let pkg_ref = pkg.compute_object_reference();
+    validator.insert_genesis_object(pkg.clone()).await;
+    fullnode.insert_genesis_object(pkg).await;
+    (validator, fullnode, pkg_ref)
 }
 
 #[cfg(test)]
@@ -3429,8 +3575,9 @@ pub async fn call_move(
     type_args: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
 ) -> SuiResult<TransactionEffects> {
-    call_move_with_shared(
+    call_move_(
         authority,
+        None,
         gas_object_id,
         sender,
         sender_key,
@@ -3444,8 +3591,9 @@ pub async fn call_move(
     .await
 }
 
-pub async fn call_move_with_shared(
+pub async fn call_move_(
     authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
@@ -3475,7 +3623,7 @@ pub async fn call_move_with_shared(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
     let signed_effects =
-        send_and_confirm_transaction_with_shared(authority, transaction, with_shared).await?;
+        send_and_confirm_transaction_(authority, fullnode, transaction, with_shared).await?;
     Ok(signed_effects.into_data())
 }
 
@@ -3585,6 +3733,7 @@ pub async fn call_dev_inspect(
         .dev_inspect_transaction(
             transaction.data().intent_message.value.clone(),
             transaction_digest,
+            authority.epoch(),
         )
         .await
 }
@@ -3609,7 +3758,9 @@ pub async fn call_dev_inspect_move_call(
         type_arguments,
         arguments,
     };
-    authority.dev_inspect_move_call(sender, move_call).await
+    authority
+        .dev_inspect_move_call(sender, move_call, authority.epoch())
+        .await
 }
 
 #[cfg(test)]

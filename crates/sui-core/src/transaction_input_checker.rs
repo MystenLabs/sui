@@ -83,7 +83,11 @@ pub(crate) fn check_dev_inspect_input_objects(
             fp_ensure!(
                 used_objects.insert(object.id().into()),
                 SuiError::InvalidBatchTransaction {
-                    error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
+                    error: format!(
+                        "Mutable object {} cannot appear in more than one single \
+                        transactions in a batch",
+                        object.id()
+                    ),
                 }
             );
         }
