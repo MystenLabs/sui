@@ -58,9 +58,6 @@ pub struct CheckpointStore {
     /// Maps checkpoint contents digest to checkpoint contents
     checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
 
-    /// Maps sequence number to checkpoint summary
-    checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
-
     /// Stores certified checkpoints
     certified_checkpoints: DBMap<CheckpointSequenceNumber, CertifiedCheckpointSummary>,
     /// Map from checkpoint digest to certified checkpoint
@@ -85,24 +82,18 @@ impl CheckpointStore {
         contents: CheckpointContents,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        for transaction in contents.iter() {
-            debug!(
-                "Manually inserting genesis transaction in checkpoint DB: {:?}",
-                transaction.transaction
-            );
+        if epoch_store.epoch() == checkpoint.summary.epoch {
             epoch_store
-                .put_genesis_transaction_in_builder_digest_to_checkpoint(
-                    transaction.transaction,
-                    checkpoint.sequence_number(),
-                )
+                .put_genesis_checkpoint_in_builder(&checkpoint.summary, &contents)
                 .unwrap();
+        } else {
+            debug!("Not inserting checkpoint builder data for genesis checkpoint, validator epoch {}, genesis epoch {}",
+                epoch_store.epoch(), checkpoint.summary.epoch,
+            );
         }
         self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
         self.insert_checkpoint_contents(contents).unwrap();
         self.update_highest_synced_checkpoint(&checkpoint).unwrap();
-        self.checkpoint_summary
-            .insert(&checkpoint.sequence_number(), checkpoint.summary())
-            .unwrap();
     }
 
     pub fn get_checkpoint_by_digest(
@@ -291,9 +282,9 @@ impl CheckpointStore {
 
     pub fn get_epoch_last_checkpoint(
         &self,
-        epoch_id: &EpochId,
+        epoch_id: EpochId,
     ) -> SuiResult<Option<VerifiedCheckpoint>> {
-        let seq = self.epoch_last_checkpoint_map.get(epoch_id)?;
+        let seq = self.epoch_last_checkpoint_map.get(&epoch_id)?;
         let checkpoint = match seq {
             Some(seq) => self.get_checkpoint_by_sequence_number(seq)?,
             None => None,
@@ -309,7 +300,7 @@ impl CheckpointStore {
     ) -> Option<EpochStats> {
         let (first_checkpoint, prev_epoch_network_transactions) = if epoch == 0 {
             (0, 0)
-        } else if let Ok(Some(checkpoint)) = self.get_epoch_last_checkpoint(&(epoch - 1)) {
+        } else if let Ok(Some(checkpoint)) = self.get_epoch_last_checkpoint(epoch - 1) {
             (
                 checkpoint.summary.sequence_number + 1,
                 checkpoint.summary.network_total_transactions,
@@ -486,10 +477,6 @@ impl CheckpointBuilder {
                 &self.tables.checkpoint_content,
                 [(contents.digest(), contents)],
             )?;
-            batch = batch.insert_batch(
-                &self.tables.checkpoint_summary,
-                [(sequence_number, summary)],
-            )?;
         }
         batch.write()?;
         self.notify_aggregator.notify_waiters();
@@ -504,7 +491,21 @@ impl CheckpointBuilder {
         last_pending_of_epoch: bool,
     ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
         let total = all_effects.len();
-        let mut last_checkpoint = self.tables.checkpoint_summary.iter().skip_to_last().next();
+        let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
+        if last_checkpoint.is_none() {
+            let epoch = self.epoch_store.epoch();
+            if epoch > 0 {
+                let previous_epoch = epoch - 1;
+                let last_verified = self.tables.get_epoch_last_checkpoint(previous_epoch)?;
+                last_checkpoint = last_verified.map(VerifiedCheckpoint::into_summary_and_sequence);
+                if let Some((ref seq, _)) = last_checkpoint {
+                    debug!("No checkpoints in builder DB, taking checkpoint from previous epoch with sequence {seq}");
+                } else {
+                    // This is some serious bug with when CheckpointBuilder started so surfacing it via panic
+                    panic!("Can not find last checkpoint for previous epoch {previous_epoch}");
+                }
+            }
+        }
         let chunks = all_effects.chunks(self.max_transactions_per_checkpoint);
         let chunks = chunks.into_iter().map(|ch| ch.to_vec());
         let mut chunks: Vec<_> = chunks.collect();
@@ -769,7 +770,7 @@ impl CheckpointAggregator {
                 current
             } else {
                 let next_to_certify = self.next_checkpoint_to_certify();
-                let Some(summary) = self.tables.checkpoint_summary.get(&next_to_certify)? else { return Ok(()); };
+                let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(()); };
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
                     digest: summary.digest(),
@@ -1098,16 +1099,16 @@ impl CheckpointTailer {
     // Returns Ok(false) if sender channel is closed
     async fn do_run(&mut self) -> SuiResult<bool> {
         loop {
-            let summary = self.tables.checkpoint_summary.get(&self.sequence)?;
+            let summary = self.tables.certified_checkpoints.get(&self.sequence)?;
             let Some(summary) = summary else { return Ok(true); };
             let content = self
                 .tables
                 .checkpoint_content
-                .get(&summary.content_digest)?;
+                .get(&summary.content_digest())?;
             let Some(content) = content else {
                 return Err(SuiError::from("Checkpoint summary for sequence {} exists, but content does not. This should not happen"));
             };
-            if self.sender.send((summary, content)).await.is_err() {
+            if self.sender.send((summary.summary, content)).await.is_err() {
                 return Ok(false);
             }
             self.sequence += 1;
