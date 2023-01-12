@@ -123,8 +123,9 @@ export interface ValidatorReportRecords {
     fields: ValidatorReportRecordsFields;
 }
 
+//TODO : add type for contents
 export interface ValidatorReportRecordsFields {
-    contents: any[];
+    contents: [];
 }
 
 export interface ValidatorsClass {
