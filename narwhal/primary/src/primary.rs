@@ -813,10 +813,7 @@ impl PrimaryReceiverHandler {
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
                         header.author, header.epoch, header.round
                     );
-                    self.metrics
-                        .votes_dropped_equivocation_protection
-                        .with_label_values(&[&header.epoch.to_string()])
-                        .inc();
+                    self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(vote_info.vote_digest, header.round));
                 }
             }

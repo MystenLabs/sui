@@ -320,14 +320,8 @@ impl Core {
         header_store
             .async_write(header.digest(), header.clone())
             .await;
-        metrics
-            .headers_proposed
-            .with_label_values(&[&header.epoch.to_string()])
-            .inc();
-        metrics
-            .proposed_header_round
-            .with_label_values(&[&header.epoch.to_string()])
-            .set(header.round as i64);
+        metrics.headers_proposed.inc();
+        metrics.proposed_header_round.set(header.round as i64);
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
@@ -450,7 +444,6 @@ impl Core {
         }?;
 
         // Broadcast the certificate.
-        let epoch = certificate.epoch();
         let round = certificate.header.round;
         let header_to_certificate_duration =
             Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
@@ -473,17 +466,10 @@ impl Core {
             ));
 
         // Update metrics.
-        self.metrics
-            .certificate_created_round
-            .with_label_values(&[&epoch.to_string()])
-            .set(round as i64);
-        self.metrics
-            .certificates_created
-            .with_label_values(&[&epoch.to_string()])
-            .inc();
+        self.metrics.certificate_created_round.set(round as i64);
+        self.metrics.certificates_created.inc();
         self.metrics
             .header_to_certificate_latency
-            .with_label_values(&[&epoch.to_string()])
             .observe(header_to_certificate_duration);
 
         // NOTE: This log entry is used to compute performance.
@@ -506,10 +492,7 @@ impl Core {
         let digest = certificate.digest();
         if self.certificate_store.read(digest)?.is_some() {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.metrics
-                .duplicate_certificates_processed
-                .with_label_values(&[&certificate.epoch().to_string()])
-                .inc();
+            self.metrics.duplicate_certificates_processed.inc();
             if let Some(notify) = notify {
                 let _ = notify.send(Ok(())); // no problem if remote side isn't listening
             }
@@ -563,7 +546,7 @@ impl Core {
         self.highest_received_round = self.highest_received_round.max(certificate.round());
         self.metrics
             .highest_received_round
-            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .with_label_values(&[certificate_source])
             .set(self.highest_received_round as i64);
 
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
@@ -600,7 +583,7 @@ impl Core {
             );
             self.metrics
                 .certificates_suspended
-                .with_label_values(&[&certificate.epoch().to_string(), "missing_parents"])
+                .with_label_values(&["missing_parents"])
                 .inc();
             return Err(DagError::Suspended);
         }
@@ -612,11 +595,11 @@ impl Core {
         self.highest_processed_round = self.highest_processed_round.max(certificate.round());
         self.metrics
             .highest_processed_round
-            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .with_label_values(&[certificate_source])
             .set(self.highest_processed_round as i64);
         self.metrics
             .certificates_processed
-            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .with_label_values(&[certificate_source])
             .inc();
         // Append the certificate to the aggregator of the
         // corresponding round.
@@ -788,7 +771,6 @@ impl Core {
 
                         self.metrics
                             .gc_core_latency
-                            .with_label_values(&[&self.committee.epoch.to_string()])
                             .observe(now.elapsed().as_secs_f64());
                     }
 
