@@ -8989,6 +8989,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-light-client"
+version = "0.21.0"
+
+[[package]]
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
