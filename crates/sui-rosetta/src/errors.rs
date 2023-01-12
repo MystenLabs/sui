@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::extract::rejection::JsonRejection;
 use std::fmt::Debug;
 
 use axum::http::StatusCode;
@@ -13,7 +14,6 @@ use serde_json::{json, Value};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use sui_types::base_types::SuiAddress;
 use sui_types::error::SuiError;
 
 use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
@@ -55,8 +55,9 @@ pub enum Error {
     },
     #[error("Public key deserialization error: {0:?}")]
     PublicKeyDeserializationError(PublicKey),
-    #[error("Insufficient fund for address [{address}], requested amount: {amount}")]
-    InsufficientFund { address: SuiAddress, amount: u128 },
+
+    #[error("Error executing transaction: {0}")]
+    TransactionExecutionError(String),
 
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
@@ -67,11 +68,13 @@ pub enum Error {
     #[error(transparent)]
     SuiError(#[from] SuiError),
     #[error(transparent)]
-    SuiRpcError(#[from] sui_sdk::error::RpcError),
+    SuiRpcError(#[from] sui_sdk::error::Error),
     #[error(transparent)]
     EncodingError(#[from] eyre::Report),
     #[error(transparent)]
     DBError(#[from] TypedStoreError),
+    #[error(transparent)]
+    JsonExtractorRejection(#[from] JsonRejection),
 }
 
 impl Serialize for ErrorType {

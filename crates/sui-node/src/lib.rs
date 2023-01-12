@@ -69,6 +69,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{
     run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
@@ -150,10 +151,19 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        let epoch_store =
-            AuthorityPerEpochStore::new(committee, &config.db_path().join("store"), None);
+        let epoch_store = AuthorityPerEpochStore::new(
+            committee,
+            &config.db_path().join("store"),
+            None,
+            EpochMetrics::new(&registry_service.default_registry()),
+        );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),
@@ -195,14 +205,30 @@ impl SuiNode {
             config.protocol_public_key(),
             secret,
             store,
-            epoch_store,
+            epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
             event_store,
             transaction_streamer,
+            checkpoint_store.clone(),
             &prometheus_registry,
         )
         .await;
+
+        // ensure genesis txn was executed
+        if epoch_store.epoch() == 0 {
+            state
+                .execute_certificate(
+                    &genesis
+                        .transaction()
+                        .clone()
+                        .verify(epoch_store.committee())
+                        .unwrap(),
+                    &epoch_store,
+                )
+                .await
+                .unwrap();
+        }
 
         let (checkpoint_executor_handle, reconfig_channel) = CheckpointExecutor::new(
             state_sync_handle.subscribe_to_synced_checkpoints(),
@@ -298,11 +324,13 @@ impl SuiNode {
             .close_epoch(&self.state.epoch_store())
     }
 
-    pub fn tx_checkpointed_in_current_epoch(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        Ok(self
-            .state
-            .epoch_store()
-            .tx_checkpointed_in_current_epoch(digest)?)
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.state
+            .database
+            .is_transaction_executed_in_checkpoint(digest)
     }
 
     fn create_p2p_network(
@@ -514,6 +542,11 @@ impl SuiNode {
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
+        // Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
+        #[cfg(test)]
+        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 2;
+        #[cfg(not(test))]
+        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
 
         CheckpointService::spawn(
             state.clone(),
@@ -524,6 +557,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             Box::new(NetworkTransactionCertifier::default()),
             checkpoint_metrics,
+            MAX_TRANSACTIONS_PER_CHECKPOINT,
         )
     }
 

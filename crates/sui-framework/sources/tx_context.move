@@ -88,10 +88,10 @@ module sui::tx_context {
     fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
         let tx_hash = vector[];
         let i = 1;
-        let hash_length = (TX_HASH_LENGTH as u8);
+        let hash_length = TX_HASH_LENGTH;
         while (i <= hash_length) {
-            let value = if (i <= 8) ((hint >> (64 - (8 * i))) as u8) else 0;
-            vector::push_back(&mut tx_hash, value);
+            let value = i ^ hint % 256;
+            vector::push_back(&mut tx_hash, (value as u8));
             i = i + 1;
         };
         tx_hash

@@ -270,11 +270,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::debug_span!(
-            "validator_state_process_tx",
-            ?tx_digest,
-            tx_kind = transaction.data().intent_message.value.kind_as_str()
-        );
+        let span = tracing::debug_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)

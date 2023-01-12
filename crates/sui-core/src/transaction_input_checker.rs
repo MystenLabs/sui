@@ -48,7 +48,6 @@ pub async fn check_transaction_input(
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction.validity_check()?;
-    transaction.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
@@ -64,7 +63,6 @@ pub(crate) async fn check_dev_inspect_input(
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction.validity_check()?;
-    transaction.kind.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let input_objects = check_dev_inspect_input_objects(store, input_objects)?;
@@ -85,7 +83,11 @@ pub(crate) fn check_dev_inspect_input_objects(
             fp_ensure!(
                 used_objects.insert(object.id().into()),
                 SuiError::InvalidBatchTransaction {
-                    error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
+                    error: format!(
+                        "Mutable object {} cannot appear in more than one single \
+                        transactions in a batch",
+                        object.id()
+                    ),
                 }
             );
         }
@@ -251,7 +253,9 @@ async fn check_objects(
     if !errors.is_empty() {
         return Err(SuiError::TransactionInputObjectsErrors { errors });
     }
-    fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
+    if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
+        return Err(SuiError::ObjectInputArityViolation);
+    }
 
     Ok(InputObjects::new(all_objects))
 }

@@ -52,8 +52,9 @@ impl EventHandler {
         tokio::spawn(async move {
             match store_copy.as_ref() {
                 EventStoreType::SqlEventStore(db) => {
-                    // Start periodic task to clean up WAL every 2 hour
-                    db.wal_cleanup_thread(Some(Duration::from_secs(7200))).await;
+                    // Start periodic task to clean up WAL every 30 minutes
+                    db.wal_cleanup_thread(Some(Duration::from_secs(30 * 60)))
+                        .await;
                 }
             }
         });

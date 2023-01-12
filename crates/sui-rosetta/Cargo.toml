@@ -7,7 +7,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-axum = "0.5.16"
+axum = "0.6.1"
+axum-extra = "0.4.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 tracing = "0.1.36"
 serde = "1.0.143"
@@ -45,7 +46,7 @@ mysten-metrics = { path = "../mysten-metrics" }
 move-core-types.workspace = true
 
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 sui-sdk = { path = "../sui-sdk" }

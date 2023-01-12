@@ -32,8 +32,7 @@ sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 telemetry-subscribers.workspace = true
-
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

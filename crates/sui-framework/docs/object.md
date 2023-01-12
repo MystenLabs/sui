@@ -185,7 +185,7 @@ Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from raw bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_id_from_bytes">id_from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <a href="object.md#0x2_object_ID">ID</a> {
-    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(<a href="address.md#0x2_address_from_bytes">address::from_bytes</a>(bytes))
+    <a href="object.md#0x2_object_id_from_address">id_from_address</a>(address::from_bytes(bytes))
 }
 </code></pre>
 

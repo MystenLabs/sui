@@ -32,8 +32,11 @@ module.exports = {
             {
                 prefer: 'type-imports',
                 disallowTypeAnnotations: true,
+                fixStyle: 'inline-type-imports',
             },
         ],
+        '@typescript-eslint/unified-signatures': 'error',
+        '@typescript-eslint/parameter-properties': 'error',
         'react/jsx-key': ['error', {}],
         'header/header': [
             2,

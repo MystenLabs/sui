@@ -30,10 +30,6 @@ use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
     messages::*,
-    messages_checkpoint::{
-        AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointRequest,
-        CheckpointResponse,
-    },
 };
 use sui_types::{fp_ensure, SUI_SYSTEM_STATE_OBJECT_ID};
 use tracing::{debug, error, info, trace, warn, Instrument};
@@ -51,7 +47,6 @@ use tokio::time::{sleep, timeout};
 
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::epoch::committee_store::CommitteeStore;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
 pub const DEFAULT_RETRIES: usize = 4;
@@ -331,19 +326,23 @@ impl<A> AuthorityAggregator<A> {
 
     /// This function recreates AuthorityAggregator with the given committee.
     /// It also updates committee store which impacts other of its references.
-    /// If it is called on a Validator/Fullnode, it **may** interleave with the the authority active's
-    /// reconfiguration process, and leave the commmittee store in an inconsistent state.
-    /// When catching up to the latest epoch, it should call `reconfig_from_genesis` first to fill in
+    /// When disallow_missing_intermediate_committees is true, it requires the
+    /// new committee needs to be current epoch + 1.
+    /// The function could be used along with `reconfig_from_genesis` to fill in
     /// all previous epoch's committee info.
     pub fn recreate_with_net_addresses(
         &self,
         committee: CommitteeWithNetAddresses,
         network_config: &Config,
+        disallow_missing_intermediate_committees: bool,
     ) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
         let network_clients =
             make_network_authority_client_sets_from_committee(&committee, network_config).map_err(
                 |err| SuiError::GenericAuthorityError {
-                    error: format!("Failed to make authority clients from committee: {:?}", err),
+                    error: format!(
+                        "Failed to make authority clients from committee {committee}, err: {:?}",
+                        err
+                    ),
                 },
             )?;
 
@@ -365,15 +364,17 @@ impl<A> AuthorityAggregator<A> {
         // TODO: It's likely safer to do the following operations atomically, in case this function
         // gets called from different threads. It cannot happen today, but worth the caution.
         let new_committee = committee.committee;
-        fp_ensure!(
-            self.committee.epoch + 1 == new_committee.epoch,
-            SuiError::AdvanceEpochError {
-                error: format!(
-                    "Trying to advance from epoch {} to epoch {}",
-                    self.committee.epoch, new_committee.epoch
-                )
-            }
-        );
+        if disallow_missing_intermediate_committees {
+            fp_ensure!(
+                self.committee.epoch + 1 == new_committee.epoch,
+                SuiError::AdvanceEpochError {
+                    error: format!(
+                        "Trying to advance from epoch {} to epoch {}",
+                        self.committee.epoch, new_committee.epoch
+                    )
+                }
+            );
+        }
         // This call may return error if this committee is already inserted,
         // which is fine. We should continue to construct the new aggregator.
         // This is because there may be multiple AuthorityAggregators
@@ -1593,61 +1594,6 @@ where
         Ok(ObjectRead::NotExists(object_id))
     }
 
-    pub async fn handle_checkpoint_request(
-        &self,
-        request: &CheckpointRequest,
-        // authorities known to have the checkpoint we are requesting.
-        authorities: &BTreeSet<AuthorityName>,
-        timeout_total: Option<Duration>,
-    ) -> SuiResult<CheckpointResponse> {
-        self.quorum_once_with_timeout(
-            None,
-            Some(authorities),
-            |_, client| Box::pin(async move { client.handle_checkpoint(request.clone()).await }),
-            self.timeouts.serial_authority_request_timeout,
-            timeout_total,
-            "handle_checkpoint_request".to_string(),
-        )
-        .await
-    }
-
-    pub async fn get_certified_checkpoint(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-        request_contents: bool,
-        // authorities known to have the checkpoint we are requesting.
-        authorities: &BTreeSet<AuthorityName>,
-        timeout_total: Option<Duration>,
-    ) -> SuiResult<(CertifiedCheckpointSummary, Option<CheckpointContents>)> {
-        let request = CheckpointRequest::authenticated(Some(sequence_number), request_contents);
-        self.quorum_once_with_timeout(
-            None,
-            Some(authorities),
-            |_, client| {
-                let r = request.clone();
-                Box::pin(async move {
-                    let resp = client.handle_checkpoint(r).await?;
-
-                    if let CheckpointResponse::AuthenticatedCheckpoint {
-                        checkpoint: Some(AuthenticatedCheckpoint::Certified(past)),
-                        contents,
-                    } = resp
-                    {
-                        Ok((past, contents))
-                    } else {
-                        Err(SuiError::GenericAuthorityError {
-                            error: "expected Certified checkpoint".into(),
-                        })
-                    }
-                })
-            },
-            self.timeouts.serial_authority_request_timeout,
-            timeout_total,
-            "get_certified_checkpoint".to_string(),
-        )
-        .await
-    }
-
     /// This function tries to fetch CertifiedTransaction from any validators.
     /// Returns Error if certificate cannot be found in any validators.
     pub async fn handle_cert_info_request(
@@ -1959,7 +1905,7 @@ pub async fn reconfig_from_genesis(
         info!(epoch = cur_epoch, "Inserted committee");
     }
     // Now transit from latest_epoch - 1 to latest_epoch
-    aggregator.recreate_with_net_addresses(latest_committee, &network_config)
+    aggregator.recreate_with_net_addresses(latest_committee, &network_config, true)
 }
 
 pub struct AuthorityAggregatorBuilder<'a> {

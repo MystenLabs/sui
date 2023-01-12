@@ -65,7 +65,7 @@ typed-store-derive.workspace = true
 mysten-network.workspace = true
 
 fastcrypto.workspace = true
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 thiserror = "1.0.34"
 eyre = "0.6.8"
 num_cpus = "1.14.0"

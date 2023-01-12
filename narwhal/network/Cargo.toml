@@ -25,7 +25,7 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 serde = "1.0.144"
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 eyre = "0.6.8"
 
 anemo.workspace = true

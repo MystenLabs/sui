@@ -6,7 +6,7 @@ use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
 use std::net::IpAddr;
 use std::time::Duration;
-use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
+use sui_config::{builder::ConfigBuilder, NetworkConfig, NodeConfig, ValidatorInfo};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
@@ -37,6 +37,33 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         parameters.max_batch_delay = Duration::from_millis(200);
     }
     configs
+}
+
+pub fn test_authority_configs_with_objects(objects: Vec<Object>) -> (NetworkConfig, Vec<Object>) {
+    let config_dir = tempfile::tempdir().unwrap().into_path();
+    let rng = StdRng::from_seed([0; 32]);
+    let mut configs = ConfigBuilder::new(&config_dir)
+        .rng(rng)
+        .committee_size(TEST_COMMITTEE_SIZE.try_into().unwrap())
+        .with_objects(objects.clone())
+        .build();
+
+    for config in configs.validator_configs.iter_mut() {
+        let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
+        // NOTE: the following parameters are important to ensure tests run fast. Using the default
+        // Narwhal parameters may result in tests taking >60 seconds.
+        parameters.header_num_of_batches_threshold = 1;
+        parameters.max_header_delay = Duration::from_millis(200);
+        parameters.batch_size = 1;
+        parameters.max_batch_delay = Duration::from_millis(200);
+    }
+
+    let objects = objects
+        .into_iter()
+        .map(|o| configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    (configs, objects)
 }
 
 #[cfg(not(msim))]

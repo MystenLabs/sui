@@ -42,18 +42,18 @@ All Move packages are immutable objects: you can't change a Move package after y
 ### Shared
 An object can be shared, meaning that anyone can read or write this object. In contrast to mutable owned objects (which are single-writer), shared objects require [consensus](architecture/consensus.md) to sequence reads and writes. For an example of creating and accessing a shared object, see [Shared Object](../explore/move-examples/basics.md#shared-object).
 
-In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
+In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity. The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
 
-Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move)
-Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move)
-Tic Tac Toe: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)
+ * Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move)
+ * Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move)
+ * Tic Tac Toe: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)
 
 
 ## Referring to objects
 
-There are a few different ways to concisely refer to an object without specifying its full contents and metadata, each with slightly different use cases:
-* ID: the globally unique ID of the object mentioned above. This is a stable identifier for the object across time, and is useful for querying the current state of an object or describing which object was transferred between two addresses.
-* Versioned ID: an (ID, version) pair. This describes the state of the object at a particular point in the object's history, and is useful for asking what the value of the object was at some point in the past or determining how fresh some view of an object is now.
+There are a few different ways to concisely refer to an object without specifying its entire contents and metadata, each with slightly different use cases:
+* ID: the globally unique ID of the object mentioned above. ID is a stable identifier for the object across time and is useful for querying the current state of an object or describing which object was transferred between two addresses.
+* Versioned ID: an (ID, version) pair. Versioned ID describes the state of the object at a particular point in the object's history and is useful for asking what the value of the object was at some point in the past or determining how fresh some view of an object is now.
 * Object Reference: an (ID, version, object digest) triple. The object digest is the hash of the object's contents and metadata. An object reference provides an authenticated view of the object at a particular point in the object's history. Transactions require object inputs to be specified via object references to ensure the transaction's sender and a validator processing the transaction agree on the contents and metadata of the object.
 
 ## The transaction-object DAG: Relating objects and transactions

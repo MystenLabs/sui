@@ -13,6 +13,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
+use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
@@ -111,6 +112,25 @@ impl AuthorityStore {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
+
+            // insert txn and effects of genesis
+            let transaction = genesis
+                .transaction()
+                .clone()
+                .verify(&genesis.committee().unwrap())
+                .unwrap();
+
+            store
+                .perpetual_tables
+                .certificates
+                .insert(transaction.digest(), transaction.serializable_ref())
+                .unwrap();
+
+            store
+                .perpetual_tables
+                .effects
+                .insert(&genesis.effects().digest(), genesis.effects())
+                .unwrap();
         }
 
         Ok(store)
@@ -158,6 +178,45 @@ impl AuthorityStore {
             .executed_effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
+    }
+
+    pub fn insert_executed_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        epoch: EpochId,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let batch = self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .batch();
+        let batch = batch.insert_batch(
+            &self.perpetual_tables.executed_transactions_to_checkpoint,
+            digests.iter().map(|d| (*d, (epoch, sequence))),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .contains_key(digest)?)
+    }
+
+    pub fn transaction_executed_in_epoch(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<EpochId>> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .get(digest)?
+            .map(|(epoch, _)| epoch))
     }
 
     /// Returns true if there are no objects in the database
@@ -457,7 +516,7 @@ impl AuthorityStore {
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
     /// This is used to insert genesis objects
-    pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
@@ -493,10 +552,8 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// This function is used by the bench.rs script, and should not be used in other contexts
-    /// In particular it does not check the old locks before inserting new ones, so the objects
-    /// must be new.
-    pub async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
+    /// This function should only be used for initializing genesis and should remain private.
+    async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -1042,10 +1099,12 @@ impl AuthorityStore {
             ($object_keys: expr) => {
                 self.perpetual_tables
                     .objects
-                    .multi_get($object_keys)?
+                    .multi_get($object_keys.clone())?
                     .into_iter()
-                    .filter_map(|obj_opt| {
-                        let obj = obj_opt.expect("Older object version not found");
+                    .zip($object_keys)
+                    .filter_map(|(obj_opt, key)| {
+                        let obj =
+                            obj_opt.expect(&format!("Older object version not found: {:?}", key));
 
                         if obj.is_immutable() {
                             return None;

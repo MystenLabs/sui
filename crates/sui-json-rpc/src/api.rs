@@ -23,11 +23,13 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
 use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
 
@@ -187,7 +189,12 @@ pub trait RpcFullNodeReadApi {
     /// Return dev-inpsect results of the transaction, including both the transaction
     /// effects and return values of the transaction.
     #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults>;
+    async fn dev_inspect_transaction(
+        &self,
+        tx_bytes: Base64,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults>;
 
     /// Similar to `dev_inspect_transaction` but do not require gas object and budget
     #[method(name = "devInspectMoveCall")]
@@ -205,6 +212,8 @@ pub trait RpcFullNodeReadApi {
         type_arguments: Vec<SuiTypeTag>,
         /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
         arguments: Vec<SuiJsonValue>,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
@@ -265,7 +274,7 @@ pub trait RpcFullNodeReadApi {
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
@@ -281,6 +290,31 @@ pub trait RpcFullNodeReadApi {
         /// the version of the queried object. If None, default to the latest known version
         version: SequenceNumber,
     ) -> RpcResult<GetPastObjectDataResponse>;
+
+    /// Return the sequence number of the latest checkpoint that has been executed
+    #[method(name = "getLatestCheckpointSequenceNumber")]
+    fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber>;
+
+    /// Return a checkpoint summary based on a checkpoint sequence number
+    #[method(name = "getCheckpointSummary")]
+    fn get_checkpoint_summary(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointSummary>;
+
+    /// Return contents of a checkpoint, namely a list of execution digests
+    #[method(name = "getCheckpointContents")]
+    fn get_checkpoint_contents(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> RpcResult<CheckpointContents>;
+
+    /// Return contents of a checkpoint based on its sequence number
+    #[method(name = "getCheckpointContentsBySequenceNumber")]
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> RpcResult<CheckpointContents>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Governance Read API")]
@@ -616,7 +650,7 @@ pub trait EventReadApi {
         cursor: Option<EventID>,
         /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage>;
 }
@@ -639,13 +673,9 @@ pub trait TransactionExecutionApi {
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
-        /// Flag of the signature scheme that is used.
-        sig_scheme: SignatureScheme,
-        /// Signature committed to the intent message of the transaction data, as base-64 encoded string.
+        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signature: Base64,
-        /// Signer's public key, as base-64 encoded string.
-        pub_key: Base64,
-        /// The request type.
+        /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
 

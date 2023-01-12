@@ -13,7 +13,7 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
     write_keypair_to_file,
 };
-use sui_types::intent::Intent;
+use sui_types::intent::IntentMessage;
 use sui_types::messages::TransactionData;
 use tracing::info;
 
@@ -120,27 +120,16 @@ impl KeyToolCommand {
                 }
             }
             KeyToolCommand::Sign { address, data } => {
-                info!("Data to sign : {}", data);
-                info!("Address : {}", address);
+                println!("Intent message to sign: {}", data);
+                println!("Signer address: {}", address);
                 let message = Base64::decode(&data).map_err(|e| anyhow!(e))?;
-                let tx_data: TransactionData = bcs::from_bytes(&message).map_err(|e| anyhow!(e))?;
-                let sui_signature = keystore.sign_secure(&address, &tx_data, Intent::default())?;
-                // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
-                let signature_string = format!("{:?}", sui_signature);
-                let sig_split = signature_string.split('@').collect::<Vec<_>>();
-                let flag = sig_split
-                    .first()
-                    .ok_or_else(|| anyhow!("Error creating signature."))?;
-                let signature = sig_split
-                    .get(1)
-                    .ok_or_else(|| anyhow!("Error creating signature."))?;
-                let pub_key = sig_split
-                    .last()
-                    .ok_or_else(|| anyhow!("Error creating signature."))?;
-                info!("Flag Base64: {}", flag);
-                info!("Public Key Base64: {}", pub_key);
-                info!("Signature : {}", signature);
-                info!("Serialized signature Base64: {:?}", sui_signature);
+                let intent_msg: IntentMessage<TransactionData> = bcs::from_bytes(&message)?;
+                let sui_signature =
+                    keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
+                println!(
+                    "Serialized signature (`flag || sig || pk` in Base64): {:?}",
+                    sui_signature.encode_base64()
+                );
             }
             KeyToolCommand::Import {
                 mnemonic_phrase,
