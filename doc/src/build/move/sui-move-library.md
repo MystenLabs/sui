@@ -41,12 +41,12 @@ ofield::add<u8, B>(&mut a.id, 0, b);
 let b: &B = ofield::borrow<u8, B>(&a.id, 0);
 ```
 
-If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing `b`, and `b` has a dynamic object field containing `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
+If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing object `b`, and `b` has a dynamic object field containing object `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
 
 ```
 use sui::dynamic_object_field as ofield;
 
-// signed of ctx is Addr1
+// signer of ctx is Addr1
 public entry fun entry_function(a: &A, ctx: &mut TxContext) {
   let b: &B = ofield::borrow<u8, B>(&a.id, 0);
   let c: &C = ofield::borrow<u8, C>(&b.id, 0);
