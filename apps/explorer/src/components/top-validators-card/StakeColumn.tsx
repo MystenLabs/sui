@@ -7,7 +7,7 @@ import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { Text } from '~/ui/Text';
 
 type StakeColumnProps = {
-    stake: bigint;
+    stake: bigint | number | string;
 };
 
 export function StakeColumn({ stake }: StakeColumnProps) {

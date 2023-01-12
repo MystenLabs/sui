@@ -9,7 +9,7 @@ import ErrorResult from '~/components/error-result/ErrorResult';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
-    type ValidatorState,
+    type ValidatorsFields,
 } from '~/pages/validator/ValidatorDataTypes';
 import { ValidatorMeta } from '~/pages/validator/ValidatorMeta';
 import { ValidatorStats } from '~/pages/validator/ValidatorStats';
@@ -23,7 +23,7 @@ function ValidatorDetails() {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
+            ? (data.details.data.fields as ValidatorsFields)
             : null;
 
     const validatorData = useMemo(() => {

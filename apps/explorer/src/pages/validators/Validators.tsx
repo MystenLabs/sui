@@ -12,7 +12,7 @@ import { useGetObject } from '~/hooks/useGetObject';
 import { DelegationAmount } from '~/pages/validator/DelegationAmount';
 import {
     VALIDATORS_OBJECT_ID,
-    type ValidatorState,
+    type ValidatorsFields,
 } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -42,7 +42,7 @@ function ValidatorPageResult() {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
+            ? (data.details.data.fields as ValidatorsFields)
             : null;
 
     const totalStake = validatorsData?.validators.fields.total_validator_stake;
@@ -56,12 +56,12 @@ function ValidatorPageResult() {
                 av.fields.delegation_staking_pool.fields;
 
             const num_epochs_participated =
-                validatorsData.epoch - starting_epoch;
+                ~validatorsData.epoch - ~starting_epoch;
 
             const APY = Math.pow(
                 1 +
-                    (sui_balance - delegation_token_supply.fields.value) /
-                        delegation_token_supply.fields.value,
+                    (~sui_balance - ~delegation_token_supply.fields.value) /
+                        Number(delegation_token_supply.fields.value),
                 365 / num_epochs_participated - 1
             );
 
@@ -89,6 +89,8 @@ function ValidatorPageResult() {
                     validator.fields.metadata.fields.name
                 );
 
+                const commissionRate = Number(validator.fields.commission_rate);
+
                 return {
                     number: index + 1,
                     name: (
@@ -114,7 +116,7 @@ function ValidatorPageResult() {
 
                     commission: (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {validator.fields.commission_rate > 0
+                            {commissionRate > 0
                                 ? `${validator.fields.commission_rate}%`
                                 : '--'}
                         </Text>

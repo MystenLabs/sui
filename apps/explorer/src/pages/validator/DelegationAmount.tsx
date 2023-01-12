@@ -8,7 +8,7 @@ import { Heading } from '~/ui/Heading';
 import { Text } from '~/ui/Text';
 
 type DelegationAmountProps = {
-    amount: bigint | number;
+    amount: bigint | number | string;
     isStats?: boolean;
 };
 

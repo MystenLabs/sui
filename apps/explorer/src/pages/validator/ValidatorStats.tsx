@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
 
-import type { Validator } from '~/pages/validator/ValidatorDataTypes';
+import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -13,9 +13,9 @@ import { Stats } from '~/ui/Stats';
 import { getStakedPercent } from '~/utils/getStakedPercent';
 
 type StatsCardProps = {
-    validatorData: Validator;
-    totalValidatorStake: bigint;
-    epoch: number;
+    validatorData: ActiveValidator;
+    totalValidatorStake: string;
+    epoch: number | string;
 };
 
 export function ValidatorStats({
@@ -37,11 +37,11 @@ export function ValidatorStats({
         const { sui_balance, starting_epoch, delegation_token_supply } =
             validatorData.fields.delegation_staking_pool.fields;
 
-        const num_epochs_participated = epoch - starting_epoch;
+        const num_epochs_participated = ~epoch - ~starting_epoch;
         return Math.pow(
             1 +
-                (sui_balance - delegation_token_supply.fields.value) /
-                    delegation_token_supply.fields.value,
+                (~sui_balance - ~delegation_token_supply.fields.value) /
+                    ~delegation_token_supply.fields.value,
             365 / num_epochs_participated - 1
         );
     }, [validatorData, epoch]);
@@ -50,8 +50,8 @@ export function ValidatorStats({
     const delegatedStakePercentage = useMemo(
         () =>
             getStakedPercent(
-                validatorData.fields.stake_amount,
-                totalValidatorStake
+                BigInt(validatorData.fields.stake_amount),
+                BigInt(totalValidatorStake)
             ),
         [validatorData, totalValidatorStake]
     );

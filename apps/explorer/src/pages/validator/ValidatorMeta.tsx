@@ -4,7 +4,7 @@
 import { Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import type { Validator } from '~/pages/validator/ValidatorDataTypes';
+import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
@@ -14,7 +14,7 @@ import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 
 type ValidatorMetaProps = {
-    validatorData: Validator;
+    validatorData: ActiveValidator;
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
