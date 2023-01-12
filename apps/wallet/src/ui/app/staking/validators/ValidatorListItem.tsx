@@ -57,7 +57,12 @@ export function ValidatorListItem({
                                 />
                             )}
 
-                            <ImageIcon src={logo} alt={name} circle />
+                            <ImageIcon
+                                src={logo}
+                                label={name}
+                                fallback={name}
+                                circle
+                            />
                         </div>
 
                         <div className="flex flex-col gap-1.5 capitalize">

@@ -66,7 +66,13 @@ export function ValidatorLogo({
                 isTitle ? 'gap-2.5' : 'gap-2'
             )}
         >
-            <ImageIcon src={logo} alt={validatorName} size={iconSize} circle />
+            <ImageIcon
+                src={logo}
+                label={validatorName}
+                fallback={validatorName}
+                size={iconSize}
+                circle
+            />
             <div className="flex flex-col gap-1.5">
                 {isTitle ? (
                     <Heading as="h4" variant="heading4" color="steel-darker">

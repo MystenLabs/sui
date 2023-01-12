@@ -31,7 +31,9 @@ const imageStyle = cva(
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
     src: string | null;
-    alt: string;
+    label: string;
+    fallback: string;
+    alt?: string;
 }
 
 function FallBackAvatar({ str }: { str: string }) {
@@ -42,12 +44,18 @@ function FallBackAvatar({ str }: { str: string }) {
     );
 }
 
-export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
+export function ImageIcon({
+    src,
+    label,
+    alt = label,
+    fallback,
+    ...styleProps
+}: ImageIconProps) {
     const [error, setError] = useState(false);
     return (
-        <div role="img" className={imageStyle(styleProps)} aria-label={alt}>
+        <div role="img" className={imageStyle(styleProps)} aria-label={label}>
             {error ? (
-                <FallBackAvatar str={alt} />
+                <FallBackAvatar str={fallback} />
             ) : (
                 <img
                     src={src || ''}
