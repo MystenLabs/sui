@@ -331,7 +331,7 @@ pub struct PrimaryMetrics {
     /// Latency to perform a garbage collection in core module
     pub gc_core_latency: HistogramVec,
     /// The current Narwhal round in proposer
-    pub current_round: IntGaugeVec,
+    pub current_round: IntGauge,
     /// The last received Narwhal round.
     pub last_parent_missing_round: IntGaugeVec,
     /// The highest Narwhal round that has been received.
@@ -421,10 +421,9 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
-            current_round: register_int_gauge_vec_with_registry!(
+            current_round: register_int_gauge_with_registry!(
                 "current_round",
                 "Current round the node will propose",
-                &["epoch"],
                 registry
             )
             .unwrap(),

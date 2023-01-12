@@ -406,10 +406,7 @@ impl Proposer {
                 // Advance to the next round.
                 self.round += 1;
                 let _ = self.tx_narwhal_round_updates.send(self.round);
-                self.metrics
-                    .current_round
-                    .with_label_values(&[&self.committee.epoch.to_string()])
-                    .set(self.round as i64);
+                self.metrics.current_round.set(self.round as i64);
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.
