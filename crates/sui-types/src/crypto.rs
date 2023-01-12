@@ -755,6 +755,13 @@ pub struct Ed25519SuiSignature(
     [u8; Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1],
 );
 
+// Implementation useful for simplify testing when mock signature is needed
+impl Default for Ed25519SuiSignature {
+    fn default() -> Self {
+        Self([0; Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1])
+    }
+}
+
 impl SuiSignatureInner for Ed25519SuiSignature {
     type Sig = Ed25519Signature;
     type PubKey = Ed25519PublicKey;

@@ -2994,13 +2994,21 @@
         "description": "CheckpointContents are the transactions included in an upcoming checkpoint. They must have already been causally ordered. Since the causal order algorithm is the same among validators, we expect all honest validators to come up with the same order for each checkpoint content.",
         "type": "object",
         "required": [
-          "transactions"
+          "transactions",
+          "user_signatures"
         ],
         "properties": {
           "transactions": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExecutionDigests"
+            }
+          },
+          "user_signatures": {
+            "description": "This field 'pins' user signatures for the checkpoint:\n\n* For normal checkpoint this field will contain same number of elements as transactions. * Genesis checkpoint has transactions but this field is empty. * Last checkpoint in the epoch will have (last)extra system transaction in the transactions list not covered in the signatures list",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Signature"
             }
           }
         }
