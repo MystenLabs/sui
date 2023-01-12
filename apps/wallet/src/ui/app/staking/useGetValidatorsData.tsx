@@ -6,64 +6,9 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { useRpc } from '_hooks';
 
-// NOTE Temporary  until SUI SDK is updated
-// TODO: add to SUI SDK once Validator types is finalized
-// Get validators by account address
-/**
- *
- * @see {@link https://github.com/MystenLabs/sui/blob/b904dede65c91c112434d49180e2d277e76ccee6/crates/sui-types/src/sui_system_state.rs#L42}
- *
- */
+import type { ValidatorMetaData, DelegatedStake } from './ValidatorDataTypes';
 
 const STAKE_DELEGATOR_STALE_TIME = 5 * 1000;
-
-export type ValidatorMetaData = {
-    sui_address: SuiAddress;
-    pubkey_bytes: number[];
-    network_pubkey_bytes: number[];
-    worker_pubkey_bytes: number[];
-    proof_of_possession_bytes: number[];
-    name: number[];
-    net_address: number[];
-    consensus_address: number[];
-    worker_address: number[];
-    next_epoch_stake: number;
-    next_epoch_delegation: number;
-    next_epoch_gas_price: number;
-    next_epoch_commission_rate: number;
-};
-
-// Staking
-type Id = {
-    id: string;
-};
-
-type Balance = {
-    value: bigint;
-};
-
-type StakedSui = {
-    id: Id;
-    validator_address: SuiAddress;
-    pool_starting_epoch: bigint;
-    delegation_request_epoch: bigint;
-    principal: Balance;
-    sui_token_lock: bigint | null;
-};
-
-type ActiveDelegationStatus = {
-    Active: {
-        id: Id;
-        staked_sui_id: SuiAddress;
-        principal_sui_amount: bigint;
-        pool_tokens: Balance;
-    };
-};
-
-export type DelegatedStake = {
-    staked_sui: StakedSui;
-    delegation_status: 'Pending' | ActiveDelegationStatus;
-};
 
 const getDelegatedStakes = async (
     address: SuiAddress,
@@ -98,7 +43,7 @@ export function useGetValidatorsByDelegator(
 ): UseQueryResult<DelegatedStake[], Error> {
     const rpcEndPoint = useRpc().endpoints.fullNode;
     return useQuery(
-        ['delegated-staked-data', address],
+        ['validator', address],
         () => {
             return getDelegatedStakes(address, rpcEndPoint);
         },
@@ -114,7 +59,7 @@ export function useGetValidatorMetaData(): UseQueryResult<
     Error
 > {
     const rpcEndPoint = useRpc().endpoints.fullNode;
-    return useQuery(['validator-meta-data'], async () => {
+    return useQuery(['validator'], async () => {
         const response = await fetch(rpcEndPoint, {
             method: 'POST',
             headers: {

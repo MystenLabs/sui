@@ -3,6 +3,7 @@
 import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
+import { apyCalc } from '../ApyCalc';
 import StakeAmount from '../home/StakeAmount';
 import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -51,6 +52,8 @@ export function ValidatorFormDetail({
         );
     }, [validatorAddress, validatorsData]);
 
+    const totalValidatorStake = validatorData?.fields.stake_amount || 0;
+
     const totalStake = useMemo(() => {
         if (!stakeValidators) return 0n;
         let totalActiveStake = 0n;
@@ -64,19 +67,7 @@ export function ValidatorFormDetail({
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
-        const { sui_balance, starting_epoch, delegation_token_supply } =
-            validatorData.fields.delegation_staking_pool.fields;
-
-        const num_epochs_participated = +validatorsData.epoch - +starting_epoch;
-
-        return (
-            Math.pow(
-                1 +
-                    (+sui_balance - +delegation_token_supply.fields.value) /
-                        +delegation_token_supply.fields.value,
-                365 / num_epochs_participated - 1
-            ) || 0
-        );
+        return apyCalc(validatorData, +validatorsData.epoch);
     }, [validatorData, validatorsData]);
 
     if (isLoading || loadingValidators) {
@@ -159,7 +150,10 @@ export function ValidatorFormDetail({
                                         Total Staked
                                     </Text>
                                 </div>
-                                <StakeAmount balance={10n} variant="body" />
+                                <StakeAmount
+                                    balance={totalValidatorStake}
+                                    variant="body"
+                                />
                             </div>
                         )}
                     </div>

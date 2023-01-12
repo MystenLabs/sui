@@ -9,7 +9,7 @@ import { useFormatCoin } from '_hooks';
 
 //TODO unify StakeAmount and CoinBalance
 interface StakeAmountProps {
-    balance: bigint;
+    balance: bigint | number | string;
     variant: 'heading4' | 'body';
     isEarnedRewards?: boolean;
 }
