@@ -5,7 +5,7 @@ import cl from 'classnames';
 import { toast } from 'react-hot-toast';
 
 import FaucetMessageInfo from '../message-info';
-import { useFaucetMutation, useIsFaucetMutating } from '../useFaucetMutation';
+import { useFaucetMutation } from '../useFaucetMutation';
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
 import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
@@ -26,10 +26,9 @@ function FaucetRequestButton({
     trackEventSource,
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
-    const networkName = API_ENV_TO_INFO[network].name;
+    const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
     const showFaucetRequestButton = API_ENV.customRPC !== network;
     const mutation = useFaucetMutation();
-    const isMutating = useIsFaucetMutating();
     return showFaucetRequestButton ? (
         <Button
             mode={mode}
@@ -47,7 +46,7 @@ function FaucetRequestButton({
                     props: { source: trackEventSource, networkName },
                 });
             }}
-            disabled={mutation.isLoading || isMutating}
+            disabled={mutation.isMutating}
         >
             <Icon icon={SuiIcons.Download} className={cl(st.icon, st[mode])} />
             Request {networkName} SUI Tokens

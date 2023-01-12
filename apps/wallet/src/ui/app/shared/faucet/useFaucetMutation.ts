@@ -9,8 +9,9 @@ import { useRpc } from '../../hooks/useRpc';
 export function useFaucetMutation() {
     const api = useRpc();
     const address = useAppSelector(({ account: { address } }) => address);
-    return useMutation({
-        mutationKey: ['faucet-request-tokens', address],
+    const mutationKey = ['faucet-request-tokens', address];
+    const mutation = useMutation({
+        mutationKey,
         mutationFn: async () => {
             if (!address) {
                 throw new Error('Failed, wallet address not found.');
@@ -26,11 +27,11 @@ export function useFaucetMutation() {
             );
         },
     });
-}
-
-export function useIsFaucetMutating() {
-    const address = useAppSelector(({ account: { address } }) => address);
-    return (
-        useIsMutating({ mutationKey: ['faucet-request-tokens', address] }) > 0
-    );
+    return {
+        ...mutation,
+        /**
+         * is any faucet request in progress across different instances of the mutation
+         */
+        isMutating: useIsMutating({ mutationKey }) > 0,
+    };
 }
