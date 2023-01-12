@@ -46,6 +46,7 @@ import {
   CoinMetadataStruct,
   GetObjectDataResponse,
   GetOwnedObjectsResponse,
+  GatewayTxSeqNumber,
 } from '../types';
 import {
   PublicKey,
@@ -620,8 +621,8 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getTransactionDigestsInRange(
-    start: TransactionDigest,
-    end: TransactionDigest
+    start: GatewayTxSeqNumber,
+    end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
     try {
       return await this.client.requestWithType(

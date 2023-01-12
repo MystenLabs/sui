@@ -34,6 +34,7 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  GatewayTxSeqNumber,
 } from '../types';
 
 ///////////////////////////////
@@ -142,8 +143,8 @@ export abstract class Provider {
    * NOTE: this method may get deprecated after DevNet
    */
   abstract getTransactionDigestsInRange(
-    start: TransactionDigest,
-    end: TransactionDigest
+    start: GatewayTxSeqNumber,
+    end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse>;
 
   /**

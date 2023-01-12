@@ -35,6 +35,7 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  GatewayTxSeqNumber,
 } from '../types';
 import { Provider } from './provider';
 
@@ -137,8 +138,8 @@ export class VoidProvider extends Provider {
   }
 
   async getTransactionDigestsInRange(
-    _start: TransactionDigest,
-    _end: TransactionDigest
+    _start: GatewayTxSeqNumber,
+    _end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
   }
