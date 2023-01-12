@@ -11,7 +11,8 @@ import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
     type ValidatorState,
-    type Validator,
+    type ValidatorsFields,
+    type  ActiveValidator
 } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -25,7 +26,7 @@ import { getStakedPercent } from '~/utils/getStakedPercent';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-export function processValidators(set: Validator[], totalStake: bigint) {
+export function processValidators(set: ActiveValidator[], totalStake: bigint) {
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;
         return {
@@ -33,18 +34,17 @@ export function processValidators(set: Validator[], totalStake: bigint) {
             address: av.fields.metadata.fields.sui_address,
             stake: av.fields.stake_amount,
             stakePercent: getStakedPercent(av.fields.stake_amount, totalStake),
-            delegation_count: av.fields.delegation_count || 0,
             logo: null,
         };
     });
 }
 
 const validatorsTable = (
-    validatorsData: ValidatorState,
+    validatorsData: ValidatorsFields,
     limit?: number,
     showIcon?: boolean
 ) => {
-    const totalStake = validatorsData.validators.fields.total_validator_stake;
+    const totalStake = BigInt(validatorsData.validators.fields.total_validator_stake);
 
     const validators = processValidators(
         validatorsData.validators.fields.active_validators,
