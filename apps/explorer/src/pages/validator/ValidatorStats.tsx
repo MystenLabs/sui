@@ -33,28 +33,24 @@ export function ValidatorStats({
     //  const tallyingScore =  0;
     //  const lastNarwhalRound = 0;
 
-    const validator = useMemo(() => {
+    const apy = useMemo(() => {
         const { sui_balance, starting_epoch, delegation_token_supply } =
             validatorData.fields.delegation_staking_pool.fields;
 
         const num_epochs_participated = epoch - starting_epoch;
-
-        const APY = Math.pow(
+        return Math.pow(
             1 +
                 (sui_balance - delegation_token_supply.fields.value) /
                     delegation_token_supply.fields.value,
             365 / num_epochs_participated - 1
         );
+    }, [validatorData, epoch]);
 
-        return {
-            apy: APY ? APY : 0,
-            delegatedStakePercentage: getStakedPercent(
-                validatorData.fields.stake_amount,
-                totalValidatorStake
-            ),
-            totalStake: validatorData.fields.stake_amount,
-        };
-    }, [validatorData, epoch, totalValidatorStake]);
+    const totalStake = validatorData.fields.stake_amount;
+    const delegatedStakePercentage = getStakedPercent(
+        validatorData.fields.stake_amount,
+        totalValidatorStake
+    );
 
     return (
         <div className="flex w-full flex-col gap-5 md:mt-8 md:flex-row">
@@ -75,14 +71,11 @@ export function ValidatorStats({
                                     variant="heading2/semibold"
                                     color="steel-darker"
                                 >
-                                    {validator.apy}%
+                                    {apy > 0 ? `${apy}%` : '--'}
                                 </Heading>
                             </Stats>
                             <Stats label="Total Staked" tooltip="Coming soon">
-                                <DelegationAmount
-                                    amount={validator.totalStake}
-                                    isStats
-                                />
+                                <DelegationAmount amount={totalStake} isStats />
                             </Stats>
                         </div>
                         <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
@@ -104,7 +97,7 @@ export function ValidatorStats({
                                     variant="heading3/semibold"
                                     color="steel-darker"
                                 >
-                                    {validator.delegatedStakePercentage}%
+                                    {delegatedStakePercentage}%
                                 </Heading>
                             </Stats>
                             <Stats label="Self Staked" tooltip="Coming soon">
