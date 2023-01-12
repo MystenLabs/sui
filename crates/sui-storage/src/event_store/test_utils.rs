@@ -56,7 +56,7 @@ pub fn new_test_publish_event(
     sender: Option<SuiAddress>,
 ) -> EventEnvelope {
     EventEnvelope::new(
-        timestamp, 
+        timestamp,
         digest,
         seq_num,
         event_num,

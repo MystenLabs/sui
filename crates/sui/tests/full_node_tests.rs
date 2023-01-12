@@ -350,10 +350,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
             false,
         )
         .await?;
-    assert_eq!(
-        events_by_recipient.last().unwrap().1.tx_digest,
-        digest
-    );
+    assert_eq!(events_by_recipient.last().unwrap().1.tx_digest, digest);
     assert_eq!(events_by_recipient.last().unwrap().1.event, recipient_event,);
 
     // query by object
@@ -813,10 +810,7 @@ async fn test_full_node_event_read_api_ok() {
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(
-        events_by_recipient.data.last().unwrap().tx_digest,
-        digest
-    );
+    assert_eq!(events_by_recipient.data.last().unwrap().tx_digest, digest);
     let events_by_recipient = events_by_recipient
         .data
         .into_iter()
@@ -835,10 +829,7 @@ async fn test_full_node_event_read_api_ok() {
         .request("sui_getEvents", params)
         .await
         .unwrap();
-    assert_eq!(
-        events_by_object.data.last().unwrap().tx_digest,
-        digest
-    );
+    assert_eq!(events_by_object.data.last().unwrap().tx_digest, digest);
     let events_by_object = events_by_object
         .data
         .into_iter()
