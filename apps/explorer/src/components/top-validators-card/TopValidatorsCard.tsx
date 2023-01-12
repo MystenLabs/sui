@@ -10,9 +10,8 @@ import { StakeColumn } from './StakeColumn';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
-    type ValidatorState,
     type ValidatorsFields,
-    type  ActiveValidator
+    type ActiveValidator,
 } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -44,7 +43,9 @@ const validatorsTable = (
     limit?: number,
     showIcon?: boolean
 ) => {
-    const totalStake = BigInt(validatorsData.validators.fields.total_validator_stake);
+    const totalStake = BigInt(
+        validatorsData.validators.fields.total_validator_stake
+    );
 
     const validators = processValidators(
         validatorsData.validators.fields.active_validators,
@@ -113,7 +114,7 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
+            ? (data.details.data.fields as ValidatorsFields)
             : null;
 
     const tableData = useMemo(

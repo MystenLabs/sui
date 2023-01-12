@@ -3,7 +3,11 @@
 
 import BigNumber from 'bignumber.js';
 
-export const getStakedPercent = (stake: bigint | string, total: bigint): number => {
+type StakePercent = {
+    stake: bigint | string;
+    total: bigint;
+};
+export const getStakedPercent = ({ stake, total }: StakePercent): number => {
     const bnStake = new BigNumber(stake.toString());
     const bnTotal = new BigNumber(total.toString());
     return bnStake
