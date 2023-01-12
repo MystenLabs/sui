@@ -48,12 +48,13 @@ where
     <S as ReadStore>::Error: std::error::Error,
 {
     let (state_sync, state_sync_server) = state_sync::Builder::new()
-        .config(config.p2p_config.state_sync.clone().unwrap_or_default())
+        .config(p2p_config.state_sync.clone().unwrap_or_default())
         .store(state_sync_store)
         .with_metrics(prometheus_registry)
         .build();
 
-    let (discovery, discovery_server) = discovery::Builder::new().config(p2p_config).build();
+    let (discovery, discovery_server) =
+        discovery::Builder::new().config(p2p_config.clone()).build();
 
     let p2p_network = {
         let routes = anemo::Router::new()
@@ -86,7 +87,7 @@ where
             )))
             .into_inner();
 
-        let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
+        let mut anemo_config = p2p_config.anemo_config.clone().unwrap_or_default();
         if anemo_config.max_frame_size.is_none() {
             // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
             // catch bugs where size limits are missing from other parts of our code.
@@ -95,7 +96,7 @@ where
             anemo_config.max_frame_size = Some(8 << 20);
         }
 
-        let network = Network::bind(config.p2p_config.listen_address)
+        let network = Network::bind(p2p_config.listen_address)
             .server_name("sui")
             .private_key(network_key_pair.private().0.to_bytes())
             .config(anemo_config)
