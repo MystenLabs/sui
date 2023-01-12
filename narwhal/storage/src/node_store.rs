@@ -26,7 +26,6 @@ pub struct NodeStorage {
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     pub batch_store: Store<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
-    pub temp_batch_store: Store<(CertificateDigest, BatchDigest), Batch>,
 }
 
 impl NodeStorage {
@@ -41,7 +40,6 @@ impl NodeStorage {
     const BATCHES_CF: &'static str = "batches";
     const LAST_COMMITTED_CF: &'static str = "last_committed";
     const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
-    const TEMP_BATCH_CF: &'static str = "temp_batches";
 
     /// Open or reopen all the storage of the node.
     pub fn reopen<Path: AsRef<std::path::Path> + Send>(store_path: Path) -> Self {
@@ -59,7 +57,6 @@ impl NodeStorage {
                 Self::BATCHES_CF,
                 Self::LAST_COMMITTED_CF,
                 Self::SUB_DAG_INDEX_CF,
-                Self::TEMP_BATCH_CF,
             ],
         )
         .expect("Cannot open database");
@@ -75,7 +72,6 @@ impl NodeStorage {
             batch_map,
             last_committed_map,
             sub_dag_index_map,
-            temp_batch_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<PublicKey, VoteInfo>,
@@ -86,8 +82,7 @@ impl NodeStorage {
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
-            Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
-            Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
+            Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
@@ -101,7 +96,6 @@ impl NodeStorage {
         let payload_store = Store::new(payload_map);
         let batch_store = Store::new(batch_map);
         let consensus_store = Arc::new(ConsensusStore::new(last_committed_map, sub_dag_index_map));
-        let temp_batch_store = Store::new(temp_batch_map);
 
         Self {
             proposer_store,
@@ -111,7 +105,6 @@ impl NodeStorage {
             payload_store,
             batch_store,
             consensus_store,
-            temp_batch_store,
         }
     }
 }
