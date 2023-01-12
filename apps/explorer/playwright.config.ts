@@ -52,7 +52,6 @@ const config: PlaywrightTestConfig = {
         {
             name: 'chromium',
             // Match anything except for legacy tests:
-            testMatch: /^.*(test|spec)\.(js|ts|mjs)/,
             use: {
                 ...devices['Desktop Chrome'],
             },

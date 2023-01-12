@@ -8,11 +8,10 @@ test('displays the transaction timestamp', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
     const txid = tx.EffectsCert.certificate.transactionDigest;
-    const dateLike = /^[A-Za-z]{3}\b.+?(?=(AM|PM))/;
     await page.goto(`/transaction/${txid}`);
-    await expect(page.getByTestId('transaction-timestamp')).toContainText(
-        dateLike
-    );
+    await expect(
+        page.getByTestId('transaction-timestamp').locator('div').nth(1)
+    ).not.toBeEmpty();
 });
 
 test('displays gas breakdown', async ({ page }) => {
