@@ -27,7 +27,7 @@ storage/
 # Node.js
 node_modules
 .tsbuildinfo
-tsconfig.tsbuildinfo
+*.tsbuildinfo
 .turbo
 
 # logs

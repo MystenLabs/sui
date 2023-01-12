@@ -4,8 +4,7 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
-    TestCallArg,
+    call_move, call_move_, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
 };
 use sui_types::utils::to_sender_signed_transaction;
 
@@ -1048,8 +1047,9 @@ async fn test_entry_point_vector_error() {
     );
     let (shared_obj_id, _, _) = effects.created[0].0;
     // call a function with a vector containing one shared object
-    let effects = call_move_with_shared(
+    let effects = call_move_(
         &authority,
+        None,
         &gas,
         &sender,
         &sender_key,
@@ -1429,8 +1429,9 @@ async fn test_entry_point_vector_any_error() {
     );
     let (shared_obj_id, _, _) = effects.created[0].0;
     // call a function with a vector containing one shared object
-    let effects = call_move_with_shared(
+    let effects = call_move_(
         &authority,
+        None,
         &gas,
         &sender,
         &sender_key,

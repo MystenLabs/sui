@@ -295,7 +295,7 @@ impl AuthorityStorePruningConfig {
     }
     pub fn fullnode_config() -> Self {
         Self {
-            objects_num_latest_versions_to_retain: 5,
+            objects_num_latest_versions_to_retain: u64::MAX,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
         }

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// <reference types="vitest" />
-import { pathAlias } from '@mysten/core/vite.config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
@@ -32,9 +31,9 @@ export default defineConfig({
         sourcemap: true,
     },
     resolve: {
+        conditions: ['source'],
         alias: {
             '~': new URL('./src', import.meta.url).pathname,
-            ...pathAlias(import.meta.url),
         },
     },
 });

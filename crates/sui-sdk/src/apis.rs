@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::{RpcError, SuiRpcResult};
+use crate::error::{Error, SuiRpcResult};
 use crate::{RpcClient, TransactionExecutionResult, WAIT_FOR_TX_TIMEOUT_SEC};
+use fastcrypto::encoding::Base64;
 use futures::stream;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
+use std::future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
@@ -14,7 +16,7 @@ use sui_json_rpc_types::{
     Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionResponse, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -24,7 +26,7 @@ use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{
-    CommitteeInfoResponse, ExecuteTransactionRequestType, VerifiedTransaction,
+    CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
@@ -177,6 +179,17 @@ impl ReadApi {
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
+
+    pub async fn dry_run_transaction(
+        &self,
+        tx: TransactionData,
+    ) -> SuiRpcResult<SuiTransactionEffects> {
+        Ok(self
+            .api
+            .http
+            .dry_run_transaction(Base64::from_bytes(&bcs::to_bytes(&tx)?))
+            .await?)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +251,37 @@ impl CoinReadApi {
         )
     }
 
+    pub async fn select_coins(
+        &self,
+        address: SuiAddress,
+        coin_type: Option<String>,
+        amount: u128,
+        locked_until_epoch: Option<EpochId>,
+        exclude: Vec<ObjectID>,
+    ) -> SuiRpcResult<Vec<Coin>> {
+        let mut total = 0u128;
+        let coins = self
+            .get_coins_stream(address, coin_type)
+            .filter(|coin: &Coin| {
+                future::ready(
+                    locked_until_epoch == coin.locked_until_epoch
+                        && !exclude.contains(&coin.coin_object_id),
+                )
+            })
+            .take_while(|coin: &Coin| {
+                let ready = future::ready(total < amount);
+                total += coin.balance as u128;
+                ready
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        if total < amount {
+            return Err(Error::InsufficientFund { address, amount });
+        }
+        Ok(coins)
+    }
+
     pub async fn get_balance(
         &self,
         owner: SuiAddress,
@@ -279,7 +323,7 @@ impl EventApi {
                     c.subscribe_event(filter).await?;
                 Ok(subscription.map(|item| Ok(item?)))
             }
-            _ => Err(RpcError::Subscription(
+            _ => Err(Error::Subscription(
                 "Subscription only supported by WebSocket client.".to_string(),
             )),
         }
@@ -412,13 +456,13 @@ impl QuorumDriver {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                 } else {
                     // immediately return on other types of errors
-                    return Err(RpcError::TransactionConfirmationError(tx_digest, err));
+                    return Err(Error::TransactionConfirmationError(tx_digest, err));
                 }
             } else {
                 return Ok(());
             }
             if start.elapsed().as_secs() >= WAIT_FOR_TX_TIMEOUT_SEC {
-                return Err(RpcError::FailToConfirmTransactionStatus(
+                return Err(Error::FailToConfirmTransactionStatus(
                     tx_digest,
                     WAIT_FOR_TX_TIMEOUT_SEC,
                 ));

@@ -11,7 +11,7 @@ use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
@@ -266,12 +266,12 @@ impl Bullshark {
                 for parent_digest in parents {
                     if !store_parents.contains(&parent_digest) {
                         if round - 1 + self.gc_depth > state.last_committed_round {
-                            error!(
+                            trace!(
                                 "The store does not contain the parent of {:?}: Missing item digest={:?}",
                                 certificate, parent_digest
                             );
                         } else {
-                            debug!(
+                            trace!(
                                 "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
                                 certificate, parent_digest
                             );

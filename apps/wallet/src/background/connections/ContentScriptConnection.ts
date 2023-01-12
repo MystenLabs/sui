@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import Browser from 'webextension-polyfill';
+
+import { Window } from '../Window';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { isGetAccount } from '_payloads/account/GetAccount';
@@ -8,7 +11,10 @@ import {
     isAcquirePermissionsRequest,
     isHasPermissionRequest,
 } from '_payloads/permissions';
-import { isExecuteTransactionRequest } from '_payloads/transactions';
+import {
+    isExecuteTransactionRequest,
+    isStakeRequest,
+} from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
 
@@ -120,6 +126,14 @@ export class ContentScriptConnection extends Connection {
             } else {
                 this.sendNotAllowedError(msg.id);
             }
+        } else if (isStakeRequest(payload)) {
+            const window = new Window(
+                Browser.runtime.getURL('ui.html') +
+                    `#/stake/new?address=${encodeURIComponent(
+                        payload.validatorAddress
+                    )}`
+            );
+            await window.show();
         }
     }
 

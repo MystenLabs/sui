@@ -215,6 +215,15 @@
               "$ref": "#/components/schemas/SuiJsonValue"
             }
           }
+        },
+        {
+          "name": "epoch",
+          "description": "The epoch to perform the call. Will be set from the system state object if not provided",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
         }
       ],
       "result": {
@@ -239,6 +248,15 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "epoch",
+          "description": "The epoch to perform the call. Will be set from the system state object if not provided",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -906,7 +924,7 @@
         },
         {
           "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
           "schema": {
             "type": "boolean"
           }
@@ -1773,7 +1791,7 @@
         },
         {
           "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
           "schema": {
             "type": "boolean"
           }
