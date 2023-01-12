@@ -4,15 +4,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
-import React, { useCallback, useMemo } from 'react';
+import React, { type ReactNode, useCallback, useMemo } from 'react';
 
 import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
 
-import styles from './ValidatorMap.module.css';
-
+import { Card } from '~/ui/Card';
 import { DateFilter, useDateFilterState } from '~/ui/DateFilter';
+import { Heading } from '~/ui/Heading';
 import { Placeholder } from '~/ui/Placeholder';
+import { Text } from '~/ui/Text';
 
 const HOST = 'https://imgmod.sui.io';
 
@@ -28,11 +29,25 @@ const DATE_FILTER_TO_WINDOW = {
     ALL: 'all',
 };
 
-export default function ValidatorMap() {
+function NodeStat({ title, children }: { title: string; children: ReactNode }) {
+    return (
+        <div className="space-y-1.5">
+            <Heading variant="heading2/semibold" color="steel-darker">
+                {children}
+            </Heading>
+            <Text variant="caption/semibold" color="steel-dark">
+                {title}
+            </Text>
+        </div>
+    );
+}
+
+// NOTE: This component is lazy imported, so it needs to be default exported:
+export default function NodeMap() {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
 
     const { data, isLoading, isSuccess } = useQuery(
-        ['validator-map', dateFilter],
+        ['node-map', dateFilter],
         async () => {
             const res = await fetch(
                 `${HOST}/location?${new URLSearchParams({
@@ -45,7 +60,7 @@ export default function ValidatorMap() {
             );
 
             if (!res.ok) {
-                throw new Error('Failed to fetch validator map data');
+                throw new Error('Failed to fetch node map data');
             }
 
             return res.json() as Promise<NodeLocation[]>;
@@ -110,24 +125,29 @@ export default function ValidatorMap() {
     );
 
     return (
-        <div data-testid="fullnode-map" className={styles.card}>
-            <div className={styles.container}>
-                <div className={styles.contents}>
-                    <div>
-                        <div className={styles.stat}>
+        <Card spacing="none">
+            <div
+                data-testid="node-map"
+                className="relative flex min-h-[320px] flex-col justify-end"
+            >
+                <div className="pointer-events-none relative z-10 flex flex-1 flex-col justify-between gap-8 p-6">
+                    <Heading variant="heading4/semibold" color="steel-darker">
+                        Sui Nodes
+                    </Heading>
+
+                    <div className="flex flex-col gap-8">
+                        <NodeStat title="Countries">
                             {isLoading && (
-                                <Placeholder width="59px" height="32px" />
+                                <Placeholder width="60px" height="0.8em" />
                             )}
                             {isSuccess &&
                                 countryCount &&
                                 numberFormatter.format(countryCount)}
-                        </div>
-                        <div className={styles.title}>Countries</div>
-                    </div>
-                    <div>
-                        <div className={styles.stat}>
+                        </NodeStat>
+
+                        <NodeStat title="Nodes on Devnet and Testnet">
                             {isLoading && (
-                                <Placeholder width="59px" height="32px" />
+                                <Placeholder width="60px" height="0.8em" />
                             )}
                             {
                                 // Fetch received response with no errors and the value was not null
@@ -135,54 +155,51 @@ export default function ValidatorMap() {
                                     totalCount &&
                                     numberFormatter.format(totalCount)
                             }
-                        </div>
-                        <div className={styles.title}>
-                            Nodes on Devnet and Testnet
-                        </div>
+                        </NodeStat>
                     </div>
                 </div>
-            </div>
 
-            <div className="absolute top-5 right-5 z-10">
-                <DateFilter value={dateFilter} onChange={setDateFilter} />
-            </div>
-
-            <div className={styles.mapcontainer}>
-                <div className={styles.map}>
-                    <ParentSizeModern>
-                        {(parent) => (
-                            <WorldMap
-                                nodes={data}
-                                width={parent.width}
-                                height={parent.height}
-                                onMouseOver={handleMouseOver}
-                                onMouseOut={hideTooltip}
-                            />
-                        )}
-                    </ParentSizeModern>
+                <div className="absolute top-5 right-5 z-10">
+                    <DateFilter value={dateFilter} onChange={setDateFilter} />
                 </div>
-            </div>
 
-            {tooltipOpen && tooltipData && (
-                <TooltipWithBounds
-                    top={tooltipTop}
-                    left={tooltipLeft}
-                    className={styles.tooltip}
-                    // NOTE: Tooltip will un-style itself if we provide a style object:
-                    style={{}}
-                >
-                    <div className={styles.tipitem}>
-                        <div>Nodes</div>
-                        <div>{countryNodes[tooltipData].count}</div>
+                <div className="absolute inset-0 z-0 overflow-hidden">
+                    <div className="pointer-events-none absolute inset-0 md:pointer-events-auto">
+                        <ParentSizeModern>
+                            {(parent) => (
+                                <WorldMap
+                                    nodes={data}
+                                    width={parent.width}
+                                    height={parent.height}
+                                    onMouseOver={handleMouseOver}
+                                    onMouseOut={hideTooltip}
+                                />
+                            )}
+                        </ParentSizeModern>
                     </div>
-                    <div className={styles.tipdivider} />
-                    <div>
-                        {regionNamesInEnglish.of(
-                            countryNodes[tooltipData].country
-                        ) || countryNodes[tooltipData].country}
-                    </div>
-                </TooltipWithBounds>
-            )}
-        </div>
+                </div>
+
+                {tooltipOpen && tooltipData && (
+                    <TooltipWithBounds
+                        top={tooltipTop}
+                        left={tooltipLeft}
+                        className="absolute z-40 hidden min-w-[100px] rounded-md bg-gray-100 p-2 font-sans text-xs text-white md:block"
+                        // NOTE: Tooltip will un-style itself if we provide a style object:
+                        style={{}}
+                    >
+                        <div className="flex items-center justify-between font-semibold uppercase">
+                            <div>Nodes</div>
+                            <div>{countryNodes[tooltipData].count}</div>
+                        </div>
+                        <div className="my-1 h-px bg-gray-90" />
+                        <div>
+                            {regionNamesInEnglish.of(
+                                countryNodes[tooltipData].country
+                            ) || countryNodes[tooltipData].country}
+                        </div>
+                    </TooltipWithBounds>
+                )}
+            </div>
+        </Card>
     );
 }
