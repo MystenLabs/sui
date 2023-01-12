@@ -4,7 +4,7 @@
 import { Link } from 'react-router-dom';
 
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
-import { ValidatorLogo } from '../validator-detail/ValidatorLogo';
+import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { useFormatCoin } from '_app/hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';

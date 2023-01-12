@@ -7,7 +7,7 @@ import { calculateAPY } from '../calculateAPY';
 import StakeAmount from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
-import { ValidatorLogo } from '../validator-detail/ValidatorLogo';
+import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';

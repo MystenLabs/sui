@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
 import StakeAmount from '../home/StakeAmount';
-import { useGetValidatorsByDelegator } from '../useGetDelegatedStake';
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -42,7 +42,7 @@ export function ValidatorDetailCard({
         data: stakeValidators,
         isLoading,
         isError,
-    } = useGetValidatorsByDelegator(accountAddress || '');
+    } = useGetDelegatedStake(accountAddress || '');
 
     const validatorsData =
         validatetors &&

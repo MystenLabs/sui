@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 
-import { ValidatorLogo } from '../validator-detail/ValidatorLogo';
+import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { DelegationDetailCard } from './DelegationDetailCard';
 import { SuiIcons } from '_components/icon';
 import Overlay from '_components/overlay';
