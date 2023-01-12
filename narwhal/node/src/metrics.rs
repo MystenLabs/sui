@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use axum::{http::StatusCode, routing::get, Extension, Router};
-use config::WorkerId;
+use config::{Epoch, WorkerId};
 use crypto::PublicKey;
 use multiaddr::Multiaddr;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -13,6 +13,12 @@ use tokio::task::JoinHandle;
 const METRICS_ROUTE: &str = "/metrics";
 const PRIMARY_METRICS_PREFIX: &str = "narwhal_primary";
 const WORKER_METRICS_PREFIX: &str = "narwhal_worker";
+
+pub fn new_registry(epoch: Epoch) -> Registry {
+    let mut labels = HashMap::new();
+    labels.insert("epoch".to_string(), epoch.to_string());
+    Registry::new_custom(None, Some(labels)).unwrap()
+}
 
 pub fn primary_metrics_registry(name: PublicKey) -> Registry {
     let mut labels = HashMap::new();
