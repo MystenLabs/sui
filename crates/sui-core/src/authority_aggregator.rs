@@ -1403,7 +1403,7 @@ where
         if state.certificate.is_none() && !state.effects_map.effects_map.is_empty() {
             debug!(
                 ?tx_digest,
-                "Received signed Effects but not with a quprum {:?}", state.effects_map.effects_map
+                "Received signed Effects but not with a quorum {:?}", state.effects_map.effects_map
             );
             state.errors.push(
                 SuiError::QuorumFailedToFormEffectsCertWhenProcessingTransaction {
