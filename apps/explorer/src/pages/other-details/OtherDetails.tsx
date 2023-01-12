@@ -3,12 +3,10 @@
 
 import { useParams } from 'react-router-dom';
 
-import styles from './OtherDetails.module.css';
-
 function OtherDetails() {
     const { term } = useParams();
     return (
-        <div className={styles.explain}>
+        <div className="ml-[5vw] mt-[1rem] font-sans text-2xl">
             Search results for &ldquo;{term}&rdquo;
         </div>
     );
