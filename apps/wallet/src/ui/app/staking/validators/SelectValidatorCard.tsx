@@ -46,12 +46,12 @@ export function SelectValidatorCard() {
                 } = av.fields.delegation_staking_pool.fields;
 
                 const num_epochs_participated =
-                    ~validatorsData.epoch - ~starting_epoch;
+                    +validatorsData.epoch - +starting_epoch;
 
                 const APY = Math.pow(
                     1 +
-                        (~sui_balance - ~delegation_token_supply.fields.value) /
-                            ~delegation_token_supply.fields.value,
+                        (+sui_balance - +delegation_token_supply.fields.value) /
+                            +delegation_token_supply.fields.value,
                     365 / num_epochs_participated - 1
                 );
 
