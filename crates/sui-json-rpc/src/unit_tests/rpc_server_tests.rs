@@ -631,7 +631,6 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         let gas_id = objects.last().unwrap().object_id;
 
         // Make some transactions
-        println!("Num of tx {}", objects.len()-1);
         for oref in &objects[..objects.len() - 1] {
             let data = client
                 .transaction_builder()
@@ -647,7 +646,6 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
                 )
                 .await
                 .unwrap();
-            println!("Response is :{:?}", response);
             tx_responses.push(response);
         }
     }
@@ -706,6 +704,10 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
+    println!("Tx_Responses are: {:?}", tx_responses);
+    println!("Page 2 is: {:?}", page2);
+    println!("Page 2 next cursor is: {:?}", page2.next_cursor);
+
     assert_eq!(17, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
