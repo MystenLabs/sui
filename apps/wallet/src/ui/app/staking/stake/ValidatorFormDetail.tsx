@@ -34,6 +34,7 @@ export function ValidatorFormDetail({
         data: stakeValidators,
         isLoading,
         isError,
+        error,
     } = useGetValidatorsByDelegator(accountAddress || '');
 
     const validatorsData =
@@ -91,7 +92,7 @@ export function ValidatorFormDetail({
             <div className="p-2">
                 <Alert mode="warning">
                     <div className="mb-1 font-semibold">
-                        Something went wrong
+                        {error?.message ?? 'Error loading validator data'}
                     </div>
                 </Alert>
             </div>

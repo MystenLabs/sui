@@ -81,10 +81,15 @@ const getDelegatedStakes = async (
             id: 1,
         }),
     });
+
     if (!response.ok) {
         throw new Error(response.statusText);
     }
+
     const res = await response.json();
+    if (!res?.result) {
+        throw new Error(res.error.message);
+    }
     return res.result as DelegatedStake[];
 };
 
@@ -94,7 +99,9 @@ export function useGetValidatorsByDelegator(
     const rpcEndPoint = useRpc().endpoints.fullNode;
     return useQuery(
         ['delegated-staked-data', address],
-        async () => getDelegatedStakes(address, rpcEndPoint),
+        () => {
+            return getDelegatedStakes(address, rpcEndPoint);
+        },
         {
             staleTime: STAKE_DELEGATOR_STALE_TIME,
         }
@@ -123,6 +130,10 @@ export function useGetValidatorMetaData(): UseQueryResult<
             throw new Error(response.statusText);
         }
         const res = await response.json();
+
+        if (!res?.result) {
+            throw new Error(res.error.message);
+        }
         return res.result as ValidatorMetaData[];
     });
 }
