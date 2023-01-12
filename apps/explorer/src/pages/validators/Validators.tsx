@@ -25,7 +25,6 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
-import { getStakedPercent } from '~/utils/getStakedPercent';
 
 const NUMBER_OF_VALIDATORS = 20;
 
@@ -46,109 +45,90 @@ function ValidatorPageResult() {
             ? (data.details.data.fields as ValidatorState)
             : null;
 
-    const validatorsStats = useMemo(() => {
+    const totalStake = validatorsData?.validators.fields.total_validator_stake;
+
+    const validatorsAPYs = useMemo(() => {
+        if (!validatorsData) return [];
+        const validators = validatorsData.validators.fields.active_validators;
+
+        return validators.map((av) => {
+            const { sui_balance, starting_epoch, delegation_token_supply } =
+                av.fields.delegation_staking_pool.fields;
+
+            const num_epochs_participated =
+                validatorsData.epoch - starting_epoch;
+
+            const APY = Math.pow(
+                1 +
+                    (sui_balance - delegation_token_supply.fields.value) /
+                        delegation_token_supply.fields.value,
+                365 / num_epochs_participated - 1
+            );
+
+            return APY ? APY : 0;
+        });
+    }, [validatorsData]);
+
+    const averageAPY = useMemo(() => {
+        if (!validatorsAPYs.length) return 0;
+
+        return (
+            validatorsAPYs.reduce((acc, cur) => acc + cur, 0) /
+            validatorsAPYs.length
+        );
+    }, [validatorsAPYs]);
+
+    const validatorsTableData = useMemo(() => {
         if (!validatorsData) return null;
-        const totalStake =
-            validatorsData.validators.fields.total_validator_stake;
-        const totalDelegateStake =
-            validatorsData.validators.fields.total_delegation_stake;
-        const validators = validatorsData.validators.fields.active_validators
-            .map((av) => {
-                const {
-                    sui_balance,
-                    starting_epoch,
-                    rewards_pool,
-                    delegation_token_supply,
-                } = av.fields.delegation_staking_pool.fields;
 
-                const num_epochs_participated =
-                    validatorsData.epoch - starting_epoch;
+        const validators = validatorsData.validators.fields.active_validators;
 
-                const APY = Math.pow(
-                    1 +
-                        (sui_balance - delegation_token_supply.fields.value) /
-                            delegation_token_supply.fields.value,
-                    365 / num_epochs_participated - 1
+        return {
+            data: validators.map((validator, index) => {
+                const validatorName = getName(
+                    validator.fields.metadata.fields.name
                 );
 
                 return {
-                    name: getName(av.fields.metadata.fields.name),
-                    stake: av.fields.stake_amount,
-                    stakePercent: getStakedPercent(
-                        av.fields.stake_amount,
-                        totalStake
+                    number: index + 1,
+                    name: (
+                        <div className="flex items-center gap-2.5">
+                            <ImageIcon
+                                src={null}
+                                size="sm"
+                                label={validatorName}
+                                fallback={validatorName}
+                                circle
+                            />
+                            <Text
+                                variant="bodySmall/medium"
+                                color="steel-darker"
+                            >
+                                {validatorName}
+                            </Text>
+                        </div>
                     ),
-                    apy: APY ? APY : 0,
-                    address: av.fields.metadata.fields.sui_address,
-                    rewardsPool: rewards_pool,
-                    logo: null,
-                    commissionRate: av.fields.commission_rate,
+                    stake: (
+                        <StakeColumn stake={validator.fields.stake_amount} />
+                    ),
+
+                    commission: (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            {validator.fields.commission_rate > 0
+                                ? `${validator.fields.commission_rate}%`
+                                : '--'}
+                        </Text>
+                    ),
+                    address: (
+                        <ValidatorLink
+                            address={
+                                validator.fields.metadata.fields.sui_address
+                            }
+                            noTruncate
+                        />
+                    ),
                 };
-            })
-            .sort((a, b) => (a.name > b.name ? 1 : -1));
-
-        return {
-            totalStake,
-            totalDelegateStake,
-            validatorsTableData: validators,
-            averageAPY:
-                validators.reduce((acc, cur) => acc + cur.apy, 0) /
-                validators.length,
-
-            // TODO: add missing fields
-            participation: 0,
-            lastEpochRewards: 0,
-        };
-    }, [validatorsData]);
-
-    const validatorsTableData = useMemo(() => {
-        if (!validatorsStats || !validatorsStats.validatorsTableData)
-            return null;
-        return {
-            data: validatorsStats.validatorsTableData.map(
-                ({ name, stake, address, logo, commissionRate }, index) => {
-                    return {
-                        number: index + 1,
-                        name: (
-                            <div className="flex items-center gap-2.5">
-                                <ImageIcon
-                                    src={logo}
-                                    size="sm"
-                                    label={name}
-                                    fallback={name}
-                                    circle
-                                />
-                                <Text
-                                    variant="bodySmall/medium"
-                                    color="steel-darker"
-                                >
-                                    {name}
-                                </Text>
-                            </div>
-                        ),
-                        stake: <StakeColumn stake={stake} />,
-                        delegation: (
-                            <Text
-                                variant="bodySmall/medium"
-                                color="steel-darker"
-                            >
-                                {stake.toString()}
-                            </Text>
-                        ),
-                        commission: (
-                            <Text
-                                variant="bodySmall/medium"
-                                color="steel-darker"
-                            >
-                                {commissionRate > 0
-                                    ? `${commissionRate}%`
-                                    : '--'}
-                            </Text>
-                        ),
-                        address: <ValidatorLink address={address} noTruncate />,
-                    };
-                }
-            ),
+            }),
             columns: [
                 {
                     headerLabel: '#',
@@ -172,7 +152,7 @@ function ValidatorPageResult() {
                 },
             ],
         };
-    }, [validatorsStats]);
+    }, [validatorsData]);
 
     if (isError || (!isLoading && !validatorsTableData?.data.length)) {
         return (
@@ -191,64 +171,63 @@ function ValidatorPageResult() {
             <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
                 <div className="basis-full md:basis-1/2">
                     <ErrorBoundary>
-                        {isSuccess && validatorsStats && (
-                            <Card spacing="lg">
-                                <div className="flex max-w-full flex-col gap-8">
-                                    <Heading
-                                        as="div"
-                                        variant="heading4/semibold"
-                                        color="steel-darker"
+                        <Card spacing="lg">
+                            <div className="flex max-w-full flex-col gap-8">
+                                <Heading
+                                    as="div"
+                                    variant="heading4/semibold"
+                                    color="steel-darker"
+                                >
+                                    Validators
+                                </Heading>
+                                <div className="grid-col grid grid-flow-row grid-rows-2 justify-between gap-2.5 md:grid-cols-2 md:flex-row md:gap-8">
+                                    <Stats
+                                        label="Participation"
+                                        tooltip="Coming soon"
                                     >
-                                        Validators
-                                    </Heading>
-                                    <div className="grid-col grid grid-flow-row grid-rows-2 justify-between gap-2.5 md:grid-cols-2 md:flex-row md:gap-8">
-                                        <Stats
-                                            label="Participation"
-                                            tooltip="Coming soon"
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
                                         >
-                                            <Heading
-                                                as="h3"
-                                                variant="heading2/semibold"
-                                                color="steel-darker"
-                                            >{`${validatorsStats.participation}%`}</Heading>
-                                        </Stats>
-                                        <Stats label="Total Staked">
-                                            <DelegationAmount
-                                                amount={
-                                                    validatorsStats.totalStake
-                                                }
-                                                isStats
-                                            />
-                                        </Stats>
-                                        <Stats
-                                            label="Last Epoch Reward"
-                                            tooltip="Coming soon"
+                                            --
+                                        </Heading>
+                                    </Stats>
+                                    <Stats label="Total Staked">
+                                        <DelegationAmount
+                                            amount={totalStake || 0n}
+                                            isStats
+                                        />
+                                    </Stats>
+                                    <Stats
+                                        label="Last Epoch Reward"
+                                        tooltip="Coming soon"
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
                                         >
-                                            <Heading
-                                                as="h3"
-                                                variant="heading2/semibold"
-                                                color="steel-darker"
-                                            >
-                                                {validatorsStats.lastEpochRewards >
-                                                0
-                                                    ? `${validatorsStats.lastEpochRewards}%`
-                                                    : '--'}
-                                            </Heading>
-                                        </Stats>
-                                        <Stats
-                                            label="AVG APY"
-                                            tooltip="Average APY"
+                                            --
+                                        </Heading>
+                                    </Stats>
+                                    <Stats
+                                        label="AVG APY"
+                                        tooltip="Average APY"
+                                    >
+                                        <Heading
+                                            as="h3"
+                                            variant="heading2/semibold"
+                                            color="steel-darker"
                                         >
-                                            <Heading
-                                                as="h3"
-                                                variant="heading2/semibold"
-                                                color="steel-darker"
-                                            >{`${validatorsStats.averageAPY}%`}</Heading>
-                                        </Stats>
-                                    </div>
+                                            {averageAPY > 0
+                                                ? `${averageAPY}%`
+                                                : '--'}
+                                        </Heading>
+                                    </Stats>
                                 </div>
-                            </Card>
-                        )}
+                            </div>
+                        </Card>
                     </ErrorBoundary>
                 </div>
 
