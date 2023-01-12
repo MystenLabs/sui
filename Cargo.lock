@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=ccfb77628ec1883121079f1ae9c65e9c716709c8#ccfb77628ec1883121079f1ae9c65e9c716709c8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=47c5cbd4a612a0ee8bd9ae61a4673e6b47555928#47c5cbd4a612a0ee8bd9ae61a4673e6b47555928"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -155,7 +155,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=ccfb77628ec1883121079f1ae9c65e9c716709c8#ccfb77628ec1883121079f1ae9c65e9c716709c8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=47c5cbd4a612a0ee8bd9ae61a4673e6b47555928#47c5cbd4a612a0ee8bd9ae61a4673e6b47555928"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.49",
@@ -166,12 +166,16 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=ccfb77628ec1883121079f1ae9c65e9c716709c8#ccfb77628ec1883121079f1ae9c65e9c716709c8"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=47c5cbd4a612a0ee8bd9ae61a4673e6b47555928#47c5cbd4a612a0ee8bd9ae61a4673e6b47555928"
 dependencies = [
  "anemo",
  "bytes",
+ "dashmap",
  "futures",
+ "governor",
+ "nonzero_ext",
  "pin-project-lite",
+ "tokio",
  "tower",
  "tracing",
  "uuid",
@@ -3098,6 +3102,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "governor"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c390a940a5d157878dd057c78680a33ce3415bcd05b4799509ea44210914b4d5"
+dependencies = [
+ "cfg-if",
+ "dashmap",
+ "futures",
+ "futures-timer",
+ "no-std-compat",
+ "nonzero_ext",
+ "parking_lot 0.12.1",
+ "quanta",
+ "rand 0.8.5",
+ "smallvec",
+]
+
+[[package]]
 name = "group"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4102,6 +4124,15 @@ checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
  "serde 1.0.152",
+]
+
+[[package]]
+name = "mach"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -5694,6 +5725,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "no-std-compat"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
+
+[[package]]
 name = "nom"
 version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5726,6 +5763,12 @@ dependencies = [
  "memchr",
  "minimal-lexical",
 ]
+
+[[package]]
+name = "nonzero_ext"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38bf9645c8b145698bb0b18a4637dcacbc421ea49bef2317e4fd8065a387cf21"
 
 [[package]]
 name = "normalize-line-endings"
@@ -6814,6 +6857,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20afe714292d5e879d8b12740aa223c6a88f118af41870e8b6196e39a02238a8"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "mach",
+ "once_cell",
+ "raw-cpuid",
+ "wasi 0.10.0+wasi-snapshot-preview1",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7032,6 +7091,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "10.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6823ea29436221176fe662da99998ad3b4db2c7f31e7b6f5fe43adccd6320bb"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]
@@ -11209,6 +11277,7 @@ dependencies = [
  "gloo-net",
  "gloo-timers",
  "gloo-utils",
+ "governor",
  "group",
  "guppy",
  "guppy-summaries",
@@ -11298,6 +11367,7 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
+ "mach",
  "match_opt",
  "matchers",
  "matchit 0.5.0",
@@ -11364,9 +11434,11 @@ dependencies = [
  "nibble_vec",
  "nix 0.23.2",
  "nix 0.24.3",
+ "no-std-compat",
  "nom 5.1.2",
  "nom 6.1.2",
  "nom 7.1.2",
+ "nonzero_ext",
  "normalize-line-endings",
  "nu-ansi-term",
  "num",
@@ -11469,6 +11541,7 @@ dependencies = [
  "protobuf",
  "protobuf-src",
  "ptree",
+ "quanta",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
  "quick-xml",
@@ -11490,6 +11563,7 @@ dependencies = [
  "rand_distr",
  "rand_xorshift",
  "rand_xoshiro",
+ "raw-cpuid",
  "rayon",
  "rayon-core",
  "rcgen 0.10.0",
