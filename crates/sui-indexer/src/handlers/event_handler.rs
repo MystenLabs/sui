@@ -60,6 +60,10 @@ impl EventHandler {
             let event_page = fetch_event_page(self.rpc_client.clone(), next_cursor.clone()).await?;
             self.event_handler_metrics.total_event_page_received.inc();
             let event_count = event_page.data.len();
+            info!(
+                "Received event page with {} events, next cursor: {:?}",
+                event_count, event_page.next_cursor
+            );
             self.event_handler_metrics
                 .total_events_received
                 .inc_by(event_count as u64);
@@ -75,11 +79,11 @@ impl EventHandler {
                     Some(next_cursor_val.tx_seq),
                     Some(next_cursor_val.event_seq),
                 )?;
+                self.event_handler_metrics
+                    .total_events_processed
+                    .inc_by(event_count as u64);
                 next_cursor = Some(next_cursor_val);
             }
-            self.event_handler_metrics
-                .total_events_processed
-                .inc_by(event_count as u64);
             self.event_handler_metrics.total_event_page_committed.inc();
             // sleep when the event page has been the latest page
             if event_count < EVENT_PAGE_SIZE || event_page.next_cursor.is_none() {
