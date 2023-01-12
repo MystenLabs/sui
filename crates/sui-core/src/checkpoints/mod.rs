@@ -110,6 +110,14 @@ impl CheckpointStore {
             .map(|maybe_checkpoint| maybe_checkpoint.map(VerifiedCheckpoint::new_unchecked))
     }
 
+    pub fn get_latest_certified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
+        self.certified_checkpoints
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, v)| VerifiedCheckpoint::new_unchecked(v))
+    }
+
     pub fn multi_get_checkpoint_by_sequence_number(
         &self,
         sequence_numbers: &[CheckpointSequenceNumber],
