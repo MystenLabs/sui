@@ -14,18 +14,18 @@ use crate::{
     BlockRemover,
 };
 
-use anemo::types::Address;
+use anemo::{codegen::InboundRequestLayer, types::Address};
 use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
+    inflight_limit,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
-use dashmap::DashSet;
 use fastcrypto::{
     hash::Hash,
     signature_service::SignatureService,
@@ -231,8 +231,12 @@ impl Primary {
             vote_digest_store,
             rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
             metrics: node_metrics.clone(),
-            request_vote_inflight: Arc::new(DashSet::new()),
-        });
+        })
+        // Allow only one inflight RequestVote RPC at a time per peer.
+        // This is required for correctness.
+        .add_layer_for_request_vote(InboundRequestLayer::new(
+            inflight_limit::InflightLimitLayer::new(1, inflight_limit::WaitMode::ReturnError),
+        ));
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
             payload_store: payload_store.clone(),
@@ -288,6 +292,10 @@ impl Primary {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
+            // Set a default size limit of 8 MiB for all RPCs
+            // TODO: remove this and revert to default anemo max_frame_size once size
+            // limits are fully implemented on narwhal data structures.
+            config.max_frame_size = Some(8 << 20);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
@@ -587,8 +595,6 @@ struct PrimaryReceiverHandler {
     /// Get a signal when the round changes.
     rx_narwhal_round_updates: watch::Receiver<Round>,
     metrics: Arc<PrimaryMetrics>,
-    /// Used to ensure a maximum of one inflight vote request per header.
-    request_vote_inflight: Arc<DashSet<PublicKey>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -843,17 +849,6 @@ impl PrimaryReceiverHandler {
     }
 }
 
-// Deletes the tracked inflight request when the RequestVote RPC finishes or is dropped.
-struct RequestVoteInflightGuard {
-    request_vote_inflight: Arc<DashSet<PublicKey>>,
-    author: PublicKey,
-}
-impl Drop for RequestVoteInflightGuard {
-    fn drop(&mut self) {
-        assert!(self.request_vote_inflight.remove(&self.author).is_some());
-    }
-}
-
 #[async_trait]
 impl PrimaryToPrimary for PrimaryReceiverHandler {
     async fn send_message(
@@ -877,21 +872,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         &self,
         request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
-        // TODO: Remove manual code for tracking inflight requests once Anemo issue #9 is resolved.
-        let author = request.body().header.author.to_owned();
-        let _inflight_guard = if self.request_vote_inflight.insert(author.clone()) {
-            RequestVoteInflightGuard {
-                request_vote_inflight: self.request_vote_inflight.clone(),
-                author,
-            }
-        } else {
-            return Err(anemo::rpc::Status::new_with_message(
-                // TODO: This should be 429 Too Many Requests, if/when Anemo adds that status code.
-                anemo::types::response::StatusCode::Unknown,
-                format!("vote request for author {author:?} already inflight"),
-            ));
-        };
-
         self.process_request_vote(request)
             .await
             .map(anemo::Response::new)

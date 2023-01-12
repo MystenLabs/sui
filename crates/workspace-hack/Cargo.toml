@@ -26,8 +26,8 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "ccfb77628ec1883121079f1ae9c65e9c716709c8", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "ccfb77628ec1883121079f1ae9c65e9c716709c8", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "47c5cbd4a612a0ee8bd9ae61a4673e6b47555928", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "47c5cbd4a612a0ee8bd9ae61a4673e6b47555928", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -241,6 +241,7 @@ globwalk = { version = "0.8", default-features = false }
 gloo-net = { version = "0.2", default-features = false, features = ["json", "websocket"] }
 gloo-timers = { version = "0.2", features = ["futures"] }
 gloo-utils = { version = "0.1", default-features = false, features = ["serde"] }
+governor = { version = "0.5" }
 group = { version = "0.12", default-features = false }
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
 guppy-summaries = { version = "0.7", default-features = false }
@@ -370,9 +371,11 @@ nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
+no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-15128469a54ed75a = { package = "nom", version = "7" }
+nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
@@ -445,6 +448,7 @@ prost = { version = "0.11" }
 prost-types = { version = "0.11" }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4" }
+quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quinn = { version = "0.9", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
@@ -669,9 +673,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "ccfb77628ec1883121079f1ae9c65e9c716709c8", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "ccfb77628ec1883121079f1ae9c65e9c716709c8", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "ccfb77628ec1883121079f1ae9c65e9c716709c8", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "47c5cbd4a612a0ee8bd9ae61a4673e6b47555928", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "47c5cbd4a612a0ee8bd9ae61a4673e6b47555928", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "47c5cbd4a612a0ee8bd9ae61a4673e6b47555928", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -918,6 +922,7 @@ globwalk = { version = "0.8", default-features = false }
 gloo-net = { version = "0.2", default-features = false, features = ["json", "websocket"] }
 gloo-timers = { version = "0.2", features = ["futures"] }
 gloo-utils = { version = "0.1", default-features = false, features = ["serde"] }
+governor = { version = "0.5" }
 group = { version = "0.12", default-features = false }
 guppy = { version = "0.15", default-features = false, features = ["rayon1", "summaries"] }
 guppy-summaries = { version = "0.7", default-features = false }
@@ -1061,9 +1066,11 @@ nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
+no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-15128469a54ed75a = { package = "nom", version = "7" }
+nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
@@ -1158,6 +1165,7 @@ prost-derive = { version = "0.11", default-features = false }
 prost-types = { version = "0.11" }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4" }
+quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quinn = { version = "0.9", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
@@ -1427,6 +1435,7 @@ ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
+mach = { version = "0.3" }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
@@ -1467,6 +1476,7 @@ ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
+mach = { version = "0.3" }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
@@ -1521,6 +1531,7 @@ openssl-sys = { version = "0.9", default-features = false }
 pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 quick-xml = { version = "0.26", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+raw-cpuid = { version = "10", default-features = false }
 rgb = { version = "0.8" }
 rustix = { version = "0.36", features = ["fs", "termios"] }
 signal-hook = { version = "0.3" }
@@ -1565,6 +1576,7 @@ pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.26", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+raw-cpuid = { version = "10", default-features = false }
 rgb = { version = "0.8" }
 rustix = { version = "0.36", features = ["fs", "termios"] }
 signal-hook = { version = "0.3" }
@@ -1591,6 +1603,7 @@ native-tls = { version = "0.2", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str-buf = { version = "1", default-features = false }
@@ -1618,6 +1631,7 @@ native-tls = { version = "0.2", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+raw-cpuid = { version = "10", default-features = false }
 schannel = { version = "0.1", default-features = false }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str-buf = { version = "1", default-features = false }
