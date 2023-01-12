@@ -10,11 +10,11 @@ module sui::validator_set {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, ValidatorMetadata};
     use sui::stake::Stake;
-    use sui::staking_pool::{Self, Delegation, PendingWithdrawEntry, StakedSui };
+    use sui::staking_pool::{Self, Delegation, PendingWithdrawEntry, PoolTokenExchangeRate, StakedSui};
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
-    use sui::vec_set::VecSet;
+    use sui::vec_set::{Self, VecSet};
     use sui::table_vec::{Self, TableVec};
     use sui::event;
 
@@ -68,6 +68,21 @@ module sui::validator_set {
         delegator_address: address,
         epoch: u64,
         amount: u64,
+    }
+
+    /// Event containing staking and rewards related information of
+    /// each validator, emitted during epoch advancement.
+    struct ValidatorEpochInfo has copy, drop {
+        epoch: u64,
+        validator_address: address,
+        reference_gas_survey_quote: u64,
+        validator_stake: u64,
+        delegated_stake: u64,
+        commission_rate: u64,
+        stake_rewards: u64,
+        pool_token_exchange_rate: PoolTokenExchangeRate,
+        tallying_rule_reporters: vector<address>,
+        tallying_rule_global_score: u64,
     }
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
@@ -288,11 +303,12 @@ module sui::validator_set {
     ///   4. Process pending validator application and withdraws.
     ///   5. At the end, we calculate the total stake for the new epoch.
     public(friend) fun advance_epoch(
+        new_epoch: u64,
         self: &mut ValidatorSet,
         validator_reward: &mut Balance<SUI>,
         delegator_reward: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
-        _validator_report_records: &VecMap<address, VecSet<address>>,
+        validator_report_records: &VecMap<address, VecSet<address>>,
         ctx: &mut TxContext,
     ) {
         // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` to
@@ -327,6 +343,9 @@ module sui::validator_set {
         process_pending_delegation_switches(self, ctx);
 
         process_pending_delegations_and_withdraws(&mut self.active_validators, ctx);
+
+        // Emit events after we have processed all the rewards distribution and pending delegations.
+        emit_validator_epoch_events(new_epoch, &self.active_validators, &validator_reward_amounts, validator_report_records);
 
         process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
 
@@ -682,6 +701,44 @@ module sui::validator_set {
             i = i + 1;
         };
         result
+    }
+
+    /// Emit events containing information of each validator for the epoch,
+    /// including stakes, rewards, performance, etc.
+    fun emit_validator_epoch_events(
+        new_epoch: u64,
+        vs: &vector<Validator>,
+        reward_amounts: &vector<u64>,
+        report_records: &VecMap<address, VecSet<address>>,
+    ) {
+        let num_validators = vector::length(vs);
+        let i = 0;
+        while (i < num_validators) {
+            let v = vector::borrow(vs, i);
+            let validator_address = validator::sui_address(v);
+            let tallying_rule_reporters =
+                if (vec_map::contains(report_records, &validator_address)) {
+                    vec_set::into_keys(*vec_map::get(report_records, &validator_address))
+                } else {
+                    vector[]
+                };
+            event::emit(
+                ValidatorEpochInfo {
+                    epoch: new_epoch,
+                    validator_address,
+                    reference_gas_survey_quote: validator::gas_price(v),
+                    validator_stake: validator::stake_amount(v),
+                    delegated_stake: validator::delegate_amount(v),
+                    commission_rate: validator::commission_rate(v),
+                    stake_rewards: *vector::borrow(reward_amounts, i),
+                    pool_token_exchange_rate: validator::pool_token_exchange_rate(v),
+                    tallying_rule_reporters,
+                    // TODO: placeholder global score
+                    tallying_rule_global_score: 1,
+                }
+            );
+            i = i + 1;
+        }
     }
 
     /// Return the active validators in `self`

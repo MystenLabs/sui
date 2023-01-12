@@ -7,6 +7,7 @@
 
 -  [Struct `SystemParameters`](#0x2_sui_system_SystemParameters)
 -  [Resource `SuiSystemState`](#0x2_sui_system_SuiSystemState)
+-  [Struct `SystemEpochInfo`](#0x2_sui_system_SystemEpochInfo)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0x2_sui_system_create)
 -  [Function `request_add_validator`](#0x2_sui_system_request_add_validator)
@@ -38,6 +39,7 @@
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
+<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="pay.md#0x2_pay">0x2::pay</a>;
@@ -176,6 +178,83 @@ The top-level object containing all information of the Sui system.
 </dt>
 <dd>
  Schedule of stake subsidies given out each epoch.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_sui_system_SystemEpochInfo"></a>
+
+## Struct `SystemEpochInfo`
+
+Event containing system-level epoch information, emitted during
+the epoch advancement transaction.
+
+
+<pre><code><b>struct</b> <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>reference_gas_price: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>total_stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_fund_inflows: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_fund_outflows: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_fund_balance: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_subsidy_amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>total_gas_fees: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>total_stake_rewards: u64</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -903,7 +982,9 @@ gas coins.
 
     // Include <a href="stake.md#0x2_stake">stake</a> subsidy in the rewards given out <b>to</b> validators and delegators.
     <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>, &<b>mut</b> self.sui_supply);
-    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> computation_reward, <a href="stake_subsidy.md#0x2_stake_subsidy_withdraw_all">stake_subsidy::withdraw_all</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>));
+    <b>let</b> <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a> = <a href="stake_subsidy.md#0x2_stake_subsidy_withdraw_all">stake_subsidy::withdraw_all</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
+    <b>let</b> stake_subsidy_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> computation_reward, <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>);
 
     <b>let</b> delegation_stake = <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators);
     <b>let</b> validator_stake = <a href="validator_set.md#0x2_validator_set_total_validator_stake">validator_set::total_validator_stake</a>(&self.validators);
@@ -929,7 +1010,13 @@ gas coins.
     self.epoch = self.epoch + 1;
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
     <b>assert</b>!(new_epoch == self.epoch, 0);
+    <b>let</b> total_rewards_amount =
+        <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward)
+        + <a href="balance.md#0x2_balance_value">balance::value</a>(&delegator_reward)
+        + <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
+
     <a href="validator_set.md#0x2_validator_set_advance_epoch">validator_set::advance_epoch</a>(
+        new_epoch,
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
         &<b>mut</b> delegator_reward,
@@ -953,6 +1040,20 @@ gas coins.
     // Validator reports are only valid for the epoch.
     // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
     self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
+
+    <a href="event.md#0x2_event_emit">event::emit</a>(
+        <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> {
+            epoch: self.epoch,
+            reference_gas_price: self.reference_gas_price,
+            total_stake: delegation_stake + validator_stake,
+            storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount <b>as</b> u64),
+            storage_fund_outflows: storage_rebate,
+            storage_fund_balance: <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund),
+            stake_subsidy_amount,
+            total_gas_fees: computation_charge,
+            total_stake_rewards: total_rewards_amount,
+        }
+    );
 }
 </code></pre>
 

@@ -21,6 +21,7 @@ module sui::sui_system {
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::epoch_time_lock;
     use sui::pay;
+    use sui::event;
 
     friend sui::genesis;
 
@@ -68,6 +69,20 @@ module sui::sui_system {
         validator_report_records: VecMap<address, VecSet<address>>,
         /// Schedule of stake subsidies given out each epoch.
         stake_subsidy: StakeSubsidy,
+    }
+
+    /// Event containing system-level epoch information, emitted during
+    /// the epoch advancement transaction.
+    struct SystemEpochInfo has copy, drop {
+        epoch: u64,
+        reference_gas_price: u64,
+        total_stake: u64,
+        storage_fund_inflows: u64,
+        storage_fund_outflows: u64,
+        storage_fund_balance: u64,
+        stake_subsidy_amount: u64,
+        total_gas_fees: u64,
+        total_stake_rewards: u64,
     }
 
     // Errors
@@ -413,7 +428,9 @@ module sui::sui_system {
 
         // Include stake subsidy in the rewards given out to validators and delegators.
         stake_subsidy::advance_epoch(&mut self.stake_subsidy, &mut self.sui_supply);
-        balance::join(&mut computation_reward, stake_subsidy::withdraw_all(&mut self.stake_subsidy));
+        let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
+        let stake_subsidy_amount = balance::value(&stake_subsidy);
+        balance::join(&mut computation_reward, stake_subsidy);
 
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
@@ -439,7 +456,13 @@ module sui::sui_system {
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
+        let total_rewards_amount =
+            balance::value(&computation_reward)
+            + balance::value(&delegator_reward)
+            + balance::value(&storage_fund_reward);
+
         validator_set::advance_epoch(
+            new_epoch,
             &mut self.validators,
             &mut computation_reward,
             &mut delegator_reward,
@@ -463,6 +486,20 @@ module sui::sui_system {
         // Validator reports are only valid for the epoch.
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
+
+        event::emit(
+            SystemEpochInfo {
+                epoch: self.epoch,
+                reference_gas_price: self.reference_gas_price,
+                total_stake: delegation_stake + validator_stake,
+                storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
+                storage_fund_outflows: storage_rebate,
+                storage_fund_balance: balance::value(&self.storage_fund),
+                stake_subsidy_amount,
+                total_gas_fees: computation_charge,
+                total_stake_rewards: total_rewards_amount,
+            }
+        );
     }
 
     spec advance_epoch {

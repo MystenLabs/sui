@@ -8,6 +8,7 @@
 -  [Struct `ValidatorSet`](#0x2_validator_set_ValidatorSet)
 -  [Struct `ValidatorPair`](#0x2_validator_set_ValidatorPair)
 -  [Struct `DelegationRequestEvent`](#0x2_validator_set_DelegationRequestEvent)
+-  [Struct `ValidatorEpochInfo`](#0x2_validator_set_ValidatorEpochInfo)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_validator_set_new)
 -  [Function `request_add_validator`](#0x2_validator_set_request_add_validator)
@@ -42,6 +43,7 @@
 -  [Function `compute_reward_distribution`](#0x2_validator_set_compute_reward_distribution)
 -  [Function `distribute_reward`](#0x2_validator_set_distribute_reward)
 -  [Function `derive_next_epoch_validators`](#0x2_validator_set_derive_next_epoch_validators)
+-  [Function `emit_validator_epoch_events`](#0x2_validator_set_emit_validator_epoch_events)
 -  [Function `active_validators`](#0x2_validator_set_active_validators)
 
 
@@ -210,6 +212,89 @@ Event emitted when a new delegation request is received.
 </dd>
 <dt>
 <code>amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_validator_set_ValidatorEpochInfo"></a>
+
+## Struct `ValidatorEpochInfo`
+
+Event containing staking and rewards related information of
+each validator, emitted during epoch advancement.
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x2_validator_set_ValidatorEpochInfo">ValidatorEpochInfo</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>reference_gas_survey_quote: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>delegated_stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>commission_rate: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_rewards: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pool_token_exchange_rate: <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tallying_rule_reporters: <a href="">vector</a>&lt;<b>address</b>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tallying_rule_global_score: u64</code>
 </dt>
 <dd>
 
@@ -641,7 +726,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, _validator_report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(new_epoch: u64, self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, delegator_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -651,11 +736,12 @@ It does the following things:
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(
+    new_epoch: u64,
     self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     delegator_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
-    _validator_report_records: &VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+    validator_report_records: &VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
     // `compute_reward_distribution` must be called before `distribute_reward` and `adjust_stake_and_gas_price` <b>to</b>
@@ -690,6 +776,9 @@ It does the following things:
     <a href="validator_set.md#0x2_validator_set_process_pending_delegation_switches">process_pending_delegation_switches</a>(self, ctx);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(&<b>mut</b> self.active_validators, ctx);
+
+    // Emit events after we have processed all the rewards distribution and pending delegations.
+    <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &validator_reward_amounts, validator_report_records);
 
     <a href="validator_set.md#0x2_validator_set_process_pending_validators">process_pending_validators</a>(&<b>mut</b> self.active_validators, &<b>mut</b> self.pending_validators);
 
@@ -1480,6 +1569,64 @@ TODO: If we want to enforce a % on stake threshold, this is the function to do i
         i = i + 1;
     };
     result
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_emit_validator_epoch_events"></a>
+
+## Function `emit_validator_epoch_events`
+
+Emit events containing information of each validator for the epoch,
+including stakes, rewards, performance, etc.
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch: u64, vs: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, reward_amounts: &<a href="">vector</a>&lt;u64&gt;, report_records: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(
+    new_epoch: u64,
+    vs: &<a href="">vector</a>&lt;Validator&gt;,
+    reward_amounts: &<a href="">vector</a>&lt;u64&gt;,
+    report_records: &VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
+) {
+    <b>let</b> num_validators = <a href="_length">vector::length</a>(vs);
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; num_validators) {
+        <b>let</b> v = <a href="_borrow">vector::borrow</a>(vs, i);
+        <b>let</b> validator_address = <a href="validator.md#0x2_validator_sui_address">validator::sui_address</a>(v);
+        <b>let</b> tallying_rule_reporters =
+            <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(report_records, &validator_address)) {
+                <a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(*<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(report_records, &validator_address))
+            } <b>else</b> {
+                <a href="">vector</a>[]
+            };
+        <a href="event.md#0x2_event_emit">event::emit</a>(
+            <a href="validator_set.md#0x2_validator_set_ValidatorEpochInfo">ValidatorEpochInfo</a> {
+                epoch: new_epoch,
+                validator_address,
+                reference_gas_survey_quote: <a href="validator.md#0x2_validator_gas_price">validator::gas_price</a>(v),
+                validator_stake: <a href="validator.md#0x2_validator_stake_amount">validator::stake_amount</a>(v),
+                delegated_stake: <a href="validator.md#0x2_validator_delegate_amount">validator::delegate_amount</a>(v),
+                commission_rate: <a href="validator.md#0x2_validator_commission_rate">validator::commission_rate</a>(v),
+                stake_rewards: *<a href="_borrow">vector::borrow</a>(reward_amounts, i),
+                pool_token_exchange_rate: <a href="validator.md#0x2_validator_pool_token_exchange_rate">validator::pool_token_exchange_rate</a>(v),
+                tallying_rule_reporters,
+                // TODO: placeholder <b>global</b> score
+                tallying_rule_global_score: 1,
+            }
+        );
+        i = i + 1;
+    }
 }
 </code></pre>
 
