@@ -40,6 +40,7 @@ use sui_types::utils::{
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::epoch::epoch_metrics::EpochMetrics;
+use move_core_types::parser::parse_type_tag;
 use std::{convert::TryInto, env};
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -3197,7 +3198,7 @@ async fn test_store_get_dynamic_field() {
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
     assert_eq!(json!(true), fields[0].name.value);
-    assert_eq!("bool", fields[0].name.type_)
+    assert_eq!(TypeTag::Bool, fields[0].name.type_)
 }
 
 async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<DynamicFieldInfo>) {
@@ -3278,7 +3279,10 @@ async fn test_dynamic_field_struct_name_parsing() {
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
     assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
-    assert_eq!("0x0::object_basics::Name", fields[0].name.type_)
+    assert_eq!(
+        parse_type_tag("0x0::object_basics::Name").unwrap(),
+        fields[0].name.type_
+    )
 }
 
 #[tokio::test]
@@ -3288,7 +3292,7 @@ async fn test_dynamic_field_bytearray_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!("Vec<u8>", fields[0].name.type_);
+    assert_eq!(parse_type_tag("vector<u8>").unwrap(), fields[0].name.type_);
     assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
 }
 
@@ -3299,7 +3303,7 @@ async fn test_dynamic_field_address_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!("Address", fields[0].name.type_);
+    assert_eq!(parse_type_tag("address").unwrap(), fields[0].name.type_);
     assert_eq!(json!(sender), fields[0].name.value);
 }
 

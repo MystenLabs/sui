@@ -1186,6 +1186,7 @@ pub enum SuiMoveValue {
 }
 
 impl SuiMoveValue {
+    /// Extract values from MoveValue without type information in json format
     pub fn to_json_value(self) -> Value {
         match self {
             SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
@@ -1196,45 +1197,6 @@ impl SuiMoveValue {
             SuiMoveValue::String(v) => json!(v),
             SuiMoveValue::UID { id } => json!({ "id": id }),
             SuiMoveValue::Option(v) => json!(v),
-        }
-    }
-
-    pub fn parse_move_value_type(value: &MoveValue) -> String {
-        match value {
-            MoveValue::U8(_) => "u8".into(),
-            MoveValue::U16(_) => "u16".into(),
-            MoveValue::U32(_) => "u32".into(),
-            MoveValue::U64(_) => "u64".into(),
-            MoveValue::U128(_) => "u128".into(),
-            MoveValue::U256(_) => "u256".into(),
-            MoveValue::Bool(_) => "bool".into(),
-            MoveValue::Address(_) => "Address".into(),
-            MoveValue::Signer(_) => "Signer".into(),
-            MoveValue::Vector(v) => {
-                let inner_type = v
-                    .first()
-                    .map(Self::parse_move_value_type)
-                    .unwrap_or_else(|| "?".into());
-                format!("Vec<{inner_type}>")
-            }
-            MoveValue::Struct(s) => match s {
-                MoveStruct::Runtime(v) => {
-                    let inner_type = v
-                        .first()
-                        .map(Self::parse_move_value_type)
-                        .unwrap_or_else(|| "?".into());
-                    format!("Vec<{inner_type}>")
-                }
-                // Treat this like tuple
-                MoveStruct::WithFields(f) => {
-                    let types = f
-                        .iter()
-                        .map(|(_, v)| Self::parse_move_value_type(v))
-                        .join(",");
-                    format!("({types})")
-                }
-                MoveStruct::WithTypes { type_, .. } => type_.to_string(),
-            },
         }
     }
 }
@@ -1322,6 +1284,7 @@ pub enum SuiMoveStruct {
 }
 
 impl SuiMoveStruct {
+    /// Extract values from MoveStruct without type information in json format
     pub fn to_json_value(self) -> Value {
         // Unwrap MoveStructs
         match self {

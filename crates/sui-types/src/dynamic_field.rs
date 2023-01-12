@@ -29,7 +29,9 @@ pub struct DynamicFieldInfo {
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldName {
-    pub type_: String,
+    #[schemars(with = "String")]
+    #[serde_as(as = "Readable<DisplayFromStr, _>")]
+    pub type_: TypeTag,
     // Bincode does not like serde_json::Value, rocksdb will not insert the value without serializing value as string.
     #[schemars(with = "Value")]
     #[serde_as(as = "Readable<_, DisplayFromStr>")]

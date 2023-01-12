@@ -1273,12 +1273,15 @@ impl AuthorityState {
             self.module_cache.as_ref(),
         )?;
 
-        let (name, type_, object_id) =
+        let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
 
+        // Safe to unwrap, we checked this is a dynamic field object, it must have type parameters.
+        let name_type = move_object.type_.type_params.first().unwrap().clone();
+
         let name = DynamicFieldName {
-            type_: SuiMoveValue::parse_move_value_type(&name),
-            value: SuiMoveValue::from(name).to_json_value(),
+            type_: name_type,
+            value: SuiMoveValue::from(name_value).to_json_value(),
         };
 
         Ok(Some(match type_ {
