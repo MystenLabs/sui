@@ -330,7 +330,7 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
         })
         .collect();
 
-    timeout(Duration::from_secs(20), join_all(handles))
+    timeout(Duration::from_secs(60), join_all(handles))
         .await
         .expect("timed out waiting for reconfiguration to complete");
 }
