@@ -262,33 +262,36 @@ impl CertificateFetcher {
             self.targets.values().max().unwrap_or(&0),
             gc_round
         );
-        self.fetch_certificates_task.spawn(async move {
-            let _scope = monitored_scope("CertificatesFetching");
-            state
-                .metrics
-                .certificate_fetcher_inflight_fetch
-                .with_label_values(&[&committee.epoch.to_string()])
-                .inc();
+        self.fetch_certificates_task
+            .spawn(monitored_future!(async move {
+                let _scope = monitored_scope("CertificatesFetching");
+                state
+                    .metrics
+                    .certificate_fetcher_inflight_fetch
+                    .with_label_values(&[&committee.epoch.to_string()])
+                    .inc();
 
-            let now = Instant::now();
-            match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds).await {
-                Ok(_) => {
-                    debug!(
-                        "Finished task to fetch certificates successfully, elapsed = {}s",
-                        now.elapsed().as_secs_f64()
-                    );
-                }
-                Err(e) => {
-                    warn!("Error from task to fetch certificates: {e}");
-                }
-            };
+                let now = Instant::now();
+                match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
+                    .await
+                {
+                    Ok(_) => {
+                        debug!(
+                            "Finished task to fetch certificates successfully, elapsed = {}s",
+                            now.elapsed().as_secs_f64()
+                        );
+                    }
+                    Err(e) => {
+                        warn!("Error from task to fetch certificates: {e}");
+                    }
+                };
 
-            state
-                .metrics
-                .certificate_fetcher_inflight_fetch
-                .with_label_values(&[&committee.epoch.to_string()])
-                .dec();
-        });
+                state
+                    .metrics
+                    .certificate_fetcher_inflight_fetch
+                    .with_label_values(&[&committee.epoch.to_string()])
+                    .dec();
+            }));
     }
 
     fn gc_round(&self) -> Round {
