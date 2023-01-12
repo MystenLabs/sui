@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * This is a list of feature keys that are used in
- * in https://docs.growthbook.io/app/features#feature-keys
+ * This is a list of feature keys that are used in wallet
+ * https://docs.growthbook.io/app/features#feature-keys
  */
 export enum FEATURES {
     USE_LOCAL_TXN_SERIALIZER = 'use-local-txn-serializer',
