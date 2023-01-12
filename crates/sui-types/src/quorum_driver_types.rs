@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{AuthorityName, ObjectID, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
 use crate::error::SuiError;
 use crate::messages::QuorumDriverResponse;
@@ -28,6 +28,8 @@ pub enum QuorumDriverError {
         retried_tx: Option<TransactionDigest>,
         retried_tx_success: Option<bool>,
     },
+    #[error("Package {package_id:?} cannot be found.")]
+    DependentPackageNotFound { package_id: ObjectID },
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeReachFinality,
     #[error("Transaction failed to reach finality after {total_attempts} attempts.")]

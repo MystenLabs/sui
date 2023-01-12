@@ -637,16 +637,20 @@ where
                     tx_cert
                 }
                 Err(err) => {
-                    if let Some(qd_error) = convert_to_quorum_driver_error_if_nonretryable(
-                        err,
-                        &tx_digest,
-                        "forming tx cert",
-                    ) {
+                    if let Some(qd_error) = convert_to_quorum_driver_error_if_nonretryable(&err) {
                         // If non-retryable failure, this task reaches terminal state for now, notify waiter.
+                        debug!(
+                            ?tx_digest,
+                            "Got unretryable error when forming tx cert: {err}"
+                        );
                         metrics.total_err_responses.inc();
                         quorum_driver.notify(&tx_digest, &Err(qd_error));
                         return;
                     } else {
+                        debug!(
+                            ?tx_digest,
+                            "Got retryable error when forming tx cert: {err}"
+                        );
                         // re-enqueue if retryable
                         spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
                             transaction.clone(),
@@ -714,29 +718,48 @@ where
 }
 
 // TODO: categorize all possible SuiErrors
-fn convert_to_quorum_driver_error_if_nonretryable(
-    err: SuiError,
-    tx_digest: &TransactionDigest,
-    action: &'static str,
-) -> Option<QuorumDriverError> {
-    match &err {
+fn convert_to_quorum_driver_error_if_nonretryable(err: &SuiError) -> Option<QuorumDriverError> {
+    match err {
         // TODO: rewrite the equivocation detection code to make it more deterministic
         SuiError::QuorumFailedToProcessTransactionWithConflictingTransactions {
             conflicting_txes,
             retried_tx_digest,
             retried_tx_success,
+        } => Some(QuorumDriverError::ObjectsDoubleUsed {
+            conflicting_txes: conflicting_txes.clone(),
+            retried_tx: *retried_tx_digest,
+            retried_tx_success: *retried_tx_success,
+        }),
+        SuiError::QuorumFailedToProcessTransaction {
+            good_stake: _,
+            errors,
+            conflicting_tx_digests,
         } => {
-            debug!(?tx_digest, "Got unretryable error when {action}: {err}");
-            Some(QuorumDriverError::ObjectsDoubleUsed {
-                conflicting_txes: conflicting_txes.clone(),
-                retried_tx: *retried_tx_digest,
-                retried_tx_success: *retried_tx_success,
-            })
+            if !conflicting_tx_digests.is_empty() {
+                return None;
+            }
+
+            // All the errors are the same, pick a sentinel error
+            let error = match &errors[..] {
+                [error, errors @ ..] if errors.iter().all(|e| e == error) => error,
+                _ => return None,
+            };
+
+            match error {
+                SuiError::TransactionInputObjectsErrors { errors } => match &errors[..] {
+                    [SuiError::DependentPackageNotFound { package_id }] => {
+                        Some(QuorumDriverError::DependentPackageNotFound {
+                            package_id: *package_id,
+                        })
+                    }
+
+                    _ => None,
+                },
+
+                _ => None,
+            }
         }
-        _ => {
-            debug!(?tx_digest, "Got retryable error when {action}: {err}");
-            None
-        }
+        _ => None,
     }
 }
 
