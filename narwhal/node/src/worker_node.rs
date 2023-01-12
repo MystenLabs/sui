@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use arc_swap::{ArcSwap, ArcSwapOption};
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
@@ -9,10 +10,11 @@ use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use storage::NodeStorage;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{info, instrument};
 use types::PreSubscribedBroadcastSender;
 use worker::metrics::{initialise_metrics, Metrics};
 use worker::{TransactionValidator, Worker, NUM_SHUTDOWN_RECEIVERS};
@@ -35,6 +37,7 @@ pub struct WorkerNodeInner {
 impl WorkerNodeInner {
     // Starts the worker node with the provided info. If the node is already running then this
     // method will return an error instead.
+    #[instrument(level = "info", skip_all)]
     async fn start(
         &mut self,
         // The primary's public key
@@ -61,7 +64,7 @@ impl WorkerNodeInner {
             (metrics, None)
         } else {
             // create a new registry
-            let registry = Registry::new();
+            let registry = new_registry(committee.load().epoch);
 
             (initialise_metrics(&registry), Some(registry))
         };
@@ -97,11 +100,13 @@ impl WorkerNodeInner {
     // Will shutdown the worker node and wait until the node has shutdown by waiting on the
     // underlying components handles. If the node was not already running then the
     // method will return immediately.
+    #[instrument(level = "info", skip_all)]
     async fn shutdown(&mut self) {
         if !self.is_running().await {
             return;
         }
 
+        let now = Instant::now();
         if let Some(tx_shutdown) = self.tx_shutdown.as_ref() {
             tx_shutdown
                 .send()
@@ -114,7 +119,11 @@ impl WorkerNodeInner {
 
         self.swap_registry(None);
 
-        info!("Narwhal worker {} shutdown is complete", self.id);
+        info!(
+            "Narwhal worker {} shutdown is complete - took {} seconds",
+            self.id,
+            now.elapsed().as_secs_f64()
+        );
     }
 
     // If any of the underlying handles haven't still finished, then this method will return
@@ -234,6 +243,7 @@ impl WorkerNodes {
         }
     }
 
+    #[instrument(level = "info", skip_all)]
     pub async fn start(
         &self,
         // The primary's public key of this authority.
@@ -255,7 +265,7 @@ impl WorkerNodes {
         }
 
         // create the registry first
-        let registry = Registry::new();
+        let registry = new_registry(committee.load().epoch);
 
         let metrics = initialise_metrics(&registry);
 
@@ -302,6 +312,7 @@ impl WorkerNodes {
     }
 
     // Shuts down all the workers
+    #[instrument(level = "info", skip_all)]
     pub async fn shutdown(&self) {
         for (key, worker) in self.workers.load_full().as_ref() {
             info!("Shutting down worker {}", key);
@@ -319,7 +330,7 @@ impl WorkerNodes {
     }
 
     // returns the worker ids that are currently running
-    async fn workers_running(&self) -> Vec<WorkerId> {
+    pub async fn workers_running(&self) -> Vec<WorkerId> {
         let mut worker_ids = Vec::new();
 
         for (id, worker) in self.workers.load_full().as_ref() {
