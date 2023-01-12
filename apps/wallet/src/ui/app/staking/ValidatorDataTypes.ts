@@ -15,8 +15,6 @@ export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
  *
  */
 
-const STAKE_DELEGATOR_STALE_TIME = 5 * 1000;
-
 export type ValidatorMetaData = {
     sui_address: SuiAddress;
     pubkey_bytes: number[];
