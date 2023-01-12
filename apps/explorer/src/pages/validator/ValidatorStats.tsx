@@ -47,10 +47,14 @@ export function ValidatorStats({
     }, [validatorData, epoch]);
 
     const totalStake = validatorData.fields.stake_amount;
-    const delegatedStakePercentage = useMemo(() => getStakedPercent(
-        validatorData.fields.stake_amount,
-        totalValidatorStake
-    ), [validatorData, totalValidatorStake]);
+    const delegatedStakePercentage = useMemo(
+        () =>
+            getStakedPercent(
+                validatorData.fields.stake_amount,
+                totalValidatorStake
+            ),
+        [validatorData, totalValidatorStake]
+    );
 
     return (
         <div className="flex w-full flex-col gap-5 md:mt-8 md:flex-row">
