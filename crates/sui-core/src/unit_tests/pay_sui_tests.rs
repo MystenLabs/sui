@@ -76,9 +76,11 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 1200,
@@ -104,9 +106,11 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 100 + 100 + 900,
@@ -133,9 +137,11 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400,
             gas_budget: 801,
@@ -161,10 +167,11 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         201,
     )
     .await;
-
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400 + 600,
             gas_budget: 400 + 400 + 201,
@@ -327,9 +334,11 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
 
     let res = execute_pay_all_sui(vec![&coin1], recipient, sender, sender_key, 2000).await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2000,
@@ -346,9 +355,11 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     let recipient = dbg_addr(2);
     let res = execute_pay_all_sui(vec![&coin1, &coin2], recipient, sender, sender_key, 2500).await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2500,

@@ -42,6 +42,8 @@ async fn get_gas_status(
     .await
 }
 
+// Note: errors returned from this function should aggregated into
+// Sui::TransactionInputObjectsErrors
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input(
     store: &AuthorityStore,
@@ -169,8 +171,8 @@ async fn check_gas(
                 let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
                 let obj = obj.ok_or(SuiError::TransactionInputObjectsErrors {
                     errors: vec![SuiError::ObjectNotFound {
-                        object_id: gas_payment.0,
-                        version: None,
+                        object_id: obj_ref.0,
+                        version: Some(obj_ref.1),
                     }],
                 })?;
                 additional_objs.push(obj);
@@ -181,13 +183,16 @@ async fn check_gas(
                 gas_price,
                 extra_amount,
                 additional_objs,
-            )?;
+            )
+            .map_err(|e| SuiError::TransactionInputObjectsErrors { errors: vec![e] })?;
         } else {
-            gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])?;
+            gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])
+                .map_err(|e| SuiError::TransactionInputObjectsErrors { errors: vec![e] })?;
         }
 
         let gas_status =
-            gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
+            gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)
+                .map_err(|e| SuiError::TransactionInputObjectsErrors { errors: vec![e] })?;
         Ok(gas_status)
     }
 }
@@ -213,9 +218,9 @@ async fn check_objects(
         if !object.is_immutable() {
             fp_ensure!(
                 used_objects.insert(object.id().into()),
-                SuiError::InvalidBatchTransaction {
+                SuiError::TransactionInputObjectsErrors { errors: vec![SuiError::InvalidBatchTransaction {
                     error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
-                }
+                }]}
             );
         }
     }
@@ -251,7 +256,9 @@ async fn check_objects(
     // If any errors with the locks were detected, we return all errors to give the client
     // a chance to update the authority if possible.
     if !errors.is_empty() {
-        return Err(SuiError::TransactionInputObjectsErrors { errors });
+        return Err(SuiError::TransactionInputObjectsErrors {
+            errors: vec![SuiError::TransactionInputObjectsErrors { errors }],
+        });
     }
     if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
         return Err(SuiError::ObjectInputArityViolation);

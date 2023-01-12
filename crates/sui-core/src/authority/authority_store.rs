@@ -275,7 +275,7 @@ impl AuthorityStore {
             .contains_key(&ObjectKey(*object_id, version))?)
     }
 
-    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.perpetual_tables.get_object(object_id)
     }

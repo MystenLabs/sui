@@ -232,7 +232,7 @@ pub enum SuiError {
     InvalidDecoding,
     #[error("Unexpected message.")]
     UnexpectedMessage,
-    #[error("The transaction inputs contain duplicates ObjectRef's")]
+    #[error("The transaction inputs contain duplicated ObjectRef's")]
     DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
@@ -636,6 +636,21 @@ impl SuiError {
             }
             SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
             _ => false,
+        }
+    }
+
+    // Collapse TransactionInputObjectsErrors into a single SuiError
+    // if there's exactly one error.
+    pub fn collapse_if_single_transaction_input_error(&self) -> Option<SuiError> {
+        match self {
+            SuiError::TransactionInputObjectsErrors { errors } => {
+                if errors.len() != 1 {
+                    None
+                } else {
+                    Some(errors.get(0).unwrap().clone())
+                }
+            }
+            _ => None,
         }
     }
 }
