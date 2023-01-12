@@ -126,7 +126,10 @@ export default function NodeMap() {
 
     return (
         <Card spacing="none">
-            <div data-testid="node-map" className="relative flex min-h-[320px] flex-col justify-end">
+            <div
+                data-testid="node-map"
+                className="relative flex min-h-[320px] flex-col justify-end"
+            >
                 <div className="pointer-events-none relative z-10 flex flex-1 flex-col justify-between gap-8 p-6">
                     <Heading variant="heading4/semibold" color="steel-darker">
                         Sui Nodes
@@ -135,7 +138,7 @@ export default function NodeMap() {
                     <div className="flex flex-col gap-8">
                         <NodeStat title="Countries">
                             {isLoading && (
-                                <Placeholder width="59px" height="32px" />
+                                <Placeholder width="60px" height="0.8em" />
                             )}
                             {isSuccess &&
                                 countryCount &&
@@ -144,7 +147,7 @@ export default function NodeMap() {
 
                         <NodeStat title="Nodes on Devnet and Testnet">
                             {isLoading && (
-                                <Placeholder width="59px" height="32px" />
+                                <Placeholder width="60px" height="0.8em" />
                             )}
                             {
                                 // Fetch received response with no errors and the value was not null
