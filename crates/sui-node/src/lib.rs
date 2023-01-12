@@ -3,20 +3,13 @@
 
 use crate::metrics::GrpcMetrics;
 use anemo::Network;
-use anemo_tower::callback::CallbackLayer;
-use anemo_tower::trace::DefaultMakeSpan;
-use anemo_tower::trace::DefaultOnFailure;
-use anemo_tower::trace::TraceLayer;
 use anyhow::anyhow;
 use anyhow::Result;
 use checkpoint_executor::CheckpointExecutor;
 use futures::TryFutureExt;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
-use narwhal_network::metrics::MetricsMakeCallbackHandler;
-use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
-use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
@@ -51,7 +44,6 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
-use tower::ServiceBuilder;
 use tracing::info;
 use typed_store::DBMetrics;
 pub mod admin;
@@ -335,12 +327,6 @@ impl SuiNode {
         state_sync_store: RocksDbStore,
         prometheus_registry: &Registry,
     ) -> Result<(Network, discovery::Handle, state_sync::Handle)> {
-        let (state_sync, state_sync_server) = state_sync::Builder::new()
-            .config(config.p2p_config.state_sync.clone().unwrap_or_default())
-            .store(state_sync_store)
-            .with_metrics(prometheus_registry)
-            .build();
-
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
         let mut p2p_config = config.p2p_config.clone();
@@ -357,72 +343,12 @@ impl SuiNode {
             });
         p2p_config.seed_peers.extend(other_validators);
 
-        let (discovery, discovery_server) = discovery::Builder::new().config(p2p_config).build();
-
-        let p2p_network = {
-            let routes = anemo::Router::new()
-                .add_rpc_service(discovery_server)
-                .add_rpc_service(state_sync_server);
-
-            let inbound_network_metrics =
-                NetworkMetrics::new("sui", "inbound", prometheus_registry);
-            let outbound_network_metrics =
-                NetworkMetrics::new("sui", "outbound", prometheus_registry);
-            let network_connection_metrics =
-                NetworkConnectionMetrics::new("sui", prometheus_registry);
-
-            let service = ServiceBuilder::new()
-                .layer(
-                    TraceLayer::new_for_server_errors()
-                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
-                        .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
-                )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(inbound_network_metrics),
-                )))
-                .service(routes);
-
-            let outbound_layer = ServiceBuilder::new()
-                .layer(
-                    TraceLayer::new_for_client_and_server_errors()
-                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
-                        .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
-                )
-                .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
-                    Arc::new(outbound_network_metrics),
-                )))
-                .into_inner();
-
-            let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            if anemo_config.max_frame_size.is_none() {
-                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
-                // catch bugs where size limits are missing from other parts of our code.
-                // TODO: remove this and revert to default anemo max_frame_size once size
-                // limits are fully implemented on sui data structures.
-                anemo_config.max_frame_size = Some(8 << 20);
-            }
-
-            let network = Network::bind(config.p2p_config.listen_address)
-                .server_name("sui")
-                .private_key(config.network_key_pair().copy().private().0.to_bytes())
-                .config(anemo_config)
-                .outbound_request_layer(outbound_layer)
-                .start(service)?;
-            info!("P2p network started on {}", network.local_addr());
-
-            let _connection_monitor_handle =
-                narwhal_network::connectivity::ConnectionMonitor::spawn(
-                    network.downgrade(),
-                    network_connection_metrics,
-                    HashMap::default(),
-                );
-
-            network
-        };
-
-        let discovery_handle = discovery.start(p2p_network.clone());
-        let state_sync_handle = state_sync.start(p2p_network.clone());
-        Ok((p2p_network, discovery_handle, state_sync_handle))
+        sui_network::create_p2p_network(
+            p2p_config,
+            state_sync_store,
+            config.network_key_pair().copy(),
+            prometheus_registry,
+        )
     }
 
     async fn construct_validator_components(

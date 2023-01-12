@@ -8991,6 +8991,10 @@ dependencies = [
 [[package]]
 name = "sui-light-client"
 version = "0.21.0"
+dependencies = [
+ "sui-config",
+ "sui-network",
+]
 
 [[package]]
 name = "sui-macros"
@@ -9006,11 +9010,13 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anemo-build",
+ "anemo-tower",
  "anyhow",
  "async-trait",
  "futures",
  "multiaddr",
  "mysten-network",
+ "narwhal-network",
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
@@ -9021,6 +9027,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tower",
  "tracing",
  "workspace-hack",
 ]
