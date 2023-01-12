@@ -88,8 +88,8 @@ struct IndexerConfig {
     db_url: String,
     #[clap(long)]
     rpc_client_url: String,
-    #[clap(long, default_value = "127.0.0.1", global = true)]
+    #[clap(long, default_value = "0.0.0.0", global = true)]
     pub client_metric_host: String,
-    #[clap(long, default_value = "8081", global = true)]
+    #[clap(long, default_value = "9184", global = true)]
     pub client_metric_port: u16,
 }
