@@ -4,13 +4,13 @@
 import { is, SuiObject } from '@mysten/sui.js';
 import { lazy, Suspense, useState, useMemo } from 'react';
 
-import { apyCalc } from '../validator/ApyCalulator';
+import { apyCalc } from '../../components/validator/ApyCalulator';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import Pagination from '~/components/pagination/Pagination';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
+import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { useGetObject } from '~/hooks/useGetObject';
-import { DelegationAmount } from '~/pages/validator/DelegationAmount';
 import {
     VALIDATORS_OBJECT_ID,
     type ValidatorsFields,

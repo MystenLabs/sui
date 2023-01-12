@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 
-import { apyCalc } from '../validator/ApyCalulator';
+import { apyCalc } from './ApyCalulator';
 import { DelegationAmount } from './DelegationAmount';
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';

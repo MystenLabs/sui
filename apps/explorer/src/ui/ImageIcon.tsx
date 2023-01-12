@@ -13,8 +13,8 @@ const imageStyle = cva(
             size: {
                 sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
                 md: 'w-7.5 h-7.5 font-medium text-body',
-                lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading4 md:text-3xl',
-                xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-heading4 md:text-5xl',
+                lg: 'md:w-10 md:h-10 w-8 h-8 font-medium text-heading4 md:text-iconTextLarge',
+                xl: 'md:w-31.5 md:h-31.5 w-16 h-16 font-medium text-heading4 md:text-iconTextLarge',
             },
             circle: {
                 true: 'rounded-full',
@@ -30,16 +30,16 @@ const imageStyle = cva(
 );
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
-    src: string | null;
+    src?: string | null;
     label: string;
     fallback: string;
     alt?: string;
 }
 
-function FallBackAvatar({ str }: { str: string }) {
+function FallBackAvatar({ fallback }: { fallback: string }) {
     return (
         <div className="flex h-full w-full items-center justify-center">
-            {str?.slice(0, 2)}
+            {fallback?.slice(0, 2)}
         </div>
     );
 }
@@ -55,7 +55,7 @@ export function ImageIcon({
     return (
         <div role="img" className={imageStyle(styleProps)} aria-label={label}>
             {error ? (
-                <FallBackAvatar str={fallback} />
+                <FallBackAvatar fallback={fallback} />
             ) : (
                 <img
                     src={src || ''}
