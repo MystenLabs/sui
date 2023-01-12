@@ -50,7 +50,11 @@ function AddressResult() {
             </>
         );
     } else {
-        return <Banner variant="error" spacing="lg" fullWidth>Something went wrong</Banner>
+        return (
+            <Banner variant="error" spacing="lg" fullWidth>
+                Something went wrong
+            </Banner>
+        );
     }
 }
 

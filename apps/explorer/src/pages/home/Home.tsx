@@ -18,7 +18,7 @@ function Home() {
         <div
             data-testid="home-page"
             id="home"
-            className="bg-white mx-auto grid grid-cols-1 md:grid-cols-2 gap-2"
+            className="mx-auto grid grid-cols-1 gap-2 bg-white md:grid-cols-2"
         >
             <section className="left-item mb-4 md:mb-0">
                 <ErrorBoundary>
