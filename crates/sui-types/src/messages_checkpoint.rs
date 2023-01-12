@@ -26,77 +26,19 @@ pub type CheckpointSequenceNumber = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
-    // Type of checkpoint request
-    pub request_type: CheckpointRequestType,
-    // A flag, if true also return the contents of the
-    // checkpoint besides the meta-data.
-    pub detail: bool,
-}
-
-impl CheckpointRequest {
-    pub fn authenticated(seq: Option<CheckpointSequenceNumber>, detail: bool) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::AuthenticatedCheckpoint(seq),
-            detail,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointRequestType {
-    /// Request a stored authenticated checkpoint.
     /// if a sequence number is specified, return the checkpoint with that sequence number;
     /// otherwise if None returns the latest authenticated checkpoint stored.
-    AuthenticatedCheckpoint(Option<CheckpointSequenceNumber>),
+    pub sequence_number: Option<CheckpointSequenceNumber>,
+    // A flag, if true also return the contents of the
+    // checkpoint besides the meta-data.
+    pub request_content: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointResponse {
-    AuthenticatedCheckpoint {
-        checkpoint: Option<AuthenticatedCheckpoint>,
-        contents: Option<CheckpointContents>,
-    },
-}
-
-// TODO: Rename to AuthenticatedCheckpointSummary
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AuthenticatedCheckpoint {
-    // The checkpoint with just a single authority
-    // signature.
-    Signed(SignedCheckpointSummary),
-    // The checkpoint with a quorum of signatures.
-    Certified(CertifiedCheckpointSummary),
-}
-
-impl AuthenticatedCheckpoint {
-    pub fn summary(&self) -> &CheckpointSummary {
-        match self {
-            Self::Signed(s) => &s.summary,
-            Self::Certified(c) => &c.summary,
-        }
-    }
-
-    pub fn verify(&self, committee: &Committee, detail: Option<&CheckpointContents>) -> SuiResult {
-        match self {
-            Self::Signed(s) => s.verify(committee, detail),
-            Self::Certified(c) => c.verify(committee, detail),
-        }
-    }
-
-    pub fn sequence_number(&self) -> CheckpointSequenceNumber {
-        match self {
-            Self::Signed(s) => s.summary.sequence_number,
-            Self::Certified(c) => c.summary.sequence_number,
-        }
-    }
-
-    pub fn epoch(&self) -> EpochId {
-        match self {
-            Self::Signed(s) => s.summary.epoch,
-            Self::Certified(c) => c.summary.epoch,
-        }
-    }
+pub struct CheckpointResponse {
+    pub checkpoint: Option<CertifiedCheckpointSummary>,
+    pub contents: Option<CheckpointContents>,
 }
 
 #[serde_as]
