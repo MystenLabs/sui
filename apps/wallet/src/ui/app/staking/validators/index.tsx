@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { SelectValidatorCard } from './SelectValidatorCard';
 import { ValidatorsCard } from './ValidatorsCard';
 import Alert from '_components/alert';
@@ -21,7 +21,7 @@ export function Validators() {
         isLoading,
         isError,
         error,
-    } = useGetValidatorsByDelegator(accountAddress || '');
+    } = useGetDelegatedStake(accountAddress || '');
 
     const navigate = useNavigate();
     const close = () => {

@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
 import StakeAmount from '../home/StakeAmount';
-import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { DelegationCard, DelegationState } from './../home/DelegationCard';
 import BottomMenuLayout, {
     Menu,
@@ -27,7 +27,7 @@ export function ValidatorsCard() {
         isLoading,
         isError,
         error,
-    } = useGetValidatorsByDelegator(accountAddress || '');
+    } = useGetDelegatedStake(accountAddress || '');
 
     const totalActivePendingStake = useMemo(() => {
         if (!stakeValidators) return 0n;
@@ -103,6 +103,7 @@ export function ValidatorsCard() {
                                     <DelegationCard
                                         address={staked_sui.validator_address}
                                         staked={staked_sui.principal.value}
+                                        stakedId={staked_sui.id.id}
                                         state={
                                             delegation_status === 'Pending'
                                                 ? DelegationState.WARM_UP

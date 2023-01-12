@@ -38,15 +38,13 @@ const getDelegatedStakes = async (
     return res.result as DelegatedStake[];
 };
 
-export function useGetValidatorsByDelegator(
+export function useGetDelegatedStake(
     address: string
 ): UseQueryResult<DelegatedStake[], Error> {
     const rpcEndPoint = useRpc().endpoints.fullNode;
     return useQuery(
         ['validator', address],
-        () => {
-            return getDelegatedStakes(address, rpcEndPoint);
-        },
+        () => getDelegatedStakes(address, rpcEndPoint),
         {
             staleTime: STAKE_DELEGATOR_STALE_TIME,
         }
@@ -59,7 +57,7 @@ export function useGetValidatorMetaData(): UseQueryResult<
     Error
 > {
     const rpcEndPoint = useRpc().endpoints.fullNode;
-    return useQuery(['validator'], async () => {
+    return useQuery(['validator-1'], async () => {
         const response = await fetch(rpcEndPoint, {
             method: 'POST',
             headers: {

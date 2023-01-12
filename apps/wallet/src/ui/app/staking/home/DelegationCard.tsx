@@ -20,6 +20,7 @@ interface DelegationCardProps {
     state: DelegationState;
     rewards?: number | bigint;
     address: string;
+    stakedId: string;
 }
 
 const STATE_TO_COPY = {
@@ -35,15 +36,17 @@ export function DelegationCard({
     rewards,
     state,
     address,
+    stakedId,
 }: DelegationCardProps) {
     const [stakedFormatted] = useFormatCoin(staked, GAS_TYPE_ARG);
     const [rewardsFormatted] = useFormatCoin(rewards, GAS_TYPE_ARG);
 
     return (
         <Link
-            to={`/stake/validator-details?address=${encodeURIComponent(
-                address
-            )}`}
+            to={`/stake/delegation-detail?${new URLSearchParams({
+                validator: address,
+                staked: stakedId,
+            }).toString()}`}
             className="flex no-underline flex-col py-3 px-3.75 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/10 bg-transparent"
         >
             <div className="flex justify-between items-start mb-2">

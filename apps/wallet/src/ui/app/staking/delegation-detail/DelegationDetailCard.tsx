@@ -6,7 +6,6 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
-import { calculateAPY } from '../calculateAPY';
 import StakeAmount from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -23,15 +22,17 @@ import { useAppSelector, useGetObject } from '_hooks';
 
 import type { ValidatorsFields } from '../ValidatorDataTypes';
 
-type ValidatorDetailCardProps = {
+type DelegationDetailCardProps = {
     validatorAddress: string;
+    stakedId: string;
 };
 
-export function ValidatorDetailCard({
+export function DelegationDetailCard({
     validatorAddress,
-}: ValidatorDetailCardProps) {
+    stakedId,
+}: DelegationDetailCardProps) {
     const {
-        data: validators,
+        data: validatetors,
         isLoading: loadingValidators,
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
@@ -39,16 +40,16 @@ export function ValidatorDetailCard({
     const accountAddress = useAppSelector(({ account }) => account.address);
 
     const {
-        data: stakeValidators,
+        data: allDelegation,
         isLoading,
         isError,
     } = useGetDelegatedStake(accountAddress || '');
 
     const validatorsData =
-        validators &&
-        is(validators.details, SuiObject) &&
-        validators.details.data.dataType === 'moveObject'
-            ? (validators.details.data.fields as ValidatorsFields)
+        validatetors &&
+        is(validatetors.details, SuiObject) &&
+        validatetors.details.data.dataType === 'moveObject'
+            ? (validatetors.details.data.fields as ValidatorsFields)
             : null;
 
     const validatorData = useMemo(() => {
@@ -58,25 +59,49 @@ export function ValidatorDetailCard({
         );
     }, [validatorAddress, validatorsData]);
 
-    const totalStake = useMemo(() => {
-        if (!stakeValidators) return 0n;
-        let totalActiveStake = 0n;
-        stakeValidators.forEach((event) => {
-            if (event.staked_sui.validator_address === validatorAddress) {
-                totalActiveStake += BigInt(event.staked_sui.principal.value);
-            }
-        });
-        return totalActiveStake;
-    }, [stakeValidators, validatorAddress]);
+    const delegationData = useMemo(() => {
+        if (!allDelegation) return null;
+
+        return allDelegation.find(
+            ({ staked_sui }) => staked_sui.id.id === stakedId
+        );
+    }, [allDelegation, stakedId]);
+
+    const totalStake = delegationData?.staked_sui.principal.value || 0n;
+
+    const suiEarned = useMemo(() => {
+        if (
+            !delegationData ||
+            typeof delegationData.delegation_status !== 'object'
+        )
+            return 0n;
+        return BigInt(
+            delegationData.delegation_status.Active.pool_tokens.value -
+                delegationData.delegation_status.Active.principal_sui_amount
+        );
+    }, [delegationData]);
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
-        return calculateAPY(validatorData, +validatorsData.epoch);
+        const { sui_balance, starting_epoch, delegation_token_supply } =
+            validatorData.fields.delegation_staking_pool.fields;
+
+        const num_epochs_participated = +validatorsData.epoch - +starting_epoch;
+
+        return (
+            Math.pow(
+                1 +
+                    (+sui_balance - +delegation_token_supply.fields.value) /
+                        +delegation_token_supply.fields.value,
+                365 / num_epochs_participated - 1
+            ) || 0
+        );
     }, [validatorData, validatorsData]);
 
-    const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(
-        validatorAddress
-    )}`;
+    const stakeByValidatorAddress = `/stake/new?${new URLSearchParams({
+        address: validatorAddress,
+        staked: stakedId,
+    }).toString()}`;
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -99,8 +124,6 @@ export function ValidatorDetailCard({
             </div>
         );
     }
-
-    const suiEarned = 0n;
 
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full">
@@ -231,22 +254,6 @@ export function ValidatorDetailCard({
                                 </Button>
                             )}
                         </div>
-                        {totalStake > 1 && (
-                            <div className="w-full">
-                                <Button
-                                    size="large"
-                                    mode="outline"
-                                    disabled
-                                    href={
-                                        stakeByValidatorAddress +
-                                        '&unstake=true'
-                                    }
-                                    className="w-full"
-                                >
-                                    Unstake All SUI
-                                </Button>
-                            </div>
-                        )}
                     </div>
                 </Content>
                 <Button

@@ -6,9 +6,8 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
-import { calculateAPY } from '../calculateAPY';
 import StakeAmount from '../home/StakeAmount';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
+import { useGetValidatorsByDelegator } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -25,13 +24,14 @@ import type { ValidatorsFields } from '../ValidatorDataTypes';
 
 type ValidatorDetailCardProps = {
     validatorAddress: string;
+    stakedId: string | null;
 };
 
 export function ValidatorDetailCard({
     validatorAddress,
 }: ValidatorDetailCardProps) {
     const {
-        data: validators,
+        data: validatetors,
         isLoading: loadingValidators,
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
@@ -42,13 +42,13 @@ export function ValidatorDetailCard({
         data: stakeValidators,
         isLoading,
         isError,
-    } = useGetDelegatedStake(accountAddress || '');
+    } = useGetValidatorsByDelegator(accountAddress || '');
 
     const validatorsData =
-        validators &&
-        is(validators.details, SuiObject) &&
-        validators.details.data.dataType === 'moveObject'
-            ? (validators.details.data.fields as ValidatorsFields)
+        validatetors &&
+        is(validatetors.details, SuiObject) &&
+        validatetors.details.data.dataType === 'moveObject'
+            ? (validatetors.details.data.fields as ValidatorsFields)
             : null;
 
     const validatorData = useMemo(() => {
@@ -71,7 +71,19 @@ export function ValidatorDetailCard({
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
-        return calculateAPY(validatorData, +validatorsData.epoch);
+        const { sui_balance, starting_epoch, delegation_token_supply } =
+            validatorData.fields.delegation_staking_pool.fields;
+
+        const num_epochs_participated = +validatorsData.epoch - +starting_epoch;
+
+        return (
+            Math.pow(
+                1 +
+                    (+sui_balance - +delegation_token_supply.fields.value) /
+                        +delegation_token_supply.fields.value,
+                365 / num_epochs_participated - 1
+            ) || 0
+        );
     }, [validatorData, validatorsData]);
 
     const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(

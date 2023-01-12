@@ -3,9 +3,9 @@
 import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { apyCalc } from '../ApyCalc';
+import { calculateAPY } from '../calculateAPY';
 import StakeAmount from '../home/StakeAmount';
-import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import { ValidatorLogo } from '../validator-detail/ValidatorLogo';
 import { Card } from '_app/shared/card';
@@ -17,13 +17,17 @@ import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 import type { ValidatorsFields } from '../ValidatorDataTypes';
 
+type ValidatorFormDetailProps = {
+    validatorAddress: string;
+    unstake?: boolean;
+    stakedId?: string | null;
+};
+
 export function ValidatorFormDetail({
     validatorAddress,
     unstake,
-}: {
-    validatorAddress: string;
-    unstake?: boolean;
-}) {
+    stakedId,
+}: ValidatorFormDetailProps) {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const {
         data: validatetors,
@@ -32,11 +36,11 @@ export function ValidatorFormDetail({
     } = useGetObject(STATE_OBJECT);
 
     const {
-        data: stakeValidators,
+        data: allDelegation,
         isLoading,
         isError,
         error,
-    } = useGetValidatorsByDelegator(accountAddress || '');
+    } = useGetDelegatedStake(accountAddress || '');
 
     const validatorsData =
         validatetors &&
@@ -44,6 +48,16 @@ export function ValidatorFormDetail({
         validatetors.details.data.dataType === 'moveObject'
             ? (validatetors.details.data.fields as ValidatorsFields)
             : null;
+
+    const delegationData = useMemo(() => {
+        if (!allDelegation) return null;
+
+        return allDelegation.find(
+            ({ staked_sui }) => staked_sui.id.id === stakedId
+        );
+    }, [allDelegation, stakedId]);
+
+    const totalSuiStake = delegationData?.staked_sui.principal.value || 0n;
 
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
@@ -55,19 +69,19 @@ export function ValidatorFormDetail({
     const totalValidatorStake = validatorData?.fields.stake_amount || 0;
 
     const totalStake = useMemo(() => {
-        if (!stakeValidators) return 0n;
+        if (!allDelegation) return 0n;
         let totalActiveStake = 0n;
-        stakeValidators.forEach((event) => {
+        allDelegation.forEach((event) => {
             if (event.staked_sui.validator_address === validatorAddress) {
                 totalActiveStake += BigInt(event.staked_sui.principal.value);
             }
         });
         return totalActiveStake;
-    }, [stakeValidators, validatorAddress]);
+    }, [allDelegation, validatorAddress]);
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
-        return apyCalc(validatorData, +validatorsData.epoch);
+        return calculateAPY(validatorData, +validatorsData.epoch);
     }, [validatorData, validatorsData]);
 
     if (isLoading || loadingValidators) {
@@ -151,7 +165,11 @@ export function ValidatorFormDetail({
                                     </Text>
                                 </div>
                                 <StakeAmount
-                                    balance={totalValidatorStake}
+                                    balance={
+                                        stakedId
+                                            ? totalSuiStake
+                                            : totalValidatorStake
+                                    }
                                     variant="body"
                                 />
                             </div>

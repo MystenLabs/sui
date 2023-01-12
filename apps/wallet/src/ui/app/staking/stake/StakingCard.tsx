@@ -58,6 +58,7 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
+    const stakeIdParams = searchParams.get('staked');
     const unstake = searchParams.get('unstake') === 'true';
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
@@ -179,6 +180,7 @@ function StakingCard() {
                                 <ValidatorFormDetail
                                     validatorAddress={validatorAddress}
                                     unstake={unstake}
+                                    stakedId={stakeIdParams}
                                 />
                                 <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
                                     <Text
