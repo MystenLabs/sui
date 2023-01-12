@@ -2,6 +2,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub use crate::committee::EpochId;
+use crate::crypto::{
+    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
+};
+use crate::error::ExecutionError;
+use crate::error::ExecutionErrorKind;
+use crate::error::SuiError;
+use crate::gas_coin::GasCoin;
+use crate::object::{Object, Owner};
+use crate::sui_serde::HexObjectId;
+use crate::sui_serde::Readable;
+use crate::sui_serde::ToArray;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use move_core_types::account_address::AccountAddress;
@@ -74,7 +86,7 @@ pub type AuthorityName = AuthorityPublicKeyBytes;
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
+    #[serde_as(as = "Readable<HexObjectId, _>")]
     AccountAddress,
 );
 
@@ -155,7 +167,7 @@ pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 )]
 pub struct SuiAddress(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<Hex, _>")]
+    #[serde_as(as = "Readable<ToArray<Hex>, _>")]
     [u8; SUI_ADDRESS_LENGTH],
 );
 

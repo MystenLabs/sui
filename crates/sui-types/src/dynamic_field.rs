@@ -3,6 +3,7 @@
 
 use crate::base_types::ObjectDigest;
 use crate::error::{SuiError, SuiResult};
+use crate::sui_serde::Readable;
 use crate::{ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
@@ -13,7 +14,6 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use std::fmt::{Display, Formatter};
-
 #[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
@@ -30,9 +30,9 @@ pub struct DynamicFieldInfo {
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldName {
     pub type_: String,
-    // Bincode does not like serde_json::Value, rocksdb will not insert the value without this hack.
+    // Bincode does not like serde_json::Value, rocksdb will not insert the value without serializing value as string.
     #[schemars(with = "Value")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "Readable<_, DisplayFromStr>")]
     pub value: Value,
 }
 
