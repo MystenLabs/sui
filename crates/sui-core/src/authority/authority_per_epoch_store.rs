@@ -1288,6 +1288,19 @@ impl AuthorityPerEpochStore {
         batch.write()
     }
 
+    /// Register genesis transaction in builder DB so that it does not include transaction
+    /// in future checkpoints
+    pub fn put_genesis_transaction_in_builder_digest_to_checkpoint(
+        &self,
+        digest: TransactionDigest,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult<()> {
+        Ok(self
+            .tables
+            .builder_digest_to_checkpoint
+            .insert(&digest, &sequence)?)
+    }
+
     pub fn builder_included_transaction_in_checkpoint(
         &self,
         digest: &TransactionDigest,
