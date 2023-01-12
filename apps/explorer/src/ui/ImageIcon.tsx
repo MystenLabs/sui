@@ -30,29 +30,36 @@ const imageStyle = cva(
 );
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
-    src?: string | null;
-    alt: string;
+    src: string | null;
+    label: string;
+    fallback: string;
+    alt?: string;
 }
 
 function FallBackAvatar({ str }: { str: string }) {
     return (
-        <div className="flex h-full w-full items-center justify-center">
-            {str.slice(0, 2)}
+        <div className="flex h-full w-full items-center justify-center text-bodySmall font-medium">
+            {str?.slice(0, 2)}
         </div>
     );
 }
 
-export function ImageIcon({ src, alt, ...styleProps }: ImageIconProps) {
+export function ImageIcon({
+    src,
+    label,
+    alt = label,
+    fallback,
+    ...styleProps
+}: ImageIconProps) {
     const [error, setError] = useState(false);
     return (
-        <div role="img" className={imageStyle(styleProps)} aria-label={alt}>
+        <div role="img" className={imageStyle(styleProps)} aria-label={label}>
             {error ? (
-                <FallBackAvatar str={alt} />
+                <FallBackAvatar str={fallback} />
             ) : (
                 <img
                     src={src || ''}
                     alt={alt}
-                    aria-label={alt}
                     className="flex h-full w-full items-center justify-center"
                     onError={() => setError(true)}
                 />

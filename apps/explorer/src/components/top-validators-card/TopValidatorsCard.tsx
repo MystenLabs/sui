@@ -59,7 +59,13 @@ const validatorsTable = (
                 name: (
                     <div className="flex items-center gap-2.5">
                         {showIcon && (
-                            <ImageIcon src={logo} size="sm" alt={name} circle />
+                            <ImageIcon
+                                src={logo}
+                                size="sm"
+                                fallback={name}
+                                label={name}
+                                circle
+                            />
                         )}
                         <Text variant="bodySmall/medium" color="steel-darker">
                             {name}

@@ -37,7 +37,12 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
     return (
         <>
             <div className="flex basis-full gap-5 border-r border-solid border-transparent border-r-gray-45 capitalize md:mr-7.5 md:basis-1/4">
-                <ImageIcon src={logo} alt={validatorName} size="xl" />
+                <ImageIcon
+                    src={logo}
+                    label={validatorName}
+                    fallback={validatorName}
+                    size="xl"
+                />
                 <div className="mt-1 flex flex-col gap-2.5 pl-2 md:gap-3.5">
                     <Heading as="h1" variant="heading2/bold" color="gray-100">
                         {validatorName}

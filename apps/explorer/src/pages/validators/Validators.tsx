@@ -114,7 +114,8 @@ function ValidatorPageResult() {
                                 <ImageIcon
                                     src={logo}
                                     size="sm"
-                                    alt={name}
+                                    label={name}
+                                    fallback={name}
                                     circle
                                 />
                                 <Text
