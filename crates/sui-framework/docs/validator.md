@@ -31,6 +31,7 @@
 -  [Function `pending_withdraw`](#0x2_validator_pending_withdraw)
 -  [Function `gas_price`](#0x2_validator_gas_price)
 -  [Function `commission_rate`](#0x2_validator_commission_rate)
+-  [Function `pool_token_exchange_rate`](#0x2_validator_pool_token_exchange_rate)
 -  [Function `is_duplicate`](#0x2_validator_is_duplicate)
 
 
@@ -906,6 +907,30 @@ Return the total amount staked with this validator, including both validator sta
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_commission_rate">commission_rate</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
     self.commission_rate
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_pool_token_exchange_rate"></a>
+
+## Function `pool_token_exchange_rate`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_pool_token_exchange_rate">pool_token_exchange_rate</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_pool_token_exchange_rate">pool_token_exchange_rate</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): PoolTokenExchangeRate {
+    <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate">staking_pool::pool_token_exchange_rate</a>(&self.delegation_staking_pool)
 }
 </code></pre>
 
