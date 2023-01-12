@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use reqwest::Client;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -5,6 +8,7 @@ use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
+use std::time::Duration;
 use sui_config::utils;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::types::{
@@ -27,7 +31,7 @@ async fn test_locked_sui() {
     let keystore = &test_cluster.wallet.config.keystore;
 
     let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir());
+        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
 
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
@@ -120,7 +124,7 @@ async fn test_get_delegated_sui() {
     let keystore = &test_cluster.wallet.config.keystore;
 
     let (rosetta_client, _handle) =
-        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir());
+        start_rosetta_test_server(client.clone(), test_cluster.swarm.dir()).await;
 
     let network_identifier = NetworkIdentifier {
         blockchain: "sui".to_string(),
@@ -200,7 +204,7 @@ async fn test_get_delegated_sui() {
     // TODO: add DelegatedSui test when we can advance epoch.
 }
 
-fn start_rosetta_test_server(
+async fn start_rosetta_test_server(
     client: SuiClient,
     dir: &Path,
 ) -> (RosettaClient, JoinHandle<hyper::Result<()>>) {
@@ -211,6 +215,8 @@ fn start_rosetta_test_server(
     let rosetta_address = format!("{}:{}", local_ip, port);
     let _handle = rosetta_server.serve(SocketAddr::from_str(&rosetta_address).unwrap());
 
+    // wait for rosetta to process the genesis block.
+    tokio::time::sleep(Duration::from_millis(100)).await;
     (RosettaClient::new(port), _handle)
 }
 
