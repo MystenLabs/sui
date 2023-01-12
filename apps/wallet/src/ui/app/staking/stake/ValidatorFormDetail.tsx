@@ -4,9 +4,10 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import StakeAmount from '../home/StakeAmount';
-import { getName, STATE_OBJECT } from '../usePendingDelegation';
+import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
+import { STATE_OBJECT } from '../usePendingDelegation';
+import { ValidatorLogo } from '../validator-detail/ValidatorLogo';
 import { Card } from '_app/shared/card';
-import { ImageIcon } from '_app/shared/image-icon';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject, useAppSelector } from '_hooks';
@@ -23,70 +24,61 @@ export function ValidatorFormDetail({
     unstake?: boolean;
 }) {
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
+    const {
+        data: validatetors,
+        isLoading: loadingValidators,
+        isError: errorValidators,
+    } = useGetObject(STATE_OBJECT);
+
+    const {
+        data: stakeValidators,
+        isLoading,
+        isError,
+    } = useGetValidatorsByDelegator(accountAddress || '');
 
     const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
+        validatetors &&
+        is(validatetors.details, SuiObject) &&
+        validatetors.details.data.dataType === 'moveObject'
+            ? (validatetors.details.data.fields as ValidatorState)
             : null;
 
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
-
-        const validator =
-            validatorsData.validators.fields.active_validators.find(
-                (av) =>
-                    av.fields.metadata.fields.sui_address === validatorAddress
-            );
-
-        if (!validator) return null;
-
-        const {
-            sui_balance,
-            starting_epoch,
-            pending_delegations,
-            delegation_token_supply,
-        } = validator.fields.delegation_staking_pool.fields;
-
-        const num_epochs_participated = validatorsData.epoch - starting_epoch;
-        const { name: rawName, sui_address } = validator.fields.metadata.fields;
-
-        const APY = Math.pow(
-            1 +
-                (sui_balance - delegation_token_supply.fields.value) /
-                    delegation_token_supply.fields.value,
-            365 / num_epochs_participated - 1
+        return validatorsData.validators.fields.active_validators.find(
+            (av) => av.fields.metadata.fields.sui_address === validatorAddress
         );
-        console.log(pending_delegations, 'padding delegations');
-
-        const pending_delegationsByAddress = [] as {
-            delegator: string;
-            sui_amount: bigint;
-        }[];
-
-        /*` pending_delegations
-            ? (pending_delegations || []).filter(
-                  (d) => d.fields.delegator === accountAddress
-              )
-            : []`; */
-
-        return {
-            name: getName(rawName),
-            apy: APY > 0 ? APY : 'N/A',
-            logo: null,
-            address: sui_address,
-            totalStaked: 0n /*(pending_delegations || []).reduce(
-                (acc, fields) =>
-                    (acc += BigInt(fields.fields.sui_amount || 0n)),
-                0n
-            )*/,
-            pendingDelegationAmount: 0n,
-        };
     }, [validatorAddress, validatorsData]);
 
-    if (isLoading) {
+    const totalStake = useMemo(() => {
+        if (!stakeValidators) return 0n;
+        let totalActiveStake = 0n;
+        stakeValidators.forEach((event) => {
+            if (event.staked_sui.validator_address === validatorAddress) {
+                totalActiveStake += BigInt(event.staked_sui.principal.value);
+            }
+        });
+        return totalActiveStake;
+    }, [stakeValidators, validatorAddress]);
+
+    const apy = useMemo(() => {
+        if (!validatorData || !validatorsData) return 0;
+        const { sui_balance, starting_epoch, delegation_token_supply } =
+            validatorData.fields.delegation_staking_pool.fields;
+
+        const num_epochs_participated = validatorsData.epoch - starting_epoch;
+
+        return (
+            Math.pow(
+                1 +
+                    (sui_balance - delegation_token_supply.fields.value) /
+                        delegation_token_supply.fields.value,
+                365 / num_epochs_participated - 1
+            ) || 0
+        );
+    }, [validatorData, validatorsData]);
+
+    if (isLoading || loadingValidators) {
         return (
             <div className="p-2 w-full flex justify-center items-center h-full">
                 <LoadingIndicator />
@@ -94,7 +86,7 @@ export function ValidatorFormDetail({
         );
     }
 
-    if (isError) {
+    if (isError || errorValidators) {
         return (
             <div className="p-2">
                 <Alert mode="warning">
@@ -113,15 +105,11 @@ export function ValidatorFormDetail({
                     titleDivider
                     header={
                         <div className="flex py-2.5 gap-2 items-center">
-                            <ImageIcon
-                                src={validatorData.logo}
-                                alt={validatorData.name}
-                                size="sm"
-                                circle
+                            <ValidatorLogo
+                                validatorAddress={validatorAddress}
+                                iconSize="sm"
+                                size="body"
                             />
-                            <Text variant="body" weight="semibold">
-                                {validatorData.name}
-                            </Text>
                         </div>
                     }
                     footer={
@@ -134,10 +122,7 @@ export function ValidatorFormDetail({
                                 Your Staked SUI
                             </Text>
 
-                            <StakeAmount
-                                balance={validatorData.pendingDelegationAmount}
-                                variant="body"
-                            />
+                            <StakeAmount balance={totalStake} variant="body" />
                         </>
                     }
                 >
@@ -159,8 +144,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {validatorData.apy}
-                                {typeof validatorData.apy !== 'string' && '%'}
+                                {apy > 0 ? `${apy}%` : '--'}
                             </Text>
                         </div>
                         {!unstake && (
@@ -174,10 +158,7 @@ export function ValidatorFormDetail({
                                         Total Staked
                                     </Text>
                                 </div>
-                                <StakeAmount
-                                    balance={validatorData.totalStaked}
-                                    variant="body"
-                                />
+                                <StakeAmount balance={10n} variant="body" />
                             </div>
                         )}
                     </div>

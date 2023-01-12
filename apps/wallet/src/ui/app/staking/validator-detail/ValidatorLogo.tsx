@@ -41,27 +41,24 @@ export function ValidatorLogo({
         TRUNCATE_PREFIX_LENGTH
     );
 
-    const validatorData = useMemo(() => {
+    const validatorName = useMemo(() => {
         if (!validatorsData) return null;
 
         const validator = validatorsData.find(
             ({ sui_address }) => sui_address === validatorAddress
         );
-
         if (!validator) return null;
 
-        return {
-            name: getName(validator.name),
-            // TODO: add once we have the logo in the metadata
-            logo: null,
-        };
+        return getName(validator.name);
     }, [validatorAddress, validatorsData]);
+
+    const logo = null;
 
     if (isLoading) {
         return <div className="flex justify-center items-center">...</div>;
     }
 
-    return validatorData ? (
+    return validatorName ? (
         <div
             className={cl(
                 ['w-full flex justify-start  font-semibold'],
@@ -69,20 +66,15 @@ export function ValidatorLogo({
                 isTitle ? 'gap-2.5' : 'gap-2'
             )}
         >
-            <ImageIcon
-                src={validatorData.logo}
-                alt={validatorData.name}
-                size={iconSize}
-                circle
-            />
+            <ImageIcon src={logo} alt={validatorName} size={iconSize} circle />
             <div className="flex flex-col gap-1.5">
                 {isTitle ? (
                     <Heading as="h4" variant="heading4" color="steel-darker">
-                        {validatorData.name}
+                        {validatorName}
                     </Heading>
                 ) : (
                     <Text color="gray-90" variant={size} weight="semibold">
-                        {validatorData.name}
+                        {validatorName}
                     </Text>
                 )}
                 {showAddress && (

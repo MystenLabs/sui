@@ -47,11 +47,9 @@ export function ActiveDelegation({ id }: Props) {
 
     return (
         <DelegationCard
-            name={validatorName}
             staked={delegation.delegateAmount()}
             state={DelegationState.EARNING}
             address={validatorAddress}
-            icon={null}
         />
     );
 }

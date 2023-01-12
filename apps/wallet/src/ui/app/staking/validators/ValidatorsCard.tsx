@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import { FEATURES } from '../../experimentation/features';
 import StakeAmount from '../home/StakeAmount';
 import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
-import { ValidatorGridCard } from './ValidatorGridCard';
+import { DelegationCard, DelegationState } from './../home/DelegationCard';
 import BottomMenuLayout, {
     Menu,
     Content,
@@ -35,19 +35,6 @@ export function ValidatorsCard() {
             (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
             0n
         );
-    }, [stakeValidators]);
-
-    // return staked validator addresses from stakeValidators and remove duplicates
-    const validatorsAddr = useMemo(() => {
-        if (!stakeValidators) return [];
-        return stakeValidators.reduce((acc, delegator) => {
-            return {
-                ...acc,
-                [delegator.staked_sui.validator_address]: {
-                    validatorsAddr: delegator.staked_sui.validator_address,
-                },
-            };
-        }, []);
     }, [stakeValidators]);
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
@@ -111,12 +98,21 @@ export function ValidatorsCard() {
                         </Card>
 
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
-                            {validatorsAddr.map((validatorAddr) => (
-                                <ValidatorGridCard
-                                    validatorAddress={validatorAddr}
-                                    key={validatorAddr}
-                                />
-                            ))}
+                            {stakeValidators.map(
+                                ({ delegation_status, staked_sui }) => (
+                                    <DelegationCard
+                                        address={staked_sui.validator_address}
+                                        staked={staked_sui.principal.value}
+                                        state={
+                                            delegation_status === 'Pending'
+                                                ? DelegationState.WARM_UP
+                                                : DelegationState.EARNING
+                                        }
+                                        rewards={0n}
+                                        key={staked_sui.id.id}
+                                    />
+                                )
+                            )}
                         </div>
                     </div>
                 </Content>

@@ -62,7 +62,7 @@ type ActiveDelegationStatus = {
 
 export type DelegatedStake = {
     staked_sui: StakedSui;
-    delegation_status: 'pending' | ActiveDelegationStatus;
+    delegation_status: 'Pending' | ActiveDelegationStatus;
 };
 
 const getDelegatedStakes = async (

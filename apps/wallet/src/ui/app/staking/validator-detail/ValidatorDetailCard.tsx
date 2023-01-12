@@ -7,14 +7,14 @@ import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
 import StakeAmount from '../home/StakeAmount';
-import { getName, STATE_OBJECT } from '../usePendingDelegation';
+import { useGetValidatorsByDelegator } from '../useGetValidatorsData';
+import { STATE_OBJECT } from '../usePendingDelegation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
 import { CardItem } from '_app/shared/card/CardItem';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
-import { totalActiveStakedSelector } from '_app/staking/selectors';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -29,77 +29,61 @@ type ValidatorDetailCardProps = {
 export function ValidatorDetailCard({
     validatorAddress,
 }: ValidatorDetailCardProps) {
+    const {
+        data: validatetors,
+        isLoading: loadingValidators,
+        isError: errorValidators,
+    } = useGetObject(STATE_OBJECT);
+
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
+
+    const {
+        data: stakeValidators,
+        isLoading,
+        isError,
+    } = useGetValidatorsByDelegator(accountAddress || '');
+
     const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorState)
+        validatetors &&
+        is(validatetors.details, SuiObject) &&
+        validatetors.details.data.dataType === 'moveObject'
+            ? (validatetors.details.data.fields as ValidatorState)
             : null;
 
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
-
-        const validator =
-            validatorsData.validators.fields.active_validators.find(
-                (av) =>
-                    av.fields.metadata.fields.sui_address === validatorAddress
-            );
-
-        if (!validator) return null;
-
-        const {
-            sui_balance,
-            starting_epoch,
-            pending_delegations,
-            delegation_token_supply,
-        } = validator.fields.delegation_staking_pool.fields;
-
-        const num_epochs_participated = validatorsData.epoch - starting_epoch;
-        const { name: rawName, sui_address } = validator.fields.metadata.fields;
-
-        const APY = Math.pow(
-            1 +
-                (sui_balance - delegation_token_supply.fields.value) /
-                    delegation_token_supply.fields.value,
-            365 / num_epochs_participated - 1
+        return validatorsData.validators.fields.active_validators.find(
+            (av) => av.fields.metadata.fields.sui_address === validatorAddress
         );
-        console.log(pending_delegations, 'pending_delegations');
-        const pending_delegationsByAddress = [] as {
-            delegator: string;
-            sui_amount: bigint;
-        }[];
-        /* pending_delegations
-            ? (pending_delegations || []).filter(
-                  (d) => d.fields.delegator === accountAddress
-              )
-            : [];*/
-
-        return {
-            name: getName(rawName),
-            commissionRate: validator.fields.commission_rate,
-            apy: APY > 0 ? APY : 'N/A',
-            logo: null,
-            address: sui_address,
-            totalStaked:
-                pending_delegations?.reduce(
-                    (acc, fields) =>
-                        (acc += BigInt(fields.fields.sui_amount || 0n)),
-                    0n
-                ) || 0n,
-            // TODO: Calculate suiEarned
-            suiEarned: 0n,
-            pendingDelegationAmount: 0n,
-        };
     }, [validatorAddress, validatorsData]);
 
-    const totalStaked = useAppSelector(totalActiveStakedSelector);
-    const pendingStake = validatorData?.pendingDelegationAmount || 0n;
-    const apy = validatorData?.apy || 0;
-    const commissionRate = validatorData?.commissionRate || 0;
-    const totalStakedIncludingPending = totalStaked + pendingStake;
-    const suiEarned = validatorData?.suiEarned || 0n;
+    const totalStake = useMemo(() => {
+        if (!stakeValidators) return 0n;
+        let totalActiveStake = 0n;
+        stakeValidators.forEach((event) => {
+            if (event.staked_sui.validator_address === validatorAddress) {
+                totalActiveStake += BigInt(event.staked_sui.principal.value);
+            }
+        });
+        return totalActiveStake;
+    }, [stakeValidators, validatorAddress]);
+
+    const apy = useMemo(() => {
+        if (!validatorData || !validatorsData) return 0;
+        const { sui_balance, starting_epoch, delegation_token_supply } =
+            validatorData.fields.delegation_staking_pool.fields;
+
+        const num_epochs_participated = validatorsData.epoch - starting_epoch;
+
+        return (
+            Math.pow(
+                1 +
+                    (sui_balance - delegation_token_supply.fields.value) /
+                        delegation_token_supply.fields.value,
+                365 / num_epochs_participated - 1
+            ) || 0
+        );
+    }, [validatorData, validatorsData]);
 
     const stakeByValidatorAddress = `/stake/new?address=${encodeURIComponent(
         validatorAddress
@@ -107,7 +91,7 @@ export function ValidatorDetailCard({
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
-    if (isLoading) {
+    if (isLoading || loadingValidators) {
         return (
             <div className="p-2 w-full flex justify-center items-center h-full">
                 <LoadingIndicator />
@@ -115,7 +99,7 @@ export function ValidatorDetailCard({
         );
     }
 
-    if (isError) {
+    if (isError || errorValidators) {
         return (
             <div className="p-2">
                 <Alert mode="warning">
@@ -126,6 +110,8 @@ export function ValidatorDetailCard({
             </div>
         );
     }
+
+    const suiEarned = 0n;
 
     return (
         <div className="flex flex-col flex-nowrap flex-grow h-full">
@@ -138,9 +124,7 @@ export function ValidatorDetailCard({
                                     <div className="grid grid-cols-2 divide-x divide-solid divide-gray-45 divide-y-0 w-full">
                                         <CardItem title="Your Stake">
                                             <StakeAmount
-                                                balance={
-                                                    totalStakedIncludingPending
-                                                }
+                                                balance={totalStake}
                                                 variant="heading4"
                                             />
                                         </CardItem>
@@ -208,7 +192,10 @@ export function ValidatorDetailCard({
                                                 weight="semibold"
                                                 color="gray-90"
                                             >
-                                                {commissionRate}
+                                                {
+                                                    validatorData?.fields
+                                                        .commission_rate
+                                                }
                                             </Text>
 
                                             <Text
@@ -237,7 +224,7 @@ export function ValidatorDetailCard({
                                 />
                                 Stake SUI
                             </Button>
-                            {Boolean(totalStakedIncludingPending) && (
+                            {Boolean(totalStake) && (
                                 <Button
                                     size="large"
                                     mode="outline"
@@ -255,7 +242,7 @@ export function ValidatorDetailCard({
                                 </Button>
                             )}
                         </div>
-                        {totalStakedIncludingPending > 1 && (
+                        {totalStake > 1 && (
                             <div className="w-full">
                                 <Button
                                     size="large"
