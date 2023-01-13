@@ -207,6 +207,9 @@ pub struct AuthorityEpochTables {
     /// When we see certificate through consensus for the first time, we record
     /// user signature for this transaction here. This will be included in the checkpoint later.
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Signature>,
+
+    /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
+    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
 }
 
 impl AuthorityEpochTables {
@@ -1327,6 +1330,10 @@ impl AuthorityPerEpochStore {
         batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
         for (summary, transactions) in content_info {
             batch = batch.insert_batch(
+                &self.tables.builder_checkpoint_summary,
+                [(&summary.sequence_number, summary)],
+            )?;
+            batch = batch.insert_batch(
                 &self.tables.builder_digest_to_checkpoint,
                 transactions
                     .iter()
@@ -1337,17 +1344,45 @@ impl AuthorityPerEpochStore {
         batch.write()
     }
 
-    /// Register genesis transaction in builder DB so that it does not include transaction
-    /// in future checkpoints
-    pub fn put_genesis_transaction_in_builder_digest_to_checkpoint(
+    /// Register genesis checkpoint in builder DB
+    pub fn put_genesis_checkpoint_in_builder(
         &self,
-        digest: TransactionDigest,
-        sequence: CheckpointSequenceNumber,
+        summary: &CheckpointSummary,
+        contents: &CheckpointContents,
     ) -> SuiResult<()> {
+        let sequence = summary.sequence_number;
+        for transaction in contents.iter() {
+            let digest = transaction.transaction;
+            debug!(
+                "Manually inserting genesis transaction in checkpoint DB: {:?}",
+                digest
+            );
+            self.tables
+                .builder_digest_to_checkpoint
+                .insert(&digest, &sequence)?;
+        }
+        self.tables
+            .builder_checkpoint_summary
+            .insert(summary.sequence_number(), summary)?;
+        Ok(())
+    }
+
+    pub fn last_built_checkpoint_summary(
+        &self,
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, CheckpointSummary)>> {
         Ok(self
             .tables
-            .builder_digest_to_checkpoint
-            .insert(&digest, &sequence)?)
+            .builder_checkpoint_summary
+            .iter()
+            .skip_to_last()
+            .next())
+    }
+
+    pub fn get_built_checkpoint_summary(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult<Option<CheckpointSummary>> {
+        Ok(self.tables.builder_checkpoint_summary.get(&sequence)?)
     }
 
     pub fn builder_included_transaction_in_checkpoint(
