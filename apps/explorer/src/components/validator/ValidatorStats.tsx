@@ -52,7 +52,7 @@ export function ValidatorStats({
     return (
         <div className="flex flex-col items-stretch gap-5 md:flex-row">
             <Card spacing="lg">
-                <div className="flex basis-full flex-col flex-nowrap gap-8 md:basis-1/3">
+                <div className="flex basis-full flex-col gap-8 md:basis-1/3">
                     <Heading
                         as="div"
                         variant="heading4/semibold"
@@ -60,7 +60,7 @@ export function ValidatorStats({
                     >
                         SUI Staked on Validator
                     </Heading>
-                    <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                    <div className="flex flex-col gap-8 lg:flex-row">
                         <Stats label="Staking APY" tooltip="Coming soon">
                             <Heading
                                 as="h3"
@@ -74,7 +74,7 @@ export function ValidatorStats({
                             <DelegationAmount amount={totalStake} isStats />
                         </Stats>
                     </div>
-                    <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                    <div className="flex flex-col gap-8 lg:flex-row">
                         <Stats label="Delegators" tooltip="Coming soon">
                             <Heading
                                 as="h3"
@@ -107,7 +107,7 @@ export function ValidatorStats({
             </Card>
 
             <Card spacing="lg">
-                <div className="flex basis-full flex-col flex-nowrap items-stretch gap-8 md:basis-80">
+                <div className="flex basis-full flex-col items-stretch gap-8 md:basis-80">
                     <Heading
                         as="div"
                         variant="heading4/semibold"
@@ -115,7 +115,7 @@ export function ValidatorStats({
                     >
                         Validator Staking Rewards
                     </Heading>
-                    <div className="flex flex-col flex-nowrap gap-8">
+                    <div className="flex flex-col gap-8">
                         <Stats label="Last Epoch" tooltip="Coming soon">
                             <Heading
                                 as="h3"
@@ -139,7 +139,7 @@ export function ValidatorStats({
             </Card>
 
             <Card spacing="lg">
-                <div className="flex  max-w-full flex-col flex-nowrap gap-8">
+                <div className="flex  max-w-full flex-col gap-8">
                     <Heading
                         as="div"
                         variant="heading4/semibold"
@@ -147,8 +147,8 @@ export function ValidatorStats({
                     >
                         Network Participation
                     </Heading>
-                    <div className="flex flex-col flex-nowrap gap-8">
-                        <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                    <div className="flex flex-col gap-8">
+                        <div className="flex flex-col gap-8 lg:flex-row">
                             <Stats
                                 label="Staking Participation"
                                 tooltip="Coming soon"
@@ -175,7 +175,7 @@ export function ValidatorStats({
                                 </Heading>
                             </Stats>
                         </div>
-                        <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                        <div className="flex flex-col gap-8 lg:flex-row">
                             <Stats label="Tallying Score" tooltip="Coming soon">
                                 <Heading
                                     as="h3"
