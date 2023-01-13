@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::Ordering, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, VersionNumber},
+    base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
 };
 use tokio::{
@@ -32,7 +32,8 @@ impl AuthorityStorePruner {
         let mut total_objects_scanned = 0;
         let mut num_versions_for_key = 0;
         let mut object_id: Option<ObjectID> = None;
-        let mut seq_num: Option<VersionNumber> = None;
+        let mut delete_range_start: Option<VersionNumber> = None;
+        let mut delete_range_end: Option<VersionNumber> = None;
         let mut num_pending_wb_ops = 0;
         let mut total_pruned: u64 = 0;
         let mut wb = perpetual_db.objects.batch();
@@ -41,10 +42,11 @@ impl AuthorityStorePruner {
             if let Some(obj_id) = object_id {
                 if obj_id != key.0 {
                     total_objects_scanned += 1;
-                    if let Some(seq) = seq_num {
-                        // delete keys in range [(obj_id, VersionNumber::ZERO), (obj_id, seq))
-                        let start = ObjectKey(obj_id, SequenceNumber::from_u64(0));
-                        let end = ObjectKey(obj_id, seq);
+                    if let (Some(start_seq_num), Some(end_seq_num)) =
+                        (delete_range_start, delete_range_end)
+                    {
+                        let start = ObjectKey(obj_id, start_seq_num);
+                        let end = ObjectKey(obj_id, end_seq_num);
                         if let Ok(new_wb) = wb.delete_range(&perpetual_db.objects, &start, &end) {
                             wb = new_wb;
                             num_pending_wb_ops += 1;
@@ -69,19 +71,23 @@ impl AuthorityStorePruner {
                     }
                     num_versions_for_key = 0;
                     object_id = Some(key.0);
-                    seq_num = None;
+                    delete_range_end = None;
                 }
                 num_versions_for_key += 1;
                 // We'll keep maximum `num_versions_to_retain` latest version of any object
-                match num_versions_for_key.cmp(&num_versions_to_retain) {
-                    Ordering::Equal => {
-                        seq_num = Some(key.1);
-                    }
-                    Ordering::Greater => {
+                delete_range_start = match delete_range_end {
+                    Some(_end) => {
                         total_pruned += 1;
+                        assert!(num_versions_for_key > num_versions_to_retain);
+                        Some(key.1)
                     }
-                    Ordering::Less => {}
-                }
+                    None => {
+                        if num_versions_for_key == num_versions_to_retain {
+                            delete_range_end = Some(key.1)
+                        }
+                        None
+                    }
+                };
             } else {
                 num_versions_for_key = 1;
                 total_objects_scanned = 1;
@@ -89,10 +95,10 @@ impl AuthorityStorePruner {
             }
         }
         if let Some(obj_id) = object_id {
-            if let Some(seq) = seq_num {
-                // delete keys in range [(obj_id, VersionNumber::ZERO), (obj_id, seq))
-                let start = ObjectKey(obj_id, SequenceNumber::from_u64(0));
-                let end = ObjectKey(obj_id, seq);
+            if let (Some(start_seq_num), Some(end_seq_num)) = (delete_range_start, delete_range_end)
+            {
+                let start = ObjectKey(obj_id, start_seq_num);
+                let end = ObjectKey(obj_id, end_seq_num);
                 if let Ok(new_wb) = wb.delete_range(&perpetual_db.objects, &start, &end) {
                     wb = new_wb;
                     num_pending_wb_ops += 1;
