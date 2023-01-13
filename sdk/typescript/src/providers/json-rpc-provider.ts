@@ -761,8 +761,11 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getDelegatedStake(address: string): Promise<DelegatedStake[]> {
+  async getDelegatedStake(address: SuiAddress): Promise<DelegatedStake[]> {
     try {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+        throw new Error('Invalid Sui address');
+      }
       const resp = await this.client.requestWithType(
         'sui_getDelegatedStakes',
         [address],
@@ -771,9 +774,7 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
-      throw new Error(
-        `Error dry running transaction with request type: ${err}`
-      );
+      throw new Error(`Error in getDelegatedStake: ${err}`);
     }
   }
 
@@ -787,9 +788,7 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
-      throw new Error(
-        `Error dry running transaction with request type: ${err}`
-      );
+      throw new Error(`Error in getValidators: ${err}`);
     }
   }
 }
