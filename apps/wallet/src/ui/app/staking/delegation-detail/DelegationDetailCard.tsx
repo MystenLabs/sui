@@ -6,6 +6,7 @@ import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
+import { calculateAPY } from '../calculateAPY';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -81,19 +82,7 @@ export function DelegationDetailCard({
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
-        const { sui_balance, starting_epoch, delegation_token_supply } =
-            validatorData.fields.delegation_staking_pool.fields;
-
-        const num_epochs_participated = +validatorsData.epoch - +starting_epoch;
-
-        return (
-            Math.pow(
-                1 +
-                    (+sui_balance - +delegation_token_supply.fields.value) /
-                        +delegation_token_supply.fields.value,
-                365 / num_epochs_participated - 1
-            ) || 0
-        );
+            return calculateAPY(validatorData, +validatorsData.epoch);
     }, [validatorData, validatorsData]);
 
     const stakeByValidatorAddress = `/stake/new?${new URLSearchParams({
