@@ -12,6 +12,7 @@ export default defineConfig({
         environment: 'happy-dom',
         minThreads: 1,
         setupFiles: ['./testSetup.ts'],
+        restoreMocks: true,
     },
     resolve: {
         conditions: ['source'],
