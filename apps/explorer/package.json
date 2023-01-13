@@ -3,7 +3,6 @@
     "private": true,
     "scripts": {
         "dev": "vite --port 3000",
-        "dev:static": "VITE_NETWORK=STATIC vite --port 8080",
         "test": "pnpm test:unit",
         "test:unit": "vitest run",
         "typecheck": "tsc -b",
