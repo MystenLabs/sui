@@ -25,6 +25,7 @@ use std::{
     sync::Arc,
 };
 use store::rocks::MetricConf;
+use store::rocks::ReadWriteOptions;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
@@ -381,6 +382,7 @@ pub fn open_batch_store() -> Store<BatchDigest, Batch> {
         MetricConf::default(),
         None,
         Some(BATCHES_CF),
+        &ReadWriteOptions::default(),
     )
     .unwrap();
     Store::new(db)

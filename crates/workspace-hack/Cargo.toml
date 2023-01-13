@@ -132,6 +132,7 @@ console-subscriber = { version = "0.1" }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
+cpp_demangle = { version = "0.4" }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1" }
@@ -161,6 +162,7 @@ data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
+debugid = { version = "0.8", default-features = false }
 der = { version = "0.6", default-features = false, features = ["oid", "std", "zeroize"] }
 der-parser = { version = "8", features = ["bigint"] }
 derive_builder = { version = "0.12" }
@@ -206,6 +208,7 @@ fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
 ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1" }
+findshlibs = { version = "0.10", default-features = false }
 fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
@@ -305,7 +308,7 @@ lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", defau
 lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false }
 leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
-libc = { version = "0.2" }
+libc = { version = "0.2", features = ["extra_traits"] }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 libsqlite3-sys = { version = "0.25", default-features = false, features = ["bundled", "pkg-config", "unlock_notify", "vcpkg"] }
@@ -319,6 +322,7 @@ matchers = { version = "0.1", default-features = false }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 memchr = { version = "2", features = ["use_std"] }
+memmap2 = { version = "0.5", default-features = false }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
 mime = { version = "0.3", default-features = false }
@@ -371,6 +375,7 @@ nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
+nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nom-a490c3000a992113 = { package = "nom", version = "6" }
@@ -432,6 +437,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
+pprof = { version = "0.11", features = ["frame-pointer"] }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
@@ -557,6 +563,8 @@ structopt = { version = "0.3" }
 strum = { version = "0.24", features = ["derive"] }
 subtle = { version = "2", default-features = false, features = ["i128", "std"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
+symbolic-common = { version = "10", default-features = false }
+symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
 tabular = { version = "0.2", features = ["ansi-cell"] }
@@ -799,6 +807,7 @@ constant_time_eq = { version = "0.2", default-features = false }
 convert_case-9fbad63c4bcf4a8f = { package = "convert_case", version = "0.4", default-features = false }
 convert_case-3b31131e45eafb45 = { package = "convert_case", version = "0.6", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
+cpp_demangle = { version = "0.4" }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1" }
@@ -832,6 +841,7 @@ data-encoding-macro = { version = "0.1", default-features = false }
 data-encoding-macro-internal = { version = "0.1", default-features = false }
 datatest-stable = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
+debugid = { version = "0.8", default-features = false }
 der = { version = "0.6", default-features = false, features = ["oid", "std", "zeroize"] }
 der-parser = { version = "8", features = ["bigint"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
@@ -886,6 +896,7 @@ fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
 ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1" }
+findshlibs = { version = "0.10", default-features = false }
 fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
@@ -996,7 +1007,7 @@ lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default
 lazycell = { version = "1", default-features = false }
 leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7" }
-libc = { version = "0.2" }
+libc = { version = "0.2", features = ["extra_traits"] }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
@@ -1011,6 +1022,7 @@ matchers = { version = "0.1", default-features = false }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 memchr = { version = "2", features = ["use_std"] }
+memmap2 = { version = "0.5", default-features = false }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
 mime = { version = "0.3", default-features = false }
@@ -1066,6 +1078,7 @@ nested = { version = "0.1", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
+nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nom-a490c3000a992113 = { package = "nom", version = "6" }
@@ -1141,6 +1154,7 @@ plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
+pprof = { version = "0.11", features = ["frame-pointer"] }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
@@ -1294,6 +1308,8 @@ strum_macros = { version = "0.24", default-features = false }
 subprocess = { version = "0.2", default-features = false }
 subtle = { version = "2", default-features = false, features = ["i128", "std"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
+symbolic-common = { version = "10", default-features = false }
+symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
@@ -1423,28 +1439,22 @@ zstd-sys = { version = "2" }
 [target.aarch64-apple-darwin.dependencies]
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
-cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
-debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
 errno = { version = "0.2", default-features = false }
-findshlibs = { version = "0.10", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
-libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 mach = { version = "0.3" }
-memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
+pprof = { version = "0.11", default-features = false, features = ["criterion", "flamegraph"] }
 quick-xml = { version = "0.26", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rgb = { version = "0.8" }
@@ -1455,8 +1465,6 @@ signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
-symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
@@ -1464,28 +1472,22 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 autotools = { version = "0.2", default-features = false }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
-cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
-debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
 errno = { version = "0.2", default-features = false }
-findshlibs = { version = "0.10", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
-libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 mach = { version = "0.3" }
-memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
+pprof = { version = "0.11", default-features = false, features = ["criterion", "flamegraph"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.26", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
@@ -1497,17 +1499,12 @@ signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
-symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
-debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
-findshlibs = { version = "0.10", default-features = false }
 foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
@@ -1515,20 +1512,17 @@ inferno = { version = "0.11", default-features = false, features = ["nameattr"] 
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
-libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 linux-raw-sys = { version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
-memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 openssl = { version = "0.10" }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
+pprof = { version = "0.11", default-features = false, features = ["criterion", "flamegraph"] }
 quick-xml = { version = "0.26", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
@@ -1539,18 +1533,13 @@ signal-hook-mio = { version = "0.2", default-features = false, features = ["supp
 signal-hook-registry = { version = "1", default-features = false }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
-symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 autotools = { version = "0.2", default-features = false }
-cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
-debugid = { version = "0.8", default-features = false }
 encoding_rs = { version = "0.8" }
-findshlibs = { version = "0.10", default-features = false }
 foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
@@ -1558,21 +1547,18 @@ inferno = { version = "0.11", default-features = false, features = ["nameattr"] 
 ipnet = { version = "2" }
 jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
-libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 linux-raw-sys = { version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
-memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 native-tls = { version = "0.2", default-features = false }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
-nix-adf3d7031871b0af = { package = "nix", version = "0.24", default-features = false, features = ["fs", "signal"] }
 num-format = { version = "0.4", default-features = false }
 once_cell = { version = "1", default-features = false, features = ["unstable"] }
 openssl = { version = "0.10" }
 openssl-macros = { version = "0.1", default-features = false }
 openssl-probe = { version = "0.1", default-features = false }
 openssl-sys = { version = "0.9", default-features = false }
-pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
+pprof = { version = "0.11", default-features = false, features = ["criterion", "flamegraph"] }
 protobuf-src = { version = "1", default-features = false }
 quick-xml = { version = "0.26", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
@@ -1584,8 +1570,6 @@ signal-hook-mio = { version = "0.2", default-features = false, features = ["supp
 signal-hook-registry = { version = "1", default-features = false }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
-symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 
@@ -1610,7 +1594,7 @@ str-buf = { version = "1", default-features = false }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
-winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
 windows_x86_64_msvc = { version = "0.42", default-features = false }
@@ -1638,7 +1622,7 @@ str-buf = { version = "1", default-features = false }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
-winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
 windows_x86_64_msvc = { version = "0.42", default-features = false }

@@ -7,6 +7,7 @@ use crate::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use store::rocks;
 use store::rocks::MetricConf;
+use store::rocks::ReadWriteOptions;
 use test_utils::{temp_dir, transaction};
 use types::PreSubscribedBroadcastSender;
 
@@ -16,6 +17,7 @@ fn create_batches_store() -> Store<BatchDigest, Batch> {
         MetricConf::default(),
         None,
         Some("batches"),
+        &ReadWriteOptions::default(),
     )
     .unwrap();
     Store::new(db)

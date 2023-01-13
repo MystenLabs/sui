@@ -4,7 +4,7 @@ use crypto::PublicKey;
 use std::sync::Arc;
 use storage::CertificateStore;
 use store::rocks::MetricConf;
-use store::{reopen, rocks, rocks::DBMap};
+use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions};
 use types::{
     Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore, Round, SequenceNumber,
 };

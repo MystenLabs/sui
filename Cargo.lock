@@ -8688,6 +8688,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
+ "pprof",
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",

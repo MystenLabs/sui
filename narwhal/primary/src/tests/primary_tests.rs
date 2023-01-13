@@ -30,7 +30,7 @@ use std::{
 use storage::CertificateStore;
 use storage::NodeStorage;
 use storage::PayloadToken;
-use store::rocks::{DBMap, MetricConf};
+use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
 use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
@@ -1091,6 +1091,7 @@ async fn test_process_payload_availability_when_failures() {
                     .expect("Couldn't find column family"),
                 serialised_key,
                 dummy_value,
+                &ReadWriteOptions::default().writeopts(),
             )
             .expect("Couldn't insert value");
 

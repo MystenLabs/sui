@@ -408,7 +408,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
                 let path = &path;
-                let db = {
+                let (db, rwopt_cfs) = {
                     let opt_cfs = match tables_db_options_override {
                         None => [
                             #(
@@ -422,20 +422,21 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         ]
                     };
                     // Safe to call unwrap because we will have atleast one field_name entry in the struct
+                    let rwopt_cfs: std::collections::HashMap<String, typed_store::rocks::ReadWriteOptions> = opt_cfs.iter().map(|q| (q.0.as_str().to_string(), q.1.rw_options.clone())).collect();
                     let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                     let db = match (as_secondary_with_path, is_transaction) {
                         (Some(p), _) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
                         (_, true) => typed_store::rocks::open_cf_opts_transactional(path, global_db_options_override, metric_conf, &opt_cfs),
                         _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                     };
-                    db
+                    db.map(|d| (d, rwopt_cfs))
                 }.expect("Cannot open DB.");
                 let (
                         #(
                             #field_names
                         ),*
                 ) = (#(
-                        DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names))).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
+                        DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names)), rwopt_cfs.get(stringify!(#field_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
                     ),*);
 
                 Self {
@@ -780,7 +781,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                     },
                     typed_store::sally::SallyDBOptions::RocksDB((path, metric_conf, access_type, global_db_options_override, tables_db_options_override)) => {
                         let path = &path;
-                        let db = {
+                        let (db, rwopt_cfs) = {
                             let opt_cfs = match tables_db_options_override {
                                 None => [
                                     #(
@@ -794,19 +795,20 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                                 ]
                             };
                             // Safe to call unwrap because we will have atleast one field_name entry in the struct
+                            let rwopt_cfs: std::collections::HashMap<String, typed_store::rocks::ReadWriteOptions> = opt_cfs.iter().map(|q| (q.0.as_str().to_string(), q.1.rw_options.clone())).collect();
                             let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                             let db = match access_type {
                                 RocksDBAccessType::Secondary(Some(p)) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
                                 _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                             };
-                            db
+                            db.map(|d| (d, rwopt_cfs))
                         }.expect("Cannot open DB.");
                         let (
                             #(
                                 #field_names
                             ),*
                         ) = (#(
-                            SallyColumn::RocksDB((DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names))).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..]), typed_store::sally::SallyConfig::default()))
+                            SallyColumn::RocksDB((DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names)), rwopt_cfs.get(stringify!(#field_names)).unwrap_or(&typed_store::rocks::ReadWriteOptions::default())).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..]), typed_store::sally::SallyConfig::default()))
                             ),*);
 
                         Self {

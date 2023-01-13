@@ -36,7 +36,6 @@ struct Tables {
     table1: DBMap<String, String>,
     table2: DBMap<i32, String>,
 }
-
 // Check that generics work
 #[derive(DBMapUtils)]
 struct TablesGenerics<Q, W> {
