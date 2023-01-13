@@ -11,7 +11,10 @@ import {
   RawSigner,
   SignableTransaction,
 } from "@mysten/sui.js";
-import { WalletAdapter } from "@mysten/wallet-adapter-base";
+import {
+  WalletAdapter,
+  WalletAdapterEvents,
+} from "@mysten/wallet-adapter-base";
 
 export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   name = "Unsafe Burner Wallet";
@@ -74,4 +77,11 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     this.connecting = false;
     this.connected = false;
   }
+
+  on: <E extends keyof WalletAdapterEvents>(
+    event: E,
+    callback: WalletAdapterEvents[E]
+  ) => () => void = () => {
+    return () => {};
+  };
 }
