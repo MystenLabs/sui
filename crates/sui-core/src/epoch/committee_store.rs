@@ -19,7 +19,7 @@ use sui_macros::nondeterministic;
 pub struct CommitteeStore {
     /// Map from each epoch ID to the committee information.
     #[default_options_override_fn = "committee_table_default_config"]
-    pub(crate) committee_map: DBMap<EpochId, Committee>,
+    committee_map: DBMap<EpochId, Committee>,
 }
 
 // These functions are used to initialize the DB tables
