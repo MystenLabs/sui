@@ -144,7 +144,13 @@ impl Operations {
             .metadata
             .ok_or_else(|| Error::MissingInput("Delegation metadata".to_string()))?;
 
-        let OperationMetadata::Delegation { amount: Some(amount), validator } = metadata else {
+        let amount = op
+            .amount
+            .ok_or_else(|| Error::MissingInput("Amount".to_string()))?
+            .value
+            .unsigned_abs();
+
+        let OperationMetadata::Delegation {  validator } = metadata else {
             return Err(Error::InvalidInput("Cannot find delegation info from metadata.".into()))
         };
 
@@ -173,11 +179,7 @@ impl Operations {
         status: Option<OperationStatus>,
         tx: SuiMoveCall,
     ) -> Result<Vec<Operation>, Error> {
-        if tx.package.object_id == SUI_FRAMEWORK_OBJECT_ID
-            && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
-            && (tx.function == ADD_DELEGATION_LOCKED_COIN_FUN_NAME.as_str()
-                || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())
-        {
+        if Self::is_delegation_call(&tx) {
             let (amount, validator) = match &tx.arguments[..] {
                 [_, _, amount, validator] => {
                     let amount = amount.to_json_value().as_array().map(|v| {
@@ -201,14 +203,16 @@ impl Operations {
                 _ => return Err(Error::InternalError(anyhow!("Error encountered when extracting arguments from move call, expecting 4 elements, got {}", tx.arguments.len()))),
             };
 
+            let amount = amount.map(|amount| Amount::new(-(amount as i128)));
+
             return Ok(vec![Operation {
                 operation_identifier: Default::default(),
                 type_: OperationType::Delegation,
                 status,
                 account: Some(sender.into()),
-                amount: None,
+                amount,
                 coin_change: None,
-                metadata: Some(OperationMetadata::Delegation { amount, validator }),
+                metadata: Some(OperationMetadata::Delegation { validator }),
             }]);
         }
         Ok(vec![Operation::generic_op(
@@ -216,6 +220,13 @@ impl Operations {
             sender,
             SuiTransactionKind::Call(tx),
         )])
+    }
+
+    fn is_delegation_call(tx: &SuiMoveCall) -> bool {
+        tx.package.object_id == SUI_FRAMEWORK_OBJECT_ID
+            && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
+            && (tx.function == ADD_DELEGATION_LOCKED_COIN_FUN_NAME.as_str()
+                || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())
     }
 
     fn parse_pay_sui_operations(
@@ -292,7 +303,6 @@ impl Operations {
 
 impl TryFrom<SuiTransactionData> for Operations {
     type Error = Error;
-
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
         let sender = data.sender;
         data.transactions
@@ -309,31 +319,26 @@ impl TryFrom<SuiTransactionResponse> for Operations {
         let ops: Operations = response.certificate.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 
-        // We will need to subtract the PaySui operation amounts from the actual balance
+        // We will need to subtract the operation amounts from the actual balance
         // change amount extracted from event to prevent double counting.
-        let mut pay_sui_balances = HashMap::new();
-
-        let pay_sui_ops =
-            ops.as_ref()
-                .iter()
-                .filter_map(|op| match (op.type_, &op.account, &op.amount) {
-                    (OperationType::PaySui, Some(acc), Some(amount)) => {
-                        Some((acc.address, -amount.value))
-                    }
-                    _ => None,
-                });
-
-        for (addr, amount) in pay_sui_ops {
-            *pay_sui_balances.entry(addr).or_default() += amount
-        }
+        let accounted_balances = ops
+            .as_ref()
+            .iter()
+            .filter_map(|op| match (&op.account, &op.amount) {
+                (Some(acc), Some(amount)) => Some((acc.address, -amount.value)),
+                _ => None,
+            })
+            .fold(HashMap::new(), |mut balances, (addr, amount)| {
+                *balances.entry(addr).or_default() += amount;
+                balances
+            });
 
         // Extract coin change operations from events
         let coin_change_operations = Self::get_balance_operation_from_events(
             &response.effects.events,
             status,
-            pay_sui_balances,
+            accounted_balances,
         );
-
         Ok(ops.into_iter().chain(coin_change_operations).collect())
     }
 }
@@ -365,10 +370,7 @@ pub struct Operation {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum OperationMetadata {
     GenericTransaction(SuiTransactionKind),
-    Delegation {
-        amount: Option<u128>,
-        validator: SuiAddress,
-    },
+    Delegation { validator: SuiAddress },
 }
 
 impl Operation {

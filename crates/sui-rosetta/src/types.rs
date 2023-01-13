@@ -853,7 +853,7 @@ impl InternalOperation {
             | InternalOperation::Delegation { sender, .. } => *sender,
         }
     }
-
+    /// Combine with ConstructionMetadata to form the TransactionData
     pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
         let single_tx = match (self, metadata.tx_metadata) {
             (
