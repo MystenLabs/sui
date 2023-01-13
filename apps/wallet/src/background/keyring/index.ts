@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '@mysten/sui.js';
+import { Base64DataBuffer, Ed25519Keypair } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
@@ -262,6 +262,36 @@ export class Keyring {
                     await this.setLockTimeout(payload.args.timeout);
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isKeyringPayload(payload, 'signData')) {
+                if (this.#locked) {
+                    throw new Error('Keyring is locked. Unlock it first.');
+                }
+                if (!payload.args) {
+                    throw new Error('Missing parameters.');
+                }
+                const { data, address } = payload.args;
+                const account = this.#accountsMap.get(address);
+                if (!account) {
+                    throw new Error(
+                        `Account for address ${address} not found in keyring`
+                    );
+                }
+                const { signature, signatureScheme, pubKey } =
+                    await account.sign(new Base64DataBuffer(data));
+                uiConnection.send(
+                    createMessage<KeyringPayload<'signData'>>(
+                        {
+                            type: 'keyring',
+                            method: 'signData',
+                            return: {
+                                signatureScheme,
+                                signature: signature.toString(),
+                                pubKey: pubKey.toBase64(),
+                            },
+                        },
+                        id
+                    )
+                );
             }
         } catch (e) {
             uiConnection.send(
