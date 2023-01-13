@@ -16,7 +16,7 @@ use sui_types::{
 
 use crate::workloads::payload::Payload;
 use crate::workloads::{Gas, GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
-use crate::ValidatorProxy;
+use crate::{ExecutionEffects, ValidatorProxy};
 use sui_core::test_utils::make_transfer_object_transaction;
 
 use super::workload::{Workload, WorkloadType, MAX_GAS_FOR_TESTING};
@@ -33,6 +33,7 @@ impl Payload for TransferObjectTestPayload {
         self: Box<Self>,
         new_object: ObjectRef,
         new_gas: ObjectRef,
+        _: &ExecutionEffects,
     ) -> Box<dyn Payload> {
         let recipient = self
             .gas

@@ -32,7 +32,9 @@ use sui_types::object::{
     generate_test_gas_objects, generate_test_gas_objects_with_owner_list, Object,
 };
 use sui_types::parse_sui_struct_tag;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
@@ -364,6 +366,34 @@ pub fn make_counter_increment_transaction(
             id: counter_id,
             initial_shared_version: counter_initial_shared_version,
         })],
+        MAX_GAS,
+    );
+    to_sender_signed_transaction(data, keypair)
+}
+
+pub fn make_delegation_transaction(
+    gas_object: ObjectRef,
+    coin: ObjectRef,
+    system_package_ref: ObjectRef,
+    validator: SuiAddress,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+) -> VerifiedTransaction {
+    let data = TransactionData::new_move_call(
+        sender,
+        system_package_ref,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        "request_add_delegation".parse().unwrap(),
+        vec![],
+        gas_object,
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            }),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
+            CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
+        ],
         MAX_GAS,
     );
     to_sender_signed_transaction(data, keypair)

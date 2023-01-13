@@ -132,6 +132,9 @@ pub enum RunSpec {
         // transactions in the benchmark workload
         #[clap(long, default_value = "1")]
         transfer_object: u32,
+        // relative weight of delegation transactions in the benchmark workload
+        #[clap(long, default_value = "0")]
+        delegation: u32,
         // Target qps
         #[clap(long, default_value = "1000", global = true)]
         target_qps: u64,

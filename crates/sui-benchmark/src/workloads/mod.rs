@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod delegation;
 pub mod payload;
 pub mod shared_counter;
 pub mod transfer_object;
@@ -11,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::workloads::payload::Payload;
+use delegation::DelegationWorkload;
 use shared_counter::SharedCounterWorkload;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
@@ -50,6 +52,8 @@ pub struct WorkloadPayloadGas {
     // Gas coins needed to run shared counter increment during
     // the course of benchmark
     pub shared_counter_payload_gas: Vec<Gas>,
+    // Gas coins needed to run delegation flow
+    pub delegation_payload_gas: Vec<Gas>,
 }
 
 #[derive(Clone)]
@@ -58,6 +62,7 @@ pub struct WorkloadGasConfig {
     pub shared_counter_workload_payload_gas_config: Vec<GasCoinConfig>,
     pub transfer_object_workload_tokens: Vec<GasCoinConfig>,
     pub transfer_object_workload_payload_gas_config: Vec<GasCoinConfig>,
+    pub delegation_gas_configs: Vec<GasCoinConfig>,
 }
 
 pub fn make_combination_workload(
@@ -67,6 +72,7 @@ pub fn make_combination_workload(
     num_transfer_accounts: u64,
     shared_counter_weight: u32,
     transfer_object_weight: u32,
+    delegation_weight: u32,
     payload_config: WorkloadPayloadGas,
 ) -> WorkloadInfo {
     let mut workloads = HashMap::<WorkloadType, (u32, Box<dyn Workload<dyn Payload>>)>::new();
@@ -81,6 +87,12 @@ pub fn make_combination_workload(
         workloads
             .entry(WorkloadType::TransferObject)
             .or_insert((transfer_object_weight, workload));
+    }
+    if delegation_weight > 0 {
+        let workload = DelegationWorkload::new_boxed();
+        workloads
+            .entry(WorkloadType::Delegation)
+            .or_insert((delegation_weight, workload));
     }
     let workload = CombinationWorkload::new_boxed(workloads);
     WorkloadInfo {
