@@ -7,7 +7,6 @@
     align-items: center;
     justify-content: center;
     flex-flow: column nowrap;
-    background: url('_assets/images/welcome_bg.svg') no-repeat center center;
     background-color: v.use(v.$colors-main-content-background);
     background-size: cover;
 
@@ -24,6 +23,8 @@
     }
 
     &.dynamic-size {
+        background: url('_assets/images/welcome_bg.svg') no-repeat center center;
+        background-size: cover;
         width: 100%;
         min-height: 100vh;
     }
