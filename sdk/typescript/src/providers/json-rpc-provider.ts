@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from './provider';
-import { HttpHeaders, JsonRpcClient } from '../rpc/client';
+import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   Coin,
   ExecuteTransactionRequestType,
@@ -62,7 +62,7 @@ import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
-import { any, number } from 'superstruct';
+import { any, is, number } from 'superstruct';
 import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 
 /**
@@ -187,6 +187,27 @@ export class JsonRpcProvider extends Provider {
       throw new Error('Faucet URL is not specified');
     }
     return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+  }
+
+  // RPC endpoint
+  async call(
+    endpoint: string,
+    params: Array<any>
+  ) : Promise<any> {
+    try {
+      const response = await this.client.request(
+        endpoint,
+        params
+      );
+      if (is(response, ErrorResponse)) {
+        throw new Error(`RPC Error: ${response.error.message}`);
+      }
+      return response.result;
+    } catch (err) {
+      throw new Error(
+        `Error calling RPC endpoint ${endpoint}: ${err}`
+      );
+    }
   }
 
   // Move info
