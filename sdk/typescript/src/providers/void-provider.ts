@@ -36,7 +36,6 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
-  GatewayTxSeqNumber,
 } from '../types';
 import { Provider } from './provider';
 
