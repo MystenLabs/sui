@@ -6,7 +6,7 @@ use anyhow::Result;
 use sui_config::NodeConfig;
 use sui_types::base_types::SuiAddress;
 use tap::TapFallible;
-use tracing::{error, trace};
+use tracing::{error, info};
 
 use super::container::Container;
 
@@ -18,7 +18,7 @@ use super::container::Container;
 /// explicitly stopped by calling [`Node::stop`]) by simply dropping that Node's runtime.
 #[derive(Debug)]
 pub struct Node {
-    thread: Option<Container>,
+    container: Option<Container>,
     config: NodeConfig,
     runtime_type: RuntimeType,
 }
@@ -32,7 +32,7 @@ impl Node {
     /// [`NodeConfig`]: sui_config::NodeConfig
     pub fn new(config: NodeConfig) -> Self {
         Self {
-            thread: None,
+            container: None,
             config,
             runtime_type: RuntimeType::SingleThreaded,
         }
@@ -47,40 +47,39 @@ impl Node {
         self.config.json_rpc_address
     }
 
-    /// Start this Node, returning a handle that will resolve when the node has completed starting
-    /// up.
-    pub fn spawn(&mut self) -> Result<tokio::sync::oneshot::Receiver<()>> {
-        trace!(name =% self.name(), "starting in-memory node");
-        let (startup_receiver, node_handle) =
-            Container::spawn(self.config.clone(), self.runtime_type);
-        self.thread = Some(node_handle);
-        Ok(startup_receiver)
+    /// Start this Node
+    pub async fn spawn(&mut self) -> Result<()> {
+        info!(name =% self.name(), "starting in-memory node");
+        let container = Container::spawn(self.config.clone(), self.runtime_type).await;
+        self.container = Some(container);
+        Ok(())
     }
 
     /// Start this Node, waiting until its completely started up.
     pub async fn start(&mut self) -> Result<()> {
-        let startup_receiver = self.spawn()?;
-        startup_receiver.await?;
-        Ok(())
+        self.spawn().await
     }
 
     /// Stop this Node
     pub fn stop(&mut self) {
-        trace!(name =% self.name(), "stopping in-memory node");
-        self.thread = None;
+        info!(name =% self.name(), "stopping in-memory node");
+        self.container = None;
     }
 
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
-        self.thread.is_some()
+        self.container.is_some()
     }
 
     /// Perform a health check on this Node by:
     /// * Checking that the node is running
     /// * Calling the Node's gRPC Health service if it's a validator.
     pub async fn health_check(&self, is_validator: bool) -> Result<(), HealthCheckError> {
-        let thread = self.thread.as_ref().ok_or(HealthCheckError::NotRunning)?;
-        if !thread.is_alive() {
+        let container = self
+            .container
+            .as_ref()
+            .ok_or(HealthCheckError::NotRunning)?;
+        if !container.is_alive() {
             return Err(HealthCheckError::NotRunning);
         }
 
