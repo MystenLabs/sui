@@ -6,10 +6,15 @@ import Browser from 'webextension-polyfill';
 import { ContentScriptConnection } from './ContentScriptConnection';
 import { KeepAliveConnection } from './KeepAliveConnection';
 import { UiConnection } from './UiConnection';
+import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
 
 import type { Connection } from './Connection';
 import type { Permission } from '_payloads/permissions';
+import type {
+    WalletStatusChange,
+    WalletStatusChangePayload,
+} from '_payloads/wallet-status-change';
 
 export class Connections {
     #connections: (Connection | KeepAliveConnection)[] = [];
@@ -62,6 +67,25 @@ export class Connections {
         for (const aConnection of this.#connections) {
             if (aConnection instanceof UiConnection) {
                 aConnection.sendLockedStatusUpdate(isLocked);
+            }
+        }
+    }
+
+    public notifyWalletStatusChange(
+        origin: string,
+        change: WalletStatusChange
+    ) {
+        for (const aConnection of this.#connections) {
+            if (
+                aConnection instanceof ContentScriptConnection &&
+                aConnection.origin === origin
+            ) {
+                aConnection.send(
+                    createMessage<WalletStatusChangePayload>({
+                        type: 'wallet-status-changed',
+                        ...change,
+                    })
+                );
             }
         }
     }

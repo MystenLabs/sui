@@ -44,6 +44,10 @@ Permissions.permissionReply.subscribe((permission) => {
     }
 });
 
+Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
+    connections.notifyWalletStatusChange(origin, { accounts });
+});
+
 Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
     connections.notifyForLockedStatusUpdate(isLocked);
 });
