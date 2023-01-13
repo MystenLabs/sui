@@ -7,7 +7,6 @@ import {
   Coin,
   ExecuteTransactionRequestType,
   GatewayTxSeqNumber,
-  GetObjectDataResponse,
   getObjectReference,
   GetTxnDigestsResponse,
   ObjectId,
@@ -46,6 +45,7 @@ import {
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
+  GetObjectDataResponse,
   GetOwnedObjectsResponse,
 } from '../types';
 import {
