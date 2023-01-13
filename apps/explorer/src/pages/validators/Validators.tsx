@@ -161,7 +161,9 @@ function ValidatorPageResult() {
                         >
                             Validators
                         </Heading>
-                        <div className="grid-col grid grid-flow-row grid-rows-2 justify-between gap-2.5 md:grid-cols-2 md:flex-row md:gap-8">
+                    
+                    <div className="flex flex-col md:flex-row gap-8">
+                        <div className="flex flex-col gap-8">
                             <Stats label="Participation" tooltip="Coming soon">
                                 <Heading
                                     as="h3"
@@ -170,12 +172,6 @@ function ValidatorPageResult() {
                                 >
                                     --
                                 </Heading>
-                            </Stats>
-                            <Stats label="Total Staked">
-                                <DelegationAmount
-                                    amount={totalStake || 0n}
-                                    isStats
-                                />
                             </Stats>
                             <Stats
                                 label="Last Epoch Reward"
@@ -189,6 +185,15 @@ function ValidatorPageResult() {
                                     --
                                 </Heading>
                             </Stats>
+                            
+                        </div>
+                        <div className="flex flex-col gap-8">
+                            <Stats label="Total Staked">
+                                <DelegationAmount
+                                    amount={totalStake || 0n}
+                                    isStats
+                                />
+                            </Stats>
                             <Stats label="AVG APY" tooltip="Average APY">
                                 <Heading
                                     as="h3"
@@ -199,6 +204,10 @@ function ValidatorPageResult() {
                                 </Heading>
                             </Stats>
                         </div>
+                    </div>
+
+
+                 
                     </div>
                 </Card>
 

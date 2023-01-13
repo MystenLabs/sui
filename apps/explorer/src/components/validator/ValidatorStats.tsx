@@ -139,7 +139,7 @@ export function ValidatorStats({
             </Card>
 
             <Card spacing="lg">
-                <div className="flex  max-w-full flex-col gap-8">
+                <div className="flex max-w-full flex-col gap-8">
                     <Heading
                         as="div"
                         variant="heading4/semibold"
