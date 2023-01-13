@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::encoding::{Base58, Encoding};
 use prometheus::Registry;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::EventPage;
 use sui_sdk::SuiClient;
+use sui_types::base_types::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::query::EventQuery;
 use tokio::time::sleep;
@@ -45,15 +48,16 @@ impl EventHandler {
 
         let mut next_cursor = None;
         let event_log = read_event_log(&mut pg_pool_conn)?;
-        let (tx_seq_opt, event_seq_opt) = (
-            event_log.next_cursor_tx_seq,
+        let (tx_dig_opt, event_seq_opt) = (
+            event_log.next_cursor_tx_dig,
             event_log.next_cursor_event_seq,
         );
-        if let (Some(tx_seq), Some(_event_seq)) = (tx_seq_opt, event_seq_opt) {
+        if let (Some(tx_dig), Some(_event_seq)) = (tx_dig_opt, event_seq_opt) {
+            let tx_digest = TransactionDigest::from_str(&tx_dig).unwrap();
             // TODO: hack event_seq as 0 b/c of an event pagination bug, will change it
             // when the pagination bug is fixed.
             next_cursor = Some(EventID {
-                tx_seq,
+                tx_digest,
                 event_seq: 0,
             });
         }
@@ -81,7 +85,7 @@ impl EventHandler {
             if let Some(next_cursor_val) = event_page.next_cursor.clone() {
                 commit_event_log(
                     &mut pg_pool_conn,
-                    Some(next_cursor_val.tx_seq),
+                    Some(Base58::encode(next_cursor_val.tx_digest)),
                     Some(next_cursor_val.event_seq),
                 )?;
                 self.event_handler_metrics
@@ -90,7 +94,7 @@ impl EventHandler {
                 // TODO: hack event_seq as 0 b/c of an event pagination bug, change it
                 // when the pagination bug is fixed.
                 next_cursor = Some(EventID {
-                    tx_seq: next_cursor_val.tx_seq,
+                    tx_digest: next_cursor_val.tx_digest,
                     event_seq: 0,
                 });
             }

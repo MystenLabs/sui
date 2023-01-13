@@ -950,7 +950,7 @@
             {
               "name": "cursor",
               "value": {
-                "txSeq": 500,
+                "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                 "eventSeq": 10
               }
             },
@@ -971,7 +971,7 @@
                   "timestamp": 0,
                   "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                   "id": {
-                    "txSeq": 0,
+                    "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                     "eventSeq": 0
                   },
                   "event": {
@@ -990,7 +990,7 @@
                 }
               ],
               "nextCursor": {
-                "txSeq": 1000,
+                "txDigest": "11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX",
                 "eventSeq": 5
               }
             }
@@ -3722,7 +3722,8 @@
         "required": [
           "event",
           "id",
-          "timestamp"
+          "timestamp",
+          "txDigest"
         ],
         "properties": {
           "event": {
@@ -3748,13 +3749,10 @@
             "minimum": 0.0
           },
           "txDigest": {
-            "description": "Transaction digest of associated transaction, if any",
-            "anyOf": [
+            "description": "Transaction digest of associated transaction",
+            "allOf": [
               {
                 "$ref": "#/components/schemas/TransactionDigest"
-              },
-              {
-                "type": "null"
               }
             ]
           }
@@ -3938,16 +3936,15 @@
         "type": "object",
         "required": [
           "eventSeq",
-          "txSeq"
+          "txDigest"
         ],
         "properties": {
           "eventSeq": {
             "type": "integer",
             "format": "int64"
           },
-          "txSeq": {
-            "type": "integer",
-            "format": "int64"
+          "txDigest": {
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },

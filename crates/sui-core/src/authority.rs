@@ -2189,17 +2189,24 @@ impl AuthorityState {
         descending: bool,
     ) -> Result<Vec<(EventID, SuiEventEnvelope)>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let cursor = cursor.unwrap_or(if descending {
-            // Database only support up to i64::MAX
-            (i64::MAX, i64::MAX).into()
+
+        //Get the tx_num from tx_digest
+        let (tx_num, event_num) = if let Some(cursor) = cursor {
+            let tx_seq = self
+                .get_indexes()?
+                .get_transaction_seq(&cursor.tx_digest)?
+                .ok_or_else(|| anyhow!("Transaction [{:?}] not found.", cursor.tx_digest))?;
+            (tx_seq as i64, cursor.event_seq)
+        } else if descending {
+            (i64::MAX, i64::MAX)
         } else {
-            (0, 0).into()
-        });
+            (0, 0)
+        };
 
         let stored_events = match query {
-            EventQuery::All => es.all_events(cursor, limit, descending).await?,
+            EventQuery::All => es.all_events(tx_num, event_num, limit, descending).await?,
             EventQuery::Transaction(digest) => {
-                es.events_by_transaction(digest, cursor, limit, descending)
+                es.events_by_transaction(digest, tx_num, event_num, limit, descending)
                     .await?
             }
             EventQuery::MoveModule { package, module } => {
@@ -2207,34 +2214,40 @@ impl AuthorityState {
                     AccountAddress::from(package),
                     Identifier::from_str(&module)?,
                 );
-                es.events_by_module_id(&module_id, cursor, limit, descending)
+                es.events_by_module_id(&module_id, tx_num, event_num, limit, descending)
                     .await?
             }
             EventQuery::MoveEvent(struct_name) => {
-                es.events_by_move_event_struct_name(&struct_name, cursor, limit, descending)
-                    .await?
+                es.events_by_move_event_struct_name(
+                    &struct_name,
+                    tx_num,
+                    event_num,
+                    limit,
+                    descending,
+                )
+                .await?
             }
             EventQuery::Sender(sender) => {
-                es.events_by_sender(&sender, cursor, limit, descending)
+                es.events_by_sender(&sender, tx_num, event_num, limit, descending)
                     .await?
             }
             EventQuery::Recipient(recipient) => {
-                es.events_by_recipient(&recipient, cursor, limit, descending)
+                es.events_by_recipient(&recipient, tx_num, event_num, limit, descending)
                     .await?
             }
             EventQuery::Object(object) => {
-                es.events_by_object(&object, cursor, limit, descending)
+                es.events_by_object(&object, tx_num, event_num, limit, descending)
                     .await?
             }
             EventQuery::TimeRange {
                 start_time,
                 end_time,
             } => {
-                es.event_iterator(start_time, end_time, cursor, limit, descending)
+                es.event_iterator(start_time, end_time, tx_num, event_num, limit, descending)
                     .await?
             }
             EventQuery::EventType(event_type) => {
-                es.events_by_type(event_type, cursor, limit, descending)
+                es.events_by_type(event_type, tx_num, event_num, limit, descending)
                     .await?
             }
         };
