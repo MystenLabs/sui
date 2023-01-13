@@ -73,8 +73,8 @@ export function ValidatorsCard() {
                                     >
                                         Staking on {stakeValidators.length}
                                         {stakeValidators.length > 1
-                                            ? ' VALIDATORS'
-                                            : ' VALIDATOR'}
+                                            ? ' Validators'
+                                            : ' Validator'}
                                     </Text>
                                 </div>
                             }
