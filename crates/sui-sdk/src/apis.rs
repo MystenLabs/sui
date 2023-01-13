@@ -180,6 +180,10 @@ impl ReadApi {
         Ok(self.api.http.get_sui_system_state().await?)
     }
 
+    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_reference_gas_price().await?)
+    }
+
     pub async fn dry_run_transaction(
         &self,
         tx: TransactionData,

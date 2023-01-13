@@ -168,28 +168,6 @@ export class JsonRpcProvider extends Provider {
 
   async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
     try {
-      const version = await this.getRpcApiVersion();
-      // TODO: clean up after 0.17.0 is deployed on both DevNet and TestNet
-      if (version && lt(versionToString(version), '0.17.0')) {
-        const [packageId, module, symbol] = coinType.split('::');
-        if (
-          normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-          module != 'sui' ||
-          symbol !== 'SUI'
-        ) {
-          throw new Error(
-            'only SUI coin is supported in getCoinMetadata for RPC version priort to 0.17.0.'
-          );
-        }
-        return {
-          decimals: 9,
-          name: 'Sui',
-          symbol: 'SUI',
-          description: '',
-          iconUrl: null,
-          id: null,
-        };
-      }
       return await this.client.requestWithType(
         'sui_getCoinMetadata',
         [coinType],
@@ -583,23 +561,23 @@ export class JsonRpcProvider extends Provider {
     try {
       let resp;
       // Serialize sigature field as: `flag || signature || pubkey`
-        const serialized_sig = new Uint8Array(
-          1 + signature.getLength() + pubkey.toBytes().length
-        );
-        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-        serialized_sig.set(signature.getData(), 1);
-        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
+      const serialized_sig = new Uint8Array(
+        1 + signature.getLength() + pubkey.toBytes().length
+      );
+      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+      serialized_sig.set(signature.getData(), 1);
+      serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
 
-        resp = await this.client.requestWithType(
-          'sui_executeTransactionSerializedSig',
-          [
-            txnBytes.toString(),
-            new Base64DataBuffer(serialized_sig).toString(),
-            requestType,
-          ],
-          SuiExecuteTransactionResponse,
-          this.options.skipDataValidation
-        );
+      resp = await this.client.requestWithType(
+        'sui_executeTransactionSerializedSig',
+        [
+          txnBytes.toString(),
+          new Base64DataBuffer(serialized_sig).toString(),
+          requestType,
+        ],
+        SuiExecuteTransactionResponse,
+        this.options.skipDataValidation
+      );
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);
@@ -650,6 +628,25 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(`Error fetching transaction auth signers: ${err}`);
+    }
+  }
+
+  // Governance
+  async getReferenceGasPrice(): Promise<number> {
+    const version = await this.getRpcApiVersion();
+    // TODO: clean up after 0.22.0 is deployed on both DevNet and TestNet
+    if (version && lt(versionToString(version), '0.22.0')) {
+      return 1;
+    }
+    try {
+      return await this.client.requestWithType(
+        'sui_getReferenceGasPrice',
+        [],
+        number(),
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(`Error getting the reference gas price ${err}`);
     }
   }
 
