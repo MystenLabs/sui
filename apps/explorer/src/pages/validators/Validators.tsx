@@ -4,12 +4,11 @@
 import { is, SuiObject } from '@mysten/sui.js';
 import { lazy, Suspense, useState, useMemo } from 'react';
 
-import { apyCalc } from '../../components/validator/ApyCalulator';
-
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import Pagination from '~/components/pagination/Pagination';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
+import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
@@ -51,7 +50,7 @@ function ValidatorPageResult() {
         const validators = validatorsData.validators.fields.active_validators;
 
         const validatorsApy = validators.map((av) =>
-            apyCalc(av, +validatorsData.epoch)
+            calculateAPY(av, +validatorsData.epoch)
         );
         return (
             validatorsApy.reduce((acc, cur) => acc + cur, 0) /

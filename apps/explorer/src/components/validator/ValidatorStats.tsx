@@ -3,8 +3,8 @@
 
 import { useMemo } from 'react';
 
-import { apyCalc } from './ApyCalulator';
 import { DelegationAmount } from './DelegationAmount';
+import { calculateAPY } from './calculateAPY';
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
@@ -35,7 +35,7 @@ export function ValidatorStats({
     //  const lastNarwhalRound = 0;
 
     const apy = useMemo(
-        () => apyCalc(validatorData, +epoch),
+        () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
 

@@ -3,7 +3,7 @@
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
-export function apyCalc(validators: ActiveValidator, epoch: number) {
+export function calculateAPY(validators: ActiveValidator, epoch: number) {
     const { sui_balance, starting_epoch, delegation_token_supply } =
         validators.fields.delegation_staking_pool.fields;
 
