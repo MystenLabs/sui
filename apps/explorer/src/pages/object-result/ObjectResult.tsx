@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionSender } from '@mysten/sui.js';
-import * as Sentry from '@sentry/react';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { findDataFromID } from '../../utils/static/searchUtil';
 import {
     instanceOfDataType,
     translate,
@@ -111,22 +108,6 @@ function ObjectResultAPI({ objID }: { objID: string }) {
     return <div>Something went wrong</div>;
 }
 
-function ObjectResultStatic({ objID }: { objID: string }) {
-    const data = findDataFromID(objID, undefined);
-
-    if (instanceOfDataType(data)) {
-        return <ObjectView data={data} />;
-    } else {
-        try {
-            return <ObjectView data={translate(data)} />;
-        } catch (err) {
-            console.error("Couldn't parse data", err);
-            Sentry.captureException(err);
-            return <Fail objID={objID} />;
-        }
-    }
-}
-
 function ObjectResult() {
     const { id: objID } = useParams();
     const { state } = useLocation();
@@ -140,9 +121,7 @@ function ObjectResult() {
     }
 
     if (objID !== undefined) {
-        return IS_STATIC_ENV ? (
-            <ObjectResultStatic objID={objID} />
-        ) : (
+        return (
             <ErrorBoundary>
                 <ObjectResultAPI objID={objID} />
             </ErrorBoundary>

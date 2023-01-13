@@ -8,7 +8,6 @@ import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/12px/
 import { ReactComponent as ContentCopyIcon16 } from '../../assets/SVGIcons/16px/Copy.svg';
 import { ReactComponent as ContentCopyIcon24 } from '../../assets/SVGIcons/24px/Copy.svg';
 import { NetworkContext } from '../../context';
-import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import type { ReactNode } from 'react';
 
@@ -16,6 +15,7 @@ import styles from './Longtext.module.css';
 
 import { Link } from '~/ui/Link';
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
+import { navigateWithUnknown } from '~/utils/api/searchUtil';
 
 /** @deprecated Use new UI components instead of Longtext. */
 function Longtext({
