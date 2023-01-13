@@ -29,9 +29,7 @@ import { getName } from '~/utils/getName';
 
 const NUMBER_OF_VALIDATORS = 20;
 
-const ValidatorMap = lazy(
-    () => import('../../components/validator-map/ValidatorMap')
-);
+const ValidatorMap = lazy(() => import('../../components/node-map'));
 
 function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } =
@@ -153,76 +151,62 @@ function ValidatorPageResult() {
                 Validators
             </Heading>
 
-            <div className="mt-8 flex w-full flex-col gap-5 md:flex-row">
-                <div className="basis-full md:basis-1/2">
-                    <ErrorBoundary>
-                        <Card spacing="lg">
-                            <div className="flex max-w-full flex-col gap-8">
+            <div className="mt-8 grid gap-5 md:grid-cols-2">
+                <Card spacing="lg">
+                    <div className="flex w-full basis-full flex-col gap-8">
+                        <Heading
+                            as="div"
+                            variant="heading4/semibold"
+                            color="steel-darker"
+                        >
+                            Validators
+                        </Heading>
+                        <div className="grid-col grid grid-flow-row grid-rows-2 justify-between gap-2.5 md:grid-cols-2 md:flex-row md:gap-8">
+                            <Stats label="Participation" tooltip="Coming soon">
                                 <Heading
-                                    as="div"
-                                    variant="heading4/semibold"
+                                    as="h3"
+                                    variant="heading2/semibold"
                                     color="steel-darker"
                                 >
-                                    Validators
+                                    --
                                 </Heading>
-                                <div className="grid-col grid grid-flow-row grid-rows-2 justify-between gap-2.5 md:grid-cols-2 md:flex-row md:gap-8">
-                                    <Stats
-                                        label="Participation"
-                                        tooltip="Coming soon"
-                                    >
-                                        <Heading
-                                            as="h3"
-                                            variant="heading2/semibold"
-                                            color="steel-darker"
-                                        >
-                                            --
-                                        </Heading>
-                                    </Stats>
-                                    <Stats label="Total Staked">
-                                        <DelegationAmount
-                                            amount={totalStake || 0n}
-                                            isStats
-                                        />
-                                    </Stats>
-                                    <Stats
-                                        label="Last Epoch Reward"
-                                        tooltip="Coming soon"
-                                    >
-                                        <Heading
-                                            as="h3"
-                                            variant="heading2/semibold"
-                                            color="steel-darker"
-                                        >
-                                            --
-                                        </Heading>
-                                    </Stats>
-                                    <Stats
-                                        label="AVG APY"
-                                        tooltip="Average APY"
-                                    >
-                                        <Heading
-                                            as="h3"
-                                            variant="heading2/semibold"
-                                            color="steel-darker"
-                                        >
-                                            {averageAPY > 0
-                                                ? `${averageAPY}%`
-                                                : '--'}
-                                        </Heading>
-                                    </Stats>
-                                </div>
-                            </div>
-                        </Card>
-                    </ErrorBoundary>
-                </div>
+                            </Stats>
+                            <Stats label="Total Staked">
+                                <DelegationAmount
+                                    amount={totalStake || 0n}
+                                    isStats
+                                />
+                            </Stats>
+                            <Stats
+                                label="Last Epoch Reward"
+                                tooltip="Coming soon"
+                            >
+                                <Heading
+                                    as="h3"
+                                    variant="heading2/semibold"
+                                    color="steel-darker"
+                                >
+                                    --
+                                </Heading>
+                            </Stats>
+                            <Stats label="AVG APY" tooltip="Average APY">
+                                <Heading
+                                    as="h3"
+                                    variant="heading2/semibold"
+                                    color="steel-darker"
+                                >
+                                    {averageAPY > 0 ? `${averageAPY}%` : '--'}
+                                </Heading>
+                            </Stats>
+                        </div>
+                    </div>
+                </Card>
 
-                <div className="basis-full md:basis-1/2">
-                    <ErrorBoundary>
-                        <Suspense fallback={null}>
-                            <ValidatorMap />
-                        </Suspense>
-                    </ErrorBoundary>
-                </div>
+                <ErrorBoundary>
+                    <Suspense fallback={null}>
+                        <ValidatorMap />
+                    </Suspense>
+                </ErrorBoundary>
             </div>
             <div className="mt-8">
                 <ErrorBoundary>

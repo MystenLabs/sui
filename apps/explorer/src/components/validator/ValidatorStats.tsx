@@ -50,43 +50,107 @@ export function ValidatorStats({
     );
 
     return (
-        <div className="flex w-full flex-col gap-5 md:mt-8 md:flex-row lg:basis-10/12">
-            <div className=" basis-full md:basis-2/5">
-                <Card spacing="lg">
-                    <div className="flex max-w-full flex-col flex-nowrap gap-8">
-                        <Heading
-                            as="div"
-                            variant="heading4/semibold"
-                            color="steel-darker"
-                        >
-                            SUI Staked on Validator
-                        </Heading>
+        <div className="flex flex-col items-stretch gap-5 md:flex-row">
+            <Card spacing="lg">
+                <div className="flex basis-full flex-col flex-nowrap gap-8 md:basis-1/3">
+                    <Heading
+                        as="div"
+                        variant="heading4/semibold"
+                        color="steel-darker"
+                    >
+                        SUI Staked on Validator
+                    </Heading>
+                    <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                        <Stats label="Staking APY" tooltip="Coming soon">
+                            <Heading
+                                as="h3"
+                                variant="heading2/semibold"
+                                color="steel-darker"
+                            >
+                                {apy > 0 ? `${apy}%` : '--'}
+                            </Heading>
+                        </Stats>
+                        <Stats label="Total Staked" tooltip="Coming soon">
+                            <DelegationAmount amount={totalStake} isStats />
+                        </Stats>
+                    </div>
+                    <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                        <Stats label="Delegators" tooltip="Coming soon">
+                            <Heading
+                                as="h3"
+                                variant="heading3/semibold"
+                                color="steel-darker"
+                            >
+                                --
+                            </Heading>
+                        </Stats>
+                        <Stats label="Delegated Staked" tooltip="Coming soon">
+                            <Heading
+                                as="h3"
+                                variant="heading3/semibold"
+                                color="steel-darker"
+                            >
+                                {delegatedStakePercentage}%
+                            </Heading>
+                        </Stats>
+                        <Stats label="Self Staked" tooltip="Coming soon">
+                            <Heading
+                                as="h3"
+                                variant="heading3/semibold"
+                                color="steel-darker"
+                            >
+                                --
+                            </Heading>
+                        </Stats>
+                    </div>
+                </div>
+            </Card>
+
+            <Card spacing="lg">
+                <div className="flex basis-full flex-col flex-nowrap items-stretch gap-8 md:basis-80">
+                    <Heading
+                        as="div"
+                        variant="heading4/semibold"
+                        color="steel-darker"
+                    >
+                        Validator Staking Rewards
+                    </Heading>
+                    <div className="flex flex-col flex-nowrap gap-8">
+                        <Stats label="Last Epoch" tooltip="Coming soon">
+                            <Heading
+                                as="h3"
+                                variant="heading3/semibold"
+                                color="steel-darker"
+                            >
+                                --
+                            </Heading>
+                        </Stats>
+                        <Stats label="Total Reward" tooltip="Coming soon">
+                            <Heading
+                                as="h3"
+                                variant="heading3/semibold"
+                                color="steel-darker"
+                            >
+                                --
+                            </Heading>
+                        </Stats>
+                    </div>
+                </div>
+            </Card>
+
+            <Card spacing="lg">
+                <div className="flex  max-w-full flex-col flex-nowrap gap-8">
+                    <Heading
+                        as="div"
+                        variant="heading4/semibold"
+                        color="steel-darker"
+                    >
+                        Network Participation
+                    </Heading>
+                    <div className="flex flex-col flex-nowrap gap-8">
                         <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
-                            <Stats label="Staking APY" tooltip="Coming soon">
-                                <Heading
-                                    as="h3"
-                                    variant="heading2/semibold"
-                                    color="steel-darker"
-                                >
-                                    {apy > 0 ? `${apy}%` : '--'}
-                                </Heading>
-                            </Stats>
-                            <Stats label="Total Staked" tooltip="Coming soon">
-                                <DelegationAmount amount={totalStake} isStats />
-                            </Stats>
-                        </div>
-                        <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
-                            <Stats label="Delegators" tooltip="Coming soon">
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
                             <Stats
-                                label="Delegated Staked"
+                                label="Staking Participation"
                                 tooltip="Coming soon"
                             >
                                 <Heading
@@ -94,124 +158,50 @@ export function ValidatorStats({
                                     variant="heading3/semibold"
                                     color="steel-darker"
                                 >
-                                    {delegatedStakePercentage}%
-                                </Heading>
-                            </Stats>
-                            <Stats label="Self Staked" tooltip="Coming soon">
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
                                     --
                                 </Heading>
                             </Stats>
-                        </div>
-                    </div>
-                </Card>
-            </div>
-            <div className="basis-full md:basis-1/4">
-                <Card spacing="lg">
-                    <div className="flex max-w-full flex-col flex-nowrap gap-8">
-                        <Heading
-                            as="div"
-                            variant="heading4/semibold"
-                            color="steel-darker"
-                        >
-                            Validator Staking Rewards
-                        </Heading>
-                        <div className="flex flex-col flex-nowrap gap-8">
-                            <Stats label="Last Epoch" tooltip="Coming soon">
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
-                            <Stats label="Total Reward" tooltip="Coming soon">
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
-                        </div>
-                    </div>
-                </Card>
-            </div>
-            <div className="basis-full md:basis-1/3">
-                <Card spacing="lg">
-                    <div className="flex  max-w-full flex-col flex-nowrap gap-8">
-                        <Heading
-                            as="div"
-                            variant="heading4/semibold"
-                            color="steel-darker"
-                        >
-                            Network Participation
-                        </Heading>
-                        <div className="flex flex-col flex-nowrap gap-8">
-                            <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
-                                <Stats
-                                    label="Staking Participation"
-                                    tooltip="Coming soon"
-                                >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading3/semibold"
-                                        color="steel-darker"
-                                    >
-                                        --
-                                    </Heading>
-                                </Stats>
 
-                                <Stats
-                                    label="voted Last Round"
-                                    tooltip="Coming soon"
+                            <Stats
+                                label="voted Last Round"
+                                tooltip="Coming soon"
+                            >
+                                <Heading
+                                    as="h3"
+                                    variant="heading3/semibold"
+                                    color="steel-darker"
                                 >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading3/semibold"
-                                        color="steel-darker"
-                                    >
-                                        --
-                                    </Heading>
-                                </Stats>
-                            </div>
-                            <div className="flex flex-col flex-nowrap gap-8 md:flex-row">
-                                <Stats
-                                    label="Tallying Score"
-                                    tooltip="Coming soon"
+                                    --
+                                </Heading>
+                            </Stats>
+                        </div>
+                        <div className="flex flex-col flex-nowrap gap-8 lg:flex-row">
+                            <Stats label="Tallying Score" tooltip="Coming soon">
+                                <Heading
+                                    as="h3"
+                                    variant="heading3/semibold"
+                                    color="steel-darker"
                                 >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading3/semibold"
-                                        color="steel-darker"
-                                    >
-                                        --
-                                    </Heading>
-                                </Stats>
+                                    --
+                                </Heading>
+                            </Stats>
 
-                                <Stats
-                                    label="Last Narwhal Round"
-                                    tooltip="Coming soon"
+                            <Stats
+                                label="Last Narwhal Round"
+                                tooltip="Coming soon"
+                            >
+                                <Heading
+                                    as="h3"
+                                    variant="heading3/semibold"
+                                    color="steel-darker"
                                 >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading3/semibold"
-                                        color="steel-darker"
-                                    >
-                                        --
-                                    </Heading>
-                                </Stats>
-                            </div>
+                                    --
+                                </Heading>
+                            </Stats>
                         </div>
                     </div>
-                </Card>
-            </div>
+                </div>
+            </Card>
         </div>
     );
 }

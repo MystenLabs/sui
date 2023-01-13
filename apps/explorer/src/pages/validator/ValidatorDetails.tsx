@@ -56,7 +56,7 @@ function ValidatorDetails() {
             <div className="flex flex-col flex-nowrap gap-5 md:flex-row md:gap-0">
                 <ValidatorMeta validatorData={validatorData} />
             </div>
-            <div className="mt-5 flex w-full md:mt-8">
+            <div className="mt-5 md:mt-8">
                 <ValidatorStats
                     validatorData={validatorData}
                     epoch={validatorsData.epoch}
