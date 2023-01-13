@@ -9,6 +9,7 @@ import {
   CertifiedTransaction,
   TransactionDigest,
   GetTxnDigestsResponse,
+  GatewayTxSeqNumber,
   SuiObjectInfo,
   GetObjectDataResponse,
   SuiObjectRef,

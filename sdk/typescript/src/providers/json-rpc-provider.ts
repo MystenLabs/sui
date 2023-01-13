@@ -6,6 +6,8 @@ import { HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   Coin,
   ExecuteTransactionRequestType,
+  GatewayTxSeqNumber,
+  GetObjectDataResponse,
   getObjectReference,
   GetTxnDigestsResponse,
   ObjectId,
@@ -44,9 +46,7 @@ import {
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
-  GetObjectDataResponse,
   GetOwnedObjectsResponse,
-  GatewayTxSeqNumber,
 } from '../types';
 import {
   PublicKey,
@@ -622,7 +622,7 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionDigestsInRange(
     start: GatewayTxSeqNumber,
-    end: GatewayTxSeqNumber,
+    end: GatewayTxSeqNumber
   ): Promise<GetTxnDigestsResponse> {
     try {
       return await this.client.requestWithType(

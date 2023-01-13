@@ -8,6 +8,7 @@ import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
+  GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   SuiObjectRef,
   SuiMoveFunctionArgTypes,
