@@ -57,6 +57,7 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
         None,
         object.compute_object_reference(),
         10000,
+        /* gas price */ 1,
     );
     to_sender_signed_transaction(data, &sender_key)
 }

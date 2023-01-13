@@ -388,6 +388,7 @@ async fn test_move_call_gas() -> SuiResult {
         gas_object.compute_object_reference(),
         args.clone(),
         GAS_VALUE_FOR_TESTING,
+        /* gas price */ 1,
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);
@@ -451,6 +452,7 @@ async fn test_move_call_gas() -> SuiResult {
             created_object_ref,
         ))],
         expected_gas_balance,
+        /* gas price */ 1,
     );
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
@@ -477,6 +479,7 @@ async fn test_move_call_gas() -> SuiResult {
         gas_object.compute_object_reference(),
         args,
         budget,
+        /* gas price */ 1,
     );
 
     let transaction = to_sender_signed_transaction(data, &sender_key);

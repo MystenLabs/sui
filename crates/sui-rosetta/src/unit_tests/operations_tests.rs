@@ -24,6 +24,7 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
         vec![10000],
         gas,
         1000,
+        /* gas price */ 1,
     );
 
     let ops: Operations = data.clone().try_into()?;

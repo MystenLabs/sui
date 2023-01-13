@@ -64,6 +64,7 @@ fn test_authority_signature_intent() {
         None,
         object.compute_object_reference(),
         10000,
+        /* gas price */ 1,
     );
     let data1 = data.clone();
     let data2 = data.clone();

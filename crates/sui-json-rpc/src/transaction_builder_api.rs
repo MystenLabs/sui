@@ -70,6 +70,10 @@ impl DataReader for AuthorityStateDataReader {
         let result = self.0.get_object_read(&object_id).await?;
         Ok(result.try_into()?)
     }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        Ok(self.0.get_sui_system_state_object()?.reference_gas_price)
+    }
 }
 
 #[async_trait]

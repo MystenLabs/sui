@@ -155,6 +155,7 @@ pub async fn make_transactions_with_wallet_context(
                 Some(2),
                 obj.to_object_ref(),
                 MAX_GAS,
+                /* gas price */ 1,
             );
             let tx = to_sender_signed_transaction(
                 data,
@@ -192,6 +193,7 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
             initial_shared_version: counter_initial_shared_version,
         })],
         MAX_GAS,
+        /* gas price */ 1,
     );
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
@@ -228,6 +230,7 @@ pub fn make_transactions_with_pre_genesis_objects(
             /* sender */ sender,
             /* gas_object_ref */ o2.compute_object_reference(),
             MAX_GAS,
+            /* gas price */ 1,
         );
         let tx = to_sender_signed_transaction(data, keys.get_key(&sender).unwrap());
         transactions.push(tx);
@@ -267,6 +270,7 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             MAX_GAS,
+            /* gas price */ 1,
         );
         transactions.push(to_sender_signed_transaction(data, &keypair));
     }
@@ -284,7 +288,13 @@ pub fn create_publish_move_package_transaction(
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes();
-    let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
+    let data = TransactionData::new_module(
+        sender,
+        gas_object_ref,
+        all_module_bytes,
+        MAX_GAS,
+        /* gas price */ 1,
+    );
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -295,7 +305,9 @@ pub fn make_transfer_object_transaction_with_wallet_context(
     sender: SuiAddress,
     recipient: SuiAddress,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer(
+        recipient, object_ref, sender, gas_object, MAX_GAS, /* gas price */ 1,
+    );
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
@@ -307,7 +319,13 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes();
-    let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
+    let data = TransactionData::new_module(
+        sender,
+        gas_object,
+        all_module_bytes,
+        MAX_GAS,
+        /* gas price */ 1,
+    );
     to_sender_signed_transaction(data, &keypair)
 }
 
@@ -341,6 +359,7 @@ pub fn make_counter_create_transaction(
         gas_object,
         vec![],
         MAX_GAS,
+        /* gas price */ 1,
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -365,6 +384,7 @@ pub fn make_counter_increment_transaction(
             initial_shared_version: counter_initial_shared_version,
         })],
         MAX_GAS,
+        /* gas price */ 1,
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -401,6 +421,7 @@ pub fn move_transaction_with_type_tags(
         gas_object.compute_object_reference(),
         arguments,
         MAX_GAS,
+        /* gas price */ 1,
     );
     to_sender_signed_transaction(data, &keypair)
 }

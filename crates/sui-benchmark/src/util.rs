@@ -59,6 +59,7 @@ pub fn make_split_coin_tx(
             CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
         ],
         1000000,
+        /* gas price */ 1,
     );
     let verified_tx = to_sender_signed_transaction(split_coin, keypair);
     Ok(verified_tx)
@@ -72,7 +73,15 @@ pub fn make_pay_tx(
     gas: ObjectRef,
     keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
-    let pay = TransactionData::new_pay(sender, input_coins, addresses, split_amounts, gas, 1000000);
+    let pay = TransactionData::new_pay(
+        sender,
+        input_coins,
+        addresses,
+        split_amounts,
+        gas,
+        1000000,
+        /* gas price */ 1,
+    );
     to_sender_signed_transaction(pay, keypair)
 }
 

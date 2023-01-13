@@ -48,6 +48,7 @@ fn test_signed_values() {
             a_sender,
             random_object_ref(),
             10000,
+            /* gas price */ 1,
         ),
         Intent::default(),
         &sender_sec,
@@ -62,6 +63,7 @@ fn test_signed_values() {
             a_sender,
             random_object_ref(),
             10000,
+            /* gas price */ 1,
         ),
         Intent::default(),
         &sender_sec2,
@@ -125,6 +127,7 @@ fn test_certificates() {
             a_sender,
             random_object_ref(),
             10000,
+            /* gas price */ 1,
         ),
         Intent::default(),
         &sender_sec,
@@ -432,7 +435,14 @@ fn test_digest_caching() {
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
+        TransactionData::new_transfer(
+            sa1,
+            random_object_ref(),
+            sa2,
+            random_object_ref(),
+            10000,
+            /* gas price */ 1,
+        ),
         Intent::default(),
         &ssec2,
     )
@@ -508,6 +518,7 @@ fn test_user_signature_committed_in_transactions() {
         a_sender,
         random_object_ref(),
         10000,
+        /* gas price */ 1,
     );
 
     let mut tx_data_2 = tx_data.clone();
@@ -556,6 +567,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         a_sender,
         random_object_ref(),
         10000,
+        /* gas price */ 1,
     );
     let transaction_a =
         Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), &sender_sec)
@@ -635,6 +647,7 @@ fn verify_sender_signature_correctly_with_flag() {
         (&sender_kp.public()).into(),
         random_object_ref(),
         10000,
+        /* gas price */ 1,
     );
 
     // create a sender keypair with Ed25519

@@ -212,7 +212,13 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas_payment| {
-            TransactionData::new_module(sender, gas_payment, vec![module_bytes], gas_budget)
+            TransactionData::new_module(
+                sender,
+                gas_payment,
+                vec![module_bytes],
+                gas_budget,
+                /* gas price */ 1,
+            )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -297,6 +303,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 gas_payment,
                 arguments,
                 gas_budget,
+                /* gas price */ 1,
             )
         };
         let transaction = self.sign_txn(sender, data);
@@ -410,7 +417,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 };
                 let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
                 let transaction = self.sign_txn(sender, |sender, gas| {
-                    TransactionData::new_transfer(recipient, obj_ref, sender, gas, gas_budget)
+                    TransactionData::new_transfer(
+                        recipient, obj_ref, sender, gas, gas_budget, /* gas price */ 1,
+                    )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
                 let output = self.object_summary_output(&summary, false);

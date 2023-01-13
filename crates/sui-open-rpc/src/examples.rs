@@ -433,7 +433,9 @@ impl RpcExampleProvider {
             ObjectDigest::new(self.rng.gen()),
         );
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_ref, 1000);
+        let data = TransactionData::new_transfer(
+            recipient, object_ref, signer, gas_ref, 1000, /* gas price */ 1,
+        );
         let data1 = data.clone();
         let data2 = data.clone();
 

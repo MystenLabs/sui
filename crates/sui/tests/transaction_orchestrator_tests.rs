@@ -218,6 +218,7 @@ async fn test_tx_across_epoch_boundaries() {
                 None,
                 o.compute_object_reference(),
                 5000,
+                /* gas price */ 1,
             );
             to_sender_signed_transaction(data, &keypair)
         })

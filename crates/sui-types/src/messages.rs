@@ -660,6 +660,7 @@ impl TransactionData {
         gas_payment: ObjectRef,
         arguments: Vec<CallArg>,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
             package,
@@ -668,7 +669,7 @@ impl TransactionData {
             type_arguments,
             arguments,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_transfer(
@@ -677,12 +678,13 @@ impl TransactionData {
         sender: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
             recipient,
             object_ref,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_transfer_sui(
@@ -691,12 +693,13 @@ impl TransactionData {
         amount: Option<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
             recipient,
             amount,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_pay(
@@ -706,13 +709,14 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
             coins,
             recipients,
             amounts,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_pay_sui(
@@ -722,13 +726,14 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
             coins,
             recipients,
             amounts,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_pay_all_sui(
@@ -737,12 +742,13 @@ impl TransactionData {
         recipient: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
             coins,
             recipient,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_module(
@@ -750,11 +756,12 @@ impl TransactionData {
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
             modules,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new_with_gas_price(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn gas(&self) -> ObjectRef {
