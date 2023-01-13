@@ -6,7 +6,7 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
-import StakeAmount from '../home/StakeAmount';
+import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';

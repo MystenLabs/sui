@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { memo } from 'react';
 
 import { Text } from '_app/shared/text';
 import { useFormatCoin } from '_hooks';
@@ -14,7 +13,11 @@ interface StakeAmountProps {
     isEarnedRewards?: boolean;
 }
 
-function StakeAmount({ balance, variant, isEarnedRewards }: StakeAmountProps) {
+export function StakeAmount({
+    balance,
+    variant,
+    isEarnedRewards,
+}: StakeAmountProps) {
     const [formatted, symbol] = useFormatCoin(balance, SUI_TYPE_ARG);
     // Handle case of 0 balance
     const zeroBalanceColor = !!balance;
@@ -42,5 +45,3 @@ function StakeAmount({ balance, variant, isEarnedRewards }: StakeAmountProps) {
         </div>
     );
 }
-
-export default memo(StakeAmount);

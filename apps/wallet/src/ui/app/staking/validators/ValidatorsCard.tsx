@@ -5,7 +5,7 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
-import StakeAmount from '../home/StakeAmount';
+import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { DelegationCard, DelegationState } from './../home/DelegationCard';
 import BottomMenuLayout, {
@@ -86,7 +86,6 @@ export function ValidatorsCard() {
                                         variant="heading4"
                                     />
                                 </CardItem>
-                                {/* TODO: show the actual Rewards Collected value https://github.com/MystenLabs/sui/issues/3605 */}
                                 <CardItem title="Earned">
                                     <StakeAmount
                                         balance={0n}

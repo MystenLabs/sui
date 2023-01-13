@@ -4,7 +4,7 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
-import StakeAmount from '../home/StakeAmount';
+import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
