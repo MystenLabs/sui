@@ -7,18 +7,25 @@ pub mod narwhal_manager_tests;
 
 use arc_swap::ArcSwap;
 use fastcrypto::traits::KeyPair;
-use mysten_metrics::{monitored_scope, RegistryService};
-use narwhal_config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use mysten_metrics::{monitored_scope, spawn_monitored_task, RegistryService};
+use narwhal_config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::NodeStorage;
 use narwhal_worker::TransactionValidator;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
+
+#[derive(PartialEq)]
+enum Running {
+    True(Epoch),
+    False,
+}
 
 pub struct NarwhalConfiguration {
     pub primary_keypair: AuthorityKeyPair,
@@ -37,7 +44,7 @@ pub struct NarwhalManager {
     worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
-    running: Mutex<bool>,
+    running: Mutex<Running>,
 }
 
 impl NarwhalManager {
@@ -60,7 +67,7 @@ impl NarwhalManager {
             network_keypair: config.network_keypair,
             worker_ids_and_keypairs: config.worker_ids_and_keypairs,
             storage_base_path: config.storage_base_path,
-            running: Mutex::new(false),
+            running: Mutex::new(Running::False),
         }
     }
 
@@ -75,9 +82,11 @@ impl NarwhalManager {
         State: ExecutionState + Send + Sync + 'static,
     {
         let mut running = self.running.lock().await;
-        if *running {
+
+        if let Running::True(epoch) = *running {
             tracing::warn!(
-                "Narwhal node is already running - need to shutdown first before starting again"
+                "Narwhal node is already Running at epoch {:?} - shutdown first before starting",
+                epoch
             );
             return;
         }
@@ -85,8 +94,7 @@ impl NarwhalManager {
         let _guard = monitored_scope("NarwhalManagerStart");
 
         // Create a new store
-        let mut store_path = self.storage_base_path.clone();
-        store_path.push(format!("epoch{}", committee.epoch()));
+        let store_path = self.get_store_path(committee.epoch());
         let store = NodeStorage::reopen(store_path);
 
         let name = self.primary_keypair.public().clone();
@@ -133,27 +141,90 @@ impl NarwhalManager {
             now.elapsed().as_secs_f64()
         );
 
-        *running = true
+        *running = Running::True(committee.epoch());
     }
 
     // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
     // have shutdown.
     pub async fn shutdown(&self) {
-        let _guard = monitored_scope("NarwhalManagerShutdown");
-
         let mut running = self.running.lock().await;
 
-        let now = Instant::now();
-        tracing::info!("Shutting down Narwhal");
+        match *running {
+            Running::True(epoch) => {
+                let _guard = monitored_scope("NarwhalManagerShutdown");
 
-        self.primary_node.shutdown().await;
-        self.worker_nodes.shutdown().await;
+                let now = Instant::now();
+                tracing::info!("Shutting down Narwhal");
 
-        tracing::info!(
-            "Narwhal shutdown is complete - took {} seconds",
-            now.elapsed().as_secs_f64()
-        );
+                self.primary_node.shutdown().await;
+                self.worker_nodes.shutdown().await;
 
-        *running = false
+                tracing::info!(
+                    "Narwhal shutdown is complete - took {} seconds",
+                    now.elapsed().as_secs_f64()
+                );
+
+                // Drop storage
+                let path_clone = self.storage_base_path.clone();
+                spawn_monitored_task!(Self::remove_old_epoch_data(path_clone, epoch));
+            }
+            Running::False => {
+                tracing::info!("Shutdown was called but Narwhal node is not running");
+            }
+        }
+
+        *running = Running::False;
+    }
+
+    fn get_store_path(&self, epoch: Epoch) -> PathBuf {
+        let mut store_path = self.storage_base_path.clone();
+        store_path.push(format!("{}", epoch));
+        store_path
+    }
+
+    async fn remove_old_epoch_data(storage_base_path: PathBuf, epoch: Epoch) {
+        // Keep previous epoch data as a safety buffer and remove starting from epoch - 1
+        let drop_boundary = epoch - 1;
+
+        // Get all the epoch stores in the base path directory
+        let files = match fs::read_dir(storage_base_path.clone()) {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::error!("Narwhal Manager cannot read the files in the storage path directory for epoch cleanup: {:?}", e);
+                return;
+            }
+        };
+
+        // Look for any that are less than or equal to the drop boundary and drop
+        for file_res in files {
+            let f = match file_res {
+                Ok(f) => f,
+                Err(e) => {
+                    tracing::error!(
+                        "Narwhal Manager error while cleaning up storage of previous epochs: {:?}",
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            let file_epoch_string = f.file_name().to_str().unwrap().to_owned(); // todo:remove unwrap
+            let file_epoch = match file_epoch_string.parse::<u64>() {
+                Ok(f) => f,
+                Err(e) => {
+                    tracing::error!("Narwhal Manager could not parse file in storage path into epoch for cleanup: {:?}",e);
+                    continue;
+                }
+            };
+
+            if file_epoch <= drop_boundary {
+                if let Err(e) = fs::remove_dir(f.path()) {
+                    tracing::error!(
+                        "Narwhal Manager could not remove old epoch storage directory: {:?}",
+                        e
+                    );
+                }
+            }
+        }
     }
 }
