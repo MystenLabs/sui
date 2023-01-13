@@ -261,6 +261,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                             .genesis_info
                             .narwhal_worker_address
                             .clone(),
+                        description: String::new(),
+                        image_url: String::new(),
+                        project_url: String::new(),
                     },
                     pop,
                 )

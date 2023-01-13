@@ -227,6 +227,9 @@ validators:
           - 137
         name:
           - 48
+        description: []
+        image_url: []
+        project_url: []
         net_address: []
         consensus_address: []
         worker_address: []
@@ -473,6 +476,9 @@ validators:
         - 137
       name:
         - 48
+      description: []
+      image_url: []
+      project_url: []
       net_address: []
       consensus_address: []
       worker_address: []
