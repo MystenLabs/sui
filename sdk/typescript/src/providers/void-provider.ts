@@ -62,6 +62,13 @@ export class VoidProvider extends Provider {
     throw this.newError('requestSuiFromFaucet');
   }
 
+  // RPC Endpoint
+  call(
+    _endpoint: string, 
+    _params: any[]): Promise<any> {
+    throw this.newError('call');
+  }
+
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
