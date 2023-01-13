@@ -475,6 +475,11 @@ impl TransactionDigest {
     pub fn encode(&self) -> String {
         Base64::encode(self.0)
     }
+
+    // TODO: de-dup this
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
