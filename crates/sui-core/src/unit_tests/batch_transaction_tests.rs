@@ -50,7 +50,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             ],
         }));
     }
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -114,7 +114,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         type_arguments: vec![],
         arguments: vec![],
     }));
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -148,7 +148,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
     let transactions = vec![SingleTransactionKind::Publish(MoveModulePublish {
         modules: module_bytes,
     })];
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -177,7 +177,7 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
         recipient: Default::default(),
         amount: None,
     })];
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -227,7 +227,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
             ],
         }));
     }
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         gas_object.compute_object_reference(),

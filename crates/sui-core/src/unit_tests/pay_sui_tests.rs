@@ -443,7 +443,7 @@ async fn execute_pay_sui(
         recipients,
         amounts,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
 
@@ -491,7 +491,7 @@ async fn execute_pay_all_sui(
         coins: input_coins,
         recipient,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
     PaySuiTransactionExecutionResult {

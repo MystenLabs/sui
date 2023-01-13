@@ -371,7 +371,7 @@ pub async fn delete_devnet_nft(
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
         package_ref,
         "devnet_nft".parse().unwrap(),

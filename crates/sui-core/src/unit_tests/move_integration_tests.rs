@@ -1861,7 +1861,12 @@ pub async fn build_and_try_publish_test_package(
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
-    let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        *sender,
+        gas_object_ref,
+        all_module_bytes,
+        gas_budget,
+    );
     let transaction = to_sender_signed_transaction(data, sender_key);
 
     (

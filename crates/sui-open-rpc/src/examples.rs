@@ -114,7 +114,7 @@ impl RpcExampleProvider {
             }),
         ];
 
-        let data = TransactionData::new(
+        let data = TransactionData::new_with_dummy_gas_price(
             TransactionKind::Batch(vec![
                 SingleTransactionKind::Call(MoveCall {
                     package: (
@@ -433,7 +433,9 @@ impl RpcExampleProvider {
             ObjectDigest::new(self.rng.gen()),
         );
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_ref, 1000);
+        let data = TransactionData::new_transfer_with_dummy_gas_price(
+            recipient, object_ref, signer, gas_ref, 1000,
+        );
         let data1 = data.clone();
         let data2 = data.clone();
 
