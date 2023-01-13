@@ -4,7 +4,6 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { Heading } from '_app/shared/heading';
-import PageTitle from '_app/shared/page-title';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 
@@ -33,7 +32,6 @@ export interface CardLayoutProps extends VariantProps<typeof cardLayoutStyles> {
     headerCaption?: string;
     icon?: 'success' | 'sui';
     children: ReactNode | ReactNode[];
-    goBackOnClick?: () => void;
 }
 
 export default function CardLayout({
@@ -42,19 +40,11 @@ export default function CardLayout({
     subtitle,
     headerCaption,
     icon,
-    goBackOnClick,
     ...styleProps
 }: CardLayoutProps) {
     return (
         <div className={cardLayoutStyles(styleProps)}>
             <div className="p-7.5 pt-10 flex-grow flex flex-col flex-nowrap items-center justify-center w-full">
-                {goBackOnClick ? (
-                    <PageTitle
-                        onClick={goBackOnClick}
-                        hideBackLabel={true}
-                        className="absolute left-[22px] top-[19px]"
-                    />
-                ) : null}
                 {icon === 'success' ? (
                     <div className="rounded-full w-12 h-12 border-dotted border-success border-2 flex items-center justify-center mb-2.5 p-1">
                         <div className="bg-success rounded-full h-8 w-8 flex items-center justify-center">
