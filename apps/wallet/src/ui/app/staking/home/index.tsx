@@ -4,7 +4,6 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 
-import { FEATURES } from '../../experimentation/features';
 import { usePendingDelegation } from '../usePendingDelegation';
 import { ActiveDelegation } from './ActiveDelegation';
 import { DelegationCard, DelegationState } from './DelegationCard';
@@ -25,6 +24,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 import st from './StakeHome.module.scss';
 

@@ -3,8 +3,11 @@
 
 import { lastValueFrom, map, take } from 'rxjs';
 
+import { growthbook } from '../experimentation/feature-gating';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
+import { type BasePayload } from '_payloads';
+import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
 import { isKeyringPayload } from '_payloads/keyring';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
@@ -50,6 +53,7 @@ export class BackgroundClient {
             this.sendGetPermissionRequests(),
             this.sendGetTransactionRequests(),
             this.getWalletStatus(),
+            this.loadFeatures(),
         ]).then(() => undefined);
     }
 
@@ -227,6 +231,16 @@ export class BackgroundClient {
         );
     }
 
+    private async loadFeatures() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<BasePayload>({
+                    type: 'get-features',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -249,6 +263,8 @@ export class BackgroundClient {
             payload.return
         ) {
             action = setKeyringStatus(payload.return);
+        } else if (isLoadedFeaturesPayload(payload)) {
+            growthbook.setFeatures(payload.features);
         }
         if (action) {
             this._dispatch(action);
