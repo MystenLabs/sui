@@ -9,7 +9,8 @@ epoch: 0
 validators:
   validator_stake: 1
   delegation_stake: 0
-  quorum_stake_threshold: 1
+  total_voting_power: 1
+  quorum_threshold: 1
   active_validators:
     - metadata:
         sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
@@ -237,6 +238,7 @@ validators:
         next_epoch_delegation: 0
         next_epoch_gas_price: 1
         next_epoch_commission_rate: 0
+      voting_power: 1
       stake_amount: 1
       pending_stake: 0
       pending_withdraw: 0
