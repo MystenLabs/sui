@@ -11,8 +11,9 @@ use sui_types::crypto::sha3_hash;
 use tracing::{debug, instrument};
 
 use crate::adapter;
-use sui_protocol_constants::{MAX_TX_GAS, REWARD_SLASHING_RATE, 
-    REWARD_SLASHING_THRESHOLD_BPS, STORAGE_FUND_REINVEST_RATE};
+use sui_protocol_constants::{
+    MAX_TX_GAS, REWARD_SLASHING_RATE, REWARD_SLASHING_THRESHOLD_BPS, STORAGE_FUND_REINVEST_RATE,
+};
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};

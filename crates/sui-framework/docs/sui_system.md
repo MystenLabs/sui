@@ -1043,7 +1043,7 @@ gas coins.
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
         &<b>mut</b> storage_fund_reward,
-        &<b>mut</b> self.validator_report_records,
+        self.validator_report_records,
         reward_slashing_threshold_bps,
         reward_slashing_rate,
         ctx,
@@ -1064,11 +1064,15 @@ gas coins.
     // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
     self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 
+    <b>let</b> new_total_stake =
+        <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators)
+        + <a href="validator_set.md#0x2_validator_set_total_validator_stake">validator_set::total_validator_stake</a>(&self.validators);
+
     <a href="event.md#0x2_event_emit">event::emit</a>(
         <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> {
             epoch: self.epoch,
             reference_gas_price: self.reference_gas_price,
-            total_stake: delegation_stake + validator_stake,
+            total_stake: new_total_stake,
             storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount <b>as</b> u64),
             storage_fund_outflows: storage_rebate,
             storage_fund_balance: <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund),

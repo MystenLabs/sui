@@ -119,4 +119,3 @@ pub const REWARD_SLASHING_THRESHOLD_BPS: u64 = 5000;
 // TODO: placeholder value here
 // The share of rewards that will be slashed and redistributed is 10%.
 pub const REWARD_SLASHING_RATE: u64 = 1000;
-

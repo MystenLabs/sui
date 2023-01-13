@@ -65,7 +65,6 @@ module sui::rewards_distribution_tests {
         set_up_sui_system_state(scenario);
 
         // need to advance epoch so validator's staking starts counting
-        // governance_test_utils::advance_epoch(scenario);
 
         delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_1, 200, scenario);
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
@@ -88,7 +87,7 @@ module sui::rewards_distribution_tests {
         advance_epoch_with_reward_amounts(0, 160, scenario);
         undelegate(DELEGATOR_ADDR_2, 0, 0, 600, scenario); // unstake 600 principal SUI
         governance_test_utils::advance_epoch(scenario); 
-        // compared to at line 83, additional 600 SUI of principal and 50 SUI of rewards withdrawn to Coin<SUI>
+        // additional 600 SUI of principal and 50 SUI of rewards withdrawn to Coin<SUI>
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 770, 0); 
         test_scenario::end(scenario_val);
     }
@@ -145,12 +144,12 @@ module sui::rewards_distribution_tests {
 
         advance_epoch(scenario);
 
-        // validator_2 is reported by 3 other validators.
+        // validator_2 is reported by 3 other validators, so (200 + 300 + 400) / 1200 = 75% of total stake.
         report_validator(VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, scenario);
         report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_2, scenario);
         report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_2, scenario);
 
-        // validator_1 is reported by only 1 other validator.
+        // validator_1 is reported by only 1 other validator, which is 300 / 1200 = 25% of total stake.
         report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_1, scenario);
 
         // 1200 SUI of total rewards, 50% threshold and 10% reward slashing.
@@ -176,6 +175,51 @@ module sui::rewards_distribution_tests {
         // Same analysis as above. Delegator 1 has 3 additional SUI, and 10% of delegator 2's rewards are slashed.
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 203, 0);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 190, 0);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_rewards_slashing_with_storage_fund() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        // Put 300 SUI into the storage fund.
+        advance_epoch_with_reward_amounts(300, 0, scenario);
+
+        // Add a few delegations.
+        delegate_to(DELEGATOR_ADDR_1, VALIDATOR_ADDR_3, 100, scenario);
+        delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_4, 100, scenario);
+        advance_epoch(scenario);
+
+        // validator_4 is reported by 3 other validators, so (100 + 200 + 400) / 1200 = 58% of total stake.
+        report_validator(VALIDATOR_ADDR_1, VALIDATOR_ADDR_4, scenario);
+        report_validator(VALIDATOR_ADDR_2, VALIDATOR_ADDR_4, scenario);
+        report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_4, scenario);
+
+        // 1000 SUI of storage rewards, 1500 SUI of computation rewards, 50% slashing threshold
+        // and 20% slashing rate
+        advance_epoch_with_reward_amounts_and_slashing_rates(
+            1000, 1500, 5000, 2000, scenario
+        );
+
+        // Validator 1 gets 100 SUI of computation rewards + 75 SUI of storage fund rewards +
+        // 14 SUI (1/7) of validator 4's slashed computation reward and 5 SUI (1/3) of validator 4's
+        // storage fund reward, so in total it gets 194 SUI of rewards. Same analysis for other 2
+        // unslashed validators too.
+        // Validator 4 should get 475 SUI of rewards without slashing. 20% is slashed so she gets
+        // 380 SUI of rewards.
+        assert_validator_stake_amounts(validator_addrs(), vector[294, 508, 722, 780], scenario);
+
+        // Undelegate so we can check the delegation rewards as well.
+        undelegate(DELEGATOR_ADDR_1, 0, 0, 100, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, 0, 100, scenario);
+
+        advance_epoch(scenario);
+
+        assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 215, 0);
+        assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 180, 0);
+
         test_scenario::end(scenario_val);
     }
 

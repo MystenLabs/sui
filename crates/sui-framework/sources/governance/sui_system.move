@@ -481,7 +481,7 @@ module sui::sui_system {
             &mut self.validators,
             &mut computation_reward,
             &mut storage_fund_reward,
-            &mut self.validator_report_records,
+            self.validator_report_records,
             reward_slashing_threshold_bps,
             reward_slashing_rate,
             ctx,
@@ -502,11 +502,15 @@ module sui::sui_system {
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
 
+        let new_total_stake =
+            validator_set::total_delegation_stake(&self.validators)
+            + validator_set::total_validator_stake(&self.validators);
+
         event::emit(
             SystemEpochInfo {
                 epoch: self.epoch,
                 reference_gas_price: self.reference_gas_price,
-                total_stake: delegation_stake + validator_stake,
+                total_stake: new_total_stake,
                 storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
                 storage_fund_outflows: storage_rebate,
                 storage_fund_balance: balance::value(&self.storage_fund),
