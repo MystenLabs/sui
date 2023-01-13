@@ -49,16 +49,26 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </Heading>
                 </div>
             </div>
-            <div className="basis-full break-all md:basis-2/3 ">
-                <DescriptionItem title="Address">
-                    <AddressLink
-                        address={
-                            validatorData.fields.metadata.fields.sui_address
-                        }
-                        noTruncate
-                    />
-                </DescriptionItem>
+            <div className="basis-full break-all md:basis-2/3">
                 <DescriptionList>
+                    <DescriptionItem title="Description">
+                        <Text variant="p1/medium" color="gray-90">
+                            --
+                        </Text>
+                    </DescriptionItem>
+                    <DescriptionItem title="Location">
+                        <Text variant="p1/medium" color="gray-90">
+                            --
+                        </Text>
+                    </DescriptionItem>
+                    <DescriptionItem title="Address">
+                        <AddressLink
+                            address={
+                                validatorData.fields.metadata.fields.sui_address
+                            }
+                            noTruncate
+                        />
+                    </DescriptionItem>
                     <DescriptionItem title="Public Key">
                         <Text variant="p1/medium" color="gray-90">
                             {validatorPublicKey}
