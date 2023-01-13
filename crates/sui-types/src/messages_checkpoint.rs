@@ -389,6 +389,10 @@ impl VerifiedCheckpoint {
     pub fn into_inner(self) -> CertifiedCheckpointSummary {
         self.0
     }
+
+    pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
+        (self.summary.sequence_number, self.0.summary)
+    }
 }
 
 impl std::ops::Deref for VerifiedCheckpoint {
