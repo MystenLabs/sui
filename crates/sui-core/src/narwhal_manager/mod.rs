@@ -187,7 +187,7 @@ impl NarwhalManager {
         let drop_boundary = epoch - 1;
 
         // Get all the epoch stores in the base path directory
-        let files = match fs::read_dir(storage_base_path.clone()) {
+        let files = match fs::read_dir(storage_base_path) {
             Ok(f) => f,
             Err(e) => {
                 tracing::error!("Narwhal Manager cannot read the files in the storage path directory for epoch cleanup: {:?}", e);
@@ -208,8 +208,13 @@ impl NarwhalManager {
                 }
             };
 
-            let file_epoch_string = f.file_name().to_str().unwrap().to_owned(); // todo:remove unwrap
-            let file_epoch = match file_epoch_string.parse::<u64>() {
+            let name = f.file_name();
+            let file_epoch_string = match name.to_str() {
+                Some(f) => f,
+                None => continue,
+            };
+
+            let file_epoch = match file_epoch_string.to_owned().parse::<u64>() {
                 Ok(f) => f,
                 Err(e) => {
                     tracing::error!("Narwhal Manager could not parse file in storage path into epoch for cleanup: {:?}",e);
