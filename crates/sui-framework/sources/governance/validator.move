@@ -14,7 +14,7 @@ module sui::validator {
     use sui::epoch_time_lock::EpochTimeLock;
     use std::option::Option;
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
-    use sui::staking_pool::{Self, Delegation, StakedSui, StakingPool};
+    use sui::staking_pool::{Self, Delegation, PoolTokenExchangeRate, StakedSui, StakingPool};
 
     friend sui::genesis;
     friend sui::sui_system;
@@ -301,6 +301,10 @@ module sui::validator {
 
     public fun commission_rate(self: &Validator): u64 {
         self.commission_rate
+    }
+
+    public fun pool_token_exchange_rate(self: &Validator): PoolTokenExchangeRate {
+        staking_pool::pool_token_exchange_rate(&self.delegation_staking_pool)
     }
 
     public fun is_duplicate(self: &Validator, other: &Validator): bool {

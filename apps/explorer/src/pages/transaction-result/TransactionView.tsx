@@ -523,7 +523,7 @@ function TransactionView({
                                 </section>
                             )}
                         </div>
-                        <div className="mt-8">
+                        <div data-testid="gas-breakdown" className="mt-8">
                             <TableHeader>Gas & Storage Fees</TableHeader>
 
                             <DescriptionList>

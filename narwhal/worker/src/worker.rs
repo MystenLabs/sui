@@ -197,6 +197,10 @@ impl Worker {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
+            // Set a default size limit of 8 MiB for all RPCs
+            // TODO: remove this and revert to default anemo max_frame_size once size
+            // limits are fully implemented on narwhal data structures.
+            config.max_frame_size = Some(8 << 20);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
@@ -442,7 +446,6 @@ impl Worker {
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
             shutdown_receivers.pop().unwrap(),

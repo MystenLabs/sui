@@ -6,9 +6,6 @@ import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { deduplicate } from '../../utils/searchUtil';
-import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import PaginationLogic from '../pagination/PaginationLogic';
 import {
@@ -52,28 +49,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     );
 }
 
-function TxForIDStatic({
-    id,
-    category,
-}: {
-    id: string;
-    category: categoryType;
-}) {
-    const data = deduplicate(findTxfromID(id)?.data as string[] | undefined)
-        .map((id) => findTxDatafromID(id))
-        .filter((x) => x !== undefined) as TxnData[];
-    if (!data) return null;
-    return (
-        <PaginationLogic
-            results={data}
-            viewComponentFn={viewFn}
-            itemsPerPage={ITEMS_PER_PAGE}
-            canVaryItemsPerPage
-        />
-    );
-}
-
-function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
+function TxForID({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] = useState<{
         data?: TxnData[];
         loadState: string;
@@ -131,16 +107,4 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     );
 }
 
-export default function TxForID({
-    id,
-    category,
-}: {
-    id: string;
-    category: categoryType;
-}) {
-    return IS_STATIC_ENV ? (
-        <TxForIDStatic id={id} category={category} />
-    ) : (
-        <TxForIDAPI id={id} category={category} />
-    );
-}
+export default TxForID;

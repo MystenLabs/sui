@@ -29,9 +29,11 @@ use sui_types::{
 };
 use tracing::{error, info};
 
+pub mod benchmark_setup;
 pub mod drivers;
 pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
+pub mod options;
 pub mod util;
 pub mod workloads;
 

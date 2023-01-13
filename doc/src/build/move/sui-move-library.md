@@ -41,12 +41,12 @@ ofield::add<u8, B>(&mut a.id, 0, b);
 let b: &B = ofield::borrow<u8, B>(&a.id, 0);
 ```
 
-If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing `b`, and `b` has a dynamic object field containing `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
+If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing object `b`, and `b` has a dynamic object field containing object `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
 
 ```
 use sui::dynamic_object_field as ofield;
 
-// signed of ctx is Addr1
+// signer of ctx is Addr1
 public entry fun entry_function(a: &A, ctx: &mut TxContext) {
   let b: &B = ofield::borrow<u8, B>(&a.id, 0);
   let c: &C = ofield::borrow<u8, C>(&b.id, 0);
@@ -70,14 +70,14 @@ To make an object `obj` shared, one can call:
 transfer::share_object(obj);
 ```
 
-After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be transferred or embedded in another object as a field. For more details, see the [shared objects](../../learn/objects.md#shared) documentation.
+After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, a shared object cannot be transferred or embedded in another object as a field. For more details, see the [shared objects](../../learn/objects.md#shared) documentation.
 
 ## Transaction context
-`TxContext` module provides a few important APIs that operate based on the current transaction context.
+The `TxContext` module provides a few important APIs that operate based on the current transaction context.
 
 To create a new ID for a new object:
 ```
-// assmue `ctx` has type `&mut TxContext`.
+// assume `ctx` has type `&mut TxContext`.
 let info = sui::object::new(ctx);
 ```
 
@@ -91,6 +91,6 @@ Now that you are familiar with the Move language, as well as with how
 to develop and test Move code, you are ready to start looking at and
 playing with some larger
 [examples](../../explore/examples.md) of Move
-programs. The examples include implementation of the tic-tac-toe game, and a more
+programs. The examples include implementations of the tic-tac-toe game, and (Hero) a more
 developed variant of a fantasy game similar to the one we have been
 developing during this tutorial.

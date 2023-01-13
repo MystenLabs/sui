@@ -52,11 +52,13 @@ impl EventHandler {
             event_log.next_cursor_tx_dig,
             event_log.next_cursor_event_seq,
         );
-        if let (Some(tx_dig), Some(event_seq)) = (tx_dig_opt, event_seq_opt) {
+        if let (Some(tx_dig), Some(_event_seq)) = (tx_dig_opt, event_seq_opt) {
             let tx_digest = TransactionDigest::from_str(&tx_dig).unwrap();
+            // TODO: hack event_seq as 0 b/c of an event pagination bug, will change it
+            // when the pagination bug is fixed.
             next_cursor = Some(EventID {
                 tx_digest,
-                event_seq,
+                event_seq: 0,
             });
         }
 
@@ -67,6 +69,10 @@ impl EventHandler {
             let event_page = fetch_event_page(self.rpc_client.clone(), next_cursor.clone()).await?;
             self.event_handler_metrics.total_event_page_received.inc();
             let event_count = event_page.data.len();
+            info!(
+                "Received event page with {} events, next cursor: {:?}",
+                event_count, event_page.next_cursor
+            );
             self.event_handler_metrics
                 .total_events_received
                 .inc_by(event_count as u64);
@@ -82,11 +88,16 @@ impl EventHandler {
                     Some(Base58::encode(next_cursor_val.tx_digest)),
                     Some(next_cursor_val.event_seq),
                 )?;
-                next_cursor = Some(next_cursor_val);
+                self.event_handler_metrics
+                    .total_events_processed
+                    .inc_by(event_count as u64);
+                // TODO: hack event_seq as 0 b/c of an event pagination bug, change it
+                // when the pagination bug is fixed.
+                next_cursor = Some(EventID {
+                    tx_digest: next_cursor_val.tx_digest,
+                    event_seq: 0,
+                });
             }
-            self.event_handler_metrics
-                .total_events_processed
-                .inc_by(event_count as u64);
             self.event_handler_metrics.total_event_page_committed.inc();
             // sleep when the event page has been the latest page
             if event_count < EVENT_PAGE_SIZE || event_page.next_cursor.is_none() {

@@ -325,7 +325,6 @@ async fn process_certificates() {
     }
 
     let mut m = HashMap::new();
-    m.insert("epoch", "0");
     m.insert("source", "other");
     assert_eq!(
         metrics
@@ -464,7 +463,6 @@ async fn recover_core() {
     }
 
     let mut m = HashMap::new();
-    m.insert("epoch", "0");
     m.insert("source", "other");
     assert_eq!(
         metrics

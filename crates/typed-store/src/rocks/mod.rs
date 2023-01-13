@@ -118,7 +118,7 @@ macro_rules! retry_transaction {
         loop {
             let status = $transaction;
             match status {
-                Err(TypedStoreError::TransactionWriteConflict) => {
+                Err(TypedStoreError::RetryableTransactionError) => {
                     retries += 1;
                     // Randomized delay to help racing transactions get out of each other's way.
                     let delay = {
@@ -270,7 +270,7 @@ impl RocksDB {
         }
     }
 
-    pub fn transaction(
+    pub fn transaction_without_snapshot(
         &self,
     ) -> Result<Transaction<'_, rocksdb::OptimisticTransactionDB>, TypedStoreError> {
         match self {
@@ -281,7 +281,7 @@ impl RocksDB {
         }
     }
 
-    pub fn transaction_with_snapshot(
+    pub fn transaction(
         &self,
     ) -> Result<Transaction<'_, rocksdb::OptimisticTransactionDB>, TypedStoreError> {
         match self {
@@ -719,8 +719,8 @@ impl<K, V> DBMap<K, V> {
         DBTransaction::new(&self.rocksdb)
     }
 
-    pub fn transaction_with_snapshot(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
-        DBTransaction::new_with_snapshot(&self.rocksdb)
+    pub fn transaction_without_snapshot(&self) -> Result<DBTransaction<'_>, TypedStoreError> {
+        DBTransaction::new_without_snapshot(&self.rocksdb)
     }
 
     pub fn table_summary(&self) -> eyre::Result<TableSummary> {
@@ -933,10 +933,10 @@ impl<'a> DBTransaction<'a> {
         })
     }
 
-    pub fn new_with_snapshot(db: &'a Arc<RocksDB>) -> Result<Self, TypedStoreError> {
+    pub fn new_without_snapshot(db: &'a Arc<RocksDB>) -> Result<Self, TypedStoreError> {
         Ok(Self {
             rocksdb: db.clone(),
-            transaction: db.transaction_with_snapshot()?,
+            transaction: db.transaction_without_snapshot()?,
         })
     }
 
@@ -1078,7 +1078,7 @@ impl<'a> DBTransaction<'a> {
         self.transaction.commit().map_err(|e| match e.kind() {
             // empirically, this is what you get when there is a write conflict. it is not
             // documented whether this is the only time you can get this error.
-            ErrorKind::Busy => TypedStoreError::TransactionWriteConflict,
+            ErrorKind::Busy | ErrorKind::TryAgain => TypedStoreError::RetryableTransactionError,
             _ => e.into(),
         })?;
         Ok(())

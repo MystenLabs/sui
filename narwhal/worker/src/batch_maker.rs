@@ -4,7 +4,6 @@
 use crate::metrics::WorkerMetrics;
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
-use config::Committee;
 use fastcrypto::hash::Hash;
 use futures::stream::FuturesOrdered;
 use store::Store;
@@ -41,8 +40,6 @@ pub mod batch_maker_tests;
 pub struct BatchMaker {
     // Our worker's id.
     id: WorkerId,
-    /// The committee information.
-    committee: Committee,
     /// The preferred batch size (in bytes).
     batch_size: usize,
     /// The maximum delay after which to seal the batch.
@@ -68,7 +65,6 @@ impl BatchMaker {
     #[must_use]
     pub fn spawn(
         id: WorkerId,
-        committee: Committee,
         batch_size: usize,
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
@@ -82,7 +78,6 @@ impl BatchMaker {
             async move {
                 Self {
                     id,
-                    committee,
                     batch_size,
                     max_batch_delay,
                     rx_shutdown,
@@ -231,7 +226,7 @@ impl BatchMaker {
 
         self.node_metrics
             .created_batch_size
-            .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
+            .with_label_values(&[reason])
             .observe(size as f64);
 
         // Send the batch through the deliver channel for further processing.
@@ -260,7 +255,7 @@ impl BatchMaker {
         // batch creation.
         self.node_metrics
             .created_batch_latency
-            .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
+            .with_label_values(&[reason])
             .observe(batch_creation_duration);
 
         // Clone things to not capture self

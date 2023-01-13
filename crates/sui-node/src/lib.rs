@@ -393,10 +393,19 @@ impl SuiNode {
                 )))
                 .into_inner();
 
+            let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
+            if anemo_config.max_frame_size.is_none() {
+                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
+                // catch bugs where size limits are missing from other parts of our code.
+                // TODO: remove this and revert to default anemo max_frame_size once size
+                // limits are fully implemented on sui data structures.
+                anemo_config.max_frame_size = Some(8 << 20);
+            }
+
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
-                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
+                .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
             info!("P2p network started on {}", network.local_addr());

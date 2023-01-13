@@ -203,6 +203,7 @@ module sui::validator_set_tests {
         let dummy_storage_fund_reward = balance::zero();
 
         validator_set::advance_epoch(
+            1, // dummy new epoch number
             validator_set, 
             &mut dummy_validator_reward, 
             &mut dummy_delegator_reward, 

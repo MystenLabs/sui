@@ -7,7 +7,9 @@ use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
-use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
+use crate::crypto::{
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature,
+};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::sui_serde::Readable;
@@ -43,7 +45,18 @@ pub struct CheckpointResponse {
 
 #[serde_as]
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
 )]
 pub struct CheckpointDigest(
     #[schemars(with = "Base58")]
@@ -376,6 +389,10 @@ impl VerifiedCheckpoint {
     pub fn into_inner(self) -> CertifiedCheckpointSummary {
         self.0
     }
+
+    pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
+        (self.summary.sequence_number, self.0.summary)
+    }
 }
 
 impl std::ops::Deref for VerifiedCheckpoint {
@@ -399,6 +416,13 @@ pub struct CheckpointSignatureMessage {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
+    /// This field 'pins' user signatures for the checkpoint:
+    ///
+    /// * For normal checkpoint this field will contain same number of elements as transactions.
+    /// * Genesis checkpoint has transactions but this field is empty.
+    /// * Last checkpoint in the epoch will have (last)extra system transaction
+    /// in the transactions list not covered in the signatures list
+    user_signatures: Vec<Signature>,
 }
 
 impl CheckpointSignatureMessage {
@@ -414,6 +438,20 @@ impl CheckpointContents {
     {
         Self {
             transactions: contents.into_iter().collect(),
+            user_signatures: vec![],
+        }
+    }
+
+    pub fn new_with_causally_ordered_transactions_and_signatures<T>(
+        contents: T,
+        signatures: Vec<Signature>,
+    ) -> Self
+    where
+        T: IntoIterator<Item = ExecutionDigests>,
+    {
+        Self {
+            transactions: contents.into_iter().collect(),
+            user_signatures: signatures,
         }
     }
 

@@ -3,7 +3,7 @@
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use move_core_types::language_storage::TypeTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
@@ -31,6 +31,7 @@ use sui_types::messages::{
 use sui_types::object::{
     generate_test_gas_objects, generate_test_gas_objects_with_owner_list, Object,
 };
+use sui_types::parse_sui_struct_tag;
 use sui_types::utils::to_sender_signed_transaction;
 
 /// The maximum gas per transaction.
@@ -72,6 +73,22 @@ pub async fn get_gas_object_with_wallet_context(
     } else {
         Some(res.swap_remove(0).to_object_ref())
     }
+}
+
+/// get one available gas ObjectRef
+pub async fn get_sui_gas_object_with_wallet_context(
+    context: &WalletContext,
+    address: &SuiAddress,
+) -> Vec<(StructTag, ObjectRef)> {
+    let res = get_gas_objects_with_wallet_context(context, address).await;
+    res.iter()
+        .map(|obj| {
+            (
+                parse_sui_struct_tag(&obj.type_).unwrap(),
+                obj.to_object_ref(),
+            )
+        })
+        .collect()
 }
 
 pub async fn get_gas_objects_with_wallet_context(

@@ -6,11 +6,14 @@ import clsx from 'clsx';
 import styles from './utils/customStyles.module.css';
 
 export interface PlaceholderProps {
-    width: string;
-    height: string;
+    width?: string;
+    height?: string;
 }
 
-export function Placeholder({ width, height }: PlaceholderProps) {
+export function Placeholder({
+    width = '100%',
+    height = '1em',
+}: PlaceholderProps) {
     return (
         <div
             className={clsx(

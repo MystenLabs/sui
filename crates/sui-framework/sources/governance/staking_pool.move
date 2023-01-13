@@ -49,6 +49,12 @@ module sui::staking_pool {
         pending_withdraws: TableVec<PendingWithdrawEntry>,
     }
 
+    /// Struct representing the exchange rate of the delegation pool token to SUI.
+    struct PoolTokenExchangeRate has copy, drop {
+        sui_amount: u64,
+        pool_token_amount: u64,
+    }
+
     /// An inactive staking pool associated with an inactive validator.
     /// Only withdraws can be made from this pool.
     struct InactiveStakingPool has key {
@@ -415,6 +421,12 @@ module sui::staking_pool {
 
     public fun delegation_token_amount(delegation: &Delegation): u64 { balance::value(&delegation.pool_tokens) }
 
+    public fun pool_token_exchange_rate(pool: &StakingPool): PoolTokenExchangeRate {
+        PoolTokenExchangeRate {
+            sui_amount: pool.sui_balance,
+            pool_token_amount: balance::supply_value(&pool.delegation_token_supply),
+        }
+    }
     /// Create a new pending withdraw entry.
     public(friend) fun new_pending_withdraw_entry(
         delegator: address, 
