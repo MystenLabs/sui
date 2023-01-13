@@ -878,10 +878,10 @@ mod tests {
 
         assert_eq!(db.total_event_count().await?, 100);
 
-        let queried_events = db.all_events((1, 5).into(), 100, false).await?;
+        let queried_events = db.all_events(1, 5, 100, false).await?;
         assert_eq!(queried_events.len(), 95);
 
-        let queried_events = db.all_events((5, 4).into(), 100, true).await?;
+        let queried_events = db.all_events(5, 4, 100, true).await?;
         assert_eq!(queried_events.len(), 45);
         Ok(())
     }
