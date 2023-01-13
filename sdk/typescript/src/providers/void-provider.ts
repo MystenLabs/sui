@@ -40,7 +40,6 @@ import {
 import { Provider } from './provider';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
-import { Option } from '../types/option';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -150,8 +149,8 @@ export class VoidProvider extends Provider {
 
   getDynamicFields(
     _parent_object_id: ObjectId, 
-    _cursor: Option<ObjectId>, 
-    _limit: Option<number>
+    _cursor: ObjectId | null=null, 
+    _limit: number | null=null
     ): Promise<DynamicFieldPage> {
     throw this.newError('getDynamicFields');
   }
