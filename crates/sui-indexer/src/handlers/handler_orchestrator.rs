@@ -6,13 +6,15 @@ use sui_indexer::PgConnectionPool;
 use sui_sdk::SuiClient;
 
 use backoff::future::retry;
-use backoff::ExponentialBackoff;
+use backoff::ExponentialBackoffBuilder;
 use futures::future::try_join_all;
 use prometheus::Registry;
 use tracing::{error, info, warn};
 
 use crate::handlers::event_handler::EventHandler;
 use crate::handlers::transaction_handler::TransactionHandler;
+
+const BACKOFF_MAX_INTERVAL_IN_SECS: u64 = 600;
 
 #[derive(Clone)]
 pub struct HandlerOrchestrator {
@@ -48,7 +50,10 @@ impl HandlerOrchestrator {
         );
 
         let txn_handle = tokio::task::spawn(async move {
-            let txn_res = retry(ExponentialBackoff::default(), || async {
+            let backoff_config = ExponentialBackoffBuilder::new()
+                .with_max_interval(std::time::Duration::from_secs(BACKOFF_MAX_INTERVAL_IN_SECS))
+                .build();
+            let txn_res = retry(backoff_config, || async {
                 let txn_handler_exec_res = txn_handler.start().await;
                 if let Err(e) = txn_handler_exec_res.clone() {
                     txn_handler
@@ -71,7 +76,10 @@ impl HandlerOrchestrator {
             }
         });
         let event_handle = tokio::task::spawn(async move {
-            let event_res = retry(ExponentialBackoff::default(), || async {
+            let backoff_config = ExponentialBackoffBuilder::new()
+                .with_max_interval(std::time::Duration::from_secs(BACKOFF_MAX_INTERVAL_IN_SECS))
+                .build();
+            let event_res = retry(backoff_config, || async {
                 let event_handler_exec_res = event_handler.start().await;
                 if let Err(e) = event_handler_exec_res.clone() {
                     event_handler
