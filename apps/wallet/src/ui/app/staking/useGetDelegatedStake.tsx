@@ -57,7 +57,9 @@ export function useGetValidatorMetaData(): UseQueryResult<
     Error
 > {
     const rpcEndPoint = useRpc().endpoints.fullNode;
-    return useQuery(['validator-1'], async () => {
+
+    // keeping the query parent key the same to invalidate all related queries
+    return useQuery(['validator', 'all'], async () => {
         const response = await fetch(rpcEndPoint, {
             method: 'POST',
             headers: {

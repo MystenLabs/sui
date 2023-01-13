@@ -125,10 +125,15 @@ function StakingCard() {
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
-                //  invalidate the react query for 0x5
-                queryClient.invalidateQueries({
-                    queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
-                });
+                //  invalidate the react query for 0x5 and validator
+                Promise.all([
+                    queryClient.invalidateQueries({
+                        queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
+                    }),
+                    queryClient.invalidateQueries({
+                        queryKey: ['validator'],
+                    }),
+                ]);
                 resetForm();
 
                 navigate(
