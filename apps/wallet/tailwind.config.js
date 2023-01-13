@@ -24,6 +24,12 @@ module.exports = {
             width: {
                 7.5: '30px',
             },
+            borderRadius: {
+                '2lg': '0.625rem',
+            },
+            boxShadow: {
+                notification: '0px 0px 20px rgba(29, 55, 87, 0.11)',
+            },
         },
     },
 };

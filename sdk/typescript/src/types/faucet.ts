@@ -10,6 +10,6 @@ export type FaucetCoinInfo = {
 };
 
 export type FaucetResponse = {
-  transferred_gas_objects: FaucetCoinInfo;
+  transferred_gas_objects: FaucetCoinInfo[];
   error: string | null;
 };
