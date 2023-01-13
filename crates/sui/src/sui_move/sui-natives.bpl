@@ -27,13 +27,13 @@ procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 
 procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int) {
     var id: int;
-    call id := $2_object_id_address{{S}}(obj);
+    id := $bytes#$2_object_ID($id#$2_object_UID($id#{{T}}(obj)));
     {{T}}_$memory := transfer({{T}}_$memory, id, obj, recipient);
 }
 
 procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}}) {
     var id: int;
-    call id := $2_object_id_address{{S}}(obj);
+    id := $bytes#$2_object_ID($id#$2_object_UID($id#{{T}}(obj)));
     if ($2_prover_owned({{T}}_$memory, id)) {
         call $ExecFailureAbort();
         return;
