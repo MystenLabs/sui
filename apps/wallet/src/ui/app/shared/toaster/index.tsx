@@ -3,6 +3,7 @@
 
 import cl from 'classnames';
 import { Toaster as ToasterLib } from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 import { useMenuIsOpen } from '_components/menu/hooks';
 import { useAppSelector } from '_hooks';
@@ -14,16 +15,21 @@ export type ToasterProps = {
 const commonToastClasses =
     '!text-p2 !font-medium !rounded-2lg !shadow-notification';
 export function Toaster({ bottomNavEnabled }: ToasterProps) {
+    const { pathname } = useLocation();
+    const isExtraNavTabsVisible = pathname.startsWith('/apps');
     const menuVisible = useMenuIsOpen();
     const isBottomNavVisible = useAppSelector(getNavIsVisible);
     const includeBottomNavSpace =
         !menuVisible && isBottomNavVisible && bottomNavEnabled;
+    const includeExtraBottomNavSpace =
+        includeBottomNavSpace && isExtraNavTabsVisible;
     return (
         <ToasterLib
             containerClassName={cl(
                 '!absolute !z-[99999] transition-all',
                 includeBottomNavSpace &&
-                    'mb-[var(--sizing-navigation-placeholder-height)]'
+                    'mb-[var(--sizing-navigation-placeholder-height)]',
+                includeExtraBottomNavSpace && '!bottom-10'
             )}
             position="bottom-center"
             toastOptions={{
