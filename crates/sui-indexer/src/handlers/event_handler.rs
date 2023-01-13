@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Encoding};
 use prometheus::Registry;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::EventPage;
 use sui_sdk::SuiClient;
-use sui_types::base_types::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::query::EventQuery;
 use tokio::time::sleep;
@@ -52,13 +49,16 @@ impl EventHandler {
             event_log.next_cursor_tx_dig,
             event_log.next_cursor_event_seq,
         );
-        if let (Some(tx_dig), Some(_event_seq)) = (tx_dig_opt, event_seq_opt) {
-            let tx_digest = TransactionDigest::from_str(&tx_dig).unwrap();
-            // TODO: hack event_seq as 0 b/c of an event pagination bug, will change it
-            // when the pagination bug is fixed.
+        if let (Some(tx_dig), Some(event_seq)) = (tx_dig_opt, event_seq_opt) {
+            let tx_digest = tx_dig.parse().map_err(|e| {
+                IndexerError::TransactionDigestParsingError(format!(
+                    "Failed parsing transaction digest {:?} with error: {:?}",
+                    tx_dig, e
+                ))
+            })?;
             next_cursor = Some(EventID {
                 tx_digest,
-                event_seq: 0,
+                event_seq,
             });
         }
 
@@ -85,18 +85,13 @@ impl EventHandler {
             if let Some(next_cursor_val) = event_page.next_cursor.clone() {
                 commit_event_log(
                     &mut pg_pool_conn,
-                    Some(Base58::encode(next_cursor_val.tx_digest)),
+                    Some(next_cursor_val.tx_digest.base58_encode()),
                     Some(next_cursor_val.event_seq),
                 )?;
                 self.event_handler_metrics
                     .total_events_processed
                     .inc_by(event_count as u64);
-                // TODO: hack event_seq as 0 b/c of an event pagination bug, change it
-                // when the pagination bug is fixed.
-                next_cursor = Some(EventID {
-                    tx_digest: next_cursor_val.tx_digest,
-                    event_seq: 0,
-                });
+                next_cursor = Some(next_cursor_val);
             }
             self.event_handler_metrics.total_event_page_committed.inc();
             // sleep when the event page has been the latest page
