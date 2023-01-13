@@ -440,6 +440,7 @@ impl EventStore for SqlEventStore {
         let rows = sqlx::query(&query)
             .persistent(true)
             .bind(tx_seq)
+            .bind(tx_seq)
             .bind(event_seq)
             .bind(limit as i64)
             .map(StoredEvent::from)
@@ -462,6 +463,7 @@ impl EventStore for SqlEventStore {
         let query = get_event_query(vec![("tx_digest", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
+            .bind(tx_seq)
             .bind(tx_seq)
             .bind(event_seq)
             .bind(digest.to_bytes())
@@ -486,6 +488,7 @@ impl EventStore for SqlEventStore {
         let query = get_event_query(vec![("event_type", Comparator::Equal)], descending);
         let rows = sqlx::query(&query)
             .persistent(true)
+            .bind(tx_seq)
             .bind(tx_seq)
             .bind(event_seq)
             .bind(event_type as u16)
@@ -516,6 +519,7 @@ impl EventStore for SqlEventStore {
             descending,
         );
         let rows = sqlx::query(&query)
+            .bind(tx_seq)
             .bind(tx_seq)
             .bind(event_seq)
             .bind(start_time as i64)
@@ -548,6 +552,7 @@ impl EventStore for SqlEventStore {
         let rows = sqlx::query(&query)
             .persistent(true)
             .bind(tx_seq)
+            .bind(tx_seq)
             .bind(event_seq)
             .bind(module.address().to_vec())
             .bind(module.name().to_string())
@@ -574,6 +579,7 @@ impl EventStore for SqlEventStore {
         let rows = sqlx::query(&query)
             .persistent(true)
             .bind(tx_seq)
+            .bind(tx_seq)
             .bind(event_seq)
             .bind(move_event_struct_name)
             .bind(limit as i64)
@@ -598,6 +604,7 @@ impl EventStore for SqlEventStore {
         let sender_vec = sender.to_vec();
         let rows = sqlx::query(&query)
             .persistent(true)
+            .bind(tx_seq)
             .bind(tx_seq)
             .bind(event_seq)
             .bind(sender_vec)
@@ -627,6 +634,7 @@ impl EventStore for SqlEventStore {
         let rows = sqlx::query(&query)
             .persistent(true)
             .bind(tx_seq)
+            .bind(tx_seq)
             .bind(event_seq)
             .bind(recipient_str)
             .bind(limit as i64)
@@ -652,6 +660,7 @@ impl EventStore for SqlEventStore {
         let rows = sqlx::query(&query)
             .persistent(true)
             .bind(tx_seq)
+            .bind(tx_seq)
             .bind(event_seq)
             .bind(object_vec)
             .bind(limit as i64)
@@ -668,13 +677,14 @@ fn convert_sqlx_err(err: sqlx::Error) -> SuiError {
 }
 
 fn get_event_query(causes: Vec<(&str, Comparator)>, descending: bool) -> String {
-    let (seq_cmp, order) = if descending {
-        (Comparator::LessThanOrEq, "DESC")
+    let (seq_num_cmp, event_num_cmp, order) = if descending {
+        (Comparator::LessThan, Comparator::LessThanOrEq, "DESC")
     } else {
-        (Comparator::MoreThanOrEq, "ASC")
+        (Comparator::MoreThan, Comparator::MoreThanOrEq, "ASC")
     };
-    let mut query =
-        format!("SELECT * FROM events WHERE seq_num {seq_cmp} ? AND event_num {seq_cmp} ?");
+    let mut query = format!(
+        "SELECT * FROM events WHERE (seq_num {seq_num_cmp} ? OR (seq_num = ? AND event_num {event_num_cmp} ?))"
+    );
     if !causes.is_empty() {
         query.push_str(" AND ");
     }
@@ -694,6 +704,7 @@ enum Comparator {
     Equal,
     LessThanOrEq,
     MoreThanOrEq,
+    MoreThan,
     LessThan,
 }
 
@@ -704,6 +715,7 @@ impl Display for Comparator {
             Comparator::LessThanOrEq => "<=",
             Comparator::MoreThanOrEq => ">=",
             Comparator::LessThan => "<",
+            Comparator::MoreThan => ">",
         };
         write!(f, "{s}")
     }
@@ -831,6 +843,46 @@ mod tests {
             test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i]);
         }
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_eventstore_cursor_read() -> Result<(), SuiError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
+        db.initialize().await?;
+
+        // Insert some records
+        info!("Inserting records!");
+        let to_insert = (1..11u64)
+            .into_iter()
+            .flat_map(|seq_num| {
+                (0..10u64).into_iter().map(move |event_num| {
+                    test_utils::new_test_newobj_event(
+                        1_000_000,
+                        TransactionDigest::random(),
+                        seq_num,
+                        event_num, // event_num
+                        None,
+                        None,
+                        None,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(db.add_events(&to_insert).await?, 100);
+        info!("Done inserting");
+
+        assert_eq!(db.total_event_count().await?, 100);
+
+        let queried_events = db.all_events(1, 5, 100, false).await?;
+        assert_eq!(queried_events.len(), 95);
+
+        let queried_events = db.all_events(5, 4, 100, true).await?;
+        assert_eq!(queried_events.len(), 45);
         Ok(())
     }
 
@@ -1486,23 +1538,20 @@ mod tests {
     fn event_query_test() {
         let query = get_event_query(vec![], false);
         assert_eq!(
-            "SELECT * FROM events WHERE seq_num >= ? AND event_num >= ? ORDER BY seq_num ASC, event_num ASC LIMIT ?",
+            "SELECT * FROM events WHERE (seq_num > ? OR (seq_num = ? AND event_num >= ?)) ORDER BY seq_num ASC, event_num ASC LIMIT ?",
             query
         );
         let query = get_event_query(vec![], true);
         assert_eq!(
-            "SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? ORDER BY seq_num DESC, event_num DESC LIMIT ?",
+            "SELECT * FROM events WHERE (seq_num < ? OR (seq_num = ? AND event_num <= ?)) ORDER BY seq_num DESC, event_num DESC LIMIT ?",
             query
         );
 
         let query = get_event_query(vec![("event_type", Comparator::Equal)], false);
-        assert_eq!("SELECT * FROM events WHERE seq_num >= ? AND event_num >= ? AND event_type = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num > ? OR (seq_num = ? AND event_num >= ?)) AND event_type = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
 
         let query = get_event_query(vec![("event_type", Comparator::Equal)], true);
-        assert_eq!("SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? AND event_type = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
-
-        let query = get_event_query(vec![("event_type", Comparator::Equal)], true);
-        assert_eq!("SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? AND event_type = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num < ? OR (seq_num = ? AND event_num <= ?)) AND event_type = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
 
         let query = get_event_query(
             vec![
@@ -1511,7 +1560,7 @@ mod tests {
             ],
             false,
         );
-        assert_eq!("SELECT * FROM events WHERE seq_num >= ? AND event_num >= ? AND package_id = ? AND module_name = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num > ? OR (seq_num = ? AND event_num >= ?)) AND package_id = ? AND module_name = ? ORDER BY seq_num ASC, event_num ASC LIMIT ?", query);
 
         let query = get_event_query(
             vec![
@@ -1520,6 +1569,6 @@ mod tests {
             ],
             true,
         );
-        assert_eq!("SELECT * FROM events WHERE seq_num <= ? AND event_num <= ? AND package_id = ? AND module_name = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
+        assert_eq!("SELECT * FROM events WHERE (seq_num < ? OR (seq_num = ? AND event_num <= ?)) AND package_id = ? AND module_name = ? ORDER BY seq_num DESC, event_num DESC LIMIT ?", query);
     }
 }
