@@ -230,4 +230,8 @@ impl DataReader for ReadApi {
     ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
         Ok(self.get_object(object_id).await?)
     }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        Ok(self.get_reference_gas_price().await?)
+    }
 }

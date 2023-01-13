@@ -187,7 +187,14 @@ mod tests {
         let recv = SuiAddress::random_for_testing_only();
         (
             recv,
-            TransactionData::new_pay_sui(send, vec![coin], vec![recv], vec![1000], coin, 1000),
+            TransactionData::new_pay_sui_with_dummy_gas_price(
+                send,
+                vec![coin],
+                vec![recv],
+                vec![1000],
+                coin,
+                1000,
+            ),
         )
     }
 }

@@ -56,7 +56,7 @@ pub fn transfer_coin_transaction(
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     to_sender_signed_transaction(
-        TransactionData::new_transfer(
+        TransactionData::new_transfer_with_dummy_gas_price(
             dest,
             object_ref,
             src,
@@ -81,7 +81,7 @@ pub fn transfer_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             src,
             framework_obj_ref,
             ident_str!("object_basics").to_owned(),
@@ -110,7 +110,7 @@ pub fn create_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             src,
             framework_obj_ref,
             ident_str!("object_basics").to_owned(),
@@ -132,7 +132,7 @@ pub fn delete_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             src,
             framework_obj_ref,
             ident_str!("object_basics").to_owned(),
@@ -160,7 +160,7 @@ pub fn set_object_move_transaction(
     ];
 
     to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             src,
             framework_obj_ref,
             ident_str!("object_basics").to_owned(),

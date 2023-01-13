@@ -185,7 +185,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
     fullnode.insert_genesis_object(shared_object).await;
     let gas_object = validator.get_object(&gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
         package,
         ident_str!("object_basics").to_owned(),
@@ -1315,7 +1315,7 @@ async fn test_objected_owned_gas() {
     authority_state
         .insert_genesis_object(child_object.clone())
         .await;
-    let data = TransactionData::new_transfer_sui(
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
         recipient,
         sender,
         None,
@@ -1418,7 +1418,7 @@ async fn test_publish_dependent_module_ok() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let data = TransactionData::new_module(
+    let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
@@ -1458,7 +1458,12 @@ async fn test_publish_module_no_dependencies_ok() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        sender,
+        gas_payment_object_ref,
+        module_bytes,
+        MAX_GAS,
+    );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let _module_object_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
@@ -1498,7 +1503,7 @@ async fn test_publish_non_existing_dependent_module() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let data = TransactionData::new_module(
+    let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
@@ -1544,7 +1549,12 @@ async fn test_package_size_limit() {
         package.push(module_bytes);
     }
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
-    let data = TransactionData::new_module(sender, gas_payment_object_ref, package, MAX_GAS);
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        sender,
+        gas_payment_object_ref,
+        package,
+        MAX_GAS,
+    );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -1749,7 +1759,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         .await
         .unwrap()
         .unwrap();
-    let data = TransactionData::new_transfer_sui(
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
         recipient,
         sender,
         Some(GAS_VALUE_FOR_TESTING),
@@ -2270,7 +2280,13 @@ async fn test_move_call_insufficient_gas() {
     let next_object_version = SequenceNumber::lamport_increment([obj_ref.1, gas_ref.1]);
 
     // Now we try to construct a transaction with a smaller gas budget than required.
-    let data = TransactionData::new_transfer(sender, obj_ref, recipient, gas_ref, gas_used - 5);
+    let data = TransactionData::new_transfer_with_dummy_gas_price(
+        sender,
+        obj_ref,
+        recipient,
+        gas_ref,
+        gas_used - 5,
+    );
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();
@@ -2675,7 +2691,9 @@ async fn test_transfer_sui_no_amount() {
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
 
     let gas_ref = gas_object.compute_object_reference();
-    let tx_data = TransactionData::new_transfer_sui(recipient, sender, None, gas_ref, MAX_GAS);
+    let tx_data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        recipient, sender, None, gas_ref, MAX_GAS,
+    );
 
     // Make sure transaction handling works as usual.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
@@ -2720,7 +2738,13 @@ async fn test_transfer_sui_with_amount() {
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
 
     let gas_ref = gas_object.compute_object_reference();
-    let tx_data = TransactionData::new_transfer_sui(recipient, sender, Some(500), gas_ref, MAX_GAS);
+    let tx_data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        recipient,
+        sender,
+        Some(500),
+        gas_ref,
+        MAX_GAS,
+    );
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let certificate = init_certified_transaction(transaction, &authority_state);
     let signed_effects = authority_state
@@ -2766,7 +2790,7 @@ async fn test_store_revert_transfer_sui() {
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
 
-    let tx_data = TransactionData::new_transfer_sui(
+    let tx_data = TransactionData::new_transfer_sui_with_dummy_gas_price(
         recipient,
         sender,
         None,
@@ -2830,7 +2854,7 @@ async fn test_store_revert_wrap_move_call() {
     let object_v0 = create_effects.created[0].0;
 
     let wrap_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             object_basics,
             ident_str!("object_basics").to_owned(),
@@ -2915,7 +2939,7 @@ async fn test_store_revert_unwrap_move_call() {
     let wrapper_v0 = wrap_effects.created[0].0;
 
     let unwrap_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             object_basics,
             ident_str!("object_basics").to_owned(),
@@ -2995,7 +3019,7 @@ async fn test_store_get_dynamic_object() {
     let inner_v0 = create_inner_effects.created[0].0;
 
     let add_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             object_basics,
             ident_str!("object_basics").to_owned(),
@@ -3066,7 +3090,7 @@ async fn test_store_get_dynamic_field() {
     let inner_v0 = create_inner_effects.created[0].0;
 
     let add_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             object_basics,
             ident_str!("object_basics").to_owned(),
@@ -3137,7 +3161,7 @@ async fn test_store_revert_add_ofield() {
     let inner_v0 = create_inner_effects.created[0].0;
 
     let add_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             object_basics,
             ident_str!("object_basics").to_owned(),
@@ -3250,7 +3274,7 @@ async fn test_store_revert_remove_ofield() {
     let inner_v1 = find_by_id(&add_effects.mutated, inner_v0.0).unwrap();
 
     let remove_ofield_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             object_basics,
             ident_str!("object_basics").to_owned(),
@@ -3474,7 +3498,13 @@ pub fn init_transfer_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref, 10000);
+    let data = TransactionData::new_transfer_with_dummy_gas_price(
+        recipient,
+        object_ref,
+        sender,
+        gas_object_ref,
+        10000,
+    );
     to_sender_signed_transaction(data, secret)
 }
 
@@ -3610,7 +3640,7 @@ pub async fn call_move_(
     for arg in test_args.into_iter() {
         args.push(arg.to_call_arg(authority).await);
     }
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
         *package,
         Identifier::new(module).unwrap(),
@@ -3716,7 +3746,7 @@ pub async fn call_dev_inspect(
     for a in test_args {
         args.push(a.to_call_arg(authority).await)
     }
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
         *package,
         Identifier::new(module).unwrap(),
@@ -3778,7 +3808,7 @@ async fn make_test_transaction(
     let function = "set_value";
     let package_object_ref = authorities[0].get_framework_object_ref().await.unwrap();
 
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
         package_object_ref,
         ident_str!(module).to_owned(),
@@ -4027,7 +4057,7 @@ async fn test_blocked_move_calls() {
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
     let tx = to_sender_signed_transaction(
-        TransactionData::new_move_call(
+        TransactionData::new_move_call_with_dummy_gas_price(
             sender,
             authority_state.get_framework_object_ref().await.unwrap(),
             ident_str!("sui_system").to_owned(),

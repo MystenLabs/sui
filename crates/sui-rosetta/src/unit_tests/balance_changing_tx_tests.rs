@@ -352,7 +352,12 @@ async fn test_transaction(
         get_random_sui(client, sender, input_objects).await
     };
 
-    let data = TransactionData::new(TransactionKind::Single(tx.clone()), sender, gas, 10000);
+    let data = TransactionData::new_with_dummy_gas_price(
+        TransactionKind::Single(tx.clone()),
+        sender,
+        gas,
+        10000,
+    );
 
     let signature = keystore
         .sign_secure(&data.signer(), &data, Intent::default())

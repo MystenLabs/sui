@@ -670,7 +670,7 @@ pub fn manual_execute_move_call_fake_txn_digest(
     sender: SuiAddress,
     move_call: MoveCall,
 ) -> TransactionDigest {
-    let txn_data = TransactionData::new(
+    let txn_data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Single(SingleTransactionKind::Call(move_call)),
         sender,
         FAKE_GAS_OBJECT,

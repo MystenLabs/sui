@@ -17,7 +17,7 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
 
     let sender = SuiAddress::random_for_testing_only();
 
-    let data = TransactionData::new_pay_sui(
+    let data = TransactionData::new_pay_sui_with_dummy_gas_price(
         sender,
         vec![gas],
         vec![SuiAddress::random_for_testing_only()],
