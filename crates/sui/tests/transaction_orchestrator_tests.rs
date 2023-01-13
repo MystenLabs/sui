@@ -36,6 +36,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         temp_dir.path(),
         &Registry::new(),
     )
+    .await
     .unwrap();
 
     let txn_count = 4;
@@ -93,6 +94,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         temp_dir.path(),
         &Registry::new(),
     )
+    .await
     .unwrap();
 
     let txn_count = 2;
