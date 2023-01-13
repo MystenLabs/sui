@@ -14,10 +14,6 @@ module.exports = {
     },
     theme: {
         extend: {
-            colors: {
-                'gradient-blue-start': '#589AEA',
-                'gradient-blue-end': '#4C75A6',
-            },
             minHeight: {
                 8: '2rem',
             },

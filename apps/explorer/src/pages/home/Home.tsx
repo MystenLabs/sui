@@ -40,7 +40,7 @@ function Home() {
                         <TabPanels>
                             <TabPanel>
                                 <ErrorBoundary>
-                                    <TopValidatorsCard limit={10} />
+                                    <TopValidatorsCard limit={10} showIcon />
                                 </ErrorBoundary>
                             </TabPanel>
                         </TabPanels>
