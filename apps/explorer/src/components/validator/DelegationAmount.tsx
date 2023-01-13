@@ -20,14 +20,14 @@ export function DelegationAmount({ amount, isStats }: DelegationAmountProps) {
     );
 
     return isStats ? (
-        <div className='break-all'>
+        <div className="break-all">
             <Heading as="div" variant="heading2/semibold" color="steel-darker">
                 {formattedAmount}
             </Heading>
         </div>
     ) : (
         <div className="flex h-full items-center gap-1">
-            <div className="flex items-baseline gap-0.5 text-steel-darker break-all">
+            <div className="flex items-baseline gap-0.5 break-all text-steel-darker">
                 <Text variant="body/medium">{formattedAmount}</Text>
                 <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
