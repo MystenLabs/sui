@@ -47,6 +47,8 @@ import {
   CoinMetadataStruct,
   GetObjectDataResponse,
   GetOwnedObjectsResponse,
+  DelegatedStake,
+  ValidatorMetaData,
 } from '../types';
 import {
   PublicKey,
@@ -62,7 +64,7 @@ import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
-import { any, is, number } from 'superstruct';
+import { any, is, number, array } from 'superstruct';
 import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 
 /**
@@ -749,6 +751,38 @@ export class JsonRpcProvider extends Provider {
         'sui_dryRunTransaction',
         [txBytes],
         TransactionEffects,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error dry running transaction with request type: ${err}`
+      );
+    }
+  }
+
+  async getDelegatedStake(address: string): Promise<DelegatedStake[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getDelegatedStakes',
+        [address],
+        array(DelegatedStake),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error dry running transaction with request type: ${err}`
+      );
+    }
+  }
+
+  async getValidators(): Promise<ValidatorMetaData[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getValidators',
+        [],
+        array(ValidatorMetaData),
         this.options.skipDataValidation
       );
       return resp;
