@@ -4,7 +4,7 @@
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::{
-    base_types::{ObjectID, VersionNumber},
+    base_types::{ObjectID, SequenceNumber, VersionNumber},
     storage::ObjectKey,
 };
 use tokio::{
@@ -145,9 +145,16 @@ impl AuthorityStorePruner {
                 tokio::select! {
                     _ = prune_interval.tick() => {
                         info!("Starting pruning of objects table");
-                        let perpetual_db = perpetual_db.clone();
-                        let num_pruned = Self::prune_objects(num_versions_to_retain, perpetual_db);
+                        let num_pruned = Self::prune_objects(num_versions_to_retain, perpetual_db.clone());
                         info!("Finished pruning with total object versions pruned = {}", num_pruned);
+                        let start = Instant::now();
+                        let min_key = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
+                        let max_key = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
+                        if let Ok(()) = perpetual_db.objects.compact_range(&min_key, &max_key) {
+                            info!("Completed compaction of objects table in {:?}", start.elapsed());
+                        } else {
+                            error!("Failed to compact objects table in  {:?}", start.elapsed());
+                        }
                     }
                     _ = &mut recv => break,
                 }
