@@ -45,7 +45,7 @@ use tracing::debug;
 
 const DUMMY_GAS_PRICE: u64 = 1;
 
-const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 2] = [
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 3] = [
     (
         SUI_FRAMEWORK_OBJECT_ID,
         "sui_system",
@@ -55,6 +55,11 @@ const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 2] = [
         SUI_FRAMEWORK_OBJECT_ID,
         "sui_system",
         "request_remove_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_set_commission_rate",
     ),
 ];
 
