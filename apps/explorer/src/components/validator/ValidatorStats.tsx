@@ -61,13 +61,17 @@ export function ValidatorStats({
                         SUI Staked on Validator
                     </Heading>
                     <div className="flex flex-col gap-8 lg:flex-row">
-                        <Stats label="Staking APY" tooltip="Coming soon">
+                        <Stats
+                            label="Staking APY"
+                            tooltip="Coming soon"
+                            unavailable={apy <= 0}
+                        >
                             <Heading
                                 as="h3"
                                 variant="heading2/semibold"
                                 color="steel-darker"
                             >
-                                {apy > 0 ? `${apy}%` : '--'}
+                                {apy}%
                             </Heading>
                         </Stats>
                         <Stats label="Total Staked" tooltip="Coming soon">
@@ -75,15 +79,12 @@ export function ValidatorStats({
                         </Stats>
                     </div>
                     <div className="flex flex-col gap-8 lg:flex-row">
-                        <Stats label="Delegators" tooltip="Coming soon">
-                            <Heading
-                                as="h3"
-                                variant="heading3/semibold"
-                                color="steel-darker"
-                            >
-                                --
-                            </Heading>
-                        </Stats>
+                        <Stats
+                            label="Delegators"
+                            tooltip="Coming soon"
+                            unavailable
+                        />
+
                         <Stats label="Delegated Staked" tooltip="Coming soon">
                             <Heading
                                 as="h3"
@@ -93,15 +94,11 @@ export function ValidatorStats({
                                 {delegatedStakePercentage}%
                             </Heading>
                         </Stats>
-                        <Stats label="Self Staked" tooltip="Coming soon">
-                            <Heading
-                                as="h3"
-                                variant="heading3/semibold"
-                                color="steel-darker"
-                            >
-                                --
-                            </Heading>
-                        </Stats>
+                        <Stats
+                            label="Self Staked"
+                            tooltip="Coming soon"
+                            unavailable
+                        />
                     </div>
                 </div>
             </Card>
@@ -116,24 +113,17 @@ export function ValidatorStats({
                         Validator Staking Rewards
                     </Heading>
                     <div className="flex flex-col gap-8">
-                        <Stats label="Last Epoch" tooltip="Coming soon">
-                            <Heading
-                                as="h3"
-                                variant="heading3/semibold"
-                                color="steel-darker"
-                            >
-                                --
-                            </Heading>
-                        </Stats>
-                        <Stats label="Total Reward" tooltip="Coming soon">
-                            <Heading
-                                as="h3"
-                                variant="heading3/semibold"
-                                color="steel-darker"
-                            >
-                                --
-                            </Heading>
-                        </Stats>
+                        <Stats
+                            label="Last Epoch"
+                            tooltip="Coming soon"
+                            unavailable
+                        />
+
+                        <Stats
+                            label="Total Reward"
+                            tooltip="Coming soon"
+                            unavailable
+                        />
                     </div>
                 </div>
             </Card>
@@ -152,52 +142,26 @@ export function ValidatorStats({
                             <Stats
                                 label="Staking Participation"
                                 tooltip="Coming soon"
-                            >
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
+                                unavailable
+                            />
 
                             <Stats
                                 label="voted Last Round"
                                 tooltip="Coming soon"
-                            >
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
+                                unavailable
+                            />
                         </div>
                         <div className="flex flex-col gap-8 lg:flex-row">
-                            <Stats label="Tallying Score" tooltip="Coming soon">
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
-
+                            <Stats
+                                label="Tallying Score"
+                                tooltip="Coming soon"
+                                unavailable
+                            />
                             <Stats
                                 label="Last Narwhal Round"
                                 tooltip="Coming soon"
-                            >
-                                <Heading
-                                    as="h3"
-                                    variant="heading3/semibold"
-                                    color="steel-darker"
-                                >
-                                    --
-                                </Heading>
-                            </Stats>
+                                unavailable
+                            />
                         </div>
                     </div>
                 </div>

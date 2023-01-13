@@ -161,27 +161,14 @@ function ValidatorPageResult() {
                                 <Stats
                                     label="Participation"
                                     tooltip="Coming soon"
-                                >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >
-                                        --
-                                    </Heading>
-                                </Stats>
+                                    unavailable
+                                />
+
                                 <Stats
                                     label="Last Epoch Reward"
                                     tooltip="Coming soon"
-                                >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >
-                                        --
-                                    </Heading>
-                                </Stats>
+                                    unavailable
+                                />
                             </div>
                             <div className="flex flex-col gap-8">
                                 <Stats label="Total Staked">
@@ -190,15 +177,17 @@ function ValidatorPageResult() {
                                         isStats
                                     />
                                 </Stats>
-                                <Stats label="AVG APY" tooltip="Average APY">
+                                <Stats
+                                    label="AVG APY"
+                                    tooltip="Average APY"
+                                    unavailable={averageAPY <= 0}
+                                >
                                     <Heading
                                         as="h3"
                                         variant="heading2/semibold"
                                         color="steel-darker"
                                     >
-                                        {averageAPY > 0
-                                            ? `${averageAPY}%`
-                                            : '--'}
+                                        {averageAPY}%
                                     </Heading>
                                 </Stats>
                             </div>

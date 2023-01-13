@@ -43,7 +43,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     fallback={validatorName}
                     size="xl"
                 />
-                <div className="mt-1 flex flex-col gap-2.5 pl-2 md:gap-3.5">
+                <div className="mt-1.5 flex flex-col">
                     <Heading as="h1" variant="heading2/bold" color="gray-90">
                         {validatorName}
                     </Heading>
