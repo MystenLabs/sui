@@ -289,6 +289,7 @@ impl AuthorityStore {
         Ok(result)
     }
 
+    // Transaction input errors should be aggregated in TransactionInputObjectsErrors
     pub fn check_input_objects(
         &self,
         objects: &[InputObjectKind],

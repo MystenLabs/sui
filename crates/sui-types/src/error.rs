@@ -641,16 +641,23 @@ impl SuiError {
 
     // Collapse TransactionInputObjectsErrors into a single SuiError
     // if there's exactly one error.
-    pub fn collapse_if_single_transaction_input_error(&self) -> Option<SuiError> {
+    pub fn collapse_if_single_transaction_input_error(&self) -> Option<&SuiError> {
         match self {
             SuiError::TransactionInputObjectsErrors { errors } => {
                 if errors.len() != 1 {
                     None
                 } else {
-                    Some(errors.get(0).unwrap().clone())
+                    // Safe to unwrap, length is checked above
+                    Some(errors.get(0).unwrap())
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn into_transaction_input_error(error: SuiError) -> SuiError {
+        SuiError::TransactionInputObjectsErrors {
+            errors: vec![error],
         }
     }
 }

@@ -1112,7 +1112,7 @@ async fn test_entry_point_vector_error() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::DuplicateObjectRefInput { .. }
+        &SuiError::DuplicateObjectRefInput { .. }
     ));
 
     // mint an owned object
@@ -1158,7 +1158,7 @@ async fn test_entry_point_vector_error() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::DuplicateObjectRefInput { .. }
+        &SuiError::DuplicateObjectRefInput { .. }
     ));
 }
 
@@ -1492,7 +1492,7 @@ async fn test_entry_point_vector_any_error() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::DuplicateObjectRefInput { .. }
+        &SuiError::DuplicateObjectRefInput { .. }
     ));
 
     // mint an owned object
@@ -1537,7 +1537,7 @@ async fn test_entry_point_vector_any_error() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::DuplicateObjectRefInput { .. }
+        &SuiError::DuplicateObjectRefInput { .. }
     ));
 }
 

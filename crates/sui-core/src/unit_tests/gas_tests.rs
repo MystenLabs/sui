@@ -34,7 +34,7 @@ async fn test_tx_less_than_minimum_gas_budget() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::GasBudgetTooLow {
+        &SuiError::GasBudgetTooLow {
             gas_budget: budget,
             min_budget: *MIN_GAS_BUDGET
         }
@@ -55,7 +55,7 @@ async fn test_tx_more_than_maximum_gas_budget() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::GasBudgetTooHigh {
+        &SuiError::GasBudgetTooHigh {
             gas_budget: budget,
             max_budget: *MAX_GAS_BUDGET
         }
@@ -77,7 +77,7 @@ async fn test_tx_gas_balance_less_than_budget() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: gas_balance as u128,
             gas_budget: (gas_price * budget) as u128,
             gas_price
@@ -157,7 +157,7 @@ async fn test_native_transfer_gas_price_is_used() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: (gas_balance as u128),
             gas_budget: (gas_budget as u128) * (gas_price as u128),
             gas_price

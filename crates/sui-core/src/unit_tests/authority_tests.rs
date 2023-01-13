@@ -1054,9 +1054,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
         res.unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::InvalidSequenceNumber],
-        }
+        &SuiError::InvalidSequenceNumber,
     );
 }
 
@@ -1071,9 +1069,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
-        SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::InvalidSequenceNumber],
-        }
+        &SuiError::InvalidSequenceNumber,
     );
 }
 
@@ -1301,7 +1297,7 @@ async fn test_immutable_gas() {
         .handle_transaction(transfer_transaction.clone())
         .await;
     assert!(matches!(
-        result
+        *result
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
@@ -1333,7 +1329,7 @@ async fn test_objected_owned_gas() {
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
-        result
+        *result
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
@@ -1770,7 +1766,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     let result = authority_state.handle_transaction(transaction).await;
 
     assert!(matches!(
-        result
+        *result
             .unwrap_err()
             .collapse_if_single_transaction_input_error()
             .unwrap(),
@@ -4061,8 +4057,12 @@ async fn test_blocked_move_calls() {
         ),
         &sender_key,
     );
-    assert!(matches!(
-        authority_state.handle_transaction(tx).await,
-        Err(SuiError::BlockedMoveFunction)
-    ));
+    let response = authority_state.handle_transaction(tx).await;
+    assert_eq!(
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        SuiError::BlockedMoveFunction
+    );
 }

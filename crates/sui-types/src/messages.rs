@@ -790,7 +790,7 @@ impl TransactionData {
         let mut inputs = self
             .kind
             .input_objects()
-            .map_err(|e| SuiError::TransactionInputObjectsErrors { errors: vec![e] })?;
+            .map_err(SuiError::into_transaction_input_error)?;
 
         if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(

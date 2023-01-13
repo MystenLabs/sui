@@ -24,7 +24,6 @@ mod test {
     use sui_types::object::Owner;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::TestClusterBuilder;
-    use tracing::log::error;
 
     fn test_config() -> SimConfig {
         env_config(
