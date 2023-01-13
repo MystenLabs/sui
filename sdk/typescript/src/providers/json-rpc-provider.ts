@@ -584,22 +584,22 @@ export class JsonRpcProvider extends Provider {
     try {
       let resp;
       // Serialize sigature field as: `flag || signature || pubkey`
-      const serialized_sig = new Uint8Array(
-        1 + signature.getLength() + pubkey.toBytes().length
-      );
-      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-      serialized_sig.set(signature.getData(), 1);
-      serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
+        const serialized_sig = new Uint8Array(
+          1 + signature.getLength() + pubkey.toBytes().length
+        );
+        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+        serialized_sig.set(signature.getData(), 1);
+        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
 
-      resp = await this.client.requestWithType(
-        'sui_executeTransactionSerializedSig',
-        [
-          txnBytes.toString(),
-          new Base64DataBuffer(serialized_sig).toString(),
-          requestType,
-        ],
-        SuiExecuteTransactionResponse,
-        this.options.skipDataValidation
+        resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [
+            txnBytes.toString(),
+            new Base64DataBuffer(serialized_sig).toString(),
+            requestType,
+          ],
+          SuiExecuteTransactionResponse,
+          this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
