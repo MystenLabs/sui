@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
+use sui_protocol_constants::STORAGE_GAS_PRICE;
 use sui_types::base_types::ObjectRef;
 use sui_types::messages::TransactionKind;
 use sui_types::{
@@ -148,12 +149,6 @@ async fn check_gas(
             version: Some(gas_payment.1),
         })?;
 
-        // TODO: cache this storage_gas_price in memory
-        let storage_gas_price = store
-            .get_sui_system_state_object()?
-            .parameters
-            .storage_gas_price;
-
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
         // both gas budget and the transfer amount.
         let extra_amount = match tx_kind {
@@ -164,7 +159,7 @@ async fn check_gas(
             _ => 0,
         };
         // TODO: We should revisit how we compute gas price and compare to gas budget.
-        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
+        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
 
         if tx_kind.is_pay_sui_tx() {
             let mut additional_objs = vec![];
@@ -187,7 +182,7 @@ async fn check_gas(
             gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])?;
         }
 
-        gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)
+        gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)
     }
 }
 

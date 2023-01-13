@@ -5896,8 +5896,7 @@
         "type": "object",
         "required": [
           "max_validator_candidate_count",
-          "min_validator_stake",
-          "storage_gas_price"
+          "min_validator_stake"
         ],
         "properties": {
           "max_validator_candidate_count": {
@@ -5906,11 +5905,6 @@
             "minimum": 0.0
           },
           "min_validator_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_gas_price": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

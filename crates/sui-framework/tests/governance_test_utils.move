@@ -61,7 +61,6 @@ module sui::governance_test_utils {
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
             1024, // max_validator_candidate_count
             0, // min_validator_stake
-            1, // storage_gas_price
             0, // stake subsidy
         )
     }
