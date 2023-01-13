@@ -271,5 +271,10 @@ export abstract class Provider {
    * @param txBytes
    */
   abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+
+  /**
+   * Getting the reference gas price for the network
+   */
+  abstract getReferenceGasPrice(): Promise<number>;
   // TODO: add more interface methods
 }

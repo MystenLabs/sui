@@ -1496,6 +1496,25 @@
       ]
     },
     {
+      "name": "sui_getReferenceGasPrice",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the reference gas price for the network",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
       "name": "sui_getSuiSystemState",
       "tags": [
         {
