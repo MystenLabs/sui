@@ -47,6 +47,8 @@ import {
   CoinMetadataStruct,
   GetObjectDataResponse,
   GetOwnedObjectsResponse,
+  DelegatedStake,
+  ValidatorMetaData,
 } from '../types';
 import {
   PublicKey,
@@ -62,7 +64,7 @@ import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
-import { any, is, number } from 'superstruct';
+import { any, is, number, array } from 'superstruct';
 import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 
 /**
@@ -582,22 +584,22 @@ export class JsonRpcProvider extends Provider {
     try {
       let resp;
       // Serialize sigature field as: `flag || signature || pubkey`
-      const serialized_sig = new Uint8Array(
-        1 + signature.getLength() + pubkey.toBytes().length
-      );
-      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-      serialized_sig.set(signature.getData(), 1);
-      serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
+        const serialized_sig = new Uint8Array(
+          1 + signature.getLength() + pubkey.toBytes().length
+        );
+        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+        serialized_sig.set(signature.getData(), 1);
+        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
 
-      resp = await this.client.requestWithType(
-        'sui_executeTransactionSerializedSig',
-        [
-          txnBytes.toString(),
-          new Base64DataBuffer(serialized_sig).toString(),
-          requestType,
-        ],
-        SuiExecuteTransactionResponse,
-        this.options.skipDataValidation
+        resp = await this.client.requestWithType(
+          'sui_executeTransactionSerializedSig',
+          [
+            txnBytes.toString(),
+            new Base64DataBuffer(serialized_sig).toString(),
+            requestType,
+          ],
+          SuiExecuteTransactionResponse,
+          this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -756,6 +758,37 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error dry running transaction with request type: ${err}`
       );
+    }
+  }
+
+  async getDelegatedStake(address: SuiAddress): Promise<DelegatedStake[]> {
+    try {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+        throw new Error('Invalid Sui address');
+      }
+      const resp = await this.client.requestWithType(
+        'sui_getDelegatedStakes',
+        [address],
+        array(DelegatedStake),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getDelegatedStake: ${err}`);
+    }
+  }
+
+  async getValidators(): Promise<ValidatorMetaData[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getValidators',
+        [],
+        array(ValidatorMetaData),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getValidators: ${err}`);
     }
   }
 }
