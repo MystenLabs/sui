@@ -22,7 +22,9 @@ use test_utils::network::TestClusterBuilder;
 use test_utils::transaction::wait_for_tx;
 use tracing::info;
 
-#[tokio::test]
+use sui_macros::sim_test;
+
+#[sim_test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let context = &mut test_cluster.wallet;
@@ -79,7 +81,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -158,7 +160,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_transaction_orchestrator_reconfig() {
     telemetry_subscribers::init_for_testing();
     let config = test_authority_configs();
@@ -198,7 +200,7 @@ async fn test_transaction_orchestrator_reconfig() {
     });
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_tx_across_epoch_boundaries() {
     telemetry_subscribers::init_for_testing();
     let total_tx_cnt = 1800;
