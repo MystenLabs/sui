@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { is, SuiObject } from '@mysten/sui.js';
-import { lazy, Suspense, useState, useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
-import Pagination from '~/components/pagination/Pagination';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
@@ -26,15 +25,11 @@ import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 
-const NUMBER_OF_VALIDATORS = 20;
-
 const ValidatorMap = lazy(() => import('../../components/node-map'));
 
 function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
-
-    const [validatorsPageNumber, setValidatorsPageNumber] = useState(1);
 
     const validatorsData =
         data &&
@@ -222,7 +217,7 @@ function ValidatorPageResult() {
                     <TableHeader>All Validators</TableHeader>
                     {isLoading && (
                         <PlaceholderTable
-                            rowCount={NUMBER_OF_VALIDATORS}
+                            rowCount={20}
                             rowHeight="13px"
                             colHeadings={['Name', 'Address', 'Stake']}
                             colWidths={['220px', '220px', '220px']}
@@ -230,34 +225,10 @@ function ValidatorPageResult() {
                     )}
 
                     {isSuccess && validatorsTableData?.data && (
-                        <>
-                            <TableCard
-                                data={validatorsTableData.data.filter(
-                                    (_, index) =>
-                                        index >=
-                                            (validatorsPageNumber - 1) *
-                                                NUMBER_OF_VALIDATORS &&
-                                        index <
-                                            validatorsPageNumber *
-                                                NUMBER_OF_VALIDATORS
-                                )}
-                                columns={validatorsTableData.columns}
-                            />
-
-                            {validatorsTableData.data.length >
-                                NUMBER_OF_VALIDATORS && (
-                                <Pagination
-                                    totalItems={validatorsTableData.data.length}
-                                    itemsPerPage={NUMBER_OF_VALIDATORS}
-                                    currentPage={validatorsPageNumber}
-                                    onPagiChangeFn={setValidatorsPageNumber}
-                                    stats={{
-                                        stats_text: 'Total Validators',
-                                        count: validatorsTableData.data.length,
-                                    }}
-                                />
-                            )}
-                        </>
+                        <TableCard
+                            data={validatorsTableData.data}
+                            columns={validatorsTableData.columns}
+                        />
                     )}
                 </ErrorBoundary>
             </div>
