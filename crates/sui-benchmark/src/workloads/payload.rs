@@ -5,6 +5,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 
 use sui_types::messages::VerifiedTransaction;
 
+use crate::ExecutionEffects;
 use rand::{prelude::*, rngs::OsRng};
 use rand_distr::WeightedAliasIndex;
 
@@ -15,6 +16,7 @@ pub trait Payload: Send + Sync {
         self: Box<Self>,
         new_object: ObjectRef,
         new_gas: ObjectRef,
+        effects: &ExecutionEffects,
     ) -> Box<dyn Payload>;
     fn make_transaction(&self) -> VerifiedTransaction;
     fn get_object_id(&self) -> ObjectID;
@@ -33,11 +35,12 @@ impl Payload for CombinationPayload {
         self: Box<Self>,
         new_object: ObjectRef,
         new_gas: ObjectRef,
+        effects: &ExecutionEffects,
     ) -> Box<dyn Payload> {
         let mut new_payloads = vec![];
         for (pos, e) in self.payloads.into_iter().enumerate() {
             if pos == self.curr_index {
-                let updated = e.make_new_payload(new_object, new_gas);
+                let updated = e.make_new_payload(new_object, new_gas, effects);
                 new_payloads.push(updated);
             } else {
                 new_payloads.push(e);

@@ -8,6 +8,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
     use sui_benchmark::util::generate_all_gas_for_test;
+    use sui_benchmark::workloads::delegation::DelegationWorkload;
     use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
     use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
     use sui_benchmark::workloads::WorkloadGasConfig;
@@ -111,6 +112,7 @@ mod test {
 
         let (transfer_object_workload_tokens, transfer_object_workload_payload_gas_config) =
             TransferObjectWorkload::generate_coin_config_for_payloads(max_ops, 2, max_ops);
+        let delegation_gas_configs = DelegationWorkload::generate_gas_config_for_payloads(max_ops);
         let (workload_init_gas, workload_payload_gas) = generate_all_gas_for_test(
             proxy.clone(),
             primary_gas,
@@ -121,6 +123,7 @@ mod test {
                 shared_counter_workload_payload_gas_config,
                 transfer_object_workload_tokens,
                 transfer_object_workload_payload_gas_config,
+                delegation_gas_configs,
             },
         )
         .await
@@ -132,6 +135,7 @@ mod test {
             2, // num transfer accounts
             1, // shared_counter_weight
             1, // transfer_object_weight
+            1, // delegation_weight
             workload_payload_gas,
         );
         combination_workload

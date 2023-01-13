@@ -7,7 +7,7 @@ use crate::workloads::Gas;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::MAX_GAS_FOR_TESTING;
 use crate::workloads::{GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
-use crate::ValidatorProxy;
+use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
 use rand::seq::SliceRandom;
@@ -32,7 +32,12 @@ pub struct SharedCounterTestPayload {
 }
 
 impl Payload for SharedCounterTestPayload {
-    fn make_new_payload(self: Box<Self>, _: ObjectRef, new_gas: ObjectRef) -> Box<dyn Payload> {
+    fn make_new_payload(
+        self: Box<Self>,
+        _: ObjectRef,
+        new_gas: ObjectRef,
+        _: &ExecutionEffects,
+    ) -> Box<dyn Payload> {
         Box::new(SharedCounterTestPayload {
             package_ref: self.package_ref,
             counter_id: self.counter_id,
