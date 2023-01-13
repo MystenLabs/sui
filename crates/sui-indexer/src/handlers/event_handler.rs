@@ -49,8 +49,13 @@ impl EventHandler {
             event_log.next_cursor_tx_seq,
             event_log.next_cursor_event_seq,
         );
-        if let (Some(tx_seq), Some(event_seq)) = (tx_seq_opt, event_seq_opt) {
-            next_cursor = Some(EventID { tx_seq, event_seq });
+        if let (Some(tx_seq), Some(_event_seq)) = (tx_seq_opt, event_seq_opt) {
+            // TODO: hack event_seq as 0 b/c of an event pagination bug, will change it
+            // when the pagination bug is fixed.
+            next_cursor = Some(EventID {
+                tx_seq,
+                event_seq: 0,
+            });
         }
 
         loop {
@@ -82,7 +87,12 @@ impl EventHandler {
                 self.event_handler_metrics
                     .total_events_processed
                     .inc_by(event_count as u64);
-                next_cursor = Some(next_cursor_val);
+                // TODO: hack event_seq as 0 b/c of an event pagination bug, change it
+                // when the pagination bug is fixed.
+                next_cursor = Some(EventID {
+                    tx_seq: next_cursor_val.tx_seq,
+                    event_seq: 0,
+                });
             }
             self.event_handler_metrics.total_event_page_committed.inc();
             // sleep when the event page has been the latest page
