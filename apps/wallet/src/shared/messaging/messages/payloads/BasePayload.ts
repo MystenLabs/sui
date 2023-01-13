@@ -23,7 +23,9 @@ export type PayloadType =
     | 'done'
     | 'keyring'
     | 'stake-request'
-    | 'wallet-status-changed';
+    | 'wallet-status-changed'
+    | 'get-features'
+    | 'features-response';
 
 export interface BasePayload {
     type: PayloadType;

@@ -5,7 +5,6 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
-import { FEATURES } from './experimentation/features';
 import { AppType } from './redux/slices/app/AppType';
 import StakeHome from './staking/home';
 import StakeNew from './staking/stake';
@@ -33,6 +32,7 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 const HIDDEN_MENU_PATHS = [
     '/stake',

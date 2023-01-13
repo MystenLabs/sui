@@ -7,9 +7,9 @@ import {
     LocalTxnDataSerializer,
 } from '@mysten/sui.js';
 
-import { growthbook } from './experimentation/feature-gating';
-import { FEATURES } from './experimentation/features';
 import { queryClient } from './helpers/queryClient';
+import { growthbook } from '_app/experimentation/feature-gating';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { Keypair } from '@mysten/sui.js';
 
