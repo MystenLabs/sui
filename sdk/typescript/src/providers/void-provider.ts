@@ -49,6 +49,11 @@ export class VoidProvider extends Provider {
     throw new Error('getCoinMetadata');
   }
 
+  // Governance
+  async getReferenceGasPrice(): Promise<number> {
+    throw this.newError('getReferenceGasPrice');
+  }
+
   // Faucet
   async requestSuiFromFaucet(
     _recipient: SuiAddress,

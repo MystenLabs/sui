@@ -339,6 +339,10 @@ pub trait GovernanceReadApi {
     /// Return [SuiSystemState]
     #[method(name = "getSuiSystemState")]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
+
+    /// Return the reference gas price for the network
+    #[method(name = "getReferenceGasPrice")]
+    async fn get_reference_gas_price(&self) -> RpcResult<u64>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]

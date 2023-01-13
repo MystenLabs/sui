@@ -93,6 +93,10 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .get_sui_system_state_object()
             .map_err(Error::from)?)
     }
+
+    async fn get_reference_gas_price(&self) -> RpcResult<u64> {
+        Ok(self.get_sui_system_state().await?.reference_gas_price)
+    }
 }
 
 impl SuiRpcModule for GovernanceReadApi {
