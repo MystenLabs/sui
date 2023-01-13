@@ -164,15 +164,12 @@ export function createWalletKitCore({
         if (walletEventUnsubscribe) {
           walletEventUnsubscribe();
         }
-        walletEventUnsubscribe = currentWallet.on(
-          "changed",
-          ({ connected }) => {
-            // when undefined connected hasn't changed
-            if (connected === false) {
-              disconnected();
-            }
+        walletEventUnsubscribe = currentWallet.on("change", ({ connected }) => {
+          // when undefined connected hasn't changed
+          if (connected === false) {
+            disconnected();
           }
-        );
+        });
         try {
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();

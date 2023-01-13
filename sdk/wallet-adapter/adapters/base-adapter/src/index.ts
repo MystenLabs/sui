@@ -8,7 +8,7 @@ import {
 } from "@mysten/sui.js";
 
 export interface WalletAdapterEvents {
-  changed(changes: { connected?: boolean; accounts?: SuiAddress[] }): void;
+  change(changes: { connected?: boolean; accounts?: SuiAddress[] }): void;
 }
 
 export interface WalletAdapter {

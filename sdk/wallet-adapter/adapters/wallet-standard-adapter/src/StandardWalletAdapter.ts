@@ -105,7 +105,7 @@ export class StandardWalletAdapter implements WalletAdapter {
   };
 
   async #notifyChanged() {
-    this.#events.emit("changed", {
+    this.#events.emit("change", {
       connected: this.connected,
       accounts: await this.getAccounts(),
     });
