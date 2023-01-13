@@ -116,10 +116,12 @@ impl SuiTxValidatorMetrics {
 
 #[cfg(test)]
 mod tests {
-    use fastcrypto::traits::KeyPair;
+    use fastcrypto::traits::{KeyPair, ToFromBytes};
     use narwhal_types::Batch;
     use narwhal_worker::TransactionValidator;
-    use sui_types::{base_types::AuthorityName, messages::ConsensusTransaction};
+    use sui_types::{
+        base_types::AuthorityName, crypto::Ed25519SuiSignature, messages::ConsensusTransaction,
+    };
 
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
@@ -177,7 +179,7 @@ mod tests {
         let bogus_transaction_bytes: Vec<_> = certificates
             .into_iter()
             .map(|mut cert| {
-                cert.tx_signature.as_mut()[2] = cert.tx_signature.as_mut()[2].wrapping_add(1);
+                cert.tx_signature = Ed25519SuiSignature::from_bytes(&[0; 64]).unwrap().into();
                 bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
                     .unwrap()
             })

@@ -266,8 +266,8 @@ pub struct ConstructionDeriveRequest {
 
 #[derive(Deserialize, Debug)]
 pub struct PublicKey {
+    /// Hex encoded `flag || pubkey` (the flag here is the signature scheme encoded as 1 byte).
     pub hex_bytes: Hex,
-    pub curve_type: CurveType,
 }
 
 impl TryInto<SuiAddress> for PublicKey {
@@ -275,7 +275,7 @@ impl TryInto<SuiAddress> for PublicKey {
 
     fn try_into(self) -> Result<SuiAddress, Self::Error> {
         let key_bytes = self.hex_bytes.to_vec()?;
-        let pub_key = SuiPublicKey::try_from_bytes(self.curve_type.into(), &key_bytes)?;
+        let pub_key = SuiPublicKey::from_bytes(&key_bytes)?;
         Ok((&pub_key).into())
     }
 }
