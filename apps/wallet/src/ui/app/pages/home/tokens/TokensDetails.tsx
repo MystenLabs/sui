@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
-import FaucetMessageInfo from '_app/shared/faucet/message-info';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
 import AccountAddress from '_components/account-address';
@@ -76,7 +75,6 @@ function MyTokens({
                     <FaucetRequestButton trackEventSource="home" />
                 </div>
             )}
-            <FaucetMessageInfo className={st.gasRequestInfo} />
         </Loading>
     );
 }

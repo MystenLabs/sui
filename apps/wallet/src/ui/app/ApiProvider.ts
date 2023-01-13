@@ -102,7 +102,8 @@ export default class ApiProvider {
         // We also clear the query client whenever set set a new API provider:
         queryClient.clear();
         this._apiFullNodeProvider = new JsonRpcProvider(
-            customRPC ?? getDefaultAPI(apiEnv).fullNode
+            customRPC ?? getDefaultAPI(apiEnv).fullNode,
+            { faucetURL: customRPC ? '' : getDefaultAPI(apiEnv).faucet }
         );
         this._signer = null;
     }
