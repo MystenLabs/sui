@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ActiveValidator } from './ValidatorDataTypes';
+import { type ActiveValidator } from '@mysten/sui.js';
 
 export function calculateAPY(validators: ActiveValidator, epoch: number) {
     const { sui_balance, starting_epoch, delegation_token_supply } =

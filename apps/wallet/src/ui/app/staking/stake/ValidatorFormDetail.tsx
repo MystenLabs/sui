@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { is, SuiObject } from '@mysten/sui.js';
+import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
@@ -14,8 +14,6 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject, useAppSelector } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
-
-import type { ValidatorsFields } from '../ValidatorDataTypes';
 
 type ValidatorFormDetailProps = {
     validatorAddress: string;

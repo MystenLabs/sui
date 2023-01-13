@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject } from '@mysten/sui.js';
+import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useState, useMemo } from 'react';
 
 import { getName, STATE_OBJECT } from '../usePendingDelegation';
@@ -16,8 +16,6 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject } from '_hooks';
-
-import type { ValidatorsFields } from '../ValidatorDataTypes';
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(

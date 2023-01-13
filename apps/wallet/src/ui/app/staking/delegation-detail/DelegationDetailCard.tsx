@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { is, SuiObject } from '@mysten/sui.js';
+import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { FEATURES } from '../../experimentation/features';
@@ -19,8 +19,6 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useGetObject } from '_hooks';
-
-import type { ValidatorsFields } from '../ValidatorDataTypes';
 
 type DelegationDetailCardProps = {
     validatorAddress: string;
