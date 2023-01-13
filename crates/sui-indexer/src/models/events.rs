@@ -27,8 +27,7 @@ pub struct Event {
 #[derive(Debug, Insertable)]
 #[diesel(table_name = events)]
 pub struct NewEvent {
-    pub transaction_digest: Option<String>,
-    pub transaction_sequence: i64,
+    pub transaction_digest: String,
     pub event_sequence: i64,
     pub event_time: Option<NaiveDateTime>,
     pub event_type: String,
@@ -73,9 +72,9 @@ pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError>
             e.timestamp
         ))
     })?;
+
     Ok(NewEvent {
-        transaction_digest: e.tx_digest.map(|digest| format!("{:?}", digest)),
-        transaction_sequence: e.id.tx_seq,
+        transaction_digest: format!("{:?}", e.tx_digest),
         event_sequence: e.id.event_seq,
         event_time: Some(timestamp),
         event_type: e.event.get_event_type(),

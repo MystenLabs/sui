@@ -38,8 +38,8 @@ use crate::{
 pub struct EventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     pub timestamp: u64,
-    /// Transaction digest of associated transaction, if any
-    pub tx_digest: Option<TransactionDigest>,
+    /// Transaction digest of associated transaction
+    pub tx_digest: TransactionDigest,
     /// Transaction sequence number, must be nondecreasing for event ingestion idempotency
     pub seq_num: u64,
     /// Consecutive per-tx counter assigned to this event.
@@ -54,14 +54,14 @@ pub struct EventEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EventID {
-    pub tx_seq: i64,
+    pub tx_digest: TransactionDigest,
     pub event_seq: i64,
 }
 
-impl From<(i64, i64)> for EventID {
-    fn from((tx_seq_num, event_seq_number): (i64, i64)) -> Self {
+impl From<(TransactionDigest, i64)> for EventID {
+    fn from((tx_digest_num, event_seq_number): (TransactionDigest, i64)) -> Self {
         Self {
-            tx_seq: tx_seq_num as i64,
+            tx_digest: tx_digest_num as TransactionDigest,
             event_seq: event_seq_number as i64,
         }
     }
@@ -69,7 +69,7 @@ impl From<(i64, i64)> for EventID {
 
 impl From<EventID> for String {
     fn from(id: EventID) -> Self {
-        format!("{}:{}", id.tx_seq, id.event_seq)
+        format!("{:?}:{}", id.tx_digest, id.event_seq)
     }
 }
 
@@ -79,14 +79,18 @@ impl TryFrom<String> for EventID {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let values = value.split(':').collect::<Vec<_>>();
         ensure!(values.len() == 2, "Malformed EventID : {value}");
-        Ok((i64::from_str(values[0])?, i64::from_str(values[1])?).into())
+        Ok((
+            TransactionDigest::from_str(values[0])?,
+            i64::from_str(values[1])?,
+        )
+            .into())
     }
 }
 
 impl EventEnvelope {
     pub fn new(
         timestamp: u64,
-        tx_digest: Option<TransactionDigest>,
+        tx_digest: TransactionDigest,
         seq_num: u64,
         event_num: u64,
         event: Event,
