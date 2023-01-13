@@ -20,7 +20,7 @@ was originally developed at Facebook to power the [Diem](https://github.com/diem
 blockchain. However, Move was designed as a platform-agnostic language
 to enable common libraries, tooling, and developer communities across
 blockchains with vastly different data and execution models. [Sui](https://github.com/MystenLabs/sui/blob/main/README.md),
-[0L](https://github.com/OLSF/libra), and
+[0L](https://github.com/0LNetworkCommunity/libra), and
 [Starcoin](https://github.com/starcoinorg/starcoin) are using Move,
 and there are also plans to integrate the language in several upcoming
 and existing platforms (e.g.,
