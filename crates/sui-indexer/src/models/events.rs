@@ -4,7 +4,7 @@
 use crate::errors::IndexerError;
 use crate::schema::events;
 use crate::schema::events::dsl::{events as events_table, id};
-use crate::schema::events::{event_sequence, transaction_sequence};
+use crate::schema::events::{event_sequence, transaction_digest};
 use crate::utils::log_errors_to_pg;
 use crate::PgPoolConnection;
 
@@ -17,7 +17,6 @@ use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope};
 pub struct Event {
     pub id: i64,
     pub transaction_digest: Option<String>,
-    pub transaction_sequence: i64,
     pub event_sequence: i64,
     pub event_time: Option<NaiveDateTime>,
     pub event_type: String,
@@ -102,7 +101,7 @@ pub fn commit_events(
         .run::<_, Error, _>(|conn| {
         diesel::insert_into(events::table)
             .values(&new_events)
-            .on_conflict((transaction_sequence, event_sequence))
+            .on_conflict((transaction_digest, event_sequence))
             .do_nothing()
             .execute(conn)
     });
