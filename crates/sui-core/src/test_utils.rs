@@ -271,7 +271,9 @@ pub fn make_transfer_sui_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        recipient, sender, amount, gas_object, MAX_GAS,
+    );
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -282,6 +284,8 @@ pub fn make_transfer_object_transaction(
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer_with_dummy_gas_price(
+        recipient, object_ref, sender, gas_object, MAX_GAS,
+    );
     to_sender_signed_transaction(data, keypair)
 }

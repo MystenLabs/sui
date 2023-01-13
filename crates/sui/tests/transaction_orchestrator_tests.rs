@@ -212,7 +212,7 @@ async fn test_tx_across_epoch_boundaries() {
     let txes = gas_objects
         .iter()
         .map(|o| {
-            let data = TransactionData::new_transfer_sui(
+            let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
                 get_key_pair::<AccountKeyPair>().0,
                 sender,
                 None,

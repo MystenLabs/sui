@@ -775,7 +775,7 @@ impl InternalOperation {
                 amounts,
             }),
         };
-        TransactionData::new(
+        TransactionData::new_with_dummy_gas_price(
             TransactionKind::Single(single_tx),
             metadata.sender,
             metadata.gas,

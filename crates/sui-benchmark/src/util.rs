@@ -47,7 +47,7 @@ pub fn make_split_coin_tx(
     gas: ObjectRef,
     keypair: &AccountKeyPair,
 ) -> Result<VerifiedTransaction> {
-    let split_coin = TransactionData::new_move_call(
+    let split_coin = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
         framework,
         coin::PAY_MODULE_NAME.to_owned(),
@@ -72,7 +72,14 @@ pub fn make_pay_tx(
     gas: ObjectRef,
     keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
-    let pay = TransactionData::new_pay(sender, input_coins, addresses, split_amounts, gas, 1000000);
+    let pay = TransactionData::new_pay_with_dummy_gas_price(
+        sender,
+        input_coins,
+        addresses,
+        split_amounts,
+        gas,
+        1000000,
+    );
     to_sender_signed_transaction(pay, keypair)
 }
 
