@@ -192,6 +192,9 @@ async fn init_genesis(
             p2p_address: sui_config::utils::new_udp_network_address(),
             narwhal_primary_address: sui_config::utils::new_udp_network_address(),
             narwhal_worker_address: sui_config::utils::new_udp_network_address(),
+            description: String::new(),
+            image_url: String::new(),
+            project_url: String::new(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);

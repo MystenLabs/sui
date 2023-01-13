@@ -38,6 +38,9 @@ module sui::genesis {
         validator_proof_of_possessions: vector<vector<u8>>,
         validator_sui_addresses: vector<address>,
         validator_names: vector<vector<u8>>,
+        validator_descriptions: vector<vector<u8>>,
+        validator_image_urls: vector<vector<u8>>,
+        validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
         validator_worker_addressess: vector<vector<u8>>,
@@ -54,6 +57,9 @@ module sui::genesis {
             vector::length(&validator_sui_addresses) == count
                 && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
+                && vector::length(&validator_descriptions) == count
+                && vector::length(&validator_image_urls) == count
+                && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
                 && vector::length(&validator_consensus_addresses) == count
                 && vector::length(&validator_worker_addressess) == count
@@ -69,6 +75,9 @@ module sui::genesis {
             let worker_pubkey = *vector::borrow(&validator_worker_pubkeys, i);
             let proof_of_possession = *vector::borrow(&validator_proof_of_possessions, i);
             let name = *vector::borrow(&validator_names, i);
+            let description = *vector::borrow(&validator_descriptions, i);
+            let image_url = *vector::borrow(&validator_image_urls, i);
+            let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
             let worker_address = *vector::borrow(&validator_worker_addressess, i);
@@ -82,6 +91,9 @@ module sui::genesis {
                 worker_pubkey,
                 proof_of_possession,
                 name,
+                description,
+                image_url,
+                project_url,
                 net_address,
                 consensus_address,
                 worker_address,

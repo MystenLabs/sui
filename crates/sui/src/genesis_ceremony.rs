@@ -58,6 +58,12 @@ pub enum CeremonyCommand {
         narwhal_primary_address: Multiaddr,
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
+        #[clap(long)]
+        description: String,
+        #[clap(long)]
+        image_url: String,
+        #[clap(long)]
+        project_url: String,
     },
 
     AddGasObject {
@@ -101,6 +107,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             p2p_address,
             narwhal_primary_address,
             narwhal_worker_address,
+            description,
+            image_url,
+            project_url,
         } => {
             let mut builder = Builder::load(&dir)?;
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
@@ -123,6 +132,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     p2p_address,
                     narwhal_primary_address,
                     narwhal_worker_address,
+                    description,
+                    image_url,
+                    project_url,
                 },
                 pop,
             );
@@ -208,6 +220,9 @@ mod test {
                     p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),
                     narwhal_worker_address: utils::new_udp_network_address(),
+                    description: String::new(),
+                    image_url: String::new(),
+                    project_url: String::new(),
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();
@@ -257,6 +272,9 @@ mod test {
                     p2p_address: validator.p2p_address().to_owned(),
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
+                    description: String::new(),
+                    image_url: String::new(),
+                    project_url: String::new(),
                 },
             };
             command.run()?;

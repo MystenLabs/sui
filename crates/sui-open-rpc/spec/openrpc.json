@@ -6434,6 +6434,8 @@
         "type": "object",
         "required": [
           "consensus_address",
+          "description",
+          "image_url",
           "name",
           "net_address",
           "network_pubkey_bytes",
@@ -6441,6 +6443,7 @@
           "next_epoch_delegation",
           "next_epoch_gas_price",
           "next_epoch_stake",
+          "project_url",
           "proof_of_possession_bytes",
           "pubkey_bytes",
           "sui_address",
@@ -6449,6 +6452,22 @@
         ],
         "properties": {
           "consensus_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "description": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "image_url": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6499,6 +6518,14 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "project_url": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
           "proof_of_possession_bytes": {
             "type": "array",

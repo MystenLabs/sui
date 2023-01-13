@@ -321,6 +321,9 @@ pub struct ValidatorInfo {
     pub p2p_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
 }
 
 impl ValidatorInfo {
