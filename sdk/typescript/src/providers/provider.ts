@@ -69,6 +69,17 @@ export abstract class Provider {
     httpHeaders?: HttpHeaders
   ): Promise<FaucetResponse>;
 
+  // RPC Endpoint
+  /**
+   * Invoke any RPC endpoint 
+   * @param endpoint the endpoint to be invoked
+   * @param params the arguments to be passed to the RPC request
+   */
+  abstract call(
+    endpoint: string,
+    params: Array<any>
+  ) : Promise<any>;
+  
   // Objects
   /**
    * Get all objects owned by an address
