@@ -7,18 +7,23 @@ mod test {
     use std::str::FromStr;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_config::SUI_KEYSTORE_FILENAME;
-    use test_utils::{messages::get_gas_object_with_wallet_context, network::TestClusterBuilder};
-
+    use sui_benchmark::util::generate_all_gas_for_test;
+    use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
+    use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
+    use sui_benchmark::workloads::WorkloadGasConfig;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
         workloads::make_combination_workload,
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-
+    use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_macros::sim_test;
     use sui_simulator::{configs::*, SimConfig};
+    use sui_types::object::Owner;
+    use test_utils::messages::get_sui_gas_object_with_wallet_context;
+    use test_utils::network::TestClusterBuilder;
+    use tracing::log::error;
 
     fn test_config() -> SimConfig {
         env_config(
@@ -64,25 +69,23 @@ mod test {
         let fullnode_rpc_url = &test_cluster.fullnode_handle.rpc_url;
 
         let keystore_path = swarm.dir().join(SUI_KEYSTORE_FILENAME);
-        let ed25519_keypair = get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap();
+        let ed25519_keypair =
+            Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
+        let all_gas = get_sui_gas_object_with_wallet_context(context, &sender).await;
+        let (_, gas) = all_gas.get(0).unwrap();
+        let (move_struct, pay_coin) = all_gas.get(1).unwrap();
+        let primary_gas = (
+            gas.clone(),
+            Owner::AddressOwner(sender),
+            ed25519_keypair.clone(),
+        );
+        let coin = (
+            pay_coin.clone(),
+            Owner::AddressOwner(sender),
+            ed25519_keypair.clone(),
+        );
+        let coin_type_tag = move_struct.type_params[0].clone();
 
-        let gas = get_gas_object_with_wallet_context(context, &sender)
-            .await
-            .expect("Expect {sender} to have at least one gas object");
-
-        // The default test parameters are somewhat conservative in order to keep the running time
-        // of the test reasonable in CI.
-        let mut workloads = vec![make_combination_workload(
-            get_var("SIM_STRESS_TEST_QPS", 10),
-            get_var("SIM_STRESS_TEST_WORKERS", 10),
-            get_var("SIM_STRESS_TEST_IFR", 2),
-            gas.0,
-            sender,
-            Arc::new(ed25519_keypair),
-            10, // num_transfer_accounts
-            1,  // shared_counter_weight
-            1,  // transfer_object_weight
-        )];
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
             LocalValidatorAggregatorProxy::from_network_config(
@@ -93,14 +96,48 @@ mod test {
             .await,
         );
 
-        for w in workloads.iter_mut() {
-            w.workload
-                .init(
-                    get_var("SIM_STRESS_TEST_NUM_SHARED_OBJECTS", 5),
-                    proxy.clone(),
-                )
-                .await;
-        }
+        // The default test parameters are somewhat conservative in order to keep the running time
+        // of the test reasonable in CI.
+
+        let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
+        let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
+        let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
+        let max_ops = target_qps * in_flight_ratio;
+        let num_shared_counters = max_ops;
+        let shared_counter_workload_init_gas_config =
+            SharedCounterWorkload::generate_coin_config_for_init(num_shared_counters);
+        let shared_counter_workload_payload_gas_config =
+            SharedCounterWorkload::generate_coin_config_for_payloads(max_ops);
+
+        let (transfer_object_workload_tokens, transfer_object_workload_payload_gas_config) =
+            TransferObjectWorkload::generate_coin_config_for_payloads(max_ops, 2, max_ops);
+        let (workload_init_gas, workload_payload_gas) = generate_all_gas_for_test(
+            proxy.clone(),
+            primary_gas,
+            coin,
+            coin_type_tag,
+            WorkloadGasConfig {
+                shared_counter_workload_init_gas_config,
+                shared_counter_workload_payload_gas_config,
+                transfer_object_workload_tokens,
+                transfer_object_workload_payload_gas_config,
+            },
+        )
+        .await
+        .unwrap();
+        let mut combination_workload = make_combination_workload(
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            2, // num transfer accounts
+            1, // shared_counter_weight
+            1, // transfer_object_weight
+            workload_payload_gas,
+        );
+        combination_workload
+            .workload
+            .init(workload_init_gas, proxy.clone())
+            .await;
 
         let driver = BenchDriver::new(5);
 
@@ -115,7 +152,13 @@ mod test {
 
         let show_progress = interval.is_unbounded();
         let stats = driver
-            .run(workloads, proxy, &registry, show_progress, interval)
+            .run(
+                vec![combination_workload],
+                proxy,
+                &registry,
+                show_progress,
+                interval,
+            )
             .await
             .unwrap();
 
