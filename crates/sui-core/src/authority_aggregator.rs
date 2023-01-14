@@ -270,7 +270,7 @@ impl EffectsStakeMap {
     errors
 )]
 pub struct QuorumExecuteCertificateError {
-    errors: BTreeMap<String, (Vec<AuthorityName>, StakeUnit)>,
+    pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
 }
 
 #[derive(Error, Debug)]
@@ -279,9 +279,10 @@ pub struct QuorumExecuteCertificateError {
     conflicting_tx_digests,
     errors,
 )]
-pub struct QuorumExecuteTransactionError {
+pub struct QuorumSignTransactionError {
+    pub total_stake: StakeUnit,
     pub good_stake: StakeUnit,
-    pub errors: BTreeMap<String, (Vec<AuthorityName>, StakeUnit)>,
+    pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
     pub conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
 }
@@ -1252,7 +1253,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedCertificate, QuorumExecuteTransactionError> {
+    ) -> Result<VerifiedCertificate, QuorumSignTransactionError> {
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
@@ -1379,9 +1380,10 @@ where
         state = Self::record_non_quorum_effects_maybe(tx_digest, state);
 
         // If we have some certificate return it, or return an error.
-        state.certificate.ok_or(QuorumExecuteTransactionError {
+        state.certificate.ok_or(QuorumSignTransactionError {
+            total_stake: self.committee.total_votes,
             good_stake: state.good_stake,
-            errors: aggregate_errors(&state.errors),
+            errors: state.errors,
             conflicting_tx_digests: state.conflicting_tx_digests,
         })
     }
@@ -1395,7 +1397,7 @@ where
         err: SuiError,
     ) {
         let concise_name = name.concise();
-        debug!(tx_digest = ?tx_digest, name=?concise_name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
+        debug!(?tx_digest, name=?concise_name, weight, "Failed to let validator sign transaction by handle_transaction: {:?}", err);
         self.metrics
             .process_tx_errors
             .with_label_values(&[&concise_name.to_string(), err.as_ref()])
@@ -1420,7 +1422,7 @@ where
     }
 
     /// This function could return Error when signature verification
-    /// or certification forming fails. This only happens when we have
+    /// or certificate forming fails. This only happens when we have
     /// a quorum of good stake, so if the we see such an error, we
     /// should exit handling this transaction.
     fn handle_response_with_signed_transaction(
@@ -1433,8 +1435,8 @@ where
         transaction_ref: &VerifiedTransaction,
         threshold: StakeUnit,
     ) {
-        // If the signed transaction's epoch is older, than the validator is falling behind.
-        // If it's newer than we need a reconfig. Either way, we return a transient error.
+        // If the signed transaction's epoch is older, then the validator is falling behind.
+        // If it's newer then we need a reconfig. Either way, we return a transient error.
         if signed_transaction.epoch() != self.committee.epoch {
             debug!(
                 ?tx_digest,
@@ -1455,7 +1457,7 @@ where
             state.bad_stake += weight;
         } else {
             let tx_digest = *signed_transaction.digest();
-            debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
+            debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
             state
                 .signatures
                 .push(signed_transaction.into_inner().into_data_and_sig().1);
@@ -1503,7 +1505,7 @@ where
         // A certificate in a past epoch does not guaranteee finality
         // and validators may reject to process it.
         if certificate.epoch() == self.committee.epoch {
-            debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
+            debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
             state.certificate = Some(certificate);
         } else if signed_effects.epoch() == self.committee.epoch {
             // If we get 2f+1 effects, it's an proof that the transaction
@@ -1525,7 +1527,7 @@ where
                 .add(signed_effects, weight, &self.committee)?
             {
                 debug!(
-                    tx_digest = ?tx_digest,
+                    ?tx_digest,
                     "Got quorum for effects for certs that are from previous epochs handle_transaction"
                 );
                 state.certificate = Some(certificate);
@@ -1535,7 +1537,7 @@ where
             // and the shared committee store in SafeClient is already updated.
             // In this case we record a transient error.
             debug!(
-                tx_digest = ?tx_digest,
+                ?tx_digest,
                 name=?name.concise(),
                 weight,
                 actual_epoch = certificate.epoch(),
@@ -1620,7 +1622,7 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
         debug!(
-            tx_digest = ?tx_digest,
+            ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
@@ -1645,7 +1647,7 @@ where
                                 signed_effects,
                             }) => {
                                 debug!(
-                                    tx_digest = ?tx_digest,
+                                    ?tx_digest,
                                     name = ?name.concise(),
                                     "Validator handled certificate successfully",
                                 );
@@ -1660,7 +1662,7 @@ where
                                     }
                                     Ok(true) => {
                                         debug!(
-                                            tx_digest = ?tx_digest,
+                                            ?tx_digest,
                                             "Got quorum for validators handle_certificate."
                                         );
                                         return Ok(ReduceOutput::End(state));
@@ -1670,7 +1672,7 @@ where
                             }
                             Err(err) => {
                                 let concise_name = name.concise();
-                                debug!(tx_digest = ?tx_digest, name=?name.concise(), weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
+                                debug!(?tx_digest, name=?name.concise(), weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
                                 self.metrics.process_cert_errors.with_label_values(&[&concise_name.to_string(), err.as_ref()]).inc();
                                 state.errors.push((err, vec![name], weight));
                                 state.bad_stake += weight;
@@ -1690,7 +1692,7 @@ where
             .unwrap();
 
         debug!(
-            tx_digest = ?tx_digest,
+            ?tx_digest,
             num_unique_effects = state.effects_map.len(),
             bad_stake = state.bad_stake,
             "Received effects responses from validators"
@@ -1699,16 +1701,13 @@ where
         // Check that one effects structure has more than 2f votes,
         // and return it.
         if let Some(cert) = state.effects_map.get_cert() {
-            debug!(
-                tx_digest = ?tx_digest,
-                "Found an effect with good stake over threshold"
-            );
+            debug!(?tx_digest, "Found an effect with good stake over threshold");
             return Ok(cert);
         }
 
         // If none has, fail.
         Err(QuorumExecuteCertificateError {
-            errors: aggregate_errors(&state.errors),
+            errors: state.errors,
         })
     }
 
@@ -1874,7 +1873,7 @@ where
 
                     // This validator could not give the transaction info, but it is supposed to know about the transaction.
                     // This could also happen on epoch change boundary.
-                    warn!(name=?authority.concise(), ?tx_digest, "Validator failed to give info about a transaction, it's either byzantine or just went through an epoch change");
+                    warn!(?tx_digest, name=?authority.concise(), "Validator failed to give info about a transaction, it's either byzantine or just went through an epoch change");
                     Err(SuiError::ByzantineAuthoritySuspicion {
                         authority,
                         reason: format!(
@@ -2036,20 +2035,6 @@ where
             }
         }
     }
-}
-
-fn aggregate_errors(
-    errors: &Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-) -> BTreeMap<String, (Vec<AuthorityName>, StakeUnit)> {
-    let mut aggregated_errors = BTreeMap::<String, (Vec<AuthorityName>, StakeUnit)>::new();
-    for (error, names, weight) in errors {
-        let entry = aggregated_errors
-            .entry(error.as_ref().to_string())
-            .or_default();
-        entry.0.extend_from_slice(names);
-        entry.1 += weight;
-    }
-    aggregated_errors
 }
 
 /// Given an AuthorityAggregator on genesis (epoch 0), catch up to the latest epoch and fill in
