@@ -1637,6 +1637,7 @@ impl AuthorityState {
         genesis: &Genesis,
     ) -> Arc<Self> {
         let secret = Arc::pin(key.copy());
+        let name: AuthorityName = secret.public().into();
         let path = match store_base_path {
             Some(path) => path,
             None => {
@@ -1661,6 +1662,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let epoch_store = AuthorityPerEpochStore::new(
+            name,
             genesis_committee.clone(),
             &path.join("store"),
             None,
@@ -2587,7 +2589,9 @@ impl AuthorityState {
 
     async fn reopen_epoch_db(&self, new_committee: Committee) {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
-        let epoch_tables = self.epoch_store().new_at_next_epoch(new_committee);
+        let epoch_tables = self
+            .epoch_store()
+            .new_at_next_epoch(self.name, new_committee);
         let previous_store = self.epoch_store.swap(epoch_tables);
         previous_store.epoch_terminated().await;
     }

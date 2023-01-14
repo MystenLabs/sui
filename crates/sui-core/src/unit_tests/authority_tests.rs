@@ -2550,6 +2550,7 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let epoch_store = AuthorityPerEpochStore::new(
+            name,
             committee,
             &epoch_store_path,
             None,
