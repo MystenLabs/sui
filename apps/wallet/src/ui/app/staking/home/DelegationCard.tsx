@@ -1,8 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '../../hooks';
+import { Link } from 'react-router-dom';
+
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
+import { ValidatorLogo } from '../validators/ValidatorLogo';
+import { useFormatCoin } from '_app/hooks';
+import { Text } from '_src/ui/app/shared/text';
+import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',
@@ -11,51 +16,76 @@ export enum DelegationState {
 }
 
 interface DelegationCardProps {
-    name: string;
     staked: number | bigint;
     state: DelegationState;
     rewards?: number | bigint;
+    address: string;
+    stakedId: string;
 }
 
 const STATE_TO_COPY = {
-    [DelegationState.WARM_UP]: 'In Warm-up',
+    [DelegationState.WARM_UP]: 'Starts Earning',
     [DelegationState.EARNING]: 'Staking Reward',
     [DelegationState.COOL_DOWN]: 'In Cool-down',
 };
 
 // TODO: Add these classes when we add delegation detail page.
-// cursor-pointer hover:bg-sui/10 hover:border-sui/30
 
 export function DelegationCard({
-    name,
     staked,
     rewards,
     state,
+    address,
+    stakedId,
 }: DelegationCardProps) {
     const [stakedFormatted] = useFormatCoin(staked, GAS_TYPE_ARG);
     const [rewardsFormatted] = useFormatCoin(rewards, GAS_TYPE_ARG);
 
     return (
-        <div className="flex flex-col p-4 box-border h-36 w-full rounded-2xl border border-solid border-gray-45 bg-transparent">
-            <div className="flex-1 text-gray-90">
-                <div className="text-subtitle font-semibold">{name}</div>
+        <Link
+            to={`/stake/delegation-detail?${new URLSearchParams({
+                validator: address,
+                staked: stakedId,
+            }).toString()}`}
+            className="flex no-underline flex-col py-3 px-3.75 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/10 bg-transparent"
+        >
+            <div className="flex justify-between items-start mb-2">
+                <ValidatorLogo
+                    validatorAddress={address}
+                    size="subtitle"
+                    iconSize="md"
+                    stacked
+                />
+
+                <div className="text-gray-60 text-p1 opacity-0 group-hover:opacity-100">
+                    <IconTooltip
+                        tip="Annual Percentage Yield"
+                        placement="top"
+                    />
+                </div>
+            </div>
+
+            <div className="flex-1">
                 <div className="flex items-baseline gap-1 mt-1">
-                    <div className="text-body font-semibold">
+                    <Text variant="body" weight="semibold" color="gray-90">
                         {stakedFormatted}
-                    </div>
-                    <div className="text-subtitle font-normal">SUI</div>
+                    </Text>
+
+                    <Text variant="subtitle" weight="normal" color="gray-90">
+                        SUI
+                    </Text>
                 </div>
             </div>
             <div>
-                <div className="text-subtitle font-medium text-steel-dark">
+                <Text variant="subtitle" weight="medium" color="steel-dark">
                     {STATE_TO_COPY[state]}
-                </div>
+                </Text>
                 {!!rewards && (
                     <div className="mt-1 text-success-dark text-bodySmall font-semibold">
                         {rewardsFormatted} SUI
                     </div>
                 )}
             </div>
-        </div>
+        </Link>
     );
 }

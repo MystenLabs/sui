@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    normalizeSuiAddress,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { STATE_OBJECT } from '../usePendingDelegation';
 import StakeForm from './StakeForm';
-import { ValidateDetailFormCard } from './ValidatorDetailCard';
+import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
     Content,
@@ -52,7 +58,8 @@ function StakingCard() {
     );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
-    const isUnstake = searchParams.get('unstake') === 'true';
+    const stakeIdParams = searchParams.get('staked');
+    const unstake = searchParams.get('unstake') === 'true';
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -93,6 +100,7 @@ function StakingCard() {
         ]
     );
 
+    const queryClient = useQueryClient();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
@@ -107,8 +115,8 @@ function StakingCard() {
             setSendError(null);
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
-                // TODO: add unstake functionality on the support roles out
-                if (isUnstake) return;
+                // TODO: add unstake functionality
+                if (unstake) return;
                 const response = await dispatch(
                     stakeTokens({
                         amount: bigIntAmount,
@@ -117,7 +125,17 @@ function StakingCard() {
                     })
                 ).unwrap();
                 const txDigest = getTransactionDigest(response);
+                //  invalidate the react query for 0x5 and validator
+                Promise.all([
+                    queryClient.invalidateQueries({
+                        queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
+                    }),
+                    queryClient.invalidateQueries({
+                        queryKey: ['validator'],
+                    }),
+                ]);
                 resetForm();
+
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
@@ -131,8 +149,9 @@ function StakingCard() {
             coinType,
             validatorAddress,
             coinDecimals,
-            isUnstake,
+            unstake,
             dispatch,
+            queryClient,
             navigate,
         ]
     );
@@ -149,23 +168,24 @@ function StakingCard() {
     }
 
     return (
-        <div className="flex flex-col flex-nowrap flex-grow h-full w-full">
+        <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
                 loading={loadingBalance}
-                className="flex justify-center w-full items-center "
+                className="flex justify-center w-full h-full items-center "
             >
                 <Formik
                     initialValues={initialValues}
-                    validateOnMount={true}
+                    validateOnMount
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
                     {({ isSubmitting, isValid, submitForm }) => (
                         <BottomMenuLayout>
                             <Content>
-                                <ValidateDetailFormCard
+                                <ValidatorFormDetail
                                     validatorAddress={validatorAddress}
-                                    unstake={isUnstake}
+                                    unstake={unstake}
+                                    stakedId={stakeIdParams}
                                 />
                                 <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
                                     <Text
@@ -173,7 +193,7 @@ function StakingCard() {
                                         color="gray-85"
                                         weight="semibold"
                                     >
-                                        {isUnstake
+                                        {unstake
                                             ? 'Enter the amount of SUI to unstake'
                                             : 'Enter the amount of SUI to stake'}
                                     </Text>
@@ -182,7 +202,7 @@ function StakingCard() {
                                     submitError={sendError}
                                     coinBalance={coinBalance}
                                     coinType={coinType}
-                                    unstake={isUnstake}
+                                    unstake={unstake}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
@@ -210,11 +230,13 @@ function StakingCard() {
                                     mode="primary"
                                     onClick={submitForm}
                                     className=" w-1/2"
-                                    disabled={!isValid || isSubmitting}
+                                    disabled={
+                                        !isValid || isSubmitting || unstake
+                                    }
                                 >
                                     {isSubmitting ? (
-                                        <LoadingIndicator />
-                                    ) : isUnstake ? (
+                                        <LoadingIndicator className="border-white" />
+                                    ) : unstake ? (
                                         'Unstake Now'
                                     ) : (
                                         'Stake Now'
