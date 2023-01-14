@@ -11,6 +11,7 @@ module sui::validator_set_tests {
     use sui::test_scenario;
     use sui::stake::Stake;
     use sui::vec_map;
+    use std::ascii;
     use std::option;
 
     #[test]
@@ -157,16 +158,17 @@ module sui::validator_set_tests {
         let stake_value = (hint as u64) * 100;
         let init_stake = coin::mint_for_testing(stake_value, ctx);
         let init_stake = coin::into_balance(init_stake);
+        let name = hint_to_ascii(hint);
         validator::new_for_testing(
             addr,
             vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],
-            vector[hint],
-            vector[hint],
-            vector[hint],
-            vector[hint],
+            copy name,
+            copy name,
+            copy name,
+            name,
             vector[hint],
             vector[hint],
             vector[hint],
@@ -182,16 +184,17 @@ module sui::validator_set_tests {
         let stake_value = (hint as u64) * 100;
         let init_stake = coin::mint_for_testing(stake_value, ctx);
         let init_stake = coin::into_balance(init_stake);
+        let name = hint_to_ascii(hint);
         validator::new_for_testing(
             addr,
             vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],
-            vector[hint],
-            vector[hint],
-            vector[hint],
-            vector[hint],
+            copy name,
+            copy name,
+            copy name,
+            name,
             vector[hint],
             vector[hint],
             vector[hint],
@@ -203,6 +206,11 @@ module sui::validator_set_tests {
         )
     }
 
+    fun hint_to_ascii(hint: u8): vector<u8> {
+        let ascii_bytes = vector[hint / 100 + 65, hint % 100 / 10 + 65, hint % 10 + 65];
+        ascii::into_bytes(ascii::string(ascii_bytes))
+    }
+
     fun advance_epoch_with_dummy_rewards(validator_set: &mut ValidatorSet, ctx: &mut TxContext) {
         let dummy_validator_reward = balance::zero();
         let dummy_delegator_reward = balance::zero();
@@ -210,11 +218,11 @@ module sui::validator_set_tests {
 
         validator_set::advance_epoch(
             1, // dummy new epoch number
-            validator_set, 
-            &mut dummy_validator_reward, 
-            &mut dummy_delegator_reward, 
-            &mut dummy_storage_fund_reward, 
-            &vec_map::empty(), 
+            validator_set,
+            &mut dummy_validator_reward,
+            &mut dummy_delegator_reward,
+            &mut dummy_storage_fund_reward,
+            &vec_map::empty(),
             ctx
         );
 
