@@ -38,6 +38,7 @@
 <pre><code><b>use</b> <a href="">0x1::ascii</a>;
 <b>use</b> <a href="">0x1::bcs</a>;
 <b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="">0x1::vector</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="bls12381.md#0x2_bls12381">0x2::bls12381</a>;
@@ -46,6 +47,7 @@
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
+<b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
 </code></pre>
 
 
@@ -100,25 +102,25 @@
  This is a proof that the validator has ownership of the private key
 </dd>
 <dt>
-<code>name: <a href="">vector</a>&lt;u8&gt;</code>
+<code>name: <a href="_String">string::String</a></code>
 </dt>
 <dd>
  A unique human-readable name of this validator.
 </dd>
 <dt>
-<code>description: <a href="">vector</a>&lt;u8&gt;</code>
+<code>description: <a href="_String">string::String</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>image_url: <a href="">vector</a>&lt;u8&gt;</code>
+<code>image_url: <a href="url.md#0x2_url_Url">url::Url</a></code>
 </dt>
 <dd>
 
 </dd>
 <dt>
-<code>project_url: <a href="">vector</a>&lt;u8&gt;</code>
+<code>project_url: <a href="url.md#0x2_url_Url">url::Url</a></code>
 </dt>
 <dd>
 
@@ -321,7 +323,10 @@
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>assert</b>!(
         // TODO: These constants are arbitrary, will adjust once we know more.
-        <a href="_length">vector::length</a>(&net_address) &lt;= 128 && <a href="_length">vector::length</a>(&name) &lt;= 128 && <a href="_length">vector::length</a>(&pubkey_bytes) &lt;= 128,
+        <a href="_length">vector::length</a>(&net_address) &lt;= 128
+            && <a href="_length">vector::length</a>(&name) &lt;= 128
+            && <a href="_length">vector::length</a>(&description) &lt;= 150
+            && <a href="_length">vector::length</a>(&pubkey_bytes) &lt;= 128,
         0
     );
     <a href="validator.md#0x2_validator_verify_proof_of_possession">verify_proof_of_possession</a>(
@@ -329,8 +334,6 @@
         sui_address,
         pubkey_bytes
     );
-    // Check that the name is human-readable.
-    <a href="_string">ascii::string</a>(<b>copy</b> name);
     <b>let</b> stake_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake.md#0x2_stake">stake</a>);
     <a href="stake.md#0x2_stake_create">stake::create</a>(<a href="stake.md#0x2_stake">stake</a>, sui_address, coin_locked_until_epoch, ctx);
     <a href="validator.md#0x2_validator_Validator">Validator</a> {
@@ -340,10 +343,10 @@
             network_pubkey_bytes,
             worker_pubkey_bytes,
             proof_of_possession,
-            name,
-            description,
-            image_url,
-            project_url,
+            name: <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(name)),
+            description: <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description)),
+            image_url: <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url),
+            project_url: <a href="url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url),
             net_address,
             consensus_address,
             worker_address,

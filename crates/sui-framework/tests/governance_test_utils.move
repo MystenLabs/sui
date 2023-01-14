@@ -25,9 +25,9 @@ module sui::governance_test_utils {
             x"FF",
             x"FF",
             b"ValidatorName",
-            x"FFFF",
-            x"FFFF",
-            x"FFFF",
+            b"description",
+            b"image_url",
+            b"project_url",
             x"FFFF",
             x"FFFF",
             x"FFFF",
@@ -60,7 +60,7 @@ module sui::governance_test_utils {
 
         while (!vector::is_empty(&addrs)) {
             vector::push_back(
-                &mut validators, 
+                &mut validators,
                 create_validator_for_testing(vector::pop_back(&mut addrs), 100, ctx)
             );
         };

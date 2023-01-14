@@ -15,7 +15,9 @@ module sui::validator {
     use std::option::Option;
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
     use sui::staking_pool::{Self, Delegation, PoolTokenExchangeRate, StakedSui, StakingPool};
-
+    use std::string::{Self, String};
+    use sui::url::Url;
+    use sui::url;
     friend sui::genesis;
     friend sui::sui_system;
     friend sui::validator_set;
@@ -42,10 +44,10 @@ module sui::validator {
         /// This is a proof that the validator has ownership of the private key
         proof_of_possession: vector<u8>,
         /// A unique human-readable name of this validator.
-        name: vector<u8>,
-        description: vector<u8>,
-        image_url: vector<u8>,
-        project_url: vector<u8>,
+        name: String,
+        description: String,
+        image_url: Url,
+        project_url: Url,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
         /// The address of the narwhal primary
@@ -120,7 +122,10 @@ module sui::validator {
     ): Validator {
         assert!(
             // TODO: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 128 && vector::length(&name) <= 128 && vector::length(&pubkey_bytes) <= 128,
+            vector::length(&net_address) <= 128
+                && vector::length(&name) <= 128
+                && vector::length(&description) <= 150
+                && vector::length(&pubkey_bytes) <= 128,
             0
         );
         verify_proof_of_possession(
@@ -128,8 +133,6 @@ module sui::validator {
             sui_address,
             pubkey_bytes
         );
-        // Check that the name is human-readable.
-        ascii::string(copy name);
         let stake_amount = balance::value(&stake);
         stake::create(stake, sui_address, coin_locked_until_epoch, ctx);
         Validator {
@@ -139,10 +142,10 @@ module sui::validator {
                 network_pubkey_bytes,
                 worker_pubkey_bytes,
                 proof_of_possession,
-                name,
-                description,
-                image_url,
-                project_url,
+                name: string::from_ascii(ascii::string(name)),
+                description: string::from_ascii(ascii::string(description)),
+                image_url: url::new_unsafe_from_bytes(image_url),
+                project_url: url::new_unsafe_from_bytes(project_url),
                 net_address,
                 consensus_address,
                 worker_address,
@@ -325,6 +328,7 @@ module sui::validator {
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
     // Creates a validator - bypassing the proof of possession in check in the process.
+    // TODO: Refactor to share code with new().
     #[test_only]
     public(friend) fun new_for_testing(
         sui_address: address,
@@ -347,11 +351,12 @@ module sui::validator {
     ): Validator {
         assert!(
             // TODO: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 128 && vector::length(&name) <= 128 && vector::length(&pubkey_bytes) <= 128,
+            vector::length(&net_address) <= 128
+                && vector::length(&name) <= 128
+                && vector::length(&description) <= 150
+                && vector::length(&pubkey_bytes) <= 128,
             0
         );
-        // Check that the name is human-readable.
-        ascii::string(copy name);
         let stake_amount = balance::value(&stake);
         stake::create(stake, sui_address, coin_locked_until_epoch, ctx);
         Validator {
@@ -361,10 +366,10 @@ module sui::validator {
                 network_pubkey_bytes,
                 worker_pubkey_bytes,
                 proof_of_possession,
-                name,
-                description,
-                image_url,
-                project_url,
+                name: string::from_ascii(ascii::string(name)),
+                description: string::from_ascii(ascii::string(description)),
+                image_url: url::new_unsafe_from_bytes(image_url),
+                project_url: url::new_unsafe_from_bytes(project_url),
                 net_address,
                 consensus_address,
                 worker_address,
