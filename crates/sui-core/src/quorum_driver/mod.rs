@@ -25,7 +25,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority_aggregator::{
-    AuthorityAggregator, QuorumExecuteCertificateError, QuorumExecuteTransactionError,
+    AuthorityAggregator, QuorumExecuteCertificateError, QuorumSignTransactionError,
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
@@ -46,12 +46,12 @@ const TX_MAX_RETRY_TIMES: u8 = 10;
 #[derive(Error, Debug)]
 pub(crate) enum QuorumDriverInternalError {
     #[error(
-        "Failed to execute transaction on a quorum of validators. Validator errors: {:?}",
+        "Failed to get a quorum of validators to sign the transaction. Validator errors: {:?}",
         0
     )]
-    TransactionError(QuorumExecuteTransactionError),
+    TransactionError(QuorumSignTransactionError),
     #[error(
-        "Failed to process transaction on a quorum of validators to form a transaction certificate because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
+        "Failed to get a quorum of validators to sign the transaction because of locked objects: {:?}, retried a conflicting transaction {:?}, success: {:?}",
         conflicting_txes,
         retried_tx_digest,
         retried_tx_success
@@ -261,7 +261,8 @@ where
             .await;
 
         match result {
-            Err(QuorumExecuteTransactionError {
+            Err(QuorumSignTransactionError {
+                total_stake,
                 good_stake,
                 errors: _errors,
                 conflicting_tx_digests,
@@ -271,6 +272,7 @@ where
                     .inc();
                 debug!(
                     ?tx_digest,
+                    ?total_stake,
                     ?good_stake,
                     "Observed {} conflicting transactions: {:?}",
                     conflicting_tx_digests.len(),
