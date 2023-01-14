@@ -459,6 +459,9 @@ fn debit_coins_and_transfer<S>(
     for (recipient, amount) in recipients.iter().zip(amounts) {
         let mut remaining_amount = *amount;
         loop {
+            if remaining_amount == 0 {
+                break; // nothing to pay
+            }
             // while remaining_amount != 0
             // guaranteed to be in-bounds because of the total > total_coins check above
             let coin = &mut coins[cur_coin_idx];
