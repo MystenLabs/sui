@@ -75,12 +75,14 @@ pub enum CeremonyCommand {
         value: u64,
     },
 
+    BuildUnsignedCheckpoint,
+
     VerifyAndSign {
         #[clap(long)]
         key_file: PathBuf,
     },
 
-    Build,
+    Finalize,
 }
 
 pub fn run(cmd: Ceremony) -> Result<()> {
@@ -155,18 +157,40 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
+        CeremonyCommand::BuildUnsignedCheckpoint => {
+            let mut builder = Builder::load(&dir)?;
+            let (unsigned_checkpoint, ..) = builder.build_unsigned_genesis_checkpoint();
+            println!(
+                "Successfully built unsigned checkpoint: {:?}",
+                unsigned_checkpoint.digest()
+            );
+
+            builder.save(dir)?;
+        }
+
         CeremonyCommand::VerifyAndSign { key_file } => {
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
 
             let mut builder = Builder::load(&dir)?;
 
+            // Don't sign unless the unsinged checkpoint has already been created
+            if builder.unsigned_genesis_checkpoint().is_none() {
+                return Err(anyhow::anyhow!(
+                    "Unable to verify and sign genesis checkpoint; it hasn't been built yet"
+                ));
+            }
+
             builder = builder.add_validator_signature(&keypair);
+            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().0;
             builder.save(dir)?;
 
-            println!("Successfully built and signed genesis");
+            println!(
+                "Successfully verified and signed genesis checkpoint: {:?}",
+                checkpoint.digest()
+            );
         }
 
-        CeremonyCommand::Build => {
+        CeremonyCommand::Finalize => {
             let builder = Builder::load(&dir)?;
 
             let genesis = builder.build();
@@ -280,6 +304,13 @@ mod test {
             command.run()?;
         }
 
+        // Build the unsigned checkpoint
+        let command = Ceremony {
+            path: Some(dir.path().into()),
+            command: CeremonyCommand::BuildUnsignedCheckpoint,
+        };
+        command.run()?;
+
         // Have all the validators verify and sign genesis
         for (key, _worker_key, _network_key, _account_key, _validator) in &validators {
             let command = Ceremony {
@@ -294,7 +325,7 @@ mod test {
         // Finalize the Ceremony and build the Genesis object
         let command = Ceremony {
             path: Some(dir.path().into()),
-            command: CeremonyCommand::Build,
+            command: CeremonyCommand::Finalize,
         };
         command.run()?;
 
