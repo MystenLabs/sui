@@ -20,6 +20,9 @@ use std::hash::{Hash, Hasher};
 
 pub type EpochId = u64;
 
+// TODO: the stake and voting power of a validator can be different so
+// in some places when we are actually referring to the voting power, we
+// should use a different type alias, field name, etc.
 pub type StakeUnit = u64;
 
 pub type CommitteeDigest = [u8; 32];

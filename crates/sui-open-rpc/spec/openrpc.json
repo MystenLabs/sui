@@ -6403,7 +6403,8 @@
           "metadata",
           "pending_stake",
           "pending_withdraw",
-          "stake_amount"
+          "stake_amount",
+          "voting_power"
         ],
         "properties": {
           "commission_rate": {
@@ -6433,6 +6434,11 @@
             "minimum": 0.0
           },
           "stake_amount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "voting_power": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6599,7 +6605,8 @@
           "pending_delegation_switches",
           "pending_removals",
           "pending_validators",
-          "quorum_stake_threshold",
+          "quorum_threshold",
+          "total_voting_power",
           "validator_stake"
         ],
         "properties": {
@@ -6637,7 +6644,12 @@
               "$ref": "#/components/schemas/Validator"
             }
           },
-          "quorum_stake_threshold": {
+          "quorum_threshold": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "total_voting_power": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
