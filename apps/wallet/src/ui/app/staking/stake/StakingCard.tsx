@@ -175,8 +175,6 @@ function StakingCard() {
                     const payload =
                         response.payload as SuiExecuteTransactionResponse;
                     txDigest = getTransactionDigest(payload);
-
-                    //  txDigest = response.payload;
                 } else {
                     response = await dispatch(
                         stakeTokens({
