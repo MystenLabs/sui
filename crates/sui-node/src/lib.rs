@@ -149,6 +149,7 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_store = AuthorityPerEpochStore::new(
+            config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
             None,

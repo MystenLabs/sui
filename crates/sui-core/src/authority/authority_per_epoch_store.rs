@@ -243,6 +243,7 @@ impl AuthorityEpochTables {
 
 impl AuthorityPerEpochStore {
     pub fn new(
+        name: AuthorityName,
         committee: Committee,
         parent_path: &Path,
         db_options: Option<Options>,
@@ -271,6 +272,10 @@ impl AuthorityPerEpochStore {
             })
             .collect();
         metrics.current_epoch.set(epoch_id as i64);
+        metrics
+            .current_voting_right
+            .set(committee.weight(&name) as i64);
+        metrics.epoch_total_votes.set(committee.total_votes as i64);
         Arc::new(Self {
             committee,
             tables,
@@ -289,11 +294,12 @@ impl AuthorityPerEpochStore {
         })
     }
 
-    pub fn new_at_next_epoch(&self, new_committee: Committee) -> Arc<Self> {
+    pub fn new_at_next_epoch(&self, name: AuthorityName, new_committee: Committee) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
         self.record_epoch_total_duration_metric();
         Self::new(
+            name,
             new_committee,
             &self.parent_path,
             self.db_options.clone(),
