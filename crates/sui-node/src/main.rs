@@ -32,6 +32,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if let Some(git_rev) = option_env!("GIT_REVISION") {
+        debug!("Sui Node built at git revision {git_rev}");
+    }
+
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path)?;
 
