@@ -161,7 +161,10 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
-        response.unwrap_err(),
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::InvalidBatchTransaction { .. }
     ));
     Ok(())
@@ -191,7 +194,10 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
-        response.unwrap_err(),
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::InvalidBatchTransaction { .. }
     ));
     Ok(())
@@ -236,8 +242,12 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
+
     assert!(matches!(
-        response.unwrap_err(),
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
 
