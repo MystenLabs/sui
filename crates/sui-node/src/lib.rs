@@ -244,7 +244,8 @@ impl SuiNode {
                     checkpoint_executor_handle.subscribe_to_end_of_epoch(),
                     config.db_path(),
                     &prometheus_registry,
-                )?,
+                )
+                .await?,
             ))
         } else {
             None

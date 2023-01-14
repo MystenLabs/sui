@@ -36,7 +36,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use sui_types::messages::VerifiedTransaction;
 
@@ -56,7 +56,7 @@ pub struct TransactiondOrchestrator<A> {
 }
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
-    pub fn new_with_network_clients(
+    pub async fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
         reconfig_channel: broadcast::Receiver<Committee>,
         parent_path: &Path,
@@ -84,7 +84,8 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
+        .await)
     }
 }
 
@@ -93,7 +94,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
     OnsiteReconfigObserver: ReconfigObserver<A>,
 {
-    pub fn new(
+    pub async fn new(
         validators: Arc<AuthorityAggregator<A>>,
         validator_state: Arc<AuthorityState>,
         parent_path: &Path,
@@ -130,6 +131,7 @@ where
                 .await;
             })
         };
+        Self::schedule_txes_in_log(&pending_tx_log, &quorum_driver_handler).await;
         Self {
             quorum_driver_handler,
             validator_state,
@@ -371,6 +373,25 @@ where
             }),
             good_response,
         )
+    }
+
+    async fn schedule_txes_in_log(
+        pending_tx_log: &Arc<WritePathPendingTransactionLog>,
+        quorum_driver: &Arc<QuorumDriverHandler<A>>,
+    ) {
+        let pending_txes = pending_tx_log.load_all_pending_transactions();
+        for tx in pending_txes {
+            let tx_digest = *tx.digest();
+            // It's not impossible we fail to enqueue a task but that's not the end of world.
+            if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+                error!(
+                    ?tx_digest,
+                    "Failed to enqueue transaction in pending_tx_log, err: {err:?}"
+                );
+            } else {
+                info!(?tx_digest, "Enqueued transaction in pending_tx_log");
+            }
+        }
     }
 
     pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
