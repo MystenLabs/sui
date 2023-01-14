@@ -1049,12 +1049,12 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
     let res = authority_state
         .handle_transaction(transfer_transaction)
         .await;
-    assert!(res.is_err());
+
     assert_eq!(
-        res.err(),
-        Some(SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::InvalidSequenceNumber],
-        })
+        res.unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::InvalidSequenceNumber,
     );
 }
 
@@ -1064,12 +1064,12 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         construct_shared_object_transaction_with_sequence_number(Some(SequenceNumber::MAX)).await;
     // Submit the transaction and assemble a certificate.
     let response = authority.handle_transaction(transaction.clone()).await;
-    assert!(response.is_err());
     assert_eq!(
-        response.err(),
-        Some(SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::InvalidSequenceNumber],
-        })
+        response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::InvalidSequenceNumber,
     );
 }
 
@@ -1297,7 +1297,10 @@ async fn test_immutable_gas() {
         .handle_transaction(transfer_transaction.clone())
         .await;
     assert!(matches!(
-        result.unwrap_err(),
+        *result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasObjectNotOwnedObject { .. }
     ));
 }
@@ -1326,7 +1329,10 @@ async fn test_objected_owned_gas() {
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
     assert!(matches!(
-        result.unwrap_err(),
+        *result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasObjectNotOwnedObject { .. }
     ));
 }
@@ -1768,8 +1774,12 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = authority_state.handle_transaction(transaction).await;
+
     assert!(matches!(
-        result.unwrap_err(),
+        *result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
 }
@@ -4077,8 +4087,12 @@ async fn test_blocked_move_calls() {
         ),
         &sender_key,
     );
-    assert!(matches!(
-        authority_state.handle_transaction(tx).await,
-        Err(SuiError::BlockedMoveFunction)
-    ));
+    let response = authority_state.handle_transaction(tx).await;
+    assert_eq!(
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        SuiError::BlockedMoveFunction
+    );
 }

@@ -1107,14 +1107,13 @@ async fn test_entry_point_vector_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 
     // mint an owned object
     let effects = call_move(
@@ -1154,14 +1153,13 @@ async fn test_entry_point_vector_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-reference argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 }
 
 #[tokio::test]
@@ -1489,14 +1487,13 @@ async fn test_entry_point_vector_any_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 
     // mint an owned object
     let effects = call_move(
@@ -1535,14 +1532,13 @@ async fn test_entry_point_vector_any_error() {
         ],
     )
     .await;
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 }
 
 #[tokio::test]
