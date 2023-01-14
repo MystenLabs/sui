@@ -217,7 +217,9 @@ impl ConsensusAdapter {
         transaction: &ConsensusTransaction,
     ) -> Duration {
         if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
-            Self::submit_delay_certificate(committee, ourselves, certificate.digest())
+            let delay = Self::submit_delay_certificate(committee, ourselves, certificate.digest());
+            tracing::error!("submit_delay = {:?}", delay);
+            delay
         } else {
             Duration::ZERO
         }
@@ -388,6 +390,8 @@ impl ConsensusAdapter {
                 epoch_store,
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
+            } else {
+                info!("Sent end of publish message");
             }
         }
         self.opt_metrics.as_ref().map(|metrics| {
@@ -434,6 +438,9 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
+            info!("end of publish message submitted to narwhal");
+        } else {
+            info!("end of publish message not sent");
         }
         Ok(())
     }

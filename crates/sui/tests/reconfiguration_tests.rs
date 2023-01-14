@@ -148,6 +148,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .process_certificate(cert.clone().into_inner())
         .await
         .unwrap();
+    tracing::error!("gas1 tx: {:?}", tx.digest());
     assert_eq!(0, effects1.epoch());
 
     // gas2 transaction is reverted
@@ -158,6 +159,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         sender,
         &keypair,
     );
+    tracing::error!("gas2 tx: {:?}", tx.digest());
     let cert = net.process_transaction(tx.clone()).await.unwrap();
 
     // Close epoch on 3 (2f+1) validators.
@@ -179,7 +181,10 @@ async fn reconfig_with_revert_end_to_end_test() {
 
     let reverting_authority_idx = reverting_authority_idx.unwrap();
     let client = net
-        .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
+        .get_client(&authorities[reverting_authority_idx].with(|node| {
+            tracing::error!("reverting authority {:?}", node.state().name.concise());
+            node.state().name
+        }))
         .unwrap();
     client
         .handle_certificate(cert.clone().into_inner())
