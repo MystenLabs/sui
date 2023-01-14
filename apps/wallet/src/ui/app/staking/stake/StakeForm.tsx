@@ -43,7 +43,7 @@ function StakeForm({
         onClearRef.current();
     }, [amount]);
 
-    const [gasBudgetEstimation] = useFormatCoin(
+    const [gasBudgetEstimation, symbol] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
         SUI_TYPE_ARG
     );
@@ -52,10 +52,10 @@ function StakeForm({
         coinBalance -
         BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
-    const [maxToken, symbol, queryResult] = useFormatCoin(
-        coinBalanceMinusGas,
-        coinType
-    );
+    const maxTokenFormated = useFormatCoin(coinBalanceMinusGas, coinType);
+
+    const maxToken = maxTokenFormated[0];
+    const queryResult = maxTokenFormated[2];
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
