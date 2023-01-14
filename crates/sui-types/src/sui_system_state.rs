@@ -73,6 +73,7 @@ impl ValidatorMetadata {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
+    pub voting_power: u64,
     pub stake_amount: u64,
     pub pending_stake: u64,
     pub pending_withdraw: u64,
@@ -89,7 +90,7 @@ impl Validator {
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
-            self.stake_amount + self.delegation_staking_pool.sui_balance,
+            self.voting_power,
             self.metadata.net_address.clone(),
         )
     }
@@ -161,7 +162,8 @@ pub struct ValidatorPair {
 pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
-    pub quorum_stake_threshold: u64,
+    pub total_voting_power: u64,
+    pub quorum_threshold: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
@@ -237,7 +239,7 @@ impl SuiSystemState {
                     Multiaddr::try_from(validator.metadata.consensus_address.clone())
                         .expect("Can't get narwhal primary address");
                 let authority = narwhal_config::Authority {
-                    stake: validator.stake_amount as narwhal_config::Stake,
+                    stake: validator.voting_power as narwhal_config::Stake,
                     primary_address,
                     network_key,
                 };

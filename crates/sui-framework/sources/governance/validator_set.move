@@ -28,13 +28,16 @@ module sui::validator_set {
         /// at the beginning of the epoch.
         total_validator_stake: u64,
 
-        /// Total amount of stake from delegation, at the   beginning of the epoch.
+        /// Total amount of stake from delegation, at the beginning of the epoch.
         total_delegation_stake: u64,
 
-        /// The amount of accumulated stake to reach a quorum among all active validators.
-        /// This is always 2/3 of total stake. Keep it here to reduce potential inconsistencies
+        /// Sum of voting power of validators.
+        total_voting_power: u64,
+
+        /// The amount of accumulated voting power to reach a quorum among all active validators.
+        /// This is always 2/3 of total voting power. Keep it here to reduce potential inconsistencies
         /// among validators.
-        quorum_stake_threshold: u64,
+        quorum_threshold: u64,
 
         /// The current list of active validators.
         active_validators: vector<Validator>,
@@ -90,11 +93,15 @@ module sui::validator_set {
     // ==== initialization at genesis ====
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
-        let (total_validator_stake, total_delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
+        let (total_validator_stake, total_delegation_stake) =
+            calculate_total_stakes(&init_active_validators);
+        let (total_voting_power, quorum_threshold) =
+            calculate_total_voting_power_and_quorum_threshold(&init_active_validators);
         let validators = ValidatorSet {
             total_validator_stake,
             total_delegation_stake,
-            quorum_stake_threshold,
+            total_voting_power,
+            quorum_threshold,
             active_validators: init_active_validators,
             pending_validators: vector::empty(),
             pending_removals: vector::empty(),
@@ -102,6 +109,7 @@ module sui::validator_set {
             pending_delegation_switches: vec_map::empty(),
         };
         validators.next_epoch_validators = derive_next_epoch_validators(&validators);
+        update_validator_voting_power(&mut validators);
         validators
     }
 
@@ -351,12 +359,32 @@ module sui::validator_set {
 
         process_pending_removals(self, ctx);
 
+        // Update the voting power of each validator, now that the pending validator additions
+        // and the removals have been processed.
+        update_validator_voting_power(self);
+
         self.next_epoch_validators = derive_next_epoch_validators(self);
 
-        let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&self.active_validators);
+        let (validator_stake, delegation_stake) = calculate_total_stakes(&self.active_validators);
         self.total_validator_stake = validator_stake;
         self.total_delegation_stake = delegation_stake;
-        self.quorum_stake_threshold = quorum_stake_threshold;
+
+        let (total_voting_power, quorum_threshold) =
+            calculate_total_voting_power_and_quorum_threshold(&self.active_validators);
+        self.total_voting_power = total_voting_power;
+        self.quorum_threshold = quorum_threshold;
+    }
+
+    // TODO: implement this to correctly cap the voting power.
+    fun update_validator_voting_power(self: &mut ValidatorSet) {
+        let num_validators = vector::length(&self.active_validators);
+        let i = 0;
+        while (i < num_validators) {
+            let validator_mut = vector::borrow_mut(&mut self.active_validators, i);
+            let updated_voting_power = validator::total_stake(validator_mut);
+            validator::set_voting_power(validator_mut, updated_voting_power);
+            i = i + 1;
+        };
     }
 
     /// Called by `sui_system` to derive reference gas price for the new epoch.
@@ -380,7 +408,7 @@ module sui::validator_set {
         // Build a priority queue that will pop entries with gas price from the highest to the lowest.
         let pq = pq::new(entries);
         let sum = 0;
-        let threshold = (total_validator_stake(self) + total_delegation_stake(self)) / 3;
+        let threshold = self.total_voting_power - self.quorum_threshold;
         let result = 0;
         while (sum < threshold) {
             let (gas_price, stake) = pq::pop_max(&mut pq);
@@ -391,6 +419,10 @@ module sui::validator_set {
     }
 
     // ==== getter functions ====
+
+    public fun total_voting_power(self: &ValidatorSet): u64 {
+        self.total_voting_power
+    }
 
     public fun total_validator_stake(self: &ValidatorSet): u64 {
         self.total_validator_stake
@@ -564,8 +596,8 @@ module sui::validator_set {
         }
     }
 
-    /// Calculate the total active stake, and the amount of stake to reach quorum.
-    fun calculate_total_stake_and_quorum_threshold(validators: &vector<Validator>): (u64, u64, u64) {
+    /// Calculate the total active validator and delegated stake.
+    fun calculate_total_stakes(validators: &vector<Validator>): (u64, u64) {
         let validator_state = 0;
         let delegate_stake = 0;
         let length = vector::length(validators);
@@ -576,17 +608,20 @@ module sui::validator_set {
             delegate_stake = delegate_stake + validator::delegate_amount(v);
             i = i + 1;
         };
-        let total_stake = validator_state + delegate_stake;
-        (validator_state, delegate_stake, (total_stake + 1) * 2 / 3)
+        (validator_state, delegate_stake)
     }
 
-    /// Calculate the required percentage threshold to reach quorum.
-    /// With 3f + 1 validators, we can tolerate up to f byzantine ones.
-    /// Hence (2f + 1) / total is our threshold.
-    fun calculate_quorum_threshold(validators: &vector<Validator>): u8 {
-        let count = vector::length(validators);
-        let threshold = (2 * count / 3 + 1) * 100 / count;
-        (threshold as u8)
+    /// Calculate the total voting power, and the amount of voting power to reach quorum.
+    fun calculate_total_voting_power_and_quorum_threshold(validators: &vector<Validator>): (u64, u64) {
+        let total_voting_power = 0;
+        let length = vector::length(validators);
+        let i = 0;
+        while (i < length) {
+            let v = vector::borrow(validators, i);
+            total_voting_power = total_voting_power + validator::voting_power(v);
+            i = i + 1;
+        };
+        (total_voting_power, (total_voting_power + 1) * 2 / 3)
     }
 
     /// Process the pending stake changes for each validator.
@@ -753,7 +788,8 @@ module sui::validator_set {
         let ValidatorSet {
             total_validator_stake: _,
             total_delegation_stake: _,
-            quorum_stake_threshold: _,
+            total_voting_power: _,
+            quorum_threshold: _,
             active_validators,
             pending_validators,
             pending_removals: _,
