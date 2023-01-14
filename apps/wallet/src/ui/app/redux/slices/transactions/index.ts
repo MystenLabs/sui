@@ -19,6 +19,7 @@ import type {
     SuiAddress,
     SuiExecuteTransactionResponse,
     SuiMoveObject,
+    ObjectId,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -101,6 +102,40 @@ export const stakeTokens = createAsyncThunk<
         );
         dispatch(fetchAllOwnedAndRequiredObjects());
         return response;
+    }
+);
+
+type UnStakeTokenTxn = {
+    principalWithdrawAmount: string;
+    delegation: ObjectId;
+    stakedSuiId: ObjectId;
+};
+
+export const unStakeToken = createAsyncThunk<
+    TransactionResult,
+    UnStakeTokenTxn,
+    AppThunkConfig
+>(
+    'sui-objects/unstake',
+    async (
+        { principalWithdrawAmount, delegation, stakedSuiId },
+        { extra: { api, keypairVault, background }, dispatch }
+    ) => {
+        const signer = api.getSignerInstance(
+            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+            background
+        );
+
+        const unstakeResponse = await Coin.unStakeCoin(
+            signer,
+            delegation,
+            stakedSuiId,
+            principalWithdrawAmount
+        );
+
+        dispatch(fetchAllOwnedAndRequiredObjects());
+
+        return unstakeResponse;
     }
 );
 

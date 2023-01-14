@@ -5,13 +5,16 @@ import {
     getTransactionDigest,
     normalizeSuiAddress,
     SUI_TYPE_ARG,
+    type SuiExecuteTransactionResponse,
 } from '@mysten/sui.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
+import { DelegationState } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createValidationSchema } from './validation';
@@ -20,6 +23,7 @@ import BottomMenuLayout, {
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
+import { Collapse } from '_app/shared/collapse';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -35,7 +39,7 @@ import {
     accountItemizedBalancesSelector,
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { stakeTokens } from '_redux/slices/transactions';
+import { stakeTokens, unStakeToken } from '_redux/slices/transactions';
 import { Text } from '_src/ui/app/shared/text';
 
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -49,7 +53,8 @@ export type FormValues = typeof initialValues;
 
 function StakingCard() {
     const coinType = GAS_TYPE_ARG;
-
+    const [sendError, setSendError] = useState<string | null>(null);
+    const accountAddress = useAppSelector(({ account }) => account.address);
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -60,19 +65,50 @@ function StakingCard() {
     const validatorAddress = searchParams.get('address');
     const stakeIdParams = searchParams.get('staked');
     const unstake = searchParams.get('unstake') === 'true';
+
+    const { data: allDelegation, isLoading } = useGetDelegatedStake(
+        accountAddress || ''
+    );
+
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
     );
+
     const gasAggregateBalance = useMemo(
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
+    const totalToken = useMemo(() => {
+        if (!allDelegation) return BigInt(0);
+        // return only the total amount of tokens staked for a specific stakeId
+        if (stakeIdParams) {
+            const balance =
+                allDelegation.find(
+                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
+                )?.staked_sui.principal.value || 0;
+            return BigInt(balance);
+        }
+        // return aggregate delegation
+        return allDelegation.reduce(
+            (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
+            0n
+        );
+    }, [stakeIdParams, allDelegation]);
+
+    const delegationData = useMemo(() => {
+        if (!allDelegation) return null;
+
+        return allDelegation.find(
+            ({ staked_sui }) => staked_sui.id.id === stakeIdParams
+        );
+    }, [allDelegation, stakeIdParams]);
+
     const coinSymbol = useMemo(
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
         [coinType]
     );
-    const [sendError, setSendError] = useState<string | null>(null);
+
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
@@ -115,16 +151,43 @@ function StakingCard() {
             setSendError(null);
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
-                // TODO: add unstake functionality
-                if (unstake) return;
-                const response = await dispatch(
-                    stakeTokens({
-                        amount: bigIntAmount,
-                        tokenTypeArg: coinType,
-                        validatorAddress: validatorAddress,
-                    })
-                ).unwrap();
-                const txDigest = getTransactionDigest(response);
+                let response;
+                let txDigest;
+                if (unstake) {
+                    // check for delegation data
+                    if (
+                        !delegationData ||
+                        !stakeIdParams ||
+                        delegationData.delegation_status === 'Pending'
+                    ) {
+                        return;
+                    }
+                    response = await dispatch(
+                        unStakeToken({
+                            principalWithdrawAmount: bigIntAmount.toString(),
+                            delegation:
+                                delegationData.delegation_status.Active.id.id,
+                            stakedSuiId:
+                                delegationData.delegation_status.Active
+                                    .staked_sui_id,
+                        })
+                    );
+                    const payload =
+                        response.payload as SuiExecuteTransactionResponse;
+                    txDigest = getTransactionDigest(payload);
+
+                    //  txDigest = response.payload;
+                } else {
+                    response = await dispatch(
+                        stakeTokens({
+                            amount: bigIntAmount,
+                            tokenTypeArg: coinType,
+                            validatorAddress: validatorAddress,
+                        })
+                    ).unwrap();
+                    txDigest = getTransactionDigest(response);
+                }
+
                 //  invalidate the react query for 0x5 and validator
                 Promise.all([
                     queryClient.invalidateQueries({
@@ -150,9 +213,11 @@ function StakingCard() {
             validatorAddress,
             coinDecimals,
             unstake,
-            dispatch,
             queryClient,
             navigate,
+            delegationData,
+            stakeIdParams,
+            dispatch,
         ]
     );
 
@@ -170,7 +235,7 @@ function StakingCard() {
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
-                loading={loadingBalance}
+                loading={loadingBalance || isLoading}
                 className="flex justify-center w-full h-full items-center "
             >
                 <Formik
@@ -200,14 +265,31 @@ function StakingCard() {
                                 </div>
                                 <StakeForm
                                     submitError={sendError}
-                                    coinBalance={coinBalance}
+                                    coinBalance={totalToken}
                                     coinType={coinType}
                                     unstake={unstake}
                                     onClearSubmitError={
                                         handleOnClearSubmitError
                                     }
                                 />
+
+                                {stakeIdParams && (
+                                    <div className="flex-1 mt-7.5">
+                                        <Collapse
+                                            title={
+                                                delegationData?.delegation_status ===
+                                                'Pending'
+                                                    ? DelegationState.WARM_UP
+                                                    : DelegationState.EARNING
+                                            }
+                                            initialIsOpen
+                                        >
+                                            --
+                                        </Collapse>
+                                    </div>
+                                )}
                             </Content>
+
                             <Menu
                                 stuckClass="staked-cta"
                                 className="w-full px-0 pb-0 mx-0"
@@ -230,9 +312,7 @@ function StakingCard() {
                                     mode="primary"
                                     onClick={submitForm}
                                     className=" w-1/2"
-                                    disabled={
-                                        !isValid || isSubmitting || unstake
-                                    }
+                                    disabled={!isValid || isSubmitting}
                                 >
                                     {isSubmitting ? (
                                         <LoadingIndicator className="border-white" />
