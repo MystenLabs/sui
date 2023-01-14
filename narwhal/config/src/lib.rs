@@ -96,6 +96,10 @@ pub trait Export: Serialize {
 
 impl<S: Serialize> Export for S {}
 
+// TODO: the stake and voting power of a validator can be different so
+// in some places when we are actually referring to the voting power, we
+// should use a different type alias, field name, etc.
+// Also, consider unify this with `StakeUnit` on Sui side.
 pub type Stake = u64;
 pub type WorkerId = u32;
 

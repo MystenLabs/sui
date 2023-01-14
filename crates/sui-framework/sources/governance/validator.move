@@ -67,6 +67,9 @@ module sui::validator {
     struct Validator has store {
         /// Summary of the validator.
         metadata: ValidatorMetadata,
+        /// The voting power of this validator, which might be different from its
+        /// stake amount.
+        voting_power: u64,
         /// The current active stake amount. This will not change during an epoch. It can only
         /// be updated at the end of epoch.
         stake_amount: u64,
@@ -154,6 +157,10 @@ module sui::validator {
                 next_epoch_gas_price: gas_price,
                 next_epoch_commission_rate: commission_rate,
             },
+            // Initialize the voting power to be the same as the stake amount.
+            // At the epoch change where this validator is actually added to the
+            // active validator set, the voting power will be updated accordingly.
+            voting_power: stake_amount,
             stake_amount,
             pending_stake: 0,
             pending_withdraw: 0,
@@ -166,6 +173,7 @@ module sui::validator {
     public(friend) fun destroy(self: Validator, ctx: &mut TxContext) {
         let Validator {
             metadata: _,
+            voting_power: _,
             stake_amount: _,
             pending_stake: _,
             pending_withdraw: _,
@@ -299,6 +307,16 @@ module sui::validator {
         stake_amount(self) + delegate_amount(self)
     }
 
+    /// Return the voting power of this validator.
+    public fun voting_power(self: &Validator): u64 {
+        self.voting_power
+    }
+
+    /// Set the voting power of this validator, called only from validator_set.
+    public(friend) fun set_voting_power(self: &mut Validator, new_voting_power: u64) {
+        self.voting_power = new_voting_power;
+    }
+
     public fun pending_stake_amount(self: &Validator): u64 {
         self.pending_stake
     }
@@ -379,6 +397,7 @@ module sui::validator {
                 next_epoch_commission_rate: commission_rate,
             },
             stake_amount,
+            voting_power: stake_amount,
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
