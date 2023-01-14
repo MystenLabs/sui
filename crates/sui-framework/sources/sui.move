@@ -19,7 +19,7 @@ module sui::sui {
     /// This should be called only once during genesis creation.
     public(friend) fun new(ctx: &mut TxContext): Supply<SUI> {
         let (treasury, metadata) = coin::create_currency(
-            SUI {}, 
+            SUI {},
             9,
             b"SUI",
             b"Sui",

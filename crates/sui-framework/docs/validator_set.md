@@ -21,7 +21,6 @@
 -  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
--  [Function `update_validator_voting_power`](#0x2_validator_set_update_validator_voting_power)
 -  [Function `derive_reference_gas_price`](#0x2_validator_set_derive_reference_gas_price)
 -  [Function `total_voting_power`](#0x2_validator_set_total_voting_power)
 -  [Function `total_validator_stake`](#0x2_validator_set_total_validator_stake)
@@ -69,6 +68,7 @@
 <b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
 <b>use</b> <a href="vec_map.md#0x2_vec_map">0x2::vec_map</a>;
 <b>use</b> <a href="vec_set.md#0x2_vec_set">0x2::vec_set</a>;
+<b>use</b> <a href="voting_power.md#0x2_voting_power">0x2::voting_power</a>;
 </code></pre>
 
 
@@ -368,6 +368,7 @@ each validator, emitted during epoch advancement.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_new">new</a>(init_active_validators: <a href="">vector</a>&lt;Validator&gt;): <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a> {
     <b>let</b> (total_validator_stake, total_delegation_stake) =
         <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&init_active_validators);
+    <a href="voting_power.md#0x2_voting_power_update">voting_power::update</a>(&<b>mut</b> init_active_validators);
     <b>let</b> (total_voting_power, quorum_threshold) =
         <a href="validator_set.md#0x2_validator_set_calculate_total_voting_power_and_quorum_threshold">calculate_total_voting_power_and_quorum_threshold</a>(&init_active_validators);
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a> {
@@ -382,7 +383,7 @@ each validator, emitted during epoch advancement.
         pending_delegation_switches: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
     };
     validators.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(&validators);
-    <a href="validator_set.md#0x2_validator_set_update_validator_voting_power">update_validator_voting_power</a>(&<b>mut</b> validators);
+    <a href="voting_power.md#0x2_voting_power_update">voting_power::update</a>(&<b>mut</b> validators.active_validators);
     validators
 }
 </code></pre>
@@ -858,51 +859,20 @@ It does the following things:
 
     <a href="validator_set.md#0x2_validator_set_process_pending_removals">process_pending_removals</a>(self, ctx);
 
-    // Update the voting power of each <a href="validator.md#0x2_validator">validator</a>, now that the pending <a href="validator.md#0x2_validator">validator</a> additions
-    // and the removals have been processed.
-    <a href="validator_set.md#0x2_validator_set_update_validator_voting_power">update_validator_voting_power</a>(self);
-
     self.next_epoch_validators = <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self);
 
     <b>let</b> (validator_stake, delegation_stake) = <a href="validator_set.md#0x2_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.active_validators);
     self.total_validator_stake = validator_stake;
     self.total_delegation_stake = delegation_stake;
 
+    // Update the voting power of each <a href="validator.md#0x2_validator">validator</a>, now that the pending <a href="validator.md#0x2_validator">validator</a> additions
+    // and the removals have been processed.
+    self.total_voting_power = <a href="voting_power.md#0x2_voting_power_update">voting_power::update</a>(&<b>mut</b> self.active_validators);
+
     <b>let</b> (total_voting_power, quorum_threshold) =
         <a href="validator_set.md#0x2_validator_set_calculate_total_voting_power_and_quorum_threshold">calculate_total_voting_power_and_quorum_threshold</a>(&self.active_validators);
     self.total_voting_power = total_voting_power;
     self.quorum_threshold = quorum_threshold;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_validator_set_update_validator_voting_power"></a>
-
-## Function `update_validator_voting_power`
-
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_update_validator_voting_power">update_validator_voting_power</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_update_validator_voting_power">update_validator_voting_power</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>) {
-    <b>let</b> num_validators = <a href="_length">vector::length</a>(&self.active_validators);
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; num_validators) {
-        <b>let</b> validator_mut = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, i);
-        <b>let</b> updated_voting_power = <a href="validator.md#0x2_validator_total_stake">validator::total_stake</a>(validator_mut);
-        <a href="validator.md#0x2_validator_set_voting_power">validator::set_voting_power</a>(validator_mut, updated_voting_power);
-        i = i + 1;
-    };
 }
 </code></pre>
 
@@ -938,8 +908,7 @@ gas price, weighted by stake.
         <b>let</b> v = <a href="_borrow">vector::borrow</a>(vs, i);
         <a href="_push_back">vector::push_back</a>(
             &<b>mut</b> entries,
-            // Count both self and delegated <a href="stake.md#0x2_stake">stake</a>
-            pq::new_entry(<a href="validator.md#0x2_validator_gas_price">validator::gas_price</a>(v), <a href="validator.md#0x2_validator_stake_amount">validator::stake_amount</a>(v) + <a href="validator.md#0x2_validator_delegate_amount">validator::delegate_amount</a>(v))
+            pq::new_entry(<a href="validator.md#0x2_validator_gas_price">validator::gas_price</a>(v), <a href="validator.md#0x2_validator_voting_power">validator::voting_power</a>(v))
         );
         i = i + 1;
     };
@@ -1925,7 +1894,6 @@ The staking rewards are shared with the delegators while the storage fund ones a
 ## Function `derive_next_epoch_validators`
 
 Upon any change to the validator set, derive and update the metadata of the validators for the new epoch.
-TODO: If we want to enforce a % on stake threshold, this is the function to do it.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_derive_next_epoch_validators">derive_next_epoch_validators</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>): <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_ValidatorMetadata">validator::ValidatorMetadata</a>&gt;

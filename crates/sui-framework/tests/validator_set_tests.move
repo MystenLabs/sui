@@ -115,7 +115,6 @@ module sui::validator_set_tests {
 
         // Create a validator set with only the first validator in it.
         let validator_set = validator_set::new(vector[v1]);
-
         assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 0);
 
         validator_set::request_add_validator(
@@ -132,7 +131,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 42, 2);
+        assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 2);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -140,7 +139,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 41, 3);
+        assert!(validator_set::derive_reference_gas_price(&validator_set) == 42, 3);
 
         validator_set::request_add_validator(
             &mut validator_set,
