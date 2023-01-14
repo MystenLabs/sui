@@ -144,11 +144,13 @@ export const getTransactionsByAddress = createAsyncThunk<
             const sender = getTransactionSender(txEff.certificate);
             const amount = amountByRecipient && amountByRecipient[0]?.amount;
             //TODO: Support multiple recipients
-            const recipient =
+            const recipientObj =
                 amountByRecipient &&
                 amountByRecipient?.filter(
                     ({ recipientAddress }) => recipientAddress !== sender
-                )[0].recipientAddress;
+                );
+
+            const recipient = recipientObj && recipientObj[0]?.recipientAddress;
 
             const moveCallTxn = getMoveCallTransaction(txn);
             const metaDataObjectId = getTxnEffectsEventID(
