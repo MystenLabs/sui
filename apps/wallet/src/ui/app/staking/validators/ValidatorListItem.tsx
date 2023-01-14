@@ -1,8 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { type ActiveValidator } from '@mysten/sui.js';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMemo } from 'react';
 
+import { calculateAPY } from '../calculateAPY';
+import { getName } from '../usePendingDelegation';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
@@ -15,25 +20,30 @@ const TRUNCATE_MAX_LENGTH = 10;
 const TRUNCATE_PREFIX_LENGTH = 6;
 
 type ValidatorListItemProp = {
-    name: string;
-    logo?: string | null;
-    address: string;
     selected?: boolean;
     // APY can be N/A
-    apy: number | string;
+    validator: ActiveValidator;
+    epoch: number;
 };
 export function ValidatorListItem({
-    name,
-    address,
-    apy,
-    logo,
     selected,
+    validator,
+    epoch,
 }: ValidatorListItemProp) {
+    const validatorAddress = validator.fields.metadata.fields.sui_address;
+    const apy = useMemo(
+        () => calculateAPY(validator, epoch),
+        [validator, epoch]
+    );
+
     const truncatedAddress = useMiddleEllipsis(
-        address,
+        validatorAddress,
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
+
+    const logo = null;
+    const validatorName = getName(validator.fields.metadata.fields.name);
 
     return (
         <AnimatePresence>
@@ -44,7 +54,7 @@ export function ValidatorListItem({
                 <div
                     className={cl(
                         selected && 'bg-sui/10',
-                        'flex justify-between w-full hover:bg-sui/10 py-3.5 px-2 rounded-lg group items-center'
+                        'flex justify-between w-full hover:bg-sui/10 py-3.5 px-2 rounded-lg group items-center gap-1'
                     )}
                     role="button"
                 >
@@ -57,20 +67,24 @@ export function ValidatorListItem({
                                 />
                             )}
 
-                            <ImageIcon src={logo} alt={name} />
+                            <ImageIcon
+                                src={logo}
+                                label={validatorName}
+                                fallback={validatorName}
+                                circle
+                            />
                         </div>
-
-                        <div className="flex flex-col gap-1.5 capitalize">
+                        <div className="flex flex-col gap-1.5">
                             <Text
                                 variant="body"
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {name}
+                                {validatorName}
                             </Text>
                             <ExplorerLink
                                 type={ExplorerLinkType.address}
-                                address={address}
+                                address={validatorAddress}
                                 className={cl(
                                     selected && 'text-hero-dark',
                                     'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark'

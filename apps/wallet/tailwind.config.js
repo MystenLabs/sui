@@ -17,12 +17,12 @@ module.exports = {
             minHeight: {
                 8: '2rem',
             },
+            spacing: {
+                7.5: '1.875rem',
+                8: '2rem',
+            },
             height: {
                 header: '68px',
-                7.5: '30px',
-            },
-            width: {
-                7.5: '30px',
             },
             borderRadius: {
                 '2lg': '0.625rem',
