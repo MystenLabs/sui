@@ -79,7 +79,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
     publish_package_with_wallet(
         context,
         sender,
-        compile_basics_package().get_package_bytes(),
+        compile_basics_package().get_package_bytes(/* with_unpublished_deps */ false),
     )
     .await
 }

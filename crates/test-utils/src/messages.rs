@@ -285,7 +285,7 @@ pub fn create_publish_move_package_transaction(
     let build_config = BuildConfig::default();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
-        .get_package_bytes();
+        .get_package_bytes(/* with_unpublished_deps */ false);
     let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_object_ref,
@@ -315,7 +315,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
     let build_config = BuildConfig::default();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
-        .get_package_bytes();
+        .get_package_bytes(/* with_unpublished_deps */ false);
     let data = TransactionData::new_module_with_dummy_gas_price(
         sender,
         gas_object,

@@ -27,6 +27,54 @@ const MAX_GAS: u64 = 10000;
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
+async fn test_publishing_with_unpublished_deps() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let effects = build_and_try_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "depends_on_basics",
+        MAX_GAS,
+        /* with_unpublished_deps */ true,
+    )
+    .await
+    .1
+    .into_data();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.created.len(), 1);
+    let package = effects.created[0].0;
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "depends_on_basics",
+        "delegate",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.created.len(), 1);
+    let ((_, v, _), owner) = effects.created[0];
+
+    assert!(matches!(
+        owner,
+        Owner::Shared { initial_shared_version: initial } if initial == v
+    ));
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
 async fn test_object_wrapping_unwrapping() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
@@ -1845,6 +1893,7 @@ pub async fn build_and_try_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
+    with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -1852,7 +1901,7 @@ pub async fn build_and_try_publish_test_package(
     path.push(test_dir);
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
-        .get_package_bytes();
+        .get_package_bytes(with_unpublished_deps);
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -1887,6 +1936,7 @@ async fn build_and_publish_test_package(
         gas_object_id,
         test_dir,
         MAX_GAS,
+        /* with_unpublished_deps */ false,
     )
     .await
     .1
