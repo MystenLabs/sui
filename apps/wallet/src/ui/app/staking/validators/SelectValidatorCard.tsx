@@ -4,7 +4,7 @@
 import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useState, useMemo } from 'react';
 
-import { getName, STATE_OBJECT } from '../usePendingDelegation';
+import { STATE_OBJECT, getName } from '../usePendingDelegation';
 import { ValidatorListItem } from './ValidatorListItem';
 import BottomMenuLayout, {
     Content,
@@ -30,42 +30,19 @@ export function SelectValidatorCard() {
             ? (data.details.data.fields as ValidatorsFields)
             : null;
 
-    const validators = useMemo(() => {
-        if (!validatorsData) return [];
-        return validatorsData.validators.fields.active_validators
-            .map((av) => {
-                const rawName = av.fields.metadata.fields.name;
-
-                const {
-                    sui_balance,
-                    starting_epoch,
-
-                    delegation_token_supply,
-                } = av.fields.delegation_staking_pool.fields;
-
-                const num_epochs_participated =
-                    +validatorsData.epoch - +starting_epoch;
-
-                const APY = Math.pow(
-                    1 +
-                        (+sui_balance - +delegation_token_supply.fields.value) /
-                            +delegation_token_supply.fields.value,
-                    365 / num_epochs_participated - 1
-                );
-
-                return {
-                    name: getName(rawName),
-                    apy: APY > 0 ? APY : 'N/A',
-                    logo: null,
-                    address: av.fields.metadata.fields.sui_address,
-                };
-            })
-            .sort((a, b) => (a.name > b.name ? 1 : -1));
-    }, [validatorsData]);
-
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
     };
+
+    const validatorList = useMemo(() => {
+        if (!validatorsData) return [];
+        return validatorsData.validators.fields.active_validators.sort((a, b) =>
+            getName(a.fields.metadata.fields.name) >
+            getName(b.fields.metadata.fields.name)
+                ? 1
+                : -1
+        );
+    }, [validatorsData]);
 
     if (isLoading) {
         return (
@@ -100,19 +77,26 @@ export function SelectValidatorCard() {
                     </Text>
                 </div>
 
-                {validators &&
-                    validators.map(({ name, logo, address, apy }) => (
+                {validatorsData &&
+                    validatorList.map((validators) => (
                         <div
                             className="cursor-pointer w-full relative"
-                            key={address}
-                            onClick={() => selectValidator(address)}
+                            key={validators.fields.metadata.fields.sui_address}
+                            onClick={() =>
+                                selectValidator(
+                                    validators.fields.metadata.fields
+                                        .sui_address
+                                )
+                            }
                         >
                             <ValidatorListItem
-                                name={name}
-                                address={address}
-                                apy={apy}
-                                logo={logo}
-                                selected={selectedValidator === address}
+                                validator={validators}
+                                selected={
+                                    selectedValidator ===
+                                    validators.fields.metadata.fields
+                                        .sui_address
+                                }
+                                epoch={+validatorsData.epoch}
                             />
                         </div>
                     ))}
