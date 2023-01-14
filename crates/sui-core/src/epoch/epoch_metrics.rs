@@ -8,6 +8,9 @@ pub struct EpochMetrics {
     /// The current epoch ID. This is updated only when the AuthorityState finishes reconfiguration.
     pub current_epoch: IntGauge,
 
+    /// Current voting right of the validator in the protocol. Updated at the start of epochs.
+    pub current_voting_right: IntGauge,
+
     /// Total duration of the epoch. This is measured from when the current epoch store is opened,
     /// until the current epoch store is replaced with the next epoch store.
     pub epoch_total_duration: IntGauge,
@@ -20,6 +23,9 @@ pub struct EpochMetrics {
 
     /// Total amount of gas rewards (i.e. computation gas cost) in the epoch.
     pub epoch_total_gas_reward: IntGauge,
+
+    /// Total amount of stakes in the epoch.
+    pub epoch_total_votes: IntGauge,
 
     // An active validator reconfigures through the following steps:
     // 1. Halt validator (a.k.a. close epoch) and stop accepting user transaction certs.
@@ -79,6 +85,12 @@ impl EpochMetrics {
                 registry
             )
             .unwrap(),
+            current_voting_right: register_int_gauge_with_registry!(
+                "current_voting_right",
+                "Current voting right of the validator",
+                registry
+            )
+            .unwrap(),
             epoch_checkpoint_count: register_int_gauge_with_registry!(
                 "epoch_checkpoint_count",
                 "Number of checkpoints in the epoch",
@@ -97,6 +109,11 @@ impl EpochMetrics {
             epoch_total_gas_reward: register_int_gauge_with_registry!(
                 "epoch_total_gas_reward",
                 "Total amount of gas rewards (i.e. computation gas cost) in the epoch",
+                registry
+            ).unwrap(),
+            epoch_total_votes: register_int_gauge_with_registry!(
+                "epoch_total_votes",
+                "Total amount of votes among validators in the epoch.",
                 registry
             ).unwrap(),
             epoch_pending_certs_processed_time_since_epoch_close_ms: register_int_gauge_with_registry!(
