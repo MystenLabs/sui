@@ -4,7 +4,6 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useMemo } from 'react';
 
-import { FEATURES } from '../../experimentation/features';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { DelegationCard, DelegationState } from './../home/DelegationCard';
@@ -19,6 +18,7 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector } from '_hooks';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
     const accountAddress = useAppSelector(({ account }) => account.address);

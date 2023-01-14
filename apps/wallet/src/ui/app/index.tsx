@@ -30,7 +30,6 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 const HIDDEN_MENU_PATHS = [
     '/nft-details',

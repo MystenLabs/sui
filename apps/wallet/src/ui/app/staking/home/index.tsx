@@ -4,26 +4,9 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { Route, Routes } from 'react-router-dom';
 
-import { usePendingDelegation } from '../usePendingDelegation';
-import { ActiveDelegation } from './ActiveDelegation';
-import { DelegationCard, DelegationState } from './DelegationCard';
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
-import CoinBalance from '_app/shared/coin-balance';
-import PageTitle from '_app/shared/page-title';
-import StatsCard, { StatsRow, StatsItem } from '_app/shared/stats-card';
-import {
-    activeDelegationIDsSelector,
-    totalActiveStakedSelector,
-} from '_app/staking/selectors';
-import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
-import Loading from '_components/loading';
-import { useAppSelector, useObjectsState } from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { DelegationDetail } from '../delegation-detail';
+import StakePage from '../stake';
+import { Validators } from '../validators';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function Staking() {

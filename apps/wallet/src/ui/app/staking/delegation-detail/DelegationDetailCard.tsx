@@ -5,7 +5,6 @@ import { useFeature } from '@growthbook/growthbook-react';
 import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { FEATURES } from '../../experimentation/features';
 import { calculateAPY } from '../calculateAPY';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -20,6 +19,7 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useGetObject } from '_hooks';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
     validatorAddress: string;
@@ -82,7 +82,7 @@ export function DelegationDetailCard({
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
-            return calculateAPY(validatorData, +validatorsData.epoch);
+        return calculateAPY(validatorData, +validatorsData.epoch);
     }, [validatorData, validatorsData]);
 
     const stakeByValidatorAddress = `/stake/new?${new URLSearchParams({
