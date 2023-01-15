@@ -71,7 +71,7 @@ impl PrimaryNodeInner {
         }
 
         // create a new registry
-        let registry = new_registry(committee.load().epoch);
+        let registry = new_registry();
 
         // create the channel to send the shutdown signal
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
