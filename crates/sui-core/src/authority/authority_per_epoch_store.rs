@@ -23,8 +23,8 @@ use sui_types::crypto::{AuthoritySignInfo, Signature};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, SignedTransactionEffects, TransactionEffects, TrustedCertificate,
-    VerifiedCertificate, VerifiedSignedTransaction,
+    SenderSignedData, TransactionEffects, TrustedCertificate, TrustedEffects, VerifiedCertificate,
+    VerifiedSignedTransaction,
 };
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
@@ -96,7 +96,7 @@ pub struct AuthorityPerEpochStore {
     pending_consensus_certificates: Mutex<HashSet<TransactionDigest>>,
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
-    wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>,
+    wal: Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, TrustedEffects)>>,
 
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
@@ -309,8 +309,7 @@ impl AuthorityPerEpochStore {
 
     pub fn wal(
         &self,
-    ) -> &Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>>
-    {
+    ) -> &Arc<DBWriteAheadLog<TrustedCertificate, (InnerTemporaryStore, TrustedEffects)>> {
         &self.wal
     }
 

@@ -228,7 +228,7 @@ where
         .await
         .unwrap()
         .signed_effects
-        .into_data()
+        .into_message()
 }
 
 pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
@@ -485,45 +485,6 @@ async fn test_map_reducer() {
         .await;
     assert_eq!(res.as_ref().unwrap().len(), 3);
     assert!(!res.as_ref().unwrap().contains(&bad_auth));
-}
-
-#[sim_test]
-async fn test_execute_cert_to_true_effects() {
-    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
-    let gas_object1 = Object::with_owner_for_testing(addr1);
-    let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (authorities, _, _, pkg_ref) =
-        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
-    let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
-
-    // Make a schedule of transactions
-    let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create1 = create_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
-
-    do_transaction(authority_clients[0], &create1).await;
-    do_transaction(authority_clients[1], &create1).await;
-    do_transaction(authority_clients[2], &create1).await;
-
-    // Get a cert
-    let cert1 = extract_cert(&authority_clients, &authorities.committee, create1.digest()).await;
-
-    authorities
-        .execute_cert_to_true_effects(&cert1)
-        .await
-        .unwrap();
-
-    // Now two (f+1) should have the cert
-    let mut count = 0;
-    for client in &authority_clients {
-        let res = client
-            .handle_transaction_info_request((*cert1.digest()).into())
-            .await
-            .unwrap();
-        if res.signed_effects.is_some() {
-            count += 1;
-        }
-    }
-    assert!(count >= 2);
 }
 
 #[sim_test]

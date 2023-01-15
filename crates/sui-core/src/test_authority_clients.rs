@@ -164,7 +164,8 @@ impl LocalAuthorityClient {
                         .try_execute_immediately(&certificate, &epoch_store)
                         .await?
                 }
-            };
+            }
+            .into_inner();
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),

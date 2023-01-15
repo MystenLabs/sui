@@ -1289,7 +1289,7 @@ where
                                 signed_effects: Some(inner_effects),
                                 ..
                             }) => {
-                                if let Err(err) = self.handle_response_with_certified_transaction(&mut state, name, weight, tx_digest, inner_certificate, inner_effects) {
+                                if let Err(err) = self.handle_response_with_certified_transaction(&mut state, name, weight, tx_digest, inner_certificate, inner_effects.into_inner()) {
                                     // The error means we fail to verify a TransactionEffectsCertificate
                                     // with a quorum. This shouldn't happen in theory but when it does,
                                     // we exit
@@ -1653,7 +1653,7 @@ where
                                     "Validator handled certificate successfully",
                                 );
                                 // Note: here we aggregate votes by the hash of the effects structure
-                                match state.effects_map.add(signed_effects, weight, &self.committee) {
+                                match state.effects_map.add(signed_effects.into_inner(), weight, &self.committee) {
                                     Err(err) => {
                                         // The error means we fail to verify a TransactionEffectsCertificate
                                         // with a quorum. This shouldn't happen in theory but when it does,
@@ -1798,51 +1798,6 @@ where
         .await
     }
 
-    pub async fn handle_transaction_and_effects_info_request(
-        &self,
-        digests: &ExecutionDigests,
-        // authorities known to have the effects we are requesting.
-        authorities: Option<&BTreeSet<AuthorityName>>,
-        timeout_total: Option<Duration>,
-    ) -> SuiResult<(VerifiedCertificate, SignedTransactionEffects)> {
-        self.quorum_once_with_timeout(
-            None,
-            authorities,
-            |authority, client| {
-                Box::pin(async move {
-                    let resp = client
-                        .handle_transaction_and_effects_info_request(digests)
-                        .await?;
-
-                    match (resp.certified_transaction, resp.signed_effects) {
-                        (Some(cert), Some(effects)) => Ok((cert, effects)),
-                        _ => {
-                            if authorities.is_some() {
-                                // The caller is passing in authorities that have claimed to have the
-                                // cert and effects, so if they now say they don't, they're byzantine.
-                                Err(SuiError::ByzantineAuthoritySuspicion {
-                                    authority,
-                                    reason: format!(
-                                        "Validator claimed to have the cert and effects for tx {:?} but did not return them when queried",
-                                        digests.transaction,
-                                    )
-                                })
-                            } else {
-                                Err(SuiError::TransactionNotFound {
-                                    digest: digests.transaction,
-                                })
-                            }
-                        }
-                    }
-                })
-            },
-            self.timeouts.serial_authority_request_timeout,
-            timeout_total,
-            "handle_transaction_and_effects_info_request".to_string(),
-        )
-        .await
-    }
-
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
     /// an given list of validators who are supposed to know about it.
     pub async fn handle_transaction_info_request_from_some_validators(
@@ -1890,112 +1845,6 @@ where
             "handle_transaction_info_request_from_some_validators".to_string(),
         )
         .await
-    }
-
-    /// Given a certificate, execute the cert on remote validators (and preferentially on the
-    /// signers of the cert who are guaranteed to be able to process it immediately) until we
-    /// receive f+1 identical SignedTransactionEffects - at this point we know we have the
-    /// true effects for the cert, because of f+1 validators, at least 1 must be honest.
-    ///
-    /// It is assumed that this method will not be called by any of the signers of the cert, since
-    /// they can simply execute the cert locally and compute their own effects.
-    pub async fn execute_cert_to_true_effects(
-        &self,
-        cert: &CertifiedTransaction,
-    ) -> SuiResult<SignedTransactionEffects> {
-        let digest = cert.digest();
-
-        #[derive(Debug)]
-        struct ExecuteCertState {
-            cumulative_weight: StakeUnit,
-            good_weight: StakeUnit,
-            digests: HashMap<TransactionEffectsDigest, StakeUnit>,
-            true_effects: Option<SignedTransactionEffects>,
-            errors: Vec<(AuthorityName, SuiError)>,
-        }
-
-        let signers: BTreeSet<_> = cert
-            .auth_sig()
-            .authorities(&self.committee)
-            .filter_map(|r| r.ok())
-            .cloned()
-            .collect();
-
-        let initial_state = ExecuteCertState {
-            cumulative_weight: 0,
-            good_weight: 0,
-            digests: HashMap::new(),
-            true_effects: None,
-            errors: Vec::new(),
-        };
-
-        let validity = self.committee.validity_threshold();
-        let total_weight = self.committee.total_votes;
-
-        debug!(
-            ?validity,
-            ?total_weight,
-            ?digest,
-            "execute_cert_to_true_effects"
-        );
-        let final_state = self
-            .quorum_map_then_reduce_with_timeout_and_prefs(
-                Some(&signers),
-                initial_state,
-                |_name, client| {
-                    Box::pin(async move { client.handle_certificate(cert.clone()).await })
-                },
-                |mut state, name, weight, result| {
-                    Box::pin(async move {
-                        state.cumulative_weight += weight;
-                        match result {
-                            Ok(VerifiedHandleCertificateResponse {
-                                signed_effects,
-                            }) => {
-                                state.good_weight += weight;
-                                trace!(name=?name.concise(), ?weight, "successfully executed cert on peer");
-                                let entry = state.digests.entry(*signed_effects.digest()).or_insert(0);
-                                *entry += weight;
-
-                                if *entry >= validity {
-                                    state.true_effects = Some(signed_effects);
-                                    return Ok(ReduceOutput::End(state));
-                                }
-                            }
-                            Err(e) => {
-                                state.errors.push((name, e));
-                            }
-                        }
-
-                        let weight_remaining = total_weight - state.cumulative_weight;
-                        if weight_remaining + state.good_weight < validity {
-                            // The main realistic case in which this might happen is if a validator
-                            // cannot reach the rest of the committee on the network. (The
-                            // unrealistic case is that the security assumption has failed).
-                            info!(
-                                ?digest,
-                                ?total_weight,
-                                ?state,
-                                "cannot reach validity threshold for effects!"
-                            );
-                            Ok(ReduceOutput::End(state))
-                        } else {
-                            Ok(ReduceOutput::Continue(state))
-                        }
-                    })
-                },
-                // A long timeout before we hear back from a quorum
-                self.timeouts.pre_quorum_timeout,
-            )
-            .await?;
-
-        final_state
-            .true_effects
-            .ok_or(SuiError::TooManyIncorrectAuthorities {
-                errors: final_state.errors,
-                action: "execute_cert_to_true_effects".to_string(),
-            })
-            .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
     }
 
     pub async fn authorty_ask_for_cert_with_retry_and_timeout(
