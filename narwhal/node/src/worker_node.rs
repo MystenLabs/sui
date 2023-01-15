@@ -64,7 +64,7 @@ impl WorkerNodeInner {
             (metrics, None)
         } else {
             // create a new registry
-            let registry = new_registry(committee.load().epoch);
+            let registry = new_registry();
 
             (initialise_metrics(&registry), Some(registry))
         };
@@ -265,7 +265,7 @@ impl WorkerNodes {
         }
 
         // create the registry first
-        let registry = new_registry(committee.load().epoch);
+        let registry = new_registry();
 
         let metrics = initialise_metrics(&registry);
 
