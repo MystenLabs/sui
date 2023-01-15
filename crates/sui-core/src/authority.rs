@@ -1355,14 +1355,24 @@ impl AuthorityState {
         let timestamp_ms = Self::unixtime_now_ms();
 
         // Index tx
-        let seq = if let Some(indexes) = &self.indexes {
+        if let Some(indexes) = &self.indexes {
             let res = self
                 .index_tx(indexes.as_ref(), digest, &cert, &effects, timestamp_ms)
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
-                .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
-            res.ok()
-        } else {
-            None
+                .tap_err(|e| error!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
+
+            // Emit events
+            if let (Some(event_handler), Ok(seq)) = (&self.event_handler, res) {
+                event_handler
+                    .process_events(effects.data(), timestamp_ms, seq)
+                    .await
+                    .tap_ok(|_| self.metrics.post_processing_total_tx_had_event_processed.inc())
+                    .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't process events for tx: {}", e))?;
+
+                self.metrics
+                    .post_processing_total_events_emitted
+                    .inc_by(effects.data().events.len() as u64);
+            }
         };
 
         // Stream transaction
@@ -1373,22 +1383,6 @@ impl AuthorityState {
             self.metrics
                 .post_processing_total_tx_added_to_streamer
                 .inc();
-        }
-
-        // Emit events
-        if let Some(event_handler) = &self.event_handler {
-            // This is enforced in sui-node/src/lib.rs
-            let seq = seq.expect("IndexStore must be enabled for events to work");
-
-            event_handler
-                .process_events(effects.data(), timestamp_ms, seq)
-                .await
-                .tap_ok(|_| self.metrics.post_processing_total_tx_had_event_processed.inc())
-                .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't process events for tx: {}", e))?;
-
-            self.metrics
-                .post_processing_total_events_emitted
-                .inc_by(effects.data().events.len() as u64);
         }
 
         Ok(())
