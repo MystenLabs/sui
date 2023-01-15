@@ -5,14 +5,14 @@
     flex-flow: column nowrap;
     overflow-x: visible;
     height: 100%;
+}
 
-    .tx-content {
-        margin-top: 20px;
-        flex-grow: 1;
-        overflow-y: auto;
+.tx-content {
+    margin-top: 20px;
+    flex-grow: 1;
+    overflow-y: auto;
 
-        @include utils.override-main-padding;
-    }
+    @include utils.override-main-padding;
 }
 
 .center-loading {
