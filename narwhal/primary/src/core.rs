@@ -704,12 +704,8 @@ impl Core {
                         }
                     };
 
-                    if let Err(err) = message.done.send(()) {
-                        if self.is_shutting_down() {
-                            return;
-                        } else {
-                            panic!("Failed to signal back to CertificateFetcher {:?}", err);
-                        }
+                    if message.done.send(()).is_err() {
+                        result = Err(DagError::ShuttingDown);
                     }
 
                     result
@@ -788,9 +784,5 @@ impl Core {
 
             Self::process_result(&result);
         }
-    }
-
-    fn is_shutting_down(&self) -> bool {
-        !self.rx_shutdown.receiver.is_empty()
     }
 }
