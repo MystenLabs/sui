@@ -5046,7 +5046,7 @@ dependencies = [
  "byteorder",
  "data-encoding",
  "multibase",
- "multihash",
+ "multihash 0.17.0",
  "percent-encoding",
  "serde 1.0.152",
  "static_assertions",
@@ -5070,6 +5070,17 @@ name = "multihash"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "835d6ff01d610179fbce3de1694d007e500bf33a7f29689838941d6bf783ae40"
+dependencies = [
+ "core2",
+ "multihash-derive",
+ "unsigned-varint",
+]
+
+[[package]]
+name = "multihash"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15e5d911412e631e1de11eb313e4dd71f73fd964401102aab23d6c8327c431ba"
 dependencies = [
  "core2",
  "multihash-derive",
@@ -11430,7 +11441,7 @@ dependencies = [
  "move-vm-types",
  "multiaddr",
  "multibase",
- "multihash",
+ "multihash 0.18.0",
  "multihash-derive",
  "multimap",
  "named-lock",
