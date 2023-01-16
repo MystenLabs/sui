@@ -8,6 +8,7 @@ import {
 } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import { useAppSelector } from '_hooks';
 import { api } from '_redux/store/thunk-extras';
 
 // Remove duplicate transactionsId, reduces the number of RPC calls
@@ -31,9 +32,10 @@ async function getTransactionsByAddress(
 export function useGetTranactionByAddress(
     address: SuiAddress
 ): UseQueryResult<SuiTransactionResponse[], unknown> {
+    const network = useAppSelector((state) => state.app.apiEnv);
     const normalizedAddress = normalizeSuiAddress(address);
     return useQuery(
-        ['transaction-by-address', normalizedAddress],
+        ['transaction-by-address', normalizedAddress, network],
         () => getTransactionsByAddress(normalizedAddress),
         {
             enabled: !!address,
