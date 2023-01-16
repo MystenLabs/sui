@@ -121,14 +121,11 @@ export class Secp256k1Keypair implements Keypair {
    */
   signData(data: Base64DataBuffer): Base64DataBuffer {
     const msgHash = sha256(data.getData());
-    const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
+    const sig = secp.signSync(msgHash, this.keypair.secretKey, {
       canonical: true,
-      recovered: true,
+      recovered: false,
     });
-    var recoverable_sig = new Uint8Array(65);
-    recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
-    recoverable_sig.set([rec_id], 64);
-    return new Base64DataBuffer(recoverable_sig);
+    return new Base64DataBuffer(Signature.fromDER(sig).toCompactRawBytes());
   }
 
   /**

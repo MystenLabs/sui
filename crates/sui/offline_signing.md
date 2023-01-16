@@ -21,12 +21,11 @@ Raw transaction to execute: $TX_BYTES
 ## Step 2: Sign the data
 This can be done elsewhere in your signing device or implemented in languages of your choice. Sui accepts signatures for ECDSA Secp256k1, ECDSA Secp256r1 and pure Ed25519.
 
-An accepted ECDSA Secp256k1 signature follows:
-1. The signature must be of length 65 bytes in the form of `[r, s, v]` where the first 32 bytes are `r`, the second 32 bytes are `s` and the last byte is `v`.
+An accepted ECDSA Secp256k1 andd Secp256r1 signature follows:
+1. The signature must be of length 64 bytes in the form of `[r, s]` where the first 32 bytes are `r`, the second 32 bytes are `s`.
 2. The `r` value can be between 0x1 and 0xFFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364140 (inclusive).
 3. The `s` value must be in the lower half of the curve order, i.e. between 0x1 and 0x7FFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF 5D576E73 57A4501D DFE92F46 681B20A0 (inclusive).
-4. The `v` represents the recovery ID, which must be normalized to 0, 1, 2 or 3. Note that unlike [EIP-155](https://eips.ethereum.org/EIPS/eip-155) chain ID is not used to calculate the `v` value.
-5. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
+4. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
 
 An accepted pure Ed25519 signature follows:
 1. The signature must be produced according to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html#section-5.1.6).

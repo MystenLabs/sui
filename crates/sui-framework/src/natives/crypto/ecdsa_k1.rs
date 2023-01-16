@@ -3,7 +3,10 @@
 use crate::legacy_empty_cost;
 use fastcrypto::{
     hash::{HashFunction, Keccak256},
-    secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
+    secp256k1::{
+        recoverable::{Secp256k1RecoverablePublicKey, Secp256k1RecoverableSignature},
+        Secp256k1PublicKey, Secp256k1Signature,
+    },
     traits::ToFromBytes,
 };
 use move_binary_format::errors::PartialVMResult;
@@ -50,8 +53,11 @@ pub fn ecrecover(
     }
 }
 
-fn recover_pubkey(signature: &[u8], hashed_msg: &[u8]) -> Result<Secp256k1PublicKey, SuiError> {
-    match <Secp256k1Signature as ToFromBytes>::from_bytes(signature) {
+fn recover_pubkey(
+    signature: &[u8],
+    hashed_msg: &[u8],
+) -> Result<Secp256k1RecoverablePublicKey, SuiError> {
+    match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(signature) {
         Ok(signature) => match signature.recover(hashed_msg) {
             Ok(pubkey) => Ok(pubkey),
             Err(e) => Err(SuiError::KeyConversionError(e.to_string())),
