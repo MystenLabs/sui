@@ -1,68 +1,61 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useQuery } from '@tanstack/react-query';
-import { memo, useMemo } from 'react';
 
+import { memo } from 'react';
+
+import { useGetTranactionByAddress } from './useGetTransactionByAddress';
 import PageTitle from '_app/shared/page-title';
-import RecentTransactions from '_components/transactions-card/RecentTransactions';
+import { ErrorBoundary } from '_components/error-boundary';
+import Loading from '_components/loading';
 import { TxnItem } from '_components/transactions-card/Transaction';
-import { useAppSelector, useRpc } from '_hooks';
-
-import st from './Transactions.module.scss';
-// Remove duplicate transactionsId, reduces the number of RPC calls
-const dedupe = (results: string[] | undefined) =>
-    results
-        ? results.filter((value, index, self) => self.indexOf(value) === index)
-        : [];
+import { useAppSelector } from '_hooks';
+import Alert from '_src/ui/app/components/alert';
 
 function TransactionsPage() {
-    // get address
-    // Get txn data
-    // get batch of txns
-    const rpc = useRpc();
     const activeAddress = useAppSelector(({ account: { address } }) => address);
 
     const {
-        data: txnsIds,
-        isError: sErrorTxnsId,
-        isLoading: isLoadingTxnsIds,
-    } = useQuery(
-        ['txns', activeAddress],
-        () => rpc.getTransactionsForAddress(activeAddress || '', true),
-        { enabled: !!activeAddress }
-    );
-
-    const dedupedTxnsIds = useMemo(
-        () => (txnsIds ? dedupe(txnsIds) : []),
-        [txnsIds]
-    );
-
-    const {
         data: txns,
-        isError: isErrorTxns,
-        isLoading: isLoadingTxns,
-    } = useQuery(
-        ['txns', 'allTxns'],
-        async () => rpc.getTransactionWithEffectsBatch(dedupedTxnsIds),
-        { enabled: !!dedupedTxnsIds.length }
-    );
+        isError,
+        isLoading,
+    } = useGetTranactionByAddress(activeAddress || '');
+
+    if (isError) {
+        return (
+            <div className="p-2">
+                <Alert mode="warning">
+                    <div className="mb-1 font-semibold">
+                        Something went wrong
+                    </div>
+                </Alert>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex flex-col flex-nowrap h-full">
+        <div className="flex flex-col flex-nowrap h-full overflow-x-visible">
             <PageTitle
                 title="Your Activity"
                 className="flex justify-center text-heading6 text-gray-90"
             />
 
-            <div className={st.txContent}>
-                {txns &&
-                    txns.map((txn) => (
-                        <TxnItem
-                            key={txn.certificate.transactionDigest}
-                            txn={txn}
-                        />
-                    ))}
-                <RecentTransactions />
+            <div className="mt-5 flex-grow overflow-y-auto px-5 -mx-5 divide-y divide-solid divide-gray-45 divide-x-0">
+                <Loading
+                    loading={isLoading}
+                    className="flex justify-center items-center"
+                >
+                    {txns &&
+                        txns.map((txn) => (
+                            <ErrorBoundary
+                                key={txn.certificate.transactionDigest}
+                            >
+                                <TxnItem
+                                    key={txn.certificate.transactionDigest}
+                                    txn={txn}
+                                />
+                            </ErrorBoundary>
+                        ))}
+                </Loading>
             </div>
         </div>
     );
