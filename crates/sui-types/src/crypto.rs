@@ -21,6 +21,11 @@ pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
+use fastcrypto::unsecure::signature::{
+    UnsecureAggregateSignature, UnsecureAggregateSignatureAsBytes, UnsecureKeyPair,
+    UnsecurePrivateKey, UnsecurePublicKey, UnsecureSignature,
+};
+use fastcrypto::Verifier;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;
@@ -55,12 +60,12 @@ mod crypto_tests;
 mod intent_tests;
 
 // Authority Objects
-pub type AuthorityKeyPair = BLS12381KeyPair;
-pub type AuthorityPublicKey = BLS12381PublicKey;
-pub type AuthorityPrivateKey = BLS12381PrivateKey;
-pub type AuthoritySignature = BLS12381Signature;
-pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
-pub type AggregateAuthoritySignatureAsBytes = BLS12381AggregateSignatureAsBytes;
+pub type AuthorityKeyPair = UnsecureKeyPair;
+pub type AuthorityPublicKey = UnsecurePublicKey;
+pub type AuthorityPrivateKey = UnsecurePrivateKey;
+pub type AuthoritySignature = UnsecureSignature;
+pub type AggregateAuthoritySignature = UnsecureAggregateSignature;
+pub type AggregateAuthoritySignatureAsBytes = UnsecureAggregateSignatureAsBytes;
 
 // TODO(joyqvq): prefix these types with Default, DefaultAccountKeyPair etc
 pub type AccountKeyPair = Ed25519KeyPair;
@@ -778,6 +783,10 @@ impl ToFromBytes for Signature {
 
 impl SuiPublicKey for BLS12381PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::BLS12381;
+}
+
+impl SuiPublicKey for UnsecurePublicKey {
+    const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Unsecure;
 }
 
 //
@@ -1638,6 +1647,7 @@ pub enum SignatureScheme {
     Secp256r1,
     BLS12381,
     MultiSig,
+    Unsecure,
 }
 
 impl SignatureScheme {
@@ -1648,6 +1658,7 @@ impl SignatureScheme {
             SignatureScheme::Secp256r1 => 0x02,
             SignatureScheme::MultiSig => 0x03,
             SignatureScheme::BLS12381 => 0xff,
+            SignatureScheme::Unsecure => 0xee,
         }
     }
 

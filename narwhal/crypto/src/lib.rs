@@ -12,6 +12,7 @@ use fastcrypto::{
     bls12381, ed25519,
     error::FastCryptoError,
     hash::{Blake2b256, HashFunction},
+    unsecure,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
 
@@ -33,11 +34,11 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, INTENT_PR
 // to change all four aliases to point to concrete types that work with each other. Failure to do
 // so will result in a ton of compilation errors, and worse: it will not make sense!
 
-pub type PublicKey = bls12381::min_sig::BLS12381PublicKey;
-pub type Signature = bls12381::min_sig::BLS12381Signature;
-pub type AggregateSignature = bls12381::min_sig::BLS12381AggregateSignature;
-pub type PrivateKey = bls12381::min_sig::BLS12381PrivateKey;
-pub type KeyPair = bls12381::min_sig::BLS12381KeyPair;
+pub type PublicKey = unsecure::signature::UnsecurePublicKey;
+pub type Signature = unsecure::signature::UnsecureSignature;
+pub type AggregateSignature = unsecure::signature::UnsecureAggregateSignature;
+pub type PrivateKey = unsecure::signature::UnsecurePrivateKey;
+pub type KeyPair = unsecure::signature::UnsecureKeyPair;
 
 pub type NetworkPublicKey = ed25519::Ed25519PublicKey;
 pub type NetworkKeyPair = ed25519::Ed25519KeyPair;

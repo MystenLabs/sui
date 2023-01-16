@@ -20,14 +20,8 @@ use std::time::Instant;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
 
-#[derive(PartialEq)]
-enum Running {
-    True(Epoch),
-    False,
-}
-
-pub struct NarwhalConfiguration {
-    pub primary_keypair: AuthorityKeyPair,
+pub struct NarwhalConfiguration<TxValidator: TransactionValidator> {
+    pub primary_keypair: bls12381::min_sig::BLS12381KeyPair,
     pub network_keypair: NetworkKeyPair,
     pub worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
 

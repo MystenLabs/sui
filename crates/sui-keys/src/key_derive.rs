@@ -66,6 +66,9 @@ pub fn derive_key_pair_from_path(
                 error: format!("key derivation not supported {:?}", key_scheme),
             })
         }
+        SignatureScheme::Unsecure => Err(SuiError::UnsupportedFeatureError {
+            error: "Unsecure key derivation is currently not supported".to_string(),
+        }),
     }
 }
 
@@ -163,6 +166,9 @@ pub fn validate_path(
                 error: format!("key derivation not supported {:?}", key_scheme),
             })
         }
+        SignatureScheme::Unsecure => Err(SuiError::UnsupportedFeatureError {
+            error: "Unsecure key derivation is currently not supported".to_string(),
+        }),
     }
 }
 
