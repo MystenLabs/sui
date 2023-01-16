@@ -146,8 +146,8 @@ async fn health() -> &'static str {
 
 /// handler for all the request_gas requests
 async fn request_gas(
-    Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     // ID for traceability
     let id = Uuid::new_v4();

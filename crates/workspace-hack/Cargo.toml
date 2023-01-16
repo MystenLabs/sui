@@ -55,10 +55,8 @@ atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
-axum-d8f496e17d97b5cb = { package = "axum", version = "0.5" }
-axum-3b31131e45eafb45 = { package = "axum", version = "0.6" }
-axum-core-6f8ce4dd05d13bba = { package = "axum-core", version = "0.2", default-features = false }
-axum-core-468e82937335b1c9 = { package = "axum-core", version = "0.3", default-features = false }
+axum = { version = "0.6" }
+axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["tokio"] }
@@ -720,10 +718,8 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
-axum-d8f496e17d97b5cb = { package = "axum", version = "0.5" }
-axum-3b31131e45eafb45 = { package = "axum", version = "0.6" }
-axum-core-6f8ce4dd05d13bba = { package = "axum-core", version = "0.2", default-features = false }
-axum-core-468e82937335b1c9 = { package = "axum-core", version = "0.3", default-features = false }
+axum = { version = "0.6" }
+axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4" }
 backoff = { version = "0.4", features = ["tokio"] }
