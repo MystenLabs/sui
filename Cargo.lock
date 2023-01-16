@@ -2321,7 +2321,19 @@ dependencies = [
  "der",
  "elliptic-curve",
  "rfc6979",
- "signature",
+ "signature 1.6.4",
+]
+
+[[package]]
+name = "ecdsa"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12844141594ad74185a926d030f3b605f6a903b4e3fec351f3ea338ac5b7637e"
+dependencies = [
+ "der",
+ "elliptic-curve",
+ "rfc6979",
+ "signature 2.0.0",
 ]
 
 [[package]]
@@ -2332,15 +2344,15 @@ checksum = "1e9c280362032ea4203659fc489832d0204ef09f247a0506f170dafcac08c369"
 dependencies = [
  "pkcs8",
  "serde 1.0.152",
- "signature",
+ "signature 1.6.4",
  "zeroize",
 ]
 
 [[package]]
 name = "ed25519-consensus"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1dd91246c940272326f665724138660a183577ffb77b384a5e10d67d2d5075a"
+checksum = "3c8465edc8ee7436ffea81d21a019b16676ee3db267aa8d5a8d729581ecf998b"
 dependencies = [
  "curve25519-dalek-ng",
  "hex",
@@ -2546,7 +2558,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=f451422b7f15e75e055a1830cbe5d1547fa87b74#f451422b7f15e75e055a1830cbe5d1547fa87b74"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=235211dc8195590f5353d38135f5ee51a267521e#235211dc8195590f5353d38135f5ee51a267521e"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2563,8 +2575,9 @@ dependencies = [
  "curve25519-dalek-ng",
  "derive_more",
  "digest 0.10.6",
- "ecdsa",
+ "ecdsa 0.15.1",
  "ed25519-consensus",
+ "elliptic-curve",
  "eyre",
  "fastcrypto-derive",
  "generic-array",
@@ -2583,7 +2596,7 @@ dependencies = [
  "serde_with",
  "sha2 0.10.6",
  "sha3 0.10.6",
- "signature",
+ "signature 1.6.4",
  "thiserror",
  "tokio",
  "typenum",
@@ -2593,7 +2606,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=f451422b7f15e75e055a1830cbe5d1547fa87b74#f451422b7f15e75e055a1830cbe5d1547fa87b74"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=235211dc8195590f5353d38135f5ee51a267521e#235211dc8195590f5353d38135f5ee51a267521e"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.49",
@@ -2604,16 +2617,23 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=f451422b7f15e75e055a1830cbe5d1547fa87b74#f451422b7f15e75e055a1830cbe5d1547fa87b74"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=235211dc8195590f5353d38135f5ee51a267521e#235211dc8195590f5353d38135f5ee51a267521e"
 dependencies = [
+ "bincode",
+ "digest 0.10.6",
  "fastcrypto",
+ "fastcrypto-derive",
  "rand 0.8.5",
+ "serde 1.0.152",
+ "sha3 0.10.6",
+ "typenum",
+ "zeroize",
 ]
 
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=f451422b7f15e75e055a1830cbe5d1547fa87b74#f451422b7f15e75e055a1830cbe5d1547fa87b74"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=235211dc8195590f5353d38135f5ee51a267521e#235211dc8195590f5353d38135f5ee51a267521e"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -3926,7 +3946,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72c1e0b51e7ec0a97369623508396067a486bd0cbed95a2659a4b863d28cfc8b"
 dependencies = [
  "cfg-if",
- "ecdsa",
+ "ecdsa 0.14.8",
  "elliptic-curve",
  "sha2 0.10.6",
  "sha3 0.10.6",
@@ -5548,7 +5568,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_test",
  "serde_with",
- "signature",
+ "signature 1.6.4",
  "thiserror",
  "tokio",
  "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6070,12 +6090,13 @@ checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "p256"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51f44edd08f51e2ade572f141051021c5af22677e42b7dd28a88155151c33594"
+checksum = "49c124b3cbce43bcbac68c58ec181d98ed6cc7e6d0aa7c3ba97b2563410b0e55"
 dependencies = [
- "ecdsa",
+ "ecdsa 0.15.1",
  "elliptic-curve",
+ "primeorder",
  "sha2 0.10.6",
 ]
 
@@ -6521,6 +6542,15 @@ dependencies = [
  "lazy_static 1.4.0",
  "term",
  "unicode-width",
+]
+
+[[package]]
+name = "primeorder"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b54f7131b3dba65a2f414cf5bd25b66d4682e4608610668eae785750ba4c5b2"
+dependencies = [
+ "elliptic-curve",
 ]
 
 [[package]]
@@ -7972,6 +8002,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "signature"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fe458c98333f9c8152221191a77e2a44e8325d0193484af2e9421a53019e57d"
+dependencies = [
+ "digest 0.10.6",
+ "rand_core 0.6.4",
+]
+
+[[package]]
 name = "similar"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8350,7 +8390,7 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "shell-words",
- "signature",
+ "signature 1.6.4",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -8579,7 +8619,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
- "signature",
+ "signature 1.6.4",
  "strum_macros",
  "sui-adapter",
  "sui-config",
@@ -8812,7 +8852,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde 1.0.152",
- "signature",
+ "signature 1.6.4",
  "sui-adapter",
  "sui-config",
  "sui-core",
@@ -8874,7 +8914,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
- "signature",
+ "signature 1.6.4",
  "slip10_ed25519",
  "sui-types",
  "tempfile",
@@ -9036,7 +9076,7 @@ dependencies = [
  "serde 1.0.152",
  "serde_json",
  "serde_with",
- "signature",
+ "signature 1.6.4",
  "strum",
  "strum_macros",
  "sui-config",
@@ -9346,7 +9386,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_with",
- "signature",
+ "signature 1.6.4",
  "static_assertions",
  "strum",
  "strum_macros",
@@ -9645,7 +9685,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde_json",
- "signature",
+ "signature 1.6.4",
  "sui",
  "sui-adapter",
  "sui-config",
@@ -11081,7 +11121,8 @@ dependencies = [
  "downcast",
  "duration-str",
  "dyn-clone",
- "ecdsa",
+ "ecdsa 0.14.8",
+ "ecdsa 0.15.1",
  "ed25519",
  "ed25519-consensus",
  "ed25519-dalek",
@@ -11389,6 +11430,7 @@ dependencies = [
  "pretty_assertions",
  "prettyplease",
  "prettytable-rs",
+ "primeorder",
  "primitive-types",
  "proc-macro-crate",
  "proc-macro-error",
@@ -11514,7 +11556,8 @@ dependencies = [
  "signal-hook",
  "signal-hook-mio",
  "signal-hook-registry",
- "signature",
+ "signature 1.6.4",
+ "signature 2.0.0",
  "similar",
  "simplelog",
  "siphasher",

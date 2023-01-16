@@ -40,7 +40,10 @@ CertificateDigest:
       SIZE: 32
 Header:
   STRUCT:
-    - author: STR
+    - author:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
     - round: U64
     - epoch: U64
     - created_at: U64
@@ -76,7 +79,10 @@ WorkerIndex:
         TYPENAME: WorkerInfo
 WorkerInfo:
   STRUCT:
-    - name: STR
+    - name:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
     - transactions: BYTES
     - worker_address: BYTES
 WorkerOthersBatchMessage:
@@ -100,4 +106,8 @@ WorkerSynchronizeMessage:
     - digests:
         SEQ:
           TYPENAME: BatchDigest
-    - target: STR
+    - target:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
+
