@@ -30,7 +30,6 @@ export function useStakeTokenMutation() {
             }
 
             const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
-
             const coins: SuiMoveObject[] = allCoins
                 .filter(
                     (anObj) =>
