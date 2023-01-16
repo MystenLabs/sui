@@ -25,7 +25,7 @@ export function useStakeTokenMutation() {
         }: StakeTokenArgs) => {
             if (!validatorAddress || !amount || !tokenTypeArg) {
                 throw new Error(
-                    'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
+                    'Failed, missing required field'
                 );
             }
 
