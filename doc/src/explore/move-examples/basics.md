@@ -49,7 +49,7 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 child = "_"
 ```
 
-The package that references the previous package then, could use `addr_subst` to provide the address:
+The package that references the previous package could then use `addr_subst` to provide the address:
 
 ```toml
 [package]
