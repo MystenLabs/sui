@@ -4,10 +4,8 @@
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey};
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
-use mysten_metrics::{
-    monitored_future, monitored_scope, spawn_logged_monitored_task, spawn_monitored_task,
-};
+use futures::{stream::FuturesUnordered, StreamExt};
+use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
 use std::{
@@ -16,10 +14,11 @@ use std::{
     time::Duration,
 };
 use storage::CertificateStore;
+use tokio::task::JoinSet;
 use tokio::{
     sync::{oneshot, watch},
-    task::{JoinError, JoinHandle},
-    time::{self, timeout, Instant},
+    task::JoinHandle,
+    time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
@@ -79,7 +78,7 @@ pub(crate) struct CertificateFetcher {
     /// correctness).
     targets: BTreeMap<PublicKey, Round>,
     /// Keeps the handle to the (at most one) inflight fetch certificates task.
-    fetch_certificates_task: FuturesUnordered<BoxFuture<'static, Result<(), JoinError>>>,
+    fetch_certificates_task: JoinSet<()>,
 }
 
 /// Thread-safe internal state of CertificateFetcher shared with its fetch task.
@@ -114,8 +113,7 @@ impl CertificateFetcher {
             tx_certificates_loopback,
             metrics,
         });
-        // Add a future that never returns to fetch_certificates_task, so it is blocked when empty.
-        let fetch_certificates_task = FuturesUnordered::new();
+
         spawn_logged_monitored_task!(
             async move {
                 Self {
@@ -127,7 +125,7 @@ impl CertificateFetcher {
                     rx_shutdown,
                     rx_certificate_fetcher,
                     targets: BTreeMap::new(),
-                    fetch_certificates_task,
+                    fetch_certificates_task: JoinSet::new(),
                 }
                 .run()
                 .await;
@@ -189,14 +187,17 @@ impl CertificateFetcher {
                         self.kickstart();
                     }
                 },
-                _ = self.fetch_certificates_task.next(), if !self.fetch_certificates_task.is_empty() => {
+                Some(result) = self.fetch_certificates_task.join_next(), if !self.fetch_certificates_task.is_empty() => {
+                    // propagate any panics. We don't expect for cancellations to get propagated as
+                    // we gracefully shutdown the component by exiting the loop first
+                    result.unwrap();
+
                     // Kick start another fetch task after the previous one terminates.
                     // If all targets have been fetched, the new task will clean up the targets and exit.
                     if self.fetch_certificates_task.is_empty() {
                         self.kickstart();
                     }
                 },
-
                 _ = self.rx_shutdown.receiver.recv() => {
                     return
                 }
@@ -261,14 +262,10 @@ impl CertificateFetcher {
             self.targets.values().max().unwrap_or(&0),
             gc_round
         );
-        self.fetch_certificates_task.push(
-            spawn_monitored_task!(async move {
+        self.fetch_certificates_task
+            .spawn(monitored_future!(async move {
                 let _scope = monitored_scope("CertificatesFetching");
-                state
-                    .metrics
-                    .certificate_fetcher_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .inc();
+                state.metrics.certificate_fetcher_inflight_fetch.inc();
 
                 let now = Instant::now();
                 match run_fetch_task(state.clone(), committee.clone(), gc_round, written_rounds)
@@ -281,18 +278,12 @@ impl CertificateFetcher {
                         );
                     }
                     Err(e) => {
-                        debug!("Error from task to fetch certificates: {e}");
+                        warn!("Error from task to fetch certificates: {e}");
                     }
                 };
 
-                state
-                    .metrics
-                    .certificate_fetcher_inflight_fetch
-                    .with_label_values(&[&committee.epoch.to_string()])
-                    .dec();
-            })
-            .boxed(),
-        );
+                state.metrics.certificate_fetcher_inflight_fetch.dec();
+            }));
     }
 
     fn gc_round(&self) -> Round {
@@ -317,7 +308,7 @@ async fn run_fetch_task(
         .set_max_items(MAX_CERTIFICATES_TO_FETCH);
     let Some(response) =
         fetch_certificates_helper(&state.name, &state.network, &committee, request).await else {
-            return Ok(());
+            return Err(DagError::NoCertificateFetched);
         };
 
     // Process and store fetched certificates.
@@ -326,7 +317,6 @@ async fn run_fetch_task(
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
-        .with_label_values(&[&committee.epoch().to_string()])
         .add(num_certs_fetched as i64);
 
     debug!("Successfully fetched and processed {num_certs_fetched} certificates");
@@ -373,7 +363,7 @@ async fn fetch_certificates_helper(
                     result
                 }));
             }
-            let mut interval = Box::pin(time::sleep(request_interval));
+            let mut interval = Box::pin(sleep(request_interval));
             tokio::select! {
                 res = fut.next() => match res {
                     Some(Ok(resp)) => {
@@ -386,9 +376,13 @@ async fn fetch_certificates_helper(
                     Some(Err(e)) => {
                         debug!("Failed to fetch certificates: {e}");
                         // Issue request to another primary immediately.
+                        continue;
                     }
                     None => {
-                        debug!("No certificate is fetched across all peers!");
+                        debug!("No peer can be reached for fetching certificates!");
+                        // Last or all requests to peers may have failed immediately, so wait
+                        // before returning to avoid retrying fetching immediately.
+                        sleep(request_interval).await;
                         return None;
                     }
                 },

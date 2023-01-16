@@ -311,9 +311,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         Single: tx,
       },
       gasPayment: gasPayment!,
-      // Need to keep in sync with
-      // https://github.com/MystenLabs/sui/blob/f32877f2e40d35a008710c232e49b57aab886462/crates/sui-types/src/messages.rs#L338
-      gasPrice: 1,
+      // TODO: Allow people to add tip to the reference gas price
+      gasPrice: await this.provider.getReferenceGasPrice(),
       gasBudget: originalTx.data.gasBudget,
       sender: signerAddress,
     };

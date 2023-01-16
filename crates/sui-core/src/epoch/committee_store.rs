@@ -18,8 +18,6 @@ use sui_macros::nondeterministic;
 #[derive(DBMapUtils)]
 pub struct CommitteeStore {
     /// Map from each epoch ID to the committee information.
-    /// TODO: We may also want to store the checkoint sequence number in each epoch that contains
-    /// the committee for the next epoch.
     #[default_options_override_fn = "committee_table_default_config"]
     pub(crate) committee_map: DBMap<EpochId, Committee>,
 }

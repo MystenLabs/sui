@@ -4,7 +4,7 @@
 import { BehaviorSubject, filter, map, take } from 'rxjs';
 
 import Keyring from '_src/background/keyring';
-import { IS_SESSION_STORAGE_SUPPORTED } from '_src/background/keyring/VaultStorage';
+import { isSessionStorageSupported } from '_src/background/storage-utils';
 import { MSG_DISABLE_AUTO_RECONNECT } from '_src/content-script/keep-bg-alive';
 
 import type { Runtime } from 'webextension-polyfill';
@@ -17,9 +17,11 @@ export class KeepAliveConnection {
         null
     );
     private autoDisconnectTimeout: number | null = null;
+    private port: Runtime.Port;
 
-    constructor(private port: Runtime.Port) {
-        if (IS_SESSION_STORAGE_SUPPORTED) {
+    constructor(port: Runtime.Port) {
+        this.port = port;
+        if (isSessionStorageSupported()) {
             this.forcePortDisconnect(false);
             return;
         }

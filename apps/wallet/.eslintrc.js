@@ -47,8 +47,21 @@ module.exports = {
             {
                 prefer: 'type-imports',
                 disallowTypeAnnotations: true,
+                fixStyle: 'inline-type-imports',
             },
         ],
+        '@typescript-eslint/unified-signatures': 'error',
+        '@typescript-eslint/parameter-properties': 'error',
         'no-console': ['warn'],
     },
+    overrides: [
+        {
+            files: ['*.test.*', '*.spec.*'],
+            rules: {
+                // Allow any casting in tests:
+                '@typescript-eslint/no-explicit-any': 'off',
+                '@typescript-eslint/no-non-null-assertion': 'off',
+            },
+        },
+    ],
 };

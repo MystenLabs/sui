@@ -12,7 +12,7 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `UID` from the [object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move):
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `UID` from the [object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) - a module from the core [Sui Framework](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml).
 ```rust
 use sui::object::UID;
 
@@ -26,7 +26,7 @@ struct ColorObject has key {
 Now `ColorObject` represents a Sui object type and can be used to create Sui objects that can be eventually stored on the Sui chain.
 > :books: In both core Move and Sui Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) denotes a type that can appear as a key in global storage. However, the structure of global storage is a bit different: core Move uses a (type, `address`)-indexed map, whereas Sui Move uses a map keyed by object IDs.
 
-> :bulb: The `UID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the "unique ID" that defines an object. It is unique in the sense that no two values of type `UID` will ever have the same underlying set of bytes.
+> :bulb: The `UID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the "unique ID" that defines an object on the Sui network. It is unique in the sense that no two values of type `UID` will ever have the same underlying set of bytes.
 
 ### Create Sui object
 Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new `UID` for a Sui object is to call `object::new`. The `new` function takes the current transaction context as an argument to generate unique `ID`s. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move/index.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
@@ -35,7 +35,7 @@ Now that we have learned how to define a Sui object type, how do we create/insta
 // functions in the module, such as the `new` function, without fully
 // qualifying, e.g. `sui::object::new`.
 use sui::object;
-// tx_context::TxContext creates an alias to the the TxContext struct in tx_context module.
+// tx_context::TxContext creates an alias to the TxContext struct in the tx_context module.
 use sui::tx_context::TxContext;
 
 
@@ -57,7 +57,7 @@ All of the APIs for adding objects to persistent storage live in the [`transfer`
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
-This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an address, another object, or "shared"--see [object ownership](../objects.md#object-ownership) for more details.
+This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an address, another object, or "shared"--see [Object ownership](../learn/objects#object-ownership) for more details.
 
 > :bulb: In core Move, we would call `move_to<T>(a: address, t: T)` to add the entry `(a, T) -> t` to the global storage. But because (as explained above) the schema of Sui Move's global storage is different, we use the `Transfer` APIs instead of `move_to` or the other [global storage operators](https://github.com/move-language/move/blob/main/language/documentation/book/src/global-storage-operators.md) in core Move. These operators cannot be used in Sui Move.
 
@@ -83,9 +83,9 @@ public fun get_color(self: &ColorObject): (u8, u8, u8) {
 }
 ```
 
-Find the full code online in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
+Find the full code in the Sui repo under `sui_programmability/examples/objects_tutorial/sources/` in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
 
-To compile the code, make sure you have [installed Sui](../install.md) so that `sui` is in `PATH`. In the code root directory (where `Move.toml` is), run:
+To compile the code, make sure you have [installed Sui](../install.md) so that `sui` is in `PATH`. In the code root directory `(../examples/objects_tutorial/)` (where `Move.toml` is), run:
 ```
 sui move build
 ```
@@ -161,16 +161,23 @@ This will tell you the current client address.
 
 First, we need to publish the code on-chain. Assuming the path to the root of the repository containing Sui source code is $ROOT:
 ```
-$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
-You can find the published package object ID in the **Publish Results** output:
+You can find the published package object ID in the **Transaction Effects** output:
 ```
------ Publish Results ----
-The newly published package object: (0x57258f32746fd1443f2a077c0c6ec03282087c19, SequenceNumber(1), o#b3a8e284dea7482891768e166e4cd16f9749e0fa90eeb0834189016c42327401)
+Transaction Kind : Publish
+ ----- Transaction Effects ----
+ Status : Success
+ Created Objects:
+   - ID: 0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69 , Owner: Immutable
+ Mutated Objects:
+   - ID: 0x91dfb762ebd7acd718828d72898ab8977d75b0eb , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 ```
-Note that the exact data you see will be different. The first hex string in that triple is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
+ Note that the exact data you see will be different. One of the **Immutable** objects in **Created Objects** is the package object ID (`0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69` in this case). And the other object ID in **Mutated Objects** is your gas coin object ID (`0x91dfb762ebd7acd718828d72898ab8977d75b0eb` in this case) which is owned by your account address.
+
+ For convenience, let's save it to an environment variable:
 ```
-$ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
+$ export PACKAGE=0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69
 ```
 Next we can call the function to create a color object:
 ```
@@ -180,11 +187,11 @@ In the **Transaction Effects** portion of the output, you will see an object sho
 
 ```
 Created Objects:
-0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb SequenceNumber(1) o#691b417670979c6c192bdfd643630a125961c71c841a6c7d973cf9429c792efa
+  - ID: 0xe00d82272758565829feade95023e9257f442c98 , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 ```
 Again, for convenience, let's save the object ID:
 ```
-$ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
+$ export OBJECT=0xe00d82272758565829feade95023e9257f442c98
 ```
 We can inspect this object and see what kind of object it is:
 ```
@@ -192,11 +199,17 @@ $ sui client object $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
-Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
+----- Move Object (0xe00d82272758565829feade95023e9257f442c98[1]) -----
+Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
 Version: 1
-ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
-Readonly: false
-Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
+Storage Rebate: 14
+Previous Transaction: T8j4wil5wrDjFz2nqJCIZnZurD9vBKENo7zy32FYcdU=
+----- Data -----
+type: 0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69::color_object::ColorObject
+blue: 0
+green: 255
+id: 0xe00d82272758565829feade95023e9257f442c98
+red: 0
 ```
 As we can see, it's owned by the current default client address that we saw earlier. And the type of this object is `ColorObject`!
 

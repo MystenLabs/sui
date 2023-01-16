@@ -1,1 +1,1 @@
-DROP TABLE ERROR_LOGS;
+DROP TABLE error_logs;

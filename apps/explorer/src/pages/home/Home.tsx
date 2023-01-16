@@ -12,9 +12,7 @@ import styles from './Home.module.css';
 
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
-const ValidatorMap = lazy(
-    () => import('../../components/validator-map/ValidatorMap')
-);
+const NodeMap = lazy(() => import('../../components/node-map'));
 
 const TXN_PER_PAGE = 25;
 
@@ -42,7 +40,7 @@ function Home() {
                         <TabPanels>
                             <TabPanel>
                                 <ErrorBoundary>
-                                    <TopValidatorsCard limit={10} />
+                                    <TopValidatorsCard limit={10} showIcon />
                                 </ErrorBoundary>
                             </TabPanel>
                         </TabPanels>
@@ -50,7 +48,7 @@ function Home() {
                 </div>
                 <ErrorBoundary>
                     <Suspense fallback={null}>
-                        <ValidatorMap />
+                        <NodeMap />
                     </Suspense>
                 </ErrorBoundary>
                 <div>

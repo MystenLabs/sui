@@ -6,18 +6,17 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SignatureScheme, SuiSignature,
-    SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::messages_checkpoint::{
-    AuthenticatedCheckpoint, CheckpointSequenceNumber, CheckpointSignatureMessage,
-};
+use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
-use crate::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use crate::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use itertools::Either;
@@ -43,6 +42,26 @@ use std::{
 use strum::IntoStaticStr;
 use tap::Pipe;
 use tracing::debug;
+
+const DUMMY_GAS_PRICE: u64 = 1;
+
+const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 3] = [
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_add_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_remove_validator",
+    ),
+    (
+        SUI_FRAMEWORK_OBJECT_ID,
+        "sui_system",
+        "request_set_commission_rate",
+    ),
+];
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -185,7 +204,7 @@ impl GenesisObject {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -570,47 +589,11 @@ impl TransactionKind {
         )
     }
 
-    pub fn validity_check(&self) -> SuiResult {
-        match self {
-            Self::Batch(b) => {
-                fp_ensure!(
-                    !b.is_empty(),
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch Transaction cannot be empty".to_string(),
-                    }
-                );
-                // Check that all transaction kinds can be in a batch.
-                let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_)
-                    | SingleTransactionKind::TransferObject(_)
-                    | SingleTransactionKind::Pay(_) => true,
-                    SingleTransactionKind::TransferSui(_)
-                    | SingleTransactionKind::PaySui(_)
-                    | SingleTransactionKind::PayAllSui(_)
-                    | SingleTransactionKind::ChangeEpoch(_)
-                    | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_) => false,
-                });
-                fp_ensure!(
-                    valid,
-                    SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
-                    }
-                );
-            }
-            Self::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::PaySui(_)
-                | SingleTransactionKind::PayAllSui(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::Genesis(_) => (),
-            },
-        }
-        Ok(())
+    pub fn is_genesis_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::Genesis(_))
+        )
     }
 }
 
@@ -643,7 +626,7 @@ pub struct TransactionData {
 }
 
 impl TransactionData {
-    pub fn new(
+    pub fn new_with_dummy_gas_price(
         kind: TransactionKind,
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -652,14 +635,13 @@ impl TransactionData {
         TransactionData {
             kind,
             sender,
-            // TODO: Update local-txn-data-serializer.ts if `gas_price` is changed
-            gas_price: 1,
+            gas_price: DUMMY_GAS_PRICE,
             gas_payment,
             gas_budget,
         }
     }
 
-    pub fn new_with_gas_price(
+    pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -675,7 +657,7 @@ impl TransactionData {
         }
     }
 
-    pub fn new_move_call(
+    pub fn new_move_call_with_dummy_gas_price(
         sender: SuiAddress,
         package: ObjectRef,
         module: Identifier,
@@ -685,6 +667,30 @@ impl TransactionData {
         arguments: Vec<CallArg>,
         gas_budget: u64,
     ) -> Self {
+        Self::new_move_call(
+            sender,
+            package,
+            module,
+            function,
+            type_arguments,
+            gas_payment,
+            arguments,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
+    }
+
+    pub fn new_move_call(
+        sender: SuiAddress,
+        package: ObjectRef,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_payment: ObjectRef,
+        arguments: Vec<CallArg>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
             package,
             module,
@@ -692,7 +698,24 @@ impl TransactionData {
             type_arguments,
             arguments,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_transfer_with_dummy_gas_price(
+        recipient: SuiAddress,
+        object_ref: ObjectRef,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_transfer(
+            recipient,
+            object_ref,
+            sender,
+            gas_payment,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_transfer(
@@ -701,12 +724,30 @@ impl TransactionData {
         sender: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
             recipient,
             object_ref,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_transfer_sui_with_dummy_gas_price(
+        recipient: SuiAddress,
+        sender: SuiAddress,
+        amount: Option<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_transfer_sui(
+            recipient,
+            sender,
+            amount,
+            gas_payment,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_transfer_sui(
@@ -715,12 +756,32 @@ impl TransactionData {
         amount: Option<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
             recipient,
             amount,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_pay_with_dummy_gas_price(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_pay(
+            sender,
+            coins,
+            recipients,
+            amounts,
+            gas_payment,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_pay(
@@ -730,13 +791,33 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Pay(Pay {
             coins,
             recipients,
             amounts,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_pay_sui_with_dummy_gas_price(
+        sender: SuiAddress,
+        coins: Vec<ObjectRef>,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_pay_sui(
+            sender,
+            coins,
+            recipients,
+            amounts,
+            gas_payment,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_pay_sui(
@@ -746,13 +827,14 @@ impl TransactionData {
         amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::PaySui(PaySui {
             coins,
             recipients,
             amounts,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn new_pay_all_sui(
@@ -761,12 +843,22 @@ impl TransactionData {
         recipient: SuiAddress,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
             coins,
             recipient,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
+    }
+
+    pub fn new_module_with_dummy_gas_price(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        modules: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Self {
+        Self::new_module(sender, gas_payment, modules, gas_budget, DUMMY_GAS_PRICE)
     }
 
     pub fn new_module(
@@ -774,16 +866,12 @@ impl TransactionData {
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
         gas_budget: u64,
+        gas_price: u64,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
             modules,
         }));
-        Self::new(kind, sender, gas_payment, gas_budget)
-    }
-
-    /// Returns the transaction kind as a &str (variant name, no fields)
-    pub fn kind_as_str(&self) -> &'static str {
-        (&self.kind).into()
+        Self::new(kind, sender, gas_payment, gas_budget, gas_price)
     }
 
     pub fn gas(&self) -> ObjectRef {
@@ -816,7 +904,10 @@ impl TransactionData {
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs = self.kind.input_objects()?;
+        let mut inputs = self
+            .kind
+            .input_objects()
+            .map_err(SuiError::into_transaction_input_error)?;
 
         if !self.kind.is_system_tx() && !self.kind.is_pay_sui_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
@@ -827,8 +918,37 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
         match &self.kind {
-            TransactionKind::Batch(_) => (),
+            TransactionKind::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = b.iter().all(|s| match s {
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::PaySui(_)
+                    | SingleTransactionKind::PayAllSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::Publish(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                    }
+                );
+            }
             TransactionKind::Single(s) => match s {
                 SingleTransactionKind::Pay(_)
                 | SingleTransactionKind::Call(_)
@@ -856,6 +976,17 @@ impl TransactionData {
             },
         }
         Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        self.kind.single_transactions().any(|tx| match tx {
+            SingleTransactionKind::Call(call) => {
+                let (package, module, func) =
+                    (call.package.0, call.module.as_str(), call.function.as_str());
+                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+            }
+            _ => false,
+        })
     }
 }
 
@@ -958,20 +1089,7 @@ impl Transaction {
         Self::new(SenderSignedData::new(data, intent, signature))
     }
 
-    // TODO(joyqvq): remove and prefer to_tx_bytes_and_signature()
-    pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
-        (
-            Base64::from_bytes(
-                bcs::to_bytes(&self.intent_message.value)
-                    .unwrap()
-                    .as_slice(),
-            ),
-            self.tx_signature.scheme(),
-            Base64::from_bytes(self.tx_signature.signature_bytes()),
-            Base64::from_bytes(self.tx_signature.public_key_bytes()),
-        )
-    }
-
+    /// Returns the Base64 encoded tx_bytes and the Base64 encoded serialized signature (`flag || sig || pk`).
     pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
@@ -1007,7 +1125,7 @@ impl VerifiedTransaction {
         system_transaction
             .pipe(TransactionKind::Single)
             .pipe(|kind| {
-                TransactionData::new(
+                TransactionData::new_with_dummy_gas_price(
                     kind,
                     SuiAddress::default(),
                     (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
@@ -1055,33 +1173,6 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
-}
-
-/// Subscribe to notifications when new checkpoint certificates are available.
-///
-/// Note that there is no start field necessary, because checkpoint sequence numbers are
-/// contiguous. Therefore the client is always immediately sent the highest available checkpoint
-/// number, from which they can deduce if they are missing any checkpoints.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct CheckpointStreamRequest {
-    // No request fields are currently necessary, but tonic errors when the request struct has size
-    // 0.
-    _ignored: u64,
-}
-
-impl CheckpointStreamRequest {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CheckpointStreamResponseItem {
-    /// The first available checkpoint sequence on this validator. Currently this is always 0.
-    /// When snapshots are implemented, this may change to become the first checkpoint after the
-    /// most recent snapshot.
-    pub first_available_sequence: CheckpointSequenceNumber,
-    pub checkpoint: AuthenticatedCheckpoint,
 }
 
 impl From<SuiAddress> for AccountInfoRequest {

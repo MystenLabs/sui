@@ -7,20 +7,15 @@ the [Move](https://github.com/MystenLabs/awesome-move) language.
 This tutorial provides a brief explanation of the Move language and
 includes concrete examples to demonstrate how Move can be used in Sui.
 
-## Quick links
 
-* [Why Move?](../../learn/why-move.md) - Quick links to external Move resources and a comparison with Solidity
-* [How Sui Move differs from Core Move](../../learn/sui-move-diffs.md) - Highlights the differences between the core Move language and the Move we use in Sui
-* [Programming Objects Tutorial Series](../../build/programming-with-objects/index.md) - Tutorial series that walks through all the powerful ways to interact with objects in Sui Move.
-
-## Move
+## About Move
 
 Move is an open source language for writing safe smart contracts. It
 was originally developed at Facebook to power the [Diem](https://github.com/diem/diem)
 blockchain. However, Move was designed as a platform-agnostic language
 to enable common libraries, tooling, and developer communities across
 blockchains with vastly different data and execution models. [Sui](https://github.com/MystenLabs/sui/blob/main/README.md),
-[0L](https://github.com/OLSF/libra), and
+[0L](https://github.com/0LNetworkCommunity/libra), and
 [Starcoin](https://github.com/starcoinorg/starcoin) are using Move,
 and there are also plans to integrate the language in several upcoming
 and existing platforms (e.g.,
@@ -180,8 +175,8 @@ to distinguish different types of coins from one another.
 
 Learn about Move type parameters known as
 [generics](https://github.com/move-language/move/blob/main/language/documentation/book/src/generics.md)
-and also about the optional
-[phantom keyword](https://github.com/move-language/move/blob/main/language/documentation/book/src/generics.md#phantom-type-parameters))
+and the optional
+[phantom keyword](https://github.com/move-language/move/blob/main/language/documentation/book/src/generics.md#phantom-type-parameters)
 at your leisure.
 
 In particular, one type of custom coin already defined in Sui is
@@ -232,21 +227,14 @@ We will show how to call Move functions from other functions and how
 to define the new ones in the section describing how to
 [write a simple Move package](write-package.md).
 
-
-In addition to functions callable from other functions, however, the
-Sui flavor of the Move language also defines so called _entry
-functions_ that can be called directly from Sui (e.g., from a Sui
-application that can be written in a different language) and
-must satisfy a certain set of properties.
+The Sui flavor of the Move language also defines _entry functions_. These must satisfy a certain set of 
+properties and can be called directly from Sui (e.g., from a Sui application written in a different language).
 
 #### Entry functions
 
-One of the basic operations in Sui is transfer of gas objects between
-[addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
-representing individual users. And one of the
-simplest entry functions is defined in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move)
-to implement gas object transfer:
+One of the basic operations in Sui is a gas object transfer between [addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md) representing individual users. 
+The gas object transfer implementation in the [SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move) 
+is also a simple example of the use of an entry function:
 
 ```rust
 public entry fun transfer(c: coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
@@ -278,5 +266,4 @@ value, and has three parameters:
   in the function's body as indicated by its name starting with `_`)
   - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
-You can see how the `transfer` function is called from a Sui
-CLI client in [Calling Move code](../cli-client.md#calling-move-code).
+[Calling Move code](../cli-client.md#calling-move-code) describes how to call the `transfer` function from the Sui CLI client.

@@ -6,6 +6,7 @@
 
 
 -  [Struct `StakingPool`](#0x2_staking_pool_StakingPool)
+-  [Struct `PoolTokenExchangeRate`](#0x2_staking_pool_PoolTokenExchangeRate)
 -  [Resource `InactiveStakingPool`](#0x2_staking_pool_InactiveStakingPool)
 -  [Struct `DelegationToken`](#0x2_staking_pool_DelegationToken)
 -  [Struct `PendingDelegationEntry`](#0x2_staking_pool_PendingDelegationEntry)
@@ -31,6 +32,7 @@
 -  [Function `validator_address`](#0x2_staking_pool_validator_address)
 -  [Function `staked_sui_amount`](#0x2_staking_pool_staked_sui_amount)
 -  [Function `delegation_token_amount`](#0x2_staking_pool_delegation_token_amount)
+-  [Function `pool_token_exchange_rate`](#0x2_staking_pool_pool_token_exchange_rate)
 -  [Function `new_pending_withdraw_entry`](#0x2_staking_pool_new_pending_withdraw_entry)
 -  [Function `withdraw_from_principal_impl`](#0x2_staking_pool_withdraw_from_principal_impl)
 -  [Function `get_sui_amount`](#0x2_staking_pool_get_sui_amount)
@@ -114,6 +116,40 @@ A staking pool embedded in each validator struct in the system state object.
 <dd>
  Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
  at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_staking_pool_PoolTokenExchangeRate"></a>
+
+## Struct `PoolTokenExchangeRate`
+
+Struct representing the exchange rate of the delegation pool token to SUI.
+
+
+<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>sui_amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pool_token_amount: u64</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -1096,6 +1132,33 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_delegation_token_amount">delegation_token_amount</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>): u64 { <a href="balance.md#0x2_balance_value">balance::value</a>(&delegation.pool_tokens) }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_pool_token_exchange_rate"></a>
+
+## Function `pool_token_exchange_rate`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate">pool_token_exchange_rate</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate">pool_token_exchange_rate</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+    <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+        sui_amount: pool.sui_balance,
+        pool_token_amount: <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(&pool.delegation_token_supply),
+    }
+}
 </code></pre>
 
 

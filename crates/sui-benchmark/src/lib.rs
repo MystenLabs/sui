@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::bail;
 use async_trait::async_trait;
+use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use std::{collections::BTreeMap, sync::Arc};
@@ -16,20 +17,26 @@ use sui_core::{
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
 use sui_sdk::SuiClient;
+use sui_types::base_types::SuiAddress;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
     messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
     object::{Object, ObjectRead},
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
 };
-use tracing::error;
+use tracing::{error, info};
 
+pub mod benchmark_setup;
 pub mod drivers;
+pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
+pub mod options;
 pub mod util;
 pub mod workloads;
 
@@ -106,6 +113,8 @@ pub trait ValidatorProxy {
     fn get_current_epoch(&self) -> EpochId;
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync>;
+
+    async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error>;
 }
 
 pub struct LocalValidatorAggregatorProxy {
@@ -117,47 +126,58 @@ impl LocalValidatorAggregatorProxy {
     pub async fn from_genesis(
         genesis: &Genesis,
         registry: &Registry,
-        fullnode_rpc_url: &str,
+        reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
         let (aggregator, _) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build()
             .unwrap();
 
-        Self::new_impl(aggregator, registry, fullnode_rpc_url).await
+        Self::new_impl(aggregator, registry, reconfig_fullnode_rpc_url).await
     }
 
     pub async fn from_network_config(
         configs: &NetworkConfig,
         registry: &Registry,
-        fullnode_rpc_url: &str,
+        reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
         let (aggregator, _) = AuthorityAggregatorBuilder::from_network_config(configs)
             .with_registry(registry)
             .build()
             .unwrap();
-        Self::new_impl(aggregator, registry, fullnode_rpc_url).await
+        Self::new_impl(aggregator, registry, reconfig_fullnode_rpc_url).await
     }
 
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
-        fullnode_rpc_url: &str,
+        reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
-        let committee_store = aggregator.clone_committee_store();
-
-        let reconfig_observer = FullNodeReconfigObserver::new(
-            fullnode_rpc_url,
-            committee_store,
-            aggregator.safe_client_metrics_base.clone(),
-            aggregator.metrics.clone(),
-        )
-        .await;
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
-        let qd_handler =
-            QuorumDriverHandlerBuilder::new(Arc::new(aggregator), quorum_driver_metrics)
-                .with_reconfig_observer(Arc::new(reconfig_observer))
-                .start();
+        let qd_handler_builder =
+            QuorumDriverHandlerBuilder::new(Arc::new(aggregator.clone()), quorum_driver_metrics);
+
+        let qd_handler = (if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
+            info!(
+                "Using FullNodeReconfigObserver: {:?}",
+                reconfig_fullnode_rpc_url
+            );
+            let committee_store = aggregator.clone_committee_store();
+            let reconfig_observer = Arc::new(
+                FullNodeReconfigObserver::new(
+                    reconfig_fullnode_rpc_url,
+                    committee_store,
+                    aggregator.safe_client_metrics_base.clone(),
+                    aggregator.metrics.clone(),
+                )
+                .await,
+            );
+            qd_handler_builder.with_reconfig_observer(reconfig_observer)
+        } else {
+            info!("Using EmbeddedReconfigObserver");
+            qd_handler_builder.with_reconfig_observer(Arc::new(EmbeddedReconfigObserver::new()))
+        })
+        .start();
 
         let qd = qd_handler.clone_quorum_driver();
         Self {
@@ -225,6 +245,18 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             _qd_handler: qdh,
             qd,
         })
+    }
+
+    async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
+        let system_state = self.get_object(SUI_SYSTEM_STATE_OBJECT_ID).await?;
+        let move_obj = system_state.data.try_as_move().unwrap();
+        let result = bcs::from_bytes::<SuiSystemState>(move_obj.contents())?;
+        Ok(result
+            .validators
+            .active_validators
+            .into_iter()
+            .map(|v| v.metadata.sui_address)
+            .collect())
     }
 }
 
@@ -317,5 +349,10 @@ impl ValidatorProxy for FullNodeProxy {
             sui_client: self.sui_client.clone(),
             committee: self.clone_committee(),
         })
+    }
+
+    async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
+        let validators = self.sui_client.governance_api().get_validators().await?;
+        Ok(validators.into_iter().map(|v| v.sui_address).collect())
     }
 }

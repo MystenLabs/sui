@@ -69,7 +69,7 @@ impl WorkerMetrics {
             created_batch_size: register_histogram_vec_with_registry!(
                 "created_batch_size",
                 "Size in bytes of the created batches",
-                &["epoch", "reason"],
+                &["reason"],
                 // buckets with size in bytes
                 vec![
                     100.0,
@@ -90,7 +90,7 @@ impl WorkerMetrics {
             created_batch_latency: register_histogram_vec_with_registry!(
                 "created_batch_latency",
                 "The latency of creating (sealing) a batch",
-                &["epoch", "reason"],
+                &["reason"],
                 // buckets in seconds
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry

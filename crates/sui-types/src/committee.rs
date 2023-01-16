@@ -20,6 +20,9 @@ use std::hash::{Hash, Hasher};
 
 pub type EpochId = u64;
 
+// TODO: the stake and voting power of a validator can be different so
+// in some places when we are actually referring to the voting power, we
+// should use a different type alias, field name, etc.
 pub type StakeUnit = u64;
 
 pub type CommitteeDigest = [u8; 32];
@@ -342,7 +345,7 @@ impl Display for Committee {
         for (name, vote) in &self.voting_rights {
             write!(voting_rights, "{}: {}, ", name.concise(), vote)?;
         }
-        writeln!(
+        write!(
             f,
             "Committee (epoch={:?}, voting_rights=[{}])",
             self.epoch, voting_rights
@@ -359,6 +362,16 @@ pub struct CommitteeWithNetAddresses {
 impl CommitteeWithNetAddresses {
     pub fn digest(&self) -> CommitteeDigest {
         sha3_hash(self)
+    }
+}
+
+impl Display for CommitteeWithNetAddresses {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CommitteeWithNetAddresses (committee={}, net_addresses={:?})",
+            self.committee, self.net_addresses
+        )
     }
 }
 

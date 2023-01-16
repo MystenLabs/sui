@@ -14,14 +14,14 @@ serde_yaml = "0.8.26"
 signature = "1.6.0"
 camino = "1.1.1"
 tokio = { workspace = true, features = ["full"] }
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 serde_with = { version = "2.1.0", features = ["hex"] }
 tracing = "0.1.36"
 bcs = "0.1.4"
 clap = { version = "3.2.17", features = ["derive"] }
 bip32 = "0.4.0"
+prettytable-rs = "0.10.0"
 
-sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }
@@ -57,8 +57,7 @@ move-stackless-bytecode.workspace = true
 move-unit-test.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
-
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 multiaddr = "0.17.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

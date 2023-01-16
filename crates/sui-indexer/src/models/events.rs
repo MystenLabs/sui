@@ -4,7 +4,7 @@
 use crate::errors::IndexerError;
 use crate::schema::events;
 use crate::schema::events::dsl::{events as events_table, id};
-use crate::schema::events::{event_sequence, transaction_sequence};
+use crate::schema::events::{event_sequence, transaction_digest};
 use crate::utils::log_errors_to_pg;
 use crate::PgPoolConnection;
 
@@ -17,7 +17,6 @@ use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope};
 pub struct Event {
     pub id: i64,
     pub transaction_digest: Option<String>,
-    pub transaction_sequence: i64,
     pub event_sequence: i64,
     pub event_time: Option<NaiveDateTime>,
     pub event_type: String,
@@ -27,8 +26,7 @@ pub struct Event {
 #[derive(Debug, Insertable)]
 #[diesel(table_name = events)]
 pub struct NewEvent {
-    pub transaction_digest: Option<String>,
-    pub transaction_sequence: i64,
+    pub transaction_digest: String,
     pub event_sequence: i64,
     pub event_time: Option<NaiveDateTime>,
     pub event_type: String,
@@ -73,9 +71,9 @@ pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError>
             e.timestamp
         ))
     })?;
+
     Ok(NewEvent {
-        transaction_digest: e.tx_digest.map(|digest| format!("{:?}", digest)),
-        transaction_sequence: e.id.tx_seq,
+        transaction_digest: format!("{:?}", e.tx_digest),
         event_sequence: e.id.event_seq,
         event_time: Some(timestamp),
         event_type: e.event.get_event_type(),
@@ -103,7 +101,7 @@ pub fn commit_events(
         .run::<_, Error, _>(|conn| {
         diesel::insert_into(events::table)
             .values(&new_events)
-            .on_conflict((transaction_sequence, event_sequence))
+            .on_conflict((transaction_digest, event_sequence))
             .do_nothing()
             .execute(conn)
     });

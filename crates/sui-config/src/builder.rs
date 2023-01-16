@@ -12,6 +12,7 @@ use crate::{
 };
 use fastcrypto::encoding::{Encoding, Hex};
 use multiaddr::Multiaddr;
+use narwhal_config::{NetworkAdminServerParameters, Parameters as ConsensusParameters};
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -260,6 +261,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                             .genesis_info
                             .narwhal_worker_address
                             .clone(),
+                        description: String::new(),
+                        image_url: String::new(),
+                        project_url: String::new(),
                     },
                     pop,
                 )
@@ -309,7 +313,23 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     db_path: consensus_db_path,
                     internal_worker_address,
                     timeout_secs: Some(60),
-                    narwhal_config: Default::default(),
+                    narwhal_config: ConsensusParameters {
+                        network_admin_server: match self.validator_ip_sel {
+                            ValidatorIpSelection::Simulator => NetworkAdminServerParameters {
+                                primary_network_admin_server_port: 8889,
+                                worker_network_admin_server_base_port: 8890,
+                            },
+                            _ => NetworkAdminServerParameters {
+                                primary_network_admin_server_port: utils::get_available_port(
+                                    "127.0.0.1",
+                                ),
+                                worker_network_admin_server_base_port: utils::get_available_port(
+                                    "127.0.0.1",
+                                ),
+                            },
+                        },
+                        ..Default::default()
+                    },
                 };
 
                 let p2p_config = P2pConfig {
@@ -337,11 +357,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: utils::available_local_socket_address(),
                     // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
                     // provide the entire socket address here to avoid confusion.
-                    admin_interface_port: utils::get_available_port("127.0.0.1"),
+                    admin_interface_port: match self.validator_ip_sel {
+                        ValidatorIpSelection::Simulator => 8888,
+                        _ => utils::get_available_port("127.0.0.1"),
+                    },
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
-                    enable_checkpoint: false,
                     checkpoints_per_epoch: self.checkpoints_per_epoch,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,

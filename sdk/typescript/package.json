@@ -2,7 +2,7 @@
   "name": "@mysten/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui TypeScript API(Work in Progress)",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "license": "Apache-2.0",
   "files": [
     "dist",
@@ -17,6 +17,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "source": "./src/index.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
@@ -27,9 +28,9 @@
     "build:types": "tsc --build",
     "doc": "typedoc",
     "test": "pnpm test:unit",
-    "test:unit": "vitest unit",
-    "test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest e2e",
-    "test:e2e:nowait": "vitest e2e",
+    "test:unit": "vitest run unit",
+    "test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
+    "test:e2e:nowait": "vitest run e2e",
     "prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && RUST_LOG=info,sui=debug,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator",
     "lint": "eslint './{src,test}/**.{ts,js}'",
     "prepublishOnly": "pnpm build",

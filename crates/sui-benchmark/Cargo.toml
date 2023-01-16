@@ -7,12 +7,13 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.57"
+async-trait = "0.1.61"
 rayon = "1.5.3"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 futures = "0.3.23"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
+itertools = "0.10.4"
 tempfile = "3.3.0"
 tokio = { workspace = true, features = ["full"] }
 strum = "0.24.1"
@@ -46,7 +47,7 @@ telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 narwhal-node = { path = "../../narwhal/node" }
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-utils = { path = "../test-utils" }
 
 [target.'cfg(msim)'.dependencies]

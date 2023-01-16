@@ -8,7 +8,6 @@ use tracing::{debug, info};
 
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_adapter::execution_mode;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
@@ -143,7 +142,7 @@ pub async fn submit_move_transaction(
     let client = context.get_client().await.unwrap();
     let data = client
         .transaction_builder()
-        .move_call::<execution_mode::Normal>(
+        .move_call(
             sender,
             package_ref.0,
             module,
@@ -372,7 +371,7 @@ pub async fn delete_devnet_nft(
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
         package_ref,
         "devnet_nft".parse().unwrap(),

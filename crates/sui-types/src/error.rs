@@ -232,7 +232,7 @@ pub enum SuiError {
     InvalidDecoding,
     #[error("Unexpected message.")]
     UnexpectedMessage,
-    #[error("The transaction inputs contain duplicates ObjectRef's")]
+    #[error("The transaction inputs contain duplicated ObjectRef's")]
     DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
@@ -554,6 +554,9 @@ pub enum SuiError {
     #[error("Index store not available on this Fullnode.")]
     IndexStoreNotAvailable,
 
+    #[error("This Move function is currently disabled and not available for call")]
+    BlockedMoveFunction,
+
     #[error("unknown error: {0}")]
     Unknown(String),
 }
@@ -633,6 +636,28 @@ impl SuiError {
             }
             SuiError::ValidatorHaltedAtEpochEnd | SuiError::MissingCommitteeAtEpoch(_) => true,
             _ => false,
+        }
+    }
+
+    // Collapse TransactionInputObjectsErrors into a single SuiError
+    // if there's exactly one error.
+    pub fn collapse_if_single_transaction_input_error(&self) -> Option<&SuiError> {
+        match self {
+            SuiError::TransactionInputObjectsErrors { errors } => {
+                if errors.len() != 1 {
+                    None
+                } else {
+                    // Safe to unwrap, length is checked above
+                    Some(errors.get(0).unwrap())
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn into_transaction_input_error(error: SuiError) -> SuiError {
+        SuiError::TransactionInputObjectsErrors {
+            errors: vec![error],
         }
     }
 }

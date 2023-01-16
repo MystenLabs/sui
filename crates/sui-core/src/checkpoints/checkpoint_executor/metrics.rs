@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::histogram::Histogram;
 use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
     Registry,
@@ -12,6 +13,7 @@ pub struct CheckpointExecutorMetrics {
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_recv_channel_overflow: IntCounter,
     pub current_local_epoch: IntGauge,
+    pub checkpoint_transaction_count: Histogram,
 }
 
 impl CheckpointExecutorMetrics {
@@ -41,6 +43,11 @@ impl CheckpointExecutorMetrics {
                 registry
             )
             .unwrap(),
+            checkpoint_transaction_count: Histogram::new_in_registry(
+                "checkpoint_transaction_count",
+                "Number of transactions in the checkpoint",
+                registry
+            )
         };
         Arc::new(this)
     }

@@ -47,8 +47,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -56,8 +55,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -107,8 +106,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -116,8 +114,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -167,8 +165,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -176,8 +173,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -227,8 +224,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -236,8 +232,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -287,8 +283,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -296,8 +291,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -347,8 +342,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -356,8 +350,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -407,8 +401,7 @@ validator_configs:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
     enable-event-processing: false
-    enable-checkpoint: false
-    checkpoints-per-epoch: ~
+    checkpoints-per-epoch: 3000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -416,8 +409,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100

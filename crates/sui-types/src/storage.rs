@@ -188,9 +188,9 @@ pub trait ReadStore {
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<Option<VerifiedCheckpoint>, Self::Error>;
 
-    fn get_highest_verified_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error>;
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error>;
 
-    fn get_highest_synced_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error>;
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error>;
 
     fn get_checkpoint_contents(
         &self,
@@ -227,11 +227,11 @@ impl<T: ReadStore> ReadStore for &T {
         ReadStore::get_checkpoint_by_sequence_number(*self, sequence_number)
     }
 
-    fn get_highest_verified_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
         ReadStore::get_highest_verified_checkpoint(*self)
     }
 
-    fn get_highest_synced_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
         ReadStore::get_highest_synced_checkpoint(*self)
     }
 
@@ -324,6 +324,27 @@ pub struct InMemoryStore {
 }
 
 impl InMemoryStore {
+    pub fn insert_genesis_state(
+        &mut self,
+        checkpoint: VerifiedCheckpoint,
+        contents: CheckpointContents,
+        transactions: Vec<VerifiedCertificate>,
+        effects: Vec<TransactionEffects>,
+        committee: Committee,
+    ) {
+        self.insert_committee(committee);
+        self.insert_checkpoint(checkpoint.clone());
+        self.insert_checkpoint_contents(contents);
+        self.update_highest_synced_checkpoint(&checkpoint);
+
+        for transaction in transactions {
+            self.insert_transaction(transaction);
+        }
+        for effect in effects {
+            self.insert_transaction_effects(effect);
+        }
+    }
+
     pub fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -476,17 +497,19 @@ impl ReadStore for SharedInMemoryStore {
             .pipe(Ok)
     }
 
-    fn get_highest_verified_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+    fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
         self.inner()
             .get_highest_verified_checkpoint()
             .cloned()
+            .expect("storage should have been initialized with genesis checkpoint")
             .pipe(Ok)
     }
 
-    fn get_highest_synced_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+    fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
         self.inner()
             .get_highest_synced_checkpoint()
             .cloned()
+            .expect("storage should have been initialized with genesis checkpoint")
             .pipe(Ok)
     }
 

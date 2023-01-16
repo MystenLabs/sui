@@ -13,7 +13,7 @@ use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use eyre::Context;
-use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
+use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::RegistryService;
 use narwhal_node as node;
 use narwhal_node::primary_node::PrimaryNode;
@@ -25,6 +25,11 @@ use node::{
 use prometheus::Registry;
 use std::sync::Arc;
 use storage::NodeStorage;
+use sui_keys::keypair_file::{
+    read_authority_keypair_from_file, read_network_keypair_from_file,
+    write_authority_keypair_to_file, write_keypair_to_file,
+};
+use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
 #[cfg(feature = "benchmark")]
@@ -42,13 +47,18 @@ async fn main() -> Result<(), eyre::Report> {
         .args_from_usage("-v... 'Sets the level of verbosity'")
         .subcommand(
             SubCommand::with_name("generate_keys")
-                .about("Print a fresh key pair to file")
-                .args_from_usage("--filename=<FILE> 'The file where to print the new key pair'"),
+                .about("Save an encoded bls12381 keypair (Base64 encoded `privkey`) to file")
+                .args_from_usage("--filename=<FILE> 'The file where to save the encoded authority key pair'"),
         )
         .subcommand(
             SubCommand::with_name("generate_network_keys")
-                .about("Print a fresh network key pair (ed25519) to file")
-                .args_from_usage("--filename=<FILE> 'The file where to print the new network key pair'"),
+            .about("Save an encoded ed25519 network keypair (Base64 encoded `flag || privkey`) to file")
+            .args_from_usage("--filename=<FILE> 'The file where to save the encoded network key pair'"),
+        )
+        .subcommand(
+            SubCommand::with_name("get_pub_key")
+                .about("Get the public key from a keypair file")
+                .args_from_usage("--filename=<FILE> 'The file where the keypair is stored'"),
         )
         .subcommand(
             SubCommand::with_name("run")
@@ -94,26 +104,45 @@ async fn main() -> Result<(), eyre::Report> {
     match matches.subcommand() {
         ("generate_keys", Some(sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
-            let kp = generate_production_keypair::<KeyPair>();
-            config::Export::export(&kp, sub_matches.value_of("filename").unwrap())
-                .context("Failed to generate key pair")?;
+            let key_file = sub_matches.value_of("filename").unwrap();
+            let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            write_authority_keypair_to_file(&keypair, key_file).unwrap();
         }
         ("generate_network_keys", Some(sub_matches)) => {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
-            let network_kp = generate_production_keypair::<NetworkKeyPair>();
-            config::Export::export(&network_kp, sub_matches.value_of("filename").unwrap())
-                .context("Failed to generate network key pair")?
+            let network_key_file = sub_matches.value_of("filename").unwrap();
+            let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), network_key_file).unwrap();
+        }
+        ("get_pub_key", Some(sub_matches)) => {
+            let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
+            let file = sub_matches.value_of("filename").unwrap();
+            match read_network_keypair_from_file(file) {
+                Ok(keypair) => {
+                    // Network keypair file is stored as `flag || privkey`.
+                    println!("{:?}", keypair.public())
+                }
+                Err(_) => {
+                    // Authority keypair file is stored as `privkey`.
+                    match read_authority_keypair_from_file(file) {
+                        Ok(kp) => println!("{:?}", kp.public()),
+                        Err(e) => {
+                            println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                        }
+                    }
+                }
+            }
         }
         ("run", Some(sub_matches)) => {
             let primary_key_file = sub_matches.value_of("primary-keys").unwrap();
-            let primary_keypair = KeyPair::import(primary_key_file)
-                .context("Failed to load the node's primary keypair")?;
+            let primary_keypair = read_authority_keypair_from_file(primary_key_file)
+                .expect("Failed to load the node's primary keypair");
             let primary_network_key_file = sub_matches.value_of("primary-network-keys").unwrap();
-            let primary_network_keypair = NetworkKeyPair::import(primary_network_key_file)
-                .context("Failed to load the node's primary network keypair")?;
+            let primary_network_keypair = read_network_keypair_from_file(primary_network_key_file)
+                .expect("Failed to load the node's primary network keypair");
             let worker_key_file = sub_matches.value_of("worker-keys").unwrap();
-            let worker_keypair = NetworkKeyPair::import(worker_key_file)
-                .context("Failed to load the node's worker keypair")?;
+            let worker_keypair = read_network_keypair_from_file(worker_key_file)
+                .expect("Failed to load the node's worker keypair");
             let registry = match sub_matches.subcommand() {
                 ("primary", _) => primary_metrics_registry(primary_keypair.public().clone()),
                 ("worker", Some(worker_matches)) => {

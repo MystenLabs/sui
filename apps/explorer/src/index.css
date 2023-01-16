@@ -11,6 +11,7 @@
     --issue-light: theme('colors.issue.light');
     --issue-dark: theme('colors.issue.dark');
     --steel: theme('colors.steel.DEFAULT');
+    --steel-dark: theme('colors.steel.dark');
 }
 
 body {

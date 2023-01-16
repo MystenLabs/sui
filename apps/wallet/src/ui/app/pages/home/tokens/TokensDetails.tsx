@@ -7,7 +7,6 @@ import { useMemo } from 'react';
 
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
-import FaucetMessageInfo from '_app/shared/faucet/message-info';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
 import AccountAddress from '_components/account-address';
@@ -18,7 +17,7 @@ import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
-import { FEATURES } from '_src/ui/app/experimentation/features';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 import st from './TokensPage.module.scss';
 
@@ -76,7 +75,6 @@ function MyTokens({
                     <FaucetRequestButton trackEventSource="home" />
                 </div>
             )}
-            <FaucetMessageInfo className={st.gasRequestInfo} />
         </Loading>
     );
 }
@@ -107,7 +105,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 />
             )}
 
-            <div className={st.container}>
+            <div className={st.container} data-testid="coin-page">
                 {showError && error ? (
                     <Alert className={st.alert}>
                         <strong>Sync error (data might be outdated).</strong>{' '}

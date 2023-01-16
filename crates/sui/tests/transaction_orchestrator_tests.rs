@@ -12,7 +12,10 @@ use sui_types::messages::{
 use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::QuorumDriverError;
 use sui_types::utils::to_sender_signed_transaction;
-use test_utils::authority::{spawn_fullnode, spawn_test_authorities, test_authority_configs};
+use test_utils::authority::{
+    spawn_fullnode, spawn_test_authorities, test_authority_configs,
+    test_authority_configs_with_objects,
+};
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::wait_for_nodes_transition_to_epoch;
 use test_utils::network::TestClusterBuilder;
@@ -33,6 +36,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         temp_dir.path(),
         &Registry::new(),
     )
+    .await
     .unwrap();
 
     let txn_count = 4;
@@ -90,6 +94,7 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
         temp_dir.path(),
         &Registry::new(),
     )
+    .await
     .unwrap();
 
     let txn_count = 2;
@@ -196,20 +201,20 @@ async fn test_transaction_orchestrator_reconfig() {
 #[tokio::test]
 async fn test_tx_across_epoch_boundaries() {
     telemetry_subscribers::init_for_testing();
-    let total_tx_cnt = 180;
+    let total_tx_cnt = 1800;
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
     let gas_objects = generate_test_gas_objects_with_owner(total_tx_cnt, sender);
     let (result_tx, mut result_rx) =
         tokio::sync::mpsc::channel::<CertifiedTransaction>(total_tx_cnt);
 
-    let config = test_authority_configs();
-    let authorities = spawn_test_authorities(gas_objects.clone(), &config).await;
+    let (config, gas_objects) = test_authority_configs_with_objects(gas_objects);
+    let authorities = spawn_test_authorities([], &config).await;
     let fullnode = spawn_fullnode(&config, None).await;
 
     let txes = gas_objects
         .iter()
         .map(|o| {
-            let data = TransactionData::new_transfer_sui(
+            let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
                 get_key_pair::<AccountKeyPair>().0,
                 sender,
                 None,
@@ -275,7 +280,7 @@ async fn test_tx_across_epoch_boundaries() {
     // Will all transactions finish in epoch 0?  Local testing results say
     // unlikely with total_tx_size = 180.
     loop {
-        match tokio::time::timeout(tokio::time::Duration::from_secs(5), result_rx.recv()).await {
+        match tokio::time::timeout(tokio::time::Duration::from_secs(60), result_rx.recv()).await {
             Ok(Some(tx_cert)) => {
                 if tx_cert.auth_sig().epoch == 1 {
                     return;

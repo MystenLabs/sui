@@ -161,7 +161,7 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                         {assetCard}
                     </div>
 
-                    {transferMeta[transferType].address && (
+                    {transferMeta[transferType].address ? (
                         <div className={st.txnItem}>
                             <div className={st.label}>
                                 {transferMeta[transferType].transfer}
@@ -181,9 +181,9 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                                 </ExplorerLink>
                             </div>
                         </div>
-                    )}
+                    ) : null}
 
-                    {txDigest.txGas && (
+                    {txDigest.txGas > 0 && (
                         <div
                             className={cl(
                                 st.txFees,

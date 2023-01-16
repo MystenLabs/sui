@@ -2,7 +2,7 @@
 title: JSON-RPC API Quick Start
 ---
 
-Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and how to the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through how to connect and interact with the Sui network using the Sui JSON-RPC API. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
 
 This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
 
@@ -83,7 +83,7 @@ sui keytool sign --address <owner_address> --data <tx_bytes>
 The keytool creates a key and then returns the signature and public key information.
 
 
-#### Execute a transaction with a signature and a public key
+#### Execute a transaction with a serialized signature
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -91,16 +91,15 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "sui_executeTransaction",
+  "method": "sui_executeTransactionSerializedSig",
   "params": [ 
     "{{tx_bytes}}",
-    "{{sig_scheme}}",
     "{{signature}}",
-    "{{pub_key}}",
     "{{request_type}}"
   ]
 }' | json_pp
 ```
+`signature` is a Base64 encoded `flag || signature || pubkey`. 
 
 Native transfer by `sui_transferObject` supports any object that allows for public transfers. Some objects cannot be transferred natively and require a [Move call](#sui_movecall). See [Transactions](../learn/transactions.md#native-transaction) for more information about native transfers.
 

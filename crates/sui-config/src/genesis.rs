@@ -32,7 +32,7 @@ use sui_types::messages::{CallArg, TransactionEffects};
 use sui_types::messages::{CertifiedTransaction, Transaction};
 use sui_types::messages::{InputObjects, SignedTransaction};
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
@@ -83,12 +83,24 @@ impl Genesis {
         &self.objects
     }
 
+    pub fn object(&self, id: ObjectID) -> Option<Object> {
+        self.objects.iter().find(|o| o.id() == id).cloned()
+    }
+
     pub fn transaction(&self) -> &CertifiedTransaction {
         &self.transaction
     }
 
     pub fn effects(&self) -> &TransactionEffects {
         &self.effects
+    }
+
+    pub fn checkpoint(&self) -> VerifiedCheckpoint {
+        VerifiedCheckpoint::new(self.checkpoint.clone(), &self.committee().unwrap()).unwrap()
+    }
+
+    pub fn checkpoint_contents(&self) -> &CheckpointContents {
+        &self.checkpoint_contents
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -470,16 +482,6 @@ impl Builder {
         // Ensure we have signatures from all validators
         assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
 
-        // TODO(bmwill) remove this and don't override previous txn digest once we actually use the
-        // checkpoint created from genesis.
-        let objects = objects
-            .into_iter()
-            .map(|object| Object {
-                previous_transaction: TransactionDigest::genesis(),
-                ..object
-            })
-            .collect::<Vec<_>>();
-
         let genesis = Genesis {
             checkpoint,
             checkpoint_contents,
@@ -857,6 +859,9 @@ pub fn generate_genesis_system_object(
     let mut consensus_addresses = Vec::new();
     let mut worker_addresses = Vec::new();
     let mut names = Vec::new();
+    let mut descriptions = Vec::new();
+    let mut image_url = Vec::new();
+    let mut project_url = Vec::new();
     let mut stakes = Vec::new();
     let mut gas_prices = Vec::new();
     let mut commission_rates = Vec::new();
@@ -875,6 +880,9 @@ pub fn generate_genesis_system_object(
         consensus_addresses.push(validator.narwhal_primary_address());
         worker_addresses.push(validator.narwhal_worker_address());
         names.push(validator.name().to_owned().into_bytes());
+        descriptions.push(validator.description.clone().into_bytes());
+        image_url.push(validator.image_url.clone().into_bytes());
+        project_url.push(validator.project_url.clone().into_bytes());
         stakes.push(validator.stake());
         gas_prices.push(validator.gas_price());
         commission_rates.push(validator.commission_rate());
@@ -894,6 +902,9 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&descriptions).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&image_url).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&project_url).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&consensus_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_addresses).unwrap()),
@@ -969,6 +980,9 @@ mod test {
             p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
+            description: String::new(),
+            image_url: String::new(),
+            project_url: String::new(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
         let builder = Builder::new()

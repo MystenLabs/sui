@@ -49,12 +49,24 @@ export class VoidProvider extends Provider {
     throw new Error('getCoinMetadata');
   }
 
+  // Governance
+  async getReferenceGasPrice(): Promise<number> {
+    throw this.newError('getReferenceGasPrice');
+  }
+
   // Faucet
   async requestSuiFromFaucet(
     _recipient: SuiAddress,
     _httpHeaders?: HttpHeaders
   ): Promise<FaucetResponse> {
     throw this.newError('requestSuiFromFaucet');
+  }
+
+  // RPC Endpoint
+  call(
+    _endpoint: string, 
+    _params: any[]): Promise<any> {
+    throw this.newError('call');
   }
 
   // Objects

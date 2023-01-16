@@ -39,11 +39,14 @@ export const sendTokens = createAsyncThunk<
     'sui-objects/send-tokens',
     async (
         { tokenTypeArg, amount, recipientAddress, gasBudget },
-        { getState, extra: { api, keypairVault }, dispatch }
+        { getState, extra: { api, keypairVault, background }, dispatch }
     ) => {
         const state = getState();
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
-        const signer = api.getSignerInstance(keypairVault.getKeypair());
+        const signer = api.getSignerInstance(
+            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+            background
+        );
         const response = await signer.signAndExecuteTransaction(
             await CoinAPI.newPayTransaction(
                 coins,
@@ -73,7 +76,7 @@ export const stakeTokens = createAsyncThunk<
     'sui-objects/stake',
     async (
         { tokenTypeArg, amount, validatorAddress },
-        { getState, extra: { api, keypairVault }, dispatch }
+        { getState, extra: { api, keypairVault, background }, dispatch }
     ) => {
         const state = getState();
         const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
@@ -88,7 +91,10 @@ export const stakeTokens = createAsyncThunk<
             .map(({ data }) => data as SuiMoveObject);
 
         const response = await Coin.stakeCoin(
-            api.getSignerInstance(keypairVault.getKeypair()),
+            api.getSignerInstance(
+                keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+                background
+            ),
             coins,
             amount,
             validatorAddress
