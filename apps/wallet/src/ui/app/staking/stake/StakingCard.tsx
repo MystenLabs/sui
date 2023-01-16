@@ -77,7 +77,6 @@ function StakingCard() {
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return BigInt(0);
         // return only the total amount of tokens staked for a specific stakeId
-        // for staking the to
         if (stakeIdParams) {
             const balance =
                 allDelegation.find(
