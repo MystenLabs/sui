@@ -130,9 +130,7 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                <>
-                                    {calculateRemaining} {symbol}
-                                </>
+                                {calculateRemaining} {symbol}
                             </Text>
                         </div>
                     )}

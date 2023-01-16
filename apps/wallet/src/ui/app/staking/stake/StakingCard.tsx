@@ -3,9 +3,8 @@
 
 import {
     getTransactionDigest,
-    normalizeSuiAddress,
     SUI_TYPE_ARG,
-    type SuiExecuteTransactionResponse,
+    normalizeSuiAddress,
 } from '@mysten/sui.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Formik } from 'formik';
@@ -14,9 +13,13 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
-import { DelegationState } from './../home/DelegationCard';
+import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
+import {
+    useUnStakeTokenMutation,
+    useStakeTokenMutation,
+} from './useStakingMutation';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
     Content,
@@ -30,7 +33,6 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import {
     useAppSelector,
-    useAppDispatch,
     useCoinDecimals,
     useIndividualCoinMaxBalance,
 } from '_hooks';
@@ -39,7 +41,6 @@ import {
     accountItemizedBalancesSelector,
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { stakeTokens, unStakeToken } from '_redux/slices/transactions';
 import { Text } from '_src/ui/app/shared/text';
 
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -57,19 +58,13 @@ function StakingCard() {
     const accountAddress = useAppSelector(({ account }) => account.address);
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-    const coinBalance = useMemo(
-        () => (coinType && aggregateBalances[coinType]) || BigInt(0),
-        [coinType, aggregateBalances]
-    );
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
     const stakeIdParams = searchParams.get('staked');
     const unstake = searchParams.get('unstake') === 'true';
-
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
     );
-
     const totalGasCoins = useMemo(
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
@@ -79,9 +74,10 @@ function StakingCard() {
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
-    const totalToken = useMemo(() => {
+    const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return BigInt(0);
         // return only the total amount of tokens staked for a specific stakeId
+        // for staking the to
         if (stakeIdParams) {
             const balance =
                 allDelegation.find(
@@ -94,7 +90,16 @@ function StakingCard() {
             (acc, { staked_sui }) => acc + BigInt(staked_sui.principal.value),
             0n
         );
-    }, [stakeIdParams, allDelegation]);
+    }, [allDelegation, stakeIdParams]);
+
+    // For requesting withdrawal of tokens the coinBalance is the total amount of tokens staked for the specific stakeId
+    const coinBalance = useMemo(
+        () =>
+            unstake
+                ? totalTokenBalance
+                : (coinType && aggregateBalances[coinType]) || BigInt(0),
+        [unstake, totalTokenBalance, coinType, aggregateBalances]
+    );
 
     const delegationData = useMemo(() => {
         if (!allDelegation) return null;
@@ -112,6 +117,7 @@ function StakingCard() {
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
+
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
@@ -137,8 +143,16 @@ function StakingCard() {
     );
 
     const queryClient = useQueryClient();
-    const dispatch = useAppDispatch();
+    const delegationId = useMemo(() => {
+        if (!delegationData || delegationData.delegation_status === 'Pending')
+            return null;
+        return delegationData.delegation_status.Active.id.id;
+    }, [delegationData]);
+
     const navigate = useNavigate();
+
+    const stakeToken = useStakeTokenMutation();
+    const unStakeToken = useUnStakeTokenMutation();
 
     const onHandleSubmit = useCallback(
         async (
@@ -162,27 +176,20 @@ function StakingCard() {
                     ) {
                         return;
                     }
-                    response = await dispatch(
-                        unStakeToken({
-                            principalWithdrawAmount: bigIntAmount.toString(),
-                            delegation:
-                                delegationData.delegation_status.Active.id.id,
-                            stakedSuiId:
-                                delegationData.delegation_status.Active
-                                    .staked_sui_id,
-                        })
-                    );
-                    const payload =
-                        response.payload as SuiExecuteTransactionResponse;
-                    txDigest = getTransactionDigest(payload);
+                    response = await unStakeToken.mutateAsync({
+                        delegationId:
+                            delegationData.delegation_status.Active.id.id,
+                        stakeSuId: stakeIdParams,
+                        principalWithdrawAmount: bigIntAmount.toString(),
+                    });
+
+                    txDigest = getTransactionDigest(response);
                 } else {
-                    response = await dispatch(
-                        stakeTokens({
-                            amount: bigIntAmount,
-                            tokenTypeArg: coinType,
-                            validatorAddress: validatorAddress,
-                        })
-                    ).unwrap();
+                    response = await stakeToken.mutateAsync({
+                        amount: bigIntAmount,
+                        tokenTypeArg: coinType,
+                        validatorAddress: validatorAddress,
+                    });
                     txDigest = getTransactionDigest(response);
                 }
 
@@ -215,7 +222,8 @@ function StakingCard() {
             navigate,
             delegationData,
             stakeIdParams,
-            dispatch,
+            unStakeToken,
+            stakeToken,
         ]
     );
 
@@ -263,7 +271,7 @@ function StakingCard() {
                                 </div>
                                 <StakeForm
                                     submitError={sendError}
-                                    coinBalance={totalToken}
+                                    coinBalance={coinBalance}
                                     coinType={coinType}
                                     unstake={unstake}
                                     onClearSubmitError={
@@ -275,10 +283,12 @@ function StakingCard() {
                                     <div className="flex-1 mt-7.5">
                                         <Collapse
                                             title={
-                                                delegationData?.delegation_status ===
-                                                'Pending'
-                                                    ? DelegationState.WARM_UP
-                                                    : DelegationState.EARNING
+                                                STATE_TO_COPY[
+                                                    delegationData?.delegation_status ===
+                                                    'Pending'
+                                                        ? DelegationState.WARM_UP
+                                                        : DelegationState.EARNING
+                                                ]
                                             }
                                             initialIsOpen
                                         >
@@ -310,7 +320,11 @@ function StakingCard() {
                                     mode="primary"
                                     onClick={submitForm}
                                     className=" w-1/2"
-                                    disabled={!isValid || isSubmitting}
+                                    disabled={
+                                        !isValid ||
+                                        isSubmitting ||
+                                        (unstake && !delegationId)
+                                    }
                                 >
                                     {isSubmitting ? (
                                         <LoadingIndicator className="border-white" />
