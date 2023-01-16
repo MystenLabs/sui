@@ -91,12 +91,11 @@ export function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         return getTxnEffectsEventID(txn.effects, address || '');
     }, [address, txn.effects]);
 
-    const amountByRecipient = useMemo(
-        () => getAmount(certificate.data.transactions[0], txn.effects),
-        [certificate.data.transactions, txn.effects]
-    );
-
     const amount = useMemo(() => {
+        const amountByRecipient = getAmount(
+            certificate.data.transactions[0],
+            txn.effects
+        );
         const amount = amountByRecipient && amountByRecipient[0]?.amount;
         const amountTransfers = eventsSummary.reduce(
             (acc, { amount }) => acc + amount,
@@ -104,7 +103,7 @@ export function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         );
 
         return Math.abs(amount || amountTransfers);
-    }, [amountByRecipient, eventsSummary]);
+    }, [certificate.data.transactions, eventsSummary, txn.effects]);
 
     const recipientAddress = useMemo(() => {
         const receiverAddr =
