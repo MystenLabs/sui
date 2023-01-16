@@ -80,7 +80,8 @@ impl Prove {
                 "UpdateDynField".to_string(),
             ),
         );
-        options.backend.memory_type = Some("$SuiMemory".to_string());
+
+        options.model_builder.globals_access = vec!["owner".to_string()];
 
         let prover_result = std::thread::spawn(move || {
             prove::run_move_prover(

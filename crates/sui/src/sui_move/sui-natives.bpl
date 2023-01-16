@@ -28,16 +28,18 @@ procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int) {
     var id: int;
     id := $bytes#$2_object_ID($id#$2_object_UID($id#{{T}}(obj)));
+    owner[id] := $ObjState(false, recipient);
     {{T}}_$memory := transfer({{T}}_$memory, id, obj, recipient);
 }
 
 procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}}) {
     var id: int;
     id := $bytes#$2_object_ID($id#$2_object_UID($id#{{T}}(obj)));
-    if ($2_prover_owned({{T}}_$memory, id)) {
+    if ($2_prover_owned({{T}}_$memory, owner, id)) {
         call $ExecFailureAbort();
         return;
     }
+    owner[id] := $ObjState(true, 0);
     {{T}}_$memory := share({{T}}_$memory, id, obj);
 }
 
@@ -149,33 +151,34 @@ function {:constructor} $ObjState(shared: bool, owner: int): $ObjState;
 
 
 // Representation of memory for a given type.
-type {:datatype} $SuiMemory _;
+//type {:datatype} $SuiMemory _;
 
-function {:constructor} $SuiMemory<T>(domain: [int]bool, contents: [int]T, owner: [int]$ObjState): $SuiMemory T;
+//function {:constructor} $SuiMemory<T>(domain: [int]bool, contents: [int]T): $SuiMemory T;
 
+var owner: [int]$ObjState;
 
 // Functions to change memory state used in in native function Boogie implementations
 
-function {:inline} transfer<T>(m: $SuiMemory T, id: int, v: T, recipient: int): $SuiMemory T {
-    $SuiMemory(domain#$SuiMemory(m)[id := true], contents#$SuiMemory(m)[id := v], owner#$SuiMemory(m)[id := $ObjState(false, recipient)])
+function {:inline} transfer<T>(m: $Memory T, id: int, v: T, recipient: int): $Memory T {
+    $Memory(domain#$Memory(m)[id := true], contents#$Memory(m)[id := v])
 }
 
-function {:inline} share<T>(m: $SuiMemory T, id: int, v: T): $SuiMemory T {
-    $SuiMemory(domain#$SuiMemory(m)[id := true], contents#$SuiMemory(m)[id := v], owner#$SuiMemory(m)[id := $ObjState(true, 0)])
+function {:inline} share<T>(m: $Memory T, id: int, v: T): $Memory T {
+    $Memory(domain#$Memory(m)[id := true], contents#$Memory(m)[id := v])
 }
 
 // Functions to query memory state
 
-function {:inline} $2_prover_owned<T>(m: $SuiMemory T, id: int): bool {
-    domain#$SuiMemory(m)[id] && !shared#$ObjState(owner#$SuiMemory(m)[id])
+function {:inline} $2_prover_owned<T>(m: $Memory T, o: [int]$ObjState, id: int): bool {
+    domain#$Memory(m)[id] && !shared#$ObjState(o[id])
 }
 
-function {:inline} $2_prover_owned_by<T>(m: $SuiMemory T, id: int, owner: int): bool {
-    domain#$SuiMemory(m)[id] && !shared#$ObjState(owner#$SuiMemory(m)[id]) && owner#$ObjState(owner#$SuiMemory(m)[id]) == owner
+function {:inline} $2_prover_owned_by<T>(m: $Memory T, o: [int]$ObjState, id: int, owner: int): bool {
+    domain#$Memory(m)[id] && !shared#$ObjState(o[id]) && owner#$ObjState(o[id]) == owner
 }
 
-function {:inline} $2_prover_shared<T>(m: $SuiMemory T, id: int): bool {
-    domain#$SuiMemory(m)[id] && shared#$ObjState(owner#$SuiMemory(m)[id])
+function {:inline} $2_prover_shared<T>(m: $Memory T, o: [int]$ObjState, id: int): bool {
+    domain#$Memory(m)[id] && shared#$ObjState(o[id])
 }
 
 
