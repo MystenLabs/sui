@@ -24,9 +24,7 @@ export function useStakeTokenMutation() {
             validatorAddress,
         }: StakeTokenArgs) => {
             if (!validatorAddress || !amount || !tokenTypeArg) {
-                throw new Error(
-                    'Failed, missing required field'
-                );
+                throw new Error('Failed, missing required field');
             }
 
             const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
