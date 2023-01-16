@@ -7,14 +7,13 @@ import {
     getMoveCallTransaction,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import cl from 'classnames';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
+import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { Text } from '_app/shared/text';
-import Icon, { SuiIcons } from '_components/icon';
 import { getEventsSummary, getAmount, formatDate } from '_helpers';
 import { useAppSelector, useMiddleEllipsis } from '_hooks';
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
@@ -26,59 +25,6 @@ import type {
 
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
-
-interface TxnItemIconProps {
-    txnKindName: TransactionKindName | 'Minted';
-    txnFailed?: boolean;
-    isSender: boolean;
-}
-
-function TxnItemIcon({ txnKindName, txnFailed, isSender }: TxnItemIconProps) {
-    const variant = useMemo(() => {
-        if (txnKindName === 'Minted') return 'Minted';
-        return isSender ? 'Send' : 'Receive';
-    }, [isSender, txnKindName]);
-
-    const icons = {
-        Minted: (
-            <Icon icon={SuiIcons.Buy} className="text-gradient-blue-start" />
-        ),
-        Send: (
-            <Icon
-                icon={SuiIcons.ArrowLeft}
-                className="text-gradient-blue-start rotate-135"
-            />
-        ),
-        Receive: (
-            <Icon
-                icon={SuiIcons.ArrowLeft}
-                className="text-gradient-blue-start -rotate-45"
-            />
-        ),
-
-        Swapped: (
-            <Icon icon={SuiIcons.Swap} className="text-gradient-blue-start" />
-        ),
-    };
-
-    return (
-        <div
-            className={cl([
-                txnFailed ? 'bg-issue-light' : 'bg-gray-45',
-                'w-7.5 h-7.5 flex justify-center items-center rounded-2lg',
-            ])}
-        >
-            {txnFailed ? (
-                <Icon
-                    icon={SuiIcons.Info}
-                    className="text-issue-dark text-body"
-                />
-            ) : (
-                icons[variant]
-            )}
-        </div>
-    );
-}
 
 type TxnTypeProps = {
     value?: string;
@@ -204,7 +150,7 @@ export function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         >
             <div className="flex items-start w-full justify-between gap-3">
                 <div className="w-7.5">
-                    <TxnItemIcon
+                    <TxnIcon
                         txnKindName={txnIconName}
                         txnFailed={executionStatus === 'Failed'}
                         isSender={isSender}
