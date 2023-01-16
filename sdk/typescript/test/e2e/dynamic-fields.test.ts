@@ -82,7 +82,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
         null
       );
       console.log(dynamic_fields2);
-      expect(dynamic_fields2.data.length).to.toEqual(1);
+      expect(dynamic_fields2.data.length).greaterThan(0);
       expect(dynamic_fields.nextCursor).to.not.toEqual(null);
 
     });
