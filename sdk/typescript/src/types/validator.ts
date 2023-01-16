@@ -11,6 +11,7 @@ import {
   string,
   union,
   Infer,
+  optional,
 } from 'superstruct';
 import { SuiAddress } from './common';
 
@@ -21,6 +22,9 @@ export const ValidatorMetaData = object({
   worker_pubkey_bytes: array(number()),
   proof_of_possession_bytes: array(number()),
   name: array(number()),
+  description: optional(array(any())),
+  image_url: optional(array(any())),
+  project_url: optional(array(any())),
   net_address: array(number()),
   consensus_address: array(number()),
   worker_address: array(number()),
