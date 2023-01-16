@@ -1,0 +1,1 @@
+RUST_BACKTRACE=1 RUST_LOG=sui=debug,narwhal=debug,tonic=trace,tokio=trace,msim=trace,info,hyper=trace MSIM_TEST_SEED=17417772715525243976 cargo simtest --test reconfiguration_tests reconfig_with_revert_end_to_end_test  --no-capture >! /tmp/a1
