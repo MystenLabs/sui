@@ -30,6 +30,9 @@ pub fn test_validatdor_metadata(
         worker_pubkey_bytes: vec![],
         proof_of_possession_bytes: vec![],
         name: to_bytes("zero_commission").unwrap(),
+        description: vec![],
+        image_url: vec![],
+        project_url: vec![],
         net_address,
         consensus_address: vec![],
         worker_address: vec![],
@@ -61,6 +64,7 @@ pub fn test_validator(
     let sui_address = SuiAddress::from(&pubkey_bytes);
     Validator {
         metadata: test_validatdor_metadata(sui_address, pubkey_bytes, net_address),
+        voting_power: stake_amount,
         stake_amount,
         pending_stake: 1,
         pending_withdraw: 1,
@@ -74,7 +78,8 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
     let validator_set = ValidatorSet {
         validator_stake: 1,
         delegation_stake: 1,
-        quorum_stake_threshold: 1,
+        total_voting_power: 1,
+        quorum_threshold: 1,
         active_validators: validators,
         pending_validators: vec![],
         pending_removals: vec![],

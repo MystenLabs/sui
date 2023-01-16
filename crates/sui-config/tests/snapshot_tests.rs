@@ -71,6 +71,9 @@ fn populated_genesis_snapshot_matches() {
         p2p_address: Multiaddr::empty(),
         narwhal_primary_address: Multiaddr::empty(),
         narwhal_worker_address: Multiaddr::empty(),
+        description: String::new(),
+        image_url: String::new(),
+        project_url: String::new(),
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());
 

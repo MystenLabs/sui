@@ -30,6 +30,10 @@ module examples::object_basics {
         )
     }
 
+    public entry fun share(ctx: &mut TxContext) {
+        transfer::share_object(Object { id: object::new(ctx), value: 0 })
+    }
+
     public entry fun transfer(o: Object, recipient: address) {
         transfer::transfer(o, recipient)
     }

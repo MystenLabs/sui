@@ -155,7 +155,7 @@ export type IconTooltipProps = Omit<TooltipProps, 'children'>;
 export function IconTooltip(props: IconTooltipProps) {
     return (
         <Tooltip {...props}>
-            <Icon icon={SuiIcons.Info} />
+            <Icon icon={SuiIcons.Info} className="font-normal" />
         </Tooltip>
     );
 }

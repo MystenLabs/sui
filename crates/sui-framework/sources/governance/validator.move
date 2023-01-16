@@ -14,8 +14,10 @@ module sui::validator {
     use sui::epoch_time_lock::EpochTimeLock;
     use std::option::Option;
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
-    use sui::staking_pool::{Self, Delegation, StakedSui, StakingPool};
-
+    use sui::staking_pool::{Self, Delegation, PoolTokenExchangeRate, StakedSui, StakingPool};
+    use std::string::{Self, String};
+    use sui::url::Url;
+    use sui::url;
     friend sui::genesis;
     friend sui::sui_system;
     friend sui::validator_set;
@@ -42,7 +44,10 @@ module sui::validator {
         /// This is a proof that the validator has ownership of the private key
         proof_of_possession: vector<u8>,
         /// A unique human-readable name of this validator.
-        name: vector<u8>,
+        name: String,
+        description: String,
+        image_url: Url,
+        project_url: Url,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
         /// The address of the narwhal primary
@@ -62,6 +67,9 @@ module sui::validator {
     struct Validator has store {
         /// Summary of the validator.
         metadata: ValidatorMetadata,
+        /// The voting power of this validator, which might be different from its
+        /// stake amount.
+        voting_power: u64,
         /// The current active stake amount. This will not change during an epoch. It can only
         /// be updated at the end of epoch.
         stake_amount: u64,
@@ -103,6 +111,9 @@ module sui::validator {
         worker_pubkey_bytes: vector<u8>,
         proof_of_possession: vector<u8>,
         name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        project_url: vector<u8>,
         net_address: vector<u8>,
         consensus_address: vector<u8>,
         worker_address: vector<u8>,
@@ -114,7 +125,10 @@ module sui::validator {
     ): Validator {
         assert!(
             // TODO: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 128 && vector::length(&name) <= 128 && vector::length(&pubkey_bytes) <= 128,
+            vector::length(&net_address) <= 128
+                && vector::length(&name) <= 128
+                && vector::length(&description) <= 150
+                && vector::length(&pubkey_bytes) <= 128,
             0
         );
         verify_proof_of_possession(
@@ -122,8 +136,6 @@ module sui::validator {
             sui_address,
             pubkey_bytes
         );
-        // Check that the name is human-readable.
-        ascii::string(copy name);
         let stake_amount = balance::value(&stake);
         stake::create(stake, sui_address, coin_locked_until_epoch, ctx);
         Validator {
@@ -133,7 +145,10 @@ module sui::validator {
                 network_pubkey_bytes,
                 worker_pubkey_bytes,
                 proof_of_possession,
-                name,
+                name: string::from_ascii(ascii::string(name)),
+                description: string::from_ascii(ascii::string(description)),
+                image_url: url::new_unsafe_from_bytes(image_url),
+                project_url: url::new_unsafe_from_bytes(project_url),
                 net_address,
                 consensus_address,
                 worker_address,
@@ -142,6 +157,10 @@ module sui::validator {
                 next_epoch_gas_price: gas_price,
                 next_epoch_commission_rate: commission_rate,
             },
+            // Initialize the voting power to be the same as the stake amount.
+            // At the epoch change where this validator is actually added to the
+            // active validator set, the voting power will be updated accordingly.
+            voting_power: stake_amount,
             stake_amount,
             pending_stake: 0,
             pending_withdraw: 0,
@@ -154,6 +173,7 @@ module sui::validator {
     public(friend) fun destroy(self: Validator, ctx: &mut TxContext) {
         let Validator {
             metadata: _,
+            voting_power: _,
             stake_amount: _,
             pending_stake: _,
             pending_withdraw: _,
@@ -287,6 +307,16 @@ module sui::validator {
         stake_amount(self) + delegate_amount(self)
     }
 
+    /// Return the voting power of this validator.
+    public fun voting_power(self: &Validator): u64 {
+        self.voting_power
+    }
+
+    /// Set the voting power of this validator, called only from validator_set.
+    public(friend) fun set_voting_power(self: &mut Validator, new_voting_power: u64) {
+        self.voting_power = new_voting_power;
+    }
+
     public fun pending_stake_amount(self: &Validator): u64 {
         self.pending_stake
     }
@@ -303,6 +333,10 @@ module sui::validator {
         self.commission_rate
     }
 
+    public fun pool_token_exchange_rate(self: &Validator): PoolTokenExchangeRate {
+        staking_pool::pool_token_exchange_rate(&self.delegation_staking_pool)
+    }
+
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
@@ -312,6 +346,7 @@ module sui::validator {
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
     // Creates a validator - bypassing the proof of possession in check in the process.
+    // TODO: Refactor to share code with new().
     #[test_only]
     public(friend) fun new_for_testing(
         sui_address: address,
@@ -320,6 +355,9 @@ module sui::validator {
         worker_pubkey_bytes: vector<u8>,
         proof_of_possession: vector<u8>,
         name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        project_url: vector<u8>,
         net_address: vector<u8>,
         consensus_address: vector<u8>,
         worker_address: vector<u8>,
@@ -331,11 +369,12 @@ module sui::validator {
     ): Validator {
         assert!(
             // TODO: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 128 && vector::length(&name) <= 128 && vector::length(&pubkey_bytes) <= 128,
+            vector::length(&net_address) <= 128
+                && vector::length(&name) <= 128
+                && vector::length(&description) <= 150
+                && vector::length(&pubkey_bytes) <= 128,
             0
         );
-        // Check that the name is human-readable.
-        ascii::string(copy name);
         let stake_amount = balance::value(&stake);
         stake::create(stake, sui_address, coin_locked_until_epoch, ctx);
         Validator {
@@ -345,7 +384,10 @@ module sui::validator {
                 network_pubkey_bytes,
                 worker_pubkey_bytes,
                 proof_of_possession,
-                name,
+                name: string::from_ascii(ascii::string(name)),
+                description: string::from_ascii(ascii::string(description)),
+                image_url: url::new_unsafe_from_bytes(image_url),
+                project_url: url::new_unsafe_from_bytes(project_url),
                 net_address,
                 consensus_address,
                 worker_address,
@@ -355,6 +397,7 @@ module sui::validator {
                 next_epoch_commission_rate: commission_rate,
             },
             stake_amount,
+            voting_power: stake_amount,
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,

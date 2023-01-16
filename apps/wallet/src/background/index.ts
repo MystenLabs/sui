@@ -8,7 +8,7 @@ import { LOCK_ALARM_NAME } from './Alarms';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
-import { IS_SESSION_STORAGE_SUPPORTED } from './keyring/VaultStorage';
+import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 
@@ -44,6 +44,10 @@ Permissions.permissionReply.subscribe((permission) => {
     }
 });
 
+Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
+    connections.notifyWalletStatusChange(origin, { accounts });
+});
+
 Keyring.on('lockedStatusUpdate', (isLocked: boolean) => {
     connections.notifyForLockedStatusUpdate(isLocked);
 });
@@ -54,7 +58,7 @@ Browser.alarms.onAlarm.addListener((alarm) => {
     }
 });
 
-if (!IS_SESSION_STORAGE_SUPPORTED) {
+if (!isSessionStorageSupported()) {
     Keyring.on('lockedStatusUpdate', async (isLocked) => {
         if (!isLocked) {
             const allTabs = await Browser.tabs.query({});

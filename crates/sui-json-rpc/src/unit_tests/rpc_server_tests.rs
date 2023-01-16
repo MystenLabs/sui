@@ -646,7 +646,6 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
                 )
                 .await
                 .unwrap();
-
             tx_responses.push(response);
         }
     }
@@ -657,17 +656,30 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
     // test get all events ascending
     let page1 = client
         .event_api()
-        .get_events(EventQuery::All, Some((2, 0).into()), Some(3), false)
+        .get_events(
+            EventQuery::All,
+            Some((tx_responses[2].tx_digest, 0).into()),
+            Some(3),
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((5, 0).into()), page1.next_cursor);
+    assert_eq!(
+        Some((tx_responses[5].tx_digest, 0).into()),
+        page1.next_cursor
+    );
     let page2 = client
         .event_api()
-        .get_events(EventQuery::All, Some((5, 0).into()), Some(20), false)
+        .get_events(
+            EventQuery::All,
+            Some((tx_responses[5].tx_digest, 0).into()),
+            Some(20),
+            false,
+        )
         .await
         .unwrap();
-    assert_eq!(16, page2.data.len());
+    assert_eq!(15, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get all events descending
@@ -677,13 +689,23 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         .await
         .unwrap();
     assert_eq!(3, page1.data.len());
-    assert_eq!(Some((17, 0).into()), page1.next_cursor);
+    assert_eq!(
+        Some((tx_responses[16].tx_digest, 0).into()),
+        page1.next_cursor
+    );
+
     let page2 = client
         .event_api()
-        .get_events(EventQuery::All, Some((16, 0).into()), None, true)
+        .get_events(
+            EventQuery::All,
+            Some((tx_responses[16].tx_digest, 0).into()),
+            None,
+            true,
+        )
         .await
         .unwrap();
-    assert_eq!(17, page2.data.len());
+    // 17 events created by this test + 33 Genesis event
+    assert_eq!(50, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get sender events

@@ -5,8 +5,6 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import theme from '../../styles/theme.module.css';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { findDataFromID } from '../../utils/static/searchUtil';
 import TransactionView from './TransactionView';
 
 import type { SuiTransactionResponse } from '@mysten/sui.js';
@@ -45,11 +43,6 @@ function TransactionResultAPI({ id }: { id: string }) {
     return <TransactionView transaction={data} />;
 }
 
-function TransactionResultStatic({ id }: { id: string }) {
-    const entry = findDataFromID(id, undefined);
-    return <TransactionView transaction={entry} />;
-}
-
 function TransactionResult() {
     const { id } = useParams();
     const { state } = useLocation();
@@ -68,11 +61,7 @@ function TransactionResult() {
     }
 
     if (checkIsString(id)) {
-        return IS_STATIC_ENV ? (
-            <TransactionResultStatic id={id} />
-        ) : (
-            <TransactionResultAPI id={id} />
-        );
+        return <TransactionResultAPI id={id} />;
     }
 
     return <ErrorResult id={id} errorMsg="ID not a valid string" />;

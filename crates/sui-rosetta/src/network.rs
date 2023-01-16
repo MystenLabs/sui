@@ -68,7 +68,7 @@ pub async fn status(
         current_block_identifier: current_block.block.block_identifier,
         current_block_timestamp: current_block.block.timestamp,
         genesis_block_identifier: blocks.genesis_block_identifier(),
-        oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
+        oldest_block_identifier: Some(blocks.oldest_block_identifier()?),
         sync_status: Some(SyncStatus {
             current_index: Some(index),
             target_index: Some(target),

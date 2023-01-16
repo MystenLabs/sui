@@ -15,8 +15,8 @@ import {
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
+import type { CoinsMetaProps } from '../../helpers/getEventsSummary';
 import type { TransactionDryRun } from '../../hooks/useTransactionDryRun';
-import type { CoinsMetaProps } from '../../hooks/useTransactionSummary';
 import type { TransactionRequest } from '_payloads/transactions';
 
 import st from './DappTxApprovalPage.module.scss';
@@ -178,13 +178,14 @@ export function TransactionSummaryCard({
     txRequest: TransactionRequest;
     address: string;
 }) {
-    const txData: TransactionDryRun =
+    const txData: TransactionDryRun = (
         txRequest.tx.type === 'move-call'
             ? {
                   kind: 'moveCall',
                   data: txRequest.tx.data,
               }
-            : txRequest.tx.data;
+            : txRequest.tx.data
+    ) as TransactionDryRun;
 
     const txReqData = {
         txData: txData,

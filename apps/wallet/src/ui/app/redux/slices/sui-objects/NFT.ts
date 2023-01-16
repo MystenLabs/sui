@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { RawSigner, SuiExecuteTransactionResponse } from '@mysten/sui.js';
+import type {
+    SignerWithProvider,
+    SuiExecuteTransactionResponse,
+} from '@mysten/sui.js';
 
 const DEFAULT_NFT_IMAGE =
     'ipfs://QmZPWWy5Si54R3d26toaqRiqvCH7HkGdXkxwUgCm2oKKM2?filename=img-sq-01.png';
@@ -14,7 +17,7 @@ export class ExampleNFT {
      * @param signer A signer with connection to the fullnode
      */
     public static async mintExampleNFT(
-        signer: RawSigner,
+        signer: SignerWithProvider,
         name?: string,
         description?: string,
         imageUrl?: string

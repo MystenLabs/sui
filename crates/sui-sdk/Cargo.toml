@@ -31,7 +31,9 @@ sui-keys =  { path = "../sui-keys" }
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 move-binary-format.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+fastcrypto.workspace = true
+
+workspace-hack= { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }

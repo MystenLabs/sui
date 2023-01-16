@@ -7,7 +7,9 @@ use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
-use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
+use crate::crypto::{
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature,
+};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::sui_serde::Readable;
@@ -26,82 +28,35 @@ pub type CheckpointSequenceNumber = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
-    // Type of checkpoint request
-    pub request_type: CheckpointRequestType,
-    // A flag, if true also return the contents of the
-    // checkpoint besides the meta-data.
-    pub detail: bool,
-}
-
-impl CheckpointRequest {
-    pub fn authenticated(seq: Option<CheckpointSequenceNumber>, detail: bool) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::AuthenticatedCheckpoint(seq),
-            detail,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointRequestType {
-    /// Request a stored authenticated checkpoint.
     /// if a sequence number is specified, return the checkpoint with that sequence number;
     /// otherwise if None returns the latest authenticated checkpoint stored.
-    AuthenticatedCheckpoint(Option<CheckpointSequenceNumber>),
+    pub sequence_number: Option<CheckpointSequenceNumber>,
+    // A flag, if true also return the contents of the
+    // checkpoint besides the meta-data.
+    pub request_content: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointResponse {
-    AuthenticatedCheckpoint {
-        checkpoint: Option<AuthenticatedCheckpoint>,
-        contents: Option<CheckpointContents>,
-    },
-}
-
-// TODO: Rename to AuthenticatedCheckpointSummary
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AuthenticatedCheckpoint {
-    // The checkpoint with just a single authority
-    // signature.
-    Signed(SignedCheckpointSummary),
-    // The checkpoint with a quorum of signatures.
-    Certified(CertifiedCheckpointSummary),
-}
-
-impl AuthenticatedCheckpoint {
-    pub fn summary(&self) -> &CheckpointSummary {
-        match self {
-            Self::Signed(s) => &s.summary,
-            Self::Certified(c) => &c.summary,
-        }
-    }
-
-    pub fn verify(&self, committee: &Committee, detail: Option<&CheckpointContents>) -> SuiResult {
-        match self {
-            Self::Signed(s) => s.verify(committee, detail),
-            Self::Certified(c) => c.verify(committee, detail),
-        }
-    }
-
-    pub fn sequence_number(&self) -> CheckpointSequenceNumber {
-        match self {
-            Self::Signed(s) => s.summary.sequence_number,
-            Self::Certified(c) => c.summary.sequence_number,
-        }
-    }
-
-    pub fn epoch(&self) -> EpochId {
-        match self {
-            Self::Signed(s) => s.summary.epoch,
-            Self::Certified(c) => c.summary.epoch,
-        }
-    }
+pub struct CheckpointResponse {
+    pub checkpoint: Option<CertifiedCheckpointSummary>,
+    pub contents: Option<CheckpointContents>,
 }
 
 #[serde_as]
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
 )]
 pub struct CheckpointDigest(
     #[schemars(with = "Base58")]
@@ -434,6 +389,10 @@ impl VerifiedCheckpoint {
     pub fn into_inner(self) -> CertifiedCheckpointSummary {
         self.0
     }
+
+    pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
+        (self.summary.sequence_number, self.0.summary)
+    }
 }
 
 impl std::ops::Deref for VerifiedCheckpoint {
@@ -457,6 +416,13 @@ pub struct CheckpointSignatureMessage {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
+    /// This field 'pins' user signatures for the checkpoint:
+    ///
+    /// * For normal checkpoint this field will contain same number of elements as transactions.
+    /// * Genesis checkpoint has transactions but this field is empty.
+    /// * Last checkpoint in the epoch will have (last)extra system transaction
+    /// in the transactions list not covered in the signatures list
+    user_signatures: Vec<Signature>,
 }
 
 impl CheckpointSignatureMessage {
@@ -472,6 +438,20 @@ impl CheckpointContents {
     {
         Self {
             transactions: contents.into_iter().collect(),
+            user_signatures: vec![],
+        }
+    }
+
+    pub fn new_with_causally_ordered_transactions_and_signatures<T>(
+        contents: T,
+        signatures: Vec<Signature>,
+    ) -> Self
+    where
+        T: IntoIterator<Item = ExecutionDigests>,
+    {
+        Self {
+            transactions: contents.into_iter().collect(),
+            user_signatures: signatures,
         }
     }
 

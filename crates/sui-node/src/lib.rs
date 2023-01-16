@@ -49,7 +49,6 @@ use sui_storage::{
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::messages::QuorumDriverResponse;
-use tokio::sync::mpsc::channel;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -71,16 +70,14 @@ use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::SuiTxValidator;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::narwhal_manager::{
-    run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
-};
+use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
     validator_server_handle: tokio::task::JoinHandle<Result<()>>,
-    narwhal_manager: NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>,
+    narwhal_manager: NarwhalManager<SuiTxValidator>,
     consensus_adapter: Arc<ConsensusAdapter>,
     // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
     // is copied into each checkpoint service task, and they are listening to any change to this
@@ -152,6 +149,7 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_store = AuthorityPerEpochStore::new(
+            config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
             None,
@@ -159,8 +157,11 @@ impl SuiNode {
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
-        checkpoint_store
-            .insert_genesis_checkpoint(genesis.checkpoint(), genesis.checkpoint_contents().clone());
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),
@@ -244,7 +245,8 @@ impl SuiNode {
                     checkpoint_executor_handle.subscribe_to_end_of_epoch(),
                     config.db_path(),
                     &prometheus_registry,
-                )?,
+                )
+                .await?,
             ))
         } else {
             None
@@ -393,10 +395,19 @@ impl SuiNode {
                 )))
                 .into_inner();
 
+            let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
+            if anemo_config.max_frame_size.is_none() {
+                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
+                // catch bugs where size limits are missing from other parts of our code.
+                // TODO: remove this and revert to default anemo max_frame_size once size
+                // limits are fully implemented on sui data structures.
+                anemo_config.max_frame_size = Some(8 << 20);
+            }
+
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
-                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
+                .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
             info!("P2p network started on {}", network.local_addr());
@@ -441,7 +452,7 @@ impl SuiNode {
         )
         .await?;
 
-        let narwhal_manager = Self::construct_and_run_narwhal_manager(
+        let narwhal_manager = Self::construct_narwhal_manager(
             config,
             consensus_config,
             state.clone(),
@@ -470,7 +481,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
-        narwhal_manager: NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>,
+        narwhal_manager: NarwhalManager<SuiTxValidator>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> Result<ValidatorComponents> {
@@ -504,14 +515,13 @@ impl SuiNode {
             .address;
         let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
 
-        let msg = NarwhalStartMessage {
-            committee: committee.clone(),
-            shared_worker_cache: SharedWorkerCache::from(worker_cache),
-            execution_state: consensus_handler,
-        };
-        info!("Sending start signal to Narwhal");
-        narwhal_manager.tx_start.send(msg).await?;
-        // TODO: (Laura) wait for start complete signal
+        narwhal_manager
+            .start(
+                committee.clone(),
+                SharedWorkerCache::from(worker_cache),
+                consensus_handler,
+            )
+            .await;
 
         Ok(ValidatorComponents {
             validator_server_handle,
@@ -558,12 +568,12 @@ impl SuiNode {
         )
     }
 
-    fn construct_and_run_narwhal_manager(
+    fn construct_narwhal_manager(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         state: Arc<AuthorityState>,
         registry_service: &RegistryService,
-    ) -> Result<NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>> {
+    ) -> Result<NarwhalManager<SuiTxValidator>> {
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair().copy(),
@@ -574,18 +584,7 @@ impl SuiNode {
             registry_service: registry_service.clone(),
         };
 
-        let (tx_start, tr_start) = channel(1);
-        let (tx_stop, tr_stop) = channel(1);
-        let join_handle =
-            spawn_monitored_task!(run_narwhal_manager(narwhal_config, tr_start, tr_stop));
-
-        let narwhal_manager = NarwhalManager {
-            join_handle,
-            tx_start,
-            tx_stop,
-        };
-
-        Ok(narwhal_manager)
+        Ok(NarwhalManager::new(narwhal_config))
     }
 
     fn construct_consensus_adapter(
@@ -706,9 +705,7 @@ impl SuiNode {
                 // Stop the old checkpoint service.
                 drop(checkpoint_service_exit);
 
-                info!("Sending shutdown signal to Narwhal");
-                narwhal_manager.tx_stop.send(()).await?;
-                // TODO: (Laura) wait for stop complete signal
+                narwhal_manager.shutdown().await;
 
                 self.reconfigure_state(next_epoch).await;
 

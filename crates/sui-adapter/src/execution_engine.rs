@@ -459,6 +459,9 @@ fn debit_coins_and_transfer<S>(
     for (recipient, amount) in recipients.iter().zip(amounts) {
         let mut remaining_amount = *amount;
         loop {
+            if remaining_amount == 0 {
+                break; // nothing to pay
+            }
             // while remaining_amount != 0
             // guaranteed to be in-bounds because of the total > total_coins check above
             let coin = &mut coins[cur_coin_idx];
@@ -670,7 +673,7 @@ pub fn manual_execute_move_call_fake_txn_digest(
     sender: SuiAddress,
     move_call: MoveCall,
 ) -> TransactionDigest {
-    let txn_data = TransactionData::new(
+    let txn_data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Single(SingleTransactionKind::Call(move_call)),
         sender,
         FAKE_GAS_OBJECT,

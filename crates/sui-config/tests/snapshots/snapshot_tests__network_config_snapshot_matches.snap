@@ -55,8 +55,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -114,8 +114,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -173,8 +173,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -232,8 +232,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -291,8 +291,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -350,8 +350,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -409,8 +409,8 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
     authority-store-pruning-config:
-      objects-num-latest-versions-to-retain: 18446744073709551615
-      objects-pruning-period-secs: 43200
+      objects-num-latest-versions-to-retain: 2
+      objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100

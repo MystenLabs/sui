@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -50,12 +51,21 @@ pub trait DataReader {
         &self,
         object_id: ObjectID,
     ) -> Result<GetRawObjectDataResponse, anyhow::Error>;
+
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error>;
 }
 
 #[derive(Clone)]
-pub struct TransactionBuilder(pub Arc<dyn DataReader + Sync + Send>);
+pub struct TransactionBuilder<Mode: ExecutionMode>(
+    Arc<dyn DataReader + Sync + Send>,
+    PhantomData<Mode>,
+);
 
-impl TransactionBuilder {
+impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
+    pub fn new(data_reader: Arc<dyn DataReader + Sync + Send>) -> Self {
+        Self(data_reader, PhantomData)
+    }
+
     async fn select_gas(
         &self,
         signer: SuiAddress,
@@ -100,11 +110,13 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![object_id])
             .await?;
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new(
             TransactionKind::Single(single_transfer),
             signer,
             gas,
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -128,8 +140,9 @@ impl TransactionBuilder {
         amount: Option<u64>,
     ) -> anyhow::Result<TransactionData> {
         let object = self.get_object_ref(sui_object_id).await?;
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_transfer_sui(
-            recipient, signer, amount, object, gas_budget,
+            recipient, signer, amount, object, gas_budget, gas_price,
         ))
     }
 
@@ -159,8 +172,10 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, input_coins)
             .await?;
-        let data =
-            TransactionData::new_pay(signer, coin_refs, recipients, amounts, gas, gas_budget);
+        let gas_price = self.0.get_reference_gas_price().await?;
+        let data = TransactionData::new_pay(
+            signer, coin_refs, recipients, amounts, gas, gas_budget, gas_price,
+        );
         Ok(data)
     }
 
@@ -184,6 +199,7 @@ impl TransactionBuilder {
             .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs[0];
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_pay_sui(
             signer,
             coin_refs,
@@ -191,6 +207,7 @@ impl TransactionBuilder {
             amounts,
             gas_object_ref,
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -214,16 +231,18 @@ impl TransactionBuilder {
             .collect::<anyhow::Result<Vec<ObjectRef>>>()?;
         // [0] is safe because input_coins is non-empty and coins are of same length as input_coins.
         let gas_object_ref = coin_refs[0];
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_pay_all_sui(
             signer,
             coin_refs,
             recipient,
             gas_object_ref,
             gas_budget,
+            gas_price,
         ))
     }
 
-    pub async fn move_call<Mode: ExecutionMode>(
+    pub async fn move_call(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
@@ -235,14 +254,8 @@ impl TransactionBuilder {
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
         let single_move_call = SingleTransactionKind::Call(
-            self.single_move_call::<Mode>(
-                package_object_id,
-                module,
-                function,
-                type_args,
-                call_args,
-            )
-            .await?,
+            self.single_move_call(package_object_id, module, function, type_args, call_args)
+                .await?,
         );
         let input_objects = single_move_call
             .input_objects()?
@@ -256,16 +269,17 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, input_objects)
             .await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new(
             TransactionKind::Single(single_move_call),
             signer,
             gas,
             gas_budget,
+            gas_price,
         ))
     }
 
-    pub async fn single_move_call<Mode: ExecutionMode>(
+    pub async fn single_move_call(
         &self,
         package_object_id: ObjectID,
         module: &str,
@@ -283,7 +297,7 @@ impl TransactionBuilder {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args::<Mode>(
+            .resolve_and_checks_json_args(
                 package_object_id,
                 &module,
                 &function,
@@ -324,7 +338,7 @@ impl TransactionBuilder {
         })
     }
 
-    async fn resolve_and_checks_json_args<Mode: ExecutionMode>(
+    async fn resolve_and_checks_json_args(
         &self,
         package_id: ObjectID,
         module: &Identifier,
@@ -388,11 +402,13 @@ impl TransactionBuilder {
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
         let gas = self.select_gas(sender, gas, gas_budget, vec![]).await?;
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_module(
             sender,
             gas,
             compiled_modules,
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -412,7 +428,7 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![coin_object_id])
             .await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
@@ -425,6 +441,7 @@ impl TransactionBuilder {
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
             ],
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -444,7 +461,7 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![coin_object_id])
             .await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
@@ -457,6 +474,7 @@ impl TransactionBuilder {
                 CallArg::Pure(bcs::to_bytes(&split_count)?),
             ],
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -477,7 +495,7 @@ impl TransactionBuilder {
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![primary_coin, coin_to_merge])
             .await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
@@ -490,10 +508,11 @@ impl TransactionBuilder {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_to_merge_ref)),
             ],
             gas_budget,
+            gas_price,
         ))
     }
 
-    pub async fn batch_transaction<Mode: ExecutionMode>(
+    pub async fn batch_transaction(
         &self,
         signer: SuiAddress,
         single_transaction_params: Vec<RPCTransactionRequestParams>,
@@ -516,7 +535,7 @@ impl TransactionBuilder {
                 }
                 RPCTransactionRequestParams::MoveCallRequestParams(param) => {
                     SingleTransactionKind::Call(
-                        self.single_move_call::<Mode>(
+                        self.single_move_call(
                             param.package_object_id,
                             &param.module,
                             &param.function,
@@ -544,12 +563,13 @@ impl TransactionBuilder {
             .collect();
 
         let gas = self.select_gas(signer, gas, gas_budget, inputs).await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new(
             TransactionKind::Batch(tx_kinds),
             signer,
             gas,
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -596,7 +616,7 @@ impl TransactionBuilder {
             ADD_DELEGATION_LOCKED_COIN_FUN_NAME
         }
         .to_owned();
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
@@ -614,6 +634,7 @@ impl TransactionBuilder {
                 CallArg::Pure(bcs::to_bytes(&validator)?),
             ],
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -629,7 +650,7 @@ impl TransactionBuilder {
         let delegation = self.get_object_ref(delegation).await?;
         let staked_sui = self.get_object_ref(staked_sui).await?;
         let gas = self.select_gas(signer, gas, gas_budget, vec![]).await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
@@ -647,6 +668,7 @@ impl TransactionBuilder {
                 CallArg::Pure(bcs::to_bytes(&principal_withdraw_amount)?),
             ],
             gas_budget,
+            gas_price,
         ))
     }
 
@@ -663,7 +685,7 @@ impl TransactionBuilder {
         let delegation = self.get_object_ref(delegation).await?;
         let staked_sui = self.get_object_ref(staked_sui).await?;
         let gas = self.select_gas(signer, gas, gas_budget, vec![]).await?;
-
+        let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
             self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
@@ -682,6 +704,7 @@ impl TransactionBuilder {
                 CallArg::Pure(bcs::to_bytes(&switch_pool_token_amount)?),
             ],
             gas_budget,
+            gas_price,
         ))
     }
 

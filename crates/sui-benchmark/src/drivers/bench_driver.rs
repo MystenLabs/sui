@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
-use crate::workloads::workload::Payload;
+use crate::workloads::payload::Payload;
 use crate::workloads::workload::WorkloadInfo;
 use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
@@ -131,7 +131,6 @@ async fn print_and_start_benchmark() -> &'static Instant {
 }
 
 pub struct BenchWorker {
-    pub num_requests: u64,
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
 }
@@ -180,25 +179,33 @@ impl BenchDriver {
         workload_info: &WorkloadInfo,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<BenchWorker> {
-        let mut num_requests = workload_info.max_in_flight_ops / workload_info.num_workers;
-        let mut target_qps = workload_info.target_qps / workload_info.num_workers;
         let mut workers = vec![];
-        for i in 0..workload_info.num_workers {
-            if i == workload_info.num_workers - 1 {
-                num_requests =
-                    workload_info.max_in_flight_ops - workers.len() as u64 * num_requests;
-                target_qps = workload_info.target_qps - workers.len() as u64 * target_qps;
-            }
-            if num_requests > 0 && target_qps > 0 {
+        let mut qps = workload_info.target_qps;
+        if qps == 0 {
+            return vec![];
+        }
+        let mut payloads = workload_info
+            .workload
+            .make_test_payloads(
+                workload_info.max_in_flight_ops,
+                workload_info.payload_config.clone(),
+                proxy.clone(),
+            )
+            .await;
+        let mut total_workers = workload_info.num_workers;
+        while total_workers > 0 {
+            let target_qps = qps / total_workers;
+            if target_qps > 0 {
+                let chunk_size = payloads.len() / total_workers as usize;
+                let remaining = payloads.split_off(chunk_size);
                 workers.push(BenchWorker {
-                    num_requests,
                     target_qps,
-                    payload: workload_info
-                        .workload
-                        .make_test_payloads(num_requests, proxy.clone())
-                        .await,
+                    payload: payloads,
                 });
+                payloads = remaining;
+                qps -= target_qps;
             }
+            total_workers -= 1;
         }
         workers
     }
@@ -239,7 +246,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
-        info!("Setting up workers...");
+        info!("Setting up {:?} workers...", num_workers);
         let progress = Arc::new(match run_duration {
             Interval::Count(count) => ProgressBar::new(count)
                 .with_prefix("Running benchmark(count):")
@@ -345,7 +352,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 }
                                                 NextOp::Response(Some((
                                                     latency,
-                                                    b.1.make_new_payload(new_version, effects.gas_object().0),
+                                                    b.1.make_new_payload(new_version, effects.gas_object().0, &effects),
                                                 ),
                                                 ))
                                             }
@@ -391,7 +398,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
-                                                payload.make_new_payload(new_version, effects.gas_object().0),
+                                                payload.make_new_payload(new_version, effects.gas_object().0, &effects),
                                             )))
                                         }
                                         Err(err) => {

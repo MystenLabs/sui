@@ -51,7 +51,7 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
-    let data = TransactionData::new_transfer_sui(
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
         recipient,
         sender,
         None,

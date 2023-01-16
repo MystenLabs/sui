@@ -8,7 +8,8 @@
       },
       {
         "label": "Sui Releases",
-        "link": "https://github.com/MystenLabs/sui/releases"
+        "link": "https://github.com/MystenLabs/sui/releases",
+        "external": true
       },
       {
         "label": "Sui Developer Forums",
@@ -218,7 +219,7 @@
         },
       {
           "label": "Sui Framework Reference",
-          "fileName": "reference/framework"
+          "fileName": "reference/framework/index"
         }
     ],
     "explore": [

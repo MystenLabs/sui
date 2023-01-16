@@ -288,8 +288,8 @@ impl AuthorityStorePruningConfig {
         Self {
             // TODO: Temporarily disable the pruner, since we are not sure if it properly maintains
             // most recent 2 versions with lamport versioning.
-            objects_num_latest_versions_to_retain: u64::MAX,
-            objects_pruning_period_secs: 12 * 60 * 60,
+            objects_num_latest_versions_to_retain: 2,
+            objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
         }
     }
@@ -321,6 +321,9 @@ pub struct ValidatorInfo {
     pub p2p_address: Multiaddr,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
 }
 
 impl ValidatorInfo {

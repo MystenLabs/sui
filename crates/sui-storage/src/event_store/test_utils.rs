@@ -57,7 +57,7 @@ pub fn new_test_publish_event(
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(digest),
+        digest,
         seq_num,
         event_num,
         Event::Publish {
@@ -81,7 +81,7 @@ pub fn new_test_newobj_event(
 ) -> EventEnvelope {
     EventEnvelope {
         timestamp,
-        tx_digest: Some(digest),
+        tx_digest: digest,
         seq_num,
         event_num,
         event: Event::NewObject {
@@ -108,7 +108,7 @@ pub fn new_test_balance_change_event(
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        TransactionDigest::random(),
         seq_num,
         event_num,
         Event::CoinBalanceChange {
@@ -136,7 +136,7 @@ pub fn new_test_deleteobj_event(
 ) -> EventEnvelope {
     EventEnvelope {
         timestamp,
-        tx_digest: Some(digest),
+        tx_digest: digest,
         seq_num,
         event_num,
         event: Event::DeleteObject {
@@ -163,7 +163,7 @@ pub fn new_test_transfer_event(
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(digest),
+        digest,
         seq_num,
         event_num,
         Event::TransferObject {
@@ -191,7 +191,7 @@ pub fn new_test_mutate_event(
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
-        Some(TransactionDigest::random()),
+        TransactionDigest::random(),
         seq_num,
         event_num,
         Event::MutateObject {
@@ -234,7 +234,7 @@ pub fn new_test_move_event(
     let json = serde_json::to_value(&move_struct).expect("Cannot serialize move struct to JSON");
     EventEnvelope {
         timestamp,
-        tx_digest: Some(digest),
+        tx_digest: digest,
         seq_num,
         event_num,
         event: move_event,

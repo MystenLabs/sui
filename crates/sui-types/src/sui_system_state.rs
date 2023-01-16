@@ -46,6 +46,9 @@ pub struct ValidatorMetadata {
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: Vec<u8>,
+    pub description: Vec<u8>,
+    pub image_url: Vec<u8>,
+    pub project_url: Vec<u8>,
     pub net_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
@@ -70,6 +73,7 @@ impl ValidatorMetadata {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
+    pub voting_power: u64,
     pub stake_amount: u64,
     pub pending_stake: u64,
     pub pending_withdraw: u64,
@@ -86,7 +90,7 @@ impl Validator {
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
-            self.stake_amount + self.delegation_staking_pool.sui_balance,
+            self.voting_power,
             self.metadata.net_address.clone(),
         )
     }
@@ -158,7 +162,8 @@ pub struct ValidatorPair {
 pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
-    pub quorum_stake_threshold: u64,
+    pub total_voting_power: u64,
+    pub quorum_threshold: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
@@ -199,20 +204,6 @@ impl SuiSystemState {
         }
     }
 
-    pub fn get_next_epoch_committee(&self) -> Committee {
-        Committee::new(
-            self.epoch + 1,
-            self.validators
-                .next_epoch_validators
-                .iter()
-                .map(ValidatorMetadata::to_next_epoch_validator_and_stake_pair)
-                .collect(),
-        )
-        // unwrap is safe because we should have verified the committee on-chain.
-        // TODO: Make sure we actually verify it.
-        .unwrap()
-    }
-
     pub fn get_current_epoch_committee(&self) -> CommitteeWithNetAddresses {
         let mut voting_rights = BTreeMap::new();
         let mut net_addresses = BTreeMap::new();
@@ -248,7 +239,7 @@ impl SuiSystemState {
                     Multiaddr::try_from(validator.metadata.consensus_address.clone())
                         .expect("Can't get narwhal primary address");
                 let authority = narwhal_config::Authority {
-                    stake: validator.stake_amount as narwhal_config::Stake,
+                    stake: validator.voting_power as narwhal_config::Stake,
                     primary_address,
                     network_key,
                 };

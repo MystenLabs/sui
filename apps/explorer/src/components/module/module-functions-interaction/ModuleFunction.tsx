@@ -94,7 +94,9 @@ export function ModuleFunction({
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
                 onSubmit={handleSubmit((formData) =>
-                    execute.mutateAsync(formData)
+                    execute.mutateAsync(formData).catch(() => {
+                        /* ignore tx execution errors */
+                    })
                 )}
                 autoComplete="off"
                 className="flex flex-col flex-nowrap items-stretch gap-4"

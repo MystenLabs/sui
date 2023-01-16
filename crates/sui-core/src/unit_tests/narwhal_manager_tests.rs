@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use crate::narwhal_manager::{
-    run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
-};
+use crate::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use bytes::Bytes;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
@@ -18,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
-use tokio::sync::mpsc::channel;
 use tokio::time::{interval, sleep};
 
 #[derive(Clone)]
@@ -122,27 +119,17 @@ async fn test_narwhal_manager() {
             registry_service,
         };
 
-        let (tx_start, tr_start) = channel(1);
-        let (tx_stop, tr_stop) = channel(1);
-        let join_handle = tokio::spawn(run_narwhal_manager(narwhal_config, tr_start, tr_stop));
-
-        let narwhal_manager = NarwhalManager {
-            join_handle,
-            tx_start,
-            tx_stop,
-        };
+        let narwhal_manager = NarwhalManager::new(narwhal_config);
 
         // start narwhal
         let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
-        assert!(narwhal_manager
-            .tx_start
-            .send(NarwhalStartMessage {
-                committee: Arc::new(narwhal_committee.clone()),
-                shared_worker_cache: shared_worker_cache.clone(),
-                execution_state: Arc::new(execution_state.clone())
-            })
-            .await
-            .is_ok());
+        narwhal_manager
+            .start(
+                Arc::new(narwhal_committee.clone()),
+                shared_worker_cache.clone(),
+                Arc::new(execution_state.clone()),
+            )
+            .await;
 
         let name = config.protocol_key_pair().public().clone();
         narwhal_managers.push((
@@ -153,7 +140,7 @@ async fn test_narwhal_manager() {
         ));
 
         // Send some transactions
-        let (tr_shutdown, rx_shutdown) = broadcast::channel(1);
+        let (tx_shutdown, rx_shutdown) = broadcast::channel(1);
         tokio::spawn(async move {
             send_transactions(
                 &name,
@@ -163,7 +150,7 @@ async fn test_narwhal_manager() {
             )
             .await
         });
-        shutdown_senders.push(tr_shutdown);
+        shutdown_senders.push(tx_shutdown);
     }
 
     sleep(Duration::from_secs(1)).await;
@@ -174,7 +161,15 @@ async fn test_narwhal_manager() {
 
     for (narwhal_manager, state, transactions_addr, name) in narwhal_managers {
         // stop narwhal instance
-        assert!(narwhal_manager.tx_stop.send(()).await.is_ok());
+        narwhal_manager.shutdown().await;
+
+        // ensure that no primary or worker node is running
+        assert!(!narwhal_manager.primary_node.is_running().await);
+        assert!(narwhal_manager
+            .worker_nodes
+            .workers_running()
+            .await
+            .is_empty());
 
         let system_state = state
             .get_sui_system_state_object()
@@ -194,15 +189,13 @@ async fn test_narwhal_manager() {
 
         // start narwhal with advanced epoch
         let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
-        assert!(narwhal_manager
-            .tx_start
-            .send(NarwhalStartMessage {
-                committee: Arc::new(narwhal_committee.clone()),
-                shared_worker_cache: shared_worker_cache.clone(),
-                execution_state: Arc::new(execution_state.clone())
-            })
-            .await
-            .is_ok());
+        narwhal_manager
+            .start(
+                Arc::new(narwhal_committee.clone()),
+                shared_worker_cache.clone(),
+                Arc::new(execution_state.clone()),
+            )
+            .await;
 
         // Send some transactions
         let (tr_shutdown, rx_shutdown) = broadcast::channel(1);

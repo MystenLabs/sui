@@ -4,8 +4,7 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
-    TestCallArg,
+    call_move, call_move_, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
 };
 use sui_types::utils::to_sender_signed_transaction;
 
@@ -1048,8 +1047,9 @@ async fn test_entry_point_vector_error() {
     );
     let (shared_obj_id, _, _) = effects.created[0].0;
     // call a function with a vector containing one shared object
-    let effects = call_move_with_shared(
+    let effects = call_move_(
         &authority,
+        None,
         &gas,
         &sender,
         &sender_key,
@@ -1107,14 +1107,13 @@ async fn test_entry_point_vector_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 
     // mint an owned object
     let effects = call_move(
@@ -1154,14 +1153,13 @@ async fn test_entry_point_vector_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-reference argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 }
 
 #[tokio::test]
@@ -1429,8 +1427,9 @@ async fn test_entry_point_vector_any_error() {
     );
     let (shared_obj_id, _, _) = effects.created[0].0;
     // call a function with a vector containing one shared object
-    let effects = call_move_with_shared(
+    let effects = call_move_(
         &authority,
+        None,
         &gas,
         &sender,
         &sender_key,
@@ -1488,14 +1487,13 @@ async fn test_entry_point_vector_any_error() {
     )
     .await;
     // should fail as we have the same object passed in vector and as a separate by-value argument
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 
     // mint an owned object
     let effects = call_move(
@@ -1534,14 +1532,13 @@ async fn test_entry_point_vector_any_error() {
         ],
     )
     .await;
-    assert!(
-        matches!(
-            result.clone().err().unwrap(),
-            SuiError::DuplicateObjectRefInput { .. }
-        ),
-        "{:?}",
+    assert!(matches!(
         result
-    );
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::DuplicateObjectRefInput { .. }
+    ));
 }
 
 #[tokio::test]
@@ -1860,7 +1857,12 @@ pub async fn build_and_try_publish_test_package(
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
-    let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
+    let data = TransactionData::new_module_with_dummy_gas_price(
+        *sender,
+        gas_object_ref,
+        all_module_bytes,
+        gas_budget,
+    );
     let transaction = to_sender_signed_transaction(data, sender_key);
 
     (

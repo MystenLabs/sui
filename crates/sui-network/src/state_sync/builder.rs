@@ -85,7 +85,7 @@ where
             checkpoint_event_sender: checkpoint_event_sender.clone(),
         };
         let peer_heights = PeerHeights {
-            heights: HashMap::new(),
+            peers: HashMap::new(),
             unprocessed_checkpoints: HashMap::new(),
             sequence_number_to_digest: HashMap::new(),
         }
