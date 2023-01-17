@@ -125,9 +125,13 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Derive Ed25519 keypair from mnemonics and path. The mnemonics must be normalized
    * and validated against the english wordlist.
+   * 
+   * @param mnemonics string made from space separated english words.
    *
    * If path is none, it will default to m/44'/784'/0'/0'/0', otherwise the path must
    * be compliant to SLIP-0010 in form m/44'/784'/{account_index}'/{change_index}'/{address_index}'.
+   * @param path string | null
+   * 
    */
   static deriveKeypair(mnemonics: string, path?: string): Ed25519Keypair {
     if (path == null) {
