@@ -103,4 +103,8 @@ NetworkEnv.on('changed', async (network) => {
         customRPC: network.customRpcUrl,
     });
     connections.notifyUI({ event: 'networkChanged', network });
+    connections.notifyContentScript({
+        event: 'walletStatusChange',
+        change: { network },
+    });
 });

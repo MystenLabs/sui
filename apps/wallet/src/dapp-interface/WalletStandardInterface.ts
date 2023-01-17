@@ -12,6 +12,9 @@ import {
     type EventsFeature,
     type EventsOnMethod,
     type EventsListeners,
+    SUI_DEVNET_CHAIN,
+    SUI_TESTNET_CHAIN,
+    SUI_LOCALNET_CHAIN,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -19,7 +22,6 @@ import { filter, map, type Observable } from 'rxjs';
 import { mapToPromise } from './utils';
 import { createMessage } from '_messages';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
-import { type Payload } from '_payloads';
 import {
     type AcquirePermissionsRequest,
     type AcquirePermissionsResponse,
@@ -28,16 +30,19 @@ import {
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
+import { API_ENV } from '_src/ui/app/ApiProvider';
 
 import type { SuiAddress } from '@mysten/sui.js/src';
-import type { EventsChangeProperties } from '@mysten/wallet-standard';
+import type { BasePayload, Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { SetNetworkPayload } from '_payloads/network';
 import type {
     StakeRequest,
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
 } from '_payloads/transactions';
+import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
 type WalletEventsMap = {
     [E in keyof EventsListeners]: Parameters<EventsListeners[E]>[0];
@@ -53,6 +58,15 @@ type SuiWalletStakeFeature = {
         stake: (input: StakeInput) => Promise<void>;
     };
 };
+type ChainType = Wallet['chains'][number];
+const API_ENV_TO_CHAIN: Record<
+    Exclude<API_ENV, API_ENV.customRPC>,
+    ChainType
+> = {
+    [API_ENV.local]: SUI_LOCALNET_CHAIN,
+    [API_ENV.devNet]: SUI_DEVNET_CHAIN,
+    [API_ENV.testNet]: SUI_TESTNET_CHAIN,
+};
 
 export class SuiWallet implements Wallet {
     readonly #events: Emitter<WalletEventsMap>;
@@ -60,6 +74,7 @@ export class SuiWallet implements Wallet {
     readonly #name = name;
     #account: ReadonlyWalletAccount | null;
     #messagesStream: WindowMessageStream;
+    #activeChain: ChainType | null = null;
 
     get version() {
         return this.#version;
@@ -115,7 +130,7 @@ export class SuiWallet implements Wallet {
             address,
             // TODO: Expose public key instead of address:
             publicKey: new Uint8Array(),
-            chains: SUI_CHAINS,
+            chains: this.#activeChain ? [this.#activeChain] : [],
             features: ['sui:signAndExecuteTransaction'],
         });
     }
@@ -129,16 +144,24 @@ export class SuiWallet implements Wallet {
         );
         this.#messagesStream.messages.subscribe(({ payload }) => {
             if (isWalletStatusChangePayload(payload)) {
-                const { accounts } = payload;
-                let change: EventsChangeProperties = {};
+                const { network, accounts } = payload;
+                if (network) {
+                    this.#setActiveChain(network);
+                    if (
+                        this.#account &&
+                        this.#activeChain &&
+                        this.#account.chains[0] !== this.#activeChain
+                    ) {
+                        this.#setAccount(this.#account.address);
+                    }
+                }
                 if (accounts) {
                     const [address = null] = accounts;
                     if (address !== this.#account?.address) {
                         this.#setAccount(address);
-                        change = { accounts: this.accounts };
                     }
                 }
-                this.#events.emit('change', change);
+                this.#events.emit('change', { accounts: this.accounts });
             }
         });
         this.#connected();
@@ -150,18 +173,12 @@ export class SuiWallet implements Wallet {
     };
 
     #connected = async () => {
+        this.#setActiveChain(await this.#getActiveNetwork());
         if (!(await this.#hasPermissions(['viewAccount']))) {
             return;
         }
-        const accounts = await mapToPromise(
-            this.#send<GetAccount, GetAccountResponse>({
-                type: 'get-account',
-            }),
-            (response) => response.accounts
-        );
-
+        const accounts = await this.#getAccount();
         const [address] = accounts;
-
         if (address) {
             const account = this.#account;
             if (!account || account.address !== address) {
@@ -220,6 +237,29 @@ export class SuiWallet implements Wallet {
             }),
             ({ result }) => result
         );
+    }
+
+    #getAccount() {
+        return mapToPromise(
+            this.#send<GetAccount, GetAccountResponse>({
+                type: 'get-account',
+            }),
+            (response) => response.accounts
+        );
+    }
+
+    #getActiveNetwork() {
+        return mapToPromise(
+            this.#send<BasePayload, SetNetworkPayload>({
+                type: 'get-network',
+            }),
+            ({ network }) => network
+        );
+    }
+
+    #setActiveChain({ env }: NetworkEnvType) {
+        this.#activeChain =
+            env === API_ENV.customRPC ? 'sui:unknown' : API_ENV_TO_CHAIN[env];
     }
 
     #send<
