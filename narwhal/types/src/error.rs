@@ -27,12 +27,6 @@ macro_rules! ensure {
     };
 }
 
-/*
-#[macro_export(local_inner_macros)]
-macro_rules! ensure_unless_shutdown {
-
-}*/
-
 pub type DagResult<T> = Result<T, DagError>;
 
 #[derive(Clone, Debug, Error)]
