@@ -5,7 +5,6 @@ import { combineReducers } from '@reduxjs/toolkit';
 
 import account from './slices/account';
 import app from './slices/app';
-import curatedApps from './slices/dapps';
 import permissions from './slices/permissions';
 import suiObjects from './slices/sui-objects';
 import transactionRequests from './slices/transaction-requests';
@@ -20,7 +19,6 @@ const rootReducer = combineReducers({
     txresults,
     permissions,
     transactionRequests,
-    curatedApps,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
