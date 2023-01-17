@@ -115,6 +115,45 @@ impl IndexerEventHandlerMetrics {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct IndexerCheckpointHandlerMetrics {
+    pub total_checkpoint_requested: IntCounter,
+    pub total_checkpoint_received: IntCounter,
+    pub total_checkpoint_processed: IntCounter,
+    pub total_checkpoint_handler_error: IntCounter,
+}
+
+impl IndexerCheckpointHandlerMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_checkpoint_received: register_int_counter_with_registry!(
+                "total_checkpoint_received",
+                "Total number of checkpoint received",
+                registry,
+            )
+            .unwrap(),
+            total_checkpoint_processed: register_int_counter_with_registry!(
+                "total_checkpoint_processed",
+                "Total number of checkpoint processed",
+                registry,
+            )
+            .unwrap(),
+            total_checkpoint_handler_error: register_int_counter_with_registry!(
+                "total_checkpoint_handler_error",
+                "Total number of checkpoint handler error",
+                registry,
+            )
+            .unwrap(),
+            total_checkpoint_requested: register_int_counter_with_registry!(
+                "total_checkpoint_requested",
+                "Total number of checkpoint requested",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 /// derivative data processor related metrics
 #[derive(Clone, Debug)]
 pub struct IndexerAddressProcessorMetrics {

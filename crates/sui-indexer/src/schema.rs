@@ -17,6 +17,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    checkpoint_logs (next_cursor_sequence_number) {
+        next_cursor_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    checkpoints (sequence_number) {
+        sequence_number -> Int8,
+        content_digest -> Varchar,
+        epoch -> Int8,
+        total_gas_cost -> Int8,
+        total_computation_cost -> Int8,
+        total_storage_cost -> Int8,
+        total_storage_rebate -> Int8,
+        total_transactions -> Int8,
+        previous_digest -> Nullable<Varchar>,
+        next_epoch_committee -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     error_logs (id) {
         id -> Int8,
         error_type -> Varchar,
@@ -113,6 +134,8 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     address_logs,
     addresses,
+    checkpoint_logs,
+    checkpoints,
     error_logs,
     event_logs,
     events,

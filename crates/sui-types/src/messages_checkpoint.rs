@@ -77,6 +77,12 @@ impl AsRef<[u8; 32]> for CheckpointDigest {
     }
 }
 
+impl CheckpointDigest {
+    pub fn encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+}
+
 #[serde_as]
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
@@ -96,6 +102,12 @@ impl AsRef<[u8]> for CheckpointContentsDigest {
 impl AsRef<[u8; 32]> for CheckpointContentsDigest {
     fn as_ref(&self) -> &[u8; 32] {
         &self.0
+    }
+}
+
+impl CheckpointContentsDigest {
+    pub fn encode(&self) -> String {
+        Base58::encode(self.0)
     }
 }
 
