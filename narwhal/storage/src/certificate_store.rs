@@ -435,6 +435,7 @@ mod test {
         collections::{BTreeSet, HashSet},
         time::Instant,
     };
+    use store::rocks::MetricConf;
     use store::{
         reopen,
         rocks::{open_cf, DBMap},
@@ -450,6 +451,7 @@ mod test {
         let rocksdb = open_cf(
             path,
             None,
+            MetricConf::default(),
             &[
                 CERTIFICATES_CF,
                 CERTIFICATE_ID_BY_ROUND_CF,

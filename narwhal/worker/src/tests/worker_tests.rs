@@ -17,6 +17,7 @@ use prometheus::Registry;
 use std::time::Duration;
 use storage::NodeStorage;
 use store::rocks;
+use store::rocks::MetricConf;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
@@ -55,7 +56,13 @@ async fn reject_invalid_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        MetricConf::default(),
+        None,
+        Some("batches"),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     let registry = Registry::new();
@@ -142,7 +149,13 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        MetricConf::default(),
+        None,
+        Some("batches"),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     let registry = Registry::new();

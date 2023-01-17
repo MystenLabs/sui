@@ -169,6 +169,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// ```
 /// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
+/// use typed_store::rocks::MetricConf;
 /// use typed_store::Store;
 /// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
@@ -211,7 +212,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").into_path();
 ///
 /// // We can then open the DB with the configs
-/// let _ = Tables::open_tables_read_write(primary_path, None, Some(config.build()));
+/// let _ = Tables::open_tables_read_write(primary_path, MetricConf::default(), None, Some(config.build()));
 /// Ok(())
 /// }
 ///
@@ -224,7 +225,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// This mode provides handle struct which opens the DB in read only mode and has certain features like dumping and counting the keys in the tables
 ///
 /// Use the function `Tables::get_read_only_handle` which returns a handle that only allows read only features
-/// ```
+///```
 /// use typed_store::rocks::DBOptions;
 /// use typed_store::rocks::DBMap;
 /// use typed_store::Store;
@@ -255,11 +256,11 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// #[tokio::main]
 /// async fn main() -> Result<(), Error> {
 ///
-/// let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").into_path();
-/// let _ = Tables::open_tables_read_write(primary_path.clone(), None, None);
+/// use typed_store::rocks::MetricConf;let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").into_path();
+/// let _ = Tables::open_tables_read_write(primary_path.clone(), typed_store::rocks::MetricConf::default(), None, None);
 ///
 /// // Get the read only handle
-/// let read_only_handle = Tables::get_read_only_handle(primary_path, None, None);
+/// let read_only_handle = Tables::get_read_only_handle(primary_path, None, None, MetricConf::default());
 /// // Use this handle for dumping
 /// let ret = read_only_handle.dump("table2", 100, 0).unwrap();
 /// let key_count = read_only_handle.count_keys("table1").unwrap();
@@ -402,6 +403,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 path: std::path::PathBuf,
                 as_secondary_with_path: Option<std::path::PathBuf>,
                 is_transaction: bool,
+                metric_conf: typed_store::rocks::MetricConf,
                 global_db_options_override: Option<rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
@@ -422,9 +424,9 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     // Safe to call unwrap because we will have atleast one field_name entry in the struct
                     let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                     let db = match (as_secondary_with_path, is_transaction) {
-                        (Some(p), _) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, &opt_cfs),
-                        (_, true) => typed_store::rocks::open_cf_opts_transactional(path, global_db_options_override, &opt_cfs),
-                        _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, &opt_cfs)
+                        (Some(p), _) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
+                        (_, true) => typed_store::rocks::open_cf_opts_transactional(path, global_db_options_override, metric_conf, &opt_cfs),
+                        _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                     };
                     db
                 }.expect("Cannot open DB.");
@@ -459,10 +461,11 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             #[allow(unused_parens)]
             pub fn open_tables_read_write(
                 path: std::path::PathBuf,
+                metric_conf: typed_store::rocks::MetricConf,
                 global_db_options_override: Option<rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, global_db_options_override, tables_db_options_override);
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, metric_conf, global_db_options_override, tables_db_options_override);
                 Self {
                     #(
                         #field_names: #post_process_fn(inner.#field_names),
@@ -477,10 +480,11 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             #[allow(unused_parens)]
             pub fn open_tables_transactional(
                 path: std::path::PathBuf,
+                metric_conf: typed_store::rocks::MetricConf,
                 global_db_options_override: Option<rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, true, global_db_options_override, tables_db_options_override);
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, true, metric_conf, global_db_options_override, tables_db_options_override);
                 Self {
                     #(
                         #field_names: #post_process_fn(inner.#field_names),
@@ -500,8 +504,9 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 primary_path: std::path::PathBuf,
                 with_secondary_path: Option<std::path::PathBuf>,
                 global_db_options_override: Option<rocksdb::Options>,
+                metric_conf: typed_store::rocks::MetricConf,
                 ) -> #secondary_db_map_struct_name #generics {
-                #secondary_db_map_struct_name::open_tables_read_only(primary_path, with_secondary_path, global_db_options_override)
+                #secondary_db_map_struct_name::open_tables_read_only(primary_path, with_secondary_path, metric_conf, global_db_options_override)
             }
         }
 
@@ -524,15 +529,16 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             pub fn open_tables_read_only(
                 primary_path: std::path::PathBuf,
                 with_secondary_path: Option<std::path::PathBuf>,
+                metric_conf: typed_store::rocks::MetricConf,
                 global_db_options_override: Option<rocksdb::Options>,
             ) -> Self {
                 let inner = match with_secondary_path {
-                    Some(q) => #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(q), false, global_db_options_override, None),
+                    Some(q) => #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(q), false, metric_conf, global_db_options_override, None),
                     None => {
                         let p: std::path::PathBuf = tempfile::tempdir()
                         .expect("Failed to open temporary directory")
                         .into_path();
-                        #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), false, global_db_options_override, None)
+                        #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), false, metric_conf, global_db_options_override, None)
                     }
                 };
                 Self {
@@ -772,7 +778,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                             )*
                         }
                     },
-                    typed_store::sally::SallyDBOptions::RocksDB((path, access_type, global_db_options_override, tables_db_options_override)) => {
+                    typed_store::sally::SallyDBOptions::RocksDB((path, metric_conf, access_type, global_db_options_override, tables_db_options_override)) => {
                         let path = &path;
                         let db = {
                             let opt_cfs = match tables_db_options_override {
@@ -790,8 +796,8 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                             // Safe to call unwrap because we will have atleast one field_name entry in the struct
                             let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                             let db = match access_type {
-                                RocksDBAccessType::Secondary(Some(p)) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, &opt_cfs),
-                                _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, &opt_cfs)
+                                RocksDBAccessType::Secondary(Some(p)) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
+                                _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                             };
                             db
                         }.expect("Cannot open DB.");
@@ -878,14 +884,14 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                             )*
                         }
                     },
-                    typed_store::sally::SallyReadOnlyDBOptions::RocksDB((primary_path, with_secondary_path, global_db_options_override)) => {
-                        let inner = match with_secondary_path {
-                            Some(q) => #intermediate_db_map_struct_name::init(SallyDBOptions::RocksDB((primary_path, RocksDBAccessType::Secondary(Some(q)), global_db_options_override, None))),
+                    typed_store::sally::SallyReadOnlyDBOptions::RocksDB(b) => {
+                        let inner = match b.2 {
+                            Some(q) => #intermediate_db_map_struct_name::init(SallyDBOptions::RocksDB((b.0, b.1, RocksDBAccessType::Secondary(Some(q)), b.3, None))),
                             None => {
                                 let p: std::path::PathBuf = tempfile::tempdir()
                                     .expect("Failed to open temporary directory")
                                     .into_path();
-                                #intermediate_db_map_struct_name::init(SallyDBOptions::RocksDB((primary_path, RocksDBAccessType::Secondary(Some(p)), global_db_options_override, None)))
+                                #intermediate_db_map_struct_name::init(SallyDBOptions::RocksDB((b.0, b.1, RocksDBAccessType::Secondary(Some(p)), b.3, None)))
                             }
                         };
                         Self {

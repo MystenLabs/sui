@@ -23,6 +23,7 @@ use typed_store::{rocks::DBMap, traits::Map};
 use tracing::{debug, error, instrument, trace, warn};
 
 use tap::TapFallible;
+use typed_store::rocks::MetricConf;
 
 /// TxGuard is a handle on an in-progress transaction.
 ///
@@ -221,7 +222,8 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     pub fn new(path: PathBuf) -> Self {
-        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
+        let tables =
+            DBWriteAheadLogTables::open_tables_read_write(path, MetricConf::default(), None, None);
 
         // Read in any digests that were left in the log, e.g. due to a crash.
         //

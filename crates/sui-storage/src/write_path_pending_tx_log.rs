@@ -12,6 +12,7 @@ use sui_types::crypto::EmptySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages::{SenderSignedData, VerifiedTransaction};
+use typed_store::rocks::MetricConf;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::{rocks::DBMap, traits::Map};
 use typed_store_derive::DBMapUtils;
@@ -29,8 +30,12 @@ pub struct WritePathPendingTransactionLog {
 
 impl WritePathPendingTransactionLog {
     pub fn new(path: PathBuf) -> Self {
-        let pending_transactions =
-            WritePathPendingTransactionTable::open_tables_transactional(path, None, None);
+        let pending_transactions = WritePathPendingTransactionTable::open_tables_transactional(
+            path,
+            MetricConf::default(),
+            None,
+            None,
+        );
         Self {
             pending_transactions,
         }

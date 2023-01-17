@@ -11,10 +11,10 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 use std::time::Duration;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::be_fix_int_ser;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
 use typed_store::rocks::RocksDBAccessType;
+use typed_store::rocks::{be_fix_int_ser, MetricConf};
 use typed_store::sally::SallyColumn;
 use typed_store::sally::SallyDBOptions;
 use typed_store::sally::SallyReadOnlyDBOptions;
@@ -66,7 +66,8 @@ struct TablesSingle {
 #[tokio::test]
 async fn macro_test() {
     let primary_path = temp_dir();
-    let tbls_primary = Tables::open_tables_read_write(primary_path.clone(), None, None);
+    let tbls_primary =
+        Tables::open_tables_read_write(primary_path.clone(), MetricConf::default(), None, None);
 
     // Write to both tables
     let mut raw_key_bytes1 = 0;
@@ -75,8 +76,8 @@ async fn macro_test() {
     for i in kv_range.clone() {
         let key = i.to_string();
         let value = i.to_string();
-        let k_buf = be_fix_int_ser::<String>(key.borrow()).unwrap();
-        let value_buf = bincode::serialize::<String>(value.borrow()).unwrap();
+        let k_buf = be_fix_int_ser::<String>(&key).unwrap();
+        let value_buf = bincode::serialize::<String>(&value).unwrap();
         raw_key_bytes1 += k_buf.len();
         raw_value_bytes1 += value_buf.len();
     }
@@ -93,7 +94,7 @@ async fn macro_test() {
         let key = i;
         let value = i.to_string();
         let k_buf = be_fix_int_ser(key.borrow()).unwrap();
-        let value_buf = bincode::serialize::<String>(value.borrow()).unwrap();
+        let value_buf = bincode::serialize::<String>(&value).unwrap();
         raw_key_bytes2 += k_buf.len();
         raw_value_bytes2 += value_buf.len();
     }
@@ -104,7 +105,8 @@ async fn macro_test() {
         .expect("Failed to multi-insert");
 
     // Open in secondary mode
-    let tbls_secondary = Tables::get_read_only_handle(primary_path.clone(), None, None);
+    let tbls_secondary =
+        Tables::get_read_only_handle(primary_path.clone(), None, None, MetricConf::default());
 
     // Check all the tables can be listed
     let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
@@ -175,6 +177,7 @@ async fn test_sallydb() {
     let primary_path = temp_dir();
     let example_db = SallyDBExample::init(SallyDBOptions::RocksDB((
         primary_path.clone(),
+        MetricConf::default(),
         RocksDBAccessType::Primary,
         None,
         None,
@@ -193,9 +196,13 @@ async fn test_sallydb() {
     wb.write().await.expect("Failed to commit write batch");
 
     // Open in secondary mode
-    let example_db_secondary = SallyDBExample::get_read_only_handle(
-        SallyReadOnlyDBOptions::RocksDB((primary_path.clone(), None, None)),
-    );
+    let example_db_secondary =
+        SallyDBExample::get_read_only_handle(SallyReadOnlyDBOptions::RocksDB(Box::new((
+            primary_path.clone(),
+            MetricConf::default(),
+            None,
+            None,
+        ))));
 
     // Check all the tables can be listed
     let actual_table_names: HashSet<_> = list_tables(primary_path).unwrap().into_iter().collect();
@@ -250,7 +257,7 @@ async fn test_sallydb() {
 async fn macro_transactional_test() {
     let key = "key".to_string();
     let primary_path = temp_dir();
-    let tables = Tables::open_tables_transactional(primary_path, None, None);
+    let tables = Tables::open_tables_transactional(primary_path, MetricConf::default(), None, None);
     let mut transaction = tables
         .table1
         .transaction()
@@ -308,14 +315,24 @@ async fn macro_test_configure() {
     config.table2.options.create_if_missing(false);
 
     // Build and open with new config
-    let _ = Tables::open_tables_read_write(primary_path, None, Some(config.build()));
+    let _ = Tables::open_tables_read_write(
+        primary_path,
+        MetricConf::default(),
+        None,
+        Some(config.build()),
+    );
 
     // Test the static config options
     let primary_path = temp_dir();
 
     assert_eq!(TABLE1_OPTIONS_SET_FLAG.lock().unwrap().len(), 0);
 
-    let _ = TablesCustomOptions::open_tables_read_write(primary_path, None, None);
+    let _ = TablesCustomOptions::open_tables_read_write(
+        primary_path,
+        MetricConf::default(),
+        None,
+        None,
+    );
 
     // Ensures that the function to set options was called
     assert_eq!(TABLE1_OPTIONS_SET_FLAG.lock().unwrap().len(), 1);
@@ -352,7 +369,12 @@ async fn store_iter_and_filter_successfully() {
 
     config.table2.options.create_if_missing(false);
     let path = temp_dir();
-    let str = StoreTables::open_tables_read_write(path.clone(), None, Some(config.build()));
+    let str = StoreTables::open_tables_read_write(
+        path.clone(),
+        MetricConf::default(),
+        None,
+        Some(config.build()),
+    );
 
     // AND key-values to store.
     let key_values = vec![

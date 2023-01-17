@@ -6,11 +6,18 @@ use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use store::rocks;
+use store::rocks::MetricConf;
 use test_utils::{temp_dir, transaction};
 use types::PreSubscribedBroadcastSender;
 
 fn create_batches_store() -> Store<BatchDigest, Batch> {
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        MetricConf::default(),
+        None,
+        Some("batches"),
+    )
+    .unwrap();
     Store::new(db)
 }
 
