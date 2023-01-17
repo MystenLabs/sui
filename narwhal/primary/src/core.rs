@@ -123,49 +123,50 @@ impl Core {
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
-                let call = async move {
-                    Self {
-                        name,
-                        committee,
-                        worker_cache,
-                        header_store,
-                        certificate_store,
-                        synchronizer,
-                        signature_service,
-                        rx_consensus_round_updates,
-                        rx_narwhal_round_updates,
-                        gc_depth,
-                        rx_shutdown,
-                        rx_certificates,
-                        rx_certificates_loopback,
-                        rx_headers,
-                        tx_new_certificates,
-                        tx_parents,
-                        gc_round: 0,
-                        highest_received_round: 0,
-                        highest_processed_round: 0,
-                        pending_certificates: HashMap::new(),
-                        background_tasks: JoinSet::new(),
-                        cancel_proposed_header: None,
-                        propose_header_future: None.into(),
-                        certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
-                        network: primary_network,
-                        metrics,
-                    }
-                    .recover()
-                    .await?
-                    .run()
-                    .await
-                };
-
-                match call.await {
-                    Err(err @ DagError::ShuttingDown) => debug!("{:?}", err),
-                    Err(err) => panic!("{:?}", err),
-                    Ok(_) => {}
+                Self {
+                    name,
+                    committee,
+                    worker_cache,
+                    header_store,
+                    certificate_store,
+                    synchronizer,
+                    signature_service,
+                    rx_consensus_round_updates,
+                    rx_narwhal_round_updates,
+                    gc_depth,
+                    rx_shutdown,
+                    rx_certificates,
+                    rx_certificates_loopback,
+                    rx_headers,
+                    tx_new_certificates,
+                    tx_parents,
+                    gc_round: 0,
+                    highest_received_round: 0,
+                    highest_processed_round: 0,
+                    pending_certificates: HashMap::new(),
+                    background_tasks: JoinSet::new(),
+                    cancel_proposed_header: None,
+                    propose_header_future: None.into(),
+                    certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
+                    network: primary_network,
+                    metrics,
                 }
+                .run_inner()
+                .await
             },
             "CoreTask"
         )
+    }
+
+    #[instrument(level = "info", skip_all)]
+    async fn run_inner(self) {
+        let core = async move { self.recover().await?.run().await };
+
+        match core.await {
+            Err(err @ DagError::ShuttingDown) => debug!("{:?}", err),
+            Err(err) => panic!("{:?}", err),
+            Ok(_) => {}
+        }
     }
 
     #[instrument(level = "info", skip_all)]
