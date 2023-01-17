@@ -1847,6 +1847,7 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
+    // TODO: Audit every call to this function to make sure there are no data races during reconfig.
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
