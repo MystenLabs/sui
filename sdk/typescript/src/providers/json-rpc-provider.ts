@@ -50,6 +50,8 @@ import {
   GetOwnedObjectsResponse,
   DelegatedStake,
   ValidatorMetaData,
+  BalanceStruct,
+  SupplyStruct,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields'
 import {
@@ -170,6 +172,103 @@ export class JsonRpcProvider extends Provider {
     return undefined;
   }
 
+  async requestSuiFromFaucet(
+    recipient: SuiAddress,
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    if (!this.endpoints.faucet) {
+      throw new Error('Faucet URL is not specified');
+    }
+    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+  }
+
+  // Coins
+  async getCoins(
+    owner: SuiAddress,
+    coinType: String | null = null,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ) : Promise<PaginatedCoins> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getCoins',
+        [owner, coinType, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting coins for owner ${owner}: ${err}`
+      );
+    }
+  }
+
+  async getAllCoins(
+    owner: SuiAddress,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ) : Promise<PaginatedCoins> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getAllCoins',
+        [owner, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting all coins for owner ${owner}: ${err}`
+      )
+    }
+  }
+
+  async getBalance(
+    owner: SuiAddress,
+    coinType: String | null = null,
+  ) : Promise<BalanceStruct> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getBalance',
+        [owner, coinType],
+        BalanceStruct,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting balance for coin type ${coinType} for owner ${owner}: ${err}`
+      )
+    }
+  }
+
+  async getAllBalances(
+    owner: SuiAddress
+  ) : Promise<BalanceStruct> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getAllBalances',
+        [owner],
+        BalanceStruct,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting all balances for owner ${owner}: ${err}`
+      )
+    }
+  }
+
   async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
     try {
       return await this.client.requestWithType(
@@ -183,14 +282,21 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async requestSuiFromFaucet(
-    recipient: SuiAddress,
-    httpHeaders?: HttpHeaders
-  ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
-      throw new Error('Faucet URL is not specified');
+  async getTotalSupply(
+    coinType: String
+  ) : Promise<SupplyStruct> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getTotalSupply',
+        [coinType],
+        SupplyStruct,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching total supply for Coin type ${coinType}: ${err}`
+      );
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
   }
 
   // RPC endpoint
@@ -705,27 +811,6 @@ export class JsonRpcProvider extends Provider {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     return this.wsClient.unsubscribeEvent(id);
-  }
-
-  // Coins
-  async getCoins(
-    owner: SuiAddress,
-    coinType: String | null,
-    cursor: ObjectId | null,
-    limit: number | null
-  ) : Promise<PaginatedCoins> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getCoins',
-        [owner, coinType, cursor, limit],
-        PaginatedCoins,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting coins: ${err} for owner ${owner}`
-      );
-    }
   }
 
   async devInspectTransaction(txBytes: string): Promise<DevInspectResults> {

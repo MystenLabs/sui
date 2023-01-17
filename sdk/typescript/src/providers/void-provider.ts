@@ -36,6 +36,9 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  PaginatedCoins,
+  BalanceStruct,
+  SupplyStruct,
 } from '../types';
 import { Provider } from './provider';
 
@@ -45,10 +48,6 @@ export class VoidProvider extends Provider {
   // API Version
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
     throw this.newError('getRpcApiVersion');
-  }
-
-  getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
-    throw new Error('getCoinMetadata');
   }
 
   // Governance
@@ -69,6 +68,47 @@ export class VoidProvider extends Provider {
     _endpoint: string, 
     _params: any[]): Promise<any> {
     throw this.newError('call');
+  }
+
+  // Coins
+  async getCoins(
+    _owner: SuiAddress,
+    _coinType: String | null,
+    _cursor: ObjectId | null,
+    _limit: number | null
+  ) : Promise<PaginatedCoins> {
+    throw this.newError('getCoins');
+  }
+
+  async getAllCoins(
+    _owner: SuiAddress,
+    _cursor: ObjectId | null,
+    _limit: number | null
+  ) : Promise<PaginatedCoins> {
+    throw this.newError('getAllCoins');
+  }
+
+  async getBalance(
+    _owner: string, 
+    _coinType: String | null
+    ): Promise<BalanceStruct> {
+      throw this.newError('getBalance');
+  }
+
+  async getAllBalances(
+    _owner: string, 
+    ): Promise<BalanceStruct> {
+      throw this.newError('getAllBalances');
+  }
+
+  async getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
+    throw new Error('getCoinMetadata');
+  }
+
+  async getTotalSupply(
+    _coinType: string
+  ) : Promise<SupplyStruct> {
+    throw new Error('getTotalSupply');
   }
 
   // Objects

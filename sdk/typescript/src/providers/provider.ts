@@ -35,6 +35,9 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  PaginatedCoins,
+  BalanceStruct,
+  SupplyStruct,
 } from '../types';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
@@ -50,15 +53,6 @@ export abstract class Provider {
    * connected to, or undefined if any error occurred
    */
   abstract getRpcApiVersion(): Promise<RpcApiVersion | undefined>;
-
-  /**
-   * Fetch CoinMetadata for a given coin type
-   *
-   * @param coinType fully qualified type names for the coin (e.g.,
-   * 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
-   *
-   */
-  abstract getCoinMetadata(coinType: string): Promise<CoinMetadata>;
 
   // Faucet
   /**
@@ -82,6 +76,63 @@ export abstract class Provider {
     params: Array<any>
   ) : Promise<any>;
   
+  // Coins
+  /**
+   * Get all Coin<`coin_type`> objects owned by an address. 
+   * @param coinType optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+   * @param cursor optional paging cursor
+   * @param limit maximum number of items per page
+   */
+  abstract getCoins(
+    owner: SuiAddress,
+    coinType: String | null,
+    cursor: ObjectId | null,
+    limit: number | null
+  ) : Promise<PaginatedCoins>;
+
+  /**
+   * Get all Coin objects owned by an address.
+   * @param cursor optional paging cursor
+   * @param limt maximum number of items per page
+   */
+  abstract getAllCoins(
+    owner: SuiAddress,
+    cursor: ObjectId | null,
+    limit: number | null
+  ) : Promise<PaginatedCoins>;
+
+  /**
+   * Get the total coin balance for one coin type, owned by the address owner.
+   * @param coinType optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+   */
+  abstract getBalance(
+    owner: SuiAddress,
+    coinType: String | null
+  ) : Promise<BalanceStruct>;
+
+  /**
+   * Get the total coin balance for all coin type, owned by the address owner.
+   */
+  abstract getAllBalances(
+    owner: SuiAddress
+  ) : Promise<BalanceStruct>;
+
+  /**
+   * Fetch CoinMetadata for a given coin type
+   * @param coinType fully qualified type names for the coin (e.g.,
+   * 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+   *
+   */
+  abstract getCoinMetadata(coinType: string): Promise<CoinMetadata>;
+
+  /**
+   *  Fetch total supply for a coin
+   * @param coinType fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+   */
+  abstract getTotalSupply(
+    coinType: string
+  ) : Promise<SupplyStruct>;
+
   // Objects
   /**
    * Get all objects owned by an address

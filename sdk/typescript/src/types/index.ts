@@ -11,3 +11,4 @@ export * from './version';
 export * from './faucet';
 export * from './normalized';
 export * from './validator';
+export * from './coin';
