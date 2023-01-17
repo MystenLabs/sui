@@ -80,10 +80,6 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
         excludedNetworks.push(API_ENV.testNet);
     }
 
-    if (!growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL)) {
-        excludedNetworks.push(API_ENV.customRPC);
-    }
-
     return Object.values(API_ENV).filter(
         (env) => !excludedNetworks.includes(env as keyof typeof API_ENV)
     );
