@@ -116,6 +116,71 @@ impl IndexerEventHandlerMetrics {
 }
 
 #[derive(Clone, Debug)]
+
+// TODO: remove object and publish event related metrics after wave 2
+pub struct IndexerObjectEventHandlerMetrics {
+    pub total_object_events_received: IntCounter,
+    pub total_object_events_processed: IntCounter,
+    pub total_object_event_handler_error: IntCounter,
+}
+
+impl IndexerObjectEventHandlerMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_object_events_received: register_int_counter_with_registry!(
+                "total_object_events_received",
+                "Total number of object events received",
+                registry,
+            )
+            .unwrap(),
+            total_object_events_processed: register_int_counter_with_registry!(
+                "total_object_events_processed",
+                "Total number of object events processed",
+                registry,
+            )
+            .unwrap(),
+            total_object_event_handler_error: register_int_counter_with_registry!(
+                "total_object_event_handler_error",
+                "Total number of object event handler error",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct IndexerPublishEventHandlerMetrics {
+    pub total_publish_events_received: IntCounter,
+    pub total_publish_events_processed: IntCounter,
+    pub total_publish_event_handler_error: IntCounter,
+}
+
+impl IndexerPublishEventHandlerMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_publish_events_received: register_int_counter_with_registry!(
+                "total_publish_events_received",
+                "Total number of publish events received",
+                registry,
+            )
+            .unwrap(),
+            total_publish_events_processed: register_int_counter_with_registry!(
+                "total_publish_events_processed",
+                "Total number of publish events processed",
+                registry,
+            )
+            .unwrap(),
+            total_publish_event_handler_error: register_int_counter_with_registry!(
+                "total_publish_event_handler_error",
+                "Total number of publish event handler error",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct IndexerCheckpointHandlerMetrics {
     pub total_checkpoint_requested: IntCounter,
     pub total_checkpoint_received: IntCounter,
