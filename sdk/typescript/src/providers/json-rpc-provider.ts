@@ -50,6 +50,8 @@ import {
   GetOwnedObjectsResponse,
   DelegatedStake,
   ValidatorMetaData,
+  SuiSystemState,
+  CommitteeInfoResponse,
   CoinBalance,
   CoinSupply,
   CheckpointSummary,
@@ -985,6 +987,34 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error in getValidators: ${err}`);
+    }
+  }
+
+  async getCommitteeInfo(epoch: number | null = null): Promise<CommitteeInfoResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCommitteeInfo',
+        [epoch],
+        CommitteeInfoResponse,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getCommitteeInfo: ${err}`);
+    }
+  }
+
+  async getSuiSystemState(): Promise<SuiSystemState> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getSuiSystemState',
+        [],
+        SuiSystemState,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getSuiSystemState: ${err}`);
     }
   }
 
