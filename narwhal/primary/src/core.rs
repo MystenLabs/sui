@@ -123,45 +123,53 @@ impl Core {
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
-                Self {
-                    name,
-                    committee,
-                    worker_cache,
-                    header_store,
-                    certificate_store,
-                    synchronizer,
-                    signature_service,
-                    rx_consensus_round_updates,
-                    rx_narwhal_round_updates,
-                    gc_depth,
-                    rx_shutdown,
-                    rx_certificates,
-                    rx_certificates_loopback,
-                    rx_headers,
-                    tx_new_certificates,
-                    tx_parents,
-                    gc_round: 0,
-                    highest_received_round: 0,
-                    highest_processed_round: 0,
-                    pending_certificates: HashMap::new(),
-                    background_tasks: JoinSet::new(),
-                    cancel_proposed_header: None,
-                    propose_header_future: None.into(),
-                    certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
-                    network: primary_network,
-                    metrics,
+                let call = async move {
+                    Self {
+                        name,
+                        committee,
+                        worker_cache,
+                        header_store,
+                        certificate_store,
+                        synchronizer,
+                        signature_service,
+                        rx_consensus_round_updates,
+                        rx_narwhal_round_updates,
+                        gc_depth,
+                        rx_shutdown,
+                        rx_certificates,
+                        rx_certificates_loopback,
+                        rx_headers,
+                        tx_new_certificates,
+                        tx_parents,
+                        gc_round: 0,
+                        highest_received_round: 0,
+                        highest_processed_round: 0,
+                        pending_certificates: HashMap::new(),
+                        background_tasks: JoinSet::new(),
+                        cancel_proposed_header: None,
+                        propose_header_future: None.into(),
+                        certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
+                        network: primary_network,
+                        metrics,
+                    }
+                    .recover()
+                    .await?
+                    .run()
+                    .await
+                };
+
+                match call.await {
+                    Err(err @ DagError::ShuttingDown) => debug!("{:?}", err),
+                    Err(err) => panic!("{:?}", err),
+                    Ok(_) => {}
                 }
-                .recover()
-                .await
-                .run()
-                .await;
             },
             "CoreTask"
         )
     }
 
     #[instrument(level = "info", skip_all)]
-    pub async fn recover(mut self) -> Self {
+    pub async fn recover(mut self) -> DagResult<Self> {
         info!("Starting certificate recovery. Message processing will begin after completion.");
 
         let last_round_certificates = self
@@ -175,15 +183,13 @@ impl Core {
             .unwrap_or(0);
 
         for certificate in last_round_certificates {
-            self.append_certificate_in_aggregator(certificate)
-                .await
-                .expect("Failed appending recovered certificates to aggregator in primary core");
+            self.append_certificate_in_aggregator(certificate).await?;
         }
 
         self.highest_received_round = last_round_number;
         self.highest_processed_round = last_round_number;
 
-        self
+        Ok(self)
     }
 
     // Requests a vote for a Header from the given peer. Retries indefinitely until either a
@@ -665,7 +671,6 @@ impl Core {
     fn process_result(result: &DagResult<()>) {
         match result {
             Ok(()) => (),
-            Err(e @ DagError::ShuttingDown) => debug!("{e}"),
             Err(DagError::StoreError(e)) => {
                 error!("{e}");
                 panic!("Storage failure: killing node.");
@@ -680,7 +685,7 @@ impl Core {
     }
 
     // Main loop listening to incoming messages.
-    pub async fn run(mut self) {
+    pub async fn run(mut self) -> DagResult<Self> {
         info!("Core on node {} has started successfully.", self.name);
         loop {
             let result = tokio::select! {
@@ -760,7 +765,7 @@ impl Core {
                 },
 
                 _ = self.rx_shutdown.receiver.recv() => {
-                    return
+                    return Ok(self);
                 }
 
                 // Check whether the consensus round has changed, to clean up structures
