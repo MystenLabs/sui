@@ -23,7 +23,7 @@ interface DelegationCardProps {
     stakedId: string;
 }
 
-const STATE_TO_COPY = {
+export const STATE_TO_COPY = {
     [DelegationState.WARM_UP]: 'Starts Earning',
     [DelegationState.EARNING]: 'Staking Reward',
     [DelegationState.COOL_DOWN]: 'In Cool-down',

@@ -34,7 +34,6 @@ export function usePageView() {
         trackPageview({
             url: location.pathname,
         });
-
         // Send a network event to Plausible with the page and url params
         trackEvent('PageByNetwork', {
             props: {

@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type SuiAddress } from '@mysten/sui.js';
+import {
+    is,
+    SuiObject,
+    type SuiAddress,
+    Base64DataBuffer,
+} from '@mysten/sui.js';
 import { type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -10,6 +15,8 @@ import { useGetObject, useAppSelector } from '_hooks';
 
 export const STATE_OBJECT = '0x5';
 export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
+
+const textDecoder = new TextDecoder();
 
 // TODO: Generalize into SDK:
 interface SystemStateObject {
@@ -48,7 +55,7 @@ export function getName(rawName: string | number[]) {
     if (Array.isArray(rawName)) {
         name = String.fromCharCode(...rawName);
     } else {
-        name = decodeURIComponent(atob(rawName));
+        name = textDecoder.decode(new Base64DataBuffer(rawName).getData());
         if (!VALDIATOR_NAME.test(name)) {
             name = rawName;
         }

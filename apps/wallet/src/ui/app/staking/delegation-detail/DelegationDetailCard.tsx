@@ -85,6 +85,12 @@ export function DelegationDetailCard({
         return calculateAPY(validatorData, +validatorsData.epoch);
     }, [validatorData, validatorsData]);
 
+    const delegationId = useMemo(() => {
+        if (!delegationData || delegationData.delegation_status === 'Pending')
+            return null;
+        return delegationData.delegation_status.Active.id.id;
+    }, [delegationData]);
+
     const stakeByValidatorAddress = `/stake/new?${new URLSearchParams({
         address: validatorAddress,
         staked: stakedId,
@@ -223,7 +229,7 @@ export function DelegationDetailCard({
                                 />
                                 Stake SUI
                             </Button>
-                            {Boolean(totalStake) && (
+                            {Boolean(totalStake) && delegationId && (
                                 <Button
                                     size="large"
                                     mode="outline"

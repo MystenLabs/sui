@@ -9,11 +9,7 @@ import {
 } from '@reduxjs/toolkit';
 
 import { accountCoinsSelector } from '_redux/slices/account';
-import {
-    fetchAllOwnedAndRequiredObjects,
-    suiObjectsAdapterSelectors,
-} from '_redux/slices/sui-objects';
-import { Coin } from '_redux/slices/sui-objects/Coin';
+import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 
 import type {
     SuiAddress,
@@ -62,48 +58,6 @@ export const sendTokens = createAsyncThunk<
     }
 );
 
-type StakeTokensTXArgs = {
-    tokenTypeArg: string;
-    amount: bigint;
-    validatorAddress: SuiAddress;
-};
-
-export const stakeTokens = createAsyncThunk<
-    TransactionResult,
-    StakeTokensTXArgs,
-    AppThunkConfig
->(
-    'sui-objects/stake',
-    async (
-        { tokenTypeArg, amount, validatorAddress },
-        { getState, extra: { api, keypairVault, background }, dispatch }
-    ) => {
-        const state = getState();
-        const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
-
-        const coins: SuiMoveObject[] = suiObjectsAdapterSelectors
-            .selectAll(state)
-            .filter(
-                (anObj) =>
-                    anObj.data.dataType === 'moveObject' &&
-                    anObj.data.type === coinType
-            )
-            .map(({ data }) => data as SuiMoveObject);
-
-        const response = await Coin.stakeCoin(
-            api.getSignerInstance(
-                keypairVault.getKeypair().getPublicKey().toSuiAddress(),
-                background
-            ),
-            coins,
-            amount,
-            validatorAddress
-        );
-        dispatch(fetchAllOwnedAndRequiredObjects());
-        return response;
-    }
-);
-
 const txAdapter = createEntityAdapter<TransactionResult>({
     selectId: (tx) => getTransactionDigest(tx),
 });
@@ -118,11 +72,6 @@ const slice = createSlice({
     reducers: {},
     extraReducers: (builder) => {
         builder.addCase(sendTokens.fulfilled, (state, { payload }) => {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore: This causes a compiler error, but it will be removed when we migrate off of Redux.
-            return txAdapter.setOne(state, payload);
-        });
-        builder.addCase(stakeTokens.fulfilled, (state, { payload }) => {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore: This causes a compiler error, but it will be removed when we migrate off of Redux.
             return txAdapter.setOne(state, payload);

@@ -3,14 +3,14 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useCallback } from 'react';
+import { useEffect, useRef, memo, useCallback, useMemo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { useFormatCoin } from '_hooks';
+import { useCoinDecimals, useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
@@ -56,11 +56,17 @@ function StakeForm({
 
     const maxToken = maxTokenFormated[0];
     const queryResult = maxTokenFormated[2];
+    const [coinDecimals] = useCoinDecimals(coinType);
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
+
+    const calculateRemaining = useMemo(() => {
+        if (!amount || !maxToken) return 0;
+        return (+maxToken - +amount).toFixed(coinDecimals);
+    }, [amount, maxToken, coinDecimals]);
 
     return (
         <Form
@@ -109,7 +115,26 @@ function StakeForm({
                             </Text>
                         </div>
                     }
-                ></Card>
+                >
+                    {+amount > 0 && (
+                        <div className="py-px flex justify-between w-full">
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                Stake Remaining
+                            </Text>
+                            <Text
+                                variant="body"
+                                weight="medium"
+                                color="steel-darker"
+                            >
+                                {calculateRemaining} {symbol}
+                            </Text>
+                        </div>
+                    )}
+                </Card>
                 <ErrorMessage
                     className={st.error}
                     name="amount"
