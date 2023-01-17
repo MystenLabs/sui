@@ -11,6 +11,7 @@ import {
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
+import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
@@ -25,63 +26,10 @@ import {
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
 import Alert from '_src/ui/app/components/alert';
 
-import type {
-    TransactionKindName,
-    SuiTransactionResponse,
-    ObjectId,
-} from '@mysten/sui.js';
+import type { SuiTransactionResponse, ObjectId } from '@mysten/sui.js';
 
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
-
-type TxnTypeProps = {
-    value?: string;
-    variant: TransactionKindName;
-    isSender: boolean;
-};
-
-function TxnType({ value, variant, isSender }: TxnTypeProps) {
-    const address = useMiddleEllipsis(
-        value || '',
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
-
-    const label = useMemo(() => {
-        let name;
-        switch (variant) {
-            case 'Call':
-                name = 'Action';
-                break;
-            case 'ChangeEpoch':
-                name = 'Action';
-                break;
-            case 'Publish':
-                name = 'Action';
-                break;
-
-            default:
-                name = isSender ? 'To' : 'From';
-        }
-        return name;
-    }, [variant, isSender]);
-
-    return (
-        <div className="flex gap-1 break-all capitalize">
-            <Text color="steel-darker" weight="semibold" variant="subtitle">
-                {label}
-            </Text>
-            <Text
-                color="steel-darker"
-                weight="normal"
-                variant="subtitle"
-                mono={label !== 'Action'}
-            >
-                {label !== 'Action' ? address : value}
-            </Text>
-        </div>
-    );
-}
 
 function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
     const address = useAppSelector(({ account: { address } }) => address);
@@ -138,6 +86,12 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         );
     }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
 
+    const receiverAddress = useMiddleEllipsis(
+        recipientAddress || '',
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
+    );
+
     const moveCallTxn = getMoveCallTransaction(
         certificate.data.transactions[0]
     );
@@ -146,7 +100,8 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         const moveCallTxn = getMoveCallTransaction(
             certificate.data.transactions[0]
         );
-        if (txnKind === 'Call') return moveCallTxn?.function.replace(/_/g, ' ');
+        if (txnKind === 'Call')
+            return moveCallTxn?.function.replace(/_/g, ' ') || 'Call';
         if (txnKind === 'ChangeEpoch') return txnKind;
         return recipientAddress;
     }, [certificate.data.transactions, recipientAddress, txnKind]);
@@ -161,6 +116,19 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
     }, [txn]);
 
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
+    const isSuTransfer =
+        txnKind === 'PaySui' ||
+        txnKind === 'TransferSui' ||
+        txnKind === 'PayAllSui' ||
+        txnKind === 'Pay';
+
+    const label = useMemo(() => {
+        return isSuTransfer || txnKind === 'TransferObject'
+            ? isSender
+                ? 'To'
+                : 'From'
+            : 'Action';
+    }, [isSender, isSuTransfer, txnKind]);
 
     return (
         <div className="flex items-start w-full justify-between gap-3">
@@ -184,23 +152,40 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
                 ) : (
                     <>
                         <div className="flex w-full justify-between">
-                            <Text color="gray-90" weight="semibold">
-                                {isMint
-                                    ? 'Minted'
-                                    : isSender
-                                    ? 'Sent'
-                                    : 'Received'}
-                            </Text>
+                            {isMint ? (
+                                <Text color="gray-90" weight="semibold">
+                                    Minted
+                                </Text>
+                            ) : (
+                                <div className="flex flex-col w-full gap-1.5">
+                                    <div className="flex gap-1 align-middle items-baseline">
+                                        <Text color="gray-90" weight="semibold">
+                                            {isSender ? 'Sent' : 'Received'}
+                                        </Text>
+                                        {isSuTransfer && (
+                                            <Text
+                                                color="gray-90"
+                                                weight="normal"
+                                                variant="subtitleSmall"
+                                            >
+                                                SUI
+                                            </Text>
+                                        )}
+                                    </div>
+
+                                    <TxnTypeLabel
+                                        label={label}
+                                        content={
+                                            label !== 'Action'
+                                                ? receiverAddress
+                                                : txnLabel
+                                        }
+                                    />
+                                </div>
+                            )}
                             <CoinBalance amount={amount} />
                         </div>
 
-                        {!isMint && (
-                            <TxnType
-                                variant={txnKind}
-                                value={txnLabel}
-                                isSender={isSender}
-                            />
-                        )}
                         {objectIds[0] && <TxnImage id={objectIds[0]} />}
                     </>
                 )}
