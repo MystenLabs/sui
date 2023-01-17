@@ -4,7 +4,7 @@
 import { Text } from '_app/shared/text';
 
 type TxnTypeProps = {
-    label: string;
+    label: 'Action' | 'From' | 'To';
     content: string;
 };
 
