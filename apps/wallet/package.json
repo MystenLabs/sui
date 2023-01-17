@@ -124,6 +124,9 @@
         "@scure/bip32": "^1.1.1",
         "@scure/bip39": "^1.1.0",
         "@tanstack/react-query": "^4.20.9",
+        "@trpc/client": "^10.9.0",
+        "@trpc/react-query": "^10.9.0",
+        "@trpc/server": "^10.9.0",
         "bignumber.js": "^9.1.1",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
@@ -147,10 +150,12 @@
         "stream-browserify": "^3.0.0",
         "tailwindcss": "^3.2.4",
         "throttle-debounce": "^5.0.0",
+        "trpc-chrome": "^1.0.0",
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.2",
         "webextension-polyfill": "^0.9.0",
         "yup": "^0.32.11",
+        "zod": "^3.20.2",
         "zxcvbn": "^4.4.2"
     }
 }

@@ -24,6 +24,9 @@ export class Connections {
             try {
                 let connection: Connection | KeepAliveConnection;
                 switch (port.name) {
+                    // Ignore TRPC:
+                    case 'trpc':
+                        return;
                     case ContentScriptConnection.CHANNEL:
                         connection = new ContentScriptConnection(port);
                         break;

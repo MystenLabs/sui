@@ -213,6 +213,9 @@ importers:
       '@storybook/react-webpack5': ^7.0.0-beta.3
       '@storybook/theming': 7.0.0-beta.3
       '@tanstack/react-query': ^4.20.9
+      '@trpc/client': ^10.9.0
+      '@trpc/react-query': ^10.9.0
+      '@trpc/server': ^10.9.0
       '@types/dotenv-webpack': ^7.0.3
       '@types/git-rev-sync': ^2.0.0
       '@types/node': ^18.11.18
@@ -277,6 +280,7 @@ importers:
       svgtofont: ^3.17.8
       tailwindcss: ^3.2.4
       throttle-debounce: ^5.0.0
+      trpc-chrome: ^1.0.0
       ts-loader: ^9.4.2
       ts-node: ^10.9.1
       tsconfig-paths: ^4.1.2
@@ -292,6 +296,7 @@ importers:
       webpack-cli: ^4.10.0
       webpack-merge: ^5.8.0
       yup: ^0.32.11
+      zod: ^3.20.2
       zxcvbn: ^4.4.2
     dependencies:
       '@floating-ui/react-dom-interactions': 0.13.3_ib3m5ricvtkl2cll7qpr2f6lvq
@@ -308,6 +313,9 @@ importers:
       '@scure/bip32': 1.1.1
       '@scure/bip39': 1.1.0
       '@tanstack/react-query': 4.22.0_biqbaboplfbrettd7655fr4n2y
+      '@trpc/client': 10.9.0_@trpc+server@10.9.0
+      '@trpc/react-query': 10.9.0_qw4miir7nnxijwjta54q3esyeq
+      '@trpc/server': 10.9.0
       bignumber.js: 9.1.1
       bootstrap-icons: 1.9.1
       buffer: 6.0.3
@@ -329,12 +337,14 @@ importers:
       rxjs: 7.8.0
       semver: 7.3.8
       stream-browserify: 3.0.0
-      tailwindcss: 3.2.4_ts-node@10.9.1
+      tailwindcss: 3.2.4_aesdjsunmf4wiehhujt67my7tu
       throttle-debounce: 5.0.0
+      trpc-chrome: 1.0.0_2zpqbmooshoeqfe2ml35ze43ai
       tweetnacl: 1.0.3
       uuid: 8.3.2
       webextension-polyfill: 0.9.0
       yup: 0.32.11
+      zod: 3.20.2
       zxcvbn: 4.4.2
     devDependencies:
       '@babel/preset-env': 7.20.2
@@ -5983,6 +5993,34 @@ packages:
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
     dev: true
+
+  /@trpc/client/10.9.0_@trpc+server@10.9.0:
+    resolution: {integrity: sha512-id6318qpgqllNOuBp7nuciXFPXCe+zae5d4r1hze6Eyp5fFFNO58TqA+4Q44KIcHgpfWyW2egs6iPeql3PrdKA==}
+    peerDependencies:
+      '@trpc/server': 10.9.0
+    dependencies:
+      '@trpc/server': 10.9.0
+    dev: false
+
+  /@trpc/react-query/10.9.0_qw4miir7nnxijwjta54q3esyeq:
+    resolution: {integrity: sha512-I7xtdFj/AETwc9HfY2bGxKINij39r26LvfIiTBfz2pBj1ELrcgucWmPeI2eS6pon/uI1E9Nqa6fQCg/zkg764Q==}
+    peerDependencies:
+      '@tanstack/react-query': ^4.3.8
+      '@trpc/client': 10.9.0
+      '@trpc/server': 10.9.0
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    dependencies:
+      '@tanstack/react-query': 4.22.0_biqbaboplfbrettd7655fr4n2y
+      '@trpc/client': 10.9.0_@trpc+server@10.9.0
+      '@trpc/server': 10.9.0
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
+
+  /@trpc/server/10.9.0:
+    resolution: {integrity: sha512-5psyZgbvy29pJND32hwkWTMbv6s86IbsPOeDopsgNF0VegZT6Dsijmb7Ub/TDhuJVQVq5u4u5briMXi3SxmBkw==}
+    dev: false
 
   /@trysound/sax/0.2.0:
     resolution: {integrity: sha512-L7z9BgrNEcYyUYtF+HaEfiS5ebkh9jXqbszz7pC0hRBPaatV0XjSD3+eHrpqFemQfgwiFF0QPIarnIihIDn7OA==}
@@ -17373,10 +17411,12 @@ packages:
       - ts-node
     dev: true
 
-  /tailwindcss/3.2.4_ts-node@10.9.1:
+  /tailwindcss/3.2.4_aesdjsunmf4wiehhujt67my7tu:
     resolution: {integrity: sha512-AhwtHCKMtR71JgeYDaswmZXhPcW9iuI9Sp2LvZPo9upDZ7231ZJ7eA9RaURbhpXGVlrjX4cFNlB4ieTetEb7hQ==}
     engines: {node: '>=12.13.0'}
     hasBin: true
+    peerDependencies:
+      postcss: ^8.0.9
     dependencies:
       arg: 5.0.2
       chokidar: 3.5.3
@@ -17655,6 +17695,16 @@ packages:
     resolution: {integrity: sha512-c1PTsA3tYrIsLGkJkzHF+w9F2EyxfXGo4UyJc4pFL++FMjnq0HJS69T3M7d//gKrFKwy429bouPescbjecU+Zw==}
     engines: {node: '>=8'}
     dev: true
+
+  /trpc-chrome/1.0.0_2zpqbmooshoeqfe2ml35ze43ai:
+    resolution: {integrity: sha512-lulJIFLh37dz1m8zDCliCKhKJmrZqCTZd+kVyfL084aKkqaZVbfjzm7WqWOmhXiKvP/4pWeKSh7qIN2DhwTDUA==}
+    peerDependencies:
+      '@trpc/client': ^10.0.0
+      '@trpc/server': ^10.0.0
+    dependencies:
+      '@trpc/client': 10.9.0_@trpc+server@10.9.0
+      '@trpc/server': 10.9.0
+    dev: false
 
   /ts-dedent/2.2.0:
     resolution: {integrity: sha512-q5W7tVM71e2xjHZTlgfTDoPF/SmqKG5hddq9SzR49CH2hayqRKJtQ4mtRlSxKaJlR/+9rEM+mnBHf7I2/BQcpQ==}

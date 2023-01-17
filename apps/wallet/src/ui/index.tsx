@@ -11,6 +11,7 @@ import { HashRouter } from 'react-router-dom';
 import App from './app';
 import { growthbook } from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
+import { trpcClient, trpc } from './app/trpc';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
@@ -44,11 +45,16 @@ function renderApp() {
             <HashRouter>
                 <Provider store={store}>
                     <IntlProvider locale={navigator.language}>
-                        <QueryClientProvider client={queryClient}>
-                            <ErrorBoundary>
-                                <App />
-                            </ErrorBoundary>
-                        </QueryClientProvider>
+                        <trpc.Provider
+                            client={trpcClient}
+                            queryClient={queryClient}
+                        >
+                            <QueryClientProvider client={queryClient}>
+                                <ErrorBoundary>
+                                    <App />
+                                </ErrorBoundary>
+                            </QueryClientProvider>
+                        </trpc.Provider>
                     </IntlProvider>
                 </Provider>
             </HashRouter>
