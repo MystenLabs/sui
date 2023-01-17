@@ -39,6 +39,7 @@ export function useGetTransactionsByAddress(
         () => getTransactionsByAddress(normalizedAddress),
         {
             enabled: !!address,
+            refetchOnWindowFocus: true,
         }
     );
 }

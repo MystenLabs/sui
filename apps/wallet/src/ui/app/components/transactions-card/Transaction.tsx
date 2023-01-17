@@ -16,23 +16,22 @@ import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { Text } from '_app/shared/text';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { getEventsSummary, getAmount, formatDate } from '_helpers';
-import {
-    useAppSelector,
-    useMiddleEllipsis,
-    useGetTransactionById,
-} from '_hooks';
+import { useMiddleEllipsis } from '_hooks';
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
-import Alert from '_src/ui/app/components/alert';
 
-import type { SuiTransactionResponse, ObjectId } from '@mysten/sui.js';
+import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
 
 const TRUNCATE_MAX_LENGTH = 8;
 const TRUNCATE_PREFIX_LENGTH = 4;
 
-function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
-    const address = useAppSelector(({ account: { address } }) => address);
+export function Transaction({
+    txn,
+    address,
+}: {
+    txn: SuiTransactionResponse;
+    address: SuiAddress;
+}) {
     const { certificate } = txn;
     const executionStatus = getExecutionStatusType(txn) as 'Success' | 'Failed';
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
@@ -131,108 +130,85 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
     }, [isSender, isSuTransfer, txnKind]);
 
     return (
-        <div className="flex items-start w-full justify-between gap-3">
-            <div className="w-7.5">
-                <TxnIcon
-                    txnKindName={txnIconName}
-                    txnFailed={executionStatus === 'Failed'}
-                    isSender={isSender}
-                />
-            </div>
-            <div className="flex flex-col w-full gap-1.5">
-                {error ? (
-                    <div className="flex flex-col w-full gap-1.5">
-                        <Text color="gray-90" weight="semibold">
-                            Transaction failed
-                        </Text>
-                        <div className="flex break-all text-issue-dark text-subtitle">
-                            {error}
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <div className="flex w-full justify-between flex-col gap-1">
-                            <div className="flex w-full justify-between ">
-                                <div className="flex gap-1 align-middle  items-baseline">
-                                    <Text color="gray-90" weight="semibold">
-                                        {isMint
-                                            ? 'Minted'
-                                            : isSender
-                                            ? 'Sent'
-                                            : 'Received'}
-                                    </Text>
-                                    {isSuTransfer && (
-                                        <Text
-                                            color="gray-90"
-                                            weight="normal"
-                                            variant="subtitleSmall"
-                                        >
-                                            SUI
-                                        </Text>
-                                    )}
-                                </div>
-
-                                <CoinBalance amount={amount} />
-                            </div>
-                            <div className="flex flex-col w-full">
-                                <div className="flex flex-col w-full gap-1.5">
-                                    <TxnTypeLabel
-                                        label={label}
-                                        content={
-                                            label !== 'Action'
-                                                ? receiverAddress
-                                                : txnLabel
-                                        }
-                                    />
-                                    {objectIds[0] && (
-                                        <TxnImage id={objectIds[0]} />
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </>
-                )}
-
-                {txnDate && (
-                    <Text
-                        color="steel-dark"
-                        weight="medium"
-                        variant="subtitleSmallExtra"
-                    >
-                        {txnDate}
-                    </Text>
-                )}
-            </div>
-        </div>
-    );
-}
-
-export function TxnListItem({ txnId }: { txnId: ObjectId }) {
-    const { data: txn, isError, isLoading } = useGetTransactionById(txnId);
-    if (isError) {
-        return (
-            <div className="p-2">
-                <Alert mode="warning">
-                    <div className="mb-1 font-semibold">
-                        Something went wrong
-                    </div>
-                </Alert>
-            </div>
-        );
-    }
-
-    return isLoading ? (
-        <div className="flex w-full justify-start items-center flex-col gap-2 py-4 no-underline">
-            <LoadingIndicator />
-        </div>
-    ) : (
         <Link
             to={`/receipt?${new URLSearchParams({
-                txdigest: txnId,
+                txdigest: txn.certificate.transactionDigest,
             }).toString()}`}
             className="flex items-center w-full flex-col gap-2 py-4 no-underline"
         >
-            <TxnItem txn={txn} />
+            <div className="flex items-start w-full justify-between gap-3">
+                <div className="w-7.5">
+                    <TxnIcon
+                        txnKindName={txnIconName}
+                        txnFailed={executionStatus === 'Failed'}
+                        isSender={isSender}
+                    />
+                </div>
+                <div className="flex flex-col w-full gap-1.5">
+                    {error ? (
+                        <div className="flex flex-col w-full gap-1.5">
+                            <Text color="gray-90" weight="semibold">
+                                Transaction failed
+                            </Text>
+                            <div className="flex break-all text-issue-dark text-subtitle">
+                                {error}
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex w-full justify-between flex-col gap-1">
+                                <div className="flex w-full justify-between ">
+                                    <div className="flex gap-1 align-middle  items-baseline">
+                                        <Text color="gray-90" weight="semibold">
+                                            {isMint
+                                                ? 'Minted'
+                                                : isSender
+                                                ? 'Sent'
+                                                : 'Received'}
+                                        </Text>
+                                        {isSuTransfer && (
+                                            <Text
+                                                color="gray-90"
+                                                weight="normal"
+                                                variant="subtitleSmall"
+                                            >
+                                                SUI
+                                            </Text>
+                                        )}
+                                    </div>
+
+                                    <CoinBalance amount={amount} />
+                                </div>
+                                <div className="flex flex-col w-full">
+                                    <div className="flex flex-col w-full gap-1.5">
+                                        <TxnTypeLabel
+                                            label={label}
+                                            content={
+                                                label !== 'Action'
+                                                    ? receiverAddress
+                                                    : txnLabel
+                                            }
+                                        />
+                                        {objectIds[0] && (
+                                            <TxnImage id={objectIds[0]} />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {txnDate && (
+                        <Text
+                            color="steel-dark"
+                            weight="medium"
+                            variant="subtitleSmallExtra"
+                        >
+                            {txnDate}
+                        </Text>
+                    )}
+                </div>
+            </div>
         </Link>
     );
 }
