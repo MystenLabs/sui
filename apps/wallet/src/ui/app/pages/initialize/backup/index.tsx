@@ -134,7 +134,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                     color="steel-dark"
                                     weight="normal"
                                 >
-                                    I saved my recovery passphrase
+                                    I saved my recovery phrase
                                 </Text>
                             </label>
                         </div>
