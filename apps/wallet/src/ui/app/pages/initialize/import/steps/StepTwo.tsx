@@ -29,7 +29,7 @@ export default function StepTwo({ next, data, mode }: StepProps) {
                 <Form className="flex flex-col flex-nowrap self-stretch flex-1">
                     <PasswordFields />
                     <div className="flex-1" />
-                    <div className="flex flex-nowrap gap-2.5">
+                    <div className="flex flex-nowrap gap-2.5 mt-5">
                         <Button
                             type="button"
                             disabled={isSubmitting}
