@@ -5,7 +5,6 @@ import { is, SuiObject } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
-import ErrorResult from '~/components/error-result/ErrorResult';
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
 import { useGetObject } from '~/hooks/useGetObject';
@@ -13,6 +12,7 @@ import {
     VALIDATORS_OBJECT_ID,
     type ValidatorsFields,
 } from '~/pages/validator/ValidatorDataTypes';
+import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 function ValidatorDetails() {
@@ -46,7 +46,9 @@ function ValidatorDetails() {
     if (!validatorData || !validatorsData) {
         return (
             <div className="mt-5 mb-10 flex items-center justify-center">
-                <ErrorResult id={id} errorMsg="No validator data found" />
+                <Banner variant="error" spacing="lg" fullWidth>
+                    No validator data found for {id}
+                </Banner>
             </div>
         );
     }
