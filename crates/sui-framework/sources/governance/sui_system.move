@@ -91,6 +91,7 @@ module sui::sui_system {
     const EEPOCH_NUMBER_MISMATCH: u64 = 2;
     const ECANNOT_REPORT_ONESELF: u64 = 3;
     const EREPORT_RECORD_NOT_FOUND: u64 = 4;
+    const EBPS_TOO_LARGE: u64 = 5;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -424,10 +425,22 @@ module sui::sui_system {
         storage_rebate: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
+        reward_slashing_threshold_bps: u64, // threshold of validator reports filed this epoch
+                                             // before a validator's rewards are slashed, in bps.
+        reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
+
+        let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
+        // Rates can't be higher than 100%.
+        assert!(
+            storage_fund_reinvest_rate <= bps_denominator_u64 
+            && reward_slashing_threshold_bps <= bps_denominator_u64
+            && reward_slashing_rate <= bps_denominator_u64,
+            EBPS_TOO_LARGE,
+        );
 
         let storage_reward = balance::create_staking_rewards(storage_charge);
         let computation_reward = balance::create_staking_rewards(computation_charge);
@@ -445,8 +458,6 @@ module sui::sui_system {
         let total_stake_u128 = (total_stake as u128);
         let computation_charge_u128 = (computation_charge as u128);
 
-        let delegator_reward_amount = (delegation_stake as u128) * computation_charge_u128 / total_stake_u128;
-        let delegator_reward = balance::split(&mut computation_reward, (delegator_reward_amount as u64));
         balance::join(&mut self.storage_fund, storage_reward);
 
         let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
@@ -463,25 +474,23 @@ module sui::sui_system {
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
         let total_rewards_amount =
-            balance::value(&computation_reward)
-            + balance::value(&delegator_reward)
-            + balance::value(&storage_fund_reward);
+            balance::value(&computation_reward)+ balance::value(&storage_fund_reward);
 
         validator_set::advance_epoch(
             new_epoch,
             &mut self.validators,
             &mut computation_reward,
-            &mut delegator_reward,
             &mut storage_fund_reward,
-            &self.validator_report_records,
+            self.validator_report_records,
+            reward_slashing_threshold_bps,
+            reward_slashing_rate,
             ctx,
         );
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `delegator_reward`, `storage_fund_reward` and `computation_reward`.
+        // remaining balance in `storage_fund_reward` and `computation_reward`. 
         // All of these go to the storage fund.
-        balance::join(&mut self.storage_fund, delegator_reward);
         balance::join(&mut self.storage_fund, storage_fund_reward);
         balance::join(&mut self.storage_fund, computation_reward);
 
@@ -493,11 +502,15 @@ module sui::sui_system {
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
 
+        let new_total_stake =
+            validator_set::total_delegation_stake(&self.validators)
+            + validator_set::total_validator_stake(&self.validators);
+
         event::emit(
             SystemEpochInfo {
                 epoch: self.epoch,
                 reference_gas_price: self.reference_gas_price,
-                total_stake: delegation_stake + validator_stake,
+                total_stake: new_total_stake,
                 storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
                 storage_fund_outflows: storage_rebate,
                 storage_fund_balance: balance::value(&self.storage_fund),

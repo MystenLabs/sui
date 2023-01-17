@@ -275,6 +275,15 @@ the epoch advancement transaction.
 
 
 
+<a name="0x2_sui_system_EBPS_TOO_LARGE"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EBPS_TOO_LARGE">EBPS_TOO_LARGE</a>: u64 = 5;
+</code></pre>
+
+
+
 <a name="0x2_sui_system_ECANNOT_REPORT_ONESELF"></a>
 
 
@@ -961,7 +970,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_threshold_bps: u64, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -978,10 +987,22 @@ gas coins.
     storage_rebate: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
+    reward_slashing_threshold_bps: u64, // threshold of <a href="validator.md#0x2_validator">validator</a> reports filed this epoch
+                                         // before a <a href="validator.md#0x2_validator">validator</a>'s rewards are slashed, in bps.
+    reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x2_validator">validator</a>, in bps.
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+
+    <b>let</b> bps_denominator_u64 = (<a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u64);
+    // Rates can't be higher than 100%.
+    <b>assert</b>!(
+        storage_fund_reinvest_rate &lt;= bps_denominator_u64
+        && reward_slashing_threshold_bps &lt;= bps_denominator_u64
+        && reward_slashing_rate &lt;= bps_denominator_u64,
+        <a href="sui_system.md#0x2_sui_system_EBPS_TOO_LARGE">EBPS_TOO_LARGE</a>,
+    );
 
     <b>let</b> storage_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(storage_charge);
     <b>let</b> computation_reward = <a href="balance.md#0x2_balance_create_staking_rewards">balance::create_staking_rewards</a>(computation_charge);
@@ -999,8 +1020,6 @@ gas coins.
     <b>let</b> total_stake_u128 = (total_stake <b>as</b> u128);
     <b>let</b> computation_charge_u128 = (computation_charge <b>as</b> u128);
 
-    <b>let</b> delegator_reward_amount = (delegation_stake <b>as</b> u128) * computation_charge_u128 / total_stake_u128;
-    <b>let</b> delegator_reward = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> computation_reward, (delegator_reward_amount <b>as</b> u64));
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_reward);
 
     <b>let</b> storage_fund_reward_amount = (storage_fund_balance <b>as</b> u128) * computation_charge_u128 / total_stake_u128;
@@ -1017,25 +1036,23 @@ gas coins.
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
     <b>assert</b>!(new_epoch == self.epoch, 0);
     <b>let</b> total_rewards_amount =
-        <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward)
-        + <a href="balance.md#0x2_balance_value">balance::value</a>(&delegator_reward)
-        + <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
+        <a href="balance.md#0x2_balance_value">balance::value</a>(&computation_reward)+ <a href="balance.md#0x2_balance_value">balance::value</a>(&storage_fund_reward);
 
     <a href="validator_set.md#0x2_validator_set_advance_epoch">validator_set::advance_epoch</a>(
         new_epoch,
         &<b>mut</b> self.validators,
         &<b>mut</b> computation_reward,
-        &<b>mut</b> delegator_reward,
         &<b>mut</b> storage_fund_reward,
-        &self.validator_report_records,
+        self.validator_report_records,
+        reward_slashing_threshold_bps,
+        reward_slashing_rate,
         ctx,
     );
     // Derive the reference gas price for the new epoch
     self.reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&self.validators);
     // Because of precision issues <b>with</b> integer divisions, we expect that there will be some
-    // remaining <a href="balance.md#0x2_balance">balance</a> in `delegator_reward`, `storage_fund_reward` and `computation_reward`.
+    // remaining <a href="balance.md#0x2_balance">balance</a> in `storage_fund_reward` and `computation_reward`.
     // All of these go <b>to</b> the storage fund.
-    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, delegator_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reward);
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
 
@@ -1047,11 +1064,15 @@ gas coins.
     // TODO: or do we want <b>to</b> make it persistent and validators have <b>to</b> explicitly change their scores?
     self.validator_report_records = <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>();
 
+    <b>let</b> new_total_stake =
+        <a href="validator_set.md#0x2_validator_set_total_delegation_stake">validator_set::total_delegation_stake</a>(&self.validators)
+        + <a href="validator_set.md#0x2_validator_set_total_validator_stake">validator_set::total_validator_stake</a>(&self.validators);
+
     <a href="event.md#0x2_event_emit">event::emit</a>(
         <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> {
             epoch: self.epoch,
             reference_gas_price: self.reference_gas_price,
-            total_stake: delegation_stake + validator_stake,
+            total_stake: new_total_stake,
             storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount <b>as</b> u64),
             storage_fund_outflows: storage_rebate,
             storage_fund_balance: <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund),

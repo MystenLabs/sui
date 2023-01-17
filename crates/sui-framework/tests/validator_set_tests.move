@@ -212,22 +212,21 @@ module sui::validator_set_tests {
     }
 
     fun advance_epoch_with_dummy_rewards(validator_set: &mut ValidatorSet, ctx: &mut TxContext) {
-        let dummy_validator_reward = balance::zero();
-        let dummy_delegator_reward = balance::zero();
+        let dummy_computation_reward = balance::zero();
         let dummy_storage_fund_reward = balance::zero();
 
         validator_set::advance_epoch(
             1, // dummy new epoch number
-            validator_set,
-            &mut dummy_validator_reward,
-            &mut dummy_delegator_reward,
-            &mut dummy_storage_fund_reward,
-            &vec_map::empty(),
+            validator_set, 
+            &mut dummy_computation_reward, 
+            &mut dummy_storage_fund_reward, 
+            vec_map::empty(),
+            0,
+            0,
             ctx
         );
 
-        balance::destroy_zero(dummy_validator_reward);
-        balance::destroy_zero(dummy_delegator_reward);
+        balance::destroy_zero(dummy_computation_reward);
         balance::destroy_zero(dummy_storage_fund_reward);
     }
 }

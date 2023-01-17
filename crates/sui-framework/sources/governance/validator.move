@@ -294,6 +294,10 @@ module sui::validator {
         self.metadata.sui_address
     }
 
+    public fun total_stake_amount(self: &Validator): u64 {
+        self.stake_amount + staking_pool::sui_balance(&self.delegation_staking_pool)
+    }
+
     public fun stake_amount(self: &Validator): u64 {
         self.stake_amount
     }
