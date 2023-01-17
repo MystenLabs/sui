@@ -6,7 +6,7 @@ import { memo } from 'react';
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
-import { TxnListItem } from '_components/transactions-card/Transaction';
+import { Transaction } from '_components/transactions-card/Transaction';
 import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
@@ -44,9 +44,15 @@ function TransactionsPage() {
                     className="flex justify-center items-center"
                 >
                     {txns &&
-                        txns.map((txnId) => (
-                            <ErrorBoundary key={txnId}>
-                                <TxnListItem txnId={txnId} />
+                        activeAddress &&
+                        txns.map((txn) => (
+                            <ErrorBoundary
+                                key={txn.certificate.transactionDigest}
+                            >
+                                <Transaction
+                                    txn={txn}
+                                    address={activeAddress}
+                                />
                             </ErrorBoundary>
                         ))}
                 </Loading>
