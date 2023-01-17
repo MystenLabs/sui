@@ -224,13 +224,13 @@ async fn test_narwhal_manager() {
 #[tokio::test]
 async fn test_remove_old_epoch_data() {
     // Create the storage paths
-    let base_path_string = "/tmp/test_nw_manager_storage_path".to_owned();
+    let base_path_string = narwhal_test_utils::temp_dir().to_str().unwrap().to_owned();
 
     let mut base_path = PathBuf::new();
     base_path.push(base_path_string.clone());
 
-    let mut path_12 = PathBuf::new();
-    path_12.push(base_path_string.clone() + "/12");
+    let mut path_other = PathBuf::new();
+    path_other.push(base_path_string.clone() + "/other");
     let mut path_98 = base_path.clone();
     path_98.push(base_path_string.clone() + "/98");
     let mut path_99 = base_path.clone();
@@ -239,7 +239,7 @@ async fn test_remove_old_epoch_data() {
     path_100.push(base_path_string.clone() + "/100");
 
     // Remove the directories created next in case it wasn't cleaned up before the last test run terminated
-    _ = fs::remove_dir(path_12.clone());
+    _ = fs::remove_dir(path_other.clone());
     _ = fs::remove_dir(path_98.clone());
     _ = fs::remove_dir(path_99.clone());
     _ = fs::remove_dir(path_100.clone());
@@ -247,7 +247,7 @@ async fn test_remove_old_epoch_data() {
 
     // Create some epoch directories
     fs::create_dir(base_path.clone()).unwrap();
-    fs::create_dir(path_12.clone()).unwrap();
+    fs::create_dir(path_other.clone()).unwrap();
     fs::create_dir(path_98.clone()).unwrap();
     fs::create_dir(path_99.clone()).unwrap();
     fs::create_dir(path_100.clone()).unwrap();
@@ -261,12 +261,13 @@ async fn test_remove_old_epoch_data() {
     let mut epochs_left = Vec::new();
     for file_res in files {
         let file_epoch_string = file_res.unwrap().file_name().to_str().unwrap().to_owned();
-        let file_epoch = file_epoch_string.parse::<u64>().unwrap();
-        epochs_left.push(file_epoch);
+        if let Ok(file_epoch) = file_epoch_string.parse::<u64>() {
+            epochs_left.push(file_epoch);
+        }
     }
 
     // Remove the directories we created before the test possibly terminates
-    _ = fs::remove_dir(path_12);
+    _ = fs::remove_dir(path_other);
     _ = fs::remove_dir(path_98);
     _ = fs::remove_dir(path_99);
     _ = fs::remove_dir(path_100);
