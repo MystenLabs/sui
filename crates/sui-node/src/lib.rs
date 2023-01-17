@@ -52,7 +52,7 @@ use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{info, warn};
 use typed_store::DBMetrics;
 pub mod admin;
 mod handle;
@@ -499,7 +499,7 @@ impl SuiNode {
         );
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
-            epoch_store,
+            epoch_store.clone(),
             checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
@@ -521,13 +521,19 @@ impl SuiNode {
             .address;
         let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
 
-        narwhal_manager
-            .start(
-                committee.clone(),
-                SharedWorkerCache::from(worker_cache),
-                consensus_handler,
-            )
-            .await;
+        if committee.epoch == epoch_store.epoch() {
+            narwhal_manager
+                .start(
+                    committee.clone(),
+                    SharedWorkerCache::from(worker_cache),
+                    consensus_handler,
+                )
+                .await;
+        } else {
+            warn!(
+                "Current Sui epoch doesn't match the system state epoch. Not starting Narwhal yet"
+            );
+        }
 
         Ok(ValidatorComponents {
             validator_server_handle,
