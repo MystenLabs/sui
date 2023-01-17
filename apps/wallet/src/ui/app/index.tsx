@@ -52,13 +52,14 @@ const App = () => {
         document.body.classList.remove('app-initializing');
     }, [isPopup]);
     const location = useLocation();
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
     useEffect(() => {
         const menuVisible = !HIDDEN_MENU_PATHS.some((aPath) =>
             location.pathname.startsWith(aPath)
         );
         dispatch(setNavVisibility(menuVisible));
-    }, [location, dispatch, stakingEnabled]);
+    }, [location, dispatch]);
+
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     return (
         <Routes>
