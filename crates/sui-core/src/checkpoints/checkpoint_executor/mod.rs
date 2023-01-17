@@ -276,24 +276,24 @@ impl CheckpointExecutorEventLoop {
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((checkpoint, next_committee))) = pending.next() => {
+                    // Ensure that we are not skipping checkpoints at any point
+                    if let Some(prev_highest) = self.checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap() {
+                        assert_eq!(prev_highest + 1, checkpoint.sequence_number());
+                    } else {
+                        assert_eq!(checkpoint.sequence_number(), 0);
+                    }
+
                     match next_committee {
                         None => {
-                            // Ensure that we are not skipping checkpoints at any point
-                            if let Some(prev_highest) = self.checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap() {
-                                assert_eq!(prev_highest + 1, checkpoint.sequence_number());
-                            } else {
-                                assert_eq!(checkpoint.sequence_number(), 0);
-                            }
-
                             let new_highest = checkpoint.sequence_number();
                             debug!(
                                 "Bumping highest_executed_checkpoint watermark to {:?}",
                                 new_highest,
                             );
-                            self.metrics.last_executed_checkpoint.set(new_highest as i64);
                             self.checkpoint_store
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
+                            self.metrics.last_executed_checkpoint.set(new_highest as i64);
                         }
                         Some(committee) => {
                             debug!(
@@ -304,6 +304,7 @@ impl CheckpointExecutorEventLoop {
                             self.checkpoint_store
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
+                            self.metrics.last_executed_checkpoint.set(checkpoint.sequence_number() as i64);
                             return Some((checkpoint, committee));
                         }
                     }
