@@ -703,7 +703,11 @@ impl Core {
                             break;
                         }
                     };
-                    message.done.send(()).expect("Failed to signal back to CertificateFetcher");
+
+                    if message.done.send(()).is_err() {
+                        result = Err(DagError::ShuttingDown);
+                    }
+
                     result
                 },
 
