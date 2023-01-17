@@ -32,7 +32,6 @@ use tap::prelude::*;
 use tokio::task::JoinHandle;
 use tokio::time;
 
-use crate::authority::AuthorityState;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
@@ -153,18 +152,19 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
-        authority: Arc<AuthorityState>,
+        authority: AuthorityName,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
         let this = Arc::new(Self {
             consensus_client,
-            authority: authority.name,
+            authority,
             num_inflight_transactions,
             opt_metrics,
         });
         let recover = this.clone();
-        recover.submit_recovered(&authority.epoch_store());
+        recover.submit_recovered(epoch_store);
         this
     }
 
