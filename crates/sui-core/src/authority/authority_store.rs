@@ -195,6 +195,7 @@ impl AuthorityStore {
             digests.iter().map(|d| (*d, (epoch, sequence))),
         )?;
         batch.write()?;
+        debug!("Transactions {digests:?} finalized at checkpoint {sequence} epoch {epoch}");
         Ok(())
     }
 
