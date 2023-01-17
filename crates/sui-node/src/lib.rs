@@ -72,7 +72,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_types::base_types::{EpochId, TransactionDigest};
+use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
@@ -265,6 +265,7 @@ impl SuiNode {
                 Self::construct_validator_components(
                     config,
                     state.clone(),
+                    epoch_store.clone(),
                     checkpoint_store.clone(),
                     state_sync_handle.clone(),
                     &registry_service,
@@ -430,6 +431,7 @@ impl SuiNode {
     async fn construct_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         registry_service: &RegistryService,
@@ -440,7 +442,8 @@ impl SuiNode {
 
         let consensus_adapter = Self::construct_consensus_adapter(
             consensus_config,
-            state.clone(),
+            state.name,
+            &epoch_store,
             &registry_service.default_registry(),
         );
 
@@ -465,7 +468,7 @@ impl SuiNode {
             state.clone(),
             consensus_adapter,
             checkpoint_store,
-            state.epoch_store().clone(),
+            epoch_store,
             state_sync_handle,
             narwhal_manager,
             validator_server_handle,
@@ -503,6 +506,9 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
+        // TODO: The following is a bug and could potentially lead to data races.
+        // We need to put the narwhal committee in the epoch store, so that we could read it here,
+        // instead of reading from the system state.
         let system_state = state
             .get_sui_system_state_object()
             .expect("Reading Sui system state object cannot fail");
@@ -589,7 +595,8 @@ impl SuiNode {
 
     fn construct_consensus_adapter(
         consensus_config: &ConsensusConfig,
-        state: Arc<AuthorityState>,
+        authority: AuthorityName,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
         let consensus_address = consensus_config.address().to_owned();
@@ -601,7 +608,12 @@ impl SuiNode {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
-        ConsensusAdapter::new(Box::new(consensus_client), state, ca_metrics)
+        ConsensusAdapter::new(
+            Box::new(consensus_client),
+            authority,
+            epoch_store,
+            ca_metrics,
+        )
     }
 
     async fn start_grpc_validator_service(
@@ -739,6 +751,7 @@ impl SuiNode {
                         Self::construct_validator_components(
                             &self.config,
                             self.state.clone(),
+                            self.state.epoch_store().clone(),
                             self.checkpoint_store.clone(),
                             self.state_sync.clone(),
                             &self.registry_service,
