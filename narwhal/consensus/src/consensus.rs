@@ -4,7 +4,7 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::{metrics::ConsensusMetrics, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
@@ -298,10 +298,16 @@ where
     }
 
     async fn run(self) {
-        self.run_inner().await.expect("Failed to run consensus")
+        match self.run_inner().await {
+            Ok(_) => {}
+            Err(err @ ConsensusError::ShuttingDown) => {
+                debug!("{:?}", err)
+            }
+            Err(err) => panic!("Failed to run consensus: {:?}", err),
+        }
     }
 
-    async fn run_inner(mut self) -> StoreResult<()> {
+    async fn run_inner(mut self) -> Result<(), ConsensusError> {
         // Listen to incoming certificates.
         loop {
             tokio::select! {
@@ -368,20 +374,21 @@ where
 
                         // NOTE: The size of the sub-dag can be arbitrarily large (depending on the network condition
                         // and Byzantine leaders).
-                        if let Err(e) = self.tx_sequence.send(committed_sub_dag).await {
-                            tracing::warn!("Failed to output sub dag: {e}");
-                        }
+                        self.tx_sequence.send(committed_sub_dag).await.map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 
                     if !commited_certificates.is_empty(){
                         // Highest committed certificate round is the leader round / commit round
                         // expected by primary.
                         let leader_commit_round = commited_certificates.iter().map(|c| c.round()).max().unwrap();
+
                         self.tx_committed_certificates
                         .send((leader_commit_round, commited_certificates))
                         .await
-                        .expect("Failed to send committed round and certificates to primary");
-                        self.tx_consensus_round_updates.send(leader_commit_round).expect("Failed to notify primary about committed round!");
+                        .map_err(|_|ConsensusError::ShuttingDown)?;
+
+                        self.tx_consensus_round_updates.send(leader_commit_round)
+                        .map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 
                     self.metrics

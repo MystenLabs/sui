@@ -277,7 +277,7 @@ impl Synchronizer {
                 self.tx_certificate_fetcher
                     .send(certificate.clone())
                     .await
-                    .expect("Failed to send sync certificate request");
+                    .map_err(|_| DagError::ShuttingDown)?;
                 return Ok(false);
             }
         }
