@@ -154,13 +154,19 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request.transaction.verify()?;
+        let transaction = request
+            .transaction
+            .verify()
+            .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *transaction.digest();
 
         let _request_guard = self.metrics.request_latency.start_timer();
         let _wait_for_finality_guard = self.metrics.wait_for_finality_latency.start_timer();
 
-        let ticket = self.submit(transaction).await?;
+        let ticket = self.submit(transaction).await.map_err(|e| {
+            warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+            QuorumDriverError::QuorumDriverInternalError(e)
+        })?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
@@ -172,7 +178,7 @@ where
             ticket,
         ).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
-            return Err(QuorumDriverError::TimeoutBeforeReachFinality);
+            return Err(QuorumDriverError::TimeoutBeforeFinality);
         };
         match result {
             Err(err) => Err(err),
