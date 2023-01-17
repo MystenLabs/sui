@@ -123,6 +123,11 @@ pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
+
+// Reject a transaction if the number of pending transactions depending on the object
+// is above the threshold.
+pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
+
 type CertTxGuard<'a> =
     DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, TrustedSignedTransactionEffects)>;
 
@@ -466,6 +471,23 @@ impl AuthorityState {
             &transaction.data().intent_message.value,
         )
         .await?;
+
+        for (object_id, queue_len) in self.transaction_manager.objects_queue_len(
+            input_objects
+                .mutable_inputs()
+                .into_iter()
+                .map(|r| r.0)
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+                return Err(SuiError::TooManyTransactionsPendingOnObject {
+                    object_id,
+                    queue_len,
+                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+                });
+            }
+        }
 
         let owned_objects = input_objects.filter_owned_objects();
 

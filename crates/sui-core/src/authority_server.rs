@@ -23,7 +23,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, Instrument};
 
 use crate::{
-    authority::AuthorityState,
+    authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
 
@@ -327,6 +327,27 @@ impl ValidatorService {
             return Err(tonic::Status::invalid_argument(format!(
                 "Cannot execute system certificate via RPC interface! {certificate:?}"
             )));
+        }
+        for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
+            certificate
+                .data()
+                .intent_message
+                .value
+                .kind
+                .input_objects()?
+                .into_iter()
+                .map(|r| r.object_id())
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+                return Err(SuiError::TooManyTransactionsPendingOnObject {
+                    object_id,
+                    queue_len,
+                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+                }
+                .into());
+            }
         }
         // code block within reconfiguration lock
         let certificate = {
