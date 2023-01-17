@@ -24,9 +24,5 @@ export function CoinBalance({ amount, coinType }: CoinBalanceProps) {
                 {symbol}
             </Text>
         </div>
-    ) : (
-        <Text variant="body" weight="medium" color="steel-dark">
-            --
-        </Text>
-    );
+    ) : null;
 }
