@@ -14,6 +14,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use mysten_metrics::spawn_monitored_task;
+use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
@@ -28,6 +29,7 @@ use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_constants::MAX_TX_GAS;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 use typed_store::Map;
@@ -425,6 +427,10 @@ pub struct AuthorityState {
 
     /// Manages pending certificates and their missing input objects.
     transaction_manager: Arc<TransactionManager>,
+
+    /// Shuts down the execution task. Used only in testing.
+    #[allow(unused)]
+    tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
 
     pub metrics: Arc<AuthorityMetrics>,
 }
@@ -1606,6 +1612,7 @@ impl AuthorityState {
             tx_ready_certificates,
             metrics.clone(),
         ));
+        let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1623,6 +1630,7 @@ impl AuthorityState {
             checkpoint_store,
             committee_store,
             transaction_manager,
+            tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
             metrics,
         });
 
@@ -1639,7 +1647,11 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
-        spawn_monitored_task!(execution_process(authority_state, rx_ready_certificates));
+        spawn_monitored_task!(execution_process(
+            authority_state,
+            rx_ready_certificates,
+            rx_execution_shutdown
+        ));
 
         state
             .create_owner_index_if_empty()
@@ -2615,5 +2627,15 @@ impl AuthorityState {
             .new_at_next_epoch(self.name, new_committee);
         let previous_store = self.epoch_store.swap(epoch_tables);
         previous_store.epoch_terminated().await;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shutdown_execution_for_test(&self) {
+        self.tx_execution_shutdown
+            .lock()
+            .take()
+            .unwrap()
+            .send(())
+            .unwrap();
     }
 }
