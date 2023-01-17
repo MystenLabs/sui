@@ -247,7 +247,7 @@ async fn test_tx_across_epoch_boundaries() {
                         result_tx.send(tx_cert).await.unwrap();
                         break;
                     }
-                    Err(QuorumDriverError::TimeoutBeforeReachFinality) => {
+                    Err(QuorumDriverError::TimeoutBeforeFinality) => {
                         info!(?tx_digest, "tx result: timeout and will retry")
                     }
                     Err(other) => panic!("unexpected error: {:?}", other),

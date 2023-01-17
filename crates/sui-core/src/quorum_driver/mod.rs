@@ -7,12 +7,12 @@ pub use metrics::*;
 pub mod reconfig_observer;
 
 use arc_swap::ArcSwap;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
-use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::committee::{validity_threshold, Committee, EpochId, StakeUnit};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
 use tap::TapFallible;
 use thiserror::Error;
@@ -46,8 +46,7 @@ const TX_MAX_RETRY_TIMES: u8 = 10;
 #[derive(Error, Debug)]
 pub(crate) enum QuorumDriverInternalError {
     #[error(
-        "Failed to get a quorum of validators to sign the transaction. Validator errors: {:?}",
-        0
+        "Failed to get a quorum of validators to sign the transaction. Validator errors: {0:?}"
     )]
     TransactionError(QuorumSignTransactionError),
     #[error(
@@ -61,6 +60,10 @@ pub(crate) enum QuorumDriverInternalError {
         retried_tx_digest: Option<TransactionDigest>,
         retried_tx_success: Option<bool>,
     },
+    #[error(
+        "Failed to get a quorum of validators to process the certificate. Validator errors: {0:?}"
+    )]
+    CertificateError(QuorumExecuteCertificateError),
 }
 
 #[derive(Clone)]
@@ -151,9 +154,11 @@ impl<A> QuorumDriver<A> {
             info!(tx_digest=?transaction.digest(), "Failed to reach finality after attempting for {} times", old_retry_times+1);
             self.notify(
                 transaction.digest(),
-                &Err(QuorumDriverError::FailedAfterMaximumAttempts {
-                    total_attempts: old_retry_times + 1,
-                }),
+                &Err(
+                    QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts {
+                        total_attempts: old_retry_times + 1,
+                    },
+                ),
                 old_retry_times + 1,
             );
             return Ok(());
@@ -335,16 +340,17 @@ where
         }
     }
 
-    pub async fn process_certificate(
+    pub(crate) async fn process_certificate(
         &self,
         certificate: VerifiedCertificate,
-    ) -> Result<QuorumDriverResponse, QuorumExecuteCertificateError> {
+    ) -> Result<QuorumDriverResponse, QuorumDriverInternalError> {
         let effects = self
             .validators
             .load()
             .process_certificate(certificate.clone().into_inner())
             .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
-            .await?;
+            .await
+            .map_err(QuorumDriverInternalError::CertificateError)?;
         let tx_digest = *certificate.digest();
         let response = QuorumDriverResponse {
             tx_cert: certificate,
@@ -678,23 +684,15 @@ where
                     tx_cert
                 }
                 Err(err) => {
-                    if let Some(qd_error) = convert_to_quorum_driver_error_if_nonretryable(
+                    Self::handle_error(
+                        quorum_driver,
+                        transaction,
                         err,
-                        &tx_digest,
-                        "forming tx cert",
-                    ) {
-                        // If non-retryable failure, this task reaches terminal state for now, notify waiter.
-                        quorum_driver.notify(&tx_digest, &Err(qd_error), old_retry_times + 1);
-                        return;
-                    } else {
-                        // re-enqueue if retryable
-                        spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
-                            transaction.clone(),
-                            None,
-                            old_retry_times
-                        ));
-                        return;
-                    }
+                        None,
+                        old_retry_times,
+                        "get tx cert",
+                    );
+                    return;
                 }
             },
             Some(tx_cert) => tx_cert,
@@ -711,20 +709,47 @@ where
                     effects_cert,
                 }
             }
+            // Note: non retryable failure when processing a cert
+            // should be very rare.
             Err(err) => {
-                // Note: so far there is no known error in effects-cert forming phase
-                // that is considered permanent failure. So we always retry.
-                debug!(?tx_digest, "Failed to get effects certificate: {}", err);
-                spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
-                    transaction.clone(),
+                Self::handle_error(
+                    quorum_driver,
+                    transaction,
+                    err,
                     Some(tx_cert),
-                    old_retry_times
-                ));
+                    old_retry_times,
+                    "get effects cert",
+                );
                 return;
             }
         };
 
         quorum_driver.notify(&tx_digest, &Ok(response), old_retry_times + 1);
+    }
+
+    fn handle_error(
+        quorum_driver: Arc<QuorumDriver<A>>,
+        transaction: VerifiedTransaction,
+        err: QuorumDriverInternalError,
+        tx_cert: Option<VerifiedCertificate>,
+        old_retry_times: u8,
+        action: &'static str,
+    ) {
+        let tx_digest = *transaction.digest();
+        debug!(?tx_digest, "Failed to {action}: {}", err);
+        if let Some(qd_error) =
+            convert_to_quorum_driver_error_if_non_retryable(err, &tx_digest, action)
+        {
+            // If non-retryable failure, this task reaches terminal state for now, notify waiter.
+            quorum_driver.notify(&tx_digest, &Err(qd_error), old_retry_times + 1);
+        } else {
+            // re-enqueue if retryable
+            spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
+                transaction.clone(),
+                tx_cert,
+                old_retry_times
+            ));
+        }
     }
 
     async fn task_queue_processor(
@@ -752,28 +777,89 @@ where
 }
 
 // TODO: categorize all possible SuiErrors
-fn convert_to_quorum_driver_error_if_nonretryable(
+fn convert_to_quorum_driver_error_if_non_retryable(
     err: QuorumDriverInternalError,
     tx_digest: &TransactionDigest,
     action: &'static str,
 ) -> Option<QuorumDriverError> {
-    match &err {
+    match err {
         // TODO: rewrite the equivocation detection code to make it more deterministic
         QuorumDriverInternalError::TransactionErrorWithConflictingTransactions {
             conflicting_txes,
             retried_tx_digest,
             retried_tx_success,
         } => {
-            debug!(?tx_digest, "Got unretryable error when {action}: {err}");
-            Some(QuorumDriverError::ObjectsDoubleUsed {
-                conflicting_txes: conflicting_txes.clone(),
-                retried_tx: *retried_tx_digest,
-                retried_tx_success: *retried_tx_success,
+            let err = QuorumDriverError::ObjectsDoubleUsed {
+                conflicting_txes,
+                retried_tx: retried_tx_digest,
+                retried_tx_success,
+            };
+            debug!(?tx_digest, "Non retryable error when {action}: {err}");
+            Some(err)
+        }
+        QuorumDriverInternalError::TransactionError(QuorumSignTransactionError {
+            total_stake,
+            good_stake: _,
+            errors,
+            conflicting_tx_digests: _,
+        })
+        | QuorumDriverInternalError::CertificateError(QuorumExecuteCertificateError {
+            total_stake,
+            errors,
+        }) => {
+            let mut non_recoverable_bad_stake = 0;
+            let threshold = validity_threshold(total_stake);
+            let mut non_recoverable_errors = HashMap::new();
+            for (error, mut validators, stake) in errors {
+                if !is_error_retryable(&error) {
+                    non_recoverable_bad_stake += stake;
+                    let (stakes_entry, validators_entry) = non_recoverable_errors
+                        .entry(error.clone())
+                        .or_insert(((0_u64), vec![]));
+                    *stakes_entry += stake;
+                    validators_entry.append(&mut validators);
+                    if non_recoverable_bad_stake >= threshold {
+                        break;
+                    }
+                }
+            }
+            if non_recoverable_bad_stake < threshold {
+                debug!(?tx_digest, "Non retryable error stake < threshold when {action}: {non_recoverable_errors:?}");
+                return None;
+            }
+            debug!(
+                ?tx_digest,
+                "Non retryable error stake >= threshold when {action}: {non_recoverable_errors:?}"
+            );
+            Some(QuorumDriverError::NonRecoverableTransactionError {
+                errors: Vec::from_iter(
+                    non_recoverable_errors
+                        .into_iter()
+                        .map(|(err, (stake, validators))| (err, validators, stake)),
+                ),
             })
         }
-        _ => {
-            debug!(?tx_digest, "Got retryable error when {action}: {err}");
-            None
+    }
+}
+
+fn is_error_retryable(error: &SuiError) -> bool {
+    match error {
+        // Network error
+        SuiError::RpcError { .. } => true,
+
+        // Reconfig error
+        SuiError::ValidatorHaltedAtEpochEnd => true,
+        SuiError::MissingCommitteeAtEpoch(..) => true,
+        SuiError::WrongEpoch { .. } => true,
+
+        // Non retryable error
+        SuiError::TransactionInputObjectsErrors { .. } => false,
+        SuiError::ExecutionError(..) => false,
+        SuiError::ByzantineAuthoritySuspicion { .. } => false,
+        SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
+        other => {
+            debug!("uncategorized tx error: {other}");
+            false
         }
     }
 }
