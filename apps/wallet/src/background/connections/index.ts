@@ -9,7 +9,9 @@ import { UiConnection } from './UiConnection';
 import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
 
+import type { NetworkEnvType } from '../NetworkEnv';
 import type { Connection } from './Connection';
+import type { SetNetworkPayload } from '_payloads/network';
 import type { Permission } from '_payloads/permissions';
 import type {
     WalletStatusChange,
@@ -52,40 +54,58 @@ export class Connections {
         });
     }
 
-    public notifyForPermissionReply(permission: Permission) {
-        for (const aConnection of this.#connections) {
-            if (
-                aConnection instanceof ContentScriptConnection &&
-                aConnection.origin === permission.origin
-            ) {
-                aConnection.permissionReply(permission);
-            }
-        }
-    }
-
-    public notifyForLockedStatusUpdate(isLocked: boolean) {
-        for (const aConnection of this.#connections) {
-            if (aConnection instanceof UiConnection) {
-                aConnection.sendLockedStatusUpdate(isLocked);
-            }
-        }
-    }
-
-    public notifyWalletStatusChange(
-        origin: string,
-        change: WalletStatusChange
+    public notifyContentScript(
+        notification:
+            | { event: 'permissionReply'; permission: Permission }
+            | {
+                  event: 'walletStatusChange';
+                  origin: string;
+                  change: WalletStatusChange;
+              }
     ) {
         for (const aConnection of this.#connections) {
-            if (
-                aConnection instanceof ContentScriptConnection &&
-                aConnection.origin === origin
-            ) {
-                aConnection.send(
-                    createMessage<WalletStatusChangePayload>({
-                        type: 'wallet-status-changed',
-                        ...change,
-                    })
-                );
+            if (aConnection instanceof ContentScriptConnection) {
+                switch (notification.event) {
+                    case 'permissionReply':
+                        aConnection.permissionReply(notification.permission);
+                        break;
+                    case 'walletStatusChange':
+                        if (aConnection.origin === notification.origin) {
+                            aConnection.send(
+                                createMessage<WalletStatusChangePayload>({
+                                    type: 'wallet-status-changed',
+                                    ...notification.change,
+                                })
+                            );
+                        }
+                        break;
+                }
+            }
+        }
+    }
+
+    public notifyUI(
+        notification:
+            | { event: 'networkChanged'; network: NetworkEnvType }
+            | { event: 'lockStatusUpdate'; isLocked: boolean }
+    ) {
+        for (const aConnection of this.#connections) {
+            if (aConnection instanceof UiConnection) {
+                switch (notification.event) {
+                    case 'networkChanged':
+                        aConnection.send(
+                            createMessage<SetNetworkPayload>({
+                                type: 'set-network',
+                                network: notification.network,
+                            })
+                        );
+                        break;
+                    case 'lockStatusUpdate':
+                        aConnection.sendLockedStatusUpdate(
+                            notification.isLocked
+                        );
+                        break;
+                }
             }
         }
     }

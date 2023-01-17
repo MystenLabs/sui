@@ -4,34 +4,29 @@
 import cl from 'classnames';
 import { Field, Formik, Form } from 'formik';
 import { useCallback } from 'react';
+import { toast } from 'react-hot-toast';
 import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
 import InputWithAction from '_app/shared/input-with-action';
 import Alert from '_components/alert';
 import { useAppSelector, useAppDispatch } from '_hooks';
-import { setCustomRPC } from '_redux/slices/app';
+import { changeActiveNetwork } from '_redux/slices/app';
+import { isValidUrl } from '_src/shared/utils';
+import { API_ENV } from '_src/ui/app/ApiProvider';
 
 import st from '../NetworkSelector.module.scss';
 
 const MIN_CHAR = 5;
-
-const isValidUrl = (url: string | undefined) => {
-    if (!url) return false;
-    try {
-        new URL(url);
-    } catch (e) {
-        return false;
-    }
-    return true;
-};
 
 const validation = Yup.object({
     rpcInput: Yup.string()
         .required()
         .label('Custom RPC URL')
         .min(MIN_CHAR)
-        .test('validate-url', 'Not a valid URL', (value) => isValidUrl(value)),
+        .test('validate-url', 'Not a valid URL', (value) =>
+            isValidUrl(value || null)
+        ),
 });
 
 export function CustomRPCInput() {
@@ -43,7 +38,19 @@ export function CustomRPCInput() {
 
     const changeNetwork = useCallback(
         async ({ rpcInput }: { rpcInput: string }) => {
-            dispatch(setCustomRPC(rpcInput));
+            try {
+                await dispatch(
+                    changeActiveNetwork({
+                        network: {
+                            env: API_ENV.customRPC,
+                            customRpcUrl: rpcInput,
+                        },
+                        store: true,
+                    })
+                ).unwrap();
+            } catch (e) {
+                toast.error((e as Error).message);
+            }
         },
         [dispatch]
     );

@@ -20,6 +20,7 @@ export enum API_ENV {
 
 type EnvInfo = {
     name: string;
+    env: API_ENV;
 };
 
 type ApiEndpoints = {
@@ -27,10 +28,10 @@ type ApiEndpoints = {
     faucet?: string;
 } | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
-    [API_ENV.local]: { name: 'Local' },
-    [API_ENV.devNet]: { name: 'Sui Devnet' },
-    [API_ENV.customRPC]: { name: 'Custom RPC URL' },
-    [API_ENV.testNet]: { name: 'Sui Testnet' },
+    [API_ENV.local]: { name: 'Local', env: API_ENV.local },
+    [API_ENV.devNet]: { name: 'Sui Devnet', env: API_ENV.devNet },
+    [API_ENV.customRPC]: { name: 'Custom RPC URL', env: API_ENV.customRPC },
+    [API_ENV.testNet]: { name: 'Sui Testnet', env: API_ENV.testNet },
 };
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {

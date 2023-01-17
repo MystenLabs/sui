@@ -16,7 +16,7 @@ import {
 } from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
 import { ErrorBoundary } from '_components/error-boundary';
-import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
+import { initAppType } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
 import initSentry from '_src/shared/sentry';
 import store from '_store';
@@ -34,7 +34,6 @@ async function init() {
     }
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await thunkExtras.background.init(store.dispatch);
-    await store.dispatch(initNetworkFromStorage()).unwrap();
     const { apiEnv, customRPC } = store.getState().app;
 
     const network =
