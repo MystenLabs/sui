@@ -24,6 +24,7 @@
 -  [Function `get_staking_pool_mut_ref`](#0x2_validator_get_staking_pool_mut_ref)
 -  [Function `metadata`](#0x2_validator_metadata)
 -  [Function `sui_address`](#0x2_validator_sui_address)
+-  [Function `total_stake_amount`](#0x2_validator_total_stake_amount)
 -  [Function `stake_amount`](#0x2_validator_stake_amount)
 -  [Function `delegate_amount`](#0x2_validator_delegate_amount)
 -  [Function `total_stake`](#0x2_validator_total_stake)
@@ -779,6 +780,30 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_sui_address">sui_address</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): <b>address</b> {
     self.metadata.sui_address
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_total_stake_amount"></a>
+
+## Function `total_stake_amount`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_total_stake_amount">total_stake_amount</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_total_stake_amount">total_stake_amount</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    self.stake_amount + <a href="staking_pool.md#0x2_staking_pool_sui_balance">staking_pool::sui_balance</a>(&self.delegation_staking_pool)
 }
 </code></pre>
 
