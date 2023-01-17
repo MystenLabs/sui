@@ -3,12 +3,11 @@
 
 import { memo } from 'react';
 
-import { useGetTranactionIdByAddress } from './useGetTransactionByAddress';
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TxnListItem } from '_components/transactions-card/Transaction';
-import { useAppSelector } from '_hooks';
+import { useAppSelector, useGetTransactionIdByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
 function TransactionsPage() {
@@ -18,7 +17,7 @@ function TransactionsPage() {
         data: txns,
         isError,
         isLoading,
-    } = useGetTranactionIdByAddress(activeAddress || '');
+    } = useGetTransactionIdByAddress(activeAddress || '');
 
     if (isError) {
         return (

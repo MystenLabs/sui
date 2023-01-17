@@ -17,7 +17,7 @@ const dedupe = (results: string[] | undefined) =>
         ? results.filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
-export function useGetTranactionIdByAddress(
+export function useGetTransactionIdByAddress(
     address: SuiAddress
 ): UseQueryResult<string[], unknown> {
     const network = useAppSelector((state) => state.app.apiEnv);

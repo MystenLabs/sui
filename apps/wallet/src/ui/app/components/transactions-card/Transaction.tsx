@@ -16,8 +16,11 @@ import { CoinBalance } from '_app/shared/coin-balance';
 import { Text } from '_app/shared/text';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { getEventsSummary, getAmount, formatDate } from '_helpers';
-import { useAppSelector, useMiddleEllipsis } from '_hooks';
-import { useGetTransactionById } from '_pages/home/transactions/useGetTransactionByAddress';
+import {
+    useAppSelector,
+    useMiddleEllipsis,
+    useGetTransactionById,
+} from '_hooks';
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
 import Alert from '_src/ui/app/components/alert';
 
