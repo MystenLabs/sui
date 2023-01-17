@@ -342,7 +342,7 @@ impl Builder {
 
     pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
         let (checkpoint, _checkpoint_contents, transaction, _effects, _objects) =
-            self.build_unsigned_genesis_data();
+            self.build_unsigned_genesis_checkpoint();
 
         let name = keypair.public().into();
         assert!(
@@ -369,7 +369,19 @@ impl Builder {
         self
     }
 
-    fn build_unsigned_genesis_data(
+    pub fn unsigned_genesis_checkpoint(
+        &self,
+    ) -> Option<(
+        CheckpointSummary,
+        CheckpointContents,
+        Transaction,
+        TransactionEffects,
+        Vec<Object>,
+    )> {
+        self.built_genesis.clone()
+    }
+
+    pub fn build_unsigned_genesis_checkpoint(
         &mut self,
     ) -> (
         CheckpointSummary,
@@ -381,14 +393,6 @@ impl Builder {
         if let Some(built_genesis) = &self.built_genesis {
             return built_genesis.clone();
         }
-
-        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
-
-        // Get Move and Sui Framework
-        let modules = [
-            sui_framework::get_move_stdlib(),
-            sui_framework::get_sui_framework(),
-        ];
 
         let objects = self
             .objects
@@ -402,24 +406,11 @@ impl Builder {
             .into_iter()
             .map(|(_, v)| v)
             .collect::<Vec<_>>();
-        let objects = create_genesis_objects(
-            &mut genesis_ctx,
-            self.parameters.chain_id,
-            &modules,
-            &objects,
+
+        self.built_genesis = Some(build_unsigned_genesis_data(
+            &self.parameters,
             &validators,
-        );
-
-        let (genesis_transaction, genesis_effects, objects) = create_genesis_transaction(objects);
-        let (checkpoint, checkpoint_contents) =
-            create_genesis_checkpoint(&genesis_transaction, &genesis_effects);
-
-        self.built_genesis = Some((
-            checkpoint,
-            checkpoint_contents,
-            genesis_transaction,
-            genesis_effects,
-            objects,
+            &objects,
         ));
 
         self.built_genesis.clone().unwrap()
@@ -441,7 +432,7 @@ impl Builder {
 
     pub fn build(mut self) -> Genesis {
         let (checkpoint, checkpoint_contents, transaction, effects, objects) =
-            self.build_unsigned_genesis_data();
+            self.build_unsigned_genesis_checkpoint();
 
         let committee = Self::committee(&objects);
 
@@ -578,12 +569,47 @@ impl Builder {
             committee.insert(validator_info.info.protocol_key(), validator_info);
         }
 
+        let unsigned_genesis_file = path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE);
+        let loaded_genesis = if unsigned_genesis_file.exists() {
+            let unsinged_genesis_bytes = fs::read(unsigned_genesis_file)?;
+            let loaded_genesis: (
+                CheckpointSummary,
+                CheckpointContents,
+                Transaction,
+                TransactionEffects,
+                Vec<Object>,
+            ) = bcs::from_bytes(&unsinged_genesis_bytes)?;
+            Some(loaded_genesis)
+        } else {
+            None
+        };
+
+        // Verify it matches
+        if let Some(loaded_genesis) = &loaded_genesis {
+            let objects = objects
+                .clone()
+                .into_iter()
+                .map(|(_, o)| o)
+                .collect::<Vec<_>>();
+            let validators = committee
+                .clone()
+                .into_iter()
+                .map(|(_, v)| v)
+                .collect::<Vec<_>>();
+
+            let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
+            assert_eq!(
+                &built, loaded_genesis,
+                "loaded genesis does not match built genesis"
+            );
+        }
+
         Ok(Self {
             parameters,
             objects,
             validators: committee,
             signatures,
-            built_genesis: None,
+            built_genesis: loaded_genesis,
         })
     }
 
@@ -603,7 +629,7 @@ impl Builder {
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = Hex::encode(object.digest());
+            let hex_digest = Hex::encode(object.id());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
@@ -612,8 +638,8 @@ impl Builder {
         std::fs::create_dir_all(&signature_dir)?;
         for (pubkey, sigs) in self.signatures {
             let sig_bytes = bcs::to_bytes(&sigs)?;
-            let hex_name = Hex::encode(pubkey);
-            fs::write(signature_dir.join(hex_name), sig_bytes)?;
+            let name = self.validators.get(&pubkey).unwrap().info.name();
+            fs::write(signature_dir.join(name), sig_bytes)?;
         }
 
         // Write validator infos
@@ -622,12 +648,62 @@ impl Builder {
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = Hex::encode(validator.info.protocol_key());
-            fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
+            fs::write(
+                committee_dir.join(validator.info.name()),
+                validator_info_bytes,
+            )?;
+        }
+
+        if let Some(genesis) = &self.built_genesis {
+            let genesis_bytes = bcs::to_bytes(&genesis)?;
+            fs::write(
+                path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE),
+                genesis_bytes,
+            )?;
         }
 
         Ok(())
     }
+}
+
+fn build_unsigned_genesis_data(
+    parameters: &GenesisChainParameters,
+    validators: &[GenesisValidatorInfo],
+    objects: &[Object],
+) -> (
+    CheckpointSummary,
+    CheckpointContents,
+    Transaction,
+    TransactionEffects,
+    Vec<Object>,
+) {
+    let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
+
+    // Get Move and Sui Framework
+    let modules = [
+        sui_framework::get_move_stdlib(),
+        sui_framework::get_sui_framework(),
+    ];
+
+    let objects = create_genesis_objects(
+        &mut genesis_ctx,
+        parameters.chain_id,
+        &modules,
+        objects,
+        validators,
+    );
+
+    let (genesis_transaction, genesis_effects, objects) = create_genesis_transaction(objects);
+    let (checkpoint, checkpoint_contents) =
+        create_genesis_checkpoint(&genesis_transaction, &genesis_effects);
+
+    (
+        checkpoint,
+        checkpoint_contents,
+        genesis_transaction,
+        genesis_effects,
+        objects,
+    )
 }
 
 fn create_genesis_checkpoint(
@@ -932,6 +1008,7 @@ const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
 const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
+const GENESIS_BUILDER_UNSIGNED_GENESIS_FILE: &str = "unsigned-genesis";
 
 #[cfg(test)]
 mod test {
