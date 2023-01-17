@@ -47,7 +47,7 @@ function ValidatorDetails() {
         return (
             <div className="mt-5 mb-10 flex items-center justify-center">
                 <Banner variant="error" spacing="lg" fullWidth>
-                    No validator data found
+                    No validator data found for {id}
                 </Banner>
             </div>
         );
