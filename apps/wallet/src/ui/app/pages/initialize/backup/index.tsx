@@ -122,12 +122,12 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                         setPasswordCopied(!passwordCopied)
                                     }
                                 />
-                                <div className="absolute top-0 left-0 h-5 w-5 bg-white peer-checked/agree:bg-success peer-checked/agree:shadow-none border-gray-50 border rounded shadow-button flex justify-center items-center">
+                                <span className="absolute top-0 left-0 h-5 w-5 bg-white peer-checked/agree:bg-success peer-checked/agree:shadow-none border-gray-50 border rounded shadow-button flex justify-center items-center">
                                     <Icon
                                         icon={SuiIcons.Checkmark}
                                         className="text-white text-[8px] font-semibold"
                                     />
-                                </div>
+                                </span>
 
                                 <Text
                                     variant="bodySmall"

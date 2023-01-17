@@ -75,12 +75,12 @@ const CreatePage = () => {
                                             id="terms"
                                             className="peer/terms invisible"
                                         />
-                                        <div className="absolute top-0 left-0.5 h-5 w-5 bg-white peer-checked/terms:bg-success peer-checked/terms:shadow-none  border-gray-50 border rounded shadow-button flex justify-center items-center">
+                                        <span className="absolute top-0 left-0.5 h-5 w-5 bg-white peer-checked/terms:bg-success peer-checked/terms:shadow-none  border-gray-50 border rounded shadow-button flex justify-center items-center">
                                             <Icon
                                                 icon={SuiIcons.Checkmark}
                                                 className="text-white text-[8px] font-semibold"
                                             />
-                                        </div>
+                                        </span>
                                         <Text
                                             variant="bodySmall"
                                             color="steel-dark"

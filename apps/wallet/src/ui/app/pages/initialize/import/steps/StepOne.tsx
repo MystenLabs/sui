@@ -64,7 +64,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                             disabled={isSubmitting}
                         />
                         {touched.mnemonic && errors?.mnemonic && (
-                            <Alert>{errors?.mnemonic}</Alert>
+                            <Alert className="mt-3.5">{errors?.mnemonic}</Alert>
                         )}
                     </FieldLabel>
 
