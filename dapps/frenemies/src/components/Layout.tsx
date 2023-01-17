@@ -3,30 +3,16 @@
 
 import Header from "./header/Header";
 import Footer from "./footer/Footer";
-import Leaderboard from "./leaderboard/Leaderboard";
+// import { Outlet } from "react-router-dom";
+import { ReactElement } from "react";
 
-function Layout() {
+function Layout({ children }: { children: ReactElement | ReactElement[] }) {
   return (
     <div className="container">
       <Header />
-
       <div className="mx-auto max-w-4xl container">
-        {/* The data should later be fetched from Sui Network directly */}
-        <Leaderboard
-          rank={333}
-          totalScore={420}
-          records={[
-            {
-              round: 10,
-              role: "enemy",
-              validator: "0x0000000000000000000000000000000000000000",
-              objectiveAchieved: true,
-              score: 100,
-            },
-          ]}
-        />
+        {children}
       </div>
-
       <Footer />
     </div>
   );
