@@ -49,6 +49,7 @@ move-core-types.workspace = true
 narwhal-node = { path = "../../narwhal/node" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-utils = { path = "../test-utils" }
+sysinfo = "0.27.5"
 
 [target.'cfg(msim)'.dependencies]
 sui-macros = { path = "../sui-macros" }

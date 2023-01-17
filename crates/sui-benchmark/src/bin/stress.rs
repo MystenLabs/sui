@@ -118,8 +118,10 @@ async fn main() -> Result<()> {
     } else {
         let stats: BenchmarkStats = joined.unwrap().unwrap();
         let table = stats.to_table();
+        let cpu_table = stats.to_cpu_table();
         eprintln!("Benchmark Report:");
         eprintln!("{}", table);
+        eprintln!("{}", cpu_table);
         if !prev_benchmark_stats_path.is_empty() {
             let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
             let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
