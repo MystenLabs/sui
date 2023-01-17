@@ -5,8 +5,10 @@ import {
     getTransactionDigest,
     SUI_TYPE_ARG,
     normalizeSuiAddress,
+    type SuiAddress,
+    type SuiMoveObject,
 } from '@mysten/sui.js';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -16,7 +18,6 @@ import { STATE_OBJECT } from '../usePendingDelegation';
 import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
-import { useUnStakeTokenMutation, useStakeTokenMutation } from './stakingHooks';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
     Content,
@@ -29,6 +30,7 @@ import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import {
+    useSigner,
     useAppSelector,
     useCoinDecimals,
     useIndividualCoinMaxBalance,
@@ -36,6 +38,7 @@ import {
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,
+    ownedObjects,
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
@@ -146,9 +149,65 @@ function StakingCard() {
     }, [delegationData]);
 
     const navigate = useNavigate();
+    const signer = useSigner();
+    const allCoins = useAppSelector(ownedObjects);
+    const stakeToken = useMutation({
+        mutationFn: async ({
+            tokenTypeArg,
+            amount,
+            validatorAddress,
+        }: {
+            tokenTypeArg: string;
+            amount: bigint;
+            validatorAddress: SuiAddress;
+        }) => {
+            if (!validatorAddress || !amount || !tokenTypeArg) {
+                throw new Error('Failed, missing required field');
+            }
 
-    const stakeToken = useStakeTokenMutation();
-    const unStakeToken = useUnStakeTokenMutation();
+            const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
+            const coins: SuiMoveObject[] = allCoins
+                .filter(
+                    (anObj) =>
+                        anObj.data.dataType === 'moveObject' &&
+                        anObj.data.type === coinType
+                )
+                .map(({ data }) => data as SuiMoveObject);
+
+            const response = Coin.stakeCoin(
+                signer,
+                coins,
+                amount,
+                validatorAddress
+            );
+            return response;
+        },
+    });
+    const unStakeToken = useMutation({
+        mutationFn: async ({
+            principalWithdrawAmount,
+            delegationId,
+            stakeSuId,
+        }: {
+            principalWithdrawAmount: string;
+            delegationId: string;
+            stakeSuId: string;
+        }) => {
+            if (!principalWithdrawAmount || !delegationId || !stakeSuId) {
+                throw new Error(
+                    'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
+                );
+            }
+
+            const response = await Coin.unStakeCoin(
+                signer,
+                delegationId,
+                stakeSuId,
+                principalWithdrawAmount
+            );
+            return response;
+        },
+    });
 
     const onHandleSubmit = useCallback(
         async (
