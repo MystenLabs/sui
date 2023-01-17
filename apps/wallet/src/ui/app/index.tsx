@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -30,6 +31,7 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { setNavVisibility } from '_redux/slices/app';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 const HIDDEN_MENU_PATHS = [
     '/nft-details',
@@ -50,12 +52,13 @@ const App = () => {
         document.body.classList.remove('app-initializing');
     }, [isPopup]);
     const location = useLocation();
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
     useEffect(() => {
         const menuVisible = !HIDDEN_MENU_PATHS.some((aPath) =>
             location.pathname.startsWith(aPath)
         );
         dispatch(setNavVisibility(menuVisible));
-    }, [location, dispatch]);
+    }, [location, dispatch, stakingEnabled]);
 
     return (
         <Routes>
@@ -71,7 +74,9 @@ const App = () => {
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
-                <Route path="stake/*" element={<Staking />} />
+                {stakingEnabled ? (
+                    <Route path="stake/*" element={<Staking />} />
+                ) : null}
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
