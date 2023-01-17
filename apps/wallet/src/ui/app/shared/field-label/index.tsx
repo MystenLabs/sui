@@ -5,8 +5,6 @@ import { Text } from '_app/shared/text';
 
 import type { ReactNode } from 'react';
 
-import st from './FieldLabel.module.scss';
-
 export type FieldLabelProps = {
     txt: string;
     children: ReactNode | ReactNode[];
@@ -14,8 +12,8 @@ export type FieldLabelProps = {
 
 export default function FieldLabel({ txt, children }: FieldLabelProps) {
     return (
-        <label className={st.container}>
-            <div className="ml-2">
+        <label className="flex flex-col flex-nowrap first:-mt-7.5">
+            <div className="ml-2 mt-7.5 mb-2.5">
                 <Text variant="body" color="steel-darker" weight="semibold">
                     {txt}
                 </Text>

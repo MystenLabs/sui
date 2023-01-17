@@ -14,12 +14,21 @@ module.exports = {
     },
     theme: {
         extend: {
+            colors: {
+                'gradient-blue-start': '#589AEA',
+                'gradient-blue-end': '#4C75A6',
+                'alice-blue': '#F1F8FD',
+            },
             minHeight: {
                 8: '2rem',
+                15: '3.75rem',
             },
             spacing: {
                 7.5: '1.875rem',
                 8: '2rem',
+                15: '3.75rem',
+                'popup-height': '595px',
+                'popup-width': '360px',
             },
             boxShadow: {
                 'wallet-content': '0px -5px 20px 5px rgba(160, 182, 195, 0.15)',
@@ -32,9 +41,10 @@ module.exports = {
                 '2lg': '0.625rem',
             },
             height: {
-                header: '68px',
+                header: '4.25rem',
+                'nav-height': '76px',
             },
-            width: {
+            maxWidth: {
                 'popup-width': '360px',
             },
         },

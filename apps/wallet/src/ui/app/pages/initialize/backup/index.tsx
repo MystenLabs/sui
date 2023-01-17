@@ -107,8 +107,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                                 weight="normal"
                             >
                                 Never disclose your secret recovery phrase.
-                                Anyone with the passphrase can take over your
-                                account forever.
+                                Anyone can take over your account with it.
                             </Text>
                         </div>
                         <div className="flex-1" />
