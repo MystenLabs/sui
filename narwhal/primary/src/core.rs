@@ -151,17 +151,26 @@ impl Core {
                     network: primary_network,
                     metrics,
                 }
-                .recover()
+                .run_inner()
                 .await
-                .run()
-                .await;
             },
             "CoreTask"
         )
     }
 
     #[instrument(level = "info", skip_all)]
-    pub async fn recover(mut self) -> Self {
+    async fn run_inner(self) {
+        let core = async move { self.recover().await?.run().await };
+
+        match core.await {
+            Err(err @ DagError::ShuttingDown) => debug!("{:?}", err),
+            Err(err) => panic!("{:?}", err),
+            Ok(_) => {}
+        }
+    }
+
+    #[instrument(level = "info", skip_all)]
+    pub async fn recover(mut self) -> DagResult<Self> {
         info!("Starting certificate recovery. Message processing will begin after completion.");
 
         let last_round_certificates = self
@@ -175,15 +184,13 @@ impl Core {
             .unwrap_or(0);
 
         for certificate in last_round_certificates {
-            self.append_certificate_in_aggregator(certificate)
-                .await
-                .expect("Failed appending recovered certificates to aggregator in primary core");
+            self.append_certificate_in_aggregator(certificate).await?;
         }
 
         self.highest_received_round = last_round_number;
         self.highest_processed_round = last_round_number;
 
-        self
+        Ok(self)
     }
 
     // Requests a vote for a Header from the given peer. Retries indefinitely until either a
@@ -665,7 +672,6 @@ impl Core {
     fn process_result(result: &DagResult<()>) {
         match result {
             Ok(()) => (),
-            Err(e @ DagError::ShuttingDown) => debug!("{e}"),
             Err(DagError::StoreError(e)) => {
                 error!("{e}");
                 panic!("Storage failure: killing node.");
@@ -680,7 +686,7 @@ impl Core {
     }
 
     // Main loop listening to incoming messages.
-    pub async fn run(mut self) {
+    pub async fn run(mut self) -> DagResult<Self> {
         info!("Core on node {} has started successfully.", self.name);
         loop {
             let result = tokio::select! {
@@ -760,7 +766,7 @@ impl Core {
                 },
 
                 _ = self.rx_shutdown.receiver.recv() => {
-                    return
+                    return Ok(self);
                 }
 
                 // Check whether the consensus round has changed, to clean up structures
