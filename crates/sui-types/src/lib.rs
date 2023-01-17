@@ -23,7 +23,6 @@ pub mod accumulator;
 pub mod balance;
 pub mod base_types;
 pub mod certificate_proof;
-pub mod chain_id;
 pub mod coin;
 pub mod collection_types;
 pub mod committee;

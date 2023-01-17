@@ -20,7 +20,6 @@ use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::chain_id::ChainId;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     AuthorityWeakQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
@@ -135,10 +134,6 @@ impl Genesis {
         let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
             .expect("Sui System State object deserialization cannot fail");
         result
-    }
-
-    pub fn chain_id(&self) -> ChainId {
-        self.sui_system_object().chain_id
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -266,7 +261,6 @@ pub struct GenesisValidatorInfo {
 /// Initial set of parameters for a chain.
 #[derive(Default, Serialize, Deserialize)]
 pub struct GenesisChainParameters {
-    chain_id: ChainId,
     // In the future we can add the initial gas schedule or other parameters here
 }
 
@@ -301,11 +295,6 @@ impl Builder {
             signatures: Default::default(),
             built_genesis: None,
         }
-    }
-
-    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
-        self.parameters.chain_id = chain_id;
-        self
     }
 
     pub fn with_parameters(mut self, parameters: GenesisChainParameters) -> Self {
@@ -667,7 +656,7 @@ impl Builder {
 }
 
 fn build_unsigned_genesis_data(
-    parameters: &GenesisChainParameters,
+    _parameters: &GenesisChainParameters,
     validators: &[GenesisValidatorInfo],
     objects: &[Object],
 ) -> (
@@ -685,13 +674,7 @@ fn build_unsigned_genesis_data(
         sui_framework::get_sui_framework(),
     ];
 
-    let objects = create_genesis_objects(
-        &mut genesis_ctx,
-        parameters.chain_id,
-        &modules,
-        objects,
-        validators,
-    );
+    let objects = create_genesis_objects(&mut genesis_ctx, &modules, objects, validators);
 
     let (genesis_transaction, genesis_effects, objects) = create_genesis_transaction(objects);
     let (checkpoint, checkpoint_contents) =
@@ -810,7 +793,6 @@ fn create_genesis_transaction(
 
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
-    chain_id: ChainId,
     modules: &[Vec<CompiledModule>],
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
@@ -836,8 +818,7 @@ fn create_genesis_objects(
         store.insert_object(object.to_owned());
     }
 
-    generate_genesis_system_object(&mut store, &move_vm, chain_id, validators, genesis_ctx)
-        .unwrap();
+    generate_genesis_system_object(&mut store, &move_vm, validators, genesis_ctx).unwrap();
 
     store
         .into_inner()
@@ -918,7 +899,6 @@ fn process_package(
 pub fn generate_genesis_system_object(
     store: &mut InMemoryStorage,
     move_vm: &MoveVM,
-    chain_id: ChainId,
     committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
 ) -> Result<()> {
@@ -971,7 +951,6 @@ pub fn generate_genesis_system_object(
         &ident_str!("create").to_owned(),
         vec![],
         vec![
-            CallArg::Pure(bcs::to_bytes(&chain_id).unwrap()),
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&worker_pubkeys).unwrap()),

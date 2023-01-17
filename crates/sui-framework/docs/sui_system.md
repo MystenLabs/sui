@@ -122,12 +122,6 @@ The top-level object containing all information of the Sui system.
 
 </dd>
 <dt>
-<code>chain_id: u8</code>
-</dt>
-<dd>
- Id of the chain, value in the range [1, 127].
-</dd>
-<dt>
 <code>epoch: u64</code>
 </dt>
 <dd>
@@ -337,7 +331,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(chain_id: u8, validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64, initial_stake_subsidy_amount: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64, initial_stake_subsidy_amount: u64)
 </code></pre>
 
 
@@ -347,7 +341,6 @@ This function will be called only once in genesis.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(
-    chain_id: u8,
     validators: <a href="">vector</a>&lt;Validator&gt;,
     sui_supply: Supply&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
@@ -356,13 +349,11 @@ This function will be called only once in genesis.
     storage_gas_price: u64,
     initial_stake_subsidy_amount: u64,
 ) {
-    <b>assert</b>!(chain_id &gt;= 1 && chain_id &lt;= 127, 1);
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
     <b>let</b> state = <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a> {
         // Use a hardcoded ID.
         id: <a href="object.md#0x2_object_sui_system_state">object::sui_system_state</a>(),
-        chain_id,
         epoch: 0,
         validators,
         sui_supply,

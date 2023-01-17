@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::chain_id::ChainId;
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
@@ -175,7 +174,6 @@ pub struct ValidatorSet {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
     pub info: UID,
-    pub chain_id: ChainId,
     pub epoch: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,
