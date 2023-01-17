@@ -1194,11 +1194,11 @@ async fn test_handle_transaction_response() {
         .unwrap();
 
     assert_resp_err(
-            &agg,
-            tx.clone(),
-            |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
-        )
-        .await;
+        &agg,
+        tx.clone(),
+        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
+    )
+    .await;
 }
 
 async fn assert_resp_err<F>(

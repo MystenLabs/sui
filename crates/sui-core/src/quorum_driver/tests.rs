@@ -180,8 +180,8 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
         let ticket = quorum_driver.submit_transaction(tx).await.unwrap();
         // We have a timeout here to make the test fail fast if fails
         match tokio::time::timeout(Duration::from_secs(20), ticket).await {
-            Ok(Err(QuorumDriverError::FailedAfterMaximumAttempts { total_attempts })) => assert_eq!(total_attempts, 4),
-            _ => panic!("The transaction should err on SafeClient epoch check mismatch, be retried 3 times and raise QuorumDriverError::FailedAfterMaximumAttempts error"),
+            Ok(Err(QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { total_attempts })) => assert_eq!(total_attempts, 4),
+            _ => panic!("The transaction should err on SafeClient epoch check mismatch, be retried 3 times and raise QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts error"),
         };
     });
 

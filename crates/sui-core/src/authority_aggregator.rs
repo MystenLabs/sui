@@ -270,6 +270,7 @@ impl EffectsStakeMap {
     errors
 )]
 pub struct QuorumExecuteCertificateError {
+    pub total_stake: StakeUnit,
     pub errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
 }
 
@@ -1707,6 +1708,7 @@ where
 
         // If none has, fail.
         Err(QuorumExecuteCertificateError {
+            total_stake: self.committee.total_votes,
             errors: state.errors,
         })
     }
