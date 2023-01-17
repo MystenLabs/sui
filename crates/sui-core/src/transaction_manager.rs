@@ -128,7 +128,7 @@ impl TransactionManager {
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
             if missing.is_empty() {
-                debug!(tx_digest = ?digest, "certificate ready");
+                debug!("certificate ready");
                 assert!(inner.executing_certificates.insert(digest));
                 self.certificate_ready(cert);
                 self.metrics

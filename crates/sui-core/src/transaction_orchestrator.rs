@@ -36,7 +36,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
 
 use sui_types::messages::VerifiedTransaction;
 
@@ -268,6 +268,7 @@ where
                 &validator_state.epoch_store(),
             ),
         )
+        .instrument(error_span!("transaction_orchestrator", ?tx_digest))
         .await
         {
             Err(_elapsed) => {

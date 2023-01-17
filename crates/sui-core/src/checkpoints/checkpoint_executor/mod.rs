@@ -37,7 +37,7 @@ use tokio::{
     time::timeout,
 };
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 use typed_store::{rocks::TypedStoreError, Map};
 
 use crate::authority::AuthorityStore;
@@ -516,6 +516,7 @@ impl CheckpointExecutorEventLoop {
     }
 }
 
+#[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_store: Arc<AuthorityStore>,
