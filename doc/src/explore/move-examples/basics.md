@@ -32,7 +32,7 @@ Dependencies in the `[dependencies]` section are in the form:
 
 ```
 <string> = { local = <string>, addr_subst* = { (<string> = (<string> | "<hex_address>"))+ } } # local dependencies
-<string> = { git = <URL ending in .git>, subdir = <path to dir containing Move.toml inside git repo>, rev = <git commit hash>, addr_subst* = { (<string> = (<string> | "<hex_address>"))+ } } # git dependencies
+<string> = { git = <URL or path to a git repo>, subdir = <path to dir containing Move.toml inside git repo>, rev = <git commit hash>, addr_subst* = { (<string> = (<string> | "<hex_address>"))+ } } # git dependencies
 ```
 
 The `addr_subst` option for a dependency enables you to define a placeholder address from another package. It does not, however, provide a means to mutate the address of a published package. For example, a package manifest using a placeholder address might resemble:
@@ -83,7 +83,7 @@ C = { local = "c", addr_subst = { "D" = "cd" }}
 [addresses]
 a = "0x0"
 bd = "0x08f5f5f4101e9c4b2d2b3f212b6e909b48acd02b"
-cd = "0x08f5f5f4101e9c4b2d2b3f212b6e909b48acd02c"
+cd = "0x04b3d4752496d3663cb274c33e61c732ed44146c"
 ```
 
 Package B Move.toml:
