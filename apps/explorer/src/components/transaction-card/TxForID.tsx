@@ -6,7 +6,6 @@ import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import ErrorResult from '../error-result/ErrorResult';
 import PaginationLogic from '../pagination/PaginationLogic';
 import {
     type TxnData,
@@ -15,6 +14,7 @@ import {
 } from './TxCardUtils';
 
 import { useRpc } from '~/hooks/useRpc';
+import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
 
 const TRUNCATE_LENGTH = 14;
@@ -100,10 +100,10 @@ function TxForID({ id, category }: { id: string; category: categoryType }) {
     }
 
     return (
-        <ErrorResult
-            id={id}
-            errorMsg="Transactions could not be extracted on the following specified ID"
-        />
+        <Banner variant="error" fullWidth>
+            Transactions could not be extracted on the following specified ID:{' '}
+            {id}
+        </Banner>
     );
 }
 

@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import cl from 'clsx';
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
-
-import styles from './Home.module.css';
 
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
@@ -21,7 +18,7 @@ function Home() {
         <div
             data-testid="home-page"
             id="home"
-            className={cl([styles.home, styles.container])}
+            className="mx-auto grid grid-cols-1 gap-2 bg-white md:grid-cols-2"
         >
             <section className="left-item mb-4 md:mb-0">
                 <ErrorBoundary>
