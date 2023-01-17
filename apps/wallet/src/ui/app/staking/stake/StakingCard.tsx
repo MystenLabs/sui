@@ -16,10 +16,7 @@ import { STATE_OBJECT } from '../usePendingDelegation';
 import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
-import {
-    useUnStakeTokenMutation,
-    useStakeTokenMutation,
-} from './useStakingMutation';
+import { useUnStakeTokenMutation, useStakeTokenMutation } from './stakingHooks';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
     Content,
