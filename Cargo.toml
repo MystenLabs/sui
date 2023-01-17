@@ -105,26 +105,26 @@ opt-level = 1
 tokio = "1.24.1"
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-cli = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-package = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-prover = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "a8e95cbae69564d8928c9873b8acfabc50e642cf" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-cli = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-package = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-prover = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "3b20af5ef98b368a9bf405e9b39362443c964946" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "f451422b7f15e75e055a1830cbe5d1547fa87b74" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "f451422b7f15e75e055a1830cbe5d1547fa87b74", package = "fastcrypto-zkp" }

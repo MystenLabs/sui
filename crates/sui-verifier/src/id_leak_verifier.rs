@@ -123,6 +123,7 @@ impl<'a> IDLeakAnalysis<'a> {
 }
 
 impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
+    type Error = PartialVMError;
     type State = AbstractState;
 
     fn execute(
