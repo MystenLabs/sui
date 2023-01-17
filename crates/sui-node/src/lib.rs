@@ -458,7 +458,7 @@ impl SuiNode {
         let narwhal_manager = Self::construct_narwhal_manager(
             config,
             consensus_config,
-            state.clone(),
+            epoch_store.clone(),
             registry_service,
         )?;
 
@@ -583,7 +583,7 @@ impl SuiNode {
     fn construct_narwhal_manager(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
-        state: Arc<AuthorityState>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         registry_service: &RegistryService,
     ) -> Result<NarwhalManager<SuiTxValidator>> {
         let narwhal_config = NarwhalConfiguration {
@@ -592,7 +592,7 @@ impl SuiNode {
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
-            tx_validator: SuiTxValidator::new(state, &registry_service.default_registry()),
+            tx_validator: SuiTxValidator::new(epoch_store, &registry_service.default_registry()),
             registry_service: registry_service.clone(),
         };
 
