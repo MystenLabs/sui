@@ -6,6 +6,7 @@ import {
     getTransactionKindName,
     getMoveCallTransaction,
     getExecutionStatusError,
+    getTransferObjectTransaction,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -58,11 +59,9 @@ function TxnType({ value, variant, isSender }: TxnTypeProps) {
             case 'Publish':
                 name = 'Action';
                 break;
-            case 'TransferObject':
-                name = 'Action';
-                break;
+
             default:
-                name = isSender ? 'From' : 'To';
+                name = isSender ? 'To' : 'From';
         }
         return name;
     }, [variant, isSender]);
@@ -95,14 +94,20 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
     );
 
     const objectIds = useMemo(() => {
-        return getTxnEffectsEventID(txn.effects, address || '');
-    }, [address, txn.effects]);
+        const transferId = getTransferObjectTransaction(
+            certificate.data.transactions[0]
+        )?.objectRef?.objectId;
+        return transferId
+            ? [transferId]
+            : getTxnEffectsEventID(txn.effects, address || '');
+    }, [address, certificate.data.transactions, txn.effects]);
+
+    const amountByRecipient = getAmount(
+        certificate.data.transactions[0],
+        txn.effects
+    );
 
     const amount = useMemo(() => {
-        const amountByRecipient = getAmount(
-            certificate.data.transactions[0],
-            txn.effects
-        );
         const amount = amountByRecipient && amountByRecipient[0]?.amount;
         const amountTransfers = eventsSummary.reduce(
             (acc, { amount }) => acc + amount,
@@ -110,17 +115,28 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         );
 
         return Math.abs(amount || amountTransfers);
-    }, [certificate.data.transactions, eventsSummary, txn.effects]);
+    }, [amountByRecipient, eventsSummary]);
+
+    const isSender = certificate.data.sender === address;
 
     const recipientAddress = useMemo(() => {
+        const tranferObjectRecipientAddress =
+            amountByRecipient &&
+            amountByRecipient?.find(
+                ({ recipientAddress }) => recipientAddress !== address
+            )?.recipientAddress;
         const receiverAddr =
             eventsSummary &&
             eventsSummary.find(
                 ({ receiverAddress }) => receiverAddress !== address
             )?.receiverAddress;
 
-        return receiverAddr;
-    }, [address, eventsSummary]);
+        return (
+            receiverAddr ??
+            tranferObjectRecipientAddress ??
+            certificate.data.sender
+        );
+    }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
 
     const moveCallTxn = getMoveCallTransaction(
         certificate.data.transactions[0]
@@ -135,7 +151,6 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
         return recipientAddress;
     }, [certificate.data.transactions, recipientAddress, txnKind]);
 
-    const isSender = certificate.data.sender === address;
     const isMint = txnKind === 'Call' && moveCallTxn?.function === 'mint';
     const txnIconName = isMint ? 'Minted' : txnKind;
 
