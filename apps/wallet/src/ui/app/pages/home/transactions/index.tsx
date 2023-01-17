@@ -3,11 +3,11 @@
 
 import { memo } from 'react';
 
-import { useGetTranactionByAddress } from './useGetTransactionByAddress';
+import { useGetTranactionIdByAddress } from './useGetTransactionByAddress';
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
-import { TxnItem } from '_components/transactions-card/Transaction';
+import { TxnListItem } from '_components/transactions-card/Transaction';
 import { useAppSelector } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
@@ -18,7 +18,7 @@ function TransactionsPage() {
         data: txns,
         isError,
         isLoading,
-    } = useGetTranactionByAddress(activeAddress || '');
+    } = useGetTranactionIdByAddress(activeAddress || '');
 
     if (isError) {
         return (
@@ -45,14 +45,9 @@ function TransactionsPage() {
                     className="flex justify-center items-center"
                 >
                     {txns &&
-                        txns.map((txn) => (
-                            <ErrorBoundary
-                                key={txn.certificate.transactionDigest}
-                            >
-                                <TxnItem
-                                    key={txn.certificate.transactionDigest}
-                                    txn={txn}
-                                />
+                        txns.map((txnId) => (
+                            <ErrorBoundary key={txnId}>
+                                <TxnListItem txnId={txnId} />
                             </ErrorBoundary>
                         ))}
                 </Loading>
