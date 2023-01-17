@@ -7,7 +7,7 @@ import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { TxnListItem } from '_components/transactions-card/Transaction';
-import { useAppSelector, useGetTransactionIdByAddress } from '_hooks';
+import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
 function TransactionsPage() {
@@ -17,7 +17,7 @@ function TransactionsPage() {
         data: txns,
         isError,
         isLoading,
-    } = useGetTransactionIdByAddress(activeAddress || '');
+    } = useGetTransactionsByAddress(activeAddress || '');
 
     if (isError) {
         return (

@@ -151,28 +151,31 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
                     </div>
                 ) : (
                     <>
-                        <div className="flex w-full justify-between">
-                            {isMint ? (
-                                <Text color="gray-90" weight="semibold">
-                                    Minted
-                                </Text>
-                            ) : (
-                                <div className="flex flex-col w-full gap-1.5">
-                                    <div className="flex gap-1 align-middle items-baseline">
-                                        <Text color="gray-90" weight="semibold">
-                                            {isSender ? 'Sent' : 'Received'}
+                        <div className="flex w-full justify-between flex-col gap-1">
+                            <div className="flex w-full justify-between ">
+                                <div className="flex gap-1 align-middle  items-baseline">
+                                    <Text color="gray-90" weight="semibold">
+                                        {isMint
+                                            ? 'Minted'
+                                            : isSender
+                                            ? 'Sent'
+                                            : 'Received'}
+                                    </Text>
+                                    {isSuTransfer && (
+                                        <Text
+                                            color="gray-90"
+                                            weight="normal"
+                                            variant="subtitleSmall"
+                                        >
+                                            SUI
                                         </Text>
-                                        {isSuTransfer && (
-                                            <Text
-                                                color="gray-90"
-                                                weight="normal"
-                                                variant="subtitleSmall"
-                                            >
-                                                SUI
-                                            </Text>
-                                        )}
-                                    </div>
+                                    )}
+                                </div>
 
+                                <CoinBalance amount={amount} />
+                            </div>
+                            <div className="flex flex-col w-full">
+                                <div className="flex flex-col w-full gap-1.5">
                                     <TxnTypeLabel
                                         label={label}
                                         content={
@@ -181,12 +184,12 @@ function TxnItem({ txn }: { txn: SuiTransactionResponse }) {
                                                 : txnLabel
                                         }
                                     />
+                                    {objectIds[0] && (
+                                        <TxnImage id={objectIds[0]} />
+                                    )}
                                 </div>
-                            )}
-                            <CoinBalance amount={amount} />
+                            </div>
                         </div>
-
-                        {objectIds[0] && <TxnImage id={objectIds[0]} />}
                     </>
                 )}
 
