@@ -1070,7 +1070,7 @@ impl<T: SuiData> TryFrom<ObjectRead> for SuiObjectRead<T> {
 pub type GetPastObjectDataResponse = SuiPastObjectRead<SuiParsedData>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(tag = "status", content = "details", rename = "ObjectRead")]
+#[serde(tag = "status", content = "details", rename = "PastObjectRead")]
 pub enum SuiPastObjectRead<T: SuiData> {
     /// The object exists and is found with this version
     VersionFound(SuiObject<T>),

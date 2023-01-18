@@ -2833,7 +2833,7 @@
         "name": "GetPastObjectDataResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
+          "$ref": "#/components/schemas/PastObjectRead"
         }
       },
       "examples": [
@@ -5192,6 +5192,161 @@
             ]
           }
         }
+      },
+      "PastObjectRead": {
+        "oneOf": [
+          {
+            "description": "The object exists and is found with this version",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/Object"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "VersionFound"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The object does not exist",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ObjectNotExists"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The object is found to be deleted with this version",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/ObjectRef"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ObjectDeleted"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The object exists but not found with this version",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "VersionNotFound"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The asked object version is higher than the latest",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "type": "object",
+                "required": [
+                  "asked_version",
+                  "latest_version",
+                  "object_id"
+                ],
+                "properties": {
+                  "asked_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "latest_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "VersionTooHigh"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "type": "object",
+                "required": [
+                  "object_id",
+                  "wrapped_version"
+                ],
+                "properties": {
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "wrapped_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Wrapped"
+                ]
+              }
+            }
+          }
+        ]
       },
       "Pay": {
         "type": "object",

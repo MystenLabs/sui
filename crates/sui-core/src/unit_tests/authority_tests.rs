@@ -4573,7 +4573,7 @@ async fn test_owner_index() {
 
     // create a inner object
     let create_inner_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -4598,7 +4598,7 @@ async fn test_owner_index() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "wrap_object",
         vec![],
@@ -4623,7 +4623,7 @@ async fn test_owner_index() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "unwrap_object",
         vec![],
