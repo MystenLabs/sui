@@ -387,6 +387,11 @@ pub enum SuiError {
     },
     #[error("Object deleted at reference {:?}.", object_ref)]
     ObjectDeleted { object_ref: ObjectRef },
+    #[error("Object [{}] wrapped at version {}.", object_id, version)]
+    ObjectWrapped {
+        object_id: ObjectID,
+        version: SequenceNumber,
+    },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Move Execution failed")]

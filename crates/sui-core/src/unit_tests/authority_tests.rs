@@ -3869,6 +3869,20 @@ pub async fn init_state_with_ids_and_object_basics<
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
+        let indexes = state.indexes.as_ref().unwrap();
+        indexes
+            .insert_genesis_objects(ObjectIndexChanges {
+                deleted_owners: vec![],
+                deleted_dynamic_fields: vec![],
+                deleted_wrapped_objects: vec![],
+                new_owners: vec![(
+                    (address, object_id),
+                    ObjectInfo::new(&obj.compute_object_reference(), &obj),
+                )],
+                new_dynamic_fields: vec![],
+                new_wrapped_objects: vec![],
+            })
+            .unwrap();
         state.insert_genesis_object(obj).await;
     }
 
@@ -4543,6 +4557,117 @@ async fn test_blocked_move_calls() {
             .unwrap(),
         SuiError::BlockedMoveFunction
     );
+}
+
+#[tokio::test]
+async fn test_owner_index() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+
+    let indexes = authority_state.indexes.as_ref().unwrap();
+
+    // Account should only have one gas object
+    assert_eq!(1, indexes.get_owner_objects(sender).unwrap().len());
+
+    // create a inner object
+    let create_inner_effects = create_move_object(
+        &object_basics,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(create_inner_effects.status.is_ok());
+    assert_eq!(create_inner_effects.created.len(), 1);
+    assert_eq!(2, indexes.get_owner_objects(sender).unwrap().len());
+
+    let inner_v0 = create_inner_effects.created[0].0;
+
+    assert!(matches!(
+        indexes.get_last_known_owner(&inner_v0.0).unwrap(),
+        Some((ObjectOwnerStatus::Owned(Owner::AddressOwner(owner)),seq)) if seq.value() == 2 && owner == sender
+    ));
+
+    // wrap the inner object
+    let create_wrapper_effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "wrap_object",
+        vec![],
+        vec![TestCallArg::Object(inner_v0.0)],
+    )
+    .await
+    .unwrap();
+    let owner_object = indexes.get_owner_objects(sender).unwrap();
+    assert!(create_wrapper_effects.status.is_ok());
+    assert_eq!(create_wrapper_effects.created.len(), 1);
+    assert_eq!(2, owner_object.len());
+    assert!(matches!(
+        indexes.get_last_known_owner(&inner_v0.0).unwrap(),
+        Some((ObjectOwnerStatus::Wrapped,seq)) if seq.value() == 3
+    ));
+
+    let wrapper = create_wrapper_effects.created[0].0;
+
+    // unwrap the inner object
+    let unwrap_effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &object_basics,
+        "object_basics",
+        "unwrap_object",
+        vec![],
+        vec![TestCallArg::Object(wrapper.0)],
+    )
+    .await
+    .unwrap();
+    let owner_object = indexes.get_owner_objects(sender).unwrap();
+    assert!(unwrap_effects.status.is_ok());
+    assert_eq!(unwrap_effects.unwrapped.len(), 1);
+    assert_eq!(2, owner_object.len());
+
+    assert!(matches!(
+        indexes.get_last_known_owner(&inner_v0.0).unwrap(),
+        Some((ObjectOwnerStatus::Owned(Owner::AddressOwner(owner)), seq)) if seq.value() == 4 && owner == sender
+    ));
+
+    // Object Not exists at version 1
+    let inner_object = authority_state
+        .get_past_object_read(&inner_v0.0, SequenceNumber::from(1))
+        .await
+        .unwrap();
+    assert!(matches!(inner_object, PastObjectRead::VersionNotFound(..)));
+
+    // The object should be accessible at version 2
+    let inner_object = authority_state
+        .get_past_object_read(&inner_v0.0, SequenceNumber::from(2))
+        .await
+        .unwrap();
+    assert!(matches!(inner_object, PastObjectRead::VersionFound(..)));
+
+    // The object should be wrapped at version 3
+    let inner_object = authority_state
+        .get_past_object_read(&inner_v0.0, SequenceNumber::from(3))
+        .await
+        .unwrap();
+    assert!(matches!(inner_object, PastObjectRead::Wrapped { .. }));
+
+    // The object should be accessible again at version 4
+    let inner_object = authority_state
+        .get_past_object_read(&inner_v0.0, SequenceNumber::from(4))
+        .await
+        .unwrap();
+    assert!(matches!(inner_object, PastObjectRead::VersionFound(..)));
 }
 
 #[tokio::test]

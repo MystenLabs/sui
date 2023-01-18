@@ -51,7 +51,7 @@ use sui_json_rpc_types::{
 };
 use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
+use sui_storage::indexes::{ObjectIndexChanges, ObjectOwnerStatus, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
@@ -1124,7 +1124,7 @@ impl AuthorityState {
         timestamp_ms: u64,
     ) -> SuiResult<u64> {
         let changes = self
-            .process_object_index(effects)
+            .process_object_index(indexes, effects)
             .tap_err(|e| warn!("{e}"))?;
 
         indexes.index_tx(
@@ -1152,6 +1152,7 @@ impl AuthorityState {
 
     fn process_object_index(
         &self,
+        indexes: &IndexStore,
         effects: &TransactionEffects,
     ) -> Result<ObjectIndexChanges, SuiError> {
         let modified_at_version = effects
@@ -1174,78 +1175,102 @@ impl AuthorityState {
             }
         }
 
-        let mut new_owners = vec![];
-        let mut new_dynamic_fields = vec![];
+        let changes =
+            effects
+                .all_mutated()
+                .try_fold(changes, |mut changes, (oref, owner, kind)| {
+                    let (id, version, digest) = oref;
+                    let last_owner = indexes.get_last_known_owner(id)?;
+                    // Object data should be available for new updates.
+                    let Some(o) = self.database.get_object_by_key(id, *version)? else {
+                        return Ok::<ObjectIndexChanges, SuiError>(changes);
+                    };
 
-        for (oref, owner, kind) in effects.all_mutated() {
-            let id = &oref.0;
-            // For mutated objects, retrieve old owner and delete old index if there is a owner change.
-            if let WriteKind::Mutate = kind {
-                let Some(old_version) = modified_at_version.get(id) else{
-                        error!("Error processing object owner index for tx [{:?}], cannot find modified at version for mutated object [{id}].", effects.transaction_digest);
-                        continue;
-                    };
-                let Some(old_object) = self.database.get_object_by_key(id, *old_version)? else {
-                        error!("Error processing object owner index for tx [{:?}], cannot find object [{id}] at version [{old_version}].", effects.transaction_digest);
-                        continue;
-                    };
-                if &old_object.owner != owner {
-                    match old_object.owner {
-                        Owner::AddressOwner(addr) => {
-                            deleted_owners.push((addr, *id));
+                    // For mutated objects, retrieve old owner and delete old index if there is a owner change.
+                    if let (WriteKind::Mutate, Some((owner_status, last_known_version))) =
+                        (kind, last_owner)
+                    {
+                        // Skip processing if change version is older then known version.
+                        if &last_known_version < version {
+                            match owner_status {
+                                ObjectOwnerStatus::Owned(old_owner) => {
+                                    if &old_owner != owner {
+                                        match old_owner {
+                                            Owner::AddressOwner(addr) => {
+                                                changes.deleted_owners.push((addr, *id))
+                                            }
+                                            Owner::ObjectOwner(object_id) => changes
+                                                .deleted_dynamic_fields
+                                                .push((ObjectID::from(object_id), *id)),
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                ObjectOwnerStatus::Wrapped => {
+                                    changes.deleted_wrapped_objects.push(*id)
+                                }
+                            }
                         }
-                        Owner::ObjectOwner(object_id) => {
-                            deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
+                    }
+
+                    match owner {
+                        Owner::AddressOwner(addr) => {
+                            let type_ = o
+                                .type_()
+                                .map(|type_| ObjectType::Struct(type_.clone()))
+                                .unwrap_or(ObjectType::Package);
+
+                            changes.new_owners.push((
+                                (*addr, *id),
+                                ObjectInfo {
+                                    object_id: *id,
+                                    version: *version,
+                                    digest: *digest,
+                                    type_,
+                                    owner: *owner,
+                                    previous_transaction: effects.transaction_digest,
+                                },
+                            ));
+                        }
+                        Owner::ObjectOwner(owner) => {
+                            let Some(df_info) = self.try_create_dynamic_field_info(&o)? else {
+                                // Skip indexing for non dynamic field objects.
+                                return Ok::<ObjectIndexChanges, SuiError>(changes);
+                            };
+                            changes
+                                .new_dynamic_fields
+                                .push(((ObjectID::from(*owner), *id), df_info))
                         }
                         _ => {}
                     }
+                    Ok::<ObjectIndexChanges, SuiError>(changes)
+                })?;
+
+        effects
+            .wrapped
+            .iter()
+            .try_fold(changes, |mut changes, (id, version, _)| {
+                if let Some((last_owner, last_known_version)) = indexes.get_last_known_owner(id)? {
+                    // Skip if last known owner version is older than incoming object version.
+                    if &last_known_version < version {
+                        if let ObjectOwnerStatus::Owned(old_owner) = &last_owner {
+                            match old_owner {
+                                Owner::AddressOwner(addr) => {
+                                    changes.deleted_owners.push((*addr, *id))
+                                }
+                                Owner::ObjectOwner(object_id) => changes
+                                    .deleted_dynamic_fields
+                                    .push((ObjectID::from(*object_id), *id)),
+                                _ => {}
+                            }
+                        }
+                        changes.new_wrapped_objects.push((*id, *version));
+                    }
+                } else {
+                    changes.new_wrapped_objects.push((*id, *version));
                 }
-            }
-
-            match owner {
-                Owner::AddressOwner(addr) => {
-                    // TODO: We can remove the object fetching after we added ObjectType to TransactionEffects
-                    let Some(o) = self.database.get_object_by_key(id, oref.1)? else{
-                        continue;
-                    };
-
-                    let type_ = o
-                        .type_()
-                        .map(|type_| ObjectType::Struct(type_.clone()))
-                        .unwrap_or(ObjectType::Package);
-
-                    new_owners.push((
-                        (*addr, *id),
-                        ObjectInfo {
-                            object_id: *id,
-                            version: oref.1,
-                            digest: oref.2,
-                            type_,
-                            owner: *owner,
-                            previous_transaction: effects.transaction_digest,
-                        },
-                    ));
-                }
-                Owner::ObjectOwner(owner) => {
-                    let Some(o) = self.database.get_object_by_key(&oref.0, oref.1)? else{
-                        continue;
-                    };
-                    let Some(df_info) = self.try_create_dynamic_field_info(&o)? else{
-                        // Skip indexing for non dynamic field objects.
-                        continue;
-                    };
-                    new_dynamic_fields.push(((ObjectID::from(*owner), *id), df_info))
-                }
-                _ => {}
-            }
-        }
-
-        Ok(ObjectIndexChanges {
-            deleted_owners,
-            deleted_dynamic_fields,
-            new_owners,
-            new_dynamic_fields,
-        })
+                Ok::<ObjectIndexChanges, SuiError>(changes)
+            })
     }
 
     fn try_create_dynamic_field_info(&self, o: &Object) -> SuiResult<Option<DynamicFieldInfo>> {
@@ -1757,8 +1782,10 @@ impl AuthorityState {
         index_store.insert_genesis_objects(ObjectIndexChanges {
             deleted_owners: vec![],
             deleted_dynamic_fields: vec![],
+            deleted_wrapped_objects: vec![],
             new_owners,
             new_dynamic_fields,
+            new_wrapped_objects: vec![],
         })
     }
 
@@ -1903,6 +1930,19 @@ impl AuthorityState {
                     });
                 }
                 if version < obj_ref.1 {
+                    // Read past owner info if indexes is available
+                    if let Some(indexes) = &self.indexes {
+                        // Return if object is wrapped
+                        if let Some(ObjectOwnerStatus::Wrapped) =
+                            indexes.get_owner(object_id, version)?
+                        {
+                            return Ok(PastObjectRead::Wrapped {
+                                object_id: *object_id,
+                                wrapped_version: version,
+                            });
+                        }
+                    }
+
                     // Read past objects
                     return Ok(match self.database.get_object_by_key(object_id, version)? {
                         None => PastObjectRead::VersionNotFound(*object_id, version),
@@ -1939,20 +1979,6 @@ impl AuthorityState {
                 }
             }
         }
-    }
-
-    fn get_owner_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-    ) -> Result<Owner, SuiError> {
-        self.database
-            .get_object_by_key(object_id, version)?
-            .ok_or(SuiError::ObjectNotFound {
-                object_id: *object_id,
-                version: Some(version),
-            })
-            .map(|o| o.owner)
     }
 
     pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {

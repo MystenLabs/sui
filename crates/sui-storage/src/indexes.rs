@@ -6,7 +6,7 @@
 
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::cmp::min;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,7 +17,9 @@ use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
 
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{
+    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
+};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
@@ -34,11 +36,42 @@ pub const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 pub const MAX_GET_OWNED_OBJECT_SIZE: usize = 256;
 
+#[derive(Debug, Default)]
 pub struct ObjectIndexChanges {
     pub deleted_owners: Vec<OwnerIndexKey>,
     pub deleted_dynamic_fields: Vec<DynamicFieldKey>,
+    pub deleted_wrapped_objects: Vec<ObjectID>,
     pub new_owners: Vec<(OwnerIndexKey, ObjectInfo)>,
     pub new_dynamic_fields: Vec<(DynamicFieldKey, DynamicFieldInfo)>,
+    pub new_wrapped_objects: Vec<(ObjectID, SequenceNumber)>,
+}
+
+impl ObjectIndexChanges {
+    pub fn object_to_owner_index_update(
+        &self,
+    ) -> impl IntoIterator<Item = ((ObjectID, SequenceNumber), ObjectOwnerStatus)> + '_ {
+        let object_to_address_index = self.new_owners.iter().map(|((owner, id), info)| {
+            (
+                (*id, info.version),
+                ObjectOwnerStatus::Owned(Owner::AddressOwner(*owner)),
+            )
+        });
+        let object_to_df_index = self.new_dynamic_fields.iter().map(|((owner, id), info)| {
+            (
+                (*id, info.version),
+                ObjectOwnerStatus::Owned(Owner::ObjectOwner((*owner).into())),
+            )
+        });
+
+        let wrapped_object_index = self
+            .new_wrapped_objects
+            .iter()
+            .map(|(id, seq)| ((*id, *seq), ObjectOwnerStatus::Wrapped));
+
+        object_to_address_index
+            .chain(object_to_df_index)
+            .chain(wrapped_object_index)
+    }
 }
 
 #[derive(DBMapUtils)]
@@ -92,6 +125,22 @@ pub struct IndexStoreTables {
     /// by a specific object, and their object reference.
     #[default_options_override_fn = "dynamic_field_index_table_default_config"]
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
+
+    /// This is an index of wrapped object, indexed by the object ID.
+    /// This table keeps record of wrapped object.
+    #[default_options_override_fn = "owner_index_table_default_config"]
+    wrapped_object_index: DBMap<ObjectID, SequenceNumber>,
+
+    /// Map of object id to it's owner, this is a append only table and is used as a reverse lookup
+    /// for `owner_index`, `dynamic_field_index` and `wrapped_object_index` tables.
+    #[default_options_override_fn = "owner_index_table_default_config"]
+    object_to_owner_index: DBMap<(ObjectID, SequenceNumber), ObjectOwnerStatus>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ObjectOwnerStatus {
+    Owned(Owner),
+    Wrapped,
 }
 
 pub struct IndexStore {
@@ -217,6 +266,10 @@ impl IndexStore {
         )?;
 
         // Owner index
+        let batch = batch.insert_batch(
+            &self.tables.object_to_owner_index,
+            object_index_changes.object_to_owner_index_update(),
+        )?;
         let batch = batch.delete_batch(
             &self.tables.owner_index,
             object_index_changes.deleted_owners.into_iter(),
@@ -225,6 +278,10 @@ impl IndexStore {
             &self.tables.dynamic_field_index,
             object_index_changes.deleted_dynamic_fields.into_iter(),
         )?;
+        let batch = batch.delete_batch(
+            &self.tables.wrapped_object_index,
+            object_index_changes.deleted_wrapped_objects.into_iter(),
+        )?;
         let batch = batch.insert_batch(
             &self.tables.owner_index,
             object_index_changes.new_owners.into_iter(),
@@ -232,6 +289,10 @@ impl IndexStore {
         let batch = batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
+        )?;
+        let batch = batch.insert_batch(
+            &self.tables.wrapped_object_index,
+            object_index_changes.new_wrapped_objects.into_iter(),
         )?;
 
         batch.write()?;
@@ -304,6 +365,30 @@ impl IndexStore {
                 }
             }
         })
+    }
+
+    pub fn get_last_known_owner(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<(ObjectOwnerStatus, SequenceNumber)>, SuiError> {
+        Ok(self
+            .tables
+            .object_to_owner_index
+            .iter()
+            .skip_prior_to(&(*object_id, SequenceNumber::MAX))?
+            .next()
+            .map(|((_, seq), owner)| (owner, seq)))
+    }
+
+    pub fn get_owner(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<Option<ObjectOwnerStatus>, SuiError> {
+        Ok(self
+            .tables
+            .object_to_owner_index
+            .get(&(*object_id, version))?)
     }
 
     pub fn get_transactions_in_range(
