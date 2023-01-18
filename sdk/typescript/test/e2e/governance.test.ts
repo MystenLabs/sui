@@ -5,7 +5,6 @@ import { describe, it, expect, beforeAll, expectTypeOf } from 'vitest';
 import {
   LocalTxnDataSerializer,
   RawSigner,
-  SuiSystemState,
   DelegatedStake,
 } from '../../src';
 import {
@@ -33,7 +32,7 @@ describe('Governance API', () => {
         toolbox.address(),
       );
       expectTypeOf(stakes).toBeArray(DelegatedStake)
-      // console.log(stakes);
+      //not able to test this, needs address with stake
     });
     it('test getValidators', async () => {
       const validators = await toolbox.provider.getValidators();
@@ -50,7 +49,7 @@ describe('Governance API', () => {
     });
     it('test getSuiSystemState', async () => {
       const systemState = await toolbox.provider.getSuiSystemState();
-      expectTypeOf(systemState).toBeAny(SuiSystemState)
+      expect(systemState.chain_id).greaterThan(0)
     }); 
     
   }

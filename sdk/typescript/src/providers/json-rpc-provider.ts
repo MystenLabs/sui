@@ -788,6 +788,65 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]> {
+    try {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+        throw new Error('Invalid Sui address');
+      }
+      const resp = await this.client.requestWithType(
+        'sui_getDelegatedStakes',
+        [address],
+        array(DelegatedStake),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getDelegatedStake: ${err}`);
+    }
+  }
+
+  async getValidators(): Promise<ValidatorMetaData[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getValidators',
+        [],
+        array(ValidatorMetaData),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getValidators: ${err}`);
+    }
+  }
+
+  async getCommitteeInfo(epoch: number | null = null): Promise<CommitteeInfoResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCommitteeInfo',
+        [epoch],
+        CommitteeInfoResponse,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getCommitteeInfo: ${err}`);
+    }
+  }
+
+  async getSuiSystemState(): Promise<SuiSystemState> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getSuiSystemState',
+        [],
+        SuiSystemState,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getSuiSystemState: ${err}`);
+    }
+  }
+
   // Events
   async getEvents(
     query: EventQuery,
