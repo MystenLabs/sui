@@ -56,7 +56,7 @@ function columnsContent(columns: TableColumn[]) {
         accessorKey: column.accessorKey,
         id: column.accessorKey,
         header: column.headerLabel,
-        enableSorting:!!column.sorting,
+        enableSorting: !!column.sorting,
         // cell renderer for each column from react-table
         cell: (info: any) => info.getValue(),
     }));
@@ -69,7 +69,12 @@ export interface TableCardProps {
     enableSorting?: boolean;
 }
 
-export function TableCard({ refetching, data, columns, enableSorting }: TableCardProps) {
+export function TableCard({
+    refetching,
+    data,
+    columns,
+    enableSorting,
+}: TableCardProps) {
     // Use Columns to create a table
     const processedcol = useMemo(() => columnsContent(columns), [columns]);
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -83,9 +88,8 @@ export function TableCard({ refetching, data, columns, enableSorting }: TableCar
         enableSorting: !!enableSorting,
         state: {
             sorting,
-          },
-    },
-    );
+        },
+    });
 
     return (
         <div
@@ -98,31 +102,51 @@ export function TableCard({ refetching, data, columns, enableSorting }: TableCar
                 <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
-                            {headerGroup.headers.map(({id, colSpan, column, isPlaceholder, getContext }) => (
-                                <th
-                                    key={id}
-                                    colSpan={colSpan}
-                                    scope="col"
-                                    className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
-                                    onClick={column.columnDef.enableSorting ? column.getToggleSortingHandler() : void(0)}
-                                   
-                                >
-                                    <div className="gap-1 items-center flex">
-                                
-                                    {isPlaceholder
-                                        ? null
-                                        : flexRender(
-                                              column.columnDef.header,
-                                              getContext()
-                                          )}
-                                           {{
-                                            asc: <ArrowRight fill="currentColor" className='-rotate-90 text-steel-darker'/>,
-                                            desc: <ArrowRight fill="currentColor"  className='rotate-90 text-steel-darker'/>,
-                                            }[column.getIsSorted() as string] ?? null}
-                                            </div>
-                                    
-                                </th>
-                            ))}
+                            {headerGroup.headers.map(
+                                ({
+                                    id,
+                                    colSpan,
+                                    column,
+                                    isPlaceholder,
+                                    getContext,
+                                }) => (
+                                    <th
+                                        key={id}
+                                        colSpan={colSpan}
+                                        scope="col"
+                                        className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                        onClick={
+                                            column.columnDef.enableSorting
+                                                ? column.getToggleSortingHandler()
+                                                : void 0
+                                        }
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            {isPlaceholder
+                                                ? null
+                                                : flexRender(
+                                                      column.columnDef.header,
+                                                      getContext()
+                                                  )}
+                                            {{
+                                                asc: (
+                                                    <ArrowRight
+                                                        fill="currentColor"
+                                                        className="-rotate-90 text-steel-darker"
+                                                    />
+                                                ),
+                                                desc: (
+                                                    <ArrowRight
+                                                        fill="currentColor"
+                                                        className="rotate-90 text-steel-darker"
+                                                    />
+                                                ),
+                                            }[column.getIsSorted() as string] ??
+                                                null}
+                                        </div>
+                                    </th>
+                                )
+                            )}
                         </tr>
                     ))}
                 </thead>
