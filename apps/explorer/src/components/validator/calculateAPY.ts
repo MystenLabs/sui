@@ -3,7 +3,7 @@
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
-const ROUNDING_MODE = 4;
+const APY_DECIMALS = 4;
 
 export function calculateAPY(validators: ActiveValidator, epoch: number) {
     const { sui_balance, starting_epoch, delegation_token_supply } =
@@ -16,5 +16,5 @@ export function calculateAPY(validators: ActiveValidator, epoch: number) {
                 +delegation_token_supply.fields.value,
         365 / num_epochs_participated - 1
     );
-    return apy ? parseFloat(apy.toFixed(ROUNDING_MODE)) : 0;
+    return apy ? parseFloat(apy.toFixed(APY_DECIMALS)) : 0;
 }
