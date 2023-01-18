@@ -5,18 +5,33 @@ import { runtime } from 'webextension-polyfill';
  * script which allows the injected script to use a TRPC client.
  */
 export function setupTRPCProxy() {
-    // TODO: Handle ports being disconnected seamlessly.
     const port = runtime.connect({ name: 'trpc' });
 
-    port.onMessage.addListener((data) => {
+    const onDisconnect = () => {
+        cleanup();
+        setupTRPCProxy();
+        window.dispatchEvent(new CustomEvent('trpc-reconnect'));
+    };
+
+    const onMessage = (data: unknown) => {
         window.dispatchEvent(
             new CustomEvent('trpc-response', { detail: data })
         );
-    });
+    };
 
-    window.addEventListener('trpc-request', (event) => {
+    const requestHandler = (event: Event) => {
         if (event instanceof CustomEvent) {
             port.postMessage(event.detail);
         }
-    });
+    };
+
+    port.onDisconnect.addListener(onDisconnect);
+    port.onMessage.addListener(onMessage);
+    window.addEventListener('trpc-request', requestHandler);
+
+    function cleanup() {
+        port.onDisconnect.removeListener(onDisconnect);
+        port.onMessage.removeListener(onMessage);
+        window.removeEventListener('trpc-request', requestHandler);
+    }
 }

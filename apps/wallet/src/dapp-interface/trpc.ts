@@ -8,9 +8,6 @@ import { observable } from '@trpc/server/observable';
 
 import { type AppRouter } from '_src/background/trpc';
 
-// TODO: This doesn't really handle disconnection from the port, which can happen in the backend.
-// We could entirely shield this from any concept of disconnecting, by making the port proxy just
-// manage that for us.
 const link: TRPCLink<AnyRouter> = (runtime) => {
     return ({ op }) => {
         return observable((observer) => {
@@ -20,6 +17,14 @@ const link: TRPCLink<AnyRouter> = (runtime) => {
 
             try {
                 const input = runtime.transformer.serialize(op.input);
+
+                const onDisconnect = () => {
+                    observer.error(new TRPCClientError('Port disconnected'));
+                };
+                window.addEventListener('trpc-reconnect', onDisconnect);
+                listeners.push(() =>
+                    window.removeEventListener('trpc-reconnect', onDisconnect)
+                );
 
                 const onMessage = (event: Event) => {
                     if (!(event instanceof CustomEvent)) return;
@@ -117,6 +122,9 @@ export const trpc = createTRPCProxyClient<AppRouter>({
 
 trpc.ping.query().then(console.log, console.error);
 trpc.onPing.subscribe(undefined, {
+    onError(err) {
+        console.log(err);
+    },
     onData(data) {
         console.log(data);
     },
