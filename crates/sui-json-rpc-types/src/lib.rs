@@ -87,6 +87,7 @@ pub struct Coin {
     pub digest: ObjectDigest,
     pub balance: u64,
     pub locked_until_epoch: Option<EpochId>,
+    pub previous_transaction: TransactionDigest,
 }
 
 impl Coin {
