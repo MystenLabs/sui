@@ -26,9 +26,6 @@ export function ValidatorStats({
 }: StatsCardProps) {
     // TODO: add missing fields
     // const numberOfDelegators = 0;
-    //  const selfStake = 0;
-    //  const lastEpoch = 0;
-    //  const totalRewards =  0;
     //  const networkStakingParticipation = 0;
     //  const votedLastRound =  0;
     //  const tallyingScore =  0;
@@ -38,15 +35,20 @@ export function ValidatorStats({
         () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
-
-    const totalStake = validatorData.fields.stake_amount;
+    const totalRewards =
+        validatorData.fields.delegation_staking_pool.fields.rewards_pool;
+    const delegatedStake =
+        validatorData.fields.delegation_staking_pool.fields.sui_balance;
+    const selfStake = validatorData.fields.stake_amount;
+    const totalStake = +selfStake + +delegatedStake;
+    const lastEpoch = epoch;
     const delegatedStakePercentage = useMemo(
         () =>
             getStakedPercent(
-                BigInt(validatorData.fields.stake_amount),
+                BigInt(delegatedStake),
                 BigInt(totalValidatorStake)
             ),
-        [validatorData, totalValidatorStake]
+        [delegatedStake, totalValidatorStake]
     );
 
     return (
@@ -94,11 +96,9 @@ export function ValidatorStats({
                                 {delegatedStakePercentage}%
                             </Heading>
                         </Stats>
-                        <Stats
-                            label="Self Staked"
-                            tooltip="Coming soon"
-                            unavailable
-                        />
+                        <Stats label="Self Staked" tooltip="Coming soon">
+                            <DelegationAmount amount={selfStake} isStats />
+                        </Stats>
                     </div>
                 </div>
             </Card>
@@ -116,14 +116,24 @@ export function ValidatorStats({
                         <Stats
                             label="Last Epoch"
                             tooltip="Coming soon"
-                            unavailable
-                        />
+                            unavailable={+lastEpoch <= 0}
+                        >
+                            <Heading
+                                as="div"
+                                variant="heading4/semibold"
+                                color="steel-darker"
+                            >
+                                {lastEpoch}
+                            </Heading>
+                        </Stats>
 
                         <Stats
                             label="Total Reward"
                             tooltip="Coming soon"
-                            unavailable
-                        />
+                            unavailable={+totalRewards <= 0}
+                        >
+                            <DelegationAmount amount={totalRewards} isStats />
+                        </Stats>
                     </div>
                 </div>
             </Card>
