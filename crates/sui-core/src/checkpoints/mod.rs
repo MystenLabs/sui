@@ -32,7 +32,7 @@ use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{SignedTransactionEffects, TransactionEffects};
+use sui_types::messages::{TransactionEffects, VerifiedSignedTransactionEffects};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, VerifiedCheckpoint,
@@ -656,7 +656,7 @@ impl CheckpointBuilder {
             .state
             .try_execute_immediately(&cert, &self.epoch_store)
             .await?;
-        effects.push(signed_effect.into_data());
+        effects.push(signed_effect.into_message());
         Ok(())
     }
 
@@ -664,7 +664,7 @@ impl CheckpointBuilder {
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already
     fn complete_checkpoint_effects(
         &self,
-        mut roots: Vec<SignedTransactionEffects>,
+        mut roots: Vec<VerifiedSignedTransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let mut results = vec![];
         let mut seen = HashSet::new();
@@ -694,7 +694,7 @@ impl CheckpointBuilder {
                         pending.insert(*dependency);
                     }
                 }
-                results.push(effect.into_data());
+                results.push(effect.into_message());
             }
             if pending.is_empty() {
                 break;
@@ -1124,6 +1124,7 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
     use sui_types::crypto::Signature;
+    use sui_types::messages::{SignedTransactionEffects, TrustedSignedTransactionEffects};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -1141,7 +1142,7 @@ mod tests {
         let state =
             AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
 
-        let mut store = HashMap::<TransactionDigest, SignedTransactionEffects>::new();
+        let mut store = HashMap::<TransactionDigest, TrustedSignedTransactionEffects>::new();
         store.insert(
             d(1),
             e(
@@ -1279,24 +1280,29 @@ mod tests {
     }
 
     #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionDigest, SignedTransactionEffects> {
+    impl EffectsNotifyRead for HashMap<TransactionDigest, TrustedSignedTransactionEffects> {
         async fn notify_read_effects(
             &self,
             digests: Vec<TransactionDigest>,
-        ) -> SuiResult<Vec<SignedTransactionEffects>> {
+        ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
             Ok(digests
                 .into_iter()
-                .map(|d| self.get(d.as_ref()).expect("effects not found").clone())
+                .map(|d| {
+                    self.get(d.as_ref())
+                        .expect("effects not found")
+                        .clone()
+                        .into()
+                })
                 .collect())
         }
 
         fn get_effects(
             &self,
             digests: &[TransactionDigest],
-        ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
+        ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
             Ok(digests
                 .iter()
-                .map(|d| self.get(d.as_ref()).cloned())
+                .map(|d| self.get(d.as_ref()).cloned().map(|e_opt| e_opt.into()))
                 .collect())
         }
     }
@@ -1336,18 +1342,19 @@ mod tests {
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
         gas_used: GasCostSummary,
-    ) -> SignedTransactionEffects {
+    ) -> TrustedSignedTransactionEffects {
         let effects = TransactionEffects {
             transaction_digest,
             dependencies,
             gas_used,
             ..Default::default()
         };
-        SignedTransactionEffects::new(
+        VerifiedSignedTransactionEffects::new_unchecked(SignedTransactionEffects::new(
             state.epoch_store_for_testing().epoch(),
             effects,
             &*state.secret,
             state.name,
-        )
+        ))
+        .serializable()
     }
 }

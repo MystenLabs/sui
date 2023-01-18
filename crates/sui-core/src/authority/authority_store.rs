@@ -39,7 +39,7 @@ pub struct AuthorityStore {
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
-    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
+    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, VerifiedSignedTransactionEffects>,
     _store_pruner: AuthorityStorePruner,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
@@ -143,7 +143,7 @@ impl AuthorityStore {
     pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<SignedTransactionEffects>> {
+    ) -> SuiResult<Option<TrustedSignedTransactionEffects>> {
         Ok(self
             .perpetual_tables
             .executed_effects
@@ -169,7 +169,7 @@ impl AuthorityStore {
             .perpetual_tables
             .executed_effects
             .get(transaction_digest)?
-            .map(|data| data.into_data()))
+            .map(|data| data.into_inner().into_data()))
     }
 
     /// Returns true if we have an effects structure for this transaction digest
@@ -607,7 +607,7 @@ impl AuthorityStore {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
-        effects: &SignedTransactionEffects,
+        effects: &VerifiedSignedTransactionEffects,
         effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
         // Extract the new state from the execution
@@ -638,7 +638,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects)],
+                [(transaction_digest, effects.serializable_ref())],
             )?
             .insert_batch(
                 &self.perpetual_tables.effects,
@@ -1292,18 +1292,21 @@ pub trait EffectsStore {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>>;
 }
 
 impl EffectsStore for Arc<AuthorityStore> {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
         Ok(self
             .perpetual_tables
             .executed_effects
-            .multi_get(transactions)?)
+            .multi_get(transactions)?
+            .into_iter()
+            .map(|e_opt| e_opt.map(|e| e.into()))
+            .collect())
     }
 }
 

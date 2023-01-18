@@ -1381,7 +1381,7 @@ pub async fn send_and_confirm_transaction_(
     if let Some(fullnode) = fullnode {
         fullnode.try_execute_for_test(&certificate).await?;
     }
-    Ok(result)
+    Ok(result.into_inner())
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -1847,7 +1847,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         )
         .await
         .unwrap();
-    signed_effects.into_data().status.unwrap();
+    signed_effects.into_message().status.unwrap();
     let account = authority_state
         .get_object(&object_id)
         .await
@@ -1904,7 +1904,7 @@ async fn test_handle_confirmation_transaction_ok() {
         )
         .await
         .unwrap();
-    signed_effects.into_data().status.unwrap();
+    signed_effects.into_message().status.unwrap();
     // Key check: the ownership has changed
 
     let new_account = authority_state
@@ -2270,7 +2270,7 @@ async fn test_move_call_insufficient_gas() {
         )
         .await
         .unwrap()
-        .into_data();
+        .into_message();
     let gas_used = effects.gas_used.gas_used();
 
     let obj_ref = authority_state
@@ -2671,8 +2671,8 @@ async fn test_idempotent_reversed_confirmation() {
         .await;
     assert!(result2.is_ok());
     assert_eq!(
-        result1.unwrap().into_data(),
-        result2.unwrap().signed_effects.unwrap().into_data()
+        result1.unwrap().into_message(),
+        result2.unwrap().signed_effects.unwrap().into_message()
     );
 }
 
@@ -2718,7 +2718,7 @@ async fn test_transfer_sui_no_amount() {
         .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
-    let effects = signed_effects.into_data();
+    let effects = signed_effects.into_message();
     // Check that the transaction was successful, and the gas object is the only mutated object,
     // and got transferred. Also check on its version and new balance.
     assert!(effects.status.is_ok());
@@ -2762,7 +2762,7 @@ async fn test_transfer_sui_with_amount() {
         .execute_certificate(&certificate, &authority_state.epoch_store_for_testing())
         .await
         .unwrap();
-    let effects = signed_effects.into_data();
+    let effects = signed_effects.into_message();
     // Check that the transaction was successful, the gas object remains in the original owner,
     // and an amount is split out and send to the recipient.
     assert!(effects.status.is_ok());
@@ -2885,7 +2885,7 @@ async fn test_store_revert_wrap_move_call() {
         .execute_certificate(&wrap_cert, &authority_state.epoch_store_for_testing())
         .await
         .unwrap()
-        .into_data();
+        .into_message();
 
     assert!(wrap_effects.status.is_ok());
     assert_eq!(wrap_effects.created.len(), 1);
@@ -2970,7 +2970,7 @@ async fn test_store_revert_unwrap_move_call() {
         .execute_certificate(&unwrap_cert, &authority_state.epoch_store_for_testing())
         .await
         .unwrap()
-        .into_data();
+        .into_message();
 
     assert!(unwrap_effects.status.is_ok());
     assert_eq!(unwrap_effects.deleted.len(), 1);
@@ -3052,7 +3052,7 @@ async fn test_store_get_dynamic_object() {
         .try_execute_for_test(&add_cert)
         .await
         .unwrap()
-        .into_data();
+        .into_message();
 
     assert!(add_effects.status.is_ok());
     assert_eq!(add_effects.created.len(), 1);
@@ -3123,7 +3123,7 @@ async fn test_store_get_dynamic_field() {
         .try_execute_for_test(&add_cert)
         .await
         .unwrap()
-        .into_data();
+        .into_message();
 
     assert!(add_effects.status.is_ok());
     assert_eq!(add_effects.created.len(), 1);
@@ -3195,7 +3195,7 @@ async fn test_store_revert_add_ofield() {
         .execute_certificate(&add_cert, &authority_state.epoch_store_for_testing())
         .await
         .unwrap()
-        .into_data();
+        .into_message();
 
     assert!(add_effects.status.is_ok());
     assert_eq!(add_effects.created.len(), 1);
@@ -3308,7 +3308,7 @@ async fn test_store_revert_remove_ofield() {
         )
         .await
         .unwrap()
-        .into_data();
+        .into_message();
 
     assert!(remove_effects.status.is_ok());
     let outer_v2 = find_by_id(&remove_effects.mutated, outer_v0.0).unwrap();
@@ -4011,12 +4011,13 @@ async fn test_consensus_message_processed() {
         let effects2 = if send_first && rng.gen_bool(0.5) {
             authority2.try_execute_for_test(&certificate).await.unwrap()
         } else {
+            let epoch_store = authority2.epoch_store_for_testing();
+            epoch_store
+                .acquire_shared_locks_from_effects(&certificate, &effects1, authority2.db())
+                .await
+                .unwrap();
             authority2
-                .execute_certificate_with_effects(
-                    &certificate,
-                    &effects1,
-                    &authority2.epoch_store_for_testing(),
-                )
+                .try_execute_immediately(&certificate, &epoch_store)
                 .await
                 .unwrap();
             authority2
@@ -4026,6 +4027,7 @@ async fn test_consensus_message_processed() {
                 .get(transaction_digest)
                 .unwrap()
                 .unwrap()
+                .into()
         };
 
         assert_eq!(effects1.data(), effects2.data());

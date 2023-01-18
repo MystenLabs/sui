@@ -261,7 +261,7 @@ where
         let _guard = metrics.local_execution_latency.start_timer();
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            validator_state.execute_certificate_with_effects(
+            validator_state.fullnode_execute_certificate_with_effects(
                 tx_cert,
                 effects_cert,
                 // TODO: Check whether it's safe to call epoch_store here.

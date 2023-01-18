@@ -249,7 +249,7 @@ pub async fn do_cert_with_shared_objects(
         .unwrap()
         .pop()
         .unwrap()
-        .into_data()
+        .into_message()
 }
 
 async fn execute_shared_on_first_three_authorities(

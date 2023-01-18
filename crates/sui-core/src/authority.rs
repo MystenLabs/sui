@@ -124,7 +124,7 @@ pub(crate) mod authority_store;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> =
-    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>;
+    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, TrustedSignedTransactionEffects)>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -549,12 +549,9 @@ impl AuthorityState {
     /// Executes a certificate that's known to have correct effects.
     /// For such certificate, we don't have to wait for consensus to set shared object
     /// locks because we already know the shared object versions based on the effects.
-    /// This function can be called either by a fullnode after seeing a quorum of signed effects,
-    /// or by a validator after seeing the certificate included by a certified checkpoint.
-    /// TODO: down the road, we may want to execute a shared object tx on a validator when f+1
-    /// validators have executed it.
+    /// This function can be called by a fullnode only.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate_with_effects<S>(
+    pub async fn fullnode_execute_certificate_with_effects(
         &self,
         certificate: &VerifiedCertificate,
         // NOTE: the caller of this must promise to wait until it
@@ -563,10 +560,10 @@ impl AuthorityState {
         // digests matching this TransactionEffectsEnvelope, before calling
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
-        // TODO: allow CertifiedTransactionEffects only
-        effects: &TransactionEffectsEnvelope<S>,
+        effects: &VerifiedCertifiedTransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        assert!(self.is_fullnode());
         let _metrics_guard = self
             .metrics
             .execute_certificate_with_effects_latency
@@ -598,7 +595,8 @@ impl AuthorityState {
             ))
             .await?
             .pop()
-            .expect("notify_read_effects should return exactly 1 element");
+            .expect("notify_read_effects should return exactly 1 element")
+            .into_inner();
 
         let observed_effects_digest = observed_effects.digest();
         if observed_effects_digest != expected_effects_digest {
@@ -619,7 +617,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SignedTransactionEffects> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate");
@@ -655,7 +653,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SignedTransactionEffects> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
         debug!(?tx_digest, "execute_certificate_internal");
@@ -682,7 +680,7 @@ impl AuthorityState {
     pub async fn try_execute_for_test(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<SignedTransactionEffects> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         self.try_execute_immediately(certificate, &self.epoch_store_for_testing())
             .await
     }
@@ -690,7 +688,7 @@ impl AuthorityState {
     pub async fn notify_read_effects(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<SignedTransactionEffects> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let tx_digest = *certificate.digest();
         Ok(self
             .database
@@ -768,7 +766,7 @@ impl AuthorityState {
         tx_guard: CertTxGuard<'_>,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SignedTransactionEffects> {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -811,16 +809,17 @@ impl AuthorityState {
         if let Some((inner_temporary_storage, signed_effects)) =
             epoch_store.wal().get_execution_output(&digest)?
         {
-            return self
-                .commit_cert_and_notify(
-                    certificate,
-                    inner_temporary_storage,
-                    signed_effects,
-                    tx_guard,
-                    execution_guard,
-                    epoch_store,
-                )
-                .await;
+            let signed_effects = signed_effects.into();
+            self.commit_cert_and_notify(
+                certificate,
+                inner_temporary_storage,
+                &signed_effects,
+                tx_guard,
+                execution_guard,
+                epoch_store,
+            )
+            .await?;
+            return Ok(signed_effects);
         }
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
@@ -845,7 +844,10 @@ impl AuthorityState {
         // would be more difficult in the alternative.
         epoch_store.wal().write_execution_output(
             &digest,
-            (inner_temporary_store.clone(), signed_effects.clone()),
+            (
+                inner_temporary_store.clone(),
+                signed_effects.clone().serializable(),
+            ),
         )?;
 
         // Insert an await in between write_execution_output and commit so that tests can observe
@@ -856,26 +858,27 @@ impl AuthorityState {
         self.commit_cert_and_notify(
             certificate,
             inner_temporary_store,
-            signed_effects,
+            &signed_effects,
             tx_guard,
             execution_guard,
             epoch_store,
         )
-        .await
+        .await?;
+        Ok(signed_effects)
     }
 
     async fn commit_cert_and_notify(
         &self,
         certificate: &VerifiedCertificate,
         inner_temporary_store: InnerTemporaryStore,
-        signed_effects: SignedTransactionEffects,
+        signed_effects: &VerifiedSignedTransactionEffects,
         tx_guard: CertTxGuard<'_>,
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<SignedTransactionEffects> {
+    ) -> SuiResult {
         let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = signed_effects.data().shared_objects.len();
+        let shared_object_count = signed_effects.inner().data().shared_objects.len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
@@ -885,7 +888,7 @@ impl AuthorityState {
             .map(|(_, ((id, seq, _), _, _))| ObjectKey(*id, *seq))
             .collect();
 
-        self.commit_certificate(inner_temporary_store, certificate, &signed_effects)
+        self.commit_certificate(inner_temporary_store, certificate, signed_effects)
             .await?;
 
         // Notifies transaction manager about available input objects. This allows the transaction
@@ -927,7 +930,7 @@ impl AuthorityState {
             .batch_size
             .observe(certificate.data().intent_message.value.kind.batch_size() as f64);
 
-        Ok(signed_effects)
+        Ok(())
     }
 
     /// prepare_certificate validates the transaction input, and executes the certificate,
@@ -944,7 +947,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
+    ) -> SuiResult<(InnerTemporaryStore, VerifiedSignedTransactionEffects)> {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
         let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
             &self.database,
@@ -998,9 +1001,9 @@ impl AuthorityState {
                 epoch_store.epoch(),
             );
 
-        // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects =
-            SignedTransactionEffects::new(epoch_store.epoch(), effects, &*self.secret, self.name);
+        let signed_effects = VerifiedSignedTransactionEffects::new_unchecked(
+            SignedTransactionEffects::new(epoch_store.epoch(), effects, &*self.secret, self.name),
+        );
         Ok((inner_temp_store, signed_effects))
     }
 
@@ -1344,7 +1347,7 @@ impl AuthorityState {
             self.database.get_signed_effects(digest)?,
         );
         let (cert, effects) = match info {
-            (Some(cert), Some(effects)) => (cert, effects),
+            (Some(cert), Some(effects)) => (cert, effects.into_inner()),
             _ => {
                 return Err(SuiError::CertificateNotfound {
                     certificate_digest: *digest,
@@ -2295,7 +2298,7 @@ impl AuthorityState {
         &self,
         cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<SignedTransactionEffects>> {
+    ) -> SuiResult<Option<VerifiedSignedTransactionEffects>> {
         let effects = self.database.get_signed_effects(transaction_digest)?;
         // If the transaction was executed in previous epochs, the validator will
         // re-sign the effects with new current epoch so that a client is always able to
@@ -2326,18 +2329,19 @@ impl AuthorityState {
         // the authority's signature, as well as to identify in which epoch the transaction was
         // executed.
         Ok(effects.map(|effects| {
+            let effects: VerifiedSignedTransactionEffects = effects.into();
             if effects.epoch() < cur_epoch {
                 debug!(
                     effects_epoch=?effects.epoch(),
                     ?cur_epoch,
                     "Re-signing the effects with the current epoch"
                 );
-                SignedTransactionEffects::new(
+                VerifiedSignedTransactionEffects::new_unchecked(SignedTransactionEffects::new(
                     cur_epoch,
-                    effects.into_data(),
+                    effects.into_message(),
                     &*self.secret,
                     self.name,
-                )
+                ))
             } else {
                 effects
             }
@@ -2398,12 +2402,12 @@ impl AuthorityState {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
-        signed_effects: &SignedTransactionEffects,
+        signed_effects: &VerifiedSignedTransactionEffects,
     ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
         let digest = certificate.digest();
-        let effects_digest = &signed_effects.digest();
+        let effects_digest = signed_effects.inner().digest();
         self.database
             .update_state(
                 inner_temporary_store,

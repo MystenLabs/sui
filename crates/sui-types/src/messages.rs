@@ -1067,11 +1067,6 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 }
 
-/// A transaction that is signed by a sender but not yet by an authority.
-pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
-pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
-pub type TrustedTransction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
-
 impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
@@ -1143,10 +1138,6 @@ impl VerifiedTransaction {
     }
 }
 
-/// A transaction that is signed by a sender and also by an authority.
-pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
-pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
-
 impl VerifiedSignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
@@ -1163,6 +1154,14 @@ impl VerifiedSignedTransaction {
         ))
     }
 }
+
+/// A transaction that is signed by a sender but not yet by an authority.
+pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
+pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+
+/// A transaction that is signed by a sender and also by an authority.
+pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
+pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
@@ -1321,22 +1320,29 @@ pub struct HandleCertificateResponse {
 
 #[derive(Clone, Debug)]
 pub struct VerifiedHandleCertificateResponse {
-    pub signed_effects: SignedTransactionEffects,
+    pub signed_effects: VerifiedSignedTransactionEffects,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
+pub struct TransactionInfoResponse<
+    TxnT = SignedTransaction,
+    CertT = CertifiedTransaction,
+    EffectsT = SignedTransactionEffects,
+> {
     // The signed transaction response to handle_transaction
     pub signed_transaction: Option<TxnT>,
     // The certificate in case one is available
     pub certified_transaction: Option<CertT>,
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
-    pub signed_effects: Option<SignedTransactionEffects>,
+    pub signed_effects: Option<EffectsT>,
 }
 
-pub type VerifiedTransactionInfoResponse =
-    TransactionInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
+pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
+    VerifiedSignedTransaction,
+    VerifiedCertificate,
+    VerifiedSignedTransactionEffects,
+>;
 
 impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
     fn from(v: VerifiedTransactionInfoResponse) -> Self {
@@ -1348,6 +1354,7 @@ impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
 
         let certified_transaction = certified_transaction.map(|c| c.into_inner());
         let signed_transaction = signed_transaction.map(|c| c.into_inner());
+        let signed_effects = signed_effects.map(|s| s.into_inner());
         TransactionInfoResponse {
             signed_transaction,
             certified_transaction,
@@ -2052,6 +2059,7 @@ pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
+pub type TrustedSignedTransactionEffects = TrustedEnvelope<TransactionEffects, AuthoritySignInfo>;
 pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =

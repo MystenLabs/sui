@@ -66,7 +66,7 @@ pub struct AuthorityPerpetualTables {
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
+    pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
 
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
