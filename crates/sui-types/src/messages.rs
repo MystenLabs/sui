@@ -1067,10 +1067,6 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 }
 
-/// A transaction that is signed by a sender but not yet by an authority.
-pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
-pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
-
 impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
@@ -1142,10 +1138,6 @@ impl VerifiedTransaction {
     }
 }
 
-/// A transaction that is signed by a sender and also by an authority.
-pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
-pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
-
 impl VerifiedSignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
@@ -1163,13 +1155,19 @@ impl VerifiedSignedTransaction {
     }
 }
 
+/// A transaction that is signed by a sender but not yet by an authority.
+pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
+pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+
+/// A transaction that is signed by a sender and also by an authority.
+pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
+pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
+
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
-
-pub type TrustedEffects = TrustedEnvelope<TransactionEffects, AuthoritySignInfo>;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
@@ -2061,6 +2059,7 @@ pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
+pub type TrustedSignedTransactionEffects = TrustedEnvelope<TransactionEffects, AuthoritySignInfo>;
 pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEffects, S>;
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =

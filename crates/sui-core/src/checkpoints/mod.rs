@@ -1124,7 +1124,7 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
     use sui_types::crypto::Signature;
-    use sui_types::messages::{SignedTransactionEffects, TrustedEffects};
+    use sui_types::messages::{SignedTransactionEffects, TrustedSignedTransactionEffects};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -1142,7 +1142,7 @@ mod tests {
         let state =
             AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
 
-        let mut store = HashMap::<TransactionDigest, TrustedEffects>::new();
+        let mut store = HashMap::<TransactionDigest, TrustedSignedTransactionEffects>::new();
         store.insert(
             d(1),
             e(
@@ -1280,7 +1280,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionDigest, TrustedEffects> {
+    impl EffectsNotifyRead for HashMap<TransactionDigest, TrustedSignedTransactionEffects> {
         async fn notify_read_effects(
             &self,
             digests: Vec<TransactionDigest>,
@@ -1342,7 +1342,7 @@ mod tests {
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
         gas_used: GasCostSummary,
-    ) -> TrustedEffects {
+    ) -> TrustedSignedTransactionEffects {
         let effects = TransactionEffects {
             transaction_digest,
             dependencies,

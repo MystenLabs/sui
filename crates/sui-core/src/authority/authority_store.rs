@@ -143,7 +143,7 @@ impl AuthorityStore {
     pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TrustedEffects>> {
+    ) -> SuiResult<Option<TrustedSignedTransactionEffects>> {
         Ok(self
             .perpetual_tables
             .executed_effects
