@@ -104,29 +104,6 @@ fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTrans
     );
 }
 
-// Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
-fn compare_transaction_info_responses(
-    o1: &VerifiedTransactionInfoResponse,
-    o2: &VerifiedTransactionInfoResponse,
-) {
-    assert_eq!(o1.signed_transaction, o2.signed_transaction);
-    assert_eq!(o1.signed_effects, o2.signed_effects);
-    match (
-        o1.certified_transaction.as_ref(),
-        o2.certified_transaction.as_ref(),
-    ) {
-        (Some(cert1), Some(cert2)) => {
-            assert_eq!(cert1.digest(), cert2.digest());
-            assert_eq!(
-                cert1.auth_sig().signature.as_ref(),
-                cert2.auth_sig().signature.as_ref()
-            );
-        }
-        (None, None) => (),
-        _ => panic!("certificate structure between responses differs"),
-    }
-}
-
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
 async fn construct_shared_object_transaction_with_sequence_number(
@@ -1066,10 +1043,7 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(
-        account_info.signed_transaction.unwrap(),
-        pending_confirmation
-    );
+    assert_eq!(account_info.into_signed_for_testing(), pending_confirmation);
 
     // Check the final state of the locks
     let Some(envelope) = authority_state.get_transaction_lock(
@@ -1183,7 +1157,7 @@ async fn test_objected_owned_gas() {
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: VerifiedTransaction,
-) -> Result<SignedTransactionEffects, SuiError> {
+) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     send_and_confirm_transaction_(
         authority,
         None, /* no fullnode_key_pair */
@@ -1198,10 +1172,10 @@ pub async fn send_and_confirm_transaction_(
     fullnode: Option<&AuthorityState>,
     transaction: VerifiedTransaction,
     with_shared: bool, // transaction includes shared objects
-) -> Result<SignedTransactionEffects, SuiError> {
+) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let response = authority.handle_transaction(transaction.clone()).await?;
-    let vote = response.signed_transaction.unwrap().into_inner();
+    let vote = response.into_signed_for_testing();
 
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
@@ -1224,7 +1198,7 @@ pub async fn send_and_confirm_transaction_(
     if let Some(fullnode) = fullnode {
         fullnode.try_execute_for_test(&certificate).await?;
     }
-    Ok(result.into_inner())
+    Ok((certificate.into_inner(), result.into_inner()))
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -1285,7 +1259,8 @@ async fn test_publish_dependent_module_ok() {
         .is_none());
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
-        .unwrap();
+        .unwrap()
+        .1;
     signed_effects.into_data().status.unwrap();
 
     // check that the dependent module got published
@@ -1317,7 +1292,8 @@ async fn test_publish_module_no_dependencies_ok() {
     let _module_object_id = TxContext::new(&sender, transaction.digest(), 0).fresh_id();
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
-        .unwrap();
+        .unwrap()
+        .1;
     signed_effects.into_data().status.unwrap();
 }
 
@@ -1407,7 +1383,8 @@ async fn test_package_size_limit() {
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
-        .unwrap();
+        .unwrap()
+        .1;
     assert_eq!(
         signed_effects.status,
         ExecutionStatus::Failure {
@@ -1528,7 +1505,7 @@ async fn test_conflicting_transactions() {
             .unwrap();
 
         assert_eq!(
-            ok.signed_transaction.as_ref().unwrap().digest(),
+            ok.clone().into_signed_for_testing().digest(),
             object_info
                 .object_and_lock
                 .expect("object should exist")
@@ -1538,7 +1515,7 @@ async fn test_conflicting_transactions() {
         );
 
         assert_eq!(
-            ok.signed_transaction.as_ref().unwrap().digest(),
+            ok.into_signed_for_testing().digest(),
             gas_info
                 .object_and_lock
                 .expect("gas should exist")
@@ -1584,17 +1561,19 @@ async fn test_handle_transfer_transaction_double_spend() {
         gas_object.compute_object_reference(),
     );
 
-    let signed_transaction = authority_state
+    let signed_transaction: TransactionInfoResponse = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await
-        .unwrap();
+        .unwrap()
+        .into();
     // calls to handlers are idempotent -- returns the same.
-    let double_spend_signed_transaction = authority_state
+    let double_spend_signed_transaction: TransactionInfoResponse = authority_state
         .handle_transaction(transfer_transaction)
         .await
-        .unwrap();
+        .unwrap()
+        .into();
     // this is valid because our test authority should not change its certified transaction
-    compare_transaction_info_responses(&signed_transaction, &double_spend_signed_transaction);
+    assert_eq!(signed_transaction, double_spend_signed_transaction);
 }
 
 #[tokio::test]
@@ -1984,7 +1963,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         .await
         .unwrap();
 
-    assert_eq!(info.signed_effects.unwrap(), signed_effects);
+    assert_eq!(info.into_executed_for_testing().1, signed_effects);
 }
 
 #[tokio::test]
@@ -2145,7 +2124,8 @@ async fn test_move_call_insufficient_gas() {
     let tx_digest = *transaction.digest();
     let signed_effects = send_and_confirm_transaction(&authority_state, transaction)
         .await
-        .unwrap();
+        .unwrap()
+        .1;
     let effects = signed_effects.into_data();
     assert!(effects.status.is_err());
     let obj = authority_state
@@ -2516,7 +2496,11 @@ async fn test_idempotent_reversed_confirmation() {
     assert!(result2.is_ok());
     assert_eq!(
         result1.unwrap().into_message(),
-        result2.unwrap().signed_effects.unwrap().into_message()
+        result2
+            .unwrap()
+            .into_executed_for_testing()
+            .1
+            .into_message()
     );
 }
 
@@ -3504,7 +3488,9 @@ pub async fn call_move_(
 
     let transaction = to_sender_signed_transaction(data, sender_key);
     let signed_effects =
-        send_and_confirm_transaction_(authority, fullnode, transaction, with_shared).await?;
+        send_and_confirm_transaction_(authority, fullnode, transaction, with_shared)
+            .await?
+            .1;
     Ok(signed_effects.into_data())
 }
 
@@ -3649,7 +3635,7 @@ async fn make_test_transaction(
             .handle_transaction(transaction.clone())
             .await
             .unwrap();
-        let vote = response.signed_transaction.unwrap();
+        let vote = response.into_signed_for_testing();
         sigs.push(vote.auth_sig().clone());
         if let Ok(cert) = CertifiedTransaction::new(vote.into_message(), sigs.clone(), &committee) {
             return cert.verify(&committee).unwrap();

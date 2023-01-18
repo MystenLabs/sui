@@ -423,7 +423,8 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
             transaction_digest: digest,
         })
         .await?;
-    assert!(info.signed_effects.is_some());
+    // Check that it has been executed.
+    info.into_executed_for_testing();
 
     Ok(())
 }

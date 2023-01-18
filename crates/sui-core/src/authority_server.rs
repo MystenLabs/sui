@@ -255,7 +255,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::error_span!("validator_state_process_tx", ?tx_digest);
+        let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)
