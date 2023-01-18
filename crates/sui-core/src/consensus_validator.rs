@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use eyre::WrapErr;
+use eyre::{bail, WrapErr};
+use fastcrypto::hash::Hash;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
+use tracing::warn;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use narwhal_worker::TransactionValidator;
@@ -57,6 +59,10 @@ impl TransactionValidator for SuiTxValidator {
         for tx in txs.into_iter() {
             match tx.kind {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
+                    if certificate.epoch() != self.epoch_store.epoch() {
+                        warn!("Rejecting batch {:?} with an outdated certificate from epoch {}, current epoch {}, tx digest {:?}", b.digest(), certificate.epoch(), self.epoch_store.epoch(), certificate.digest());
+                        bail!("Batch contains certificate with invalid epoch");
+                    }
                     self.metrics.certificate_signatures_verified.inc();
                     certificate.data().verify()?;
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
