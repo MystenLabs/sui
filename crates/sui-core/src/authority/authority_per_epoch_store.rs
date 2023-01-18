@@ -63,6 +63,7 @@ use typed_store_derive::DBMapUtils;
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
+pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
 pub struct CertLockGuard(LockGuard);
 
@@ -234,7 +235,7 @@ impl AuthorityEpochTables {
     }
 
     pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {
-        parent_path.join(format!("epoch_{}", epoch))
+        parent_path.join(format!("{}{}", EPOCH_DB_PREFIX, epoch))
     }
 
     fn load_reconfig_state(&self) -> SuiResult<ReconfigState> {
@@ -304,6 +305,10 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
         })
+    }
+
+    pub fn get_parent_path(&self) -> PathBuf {
+        self.parent_path.clone()
     }
 
     pub fn new_at_next_epoch(&self, name: AuthorityName, new_committee: Committee) -> Arc<Self> {

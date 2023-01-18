@@ -64,6 +64,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -129,6 +131,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -194,6 +198,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -259,6 +265,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -324,6 +332,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -389,6 +399,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -454,6 +466,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 18446744073709551615
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
