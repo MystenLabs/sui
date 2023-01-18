@@ -321,11 +321,13 @@ async fn init_executor_test(
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
     let genesis = network_config.genesis;
-    let committee = genesis.committee().unwrap();
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     let keypair = network_config.validator_configs[0]
         .protocol_key_pair()
         .copy();
-    let state = AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
+    let state =
+        AuthorityState::new_for_testing(committee.committee().clone(), &keypair, None, &genesis)
+            .await;
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
@@ -334,7 +336,6 @@ async fn init_executor_test(
         store.clone(),
         state.clone(),
     );
-    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     (state, executor, checkpoint_sender, committee)
 }
 
