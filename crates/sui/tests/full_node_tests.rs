@@ -1035,7 +1035,7 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             .await
             .unwrap();
 
-        let SuiExecuteTransactionResponse::EffectsCert {
+        let SuiExecuteTransactionResponse {
             certificate,
             effects: _,
             confirmed_local_execution,
@@ -1075,7 +1075,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse::EffectsCert {
+    let SuiExecuteTransactionResponse {
         certificate,
         effects: _,
         confirmed_local_execution,
@@ -1100,7 +1100,7 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse::EffectsCert {
+    let SuiExecuteTransactionResponse {
         certificate,
         effects: _,
         confirmed_local_execution,
