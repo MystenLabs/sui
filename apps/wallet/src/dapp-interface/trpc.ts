@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import {
     type TRPCLink,
     TRPCClientError,
@@ -118,14 +121,4 @@ const link: TRPCLink<AnyRouter> = (runtime) => {
 
 export const trpc = createTRPCProxyClient<AppRouter>({
     links: [link],
-});
-
-trpc.ping.query().then(console.log, console.error);
-trpc.onPing.subscribe(undefined, {
-    onError(err) {
-        console.log(err);
-    },
-    onData(data) {
-        console.log(data);
-    },
 });

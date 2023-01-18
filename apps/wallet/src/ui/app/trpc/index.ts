@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { createTRPCReact } from '@trpc/react-query';
 
 import { backgroundLink } from './link';

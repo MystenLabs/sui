@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { initTRPC } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 
