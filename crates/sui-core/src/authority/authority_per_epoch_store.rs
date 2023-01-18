@@ -131,17 +131,6 @@ pub struct AuthorityEpochTables {
     assigned_shared_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
     next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
 
-    /// Certificates that have been received from clients or received from consensus, but not yet
-    /// executed. Entries are cleared after execution.
-    /// This table is critical for crash recovery, because usually the consensus output progress
-    /// is updated after a certificate is committed into this table.
-    ///
-    /// If theory, this table may be superseded by storing consensus and checkpoint execution
-    /// progress. But it is more complex, because it would be necessary to track inflight
-    /// executions not ordered by indices. For now, tracking inflight certificates as a map
-    /// seems easier.
-    pending_certificates: DBMap<TransactionDigest, TrustedCertificate>,
-
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
     /// consensus. But, we may also be processing transactions from checkpoints, so we need to
@@ -425,32 +414,6 @@ impl AuthorityPerEpochStore {
         Ok(roots)
     }
 
-    /// `pending_certificates` table related methods. Should only be used from TransactionManager.
-
-    /// Gets one certificate pending execution.
-    pub fn get_pending_certificate(
-        &self,
-        tx: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, TypedStoreError> {
-        Ok(self.tables.pending_certificates.get(tx)?.map(|c| c.into()))
-    }
-
-    /// Gets all pending certificates. Used during recovery.
-    pub fn all_pending_certificates(&self) -> SuiResult<Vec<VerifiedCertificate>> {
-        Ok(self
-            .tables
-            .pending_certificates
-            .iter()
-            .map(|(_, cert)| cert.into())
-            .collect())
-    }
-
-    /// Deletes one pending certificate.
-    pub fn remove_pending_certificate(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables.pending_certificates.remove(digest)?;
-        Ok(())
-    }
-
     pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
         self.tables.get_all_pending_consensus_transactions()
     }
@@ -677,21 +640,6 @@ impl AuthorityPerEpochStore {
 
     pub fn pending_consensus_certificates(&self) -> HashSet<TransactionDigest> {
         self.pending_consensus_certificates.lock().clone()
-    }
-
-    /// Stores a list of pending certificates to be executed.
-    pub fn insert_pending_certificates(
-        &self,
-        certs: &[VerifiedCertificate],
-    ) -> Result<(), TypedStoreError> {
-        let batch = self.tables.pending_certificates.batch().insert_batch(
-            &self.tables.pending_certificates,
-            certs
-                .iter()
-                .map(|cert| (*cert.digest(), cert.clone().serializable())),
-        )?;
-        batch.write()?;
-        Ok(())
     }
 
     /// Check whether certificate was processed by consensus.
@@ -976,10 +924,6 @@ impl AuthorityPerEpochStore {
         let batch = batch.insert_batch(
             &self.tables.consensus_message_order,
             [(consensus_index.index, transaction_digest)],
-        )?;
-        let batch = batch.insert_batch(
-            &self.tables.pending_certificates,
-            [(*certificate.digest(), certificate.clone().serializable())],
         )?;
         // User signatures are written in the same batch as consensus certificate processed flag,
         // which means we won't attempt to insert this twice for the same tx digest

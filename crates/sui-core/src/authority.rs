@@ -1739,7 +1739,6 @@ impl AuthorityState {
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        epoch_store.insert_pending_certificates(&certs)?;
         self.transaction_manager.enqueue(certs, epoch_store)
     }
 

@@ -28,6 +28,11 @@ pub struct TransactionManager {
     inner: RwLock<Inner>,
 }
 
+struct PendingCertificate {
+    certificate: VerifiedCertificate,
+    missing: BTreeSet<ObjectKey>,
+}
+
 #[derive(Default)]
 struct Inner {
     // Current epoch of TransactionManager.
@@ -48,7 +53,7 @@ struct Inner {
     // executing_certificates.
 
     // Maps transactions to their missing input objects.
-    pending_certificates: HashMap<TransactionDigest, BTreeSet<ObjectKey>>,
+    pending_certificates: HashMap<TransactionDigest, PendingCertificate>,
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
 }
@@ -71,16 +76,12 @@ impl TransactionManager {
         tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
-        let transaction_manager = TransactionManager {
+        TransactionManager {
             authority_store,
             metrics,
             inner: RwLock::new(Inner::new(epoch_store.epoch())),
             tx_ready_certificates,
-        };
-        transaction_manager
-            .enqueue(epoch_store.all_pending_certificates().unwrap(), epoch_store)
-            .expect("Initialize TransactionManager with pending certificates failed.");
-        transaction_manager
+        }
     }
 
     /// Enqueues certificates into TransactionManager. Once all of the input objects are available
@@ -128,8 +129,6 @@ impl TransactionManager {
             }
             // skip already executed txes
             if self.authority_store.effects_exists(&digest)? {
-                // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_certificate(&digest);
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -186,7 +185,13 @@ impl TransactionManager {
             assert!(
                 inner
                     .pending_certificates
-                    .insert(digest, missing.into_iter().collect())
+                    .insert(
+                        digest,
+                        PendingCertificate {
+                            certificate: cert,
+                            missing: missing.into_iter().collect()
+                        }
+                    )
                     .is_none(),
                 "Duplicated pending certificate {:?}",
                 digest
@@ -213,7 +218,7 @@ impl TransactionManager {
         object_keys: Vec<ObjectKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        let mut ready_digests = Vec::new();
+        let mut ready_certs = Vec::new();
 
         {
             let inner = &mut self.inner.write();
@@ -232,16 +237,15 @@ impl TransactionManager {
                     // Clean up pending certificates table.
                     for digest in digests.iter() {
                         // Pending certificate must exist.
-                        let set = inner.pending_certificates.get_mut(digest).unwrap();
-                        assert!(set.remove(&object_key));
+                        let cert = inner.pending_certificates.get_mut(digest).unwrap();
+                        assert!(cert.missing.remove(&object_key));
                         // When a certificate has no missing input, it is ready to execute.
-                        if set.is_empty() {
+                        if cert.missing.is_empty() {
                             debug!(tx_digest = ?digest, "certificate ready");
-                            inner.pending_certificates.remove(digest).unwrap();
+                            ready_certs.push(inner.pending_certificates.remove(digest).unwrap());
                             assert!(inner.executing_certificates.insert(*digest));
-                            ready_digests.push(*digest);
                         } else {
-                            debug!(tx_digest = ?digest, missing = ?set, "Certificate waiting on missing inputs");
+                            debug!(tx_digest = ?digest, missing = ?cert.missing, "Certificate waiting on missing inputs");
                         }
                     }
                 } else {
@@ -261,26 +265,8 @@ impl TransactionManager {
                 .set(inner.executing_certificates.len() as i64);
         }
 
-        for digest in ready_digests.iter() {
-            // NOTE: failing and ignoring the certificate is fine, if it will be retried at a higher level.
-            // Otherwise, this has to crash.
-            let cert = match epoch_store.get_pending_certificate(digest) {
-                Ok(Some(cert)) => cert,
-                Ok(None) => {
-                    error!(tx_digest = ?digest,
-                        "Ready certificate not found in the pending table",
-                    );
-                    continue;
-                }
-                Err(e) => {
-                    error!(tx_digest = ?digest,
-                        "Failed to read pending table: {e}",
-                    );
-
-                    continue;
-                }
-            };
-            self.certificate_ready(cert);
+        for cert in ready_certs {
+            self.certificate_ready(cert.certificate);
         }
     }
 
@@ -301,7 +287,6 @@ impl TransactionManager {
                 .transaction_manager_num_executing_certificates
                 .set(inner.executing_certificates.len() as i64);
         }
-        let _ = epoch_store.remove_pending_certificate(digest);
     }
 
     /// Sends the ready certificate for execution.
