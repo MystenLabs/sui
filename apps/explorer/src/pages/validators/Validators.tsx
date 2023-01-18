@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ActiveValidator } from '@mysten/sui.js';
+import { is, SuiObject, type ActiveValidator, type ValidatorsFields } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -9,10 +9,7 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
-import {
-    VALIDATORS_OBJECT_ID,
-    type ValidatorsFields,
-} from '~/pages/validator/ValidatorDataTypes';
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
