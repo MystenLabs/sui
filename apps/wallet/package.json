@@ -150,7 +150,6 @@
         "stream-browserify": "^3.0.0",
         "tailwindcss": "^3.2.4",
         "throttle-debounce": "^5.0.0",
-        "trpc-chrome": "^1.0.0",
         "tweetnacl": "^1.0.3",
         "uuid": "^8.3.2",
         "webextension-polyfill": "^0.9.0",

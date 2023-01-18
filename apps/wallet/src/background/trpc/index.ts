@@ -1,7 +1,7 @@
 import { initTRPC } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 
-import { createHandler } from './utils/trpcHandler';
+import { createExtensionHandler } from './adapter';
 
 const t = initTRPC.create({
     isServer: false,
@@ -24,4 +24,6 @@ const appRouter = t.router({
 
 export type AppRouter = typeof appRouter;
 
-createHandler(appRouter);
+export function setupTRPC() {
+    createExtensionHandler({ router: appRouter });
+}

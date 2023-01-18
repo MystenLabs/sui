@@ -9,10 +9,9 @@ import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { isSessionStorageSupported } from './storage-utils';
+import { setupTRPC } from './trpc';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
-
-import './trpc';
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
     // Skip automatically opening the onboarding in end-to-end tests.
@@ -76,3 +75,5 @@ if (!isSessionStorageSupported()) {
         }
     });
 }
+
+setupTRPC();
