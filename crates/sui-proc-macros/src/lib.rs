@@ -159,16 +159,33 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
             #input
         }
     } else {
-        let fn_name = input.sig.ident.clone();
+        let fn_name = &input.sig.ident;
+        let sig = &input.sig;
+        let body = &input.block;
         quote! {
-            #[::core::prelude::v1::test]
-            #[ignore = "simulator-only test"]
-            fn #fn_name () {
-                unimplemented!("this test cannot run outside the simulator");
+            #[tokio::test]
+            #sig {
+                if std::env::var("SUI_SKIP_SIMTESTS").is_ok() {
+                    println!("not running test {} in `cargo test`: SUI_SKIP_SIMTESTS is set", stringify!(#fn_name));
 
-                // paste original function to silence un-used import errors.
-                #[allow(dead_code)]
-                #input
+                    struct Ret;
+
+                    impl Into<()> for Ret {
+                        fn into(self) -> () {
+                            ()
+                        }
+                    }
+
+                    impl<E> Into<Result<(), E>> for Ret {
+                        fn into(self) -> Result<(), E> {
+                            Ok(())
+                        }
+                    }
+
+                    return Ret.into();
+                }
+
+                #body
             }
         }
     };
