@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use crate::consensus_validator::SuiTxValidator;
+use crate::epoch::data_removal;
 use crate::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use bytes::Bytes;
 use fastcrypto::bls12381;
@@ -253,7 +253,7 @@ async fn test_remove_old_epoch_data() {
     fs::create_dir(path_100.clone()).unwrap();
 
     // With the current epoch of 100, remove old epochs
-    NarwhalManager::<SuiTxValidator>::remove_old_epoch_data(base_path.clone(), 100).await;
+    data_removal::remove_old_epoch_data(base_path.clone(), 100);
 
     // Now ensure the epoch directories older than 100 were removed
     let files = fs::read_dir(base_path_string).unwrap();
