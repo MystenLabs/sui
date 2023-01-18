@@ -3,6 +3,8 @@
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
+const APY_DECIMALS = 4;
+
 export function calculateAPY(validators: ActiveValidator, epoch: number) {
     const { sui_balance, starting_epoch, delegation_token_supply } =
         validators.fields.delegation_staking_pool.fields;
@@ -14,5 +16,5 @@ export function calculateAPY(validators: ActiveValidator, epoch: number) {
                 +delegation_token_supply.fields.value,
         365 / num_epochs_participated - 1
     );
-    return apy ? apy : 0;
+    return apy ? parseFloat(apy.toFixed(APY_DECIMALS)) : 0;
 }
