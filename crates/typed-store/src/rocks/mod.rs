@@ -334,6 +334,14 @@ impl RocksDB {
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         delegate_call!(self.flush())
     }
+
+    pub fn set_options_cf(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        opts: &[(&str, &str)],
+    ) -> Result<(), rocksdb::Error> {
+        delegate_call!(self.set_options_cf(cf, opts))
+    }
 }
 
 pub enum RocksDBBatch {
@@ -524,6 +532,10 @@ impl<K, V> DBMap<K, V> {
 
     pub fn iterator_cf(&self) -> RocksDBIter<'_> {
         self.rocksdb.iterator_cf(&self.cf(), IteratorMode::Start)
+    }
+
+    pub fn set_options(&self, opts: &[(&str, &str)]) -> Result<(), rocksdb::Error> {
+        self.rocksdb.set_options_cf(&self.cf(), opts)
     }
 
     fn get_int_property(
