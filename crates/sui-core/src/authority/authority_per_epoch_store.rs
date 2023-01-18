@@ -1460,6 +1460,11 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.poison_pill_transactions.insert(tx, &true)?)
     }
 
+    pub fn erase_poison_pill_tx(&self, tx: &TransactionDigest) -> SuiResult {
+        info!(tx_digest = ?tx, "erase_poison_pill_tx");
+        Ok(self.tables.poison_pill_transactions.remove(tx)?)
+    }
+
     pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics

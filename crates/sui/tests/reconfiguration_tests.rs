@@ -316,13 +316,56 @@ async fn test_reconfig_after_poison_pill() {
     // ensure we can make it to next epoch.
     trigger_reconfiguration(&authorities).await;
 
-    // In the new epoch, the tx is no longer marked poisoned, so we can executed it.
-    // (The assumption here is that the crashing bug would have been fixed before the new epoch).
+    // Cert did not make it in via a checkpoint.
+    authorities.iter().for_each(|handle| {
+        handle.with(|node| {
+            assert!(!node.state().is_tx_already_executed(cert.digest()).unwrap());
+        })
+    });
+
+    // Part 2: Test the same process but with only f (1) validator considering the tx to be
+    // poison. The other validators will proceed normally, and the bad validator can catch up as
+    // soon as it repairs whatever caused the tx to be poison.
+    // was not in a checkpoint.
+    authorities[0].with(|node| {
+        node.state()
+            .epoch_store_for_testing()
+            .record_poison_pill_tx(cert.digest())
+            .unwrap();
+    });
+
     net.committee.epoch = 1;
     let cert = net.process_transaction(tx.clone()).await.unwrap();
     net.process_certificate(cert.clone().into_inner())
         .await
         .unwrap();
+
+    // wait for the 3 good nodes to reach the new epoch.
+    close_epoch(&authorities[1..]).await;
+    wait_for_reconfig(&authorities[1..], 2).await;
+
+    // heal the bad node
+    authorities[0]
+        .with_async(|node| async {
+            let epoch_store = node.state().epoch_store_for_testing();
+            epoch_store.erase_poison_pill_tx(cert.digest()).unwrap();
+
+            // this would normally happen due to the validator restarting after applying a fix - we
+            // have to trigger this manually.
+            node.state()
+                .execute_certificate(&cert, &epoch_store)
+                .await
+                .unwrap();
+        })
+        .await;
+
+    wait_for_reconfig(&authorities, 2).await;
+
+    authorities.iter().for_each(|handle| {
+        handle.with(|node| {
+            assert!(node.state().is_tx_already_executed(cert.digest()).unwrap());
+        })
+    });
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -387,24 +430,34 @@ async fn test_validator_resign_effects() {
 }
 
 async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
+    let start = Instant::now();
+    let next_epoch = authorities[0].with(|node| node.state().epoch_store_for_testing().epoch()) + 1;
+    // Close epoch on 3 (2f+1) validators.
+    close_epoch(&authorities[1..]).await;
+    wait_for_reconfig(authorities, next_epoch).await;
+    info!("reconfiguration complete after {:?}", start.elapsed());
+}
+
+async fn close_epoch(authorities: &[SuiNodeHandle]) {
     info!("Starting reconfiguration");
     let start = Instant::now();
 
-    // Close epoch on 3 (2f+1) validators.
-    for handle in authorities.iter().skip(1) {
+    for handle in authorities.iter() {
         handle
             .with_async(|node| async { node.close_epoch().await.unwrap() })
             .await;
     }
     info!("close_epoch complete after {:?}", start.elapsed());
+}
 
+async fn wait_for_reconfig(authorities: &[SuiNodeHandle], next_epoch: u64) {
     // Wait for all nodes to reach the next epoch.
     let handles: Vec<_> = authorities
         .iter()
         .map(|handle| {
             handle.with_async(|node| async {
                 loop {
-                    if node.state().epoch_store_for_testing().epoch() == 1 {
+                    if node.state().epoch_store_for_testing().epoch() == next_epoch {
                         break;
                     }
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -416,6 +469,4 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
     timeout(Duration::from_secs(40), join_all(handles))
         .await
         .expect("timed out waiting for reconfiguration to complete");
-
-    info!("reconfiguration complete after {:?}", start.elapsed());
 }
