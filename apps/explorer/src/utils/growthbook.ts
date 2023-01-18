@@ -36,5 +36,4 @@ export async function loadFeatures() {
 
 export enum GROWTHBOOK_FEATURES {
     USE_TEST_NET_ENDPOINT = 'testnet-selection',
-    MODULE_VIEW_INVOKE_FUNCTIONS = 'explorer-module-view-invoke-functions',
 }

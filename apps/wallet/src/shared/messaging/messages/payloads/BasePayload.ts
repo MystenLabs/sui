@@ -21,7 +21,11 @@ export type PayloadType =
     | 'update-active-origin'
     | 'disconnect-app'
     | 'done'
-    | 'keyring';
+    | 'keyring'
+    | 'stake-request'
+    | 'wallet-status-changed'
+    | 'get-features'
+    | 'features-response';
 
 export interface BasePayload {
     type: PayloadType;

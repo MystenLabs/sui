@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_tests::{init_state, send_and_confirm_transaction};
+use crate::authority::authority_tests::{
+    init_state, init_state_with_committee, send_and_confirm_transaction,
+};
 use crate::authority::AuthorityState;
 use futures::future::join_all;
 use std::collections::HashMap;
@@ -74,10 +76,12 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 1200,
             gas_price: 1
@@ -102,10 +106,12 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 100 + 100 + 900,
             gas_price: 1
@@ -131,10 +137,12 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400,
             gas_budget: 801,
             gas_price: 1
@@ -159,11 +167,12 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         201,
     )
     .await;
-
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400 + 600,
             gas_budget: 400 + 400 + 201,
             gas_price: 1
@@ -325,10 +334,12 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
 
     let res = execute_pay_all_sui(vec![&coin1], recipient, sender, sender_key, 2000).await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2000,
             gas_price: 1
@@ -344,10 +355,12 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     let recipient = dbg_addr(2);
     let res = execute_pay_all_sui(vec![&coin1, &coin2], recipient, sender, sender_key, 2500).await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2500,
             gas_price: 1
@@ -441,7 +454,7 @@ async fn execute_pay_sui(
         recipients,
         amounts,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
 
@@ -458,22 +471,38 @@ async fn execute_pay_all_sui(
     sender_key: AccountKeyPair,
     gas_budget: u64,
 ) -> PaySuiTransactionExecutionResult {
-    let authority_state = init_state().await;
-    authority_state
-        .insert_genesis_objects_bulk_unsafe(&input_coin_objects)
-        .await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir)
+        .with_objects(
+            input_coin_objects
+                .clone()
+                .into_iter()
+                .map(ToOwned::to_owned),
+        )
+        .build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0].protocol_key_pair();
 
-    let input_coins: Vec<ObjectRef> = input_coin_objects
-        .iter()
-        .map(|obj| obj.compute_object_reference())
-        .collect();
+    let authority_state = init_state_with_committee(&genesis, keypair).await;
+
+    let mut input_coins = Vec::new();
+    for coin in input_coin_objects {
+        let id = coin.id();
+        let object_ref = genesis
+            .objects()
+            .iter()
+            .find(|o| o.id() == id)
+            .unwrap()
+            .compute_object_reference();
+        input_coins.push(object_ref);
+    }
     let gas_object_ref = input_coins[0];
 
     let kind = TransactionKind::Single(SingleTransactionKind::PayAllSui(PayAllSui {
         coins: input_coins,
         recipient,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
     PaySuiTransactionExecutionResult {

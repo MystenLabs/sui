@@ -10,7 +10,7 @@ use move_core_types::account_address::AccountAddress;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_symbol_pool::Symbol;
 use sui_sdk::apis::ReadApi;
-use sui_sdk::error::RpcError;
+use sui_sdk::error::Error;
 
 use sui_sdk::rpc_types::{SuiRawData, SuiRawMoveObject, SuiRawMovePackage};
 use sui_types::{base_types::ObjectID, error::SuiError};
@@ -21,7 +21,7 @@ mod tests;
 #[derive(Debug, Error)]
 pub enum SourceVerificationError {
     #[error("Could not read a dependency's on-chain object: {0:?}")]
-    DependencyObjectReadFailure(RpcError),
+    DependencyObjectReadFailure(Error),
 
     #[error("Dependency object does not exist or was deleted: {0:?}")]
     SuiObjectRefFailure(SuiError),

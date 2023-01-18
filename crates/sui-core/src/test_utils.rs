@@ -166,7 +166,7 @@ async fn init_genesis(
         .cloned()
         .collect();
     let pkg = Object::new_package(modules, TransactionDigest::genesis()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
+    let pkg_id = pkg.id();
     genesis_objects.push(pkg);
 
     let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
@@ -192,6 +192,9 @@ async fn init_genesis(
             p2p_address: sui_config::utils::new_udp_network_address(),
             narwhal_primary_address: sui_config::utils::new_udp_network_address(),
             narwhal_worker_address: sui_config::utils::new_udp_network_address(),
+            description: String::new(),
+            image_url: String::new(),
+            project_url: String::new(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);
@@ -201,6 +204,12 @@ async fn init_genesis(
         builder = builder.add_validator_signature(key);
     }
     let genesis = builder.build();
+    let pkg_ref = genesis
+        .objects()
+        .iter()
+        .find(|o| o.id() == pkg_id)
+        .unwrap()
+        .compute_object_reference();
     (genesis, key_pairs, pkg_ref)
 }
 
@@ -210,11 +219,12 @@ pub async fn init_local_authorities(
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
+    Genesis,
     ObjectRef,
 ) {
     let (genesis, key_pairs, pkg_ref) = init_genesis(committee_size, genesis_objects).await;
     let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
-    (aggregator, authorities, pkg_ref)
+    (aggregator, authorities, genesis, pkg_ref)
 }
 
 pub async fn init_local_authorities_with_genesis(
@@ -230,13 +240,7 @@ pub async fn init_local_authorities_with_genesis(
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
     for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new_with_objects(
-            committee.clone(),
-            secret,
-            genesis.objects().to_owned(),
-            genesis,
-        )
-        .await;
+        let client = LocalAuthorityClient::new(committee.clone(), secret, genesis).await;
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
@@ -267,7 +271,9 @@ pub fn make_transfer_sui_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        recipient, sender, amount, gas_object, MAX_GAS,
+    );
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -278,6 +284,8 @@ pub fn make_transfer_object_transaction(
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer_with_dummy_gas_price(
+        recipient, object_ref, sender, gas_object, MAX_GAS,
+    );
     to_sender_signed_transaction(data, keypair)
 }

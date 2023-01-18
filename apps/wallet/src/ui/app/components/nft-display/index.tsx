@@ -55,7 +55,11 @@ function NFTDisplayCard({
         OBJ_TYPE_MAX_LENGTH,
         OBJ_TYPE_MAX_PREFIX_LENGTH
     );
-    const displayTitle = originByteNft?.fields.name || name || objIDShort;
+
+    const displayTitle =
+        originByteNft?.fields.name ||
+        (typeof name === 'string' ? name : objIDShort);
+
     return (
         <div className={nftDisplayCardStyles({ animateHover, wideView })}>
             <NftImage

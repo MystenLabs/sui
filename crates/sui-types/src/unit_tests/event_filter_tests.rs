@@ -30,7 +30,7 @@ fn test_move_event_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 0,
         event_num: 0,
         event: move_event,
@@ -86,7 +86,7 @@ fn test_transfer_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 1,
         event_num: 0,
         event: move_event,
@@ -128,7 +128,7 @@ fn test_publish_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 0,
         event_num: 0,
         event: move_event,
@@ -167,7 +167,7 @@ fn test_delete_object_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         event_num: 0,
         seq_num: 0,
         event: move_event,
@@ -211,7 +211,7 @@ fn test_new_object_filter() {
     };
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 0,
         event_num: 0,
         event: move_event,
@@ -244,7 +244,7 @@ fn test_epoch_change_filter() {
     let move_event = Event::EpochChange(0);
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 1,
         event_num: 0,
         event: move_event,
@@ -260,7 +260,7 @@ fn test_checkpoint_filter() {
     let move_event = Event::Checkpoint(0);
     let envelope = EventEnvelope {
         timestamp: 0,
-        tx_digest: Some(TransactionDigest::random()),
+        tx_digest: TransactionDigest::random(),
         seq_num: 1,
         event_num: 0,
         event: move_event,

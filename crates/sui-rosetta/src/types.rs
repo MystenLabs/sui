@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Debug, Display, Formatter};
+use axum::Json;
+use std::fmt::Debug;
 use std::str::FromStr;
 
+use crate::errors::{Error, ErrorType};
+use crate::operations::Operations;
+use crate::SUI;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use fastcrypto::encoding::Hex;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
@@ -17,10 +20,7 @@ use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-
-use crate::errors::{Error, ErrorType};
-use crate::operations::Operation;
-use crate::SUI;
+use sui_types::messages::{PaySui, SingleTransactionKind, TransactionData, TransactionKind};
 
 pub type BlockHeight = u64;
 
@@ -106,125 +106,38 @@ pub type BlockHash = TransactionDigest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {
-    pub value: SignedValue,
+    #[serde(with = "str_format")]
+    pub value: i128,
     pub currency: Currency,
 }
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
-pub struct SignedValue {
-    negative: bool,
-    value: u128,
-}
-
-impl From<u64> for SignedValue {
-    fn from(value: u64) -> Self {
-        Self {
-            negative: false,
-            value: value as u128,
-        }
-    }
-}
-
-impl From<u128> for SignedValue {
-    fn from(value: u128) -> Self {
-        Self {
-            negative: false,
-            value,
-        }
-    }
-}
-
-impl From<i128> for SignedValue {
-    fn from(value: i128) -> Self {
-        Self {
-            negative: value.is_negative(),
-            value: value.unsigned_abs(),
-        }
-    }
-}
-
-impl From<i64> for SignedValue {
-    fn from(value: i64) -> Self {
-        Self {
-            negative: value.is_negative(),
-            value: value.unsigned_abs().into(),
-        }
-    }
-}
-
-impl SignedValue {
-    pub fn neg(v: u128) -> Self {
-        Self {
-            negative: true,
-            value: v,
-        }
-    }
-    pub fn is_negative(&self) -> bool {
-        self.negative
-    }
-
-    pub fn abs(&self) -> u128 {
-        self.value
-    }
-
-    pub fn add(&mut self, other: &Self) {
-        if self.negative ^ other.negative {
-            if self.value > other.value {
-                self.value -= other.value;
-            } else {
-                self.value = other.value - self.value;
-                self.negative = !self.negative;
-            }
-        } else {
-            self.value += other.value
-        }
-    }
-}
-
-impl Display for SignedValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.negative {
-            write!(f, "-")?;
-        }
-        write!(f, "{}", self.value)
-    }
-}
-
-impl Serialize for SignedValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.to_string().serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for SignedValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Ok(if let Some(value) = s.strip_prefix('-') {
-            SignedValue {
-                negative: true,
-                value: u128::from_str(value).map_err(D::Error::custom)?,
-            }
-        } else {
-            SignedValue {
-                negative: false,
-                value: u128::from_str(&s).map_err(D::Error::custom)?,
-            }
-        })
-    }
-}
-
 impl Amount {
-    pub fn new(value: SignedValue) -> Self {
+    pub fn new(value: i128) -> Self {
         Self {
             value,
             currency: SUI.clone(),
         }
+    }
+}
+
+mod str_format {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::str::FromStr;
+
+    pub fn serialize<S>(value: &i128, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        value.to_string().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<i128, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        i128::from_str(&s).map_err(Error::custom)
     }
 }
 
@@ -260,7 +173,7 @@ impl From<sui_sdk::rpc_types::Coin> for Coin {
                 },
             },
             amount: Amount {
-                value: SignedValue::from(coin.balance),
+                value: coin.balance as i128,
                 currency: SUI.clone(),
             },
         }
@@ -399,8 +312,7 @@ impl IntoResponse for ConstructionDeriveResponse {
 #[derive(Deserialize)]
 pub struct ConstructionPayloadsRequest {
     pub network_identifier: NetworkIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<ConstructionMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -410,11 +322,10 @@ pub struct ConstructionPayloadsRequest {
 #[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter, Eq, PartialEq)]
 pub enum OperationType {
     // Balance changing operations from TransactionEffect
-    GasSpent,
+    Gas,
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
-    GasBudget,
     // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
@@ -423,11 +334,11 @@ pub enum OperationType {
     Publish,
     MoveCall,
     EpochChange,
-    // Rosetta only transaction type, used for fabricating genesis transactions.
+    // Rosetta only transaction type, for fabricated genesis transactions.
     Genesis,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct OperationIdentifier {
     index: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -535,13 +446,9 @@ pub struct TransactionIdentifier {
 #[derive(Deserialize)]
 pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub max_fee: Vec<Amount>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub suggested_fee_multiplier: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -554,8 +461,7 @@ pub struct ConstructionPreprocessResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct MetadataOptions {
-    pub sender: SuiAddress,
-    pub amount: u128,
+    pub internal_operation: InternalOperation,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -587,13 +493,20 @@ pub struct ConstructionMetadataResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConstructionMetadata {
-    pub sender_coins: Vec<ObjectRef>,
+    pub tx_metadata: TransactionMetadata,
+    pub sender: SuiAddress,
+    pub gas: ObjectRef,
+    pub budget: u64,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
     }
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub enum TransactionMetadata {
+    PaySui(Vec<ObjectRef>),
 }
 
 #[derive(Deserialize)]
@@ -605,7 +518,7 @@ pub struct ConstructionParseRequest {
 
 #[derive(Serialize)]
 pub struct ConstructionParseResponse {
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     pub account_identifier_signers: Vec<AccountIdentifier>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
@@ -706,8 +619,8 @@ pub enum OperationStatus {
     Failure,
 }
 
-impl From<&SuiExecutionStatus> for OperationStatus {
-    fn from(es: &SuiExecutionStatus) -> Self {
+impl From<SuiExecutionStatus> for OperationStatus {
+    fn from(es: SuiExecutionStatus) -> Self {
         match es {
             SuiExecutionStatus::Success => OperationStatus::Success,
             SuiExecutionStatus::Failure { .. } => OperationStatus::Failure,
@@ -757,7 +670,7 @@ pub struct Block {
 #[derive(Serialize, Clone, Debug)]
 pub struct Transaction {
     pub transaction_identifier: TransactionIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related_transactions: Vec<RelatedTransaction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -823,23 +736,50 @@ impl IntoResponse for BlockTransactionResponse {
     }
 }
 
-#[derive(Default)]
-pub struct IndexCounter {
-    index: u64,
-}
-
-impl IndexCounter {
-    pub fn next_idx(&mut self) -> u64 {
-        let next = self.index;
-        self.index += 1;
-        next
-    }
-}
-
 #[derive(Serialize, Clone)]
 pub struct PrefundedAccount {
     pub privkey: String,
     pub account_identifier: AccountIdentifier,
     pub curve_type: CurveType,
     pub currency: Currency,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum InternalOperation {
+    PaySui {
+        sender: SuiAddress,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+    },
+}
+
+impl InternalOperation {
+    pub fn sender(&self) -> SuiAddress {
+        match self {
+            InternalOperation::PaySui { sender, .. } => *sender,
+        }
+    }
+
+    pub fn into_data(self, metadata: ConstructionMetadata) -> TransactionData {
+        let single_tx = match (self, metadata.tx_metadata) {
+            (
+                Self::PaySui {
+                    recipients,
+                    amounts,
+                    ..
+                },
+                TransactionMetadata::PaySui(coins),
+            ) => SingleTransactionKind::PaySui(PaySui {
+                coins,
+                recipients,
+                amounts,
+            }),
+        };
+        TransactionData::new_with_dummy_gas_price(
+            TransactionKind::Single(single_tx),
+            metadata.sender,
+            metadata.gas,
+            metadata.budget,
+        )
+    }
 }

@@ -5,11 +5,11 @@ import React, { useState, useCallback, useContext } from 'react';
 
 import { ReactComponent as SearchIcon } from '../../assets/search.svg';
 import { NetworkContext } from '../../context';
-import { navigateWithUnknown } from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
+import { navigateWithUnknown } from '~/utils/api/searchUtil';
 
 function Search() {
     const [input, setInput] = useState('');

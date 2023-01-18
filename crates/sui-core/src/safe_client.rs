@@ -10,8 +10,7 @@ use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-    CheckpointSequenceNumber,
+    CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
@@ -24,7 +23,7 @@ use tracing::{debug, error};
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
         $cond.tap_err(|err| {
-            if err.indicates_epoch_change() {
+            if err.individual_error_indicates_epoch_change() {
                 debug!(?err, authority=?$address, "Not a real client error");
             } else {
                 error!(?err, authority=?$address, $msg);
@@ -191,9 +190,9 @@ impl<C> SafeClient<C> {
     fn check_signed_effects(
         &self,
         digest: &TransactionDigest,
-        signed_effects: &SignedTransactionEffects,
+        signed_effects: SignedTransactionEffects,
         expected_effects_digest: Option<&TransactionEffectsDigest>,
-    ) -> SuiResult {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         // Check it has the right signer
         fp_ensure!(
             signed_effects.auth_sig().authority == self.address,
@@ -224,7 +223,7 @@ impl<C> SafeClient<C> {
             );
         }
         let committee = self.get_committee(&signed_effects.epoch())?;
-        signed_effects.verify_signature(&committee)
+        signed_effects.verify(&committee)
     }
 
     // Here we centralize all checks for transaction info responses
@@ -290,9 +289,12 @@ impl<C> SafeClient<C> {
             None => None,
         };
 
-        if let Some(signed_effects) = &signed_effects {
-            self.check_signed_effects(digest, signed_effects, effects_digest)?;
-        }
+        let signed_effects = match signed_effects {
+            Some(signed_effects) => {
+                Some(self.check_signed_effects(digest, signed_effects, effects_digest)?)
+            }
+            None => None,
+        };
 
         Ok(VerifiedTransactionInfoResponse {
             signed_transaction,
@@ -459,9 +461,8 @@ where
         digest: &TransactionDigest,
         response: HandleCertificateResponse,
     ) -> SuiResult<VerifiedHandleCertificateResponse> {
-        self.check_signed_effects(digest, &response.signed_effects, None)?;
         Ok(VerifiedHandleCertificateResponse {
-            signed_effects: response.signed_effects,
+            signed_effects: self.check_signed_effects(digest, response.signed_effects, None)?,
         })
     }
 
@@ -624,7 +625,7 @@ where
     fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
-        checkpoint: &Option<AuthenticatedCheckpoint>,
+        checkpoint: &Option<CertifiedCheckpointSummary>,
     ) -> SuiResult {
         let observed_seq = checkpoint.as_ref().map(|c| c.summary().sequence_number);
 
@@ -661,24 +662,20 @@ where
         response: &CheckpointResponse,
     ) -> SuiResult {
         // Verify response data was correct for request
-        match &request.request_type {
-            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
-                let CheckpointResponse::AuthenticatedCheckpoint {
-                    checkpoint,
-                    contents,
-                } = &response;
-                // Checks that the sequence number is correct.
-                self.verify_checkpoint_sequence(*seq, checkpoint)?;
-                self.verify_contents_exist(request.detail, checkpoint, contents)?;
-                // Verify signature.
-                match checkpoint {
-                    Some(c) => {
-                        let epoch_id = c.summary().epoch;
-                        c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
-                    }
-                    None => Ok(()),
-                }
+        let CheckpointResponse {
+            checkpoint,
+            contents,
+        } = &response;
+        // Checks that the sequence number is correct.
+        self.verify_checkpoint_sequence(request.sequence_number, checkpoint)?;
+        self.verify_contents_exist(request.request_content, checkpoint, contents)?;
+        // Verify signature.
+        match checkpoint {
+            Some(c) => {
+                let epoch_id = c.summary().epoch;
+                c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
             }
+            None => Ok(()),
         }
     }
 

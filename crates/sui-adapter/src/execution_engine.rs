@@ -11,7 +11,9 @@ use sui_types::crypto::sha3_hash;
 use tracing::{debug, instrument};
 
 use crate::adapter;
-use sui_protocol_constants::{MAX_TX_GAS, STORAGE_FUND_REINVEST_RATE};
+use sui_protocol_constants::{
+    MAX_TX_GAS, REWARD_SLASHING_RATE, REWARD_SLASHING_THRESHOLD_BPS, STORAGE_FUND_REINVEST_RATE,
+};
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
@@ -320,6 +322,8 @@ fn execution_loop<
                         CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
                         CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
                         CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_THRESHOLD_BPS).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
                     ],
                     gas_status.create_move_gas_status(),
                     tx_ctx,
@@ -459,6 +463,9 @@ fn debit_coins_and_transfer<S>(
     for (recipient, amount) in recipients.iter().zip(amounts) {
         let mut remaining_amount = *amount;
         loop {
+            if remaining_amount == 0 {
+                break; // nothing to pay
+            }
             // while remaining_amount != 0
             // guaranteed to be in-bounds because of the total > total_coins check above
             let coin = &mut coins[cur_coin_idx];
@@ -670,7 +677,7 @@ pub fn manual_execute_move_call_fake_txn_digest(
     sender: SuiAddress,
     move_call: MoveCall,
 ) -> TransactionDigest {
-    let txn_data = TransactionData::new(
+    let txn_data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Single(SingleTransactionKind::Call(move_call)),
         sender,
         FAKE_GAS_OBJECT,

@@ -6,6 +6,7 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::encoding::Base64;
+use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use move_core_types::identifier::Identifier;
 use rand::rngs::StdRng;
@@ -27,10 +28,11 @@ use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress, TransactionDigest,
 };
+use sui_types::crypto::AuthorityQuorumSignInfo;
 use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature,
+    get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, AuthoritySignature, Signature, SuiAuthorityStrongQuorumSignInfo,
 };
-use sui_types::crypto::{AuthorityQuorumSignInfo, SuiSignature};
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -71,7 +73,6 @@ impl RpcExampleProvider {
     pub fn examples(&mut self) -> BTreeMap<String, Vec<ExamplePairing>> {
         [
             self.batch_transaction_examples(),
-            self.execute_transaction_example(),
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_objects_owned_by_address(),
@@ -82,7 +83,7 @@ impl RpcExampleProvider {
             self.get_transaction_auth_signers(),
             self.get_transactions(),
             self.get_events(),
-            self.execute_transaction_serialized_sig_example(),
+            self.execute_transaction_example(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -113,7 +114,7 @@ impl RpcExampleProvider {
             }),
         ];
 
-        let data = TransactionData::new(
+        let data = TransactionData::new_with_dummy_gas_price(
             TransactionKind::Batch(vec![
                 SingleTransactionKind::Call(MoveCall {
                     package: (
@@ -168,41 +169,10 @@ impl RpcExampleProvider {
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signature, _, _, result, _) = self.get_transfer_data_response();
-
-        Examples::new(
-            "sui_executeTransaction",
-            vec![ExamplePairing::new(
-                "Execute an object transfer transaction",
-                vec![
-                    (
-                        "tx_bytes",
-                        json!(Base64::from_bytes(bcs::to_bytes(&data).unwrap().as_slice())),
-                    ),
-                    ("sig_scheme", json!(signature.scheme())),
-                    (
-                        "signature",
-                        json!(Base64::from_bytes(signature.signature_bytes())),
-                    ),
-                    (
-                        "pub_key",
-                        json!(Base64::from_bytes(signature.public_key_bytes())),
-                    ),
-                    (
-                        "request_type",
-                        json!(ExecuteTransactionRequestType::WaitForLocalExecution),
-                    ),
-                ],
-                json!(result),
-            )],
-        )
-    }
-
-    fn execute_transaction_serialized_sig_example(&mut self) -> Examples {
-        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_executeTransactionSerializedSig",
+            "sui_executeTransaction",
             vec![ExamplePairing::new(
                 "Execute an transaction with serialized signature",
                 vec![
@@ -463,7 +433,9 @@ impl RpcExampleProvider {
             ObjectDigest::new(self.rng.gen()),
         );
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_ref, 1000);
+        let data = TransactionData::new_transfer_with_dummy_gas_price(
+            recipient, object_ref, signer, gas_ref, 1000,
+        );
         let data1 = data.clone();
         let data2 = data.clone();
 
@@ -483,8 +455,8 @@ impl RpcExampleProvider {
         };
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),
-            tx_digest: Some(*tx_digest),
-            id: EventID::from((0, 0)),
+            tx_digest: *tx_digest,
+            id: EventID::from((*tx_digest, 0)),
             event: sui_event.clone(),
         }];
         let result = SuiTransactionResponse {
@@ -492,11 +464,16 @@ impl RpcExampleProvider {
                 transaction_digest: *tx_digest,
                 data: SuiTransactionData::try_from(data1).unwrap(),
                 tx_signature: signature.clone(),
-                auth_sign_info: AuthorityQuorumSignInfo {
+                auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&AuthorityQuorumSignInfo {
                     epoch: 0,
-                    signature: Default::default(),
+                    // We create a dummy signature since there is no such thing as a default valid
+                    // signature.
+                    signature: AggregateAuthoritySignature::aggregate(&vec![
+                        AuthoritySignature::default(),
+                    ])
+                    .unwrap(),
                     signers_map: Default::default(),
-                },
+                }),
             },
             effects: SuiTransactionEffects {
                 status: SuiExecutionStatus::Success,
@@ -537,9 +514,11 @@ impl RpcExampleProvider {
 
     fn get_events(&mut self) -> Examples {
         let (_, _, _, _, result, events) = self.get_transfer_data_response();
+        let tx_dig =
+            TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
         let page = EventPage {
             data: events.clone(),
-            next_cursor: Some((1000, 5).into()),
+            next_cursor: Some((tx_dig, 5).into()),
         };
         Examples::new(
             "sui_getEvents",
@@ -556,7 +535,7 @@ impl RpcExampleProvider {
                         "cursor",
                         json!(EventID {
                             event_seq: 10,
-                            tx_seq: 500
+                            tx_digest: result.certificate.transaction_digest
                         }),
                     ),
                     ("limit", json!(events.len())),

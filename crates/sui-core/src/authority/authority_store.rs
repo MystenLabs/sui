@@ -13,6 +13,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
+use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
@@ -38,7 +39,7 @@ pub struct AuthorityStore {
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
-    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
+    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, VerifiedSignedTransactionEffects>,
     _store_pruner: AuthorityStorePruner,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
@@ -111,6 +112,25 @@ impl AuthorityStore {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
+
+            // insert txn and effects of genesis
+            let transaction = genesis
+                .transaction()
+                .clone()
+                .verify(&genesis.committee().unwrap())
+                .unwrap();
+
+            store
+                .perpetual_tables
+                .certificates
+                .insert(transaction.digest(), transaction.serializable_ref())
+                .unwrap();
+
+            store
+                .perpetual_tables
+                .effects
+                .insert(&genesis.effects().digest(), genesis.effects())
+                .unwrap();
         }
 
         Ok(store)
@@ -123,7 +143,7 @@ impl AuthorityStore {
     pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<SignedTransactionEffects>> {
+    ) -> SuiResult<Option<TrustedSignedTransactionEffects>> {
         Ok(self
             .perpetual_tables
             .executed_effects
@@ -149,7 +169,7 @@ impl AuthorityStore {
             .perpetual_tables
             .executed_effects
             .get(transaction_digest)?
-            .map(|data| data.into_data()))
+            .map(|data| data.into_inner().into_data()))
     }
 
     /// Returns true if we have an effects structure for this transaction digest
@@ -158,6 +178,46 @@ impl AuthorityStore {
             .executed_effects
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
+    }
+
+    pub fn insert_executed_transactions(
+        &self,
+        digests: &[TransactionDigest],
+        epoch: EpochId,
+        sequence: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let batch = self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .batch();
+        let batch = batch.insert_batch(
+            &self.perpetual_tables.executed_transactions_to_checkpoint,
+            digests.iter().map(|d| (*d, (epoch, sequence))),
+        )?;
+        batch.write()?;
+        debug!("Transactions {digests:?} finalized at checkpoint {sequence} epoch {epoch}");
+        Ok(())
+    }
+
+    pub fn is_transaction_executed_in_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .contains_key(digest)?)
+    }
+
+    pub fn transaction_executed_in_epoch(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<EpochId>> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .get(digest)?
+            .map(|(epoch, _)| epoch))
     }
 
     /// Returns true if there are no objects in the database
@@ -216,7 +276,7 @@ impl AuthorityStore {
             .contains_key(&ObjectKey(*object_id, version))?)
     }
 
-    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.perpetual_tables.get_object(object_id)
     }
@@ -230,6 +290,7 @@ impl AuthorityStore {
         Ok(result)
     }
 
+    // Transaction input errors should be aggregated in TransactionInputObjectsErrors
     pub fn check_input_objects(
         &self,
         objects: &[InputObjectKind],
@@ -457,7 +518,7 @@ impl AuthorityStore {
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
     /// This is used to insert genesis objects
-    pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
@@ -493,10 +554,8 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// This function is used by the bench.rs script, and should not be used in other contexts
-    /// In particular it does not check the old locks before inserting new ones, so the objects
-    /// must be new.
-    pub async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
+    /// This function should only be used for initializing genesis and should remain private.
+    async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -548,7 +607,7 @@ impl AuthorityStore {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
-        effects: &SignedTransactionEffects,
+        effects: &VerifiedSignedTransactionEffects,
         effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
         // Extract the new state from the execution
@@ -579,7 +638,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects)],
+                [(transaction_digest, effects.serializable_ref())],
             )?
             .insert_batch(
                 &self.perpetual_tables.effects,
@@ -1233,18 +1292,21 @@ pub trait EffectsStore {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>>;
 }
 
 impl EffectsStore for Arc<AuthorityStore> {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
         Ok(self
             .perpetual_tables
             .executed_effects
-            .multi_get(transactions)?)
+            .multi_get(transactions)?
+            .into_iter()
+            .map(|e_opt| e_opt.map(|e| e.into()))
+            .collect())
     }
 }
 

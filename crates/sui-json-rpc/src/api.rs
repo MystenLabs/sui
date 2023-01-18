@@ -23,7 +23,6 @@ use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::SignatureScheme;
 use sui_types::event::EventID;
 use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
@@ -190,7 +189,12 @@ pub trait RpcFullNodeReadApi {
     /// Return dev-inpsect results of the transaction, including both the transaction
     /// effects and return values of the transaction.
     #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults>;
+    async fn dev_inspect_transaction(
+        &self,
+        tx_bytes: Base64,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults>;
 
     /// Similar to `dev_inspect_transaction` but do not require gas object and budget
     #[method(name = "devInspectMoveCall")]
@@ -208,6 +212,8 @@ pub trait RpcFullNodeReadApi {
         type_arguments: Vec<SuiTypeTag>,
         /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
         arguments: Vec<SuiJsonValue>,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
@@ -268,7 +274,7 @@ pub trait RpcFullNodeReadApi {
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
@@ -333,6 +339,10 @@ pub trait GovernanceReadApi {
     /// Return [SuiSystemState]
     #[method(name = "getSuiSystemState")]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
+
+    /// Return the reference gas price for the network
+    #[method(name = "getReferenceGasPrice")]
+    async fn get_reference_gas_price(&self) -> RpcResult<u64>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
@@ -644,7 +654,7 @@ pub trait EventReadApi {
         cursor: Option<EventID>,
         /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage>;
 }
@@ -667,13 +677,9 @@ pub trait TransactionExecutionApi {
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
-        /// Flag of the signature scheme that is used.
-        sig_scheme: SignatureScheme,
-        /// Signature committed to the intent message of the transaction data, as base-64 encoded string.
+        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signature: Base64,
-        /// Signer's public key, as base-64 encoded string.
-        pub_key: Base64,
-        /// The request type.
+        /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
 

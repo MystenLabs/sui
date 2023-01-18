@@ -11,9 +11,11 @@ use crate::{
 };
 use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
+use anemo_tower::set_header::SetResponseHeaderLayer;
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
+    set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
@@ -22,6 +24,7 @@ use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
+use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
@@ -151,6 +154,8 @@ impl Worker {
             .unwrap();
         let addr = network::multiaddr_to_address(&address).unwrap();
 
+        let epoch_string: String = committee.load().epoch.to_string();
+
         // Set up anemo Network.
         let our_primary_peer_id = committee
             .load()
@@ -162,9 +167,16 @@ impl Worker {
             // Add an Authorization Layer to ensure that we only service requests from our primary
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new([
                 our_primary_peer_id,
-            ])));
+            ])))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )));
+
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )))
             .merge(primary_to_worker_router);
 
         let service = ServiceBuilder::new()
@@ -177,6 +189,10 @@ impl Worker {
                 inbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetResponseHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string.clone(),
+            ))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
@@ -189,6 +205,10 @@ impl Worker {
                 outbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string,
+            ))
             .into_inner();
 
         let anemo_config = {
@@ -197,9 +217,14 @@ impl Worker {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
+            // Set a default size limit of 8 MiB for all RPCs
+            // TODO: remove this and revert to default anemo max_frame_size once size
+            // limits are fully implemented on narwhal data structures.
+            config.max_frame_size = Some(8 << 20);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
+            config.shutdown_idle_timeout_ms = Some(1_000);
             config
         };
 
@@ -442,7 +467,6 @@ impl Worker {
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
             shutdown_receivers.pop().unwrap(),

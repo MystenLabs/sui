@@ -21,7 +21,6 @@ use sui_types::{
         TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    object::Object,
 };
 use sui_types::{error::SuiResult, messages::HandleCertificateResponse};
 
@@ -135,21 +134,6 @@ impl LocalAuthorityClient {
         }
     }
 
-    pub async fn new_with_objects(
-        committee: Committee,
-        secret: AuthorityKeyPair,
-        objects: Vec<Object>,
-        genesis: &Genesis,
-    ) -> Self {
-        let client = Self::new(committee, secret, genesis).await;
-
-        for object in objects {
-            client.state.insert_genesis_object(object).await;
-        }
-
-        client
-    }
-
     pub fn new_from_authority(state: Arc<AuthorityState>) -> Self {
         Self {
             state,
@@ -180,7 +164,8 @@ impl LocalAuthorityClient {
                         .try_execute_immediately(&certificate, &epoch_store)
                         .await?
                 }
-            };
+            }
+            .into_inner();
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),

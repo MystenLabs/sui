@@ -8,6 +8,7 @@ Basic math for nicer programmability
 
 -  [Function `max`](#0x2_math_max)
 -  [Function `min`](#0x2_math_min)
+-  [Function `diff`](#0x2_math_diff)
 -  [Function `pow`](#0x2_math_pow)
 -  [Function `sqrt`](#0x2_math_sqrt)
 -  [Function `sqrt_u128`](#0x2_math_sqrt_u128)
@@ -67,6 +68,35 @@ Return the smaller of <code>x</code> and <code>y</code>
         x
     } <b>else</b> {
         y
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_math_diff"></a>
+
+## Function `diff`
+
+Return the absolute value of x - y
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64 {
+    <b>if</b> (x &gt; y) {
+        x - y
+    } <b>else</b> {
+        y - x
     }
 }
 </code></pre>

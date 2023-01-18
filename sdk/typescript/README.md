@@ -302,11 +302,9 @@ const compiledModules = JSON.parse(
     { encoding: 'utf-8' }
   )
 );
-const modulesInBytes = compiledModules.map((m) =>
-  Array.from(new Base64DataBuffer(m).getData())
-);
+
 const publishTxn = await signer.publish({
-  compiledModules: modulesInBytes,
+  compiledModules: compiledModules,
   gasBudget: 10000,
 });
 console.log('publishTxn', publishTxn);

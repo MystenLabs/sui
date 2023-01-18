@@ -276,24 +276,24 @@ impl CheckpointExecutorEventLoop {
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((checkpoint, next_committee))) = pending.next() => {
+                    // Ensure that we are not skipping checkpoints at any point
+                    if let Some(prev_highest) = self.checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap() {
+                        assert_eq!(prev_highest + 1, checkpoint.sequence_number());
+                    } else {
+                        assert_eq!(checkpoint.sequence_number(), 0);
+                    }
+
                     match next_committee {
                         None => {
-                            // Ensure that we are not skipping checkpoints at any point
-                            if let Some(prev_highest) = self.checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap() {
-                                assert_eq!(prev_highest + 1, checkpoint.sequence_number());
-                            } else {
-                                assert_eq!(checkpoint.sequence_number(), 0);
-                            }
-
                             let new_highest = checkpoint.sequence_number();
                             debug!(
                                 "Bumping highest_executed_checkpoint watermark to {:?}",
                                 new_highest,
                             );
-                            self.metrics.last_executed_checkpoint.set(new_highest as i64);
                             self.checkpoint_store
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
+                            self.metrics.last_executed_checkpoint.set(new_highest as i64);
                         }
                         Some(committee) => {
                             debug!(
@@ -304,6 +304,7 @@ impl CheckpointExecutorEventLoop {
                             self.checkpoint_store
                                 .update_highest_executed_checkpoint(&checkpoint)
                                 .unwrap();
+                            self.metrics.last_executed_checkpoint.set(checkpoint.sequence_number() as i64);
                             return Some((checkpoint, committee));
                         }
                     }
@@ -465,6 +466,7 @@ impl CheckpointExecutorEventLoop {
                 epoch_store.clone(),
                 state.transaction_manager().clone(),
                 local_execution_timeout_sec,
+                &metrics,
             )
             .await
             {
@@ -521,6 +523,7 @@ pub async fn execute_checkpoint(
     epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     local_execution_timeout_sec: u64,
+    metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
     debug!(
         "Scheduling checkpoint {:?} for execution",
@@ -535,6 +538,15 @@ pub async fn execute_checkpoint(
             )
         })
         .into_inner();
+
+    let tx_count = txes.len();
+    debug!(
+        epoch=?epoch_store.epoch(),
+        checkpoint_sequence=?checkpoint.sequence_number(),
+        "Number of transactions in the checkpoint: {:?}",
+        tx_count
+    );
+    metrics.checkpoint_transaction_count.report(tx_count as u64);
 
     execute_transactions(
         txes,
@@ -634,7 +646,11 @@ async fn execute_transactions(
             }
             Ok(Err(err)) => return Err(err),
             Ok(Ok(_)) => {
-                epoch_store.insert_executed_transactions(&all_tx_digests, checkpoint_sequence)?;
+                authority_store.insert_executed_transactions(
+                    &all_tx_digests,
+                    epoch_store.epoch(),
+                    checkpoint_sequence,
+                )?;
                 return Ok(());
             }
         }

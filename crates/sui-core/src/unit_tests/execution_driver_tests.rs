@@ -249,7 +249,7 @@ pub async fn do_cert_with_shared_objects(
         .unwrap()
         .pop()
         .unwrap()
-        .into_data()
+        .into_message()
 }
 
 async fn execute_shared_on_first_three_authorities(
@@ -295,7 +295,7 @@ async fn test_transaction_manager() {
         .collect_vec();
     let all_gas_objects = gas_objects.clone().into_iter().flatten().collect_vec();
 
-    let (aggregator, authorities, framework_obj_ref) =
+    let (aggregator, authorities, _genesis, framework_obj_ref) =
         init_local_authorities(4, all_gas_objects.clone()).await;
     let authority_clients: Vec<_> = authorities
         .iter()

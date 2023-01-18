@@ -47,20 +47,24 @@ where
 
         let checkpoint = request.into_inner();
 
-        self.peer_heights
+        if !self
+            .peer_heights
             .write()
             .unwrap()
-            .update_peer_height(peer_id, Some(checkpoint.clone()));
+            .update_peer_info(peer_id, checkpoint.clone())
+        {
+            return Ok(Response::new(()));
+        }
 
         let highest_verified_checkpoint = self
             .store
             .get_highest_verified_checkpoint()
             .map_err(|e| Status::internal(e.to_string()))?
-            .map(|x| x.sequence_number());
+            .sequence_number();
 
         // If this checkpoint is higher than our highest verified checkpoint notify the
         // event loop to potentially sync it
-        if Some(checkpoint.sequence_number()) > highest_verified_checkpoint {
+        if checkpoint.sequence_number() > highest_verified_checkpoint {
             if let Some(sender) = self.sender.upgrade() {
                 sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
             }
@@ -74,7 +78,9 @@ where
         request: Request<GetCheckpointSummaryRequest>,
     ) -> Result<Response<Option<Checkpoint>>, Status> {
         let checkpoint = match request.inner() {
-            GetCheckpointSummaryRequest::Latest => self.store.get_highest_synced_checkpoint(),
+            GetCheckpointSummaryRequest::Latest => {
+                self.store.get_highest_synced_checkpoint().map(Some)
+            }
             GetCheckpointSummaryRequest::ByDigest(digest) => {
                 self.store.get_checkpoint_by_digest(digest)
             }

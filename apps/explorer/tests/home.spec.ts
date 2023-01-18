@@ -26,7 +26,7 @@ test('displays the validator table', async ({ page }) => {
     await expect(page.getByTestId('validators-table')).toBeVisible();
 });
 
-test('displays the fullnode map', async ({ page }) => {
+test('displays the node map', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('fullnode-map')).toBeVisible();
+    await expect(page.getByTestId('node-map')).toBeVisible();
 });

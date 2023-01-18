@@ -6,11 +6,11 @@ import { Coin as CoinAPI, SUI_TYPE_ARG } from '@mysten/sui.js';
 import type {
     ObjectId,
     SuiObject,
-    RawSigner,
     SuiAddress,
     SuiMoveObject,
     JsonRpcProvider,
     SuiExecuteTransactionResponse,
+    SignerWithProvider,
 } from '@mysten/sui.js';
 
 const COIN_TYPE = '0x2::coin::Coin';
@@ -85,7 +85,7 @@ export class Coin {
      * @param validator The sui address of the chosen validator
      */
     public static async stakeCoin(
-        signer: RawSigner,
+        signer: SignerWithProvider,
         coins: SuiMoveObject[],
         amount: bigint,
         validator: SuiAddress
@@ -106,8 +106,30 @@ export class Coin {
         return await signer.executeMoveCall(txn);
     }
 
+    public static async unStakeCoin(
+        signer: SignerWithProvider,
+        delegation: ObjectId,
+        stakedSuiId: ObjectId,
+        principalWithdrawAmount: string
+    ): Promise<SuiExecuteTransactionResponse> {
+        const txn = {
+            packageObjectId: '0x2',
+            module: 'sui_system',
+            function: 'request_withdraw_delegation',
+            typeArguments: [],
+            arguments: [
+                SUI_SYSTEM_STATE_OBJECT_ID,
+                delegation,
+                stakedSuiId,
+                principalWithdrawAmount,
+            ],
+            gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
+        };
+        return signer.executeMoveCall(txn);
+    }
+
     private static async requestSuiCoinWithExactAmount(
-        signer: RawSigner,
+        signer: SignerWithProvider,
         coins: SuiMoveObject[],
         amount: bigint
     ): Promise<ObjectId> {
@@ -143,7 +165,7 @@ export class Coin {
     }
 
     private static async selectSuiCoinWithExactAmount(
-        signer: RawSigner,
+        signer: SignerWithProvider,
         coins: SuiMoveObject[],
         amount: bigint,
         refreshData = false

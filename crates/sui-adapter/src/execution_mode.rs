@@ -47,6 +47,7 @@ pub trait ExecutionMode {
     );
 }
 
+#[derive(Copy, Clone)]
 pub struct Normal;
 
 impl ExecutionMode for Normal {

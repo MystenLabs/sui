@@ -84,7 +84,8 @@ impl AuthorityServer {
         ));
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
-            state.clone(),
+            state.name,
+            &state.epoch_store_for_testing(),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -311,7 +312,7 @@ impl ValidatorService {
             state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
         {
             return Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects,
+                signed_effects: signed_effects.into_inner(),
             }));
         }
 
@@ -381,7 +382,7 @@ impl ValidatorService {
         };
         match res {
             Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects,
+                signed_effects: signed_effects.into_inner(),
             })),
             Err(e) => Err(tonic::Status::from(e)),
         }

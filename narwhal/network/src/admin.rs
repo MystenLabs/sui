@@ -4,9 +4,11 @@
 use axum::routing::post;
 use axum::{extract::Extension, http::StatusCode, routing::get, Json, Router};
 use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+use std::time::Duration;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tokio::time::sleep;
+use tracing::{error, info};
 use types::metered_channel::Sender;
 use types::{ConditionalBroadcastReceiver, ReconfigureNotification};
 
@@ -48,11 +50,40 @@ pub fn start_admin_server(
 
     handles.push(spawn_logged_monitored_task!(
         async move {
-            axum_server::bind(socket_address)
-                .handle(shutdown_handle)
-                .serve(router.into_make_service())
-                .await
-                .unwrap();
+            // retry a few times before quiting
+            let mut total_retries = 10;
+
+            loop {
+                total_retries -= 1;
+
+                match TcpListener::bind(socket_address) {
+                    Ok(listener) => {
+                        axum_server::from_tcp(listener)
+                            .handle(shutdown_handle)
+                            .serve(router.into_make_service())
+                            .await
+                            .unwrap_or_else(|err| {
+                                panic!("Failed to boot admin {}: {err}", socket_address)
+                            });
+
+                        return;
+                    }
+                    Err(err) => {
+                        if total_retries == 0 {
+                            error!("{}", err);
+                            panic!("Failed to boot admin {}: {}", socket_address, err);
+                        }
+
+                        error!("{}", err);
+
+                        // just sleep for a bit before retrying in case the port
+                        // has not been de-allocated
+                        sleep(Duration::from_secs(1)).await;
+
+                        continue;
+                    }
+                }
+            }
         },
         "AdminServerTask"
     ));

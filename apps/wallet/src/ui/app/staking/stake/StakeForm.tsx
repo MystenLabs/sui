@@ -3,18 +3,15 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useCallback } from 'react';
+import { useEffect, useRef, memo, useCallback, useMemo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { useFormatCoin } from '_hooks';
-import {
-    GAS_SYMBOL,
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-} from '_redux/slices/sui-objects/Coin';
+import { useCoinDecimals, useFormatCoin } from '_hooks';
+import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
@@ -46,9 +43,7 @@ function StakeForm({
         onClearRef.current();
     }, [amount]);
 
-    const [formatted] = useFormatCoin(coinBalance, coinType);
-
-    const [gasBudgetEstimation] = useFormatCoin(
+    const [gasBudgetEstimation, symbol] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
         SUI_TYPE_ARG
     );
@@ -57,15 +52,21 @@ function StakeForm({
         coinBalance -
         BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
-    const [maxToken, symbol, queryResult] = useFormatCoin(
-        coinBalanceMinusGas,
-        coinType
-    );
+    const maxTokenFormated = useFormatCoin(coinBalanceMinusGas, coinType);
+
+    const maxToken = maxTokenFormated[0];
+    const queryResult = maxTokenFormated[2];
+    const [coinDecimals] = useCoinDecimals(coinType);
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
+
+    const calculateRemaining = useMemo(() => {
+        if (!amount || !maxToken) return 0;
+        return (+maxToken - +amount).toFixed(coinDecimals);
+    }, [amount, maxToken, coinDecimals]);
 
     return (
         <Form
@@ -76,6 +77,7 @@ function StakeForm({
             <Content>
                 <Card
                     variant="blue"
+                    titleDivider
                     header={
                         <div className="p-2.5 w-full flex bg-white">
                             <Field
@@ -102,33 +104,33 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Gas Fee
+                                Gas Fees
                             </Text>
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {gasBudgetEstimation} {GAS_SYMBOL}
+                                {gasBudgetEstimation} {symbol}
                             </Text>
                         </div>
                     }
                 >
-                    {!unstake && (
-                        <div className="flex justify-between w-full mb-3.5">
+                    {+amount > 0 && (
+                        <div className="py-px flex justify-between w-full">
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Available balance:
+                                Stake Remaining
                             </Text>
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {formatted} {symbol}
+                                {calculateRemaining} {symbol}
                             </Text>
                         </div>
                     )}

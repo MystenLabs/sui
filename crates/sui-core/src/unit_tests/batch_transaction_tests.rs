@@ -50,7 +50,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             ],
         }));
     }
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -114,7 +114,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         type_arguments: vec![],
         arguments: vec![],
     }));
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -148,7 +148,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
     let transactions = vec![SingleTransactionKind::Publish(MoveModulePublish {
         modules: module_bytes,
     })];
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -161,7 +161,10 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
-        response.unwrap_err(),
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::InvalidBatchTransaction { .. }
     ));
     Ok(())
@@ -177,7 +180,7 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
         recipient: Default::default(),
         amount: None,
     })];
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         authority_state
@@ -191,7 +194,10 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
-        response.unwrap_err(),
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::InvalidBatchTransaction { .. }
     ));
     Ok(())
@@ -227,7 +233,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
             ],
         }));
     }
-    let data = TransactionData::new(
+    let data = TransactionData::new_with_dummy_gas_price(
         TransactionKind::Batch(transactions),
         sender,
         gas_object.compute_object_reference(),
@@ -236,8 +242,12 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
+
     assert!(matches!(
-        response.unwrap_err(),
+        *response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
         SuiError::GasBalanceTooLowToCoverGasBudget { .. }
     ));
 

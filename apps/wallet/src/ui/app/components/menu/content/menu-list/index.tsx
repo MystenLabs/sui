@@ -7,7 +7,6 @@ import Browser from 'webextension-polyfill';
 import Item from './item';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import Button from '_app/shared/button';
-import FaucetMessageInfo from '_app/shared/faucet/message-info';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import { lockWallet } from '_app/wallet/actions';
 import ExternalLink from '_components/external-link';
@@ -83,7 +82,6 @@ function MenuList() {
                     Lock Wallet
                 </Button>
             </div>
-            <FaucetMessageInfo className={st.faucetInfo} />
         </div>
     );
 }

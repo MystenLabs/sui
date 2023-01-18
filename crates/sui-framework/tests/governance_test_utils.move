@@ -25,6 +25,9 @@ module sui::governance_test_utils {
             x"FF",
             x"FF",
             b"ValidatorName",
+            b"description",
+            b"image_url",
+            b"project_url",
             x"FFFF",
             x"FFFF",
             x"FFFF",
@@ -40,7 +43,6 @@ module sui::governance_test_utils {
         validators: vector<Validator>, sui_supply_amount: u64, storage_fund_amount: u64
     ) {
         sui_system::create(
-            127,
             validators,
             balance::create_supply_for_testing(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
@@ -57,7 +59,7 @@ module sui::governance_test_utils {
 
         while (!vector::is_empty(&addrs)) {
             vector::push_back(
-                &mut validators, 
+                &mut validators,
                 create_validator_for_testing(vector::pop_back(&mut addrs), 100, ctx)
             );
         };
@@ -78,7 +80,27 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, 0, 0, ctx);
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun advance_epoch_with_reward_amounts_and_slashing_rates(
+        storage_charge: u64,
+        computation_charge: u64,
+        reward_slashing_threshold_bps: u64,
+        reward_slashing_rate: u64,
+        scenario: &mut Scenario
+    ) {
+        test_scenario::next_epoch(scenario, @0x0);
+        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::advance_epoch(
+            &mut system_state, new_epoch, storage_charge, computation_charge, 0, 0,
+            reward_slashing_threshold_bps, reward_slashing_rate, ctx
+        );
         test_scenario::return_shared(system_state);
     }
 

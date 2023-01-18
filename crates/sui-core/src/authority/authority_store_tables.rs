@@ -66,10 +66,14 @@ pub struct AuthorityPerpetualTables {
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
+    pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
 
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
+
+    /// When transaction is executed via checkpoint executor, we store association here
+    pub(crate) executed_transactions_to_checkpoint:
+        DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because
@@ -91,7 +95,7 @@ impl AuthorityPerpetualTables {
         Self::get_read_only_handle(Self::path(parent_path), None, None)
     }
 
-    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects

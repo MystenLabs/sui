@@ -37,10 +37,6 @@ async fn main() -> Result<()> {
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
-    info!(
-        "Started Prometheus HTTP endpoint at {}",
-        config.metrics_address
-    );
 
     // Initialize logging
     let (_guard, filter_handle) =
@@ -48,6 +44,15 @@ async fn main() -> Result<()> {
             .with_env()
             .with_prom_registry(&prometheus_registry)
             .init();
+
+    info!(
+        "Started Prometheus HTTP endpoint at {}",
+        config.metrics_address
+    );
+
+    if let Some(git_rev) = option_env!("GIT_REVISION") {
+        info!("Sui Node built at git revision {git_rev}");
+    }
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;

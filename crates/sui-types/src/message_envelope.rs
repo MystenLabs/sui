@@ -204,6 +204,10 @@ impl<T: Message, S> TrustedEnvelope<T, S> {
     pub fn into_inner(self) -> Envelope<T, S> {
         self.0
     }
+
+    pub fn inner(&self) -> &Envelope<T, S> {
+        &self.0
+    }
 }
 
 // An empty marker struct that can't be serialized.

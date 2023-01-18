@@ -4,6 +4,9 @@
 import { thunkExtras } from '_redux/store/thunk-extras';
 
 export function useSigner() {
-    const { api, keypairVault } = thunkExtras;
-    return api.getSignerInstance(keypairVault.getKeypair());
+    const { api, keypairVault, background } = thunkExtras;
+    return api.getSignerInstance(
+        keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+        background
+    );
 }

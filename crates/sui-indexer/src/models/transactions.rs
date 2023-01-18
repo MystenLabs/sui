@@ -127,8 +127,8 @@ pub fn transaction_response_to_new_transaction(
             err
         ))
     })?;
-    // canonical txn digest string is Base64 encoded
-    let tx_digest = cer.transaction_digest.encode();
+    // canonical txn digest string is Base58 encoded
+    let tx_digest = cer.transaction_digest.base58_encode();
     let gas_budget = cer.data.gas_budget;
     let sender = cer.data.sender.to_string();
     let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());

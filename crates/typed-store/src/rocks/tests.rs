@@ -601,7 +601,9 @@ async fn test_transaction_snapshot() {
 
     // transaction without set_snapshot succeeds when extraneous write occurs before transaction
     // write.
-    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx1 = db
+        .transaction_without_snapshot()
+        .expect("failed to initiate transaction");
     // write occurs after transaction is created but before first write
     db.insert(&key, &"1".to_string()).unwrap();
     tx1 = tx1
@@ -612,21 +614,21 @@ async fn test_transaction_snapshot() {
 
     // transaction without set_snapshot fails when extraneous write occurs after transaction
     // write.
-    let mut tx1 = db.transaction().expect("failed to initiate transaction");
+    let mut tx1 = db
+        .transaction_without_snapshot()
+        .expect("failed to initiate transaction");
     tx1 = tx1
         .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     db.insert(&key, &"1".to_string()).unwrap();
     assert!(matches!(
         tx1.commit(),
-        Err(TypedStoreError::TransactionWriteConflict)
+        Err(TypedStoreError::RetryableTransactionError)
     ));
     assert_eq!(db.get(&key).unwrap().unwrap(), "1".to_string());
 
     // failed transaction with set_snapshot
-    let mut tx1 = db
-        .transaction_with_snapshot()
-        .expect("failed to initiate transaction");
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
     // write occurs after transaction is created, so the conflict is detected
     db.insert(&key, &"1".to_string()).unwrap();
     tx1 = tx1
@@ -634,12 +636,10 @@ async fn test_transaction_snapshot() {
         .unwrap();
     assert!(matches!(
         tx1.commit(),
-        Err(TypedStoreError::TransactionWriteConflict)
+        Err(TypedStoreError::RetryableTransactionError)
     ));
 
-    let mut tx1 = db
-        .transaction_with_snapshot()
-        .expect("failed to initiate transaction");
+    let mut tx1 = db.transaction().expect("failed to initiate transaction");
     tx1 = tx1
         .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
@@ -648,8 +648,12 @@ async fn test_transaction_snapshot() {
 
     // when to transactions race, one will fail provided that neither commits before the other
     // writes.
-    let mut tx1 = db.transaction().expect("failed to initiate transaction");
-    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+    let mut tx1 = db
+        .transaction_without_snapshot()
+        .expect("failed to initiate transaction");
+    let mut tx2 = db
+        .transaction_without_snapshot()
+        .expect("failed to initiate transaction");
     tx1 = tx1
         .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
@@ -660,12 +664,16 @@ async fn test_transaction_snapshot() {
     tx1.commit().expect("failed to commit");
     assert!(matches!(
         tx2.commit(),
-        Err(TypedStoreError::TransactionWriteConflict)
+        Err(TypedStoreError::RetryableTransactionError)
     ));
 
     // IMPORTANT: a race is still possible if one tx commits before the other writes.
-    let mut tx1 = db.transaction().expect("failed to initiate transaction");
-    let mut tx2 = db.transaction().expect("failed to initiate transaction");
+    let mut tx1 = db
+        .transaction_without_snapshot()
+        .expect("failed to initiate transaction");
+    let mut tx2 = db
+        .transaction_without_snapshot()
+        .expect("failed to initiate transaction");
     tx1 = tx1
         .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
@@ -685,7 +693,9 @@ async fn test_retry_transaction() {
 
     let mut conflicts = 0;
     retry_transaction!({
-        let mut tx1 = db.transaction().expect("failed to initiate transaction");
+        let mut tx1 = db
+            .transaction_without_snapshot()
+            .expect("failed to initiate transaction");
         tx1 = tx1
             .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
             .unwrap();
@@ -699,7 +709,9 @@ async fn test_retry_transaction() {
     .unwrap();
 
     retry_transaction!({
-        let mut tx1 = db.transaction().expect("failed to initiate transaction");
+        let mut tx1 = db
+            .transaction_without_snapshot()
+            .expect("failed to initiate transaction");
         tx1 = tx1
             .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
             .unwrap();
@@ -713,7 +725,9 @@ async fn test_retry_transaction() {
     // the macro compiles as expected.
     tokio::time::timeout(Duration::from_secs(1), async move {
         retry_transaction_forever!({
-            let mut tx1 = db.transaction().expect("failed to initiate transaction");
+            let mut tx1 = db
+                .transaction_without_snapshot()
+                .expect("failed to initiate transaction");
             tx1 = tx1
                 .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
                 .unwrap();
