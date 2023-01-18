@@ -14,6 +14,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use mysten_metrics::spawn_monitored_task;
+use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
@@ -28,6 +29,7 @@ use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_constants::MAX_TX_GAS;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 use typed_store::Map;
@@ -123,6 +125,11 @@ pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
+
+// Reject a transaction if the number of pending transactions depending on the object
+// is above the threshold.
+pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
+
 type CertTxGuard<'a> =
     DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, TrustedSignedTransactionEffects)>;
 
@@ -421,6 +428,10 @@ pub struct AuthorityState {
     /// Manages pending certificates and their missing input objects.
     transaction_manager: Arc<TransactionManager>,
 
+    /// Shuts down the execution task. Used only in testing.
+    #[allow(unused)]
+    tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
+
     pub metrics: Arc<AuthorityMetrics>,
 }
 
@@ -466,6 +477,23 @@ impl AuthorityState {
             &transaction.data().intent_message.value,
         )
         .await?;
+
+        for (object_id, queue_len) in self.transaction_manager.objects_queue_len(
+            input_objects
+                .mutable_inputs()
+                .into_iter()
+                .map(|r| r.0)
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+                return Err(SuiError::TooManyTransactionsPendingOnObject {
+                    object_id,
+                    queue_len,
+                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+                });
+            }
+        }
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -1584,6 +1612,7 @@ impl AuthorityState {
             tx_ready_certificates,
             metrics.clone(),
         ));
+        let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
         let state = Arc::new(AuthorityState {
             name,
@@ -1601,6 +1630,7 @@ impl AuthorityState {
             checkpoint_store,
             committee_store,
             transaction_manager,
+            tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
             metrics,
         });
 
@@ -1617,7 +1647,11 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
-        spawn_monitored_task!(execution_process(authority_state, rx_ready_certificates));
+        spawn_monitored_task!(execution_process(
+            authority_state,
+            rx_ready_certificates,
+            rx_execution_shutdown
+        ));
 
         state
             .create_owner_index_if_empty()
@@ -2593,5 +2627,15 @@ impl AuthorityState {
             .new_at_next_epoch(self.name, new_committee);
         let previous_store = self.epoch_store.swap(epoch_tables);
         previous_store.epoch_terminated().await;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shutdown_execution_for_test(&self) {
+        self.tx_execution_shutdown
+            .lock()
+            .take()
+            .unwrap()
+            .send(())
+            .unwrap();
     }
 }

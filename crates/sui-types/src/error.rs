@@ -88,6 +88,12 @@ pub enum SuiError {
         child_id: ObjectID,
         parent_id: ObjectID,
     },
+    #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
+    TooManyTransactionsPendingOnObject {
+        object_id: ObjectID,
+        queue_len: usize,
+        threshold: usize,
+    },
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
