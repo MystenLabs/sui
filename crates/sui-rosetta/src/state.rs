@@ -60,7 +60,7 @@ pub trait BlockProvider {
     async fn current_block(&self) -> Result<BlockResponse, Error>;
     fn genesis_block_identifier(&self) -> BlockIdentifier;
     fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
-    async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
+    fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn get_balance_at_block(
         &self,
         addr: SuiAddress,
@@ -136,8 +136,17 @@ impl BlockProvider for PseudoBlockProvider {
             })
     }
 
-    async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.current_block().await.map(|b| b.block.block_identifier)
+    fn current_block_identifier(&self) -> Result<BlockIdentifier, Error> {
+        let (_, (block_id, ..)) =
+            self.database
+                .blocks
+                .iter()
+                .last()
+                .ok_or(Error::BlockNotFound {
+                    index: None,
+                    hash: None,
+                })?;
+        Ok(block_id)
     }
 
     async fn get_balance_at_block(
@@ -182,7 +191,7 @@ impl PseudoBlockProvider {
                 info!("Datastore is empty, processing genesis block.");
                 process_genesis_block(&client, &f).await.unwrap()
             } else {
-                let current_block = f.current_block_identifier().await.unwrap();
+                let current_block = f.current_block_identifier().unwrap();
                 info!("Resuming from block {}", current_block.index);
             };
             loop {
@@ -197,7 +206,7 @@ impl PseudoBlockProvider {
     }
 
     async fn create_next_block(&self, client: &SuiClient) -> Result<(), Error> {
-        let current_block = self.current_block_identifier().await?;
+        let current_block = self.current_block_identifier()?;
         // Sui get_total_transaction_number starts from 1.
         let total_tx = client.read_api().get_total_transaction_number().await? - 1;
         if total_tx == 0 {

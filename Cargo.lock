@@ -9141,6 +9141,7 @@ dependencies = [
  "mysten-metrics",
  "once_cell",
  "rand 0.8.5",
+ "reqwest",
  "rocksdb",
  "serde 1.0.152",
  "serde_json",

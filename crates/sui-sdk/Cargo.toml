@@ -40,7 +40,6 @@ clap = { version = "3.2.17", features = ["derive"] }
 dirs = "4.0.0"
 async-recursion = "1.0.0"
 tempfile = "3.3.0"
-fastcrypto.workspace = true
 test-utils = { path = "../test-utils" }
 futures-core = "0.3.21"
 futures = "0.3.23"
