@@ -121,7 +121,14 @@ export function TableCard({
                                                 : void 0
                                         }
                                     >
-                                        <div className="flex items-center gap-1">
+                                        <div
+                                            className={clsx(
+                                                'flex items-center gap-1',
+                                                column.columnDef
+                                                    .enableSorting &&
+                                                    'cursor-pointer'
+                                            )}
+                                        >
                                             {isPlaceholder
                                                 ? null
                                                 : flexRender(
