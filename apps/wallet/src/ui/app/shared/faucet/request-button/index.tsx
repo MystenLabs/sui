@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 
 import FaucetMessageInfo from '../message-info';
 import { useFaucetMutation } from '../useFaucetMutation';
-import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
+import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
@@ -27,9 +27,8 @@ function FaucetRequestButton({
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
-    const showFaucetRequestButton = API_ENV.customRPC !== network;
     const mutation = useFaucetMutation();
-    return showFaucetRequestButton ? (
+    return mutation.enabled ? (
         <Button
             mode={mode}
             onClick={() => {

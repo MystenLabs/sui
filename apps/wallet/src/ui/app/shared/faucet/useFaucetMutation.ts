@@ -29,6 +29,8 @@ export function useFaucetMutation() {
     });
     return {
         ...mutation,
+        /** If the currently-configured endpoint supports faucet: */
+        enabled: !!api.endpoints.faucet,
         /**
          * is any faucet request in progress across different instances of the mutation
          */
