@@ -762,8 +762,12 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  //Dynamic Fields
-  async getDynamicFields(parent_object_id: ObjectId, cursor: ObjectId | null = null, limit: number | null = null): Promise<DynamicFieldPage> {
+  // Dynamic Fields
+  async getDynamicFields(
+    parent_object_id: ObjectId,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ): Promise<DynamicFieldPage> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getDynamicFields',
@@ -774,14 +778,17 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(
-        `Error getting dynamic fields with request type: ${err}`
+        `Error getting dynamic fields with request type: ${err} for parent_object_id: ${parent_object_id}, cursor: ${cursor} and limit: ${limit}.`
       );
     }
   }
 
-  async getDynamicFieldObject(parent_object_id: ObjectId, name: String): Promise<GetObjectDataResponse> {
+  async getDynamicFieldObject(
+    parent_object_id: ObjectId,
+    name: string
+  ): Promise<GetObjectDataResponse> {
     try {
-      const resp =  await this.client.requestWithType(
+      const resp = await this.client.requestWithType(
         'sui_getDynamicFieldObject',
         [parent_object_id, name],
         GetObjectDataResponse,
@@ -790,7 +797,7 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(
-        `Error getting dynamic field object with request type: ${err}`
+        `Error getting dynamic field object with request type: ${err} for parent_object_id: ${parent_object_id} and name: ${name}.`
       );
     }
   }

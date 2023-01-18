@@ -285,9 +285,27 @@ export abstract class Provider {
    */
   abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
 
-  abstract getDynamicFields(parent_object_id: ObjectId, cursor: ObjectId | null, limit: number | null): Promise<DynamicFieldPage>;
+  /**
+   * Return the list of dynamic field objects owned by an object
+   * @param parent_object_id - The id of the parent object
+   * @param cursor - Optional paging cursor
+   * @param limit - Maximum item returned per page
+   */
+  abstract getDynamicFields(
+    parent_object_id: ObjectId,
+    cursor: ObjectId | null,
+    limit: number | null
+  ): Promise<DynamicFieldPage>;
 
-  abstract getDynamicFieldObject(parent_object_id: ObjectId, name: string): Promise<GetObjectDataResponse>;
+  /**
+   * Return the dynamic field object information for a specified object
+   * @param parent_object_id - The ID od the quered parent object
+   * @param name - The name of the dynamic field
+   */
+  abstract getDynamicFieldObject(
+    parent_object_id: ObjectId,
+    name: string
+  ): Promise<GetObjectDataResponse>;
 
   /**
    * Getting the reference gas price for the network

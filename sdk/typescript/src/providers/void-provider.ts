@@ -148,17 +148,17 @@ export class VoidProvider extends Provider {
   }
 
   getDynamicFields(
-    _parent_object_id: ObjectId, 
-    _cursor: ObjectId | null=null, 
-    _limit: number | null=null
-    ): Promise<DynamicFieldPage> {
+    _parent_object_id: ObjectId,
+    _cursor: ObjectId | null = null,
+    _limit: number | null = null
+  ): Promise<DynamicFieldPage> {
     throw this.newError('getDynamicFields');
   }
 
   getDynamicFieldObject(
-    _parent_object_id: ObjectId, 
-    _name: String
-    ): Promise<GetObjectDataResponse> {
+    _parent_object_id: ObjectId,
+    _name: string
+  ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }
 
