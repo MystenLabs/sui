@@ -114,10 +114,12 @@ function ValidatorPageResult() {
                 {
                     headerLabel: 'Name',
                     accessorKey: 'name',
+                    sorting: true,
                 },
                 {
                     headerLabel: 'Stake',
                     accessorKey: 'stake',
+                    sorting: true,
                 },
                 {
                     headerLabel: 'Address',
@@ -217,6 +219,7 @@ function ValidatorPageResult() {
                         <TableCard
                             data={validatorsTableData.data}
                             columns={validatorsTableData.columns}
+                            enableSorting
                         />
                     )}
                 </ErrorBoundary>

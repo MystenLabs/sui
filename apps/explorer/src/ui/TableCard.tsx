@@ -4,10 +4,14 @@
 import {
     flexRender,
     getCoreRowModel,
+    getSortedRowModel,
     useReactTable,
+    type SortingState,
 } from '@tanstack/react-table';
 import clsx from 'clsx';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+
+import { ReactComponent as ArrowRight } from '../assets/SVGIcons/12px/ArrowRight.svg';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
@@ -24,6 +28,7 @@ export type LinkObj = {
 type TableColumn = {
     headerLabel: string | (() => JSX.Element);
     accessorKey: string;
+    sorting?: boolean;
 };
 // TODO: update Link to use Tuple type
 // type Links = [Link, Link?];
@@ -51,6 +56,7 @@ function columnsContent(columns: TableColumn[]) {
         accessorKey: column.accessorKey,
         id: column.accessorKey,
         header: column.headerLabel,
+        enableSorting:!!column.sorting,
         // cell renderer for each column from react-table
         cell: (info: any) => info.getValue(),
     }));
@@ -60,16 +66,26 @@ export interface TableCardProps {
     refetching?: boolean;
     data: DataType[];
     columns: TableColumn[];
+    enableSorting?: boolean;
 }
 
-export function TableCard({ refetching, data, columns }: TableCardProps) {
+export function TableCard({ refetching, data, columns, enableSorting }: TableCardProps) {
     // Use Columns to create a table
     const processedcol = useMemo(() => columnsContent(columns), [columns]);
+    const [sorting, setSorting] = useState<SortingState>([]);
+
     const table = useReactTable({
         data,
         columns: processedcol,
         getCoreRowModel: getCoreRowModel(),
-    });
+        getSortedRowModel: getSortedRowModel(),
+        onSortingChange: setSorting,
+        enableSorting: !!enableSorting,
+        state: {
+            sorting,
+          },
+    },
+    );
 
     return (
         <div
@@ -80,21 +96,31 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
         >
             <table className="w-full min-w-max border-collapse border-0 text-left">
                 <thead>
-                    {table.getHeaderGroups().map((headerGroup: any) => (
+                    {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
-                            {headerGroup.headers.map((header: any) => (
+                            {headerGroup.headers.map(({id, colSpan, column, isPlaceholder, getContext }) => (
                                 <th
-                                    key={header.id}
-                                    colSpan={header.colSpan}
+                                    key={id}
+                                    colSpan={colSpan}
                                     scope="col"
-                                    className="h-[30px] px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                    className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                    onClick={column.columnDef.enableSorting ? column.getToggleSortingHandler() : void(0)}
+                                   
                                 >
-                                    {header.isPlaceholder
+                                    <div className="gap-1 items-center flex">
+                                
+                                    {isPlaceholder
                                         ? null
                                         : flexRender(
-                                              header.column.columnDef.header,
-                                              header.getContext()
+                                              column.columnDef.header,
+                                              getContext()
                                           )}
+                                           {{
+                                            asc: <ArrowRight fill="currentColor" className='-rotate-90 text-steel-darker'/>,
+                                            desc: <ArrowRight fill="currentColor"  className='rotate-90 text-steel-darker'/>,
+                                            }[column.getIsSorted() as string] ?? null}
+                                            </div>
+                                    
                                 </th>
                             ))}
                         </tr>
@@ -106,7 +132,7 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
                             {row.getVisibleCells().map((cell: any) => (
                                 <td
                                     key={cell.id}
-                                    className="h-[30px] px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
+                                    className="h-7.5 px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
                                 >
                                     {flexRender(
                                         cell.column.columnDef.cell,
