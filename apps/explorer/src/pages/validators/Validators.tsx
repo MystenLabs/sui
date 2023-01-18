@@ -30,6 +30,7 @@ const APY_DECIMALS = 4;
 
 const ValidatorMap = lazy(() => import('../../components/node-map'));
 
+
 function validatorsTableData(validators: ActiveValidator[], epoch: number) {
     return {
         data: validators.map((validator, index) => {

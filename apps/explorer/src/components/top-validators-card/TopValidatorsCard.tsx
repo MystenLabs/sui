@@ -68,9 +68,10 @@ const validatorsTable = (
                                 circle
                             />
                         )}
-                        <Text variant="bodySmall/medium" color="steel-darker">
+
+                        <Link to={`/validator/${encodeURIComponent(address)}`}>
                             {name}
-                        </Text>
+                        </Link>
                     </div>
                 ),
                 stake: <StakeColumn stake={stake} />,
