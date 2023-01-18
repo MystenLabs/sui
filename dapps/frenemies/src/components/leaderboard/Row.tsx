@@ -20,7 +20,7 @@ export type Record = {
  * A Single row in the Leaderboard table.
  * Tightly coupled with the Leaderboard component.
  */
-export default function Row({ record }: { record: Record }) {
+function Row({ record }: { record: Record }) {
   return (
     <tr>
       <td>{ record.round }</td>
@@ -31,3 +31,5 @@ export default function Row({ record }: { record: Record }) {
     </tr>
   )
 }
+
+export default Row;

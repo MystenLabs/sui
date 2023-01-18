@@ -14,7 +14,7 @@ type LeaderboardOptions = {
 /**
  * Table representing a Leaderboard
  */
-export default function Leaderboard({ records }: LeaderboardOptions) {
+function Leaderboard({ records }: LeaderboardOptions) {
   return (
     <div className="w-auto">
       <table className="table-fixed w-auto">
@@ -26,3 +26,5 @@ export default function Leaderboard({ records }: LeaderboardOptions) {
     </div>
   );
 }
+
+export default Leaderboard;

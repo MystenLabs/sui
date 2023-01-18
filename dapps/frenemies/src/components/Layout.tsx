@@ -3,7 +3,6 @@
 
 import Header from "./header/Header";
 import Footer from "./footer/Footer";
-// import { Outlet } from "react-router-dom";
 import { ReactElement } from "react";
 
 function Layout({ children }: { children: ReactElement | ReactElement[] }) {
