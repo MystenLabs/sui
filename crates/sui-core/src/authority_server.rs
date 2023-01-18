@@ -344,7 +344,7 @@ impl ValidatorService {
             // For shared objects this will wait until either timeout or we have heard back from consensus.
             // For owned objects this will return without waiting for certificate to be sequenced
             // First do quick dirty non-async check
-            if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
+            if !epoch_store.is_tx_cert_consensus_message_processed(&tx_digest)? {
                 if consensus_adapter.num_inflight_transactions()
                     > MAX_PENDING_CONSENSUS_TRANSACTIONS
                 {

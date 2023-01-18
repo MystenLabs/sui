@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 use sui_types::storage::ObjectKey;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -83,6 +83,15 @@ impl TransactionManager {
         let inner = &mut self.inner.lock();
         for cert in certs {
             let digest = *cert.digest();
+
+            if epoch_store
+                .is_poison_pill_tx(&digest)
+                .expect("db read cannot fail")
+            {
+                warn!(tx_digest = ?digest, "refusing to enqueue poison pill transaction");
+                continue;
+            }
+
             // hold the tx lock until we have finished checking if objects are missing, so that we
             // don't race with a concurrent execution of this tx.
             let _tx_lock = epoch_store.acquire_tx_lock(&digest);

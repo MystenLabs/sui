@@ -22,9 +22,9 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, Signature};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, SignedTransactionEffects, TransactionEffects, TrustedCertificate,
-    VerifiedCertificate, VerifiedSignedTransaction,
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
+    SignedTransactionEffects, TransactionEffects, TrustedCertificate, VerifiedCertificate,
+    VerifiedSignedTransaction,
 };
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
@@ -210,6 +210,11 @@ pub struct AuthorityEpochTables {
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
+
+    /// Stores transactions that appear to have caused the validator to crash loop. These
+    /// transactions will not be included in any checkpoint created by this validator in order to
+    /// allow the epoch to end.
+    poison_pill_transactions: DBMap<TransactionDigest, bool>,
 }
 
 impl AuthorityEpochTables {
@@ -695,11 +700,9 @@ impl AuthorityPerEpochStore {
     /// For shared lock certificates, if this function returns true means shared locks for this certificate are set
     pub fn is_tx_cert_consensus_message_processed(
         &self,
-        certificate: &CertifiedTransaction,
+        tx_digest: &TransactionDigest,
     ) -> SuiResult<bool> {
-        self.is_consensus_message_processed(&ConsensusTransactionKey::Certificate(
-            *certificate.digest(),
-        ))
+        self.is_consensus_message_processed(&ConsensusTransactionKey::Certificate(*tx_digest))
     }
 
     pub fn is_consensus_message_processed(&self, key: &ConsensusTransactionKey) -> SuiResult<bool> {
@@ -1219,13 +1222,16 @@ impl AuthorityPerEpochStore {
                     warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
                     return Ok(None);
                 }
+
+                let tx_digest = certificate.digest();
+
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction
                 // is constructed.
                 let certificate = VerifiedCertificate::new_unchecked(*certificate.clone());
 
                 debug!(
                     ?tracking_id,
-                    tx_digest = ?certificate.digest(),
+                    ?tx_digest,
                     "handle_consensus_transaction UserTransaction",
                 );
 
@@ -1234,7 +1240,7 @@ impl AuthorityPerEpochStore {
                     .should_accept_consensus_certs()
                 {
                     debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
-                    certificate.digest());
+                    tx_digest);
                     return Ok(None);
                 }
 
@@ -1435,6 +1441,23 @@ impl AuthorityPerEpochStore {
         self.tables
             .pending_checkpoint_signatures
             .insert(&(checkpoint_seq, index), info)
+    }
+
+    pub fn is_poison_pill_tx(&self, tx: &TransactionDigest) -> SuiResult<bool> {
+        Ok(self.tables.poison_pill_transactions.contains_key(tx)?)
+    }
+
+    pub fn load_all_poison_pill_transactions(&self) -> HashSet<TransactionDigest> {
+        self.tables
+            .poison_pill_transactions
+            .iter()
+            .map(|(tx, _)| tx)
+            .collect()
+    }
+
+    pub fn record_poison_pill_tx(&self, tx: &TransactionDigest) -> SuiResult {
+        info!(tx_digest = ?tx, "record_poison_pill_tx");
+        Ok(self.tables.poison_pill_transactions.insert(tx, &true)?)
     }
 
     pub(crate) fn record_epoch_pending_certs_process_time_metric(&self) {

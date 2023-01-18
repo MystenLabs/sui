@@ -402,6 +402,28 @@ impl CheckpointBuilder {
             for (height, (roots, last_checkpoint_of_epoch)) in
                 self.epoch_store.get_pending_checkpoints()
             {
+                // If there are transactions that are reliably crashing the validator, we should
+                // not include them in any checkpoint. Note that if there is a poison-pill, this
+                // validator may not yet have attempted to execute it, and so may not yet know that
+                // the tx should be excluded. In that case, we will crash while trying to execute
+                // it, and will not be able to progress to a completed checkpoint until after the
+                // tx has been identified as a poison-pill, at which point it will be omitted from
+                // the checkpoint.
+                //
+                // If some validators are not able to execute the tx, then we may not be able to
+                // produce a certified checkpoint, and at a minimum some validators will fork from
+                // the network. Such a case will require operator intervention - somehow, the
+                // validators that cannot execute the tx will have to be made to execute the tx
+                // somehow, which must be possible (by assumption).
+                let poison_pills = self.epoch_store.load_all_poison_pill_transactions();
+                let roots = roots
+                    .into_iter()
+                    .filter(|tx_digest| {
+                        warn!(?tx_digest, "omitting poison pill tx from checkpoint roots");
+                        !poison_pills.contains(tx_digest)
+                    })
+                    .collect();
+
                 last_processed_height = Some(height);
                 debug!("Making checkpoint at commit height {height}");
                 if let Err(e) = self

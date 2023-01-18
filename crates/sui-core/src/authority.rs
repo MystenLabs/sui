@@ -627,7 +627,7 @@ impl AuthorityState {
         self.metrics.total_cert_attempts.inc();
 
         if certificate.contains_shared_object()
-            && !epoch_store.is_tx_cert_consensus_message_processed(certificate)?
+            && !epoch_store.is_tx_cert_consensus_message_processed(&tx_digest)?
         {
             return Err(SuiError::CertificateNotSequencedError {
                 digest: *certificate.digest(),
@@ -1720,6 +1720,10 @@ impl AuthorityState {
                 debug!(?digest, "replaying failed cert from log");
 
                 if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
+                    epoch_store
+                        .record_poison_pill_tx(&digest)
+                        .expect("DB write cannot fail");
+
                     // This tx will be only partially executed, however the store will be in a safe
                     // state. We will simply never reach eventual consistency for this TX.
                     // TODO: Should we revert the tx entirely? I'm not sure the effort is

@@ -248,6 +248,83 @@ async fn reconfig_with_revert_end_to_end_test() {
     }
 }
 
+#[sim_test]
+async fn test_reconfig_after_poison_pill() {
+    let (sender, keypair) = get_account_key_pair();
+    let gas = Object::with_owner_for_testing(sender); // committed
+    let authorities =
+        spawn_test_authorities([gas.clone()].into_iter(), &test_authority_configs()).await;
+    let registry = Registry::new();
+
+    let tx = make_transfer_sui_transaction(
+        gas.compute_object_reference(),
+        sender,
+        None,
+        sender,
+        &keypair,
+    );
+    let mut net = AuthorityAggregator::new_from_local_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    let cert = net.process_transaction(tx.clone()).await.unwrap();
+
+    // Mark tx as a poison-pill
+    authorities.iter().for_each(|handle| {
+        handle.with(|node| {
+            node.state()
+                .epoch_store_for_testing()
+                .record_poison_pill_tx(cert.digest())
+                .unwrap();
+        })
+    });
+
+    // This should timeout because none of the authorities will attempt to execute the cert, but
+    // they will submit it to consensus.
+    //
+    // This is a slightly artificial test because the normal path would be:
+    // a) submit to consensus
+    // b) attempt to execute
+    // c) crash, then crash 3 more times in process_tx_recovery_log()
+    // d) mark tx as poisoned
+    // e) continue.
+    timeout(
+        Duration::from_secs(5),
+        net.process_certificate(cert.clone().into_inner()),
+    )
+    .await
+    .unwrap_err();
+
+    // Wait for tx to be processed by consensus
+    sleep(Duration::from_secs(5)).await;
+
+    // Make sure cert is processed by consensus, but not executed.
+    authorities.iter().for_each(|handle| {
+        handle.with(|node| {
+            assert!(node
+                .state()
+                .epoch_store_for_testing()
+                .is_tx_cert_consensus_message_processed(cert.digest())
+                .unwrap());
+            assert!(!node.state().is_tx_already_executed(cert.digest()).unwrap());
+        })
+    });
+
+    // ensure we can make it to next epoch.
+    trigger_reconfiguration(&authorities).await;
+
+    // In the new epoch, the tx is no longer marked poisoned, so we can executed it.
+    // (The assumption here is that the crashing bug would have been fixed before the new epoch).
+    net.committee.epoch = 1;
+    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    net.process_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+}
+
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 #[ignore] // test is flaky right now
