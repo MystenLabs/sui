@@ -60,7 +60,7 @@ impl AuthorityAPI for LocalAuthorityClient {
                 error: "Mock error after handle_transaction".to_owned(),
             });
         }
-        result.map(|r| r.into())
+        result.map(|v| v.into())
     }
 
     async fn handle_certificate(
@@ -224,7 +224,7 @@ impl AuthorityAPI for MockAuthorityApi {
     /// Handle Object information requests for this account.
     async fn handle_transaction_info_request(
         &self,
-        _request: TransactionInfoRequest,
+        request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let count = {
             let mut count = self.count.lock().unwrap();
@@ -237,12 +237,9 @@ impl AuthorityAPI for MockAuthorityApi {
             tokio::time::sleep(self.delay).await;
         }
 
-        let res = TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        };
-        Ok(res)
+        Err(SuiError::TransactionNotFound {
+            digest: request.transaction_digest,
+        })
     }
 
     async fn handle_checkpoint(
@@ -262,7 +259,7 @@ impl AuthorityAPI for MockAuthorityApi {
 
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
-    pub tx_info_resp_to_return: TransactionInfoResponse,
+    pub tx_info_resp_to_return: SuiResult<TransactionInfoResponse>,
 }
 
 #[async_trait]
@@ -271,7 +268,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(self.tx_info_resp_to_return.clone())
+        self.tx_info_resp_to_return.clone()
     }
 
     async fn handle_certificate(
@@ -313,16 +310,16 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
 impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
-            tx_info_resp_to_return: TransactionInfoResponse {
-                signed_transaction: None,
-                certified_transaction: None,
-                signed_effects: None,
-            },
+            tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
         }
     }
 
     pub fn set_tx_info_response(&mut self, resp: TransactionInfoResponse) {
-        self.tx_info_resp_to_return = resp;
+        self.tx_info_resp_to_return = Ok(resp);
+    }
+
+    pub fn reset_tx_info_response(&mut self) {
+        self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
     }
 }
 
