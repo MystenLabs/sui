@@ -3019,7 +3019,8 @@
           "epoch",
           "epoch_rolling_gas_cost_summary",
           "network_total_transactions",
-          "sequence_number"
+          "sequence_number",
+          "timestamp_ms"
         ],
         "properties": {
           "content_digest": {
@@ -3077,6 +3078,12 @@
             ]
           },
           "sequence_number": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "timestamp_ms": {
+            "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

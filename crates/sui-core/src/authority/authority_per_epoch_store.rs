@@ -32,7 +32,10 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
-use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify, EpochStats};
+use crate::checkpoints::{
+    CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
+    PendingCheckpointInfo,
+};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -197,7 +200,7 @@ pub struct AuthorityEpochTables {
     /// the sequence number of checkpoint does not match height here.
     ///
     /// The boolean value indicates whether this is the last checkpoint of the epoch.
-    pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
+    pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
@@ -1371,7 +1374,15 @@ impl AuthorityPerEpochStore {
                 Some(CmpOrdering::Greater) => false,
                 None => false,
             };
-            checkpoint_service.notify_checkpoint(self, index, roots, final_checkpoint)?;
+            let checkpoint = PendingCheckpoint {
+                roots,
+                details: PendingCheckpointInfo {
+                    timestamp_ms: committed_dag.leader.metadata.created_at,
+                    last_of_epoch: final_checkpoint,
+                    commit_height: index,
+                },
+            };
+            checkpoint_service.notify_checkpoint(self, checkpoint)?;
             if final_checkpoint {
                 info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
                 self.record_end_of_message_quorum_time_metric();
@@ -1380,25 +1391,23 @@ impl AuthorityPerEpochStore {
         self.record_checkpoint_boundary(round)
     }
 
-    pub fn get_pending_checkpoints(
-        &self,
-    ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))> {
+    pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
         self.tables.pending_checkpoints.iter().collect()
     }
 
     pub fn get_pending_checkpoint(
         &self,
         index: &CheckpointCommitHeight,
-    ) -> Result<Option<(Vec<TransactionDigest>, bool)>, TypedStoreError> {
+    ) -> Result<Option<PendingCheckpoint>, TypedStoreError> {
         self.tables.pending_checkpoints.get(index)
     }
 
     pub fn insert_pending_checkpoint(
         &self,
         index: &CheckpointCommitHeight,
-        transactions: &(Vec<TransactionDigest>, bool),
+        checkpoint: &PendingCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        self.tables.pending_checkpoints.insert(index, transactions)
+        self.tables.pending_checkpoints.insert(index, checkpoint)
     }
 
     pub fn process_pending_checkpoint(

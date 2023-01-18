@@ -62,6 +62,7 @@ impl CommitteeFixture {
             previous_digest: None,
             epoch_rolling_gas_cost_summary: Default::default(),
             next_epoch_committee: None,
+            timestamp_ms: 0,
         };
 
         self.create_certified_checkpoint(checkpoint)
@@ -117,6 +118,7 @@ impl CommitteeFixture {
                 previous_digest: Some(prev.summary.digest()),
                 epoch_rolling_gas_cost_summary: Default::default(),
                 next_epoch_committee: None,
+                timestamp_ms: 0,
             };
 
             let checkpoint = self.create_certified_checkpoint(summary);
@@ -159,6 +161,7 @@ impl CommitteeFixture {
             previous_digest: Some(previous_checkpoint.summary.digest()),
             epoch_rolling_gas_cost_summary: Default::default(),
             next_epoch_committee: Some(next_epoch_committee),
+            timestamp_ms: 0,
         };
 
         let checkpoint = self.create_certified_checkpoint(summary);
