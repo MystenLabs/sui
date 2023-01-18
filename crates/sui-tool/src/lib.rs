@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use sui_config::{genesis::Genesis, ValidatorInfo};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
-use sui_types::message_envelope::Message;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{base_types::*, messages::*, object::Owner};
 use tokio::time::Instant;
@@ -350,48 +349,48 @@ pub async fn get_transaction(tx_digest: TransactionDigest, genesis: PathBuf) -> 
 
     let responses = responses
         .iter()
-        .sorted_by(|(_, _, resp_a, _), (_, _, resp_b, _)| {
-            let sort_key_a = resp_a
-                .as_ref()
-                .map(|ok_result| {
-                    (ok_result.signed_effects)
-                        .as_ref()
-                        .map(|effects| *effects.digest())
-                })
-                .ok();
-            let sort_key_b = resp_b
-                .as_ref()
-                .map(|ok_result| {
-                    (ok_result.signed_effects)
-                        .as_ref()
-                        .map(|effects| *effects.digest())
-                })
-                .ok();
-            Ord::cmp(&sort_key_a, &sort_key_b)
+        .map(|r| {
+            let key =
+                r.2.as_ref()
+                    .map(|ok_result| match ok_result {
+                        TransactionInfoResponse::Signed(_) => None,
+                        TransactionInfoResponse::Executed(_, effects) => Some(effects.digest()),
+                    })
+                    .ok();
+            (key, r)
         })
-        .group_by(|(_name, _addr, resp, _ts)| {
-            resp.as_ref().map(|ok_result| {
-                (ok_result.signed_effects)
-                    .as_ref()
-                    .map(|effects| (effects.data(), effects.data().digest()))
+        .sorted_by(|(k1, _), (k2, _)| Ord::cmp(k1, k2))
+        .group_by(|(_, r)| {
+            r.2.as_ref().map(|ok_result| match ok_result {
+                TransactionInfoResponse::Signed(_) => None,
+                TransactionInfoResponse::Executed(_, effects) => {
+                    Some((effects.data(), effects.digest()))
+                }
             })
         });
     let mut s = String::new();
-    for (i, (st, group)) in (&responses).into_iter().enumerate() {
-        match st {
-            Ok(Some((effects, effect_digest))) => {
+    for (i, (key, group)) in responses.into_iter().enumerate() {
+        match key {
+            Ok(Some((effects, effects_digest))) => {
                 writeln!(
                     &mut s,
                     "#{:<2} tx_digest: {:<68?} effects_digest: {:?}",
-                    i, tx_digest, effect_digest
+                    i, tx_digest, effects_digest,
                 )?;
                 writeln!(&mut s, "{:#?}", effects)?;
+            }
+            Ok(None) => {
+                writeln!(
+                    &mut s,
+                    "#{:<2} tx_digest: {:<68?} Signed but not executed",
+                    i, tx_digest
+                )?;
             }
             other => {
                 writeln!(&mut s, "#{:<2} {:#?}", i, other)?;
             }
         }
-        for (j, res) in group.enumerate() {
+        for (j, (_, res)) in group.enumerate() {
             writeln!(
                 &mut s,
                 "        {:<4} {:<66} {:<56} (using {:.3} seconds)",

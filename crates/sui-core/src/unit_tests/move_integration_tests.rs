@@ -1942,7 +1942,8 @@ pub async fn build_and_try_publish_test_package(
         transaction.clone().into_inner(),
         send_and_confirm_transaction(authority, transaction)
             .await
-            .unwrap(),
+            .unwrap()
+            .1,
     )
 }
 

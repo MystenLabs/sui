@@ -1323,40 +1323,37 @@ impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionInfoRequest {
     pub transaction_digest: TransactionDigest,
 }
 
-impl From<TransactionDigest> for TransactionInfoRequest {
-    fn from(transaction_digest: TransactionDigest) -> Self {
-        TransactionInfoRequest { transaction_digest }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleCertificateResponse {
-    pub signed_effects: SignedTransactionEffects,
-}
-
-#[derive(Clone, Debug)]
-pub struct VerifiedHandleCertificateResponse {
-    pub signed_effects: VerifiedSignedTransactionEffects,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfoResponse<
+pub enum TransactionInfoResponse<
     TxnT = SignedTransaction,
     CertT = CertifiedTransaction,
-    EffectsT = SignedTransactionEffects,
+    EfxT = SignedTransactionEffects,
 > {
-    // The signed transaction response to handle_transaction
-    pub signed_transaction: Option<TxnT>,
-    // The certificate in case one is available
-    pub certified_transaction: Option<CertT>,
-    // The effects resulting from a successful execution should
-    // contain ObjectRef created, mutated, deleted and events.
-    pub signed_effects: Option<EffectsT>,
+    Signed(TxnT),
+    // TODO: Eventually support a mode for finalized transactions, where we include raw effects
+    // and the finalized epoch/checkpoint number.
+    // We also shouldn't return the cert in the Executed case, but currently the client is expecting it.
+    Executed(CertT, EfxT),
+}
+
+impl PartialEq for TransactionInfoResponse {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Signed(s1) => match other {
+                Self::Signed(s2) => s1.digest() == s2.digest(),
+                _ => false,
+            },
+            Self::Executed(c1, e1) => match other {
+                Self::Executed(c2, e2) => c1.digest() == c2.digest() && e1.digest() == e2.digest(),
+                _ => false,
+            },
+        }
+    }
 }
 
 pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
@@ -1365,23 +1362,42 @@ pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
     VerifiedSignedTransactionEffects,
 >;
 
-impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
-    fn from(v: VerifiedTransactionInfoResponse) -> Self {
-        let VerifiedTransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
-        } = v;
-
-        let certified_transaction = certified_transaction.map(|c| c.into_inner());
-        let signed_transaction = signed_transaction.map(|c| c.into_inner());
-        let signed_effects = signed_effects.map(|s| s.into_inner());
-        TransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
+impl<TxnT, CertT, EfxT> TransactionInfoResponse<TxnT, CertT, EfxT> {
+    pub fn into_signed_for_testing(self) -> TxnT {
+        match self {
+            Self::Signed(s) => s,
+            _ => unreachable!("Incorrect response type"),
         }
     }
+
+    pub fn into_executed_for_testing(self) -> (CertT, EfxT) {
+        match self {
+            Self::Executed(c, e) => (c, e),
+            _ => unreachable!("Incorrect response type"),
+        }
+    }
+}
+
+impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
+    fn from(other: VerifiedTransactionInfoResponse) -> Self {
+        match other {
+            VerifiedTransactionInfoResponse::Signed(s) => Self::Signed(s.into_inner()),
+            VerifiedTransactionInfoResponse::Executed(c, e) => {
+                Self::Executed(c.into_inner(), e.into_inner())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
+    // TODO: Add a case for finalized transaction.
+}
+
+#[derive(Clone, Debug)]
+pub struct VerifiedHandleCertificateResponse {
+    pub signed_effects: VerifiedSignedTransactionEffects,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
