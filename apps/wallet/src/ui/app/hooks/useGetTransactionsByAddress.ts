@@ -16,6 +16,8 @@ const dedupe = (results: string[] | undefined) =>
         ? results.filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
+const STALE_TIME = 1000 * 2;
+
 async function getTransactionsByAddress(
     address: string,
     cursor?: string
@@ -30,6 +32,7 @@ async function getTransactionsByAddress(
     return rpc.getTransactionWithEffectsBatch(dedupe(txnsIds.data));
 }
 
+// Fetch transactions on mount and every 2 seconds
 export function useGetTransactionsByAddress(
     address: SuiAddress
 ): UseQueryResult<SuiTransactionResponse[], unknown> {
@@ -39,7 +42,8 @@ export function useGetTransactionsByAddress(
         () => getTransactionsByAddress(normalizedAddress),
         {
             enabled: !!address,
-            refetchOnWindowFocus: true,
+            refetchOnMount: true,
+            staleTime: STALE_TIME,
         }
     );
 }
