@@ -204,30 +204,18 @@ impl CoinBalanceChangeEventChecker {
     }
 
     pub fn check(self, event: &SuiEvent) {
-        if let SuiEvent::CoinBalanceChange {
-            package_id,
-            transaction_module,
+        if let SuiEvent::BalanceChange {
             sender,
             change_type,
             owner,
             coin_type,
-            coin_object_id,
-            version,
             amount,
         } = event
         {
-            assert_eq_if_present!(self.package_id, package_id, "package_id");
-            assert_eq_if_present!(
-                self.transaction_module,
-                transaction_module,
-                "transaction_module"
-            );
             assert_eq_if_present!(self.sender, sender, "sender");
             assert_eq_if_present!(self.owner, owner, "owner");
             assert_eq_if_present!(self.change_type, change_type, "change_type");
             assert_eq_if_present!(self.coin_type, coin_type, "coin_type");
-            assert_eq_if_present!(self.coin_object_id, coin_object_id, "coin_object_id");
-            assert_eq_if_present!(self.version, version, "version");
             assert_eq_if_present!(self.amount, amount, "version");
         } else {
             panic!("event {:?} is not TransferObject Event", event);

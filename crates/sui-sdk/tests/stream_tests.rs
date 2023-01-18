@@ -63,11 +63,7 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
 
     let events = client
         .event_api()
-        .get_events_stream(
-            EventQuery::EventType(EventType::CoinBalanceChange),
-            None,
-            true,
-        )
+        .get_events_stream(EventQuery::EventType(EventType::BalanceChange), None, true)
         .collect::<Vec<_>>()
         .await;
 
@@ -101,11 +97,7 @@ async fn test_events_stream() -> Result<(), anyhow::Error> {
 
     let events = client
         .event_api()
-        .get_events_stream(
-            EventQuery::EventType(EventType::CoinBalanceChange),
-            None,
-            true,
-        )
+        .get_events_stream(EventQuery::EventType(EventType::BalanceChange), None, true)
         .collect::<Vec<_>>()
         .await;
     assert_eq!(starting_coin_balance_change_event_count + 1, events.len());

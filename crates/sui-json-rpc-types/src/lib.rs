@@ -2188,15 +2188,13 @@ pub enum SuiEvent {
     },
     /// Coin balance changing event
     #[serde(rename_all = "camelCase")]
-    CoinBalanceChange {
-        package_id: ObjectID,
-        transaction_module: String,
+    BalanceChange {
         sender: SuiAddress,
+        coin_type: String,
         change_type: BalanceChangeType,
         owner: Owner,
-        coin_type: String,
-        coin_object_id: ObjectID,
-        version: SequenceNumber,
+        /// The amount indicate the coin value changes for this event,
+        /// negative amount means spending coin value and positive means receiving coin value.
         amount: i128,
     },
     /// Epoch change
@@ -2324,25 +2322,17 @@ impl TryFrom<SuiEvent> for Event {
             },
             SuiEvent::EpochChange(id) => Event::EpochChange(id),
             SuiEvent::Checkpoint(seq) => Event::Checkpoint(seq),
-            SuiEvent::CoinBalanceChange {
-                package_id,
-                transaction_module,
+            SuiEvent::BalanceChange {
                 sender,
+                coin_type,
                 change_type,
                 owner,
-                coin_object_id: coin_id,
-                version,
-                coin_type,
                 amount,
-            } => Event::CoinBalanceChange {
-                package_id,
-                transaction_module: Identifier::from_str(&transaction_module)?,
+            } => Event::BalanceChange {
                 sender,
                 change_type,
                 owner,
                 coin_type,
-                coin_object_id: coin_id,
-                version,
                 amount,
             },
             SuiEvent::MutateObject {
@@ -2454,24 +2444,16 @@ impl SuiEvent {
             },
             Event::EpochChange(id) => SuiEvent::EpochChange(id),
             Event::Checkpoint(seq) => SuiEvent::Checkpoint(seq),
-            Event::CoinBalanceChange {
-                package_id,
-                transaction_module,
+            Event::BalanceChange {
                 sender,
                 change_type,
                 owner,
-                coin_object_id: coin_id,
-                version,
                 coin_type,
                 amount,
-            } => SuiEvent::CoinBalanceChange {
-                package_id,
-                transaction_module: transaction_module.to_string(),
+            } => SuiEvent::BalanceChange {
                 sender,
                 change_type,
                 owner,
-                coin_object_id: coin_id,
-                version,
                 coin_type,
                 amount,
             },
@@ -2502,7 +2484,7 @@ impl SuiEvent {
             SuiEvent::NewObject { .. } => "NewObject".to_string(),
             SuiEvent::EpochChange(..) => "EpochChange".to_string(),
             SuiEvent::Checkpoint(..) => "CheckPoint".to_string(),
-            SuiEvent::CoinBalanceChange { .. } => "CoinBalanceChange".to_string(),
+            SuiEvent::BalanceChange { .. } => "CoinBalanceChange".to_string(),
             SuiEvent::MutateObject { .. } => "MutateObject".to_string(),
         }
     }
@@ -2663,34 +2645,22 @@ impl PartialEq<SuiEvent> for Event {
                     false
                 }
             }
-            Event::CoinBalanceChange {
-                package_id: self_package_id,
-                transaction_module: self_transaction_module,
+            Event::BalanceChange {
                 sender: self_sender,
                 change_type: self_change_type,
                 owner: self_owner,
-                coin_object_id: self_coin_id,
-                version: self_version,
                 coin_type: self_coin_type,
                 amount: self_amount,
             } => {
-                if let SuiEvent::CoinBalanceChange {
-                    package_id,
-                    transaction_module,
+                if let SuiEvent::BalanceChange {
                     sender,
                     change_type,
                     owner,
-                    coin_object_id,
-                    version,
                     coin_type,
                     amount,
                 } = other
                 {
-                    package_id == self_package_id
-                        && &self_transaction_module.to_string() == transaction_module
-                        && self_owner == owner
-                        && self_coin_id == coin_object_id
-                        && self_version == version
+                    self_owner == owner
                         && &self_coin_type.to_string() == coin_type
                         && self_amount == amount
                         && self_sender == sender

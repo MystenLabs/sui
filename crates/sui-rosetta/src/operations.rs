@@ -284,7 +284,7 @@ impl Operations {
     fn get_balance_change_from_event(
         event: &SuiEvent,
     ) -> Option<(BalanceChangeType, SuiAddress, i128)> {
-        if let SuiEvent::CoinBalanceChange {
+        if let SuiEvent::BalanceChange {
             owner: Owner::AddressOwner(owner),
             coin_type,
             amount,

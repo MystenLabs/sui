@@ -174,7 +174,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let node = &test_cluster.fullnode_handle.sui_node;
     let context = &mut test_cluster.wallet;
 
-    let (transferred_object, sender, receiver, digest, gas, gas_used) =
+    let (transferred_object, sender, receiver, digest, _, gas_used) =
         transfer_coin(context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -237,37 +237,25 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     // one event is stored, and can be looked up by digest
     // query by timestamp verifies that a timestamp is inserted, within an hour
-    let sender_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "transfer_object".into(),
+    let sender_event = SuiEvent::BalanceChange {
         sender,
         change_type: BalanceChangeType::Pay,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(1),
-        coin_object_id: transferred_object,
         amount: -100000000000000,
     };
-    let recipient_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "transfer_object".into(),
+    let recipient_event = SuiEvent::BalanceChange {
         sender,
         change_type: BalanceChangeType::Receive,
         owner: Owner::AddressOwner(receiver),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(2),
-        coin_object_id: transferred_object,
         amount: 100000000000000,
     };
-    let gas_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "gas".into(),
+    let gas_event = SuiEvent::BalanceChange {
         sender,
         change_type: BalanceChangeType::Gas,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
         amount: (gas_used as i128).neg(),
     };
 
@@ -697,7 +685,7 @@ async fn test_full_node_event_read_api_ok() {
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (transferred_object, _, _, digest, gas, gas_used) = transfer_coin(context).await.unwrap();
+    let (transferred_object, _, _, digest, _, gas_used) = transfer_coin(context).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -720,37 +708,25 @@ async fn test_full_node_event_read_api_ok() {
 
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
-    let sender_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "transfer_object".into(),
+    let sender_event = SuiEvent::BalanceChange {
         sender,
         change_type: BalanceChangeType::Pay,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(1),
-        coin_object_id: transferred_object,
         amount: -100000000000000,
     };
-    let recipient_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "transfer_object".into(),
+    let recipient_event = SuiEvent::BalanceChange {
         sender,
         change_type: BalanceChangeType::Receive,
         owner: Owner::AddressOwner(receiver),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: SequenceNumber::from_u64(2),
-        coin_object_id: transferred_object,
         amount: 100000000000000,
     };
-    let gas_event = SuiEvent::CoinBalanceChange {
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: "gas".into(),
+    let gas_event = SuiEvent::BalanceChange {
         sender,
         change_type: BalanceChangeType::Gas,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
         amount: (gas_used as i128).neg(),
     };
 

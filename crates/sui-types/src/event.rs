@@ -169,15 +169,11 @@ pub enum Event {
         digest: ObjectDigest,
     },
     /// Coin balance changing event
-    CoinBalanceChange {
-        package_id: ObjectID,
-        transaction_module: Identifier,
+    BalanceChange {
         sender: SuiAddress,
+        coin_type: String,
         change_type: BalanceChangeType,
         owner: Owner,
-        coin_type: String,
-        coin_object_id: ObjectID,
-        version: SequenceNumber,
         /// The amount indicate the coin value changes for this event,
         /// negative amount means spending coin value and positive means receiving coin value.
         amount: i128,
@@ -268,27 +264,21 @@ impl Event {
         }
     }
 
-    pub fn balance_change(
-        ctx: &SingleTxContext,
+    pub fn balance_change1(
+        sender: SuiAddress,
         change_type: BalanceChangeType,
         owner: Owner,
-        coin_object_id: ObjectID,
-        version: SequenceNumber,
         object_type: &StructTag,
         amount: i128,
     ) -> Self {
         // We know this is a Coin object, safe to unwrap.
         let coin_type = object_type.type_params[0].to_string();
-        Event::CoinBalanceChange {
-            package_id: ctx.package_id,
-            transaction_module: ctx.transaction_module.clone(),
-            sender: ctx.sender,
-            change_type,
-            owner,
+        Event::BalanceChange {
+            sender,
             coin_type,
-            coin_object_id,
-            version,
+            change_type,
             amount,
+            owner,
         }
     }
 
@@ -345,11 +335,7 @@ impl Event {
             Event::TransferObject { object_id, .. }
             | Event::MutateObject { object_id, .. }
             | Event::DeleteObject { object_id, .. }
-            | Event::NewObject { object_id, .. }
-            | Event::CoinBalanceChange {
-                coin_object_id: object_id,
-                ..
-            } => Some(*object_id),
+            | Event::NewObject { object_id, .. } => Some(*object_id),
             _ => None,
         }
     }
@@ -362,7 +348,6 @@ impl Event {
             | Event::DeleteObject { package_id, .. }
             | Event::TransferObject { package_id, .. }
             | Event::MutateObject { package_id, .. }
-            | Event::CoinBalanceChange { package_id, .. }
             | Event::Publish { package_id, .. } => Some(*package_id),
             _ => None,
         }
@@ -377,7 +362,7 @@ impl Event {
             | Event::NewObject { sender, .. }
             | Event::Publish { sender, .. }
             | Event::DeleteObject { sender, .. }
-            | Event::CoinBalanceChange { sender, .. } => Some(*sender),
+            | Event::BalanceChange { sender, .. } => Some(*sender),
             _ => None,
         }
     }
@@ -400,9 +385,6 @@ impl Event {
             }
             | Event::MutateObject {
                 transaction_module, ..
-            }
-            | Event::CoinBalanceChange {
-                transaction_module, ..
             } => Some(transaction_module.as_str()),
             _ => None,
         }
@@ -413,7 +395,7 @@ impl Event {
         match self {
             Event::TransferObject { recipient, .. }
             | Event::NewObject { recipient, .. }
-            | Event::CoinBalanceChange {
+            | Event::BalanceChange {
                 owner: recipient, ..
             } => Some(recipient),
             _ => None,
@@ -463,7 +445,7 @@ impl Event {
             Event::TransferObject { object_type, .. }
             | Event::MutateObject { object_type, .. }
             | Event::NewObject { object_type, .. }
-            | Event::CoinBalanceChange {
+            | Event::BalanceChange {
                 coin_type: object_type,
                 ..
             } => Some(object_type.clone()),
@@ -476,7 +458,6 @@ impl Event {
         match self {
             Event::TransferObject { version, .. }
             | Event::MutateObject { version, .. }
-            | Event::CoinBalanceChange { version, .. }
             | Event::NewObject { version, .. }
             | Event::DeleteObject { version, .. }
             | Event::Publish { version, .. } => Some(version),
@@ -495,7 +476,7 @@ impl Event {
 
     /// Extracts the amount from a SuiEvent::CoinBalanceChange event
     pub fn amount(&self) -> Option<i128> {
-        if let Event::CoinBalanceChange { amount, .. } = self {
+        if let Event::BalanceChange { amount, .. } = self {
             Some(*amount)
         } else {
             None
@@ -504,7 +485,7 @@ impl Event {
 
     /// Extracts the balance change type from a SuiEvent::CoinBalanceChange event
     pub fn balance_change_type(&self) -> Option<&BalanceChangeType> {
-        if let Event::CoinBalanceChange { change_type, .. } = self {
+        if let Event::BalanceChange { change_type, .. } = self {
             Some(change_type)
         } else {
             None

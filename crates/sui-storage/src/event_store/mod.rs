@@ -218,31 +218,21 @@ impl StoredEvent {
     }
 
     pub fn into_coin_balance_change(self) -> Result<SuiEvent, anyhow::Error> {
-        let package_id = self.package_id()?;
-        let transaction_module = self.transaction_module()?;
         let sender = self.sender()?;
         let owner = self.recipient()?;
         let coin_type = self.object_type()?;
-        let coin_object_id = self.object_id()?;
         let change_type = self.change_type()?.ok_or_else(|| {
             anyhow::anyhow!("Can't extract balance change type from StoredEvent: {self:?}")
-        })?;
-        let version = self.object_version()?.ok_or_else(|| {
-            anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
         })?;
         let amount = self
             .amount()?
             .ok_or_else(|| anyhow::anyhow!("Can't extract amount from StoredEvent: {self:?}"))?;
 
-        Ok(SuiEvent::CoinBalanceChange {
-            package_id,
-            transaction_module,
+        Ok(SuiEvent::BalanceChange {
             sender,
             change_type,
             owner,
             coin_type,
-            coin_object_id,
-            version,
             amount,
         })
     }
@@ -382,7 +372,7 @@ impl TryInto<SuiEventEnvelope> for StoredEvent {
                     EventType::MutateObject => self.into_mutate_object(),
                     EventType::DeleteObject => self.into_delete_object(),
                     EventType::NewObject => self.into_new_object(),
-                    EventType::CoinBalanceChange => self.into_coin_balance_change(),
+                    EventType::BalanceChange => self.into_coin_balance_change(),
                     // TODO support "EpochChange" and "Checkpoint"
                     EventType::EpochChange => anyhow::bail!("Unsupported event type: EpochChange"),
                     EventType::Checkpoint => anyhow::bail!("Unsupported event type: Checkpoint"),

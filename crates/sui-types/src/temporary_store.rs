@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Neg;
 
 use move_core_types::account_address::AccountAddress;
@@ -138,18 +138,19 @@ impl<S> TemporaryStore<S> {
         let mut deleted = BTreeMap::new();
         let mut events = Vec::new();
 
+        // account balances aggregated by Sender, Coin type, and Owner.
+        let mut balances: HashMap<(SuiAddress, StructTag, Owner), i128> = HashMap::new();
+
         // Extract gas id and charged gas amount, this can be None for unmetered transactions.
         let (gas_id, gas_charged) =
             if let Some((sender, coin_id, ref gas_charged)) = self.gas_charged {
                 // Safe to unwrap, gas must be an input object.
                 let gas = &self.input_objects[&coin_id];
                 // Emit event for gas charges.
-                events.push(Event::balance_change(
-                    &SingleTxContext::gas(sender),
+                events.push(Event::balance_change1(
+                    sender,
                     BalanceChangeType::Gas,
                     gas.owner,
-                    coin_id,
-                    gas.version(),
                     gas.type_().unwrap(),
                     gas_charged.net_gas_usage().neg() as i128,
                 ));
@@ -185,8 +186,16 @@ impl<S> TemporaryStore<S> {
 
             // Create events for writes
             let old_obj = self.input_objects.get(&id);
-            let written_events =
-                Self::create_written_events(ctx, kind, id, &obj, old_obj, gas_id, gas_charged);
+            let written_events = Self::create_written_events(
+                ctx,
+                kind,
+                id,
+                &obj,
+                old_obj,
+                gas_id,
+                gas_charged,
+                &mut balances,
+            );
             events.extend(written_events);
             written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
@@ -201,34 +210,52 @@ impl<S> TemporaryStore<S> {
                 .and_then(|o| Coin::extract_balance_if_coin(o).ok())
                 .flatten();
 
-            let event = match (deleted_obj, balance) {
+            match (deleted_obj, balance) {
                 // Object is an owned (provided as input) coin object, create a spend event for the remaining balance.
                 (Some(deleted_obj), Some(balance)) => {
                     let balance = balance as i128;
-                    Event::balance_change(
-                        &ctx,
-                        BalanceChangeType::Pay,
-                        deleted_obj.owner,
-                        id,
-                        deleted_obj.version(),
-                        deleted_obj.type_().unwrap(),
-                        balance.neg(),
-                    )
+                    let coin_type = deleted_obj.type_().unwrap();
+                    *balances
+                        .entry((ctx.sender, coin_type.clone(), deleted_obj.owner))
+                        .or_default() -= balance;
                 }
                 // If deleted object is not owned coin, emit a delete event.
-                _ => Event::DeleteObject {
-                    package_id: ctx.package_id,
-                    transaction_module: ctx.transaction_module.clone(),
-                    sender: ctx.sender,
-                    object_id: id,
-                    version,
-                },
+                _ => {
+                    events.push(Event::DeleteObject {
+                        package_id: ctx.package_id,
+                        transaction_module: ctx.transaction_module.clone(),
+                        sender: ctx.sender,
+                        object_id: id,
+                        version,
+                    });
+                }
             };
-            events.push(event);
             deleted.insert(id, (version, kind));
         }
 
+        let balance_events =
+            balances
+                .into_iter()
+                .filter_map(|((sender, coin_type, owner), amount)| {
+                    if amount != 0 {
+                        let balance_change_type = if amount.is_negative() {
+                            BalanceChangeType::Pay
+                        } else {
+                            BalanceChangeType::Receive
+                        };
+                        Some(Event::balance_change1(
+                            sender,
+                            balance_change_type,
+                            owner,
+                            &coin_type,
+                            amount,
+                        ))
+                    } else {
+                        None
+                    }
+                });
         // Combine object events with move events.
+        events.extend(balance_events);
         events.extend(self.events);
 
         let store = InnerTemporaryStore {
@@ -248,28 +275,23 @@ impl<S> TemporaryStore<S> {
         old_obj: Option<&Object>,
         gas_id: Option<ObjectID>,
         gas_charged: i128,
+        balances: &mut HashMap<(SuiAddress, StructTag, Owner), i128>,
     ) -> Vec<Event> {
         match (kind, Coin::extract_balance_if_coin(obj), old_obj) {
             // For mutation of existing coin, we need to compute the coin balance delta
             // and emit appropriate event depends on ownership changes
             (WriteKind::Mutate, Ok(Some(_)), Some(old_obj)) => {
-                Self::create_coin_mutate_events(&ctx, gas_id, obj, old_obj, gas_charged)
+                Self::process_coin_balance(&ctx, gas_id, obj, old_obj, gas_charged, balances);
+                vec![]
             }
             // For all other coin change (unwrap/create), we emit full balance transfer event to the new address owner.
             (_, Ok(Some(balance)), _) => {
                 if let Owner::AddressOwner(_) = obj.owner {
-                    vec![Event::balance_change(
-                        &ctx,
-                        BalanceChangeType::Receive,
-                        obj.owner,
-                        obj.id(),
-                        obj.version(),
-                        obj.type_().unwrap(),
-                        balance as i128,
-                    )]
-                } else {
-                    vec![]
+                    *balances
+                        .entry((ctx.sender, obj.type_().unwrap().clone(), obj.owner))
+                        .or_default() += balance as i128;
                 }
+                vec![]
             }
             // For non-coin mutation
             (WriteKind::Mutate, Ok(None), old_obj) | (WriteKind::Unwrap, Ok(None), old_obj) => {
@@ -322,17 +344,16 @@ impl<S> TemporaryStore<S> {
         }
     }
 
-    fn create_coin_mutate_events(
+    fn process_coin_balance(
         ctx: &SingleTxContext,
         gas_id: Option<ObjectID>,
         coin: &Object,
         old_coin: &Object,
         gas_charged: i128,
-    ) -> Vec<Event> {
+        balances: &mut HashMap<(SuiAddress, StructTag, Owner), i128>,
+    ) {
         // We know this is a coin, safe to unwrap.
         let coin_object_type = coin.type_().unwrap();
-        let mut events = vec![];
-
         let old_balance = Coin::extract_balance_if_coin(old_coin);
         let balance = Coin::extract_balance_if_coin(coin);
 
@@ -350,51 +371,30 @@ impl<S> TemporaryStore<S> {
             match (old_coin.owner == coin.owner, old_balance.cmp(&balance)) {
                 // same owner, old balance > new balance, spending balance.
                 // For the spend event, we are spending from the old coin so the event will use the old coin version and owner info.
-                (true, Ordering::Greater) => events.push(Event::balance_change(
-                    ctx,
-                    BalanceChangeType::Pay,
-                    old_coin.owner,
-                    old_coin.id(),
-                    old_coin.version(),
-                    coin_object_type,
-                    balance - old_balance,
-                )),
+                (true, Ordering::Greater) => {
+                    *balances
+                        .entry((ctx.sender, coin_object_type.clone(), old_coin.owner))
+                        .or_default() += balance - old_balance
+                }
                 // Same owner, balance increased.
-                (true, Ordering::Less) => events.push(Event::balance_change(
-                    ctx,
-                    BalanceChangeType::Receive,
-                    coin.owner,
-                    coin.id(),
-                    coin.version(),
-                    coin_object_type,
-                    balance - old_balance,
-                )),
+                (true, Ordering::Less) => {
+                    *balances
+                        .entry((ctx.sender, coin_object_type.clone(), coin.owner))
+                        .or_default() += balance - old_balance
+                }
                 // ownership changed, add an event for spending and one for receiving.
                 (false, _) => {
-                    events.push(Event::balance_change(
-                        ctx,
-                        BalanceChangeType::Pay,
-                        old_coin.owner,
-                        coin.id(),
-                        old_coin.version(),
-                        coin_object_type,
-                        // negative amount indicate spend.
-                        old_balance.neg(),
-                    ));
-                    events.push(Event::balance_change(
-                        ctx,
-                        BalanceChangeType::Receive,
-                        coin.owner,
-                        coin.id(),
-                        coin.version(),
-                        coin_object_type,
-                        balance,
-                    ));
+                    *balances
+                        .entry((ctx.sender, coin_object_type.clone(), old_coin.owner))
+                        .or_default() -= old_balance;
+
+                    *balances
+                        .entry((ctx.sender, coin_object_type.clone(), coin.owner))
+                        .or_default() += balance;
                 }
                 _ => {}
             }
-        }
-        events
+        };
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not

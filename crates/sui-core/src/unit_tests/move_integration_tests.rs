@@ -322,7 +322,7 @@ async fn test_object_owning_another_object() {
     .unwrap();
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 2);
-    assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+    assert_eq!(effects.events[0].event_type(), EventType::BalanceChange);
     assert_eq!(effects.events[1].event_type(), EventType::NewObject);
     let parent = effects.created[0].0;
     assert_eq!(effects.events[1].object_id(), Some(parent.0));
@@ -343,7 +343,7 @@ async fn test_object_owning_another_object() {
     .unwrap();
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 2);
-    assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+    assert_eq!(effects.events[0].event_type(), EventType::BalanceChange);
     assert_eq!(effects.events[1].event_type(), EventType::NewObject);
     let child = effects.created[0].0;
 
@@ -439,7 +439,7 @@ async fn test_object_owning_another_object() {
     .unwrap();
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 2);
-    assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+    assert_eq!(effects.events[0].event_type(), EventType::BalanceChange);
     assert_eq!(effects.events[1].event_type(), EventType::NewObject);
     let new_parent = effects.created[0].0;
 
@@ -697,7 +697,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .unwrap();
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 2);
-    assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+    assert_eq!(effects.events[0].event_type(), EventType::BalanceChange);
     assert_eq!(effects.events[1].event_type(), EventType::NewObject);
     let parent = effects.created[0].0;
     assert_eq!(effects.events[1].object_id(), Some(parent.0));
@@ -718,7 +718,7 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .unwrap();
     assert!(effects.status.is_ok());
     assert_eq!(effects.events.len(), 2);
-    assert_eq!(effects.events[0].event_type(), EventType::CoinBalanceChange);
+    assert_eq!(effects.events[0].event_type(), EventType::BalanceChange);
     assert_eq!(effects.events[1].event_type(), EventType::NewObject);
     let child = effects.created[0].0;
 

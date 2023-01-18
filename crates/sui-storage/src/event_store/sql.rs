@@ -825,7 +825,7 @@ mod tests {
                 "test_module",
                 "test_foo",
             ),
-            test_utils::new_test_balance_change_event(1_006_000, 6, 0, None, None, None),
+            test_utils::new_test_balance_change_event(1_006_000, 6, 0, None, None),
             test_utils::new_test_mutate_event(1_007_000, 7, 0, 1, "0x2::test::Object", None, None),
         ];
         assert_eq!(db.add_events(&to_insert).await?, 8);
@@ -1039,7 +1039,7 @@ mod tests {
                 "test_module",
                 "test_foo",
             ),
-            test_utils::new_test_balance_change_event(1_006_000, 6, 0, None, None, None),
+            test_utils::new_test_balance_change_event(1_006_000, 6, 0, None, None),
         ];
         db.add_events(&to_insert).await?;
         info!("Done inserting");
@@ -1101,7 +1101,7 @@ mod tests {
 
         // Query Balance Change Event
         let queried_events = db
-            .events_by_type(EventType::CoinBalanceChange, 6, 0, 1, false)
+            .events_by_type(EventType::BalanceChange, 6, 0, 1, false)
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);
