@@ -3,6 +3,21 @@
 
 import { type ActiveValidator } from '@mysten/sui.js';
 
+const ROUNDING_MODE = 4;
+
+function roundTo(number: number, decimals: number) {
+    if (decimals < 0) {
+        const factor = Math.pow(10, decimals);
+        return Math.round(number * factor) / factor;
+    } else {
+        return +(
+            Math.round(Number(number + 'e+' + decimals)) +
+            'e-' +
+            decimals
+        );
+    }
+}
+
 export function calculateAPY(validators: ActiveValidator, epoch: number) {
     const { sui_balance, starting_epoch, delegation_token_supply } =
         validators.fields.delegation_staking_pool.fields;
@@ -14,5 +29,5 @@ export function calculateAPY(validators: ActiveValidator, epoch: number) {
                 +delegation_token_supply.fields.value,
         365 / num_epochs_participated - 1
     );
-    return apy ? apy : 0;
+    return apy ? roundTo(apy, ROUNDING_MODE) : 0;
 }
