@@ -83,44 +83,39 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
-            let execution_future = async move {
-                let _guard = permit;
-                if let Ok(true) = authority.is_tx_already_executed(&digest) {
-                    return;
-                }
-                let mut attempts = 0;
-                loop {
-                    attempts += 1;
-                    let res = authority
-                        .try_execute_immediately(&certificate, &epoch_store)
-                        .await;
-                    if let Err(e) = res {
-                        if attempts == EXECUTION_MAX_ATTEMPTS {
-                            error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
-                            authority.metrics.execution_driver_execution_failures.inc();
-                            return;
-                        }
-                        // Assume only transient failure can happen. Permanent failure is probably
-                        // a bug. There is nothing that can be done to recover from permanent failures.
-                        error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
-                        sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
-                    } else {
-                        break;
+            let _guard = permit;
+            if let Ok(true) = authority.is_tx_already_executed(&digest) {
+                return;
+            }
+            let mut attempts = 0;
+            loop {
+                attempts += 1;
+                let res = authority
+                    .try_execute_immediately(&certificate, &epoch_store)
+                    .await;
+                if let Err(e) = res {
+                    if attempts == EXECUTION_MAX_ATTEMPTS {
+                        error!("Failed to execute certified transaction after {attempts} attempts! error={e} certificate={:?}", certificate);
+                        authority.metrics.execution_driver_execution_failures.inc();
+                        return;
                     }
+                    // Assume only transient failure can happen. Permanent failure is probably
+                    // a bug. There is nothing that can be done to recover from permanent failures.
+                    error!(tx_digest=?digest, "Failed to execute certified transaction! attempt {attempts}, {e}");
+                    sleep(EXECUTION_FAILURE_RETRY_INTERVAL).await;
+                } else {
+                    break;
                 }
+            }
 
-                // Remove the certificate that finished execution from the pending_certificates table.
-                authority.certificate_executed(&digest, &epoch_store);
+            // Remove the certificate that finished execution from the pending_certificates table.
+            authority.certificate_executed(&digest, &epoch_store);
 
-                authority
-                    .metrics
-                    .execution_driver_executed_transactions
-                    .inc();
-            };
+            authority
+                .metrics
+                .execution_driver_executed_transactions
+                .inc();
 
-            execution_future
-                .instrument(error_span!("execution_driver", tx_digest = ?digest))
-                .await;
-        });
+        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
     }
 }
