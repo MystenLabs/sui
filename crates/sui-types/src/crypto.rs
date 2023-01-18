@@ -1092,6 +1092,13 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
         obligation: &mut VerificationObligation,
         message_index: usize,
     ) -> SuiResult<()> {
+        fp_ensure!(
+            self.epoch == committee.epoch(),
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch(),
+                actual_epoch: self.epoch,
+            }
+        );
         let weight = committee.weight(&self.authority);
         fp_ensure!(
             weight > 0,
