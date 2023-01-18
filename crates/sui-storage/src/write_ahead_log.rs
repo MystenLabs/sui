@@ -177,6 +177,9 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     fn drop(&mut self) {
+        // do not run drop handler if current node was killed in simulator.
+        sui_simulator::return_if_killed!();
+
         if !self.dead {
             let tx = self.tx;
             error!(digest = ?tx, "DBTxGuard dropped without explicit commit");

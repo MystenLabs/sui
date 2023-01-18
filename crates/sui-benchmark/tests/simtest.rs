@@ -58,10 +58,13 @@ mod test {
 
         let checkpoints_per_epoch = get_var("CHECKPOINTS_PER_EPOCH", 0);
         if checkpoints_per_epoch > 0 {
-            builder = builder.with_checkpoints_per_epoch(30);
+            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
         }
 
-        let test_cluster = builder.build().await.unwrap();
+        let test_cluster = Arc::new(builder.build().await.unwrap());
+
+        let node_restarter = test_cluster.random_node_restarter();
+        node_restarter.run();
 
         let swarm = &test_cluster.swarm;
         let context = &test_cluster.wallet;
