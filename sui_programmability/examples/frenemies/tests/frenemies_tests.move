@@ -91,7 +91,9 @@ module frenemies::frenemies_tests {
             ts::return_shared(system_state);
             ts::return_shared(leaderboard)
         };
-        ts::end(scenario_val);
+        let effects = ts::end(scenario_val);
+        // should emit an event for each scorecard update
+        assert!(ts::num_user_events(&effects) == 1, 0)
     }
 
     #[expected_failure(abort_code = frenemies::frenemies::EScoreNotYetAvailable)]

@@ -32,12 +32,13 @@ module frenemies::assignment {
         let validators = validator_set::active_validators(sui_system::validators(state));
         let len = vector::length(validators);
 
-        // derive vassignment from the stake of first validator, an address, and the epoch.
-        // this means that a given address will always get the same assignment within an epoch
-        let top_stake = validator::total_stake(vector::borrow(validators, 0));
+        // derive validator + goal from the user's address and the current epoch.
+        // a given address will always get the same assignment in the same epoch
+        // goal assignments "round-robin" in that once the initial assignment
+        // is known, the rest of the assignments are predictable
         let addr = address::to_u256(tx_context::sender(ctx));
         let epoch = tx_context::epoch(ctx);
-        let assignment_seed = addr ^ ((top_stake ^ epoch) as u256);
+        let assignment_seed = ((addr + (epoch as u256)) as u256);
         let validator_idx = assignment_seed % (len as u256);
         let validator = validator::sui_address(vector::borrow(validators, (validator_idx as u64)));
         let goal = get_goal(addr, epoch);
