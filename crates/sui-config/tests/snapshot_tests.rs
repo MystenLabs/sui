@@ -38,6 +38,7 @@ fn genesis_config_snapshot_matches() {
 
     let fake_obj_id = ObjectID::from(fake_addr);
     let mut genesis_config = GenesisConfig::for_local_testing();
+    genesis_config.parameters.timestamp_ms = 0;
     for account in &mut genesis_config.accounts {
         account.address = Some(fake_addr);
         for gas_obj in &mut account.gas_objects {
