@@ -224,12 +224,7 @@ impl Swarm {
 
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
-        let start_handles = self
-            .nodes_iter_mut()
-            .map(|node| node.spawn())
-            .collect::<Result<Vec<_>>>()?;
-
-        try_join_all(start_handles).await?;
+        try_join_all(self.nodes_iter_mut().map(|node| node.start())).await?;
 
         Ok(())
     }
