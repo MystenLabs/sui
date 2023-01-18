@@ -7,21 +7,18 @@ pub mod narwhal_manager_tests;
 
 use arc_swap::ArcSwap;
 use fastcrypto::traits::KeyPair;
-use futures::stream::FuturesUnordered;
-use mysten_metrics::{monitored_scope, spawn_monitored_task, RegistryService};
+use mysten_metrics::{monitored_scope, RegistryService};
 use narwhal_config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::NodeStorage;
 use narwhal_worker::TransactionValidator;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 #[derive(PartialEq)]
 enum Running {
@@ -47,7 +44,6 @@ pub struct NarwhalManager {
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
     running: Mutex<Running>,
-    old_epoch_data_removal_handles: Mutex<FuturesUnordered<JoinHandle<()>>>,
 }
 
 impl NarwhalManager {
@@ -71,7 +67,6 @@ impl NarwhalManager {
             worker_ids_and_keypairs: config.worker_ids_and_keypairs,
             storage_base_path: config.storage_base_path,
             running: Mutex::new(Running::False),
-            old_epoch_data_removal_handles: Mutex::new(FuturesUnordered::new()),
         }
     }
 
@@ -167,16 +162,11 @@ impl NarwhalManager {
                     "Narwhal shutdown is complete - took {} seconds",
                     now.elapsed().as_secs_f64()
                 );
-
-                // Drop storage
-                let path_clone = self.storage_base_path.clone();
-                let handle = spawn_monitored_task!(Self::remove_old_epoch_data(path_clone, epoch));
-                let old_epoch_data_removal_handles =
-                    &*self.old_epoch_data_removal_handles.lock().await;
-                old_epoch_data_removal_handles.push(handle);
             }
             Running::False => {
-                tracing::info!("Shutdown was called but Narwhal node is not running");
+                tracing::info!(
+                    "Narwhal Manager shutdown was called but Narwhal node is not running"
+                );
             }
         }
 
@@ -189,64 +179,7 @@ impl NarwhalManager {
         store_path
     }
 
-    async fn remove_old_epoch_data(storage_base_path: PathBuf, epoch: Epoch) {
-        // Keep previous epoch data as a safety buffer and remove starting from epoch - 1
-        let drop_boundary = epoch - 1;
-
-        tracing::info!(
-            "Starting Narwhal old epoch data removal for epoch {:?}",
-            drop_boundary
-        );
-
-        // Get all the epoch stores in the base path directory
-        let files = match fs::read_dir(storage_base_path) {
-            Ok(f) => f,
-            Err(e) => {
-                tracing::error!("Narwhal Manager cannot read the files in the storage path directory for epoch cleanup: {:?}", e);
-                return;
-            }
-        };
-
-        // Look for any that are less than or equal to the drop boundary and drop
-        for file_res in files {
-            let f = match file_res {
-                Ok(f) => f,
-                Err(e) => {
-                    tracing::error!(
-                        "Narwhal Manager error while cleaning up storage of previous epochs: {:?}",
-                        e
-                    );
-                    continue;
-                }
-            };
-
-            let name = f.file_name();
-            let file_epoch_string = match name.to_str() {
-                Some(f) => f,
-                None => continue,
-            };
-
-            let file_epoch = match file_epoch_string.to_owned().parse::<u64>() {
-                Ok(f) => f,
-                Err(e) => {
-                    tracing::error!("Narwhal Manager could not parse file in storage path into epoch for cleanup: {:?}",e);
-                    continue;
-                }
-            };
-
-            if file_epoch <= drop_boundary {
-                if let Err(e) = fs::remove_dir(f.path()) {
-                    tracing::error!(
-                        "Narwhal Manager could not remove old epoch storage directory: {:?}",
-                        e
-                    );
-                }
-            }
-        }
-
-        tracing::info!(
-            "Completed Narwhal old epoch data removal process for epoch {:?}",
-            epoch
-        );
+    pub fn get_storage_base_path(&self) -> PathBuf {
+        self.storage_base_path.clone()
     }
 }
