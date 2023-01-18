@@ -35,13 +35,11 @@ function StakeForm({
     const {
         setFieldValue,
         values: { amount },
+        setTouched,
     } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-    useEffect(() => {
-        onClearRef.current();
-    }, [amount]);
 
     const [gasBudgetEstimation, symbol] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
@@ -52,16 +50,25 @@ function StakeForm({
         coinBalance -
         BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
-    const maxTokenFormated = useFormatCoin(coinBalanceMinusGas, coinType);
+    const maxTokenFormate = useFormatCoin(coinBalanceMinusGas, coinType);
 
-    const maxToken = maxTokenFormated[0];
-    const queryResult = maxTokenFormated[2];
+    const maxToken = maxTokenFormate[0];
+    const queryResult = maxTokenFormate[2];
     const [coinDecimals] = useCoinDecimals(coinType);
+    const tokenBalance = useFormatCoin(coinBalance, coinType)[0];
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
+
+    useEffect(() => {
+        onClearRef.current();
+        if (unstake) {
+            setFieldValue('amount', tokenBalance);
+            setTouched({ amount: true });
+        }
+    }, [setFieldValue, setTouched, unstake, tokenBalance]);
 
     const calculateRemaining = useMemo(() => {
         if (!amount || !maxToken) return 0;
@@ -84,17 +91,20 @@ function StakeForm({
                                 component={NumberInput}
                                 allowNegative={false}
                                 name="amount"
-                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium"
+                                className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
                                 decimals
+                                disabled={unstake}
                             />
-                            <button
-                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
-                                onClick={setMaxToken}
-                                disabled={queryResult.isLoading}
-                                type="button"
-                            >
-                                Max
-                            </button>
+                            {!unstake && (
+                                <button
+                                    className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
+                                    onClick={setMaxToken}
+                                    disabled={queryResult.isLoading}
+                                    type="button"
+                                >
+                                    Max
+                                </button>
+                            )}
                         </div>
                     }
                     footer={
@@ -130,7 +140,7 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {calculateRemaining} {symbol}
+                                {unstake ? 0 : calculateRemaining} {symbol}
                             </Text>
                         </div>
                     )}
