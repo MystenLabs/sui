@@ -338,16 +338,14 @@ module sui::sui_system {
     /// Withdraw some portion of a delegation from a validator's staking pool.
     public entry fun request_withdraw_delegation(
         self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
-        principal_withdraw_amount: u64,
+        delegation: Delegation,
+        staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
         validator_set::request_withdraw_delegation(
             &mut self.validators,
             delegation,
             staked_sui,
-            principal_withdraw_amount,
             ctx,
         );
     }
@@ -355,14 +353,13 @@ module sui::sui_system {
     // Switch delegation from the current validator to a new one.
     public entry fun request_switch_delegation(
         self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
+        delegation: Delegation,
+        staked_sui: StakedSui,
         new_validator_address: address,
-        switch_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
         validator_set::request_switch_delegation(
-            &mut self.validators, delegation, staked_sui, new_validator_address, switch_pool_token_amount, ctx
+            &mut self.validators, delegation, staked_sui, new_validator_address, ctx
         );
     }
 

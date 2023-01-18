@@ -2447,16 +2447,6 @@
           }
         },
         {
-          "name": "switch_pool_token_amount",
-          "description": "Switching stake amount",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
           "name": "gas",
           "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
           "schema": {
@@ -2489,7 +2479,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Withdraw some portion of a delegation from a validator's staking pool.",
+      "description": "Withdraw a delegation from a validator's staking pool.",
       "params": [
         {
           "name": "signer",
@@ -2513,16 +2503,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "principal_withdraw_amount",
-          "description": "Principal amount to withdraw",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         },
         {

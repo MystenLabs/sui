@@ -307,20 +307,12 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         signer: SuiAddress,
         delegation: ObjectID,
         staked_sui: ObjectID,
-        principal_withdraw_amount: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
         Ok(TransactionBytes::from_data(
             self.builder
-                .request_withdraw_delegation(
-                    signer,
-                    delegation,
-                    staked_sui,
-                    principal_withdraw_amount,
-                    gas,
-                    gas_budget,
-                )
+                .request_withdraw_delegation(signer, delegation, staked_sui, gas, gas_budget)
                 .await?,
         )?)
     }
@@ -331,7 +323,6 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
         delegation: ObjectID,
         staked_sui: ObjectID,
         new_validator_address: SuiAddress,
-        switch_pool_token_amount: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -342,7 +333,6 @@ impl RpcTransactionBuilderServer for FullNodeTransactionBuilderApi {
                     delegation,
                     staked_sui,
                     new_validator_address,
-                    switch_pool_token_amount,
                     gas,
                     gas_budget,
                 )
