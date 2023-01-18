@@ -213,5 +213,5 @@ We will see that this object is no longer there in the address.
 
 In this chapter you learned:
 - to pass objects by reference
-- to pass objects by value (deleting or transfering them)
+- to pass objects by value (deleting or transferring them)
 - to transfer and interact with objects on-chain
