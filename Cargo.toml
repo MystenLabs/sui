@@ -78,8 +78,6 @@ debug = 1
 split-debuginfo = 'packed'
 # Without stripping, sui binary size would be > 1GB.
 strip = 'debuginfo'
-# Exit process with SIGABRT when any thread panics
-panic = 'abort'
 
 # Inherits from the release profile above.
 [profile.bench]
