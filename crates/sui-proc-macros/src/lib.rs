@@ -170,14 +170,13 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
 
                     struct Ret;
 
-                    impl Into<()> for Ret {
-                        fn into(self) -> () {
-                            ()
+                    impl From<Ret> for () {
+                        fn from(_ret: Ret) -> Self {
                         }
                     }
 
-                    impl<E> Into<Result<(), E>> for Ret {
-                        fn into(self) -> Result<(), E> {
+                    impl<E> From<Ret> for Result<(), E> {
+                        fn from(_ret: Ret) -> Self {
                             Ok(())
                         }
                     }

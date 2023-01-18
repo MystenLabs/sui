@@ -332,7 +332,6 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -418,10 +417,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     {
         new_objs.first().unwrap().reference.object_id
     } else {
-        // User assert since panic causes test issues
-        assert!(false);
-        // Use this to satisfy type checker
-        ObjectID::random()
+        panic!();
     };
 
     // Try a bad argument: decimal
@@ -499,7 +495,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -551,7 +546,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -590,7 +584,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 mutated.get(1).unwrap().reference.object_id,
             )
         } else {
-            assert!(false);
             panic!()
         };
 
@@ -608,8 +601,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
         panic!()
     };
 
@@ -626,8 +617,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
         panic!()
     };
 
@@ -669,7 +658,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 mutated.get(1).unwrap().reference.object_id,
             )
         } else {
-            assert!(false);
             panic!()
         };
 
@@ -687,7 +675,6 @@ fn test_bug_1078() {
     write!(writer, "{:?}", read).unwrap();
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await?;
@@ -816,7 +803,6 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await?;
@@ -878,7 +864,6 @@ async fn get_parsed_object_assert_existence(
         .expect("Object {object_id} does not exist.")
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -969,7 +954,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
