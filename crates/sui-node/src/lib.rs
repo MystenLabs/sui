@@ -52,7 +52,7 @@ use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::{info, warn};
+use tracing::{error_span, info, warn, Instrument};
 use typed_store::DBMetrics;
 pub mod admin;
 mod handle;
@@ -215,6 +215,8 @@ impl SuiNode {
 
         // ensure genesis txn was executed
         if epoch_store.epoch() == 0 {
+            let txn = &genesis.transaction();
+            let span = error_span!("genesis_txn", tx_digest = ?txn.digest());
             state
                 .execute_certificate(
                     &genesis
@@ -224,6 +226,7 @@ impl SuiNode {
                         .unwrap(),
                     &epoch_store,
                 )
+                .instrument(span)
                 .await
                 .unwrap();
         }

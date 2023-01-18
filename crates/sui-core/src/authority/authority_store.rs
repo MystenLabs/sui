@@ -745,7 +745,7 @@ impl AuthorityStore {
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.objects,
             written.iter().map(|(_, (obj_ref, new_object, _kind))| {
-                trace!(tx_digest=?transaction_digest, ?obj_ref, "writing object");
+                debug!(?obj_ref, "writing object");
                 (ObjectKey::from(obj_ref), new_object)
             }),
         )?;
@@ -796,7 +796,7 @@ impl AuthorityStore {
         // TODO: replace with optimistic transactions (i.e. set lock to tx if none)
         let _mutexes = self.acquire_locks(owned_input_objects).await;
 
-        debug!(?tx_digest, ?owned_input_objects, "acquire_locks");
+        debug!(?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
 
         let locks = self
@@ -847,7 +847,7 @@ impl AuthorityStore {
                     // Exactly the same epoch and same transaction, nothing to lock here.
                     continue;
                 } else {
-                    debug!(prev_epoch =? previous_epoch, cur_epoch =? epoch, ?tx_digest, "Overriding an old lock from previous epoch");
+                    debug!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
                     // Fall through and override the old lock.
                 }
             }

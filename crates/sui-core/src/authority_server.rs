@@ -20,7 +20,7 @@ use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
 use tokio::task::JoinHandle;
-use tracing::{info, Instrument};
+use tracing::{error_span, info, Instrument};
 
 use crate::{
     authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
@@ -271,7 +271,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::debug_span!("validator_state_process_tx", ?tx_digest);
+        let span = tracing::error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)
@@ -436,12 +436,12 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(Self::handle_certificate(
-            state,
-            consensus_adapter,
-            request,
-            metrics
-        ))
+        spawn_monitored_task!(async move {
+            let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
+            Self::handle_certificate(state, consensus_adapter, request, metrics)
+                .instrument(span)
+                .await
+        })
         .await
         .unwrap()
     }

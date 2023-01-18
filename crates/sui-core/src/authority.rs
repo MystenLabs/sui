@@ -31,7 +31,7 @@ use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tracing::{debug, error, info, instrument, trace, warn, Instrument};
+use tracing::{debug, error, error_span, info, instrument, trace, warn, Instrument};
 use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
@@ -597,7 +597,7 @@ impl AuthorityState {
             .execute_certificate_with_effects_latency
             .start_timer();
         let digest = *certificate.digest();
-        debug!(tx_digest = ?digest, "execute_certificate_with_effects");
+        debug!("execute_certificate_with_effects");
         fp_ensure!(
             effects.data().transaction_digest == digest,
             SuiError::ErrorWhileProcessingCertificate {
@@ -647,8 +647,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let _metrics_guard = self.metrics.execute_certificate_latency.start_timer();
-        let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "execute_certificate");
+        debug!("execute_certificate");
 
         self.metrics.total_cert_attempts.inc();
 
@@ -684,7 +683,7 @@ impl AuthorityState {
     ) -> SuiResult<VerifiedSignedTransactionEffects> {
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
         let tx_digest = *certificate.digest();
-        debug!(?tx_digest, "execute_certificate_internal");
+        debug!("execute_certificate_internal");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -938,7 +937,7 @@ impl AuthorityState {
         let _ = self
             .post_process_one_tx(&digest)
             .await
-            .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
+            .tap_err(|e| error!("tx post processing failed: {e}"));
 
         // Update metrics.
         self.metrics.total_effects.inc();
@@ -1173,7 +1172,7 @@ impl AuthorityState {
         }
     }
 
-    #[instrument(level = "debug", skip_all, fields(tx_digest =? digest), err)]
+    #[instrument(level = "debug", skip_all, err)]
     fn index_tx(
         &self,
         indexes: &IndexStore,
@@ -1360,7 +1359,7 @@ impl AuthorityState {
         }))
     }
 
-    #[instrument(level = "debug", skip_all, fields(tx_digest=?digest), err)]
+    #[instrument(level = "debug", skip_all, err)]
     async fn post_process_one_tx(&self, digest: &TransactionDigest) -> SuiResult {
         if self.indexes.is_none()
             && self.transaction_streamer.is_none()
@@ -1774,6 +1773,7 @@ impl AuthorityState {
 
                 if let Err(e) = self
                     .process_certificate(tx_guard, &cert.into(), epoch_store)
+                    .instrument(error_span!("process_tx_recovery_log", tx_digest = ?digest))
                     .await
                 {
                     warn!(?digest, "Failed to process in-progress certificate: {e}");
@@ -2440,7 +2440,6 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
-        let digest = certificate.digest();
         let effects_digest = signed_effects.inner().digest();
         self.database
             .update_state(
@@ -2451,7 +2450,7 @@ impl AuthorityState {
             )
             .await
             .tap_ok(|_| {
-                debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
+                debug!(?effects_digest, "commit_certificate finished");
             })?;
 
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
@@ -2501,7 +2500,7 @@ impl AuthorityState {
             if let Some(duration) = retry_strategy.next() {
                 // Wait to retry
                 tokio::time::sleep(duration).await;
-                trace!(?tx_digest, "Retrying getting pending transaction");
+                trace!("Retrying getting pending transaction");
             } else {
                 // No more retries, just quit
                 break;

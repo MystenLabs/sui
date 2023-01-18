@@ -39,7 +39,7 @@ use sui_types::messages_checkpoint::{
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, error_span, info, warn, Instrument};
 use typed_store::rocks::{DBMap, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -652,9 +652,12 @@ impl CheckpointBuilder {
             .record_epoch_last_transaction_cert_creation_time_metric(
                 timer.elapsed().as_millis() as i64
             );
+
+        let span = error_span!("augment_epoch_last_checkpoint", tx_digest = ?cert.digest());
         let signed_effect = self
             .state
             .try_execute_immediately(&cert, &self.epoch_store)
+            .instrument(span)
             .await?;
         debug!(
             "Effects of the change epoch transaction: {:?}",
@@ -1007,7 +1010,8 @@ impl CheckpointServiceNotify for CheckpointService {
             if sequence <= last_certified {
                 debug!(
                     "Ignore signature for checkpoint sequence {} from {} - already certified",
-                    info.summary.summary.sequence_number, info.summary.auth_signature.authority
+                    info.summary.summary.sequence_number,
+                    info.summary.auth_signature.authority.concise(),
                 );
                 return Ok(());
             }

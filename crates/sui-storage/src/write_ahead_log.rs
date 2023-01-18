@@ -282,7 +282,7 @@ where
 
     fn commit_tx(&self, tx: &TransactionDigest, is_commit: bool) -> SuiResult {
         if is_commit {
-            debug!(digest = ?tx, "committing tx");
+            debug!("committing tx");
         }
         let write_batch = self.tables.log.batch();
         let write_batch = write_batch.delete_batch(&self.tables.log, std::iter::once(tx))?;

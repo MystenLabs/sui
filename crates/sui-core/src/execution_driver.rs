@@ -12,7 +12,7 @@ use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, error_span, info, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -73,7 +73,7 @@ pub async fn execution_process(
 
         // Process any tx that failed to commit.
         if let Err(err) = authority.process_tx_recovery_log(None, &epoch_store).await {
-            tracing::error!("Error processing tx recovery log: {:?}", err);
+            error!("Error processing tx recovery log: {:?}", err);
         }
 
         let limit = limit.clone();
@@ -115,6 +115,7 @@ pub async fn execution_process(
                 .metrics
                 .execution_driver_executed_transactions
                 .inc();
-        });
+
+        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
     }
 }
