@@ -656,6 +656,13 @@ impl CheckpointBuilder {
             .state
             .try_execute_immediately(&cert, &self.epoch_store)
             .await?;
+        debug!(
+            "Effects of the change epoch transaction: {:?}",
+            signed_effect
+        );
+        // The change epoch transaction cannot fail to execute.
+        // TODO: Audit the advance_epoch move call to make sure there is no way for it to fail.
+        assert!(signed_effect.status.is_ok());
         effects.push(signed_effect.into_message());
         Ok(())
     }
