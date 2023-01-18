@@ -39,6 +39,8 @@ import {
 } from '../types';
 import { Provider } from './provider';
 
+import { DynamicFieldPage } from '../types/dynamic_fields';
+
 export class VoidProvider extends Provider {
   // API Version
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
@@ -143,6 +145,21 @@ export class VoidProvider extends Provider {
 
   dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
     throw this.newError('dryRunTransaction');
+  }
+
+  getDynamicFields(
+    _parent_object_id: ObjectId,
+    _cursor: ObjectId | null = null,
+    _limit: number | null = null
+  ): Promise<DynamicFieldPage> {
+    throw this.newError('getDynamicFields');
+  }
+
+  getDynamicFieldObject(
+    _parent_object_id: ObjectId,
+    _name: string
+  ): Promise<GetObjectDataResponse> {
+    throw this.newError('getDynamicFieldObject');
   }
 
   async getTotalTransactionNumber(): Promise<number> {

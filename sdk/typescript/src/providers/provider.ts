@@ -37,6 +37,8 @@ import {
   DevInspectResults,
 } from '../types';
 
+import { DynamicFieldPage } from '../types/dynamic_fields';
+
 ///////////////////////////////
 // Exported Abstracts
 export abstract class Provider {
@@ -282,6 +284,28 @@ export abstract class Provider {
    * @param txBytes
    */
   abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+
+  /**
+   * Return the list of dynamic field objects owned by an object
+   * @param parent_object_id - The id of the parent object
+   * @param cursor - Optional paging cursor
+   * @param limit - Maximum item returned per page
+   */
+  abstract getDynamicFields(
+    parent_object_id: ObjectId,
+    cursor: ObjectId | null,
+    limit: number | null
+  ): Promise<DynamicFieldPage>;
+
+  /**
+   * Return the dynamic field object information for a specified object
+   * @param parent_object_id - The ID od the quered parent object
+   * @param name - The name of the dynamic field
+   */
+  abstract getDynamicFieldObject(
+    parent_object_id: ObjectId,
+    name: string
+  ): Promise<GetObjectDataResponse>;
 
   /**
    * Getting the reference gas price for the network

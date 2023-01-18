@@ -50,6 +50,7 @@ import {
   DelegatedStake,
   ValidatorMetaData,
 } from '../types';
+import { DynamicFieldPage } from '../types/dynamic_fields'
 import {
   PublicKey,
   SignatureScheme,
@@ -757,6 +758,46 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error dry running transaction with request type: ${err}`
+      );
+    }
+  }
+
+  // Dynamic Fields
+  async getDynamicFields(
+    parent_object_id: ObjectId,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ): Promise<DynamicFieldPage> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getDynamicFields',
+        [parent_object_id, cursor, limit],
+        DynamicFieldPage,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting dynamic fields with request type: ${err} for parent_object_id: ${parent_object_id}, cursor: ${cursor} and limit: ${limit}.`
+      );
+    }
+  }
+
+  async getDynamicFieldObject(
+    parent_object_id: ObjectId,
+    name: string
+  ): Promise<GetObjectDataResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getDynamicFieldObject',
+        [parent_object_id, name],
+        GetObjectDataResponse,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting dynamic field object with request type: ${err} for parent_object_id: ${parent_object_id} and name: ${name}.`
       );
     }
   }
