@@ -5,6 +5,7 @@ import { registerWallet } from '@mysten/wallet-standard';
 
 import { DAppInterface } from './DAppInterface';
 import { SuiWallet } from './WalletStandardInterface';
+import './trpc';
 
 registerWallet(new SuiWallet());
 
