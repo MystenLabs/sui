@@ -3564,6 +3564,8 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
             )
             .await
             .unwrap();
+    } else {
+        warn!("Failed to verify certificate: {:?}", cert);
     }
 }
 
@@ -3591,6 +3593,8 @@ pub(crate) async fn send_consensus_no_execution(
             )
             .await
             .unwrap();
+    } else {
+        warn!("Failed to verify certificate: {:?}", cert);
     }
 }
 

@@ -9,7 +9,7 @@ use std::{
 use mysten_metrics::spawn_monitored_task;
 use sui_types::messages::VerifiedCertificate;
 use tokio::{
-    sync::{mpsc::UnboundedReceiver, Semaphore},
+    sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
 use tracing::{debug, error, info};
@@ -30,6 +30,7 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<VerifiedCertificate>,
+    mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
 
@@ -38,14 +39,24 @@ pub async fn execution_process(
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let certificate = if let Some(cert) = rx_ready_certificates.recv().await {
-            cert
-        } else {
-            // Should only happen after the AuthorityState has shut down and tx_ready_certificate
-            // has been dropped by TransactionManager.
-            info!("No more certificate will be received. Exiting ...");
-            return;
+        let certificate;
+        tokio::select! {
+            result = rx_ready_certificates.recv() => {
+                if let Some(cert) = result {
+                    certificate = cert;
+                } else {
+                    // Should only happen after the AuthorityState has shut down and tx_ready_certificate
+                    // has been dropped by TransactionManager.
+                    info!("No more certificate will be received. Exiting executor ...");
+                    return;
+                };
+            }
+            _ = &mut rx_execution_shutdown => {
+                info!("Shutdown signal received. Exiting executor ...");
+                return;
+            }
         };
+
         let authority = if let Some(authority) = authority_state.upgrade() {
             authority
         } else {

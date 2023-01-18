@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
-use parking_lot::Mutex;
-use sui_types::storage::ObjectKey;
+use parking_lot::RwLock;
+use sui_types::{base_types::ObjectID, storage::ObjectKey};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
@@ -25,7 +25,7 @@ pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
-    inner: Mutex<Inner>,
+    inner: RwLock<Inner>,
 }
 
 #[derive(Default)]
@@ -34,15 +34,19 @@ struct Inner {
     // Note that except for immutable objects, a given key may only have one TransactionDigest in
     // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
     // cannot determine from TransactionData whether an input is mutable or immutable.
-    missing_inputs: BTreeMap<ObjectKey, BTreeSet<TransactionDigest>>,
+    missing_inputs: HashMap<ObjectKey, BTreeSet<TransactionDigest>>,
+
+    // Number of transactions that depend on each object ID.
+    // Used for throttling signing of hot objects.
+    input_objects: HashMap<ObjectID, usize>,
 
     // A transaction enqueued to TransactionManager must be in either pending_certificates or
     // executing_certificates.
 
     // Maps transactions to their missing input objects.
-    pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
+    pending_certificates: HashMap<TransactionDigest, BTreeSet<ObjectKey>>,
     // Transactions that have all input objects available, but have not finished execution.
-    executing_certificates: BTreeSet<TransactionDigest>,
+    executing_certificates: HashSet<TransactionDigest>,
 }
 
 impl TransactionManager {
@@ -80,7 +84,7 @@ impl TransactionManager {
         certs: Vec<VerifiedCertificate>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
-        let inner = &mut self.inner.lock();
+        let inner = &mut self.inner.write();
         for cert in certs {
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
@@ -156,6 +160,8 @@ impl TransactionManager {
                     digest,
                     objkey
                 );
+                let input_count = inner.input_objects.entry(objkey.0).or_default();
+                *input_count += 1;
             }
 
             assert!(
@@ -191,25 +197,34 @@ impl TransactionManager {
         let mut ready_digests = Vec::new();
 
         {
-            let inner = &mut self.inner.lock();
+            let inner = &mut self.inner.write();
             for object_key in object_keys {
-                let Some(digests) = inner.missing_inputs.remove(&object_key) else {
+                if let Some(digests) = inner.missing_inputs.remove(&object_key) {
+                    // Clean up object ID count table.
+                    let input_count = inner.input_objects.get_mut(&object_key.0).unwrap();
+                    *input_count -= digests.len();
+                    if *input_count == 0 {
+                        inner.input_objects.remove(&object_key.0);
+                    }
+                    // Clean up pending certificates table.
+                    for digest in digests.iter() {
+                        // Pending certificate must exist.
+                        let set = inner.pending_certificates.get_mut(digest).unwrap();
+                        assert!(set.remove(&object_key));
+                        // When a certificate has no missing input, it is ready to execute.
+                        if set.is_empty() {
+                            debug!(tx_digest = ?digest, "certificate ready");
+                            inner.pending_certificates.remove(digest).unwrap();
+                            assert!(inner.executing_certificates.insert(*digest));
+                            ready_digests.push(*digest);
+                        } else {
+                            debug!(tx_digest = ?digest, missing = ?set, "Certificate waiting on missing inputs");
+                        }
+                    }
+                } else {
+                    // No pending transaction is using this object ref as input.
                     continue;
                 };
-
-                for digest in digests.iter() {
-                    let set = inner.pending_certificates.entry(*digest).or_default();
-                    set.remove(&object_key);
-                    // This certificate has no missing input. It is ready to execute.
-                    if set.is_empty() {
-                        debug!(tx_digest = ?digest, "certificate ready");
-                        inner.pending_certificates.remove(digest);
-                        assert!(inner.executing_certificates.insert(*digest));
-                        ready_digests.push(*digest);
-                    } else {
-                        debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
-                    }
-                }
             }
 
             self.metrics
@@ -253,7 +268,7 @@ impl TransactionManager {
         epoch_store: &AuthorityPerEpochStore,
     ) {
         {
-            let inner = &mut self.inner.lock();
+            let inner = &mut self.inner.write();
             inner.executing_certificates.remove(digest);
             self.metrics
                 .transaction_manager_num_executing_certificates
@@ -266,5 +281,18 @@ impl TransactionManager {
     fn certificate_ready(&self, certificate: VerifiedCertificate) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);
+    }
+
+    // Returns the number of transactions waiting on each object ID.
+    pub(crate) fn objects_queue_len(&self, keys: Vec<ObjectID>) -> Vec<(ObjectID, usize)> {
+        let inner = self.inner.read();
+        keys.into_iter()
+            .map(|key| {
+                (
+                    key,
+                    inner.input_objects.get(&key).cloned().unwrap_or_default(),
+                )
+            })
+            .collect()
     }
 }
