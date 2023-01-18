@@ -5296,36 +5296,23 @@
         }
       },
       "SuiExecuteTransactionResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "EffectsCert"
-            ],
-            "properties": {
-              "EffectsCert": {
-                "type": "object",
-                "required": [
-                  "certificate",
-                  "confirmed_local_execution",
-                  "effects"
-                ],
-                "properties": {
-                  "certificate": {
-                    "$ref": "#/components/schemas/CertifiedTransaction"
-                  },
-                  "confirmed_local_execution": {
-                    "type": "boolean"
-                  },
-                  "effects": {
-                    "$ref": "#/components/schemas/CertifiedTransactionEffects"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
+        "type": "object",
+        "required": [
+          "certificate",
+          "confirmed_local_execution",
+          "effects"
+        ],
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/CertifiedTransaction"
+          },
+          "confirmed_local_execution": {
+            "type": "boolean"
+          },
+          "effects": {
+            "$ref": "#/components/schemas/CertifiedTransactionEffects"
           }
-        ]
+        }
       },
       "SuiExecutionResult": {
         "type": "object",
