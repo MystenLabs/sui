@@ -1829,6 +1829,7 @@ impl AuthorityState {
         let new_epoch = new_committee.epoch;
         db.perpetual_tables.set_recovery_epoch(new_epoch)?;
         self.reopen_epoch_db(new_committee).await;
+        self.transaction_manager.reconfigure(new_epoch);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
