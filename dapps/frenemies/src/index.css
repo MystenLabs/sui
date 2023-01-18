@@ -1,3 +1,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+body {
+    background: #A0B6C3;
+    /* mix-blend-mode: saturation; */
+}
+
+.leaderboard {
+    background: linear-gradient(180deg, #768AF7 0%, #97A7FF 100%);
+    border-radius: 16px;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+    margin: 0 5px;
+}
+
+.round {
+    font-family: 'Inter', 'Helvetica Neue';
+    font-style: normal;
+    font-weight: 100;
+    font-size: 130px;
+    line-height: 194px;
+    text-align: center;
+    letter-spacing: 0.1em;
+}

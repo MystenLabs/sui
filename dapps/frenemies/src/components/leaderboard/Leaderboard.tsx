@@ -1,27 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Record } from "./Row";
 import Row from './Row';
 import TableHeader from "./TableHeader";
-
-type LeaderboardOptions = {
-  rank: number,
-  totalScore: number,
-  records: Record[];
-};
+import type { Leaderboard as LeaderboardType } from '../../network/types';
 
 /**
  * Table representing a Leaderboard
  */
-function Leaderboard({ records }: LeaderboardOptions) {
+function Leaderboard({ board }: { board: LeaderboardType}) {
   return (
-    <div className="w-auto">
+    <div className="leaderboard w-auto">
       <table className="table-fixed w-auto">
         <TableHeader />
-        {records.map((record) => {
-          return <Row record={record} />
-        })}
+        {board.topScores.map((score) => <Row score={score} />)}
       </table>
     </div>
   );

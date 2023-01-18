@@ -4,12 +4,9 @@
 function TableHeader() {
   return (
     <tr>
-      <th>Round</th>
-      <th>Role</th>
-      <th>Assigned Validator</th>
-      <th>Assigned Validator</th>
-      <th>Objective</th>
+      <th>Name</th>
       <th>Score</th>
+      <th>Participation</th>
     </tr>
   );
 }

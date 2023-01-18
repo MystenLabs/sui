@@ -9,7 +9,7 @@
  */
 function Block({ title, value }: { title: string, value: string }) {
     return (
-        <div className="flex-auto py-4 text-center">
+        <div className="card flex-auto py-4 px-6 text-left">
             <p>{title}</p>
             <p>{value}</p>
         </div>
