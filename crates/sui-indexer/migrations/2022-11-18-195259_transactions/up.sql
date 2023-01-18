@@ -20,6 +20,9 @@ CREATE TABLE transactions (
     computation_cost BIGINT NOT NULL,
     storage_cost BIGINT NOT NULL,
     storage_rebate BIGINT NOT NULL,
+    -- gas price from transaction data,
+    -- not the reference gas price
+    gas_price BIGINT NOT NULL,
     -- serialized transaction
     transaction_content TEXT NOT NULL,
     UNIQUE(transaction_digest) 

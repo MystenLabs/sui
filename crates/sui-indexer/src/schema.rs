@@ -165,6 +165,7 @@ diesel::table! {
         computation_cost -> Int8,
         storage_cost -> Int8,
         storage_rebate -> Int8,
+        gas_price -> Int8,
         transaction_content -> Text,
     }
 }
