@@ -134,7 +134,7 @@ export function ValidatorStats({
                         </Stats>
 
                         <Stats
-                            label="Total Reward"
+                            label="Total SUI Rewards"
                             tooltip="Coming soon"
                             unavailable={+totalRewards <= 0}
                         >
@@ -162,7 +162,7 @@ export function ValidatorStats({
                             />
 
                             <Stats
-                                label="voted Last Round"
+                                label="Voted Last Round"
                                 tooltip="Coming soon"
                                 unavailable
                             />
