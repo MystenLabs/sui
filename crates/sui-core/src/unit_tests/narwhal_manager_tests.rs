@@ -239,11 +239,7 @@ async fn test_remove_old_epoch_data() {
     path_100.push(base_path_string.clone() + "/100");
 
     // Remove the directories created next in case it wasn't cleaned up before the last test run terminated
-    _ = fs::remove_dir(path_other.clone());
-    _ = fs::remove_dir(path_98.clone());
-    _ = fs::remove_dir(path_99.clone());
-    _ = fs::remove_dir(path_100.clone());
-    _ = fs::remove_dir(base_path.clone());
+    _ = fs::remove_dir_all(base_path.clone());
 
     // Create some epoch directories
     fs::create_dir(base_path.clone()).unwrap();
@@ -267,11 +263,7 @@ async fn test_remove_old_epoch_data() {
     }
 
     // Remove the directories we created before the test possibly terminates
-    _ = fs::remove_dir(path_other);
-    _ = fs::remove_dir(path_98);
-    _ = fs::remove_dir(path_99);
-    _ = fs::remove_dir(path_100);
-    _ = fs::remove_dir(base_path);
+    _ = fs::remove_dir_all(base_path);
 
     assert_eq!(epochs_left.len(), 1);
     assert_eq!(epochs_left[0], 100);

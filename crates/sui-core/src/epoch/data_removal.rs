@@ -53,6 +53,10 @@ impl EpochDataRemover {
 }
 
 pub(crate) fn remove_old_epoch_data(storage_base_path: PathBuf, epoch: Epoch) {
+    if epoch < 1 {
+        return;
+    }
+
     // Keep previous epoch data as a safety buffer and remove starting from epoch - 1
     let drop_boundary = epoch - 1;
 
@@ -98,7 +102,7 @@ pub(crate) fn remove_old_epoch_data(storage_base_path: PathBuf, epoch: Epoch) {
         };
 
         if file_epoch <= drop_boundary {
-            if let Err(e) = fs::remove_dir(f.path()) {
+            if let Err(e) = fs::remove_dir_all(f.path()) {
                 tracing::error!(
                     "Data Remover could not remove old epoch storage directory: {:?}",
                     e
