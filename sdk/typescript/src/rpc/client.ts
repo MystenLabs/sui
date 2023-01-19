@@ -78,7 +78,12 @@ export class JsonRpcClient {
           if (res.ok) {
             callback(null, result);
           } else {
-            callback(new Error(`${res.status} ${res.statusText}: ${result}`));
+            const isHtml = res.headers.get('content-type') === 'text/html';
+            callback(
+              new Error(
+                `${res.status} ${res.statusText}${isHtml ? '' : `: ${result}`}`
+              )
+            );
           }
         } catch (err) {
           if (err instanceof Error) callback(err);
