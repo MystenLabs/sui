@@ -1,5 +1,22 @@
 # @mysten/sui.js
 
+## 0.23.0
+
+### Minor Changes
+
+- e26f47cbf: added getDelegatedStake and getValidators and validator type
+- b745cde24: Add a call(endpoint, params) method to invoke any RPC endpoint
+- 35e0df780: EventID should use TransactionDigest instead of TxSequence
+- 5cd51dd38: Deprecate sui_executeTransaction in favor of sui_executeTransactionSerializedSig
+- 8474242af: Add methods for getDynamicFields and getDynamicFieldObject
+- f74181212: Add method to deserialize a public key, using it's schema and base64 data
+
+### Patch Changes
+
+- f3444bdf2: fix faucet response type
+- 01efa8bc6: Add getReferenceGasPrice
+- 01efa8bc6: Use reference gas price instead of a hardcoded "1" for transaction construction
+
 ## 0.22.0
 
 ### Minor Changes
