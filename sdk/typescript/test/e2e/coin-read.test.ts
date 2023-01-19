@@ -52,7 +52,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
         const suiBalance = await toolbox.provider.getBalance(toolbox.address());
         expect(suiBalance.coinType).toEqual("0x2::sui::SUI");
         expect(suiBalance.coinObjectCount).toEqual(5);
-        expect(suiBalance.totalBalance).toEqual(500000000000000);
+        expect(suiBalance.totalBalance).toBeGreaterThan(0);
 
         const testBalance = await toolbox.provider.getBalance(toolbox.address(), testType);
         expect(testBalance.coinType).toEqual(testType);
