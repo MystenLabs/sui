@@ -45,9 +45,9 @@ export function ValidatorStats({
         () =>
             getStakedPercent(
                 BigInt(delegatedStake),
-                BigInt(totalValidatorStake)
+                BigInt(totalStake)
             ),
-        [delegatedStake, totalValidatorStake]
+        [delegatedStake, totalStake]
     );
 
     return (
@@ -115,7 +115,6 @@ export function ValidatorStats({
                         <Stats
                             label="Last Epoch"
                             tooltip="Coming soon"
-                            unavailable={+lastEpoch <= 0}
                         >
                             <Heading
                                 as="div"
