@@ -3,7 +3,7 @@ footer {
 }
 
 nav.links {
-    @apply mx-auto grid grid-cols-3 text-center sm:grid-cols-4 sm:text-left;
+    @apply mx-auto grid grid-cols-4 text-center sm:grid-cols-5 sm:text-left;
 }
 
 nav.links > div > h6 {
