@@ -418,6 +418,7 @@ module sui::sui_system {
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
+        stake_subsidy_rate: u64, // what percentage of the total stake do we mint as stake subsidy.
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -431,19 +432,21 @@ module sui::sui_system {
             EBPS_TOO_LARGE,
         );
 
-        let storage_reward = balance::create_staking_rewards(storage_charge);
-        let computation_reward = balance::create_staking_rewards(computation_charge);
-
-        // Include stake subsidy in the rewards given out to validators and delegators.
-        stake_subsidy::advance_epoch(&mut self.stake_subsidy, &mut self.sui_supply);
-        let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
-        let stake_subsidy_amount = balance::value(&stake_subsidy);
-        balance::join(&mut computation_reward, stake_subsidy);
-
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
         let storage_fund_balance = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund_balance;
+
+        let storage_reward = balance::create_staking_rewards(storage_charge);
+        let computation_reward = balance::create_staking_rewards(computation_charge);
+
+        // Include stake subsidy in the rewards given out to validators and delegators.
+        stake_subsidy::mint_stake_subsidy_proportional_to_total_stake_testnet(
+            &mut self.stake_subsidy, &mut self.sui_supply, stake_subsidy_rate, total_stake);
+        let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
+        let stake_subsidy_amount = balance::value(&stake_subsidy);
+        balance::join(&mut computation_reward, stake_subsidy);
+
         let total_stake_u128 = (total_stake as u128);
         let computation_charge_u128 = (computation_charge as u128);
 
