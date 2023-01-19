@@ -65,7 +65,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
 
       it("Get total supply", async () => {
         const testSupply = await toolbox.provider.getTotalSupply(testType);
-        expect(testSupply).toEqual(11);
+        expect(testSupply.value).toEqual(11);
       })
     
     }
