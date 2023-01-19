@@ -29,12 +29,16 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus};
-use sui_types::utils::to_sender_signed_transaction;
+use sui_types::utils::{
+    make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
+};
 
+use crate::epoch::epoch_metrics::EpochMetrics;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_macros::sim_test;
 use sui_protocol_constants::MAX_MOVE_PACKAGE_SIZE;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::object::Data;
 use sui_types::{
     base_types::dbg_addr,
@@ -45,9 +49,6 @@ use sui_types::{
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
-
-use crate::epoch::epoch_metrics::EpochMetrics;
-use sui_types::dynamic_field::DynamicFieldType;
 use tracing::info;
 
 pub enum TestCallArg {
@@ -4102,4 +4103,113 @@ async fn test_blocked_move_calls() {
             .unwrap(),
         SuiError::BlockedMoveFunction
     );
+}
+
+#[tokio::test]
+async fn test_tallying_rule_score_updates() {
+    let seed = [1u8; 32];
+    let (authorities, committee) = make_committee_key(&mut StdRng::from_seed(seed));
+    let auth_0_name = authorities[0].public().into();
+    let auth_1_name = authorities[1].public().into();
+    let auth_2_name = authorities[2].public().into();
+    let auth_3_name = authorities[3].public().into();
+    let dir = env::temp_dir();
+    let epoch_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&epoch_store_path).unwrap();
+    let metrics = EpochMetrics::new(&Registry::new());
+    let epoch_store = AuthorityPerEpochStore::new(
+        auth_0_name,
+        committee.clone(),
+        &epoch_store_path,
+        None,
+        metrics.clone(),
+    );
+
+    let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {
+        epoch_store
+            .get_num_certified_checkpoint_sigs_by(auth_name)
+            .unwrap()
+    };
+
+    // Only include auth_0 and auth_1 in this certified checkpoint.
+    let ckpt_1 = mock_certified_checkpoint(authorities[0..2].iter(), committee.clone(), 1);
+
+    assert!(epoch_store
+        .record_certified_checkpoint_signatures(&ckpt_1)
+        .is_ok());
+
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_0_name),
+        Some((Some(1), 1))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_1_name),
+        Some((Some(1), 1))
+    );
+    assert_eq!(get_stored_seq_num_and_counter(&auth_2_name), None);
+    assert_eq!(get_stored_seq_num_and_counter(&auth_3_name), None);
+
+    // Only include auth_1, auth_2 and auth_3 in this certified checkpoint.
+    let ckpt_2 = mock_certified_checkpoint(authorities[1..].iter(), committee.clone(), 2);
+
+    assert!(epoch_store
+        .record_certified_checkpoint_signatures(&ckpt_2)
+        .is_ok());
+
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_0_name),
+        Some((Some(1), 1))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_1_name),
+        Some((Some(2), 2))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_2_name),
+        Some((Some(2), 1))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_3_name),
+        Some((Some(2), 1))
+    );
+
+    // Check idempotency.
+    // Call the record function again with the same checkpoint and the stored
+    // values shouldn't change.
+    assert!(epoch_store
+        .record_certified_checkpoint_signatures(&ckpt_2)
+        .is_ok());
+
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_0_name),
+        Some((Some(1), 1))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_1_name),
+        Some((Some(2), 2))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_2_name),
+        Some((Some(2), 1))
+    );
+    assert_eq!(
+        get_stored_seq_num_and_counter(&auth_3_name),
+        Some((Some(2), 1))
+    );
+
+    // Check that the metrics are correctly set.
+    let get_auth_score_metric = |auth_name: &AuthorityName| {
+        metrics
+            .tallying_rule_scores
+            .get_metric_with_label_values(&[
+                &format!("{:?}", auth_name.concise()),
+                &committee.epoch().to_string(),
+            ])
+            .unwrap()
+            .get()
+    };
+    assert_eq!(get_auth_score_metric(&auth_0_name), 1);
+    assert_eq!(get_auth_score_metric(&auth_1_name), 2);
+    assert_eq!(get_auth_score_metric(&auth_2_name), 1);
+    assert_eq!(get_auth_score_metric(&auth_3_name), 1);
 }

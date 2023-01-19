@@ -46,7 +46,8 @@ use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+    CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -212,6 +213,12 @@ pub struct AuthorityEpochTables {
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
+
+    /// Stores the sequence number of the last certified checkpoint we have recorded for idempotency and
+    /// the number of checkpoint each validator participated in certifying during the current
+    /// epoch, used for tallying rule scores.
+    num_certified_checkpoint_signatures:
+        DBMap<AuthorityName, (Option<CheckpointSequenceNumber>, u64)>,
 }
 
 impl AuthorityEpochTables {
@@ -880,6 +887,70 @@ impl AuthorityPerEpochStore {
         self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
 
+    /// Called when a ceritified checkpoint is inserted into the checkpoint store.
+    /// This function records the validators' participation in the certified checkpoint by
+    /// incrementing the counters stored in the epoch tables. Tallying score metrics are
+    /// also updated at this point to send the most up-to-date scores.
+    pub fn record_certified_checkpoint_signatures(
+        &self,
+        certified_checkpoint: &CertifiedCheckpointSummary,
+    ) -> Result<(), TypedStoreError> {
+        let signed_authorities = certified_checkpoint
+            .signatory_authorities(&self.committee)
+            .collect::<Result<Vec<&AuthorityName>, _>>()
+            // using `expect` here is fine because this error would be caught much earlier
+            .expect("Certified checkpoint should be valid");
+
+        debug!(
+            "Recording certified checkpoint signatures from {:?}",
+            signed_authorities
+        );
+
+        let seq_num = certified_checkpoint.sequence_number();
+
+        let old_values = self
+            .tables
+            .num_certified_checkpoint_signatures
+            .multi_get(signed_authorities.clone())?;
+
+        let new_key_values = signed_authorities
+            .into_iter()
+            .zip(old_values.into_iter().map(|v| v.unwrap_or((None, 0))))
+            // Only keep the entries whose values we haven't recorded for this checkpoint for idempotency.
+            .filter(|(_, (last_processed_seq_num, _))| {
+                last_processed_seq_num.is_none() || last_processed_seq_num.unwrap() < seq_num
+            })
+            // Increment counter and update the last processed ckpt sequence num
+            .map(|(name, (_, counter))| (name, (Some(seq_num), counter + 1)))
+            .collect::<Vec<_>>();
+
+        // Send tallying rule score through prometheus.
+        new_key_values
+            .iter()
+            .for_each(|(authority_name, (_, score))| {
+                self.metrics
+                    .tallying_rule_scores
+                    .with_label_values(&[
+                        &format!("{:?}", authority_name.concise()),
+                        &self.epoch().to_string(),
+                    ])
+                    .set(*score as i64)
+            });
+
+        // Batch update the counters to new values.
+        let batch = self
+            .tables
+            .num_certified_checkpoint_signatures
+            .batch()
+            .insert_batch(
+                &self.tables.num_certified_checkpoint_signatures,
+                new_key_values,
+            )?;
+        batch.write()?;
+
+        Ok(())
+    }
+
     pub fn finish_consensus_certificate_process(
         &self,
         key: ConsensusTransactionKey,
@@ -1427,6 +1498,13 @@ impl AuthorityPerEpochStore {
             .next()
             .map(|((_, index), _)| index)
             .unwrap_or_default()
+    }
+
+    pub fn get_num_certified_checkpoint_sigs_by(
+        &self,
+        name: &AuthorityName,
+    ) -> SuiResult<Option<(Option<CheckpointSequenceNumber>, u64)>> {
+        Ok(self.tables.num_certified_checkpoint_signatures.get(name)?)
     }
 
     pub fn insert_checkpoint_signature(

@@ -1007,6 +1007,11 @@ impl CheckpointServiceNotify for CheckpointService {
             .skip_to_last()
             .next()
         {
+            // TODO(emmazzz): Right now we only record participation of validators whose
+            // checkpoint signatures make it to the certified checkpoint, which is only
+            // f+1 validators, and the rest of the signatures received are ignored. Later
+            // we may want to record those as well so that we have more fine grained scores
+            // for tallying rule.
             if sequence <= last_certified {
                 debug!(
                     "Ignore signature for checkpoint sequence {} from {} - already certified",
