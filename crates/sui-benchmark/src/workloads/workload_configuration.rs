@@ -15,8 +15,8 @@ use crate::workloads::transfer_object::TransferObjectWorkload;
 use crate::workloads::delegation::DelegationWorkload;
 use crate::workloads::workload::WorkloadInfo;
 use crate::workloads::{
-    make_combination_workload, make_shared_counter_workload, make_transfer_object_workload, Gas,
-    WorkloadGasConfig, WorkloadInitGas, WorkloadPayloadGas,
+    make_combination_workload, make_delegation_workload, make_shared_counter_workload,
+    make_transfer_object_workload, Gas, WorkloadGasConfig, WorkloadInitGas, WorkloadPayloadGas,
 };
 use crate::ValidatorProxy;
 
@@ -187,8 +187,8 @@ impl WorkloadConfiguration {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Result<Vec<WorkloadInfo>> {
         let mut workloads = vec![];
-        let shared_counter_weight_ratio =
-            shared_counter_weight as f32 / (shared_counter_weight + transfer_object_weight) as f32;
+        let shared_counter_weight_ratio = shared_counter_weight as f32
+            / (shared_counter_weight + transfer_object_weight + delegation_weight) as f32;
         let shared_counter_qps = (shared_counter_weight_ratio * target_qps as f32) as u64;
         let shared_counter_num_workers =
             (shared_counter_weight_ratio * num_workers as f32).ceil() as u64;
@@ -214,11 +214,20 @@ impl WorkloadConfiguration {
                     shared_counter_payload_coin_configs,
                 )
             };
-        let transfer_object_weight_ratio = 1.0 - shared_counter_weight_ratio;
-        let transfer_object_qps = target_qps - shared_counter_qps;
+
+        let transfer_object_weight_ratio = transfer_object_weight as f32
+            / (shared_counter_weight + transfer_object_weight + delegation_weight) as f32;
+        let transfer_object_qps = (transfer_object_weight_ratio * target_qps as f32) as u64;
         let transfer_object_num_workers =
             (transfer_object_weight_ratio * num_workers as f32).ceil() as u64;
         let transfer_object_max_ops = (transfer_object_qps * in_flight_ratio) as u64;
+
+        let delegate_weight_ratio = delegation_weight as f32
+            / (shared_counter_weight + transfer_object_weight + delegation_weight) as f32;
+        let delegate_qps = (delegate_weight_ratio * target_qps as f32) as u64;
+        let delegate_num_workers = (delegate_weight_ratio * num_workers as f32).ceil() as u64;
+        let delegate_max_ops = (delegate_qps * in_flight_ratio) as u64;
+
         let (transfer_object_workload_tokens, transfer_object_workload_payload_gas_config) =
             if transfer_object_qps == 0
                 || transfer_object_max_ops == 0
@@ -296,6 +305,19 @@ impl WorkloadConfiguration {
                 )
                 .await;
             workloads.push(transfer_object_workload);
+        }
+        if let Some(delegation_workload) = make_delegation_workload(
+            delegate_qps,
+            delegate_num_workers,
+            delegate_max_ops,
+            WorkloadPayloadGas {
+                transfer_tokens: vec![],
+                transfer_object_payload_gas: vec![],
+                shared_counter_payload_gas: vec![],
+                delegation_payload_gas: workload_payload_gas.delegation_payload_gas,
+            },
+        ) {
+            workloads.push(delegation_workload);
         }
         Ok(workloads)
     }

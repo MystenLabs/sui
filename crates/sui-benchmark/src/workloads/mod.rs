@@ -144,3 +144,22 @@ pub fn make_transfer_object_workload(
         })
     }
 }
+
+pub fn make_delegation_workload(
+    target_qps: u64,
+    num_workers: u64,
+    max_in_flight_ops: u64,
+    payload_config: WorkloadPayloadGas,
+) -> Option<WorkloadInfo> {
+    if target_qps == 0 || max_in_flight_ops == 0 || num_workers == 0 {
+        None
+    } else {
+        Some(WorkloadInfo {
+            target_qps,
+            num_workers,
+            max_in_flight_ops,
+            workload: DelegationWorkload::new_boxed(),
+            payload_config,
+        })
+    }
+}
