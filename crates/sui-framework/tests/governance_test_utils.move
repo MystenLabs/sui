@@ -130,7 +130,7 @@ module sui::governance_test_utils {
     }
 
     public fun undelegate(
-        delegator: address, staked_sui_idx: u64, delegation_obj_idx: u64, pool_token_amount: u64, scenario: &mut Scenario
+        delegator: address, staked_sui_idx: u64, delegation_obj_idx: u64, scenario: &mut Scenario
     ) {
         test_scenario::next_tx(scenario, delegator);
         let stake_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
@@ -140,10 +140,7 @@ module sui::governance_test_utils {
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
-        sui_system::request_withdraw_delegation(&mut system_state, &mut delegation, &mut staked_sui, pool_token_amount, ctx);
-
-        test_scenario::return_to_sender(scenario, staked_sui);
-        test_scenario::return_to_sender(scenario, delegation);
+        sui_system::request_withdraw_delegation(&mut system_state, delegation, staked_sui, ctx);
         test_scenario::return_shared(system_state);
     }
 

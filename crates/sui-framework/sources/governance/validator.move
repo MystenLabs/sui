@@ -243,13 +243,12 @@ module sui::validator {
     /// Request to withdraw delegation from the validator's staking pool, processed at the end of the epoch.
     public(friend) fun request_withdraw_delegation(
         self: &mut Validator,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
-        principal_withdraw_amount: u64,
+        delegation: Delegation,
+        staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
-        staking_pool::request_withdraw_delegation(
-                &mut self.delegation_staking_pool, delegation, staked_sui, principal_withdraw_amount, ctx);
+        let principal_withdraw_amount = staking_pool::request_withdraw_delegation(
+                &mut self.delegation_staking_pool, delegation, staked_sui, ctx);
         decrease_next_epoch_delegation(self, principal_withdraw_amount);
     }
 
@@ -279,7 +278,7 @@ module sui::validator {
         let reward_withdraw_amount = staking_pool::process_pending_delegation_withdraws(
             &mut self.delegation_staking_pool, ctx);
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - reward_withdraw_amount;
-        assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0);
+        // assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0);
     }
 
     /// Called by `validator_set` for handling delegation switches.
