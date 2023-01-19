@@ -46,6 +46,11 @@ export function ValidatorStats({
         [delegatedStake, totalStake]
     );
 
+    const selfStakePercentage = useMemo(
+        () => getStakedPercent(BigInt(selfStake), BigInt(totalStake)),
+        [selfStake, totalStake]
+    );
+
     return (
         <div className="flex flex-col items-stretch gap-5 md:flex-row">
             <Card spacing="lg">
@@ -71,7 +76,7 @@ export function ValidatorStats({
                                 {apy}%
                             </Heading>
                         </Stats>
-                        <Stats label="Total Staked" tooltip="Coming soon">
+                        <Stats label="Total SUI Staked" tooltip="Coming soon">
                             <DelegationAmount amount={totalStake} isStats />
                         </Stats>
                     </div>
@@ -92,7 +97,13 @@ export function ValidatorStats({
                             </Heading>
                         </Stats>
                         <Stats label="Self Staked" tooltip="Coming soon">
-                            <DelegationAmount amount={selfStake} isStats />
+                            <Heading
+                                as="h3"
+                                variant="heading3/semibold"
+                                color="steel-darker"
+                            >
+                                {selfStakePercentage}%
+                            </Heading>
                         </Stats>
                     </div>
                 </div>
@@ -108,7 +119,11 @@ export function ValidatorStats({
                         Validator Staking Rewards
                     </Heading>
                     <div className="flex flex-col gap-8">
-                        <Stats label="Last Epoch" tooltip="Coming soon">
+                        <Stats
+                            label="Last SUI Epoch"
+                            tooltip="Coming soon"
+                            unavailable
+                        >
                             <Heading
                                 as="div"
                                 variant="heading4/semibold"
