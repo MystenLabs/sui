@@ -42,11 +42,7 @@ export function ValidatorStats({
     const totalStake = +selfStake + +delegatedStake;
     const lastEpoch = epoch;
     const delegatedStakePercentage = useMemo(
-        () =>
-            getStakedPercent(
-                BigInt(delegatedStake),
-                BigInt(totalStake)
-            ),
+        () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
         [delegatedStake, totalStake]
     );
 
@@ -112,10 +108,7 @@ export function ValidatorStats({
                         Validator Staking Rewards
                     </Heading>
                     <div className="flex flex-col gap-8">
-                        <Stats
-                            label="Last Epoch"
-                            tooltip="Coming soon"
-                        >
+                        <Stats label="Last Epoch" tooltip="Coming soon">
                             <Heading
                                 as="div"
                                 variant="heading4/semibold"
