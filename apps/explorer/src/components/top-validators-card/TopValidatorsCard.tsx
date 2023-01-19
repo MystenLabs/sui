@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields, type ActiveValidator } from '@mysten/sui.js';
+import {
+    is,
+    SuiObject,
+    type ValidatorsFields,
+    type ActiveValidator,
+} from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
 import { useGetObject } from '~/hooks/useGetObject';
-import {
-    VALIDATORS_OBJECT_ID,
-} from '~/pages/validator/ValidatorDataTypes';
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { ValidatorLink } from '~/ui/InternalLink';
