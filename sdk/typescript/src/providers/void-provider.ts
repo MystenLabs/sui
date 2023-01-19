@@ -95,7 +95,7 @@ export class VoidProvider extends Provider {
 
   async getAllBalances(
     _owner: string, 
-    ): Promise<BalanceStruct> {
+    ): Promise<BalanceStruct[]> {
       throw this.newError('getAllBalances');
   }
 

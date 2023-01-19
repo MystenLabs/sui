@@ -24,7 +24,7 @@ export type PaginatedCoins = Infer<typeof PaginatedCoins>;
 
 export const BalanceStruct = object({
     coinType: string(),
-    coinObjectId: union([ObjectId, literal(null)]),
+    coinObjectCount: number(),
     totalBalance: bigint(),
     lockedBalance: map(number(), bigint())
 });
