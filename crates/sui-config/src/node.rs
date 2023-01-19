@@ -157,14 +157,20 @@ impl NodeConfig {
     pub fn worker_key_pair(&self) -> &NetworkKeyPair {
         match self.worker_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            other => panic!(
+                "Invalid keypair type: {:?}, only Ed25519 is allowed for worker key",
+                other
+            ),
         }
     }
 
     pub fn network_key_pair(&self) -> &NetworkKeyPair {
         match self.network_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            other => panic!(
+                "Invalid keypair type: {:?}, only Ed25519 is allowed for network key",
+                other
+            ),
         }
     }
 
@@ -484,7 +490,7 @@ impl KeyPairWithPath {
         let cell: OnceCell<Arc<SuiKeyPair>> = OnceCell::new();
         // OK to unwrap panic because authority should not start without all keypairs loaded.
         cell.set(Arc::new(read_keypair_from_file(&path).unwrap_or_else(
-            |_| panic!("Invalid keypair file at path {:?}", &path),
+            |e| panic!("Invalid keypair file at path {:?}: {e}", &path),
         )))
         .expect("Failed to set keypair");
         Self {
@@ -500,8 +506,9 @@ impl KeyPairWithPath {
                 KeyPairLocation::File { path } => {
                     // OK to unwrap panic because authority should not start without all keypairs loaded.
                     Arc::new(
-                        read_keypair_from_file(path)
-                            .unwrap_or_else(|_| panic!("Invalid keypair file")),
+                        read_keypair_from_file(path).unwrap_or_else(|e| {
+                            panic!("Invalid keypair file at path {:?}: {e}", path)
+                        }),
                     )
                 }
             })
