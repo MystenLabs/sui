@@ -63,7 +63,7 @@ use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSummary,
+    CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
@@ -2576,6 +2576,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         gas_cost_summary: &GasCostSummary,
+        epoch_start_timestamp_ms: CheckpointTimestamp,
         timeout: Duration,
         transaction_certifier: &dyn TransactionCertifier,
     ) -> anyhow::Result<VerifiedCertificate> {
@@ -2592,6 +2593,7 @@ impl AuthorityState {
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
+            epoch_start_timestamp_ms,
         );
         // If we fail to sign the transaction locally for whatever reason, it's not recoverable.
         self.handle_transaction_impl(tx.clone(), epoch_store)

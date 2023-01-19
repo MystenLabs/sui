@@ -562,11 +562,27 @@ impl CheckpointBuilder {
                 "Received {} checkpoint user signatures from consensus",
                 signatures.len()
             );
+            let sequence_number = last_checkpoint
+                .as_ref()
+                .map(|(_, c)| c.sequence_number + 1)
+                .unwrap_or_default();
+            let timestamp_ms = details.timestamp_ms;
+            if let Some((_, last_checkpoint)) = &last_checkpoint {
+                if last_checkpoint.timestamp_ms > timestamp_ms {
+                    error!("Unexpected decrease of checkpoint timestamp, sequence: {}, previous: {}, current: {}",
+                    sequence_number,  last_checkpoint.timestamp_ms, timestamp_ms);
+                }
+            }
+
             let epoch_rolling_gas_cost_summary =
                 self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
             if last_checkpoint_of_epoch {
-                self.augment_epoch_last_checkpoint(&epoch_rolling_gas_cost_summary, &mut effects)
-                    .await?;
+                self.augment_epoch_last_checkpoint(
+                    &epoch_rolling_gas_cost_summary,
+                    timestamp_ms,
+                    &mut effects,
+                )
+                .await?;
             }
 
             let contents =
@@ -583,17 +599,6 @@ impl CheckpointBuilder {
                 .unwrap_or(num_txns);
 
             let previous_digest = last_checkpoint.as_ref().map(|(_, c)| c.digest());
-            let sequence_number = last_checkpoint
-                .as_ref()
-                .map(|(_, c)| c.sequence_number + 1)
-                .unwrap_or_default();
-            let timestamp_ms = details.timestamp_ms;
-            if let Some((_, last_checkpoint)) = &last_checkpoint {
-                if last_checkpoint.timestamp_ms > timestamp_ms {
-                    error!("Unexpected decrease of checkpoint timestamp, sequence: {}, previous: {}, current: {}",
-                    sequence_number,  last_checkpoint.timestamp_ms, timestamp_ms);
-                }
-            }
             let summary = CheckpointSummary::new(
                 epoch,
                 sequence_number,
@@ -655,6 +660,7 @@ impl CheckpointBuilder {
     async fn augment_epoch_last_checkpoint(
         &self,
         epoch_total_gas_cost: &GasCostSummary,
+        epoch_start_timestamp_ms: CheckpointTimestamp,
         effects: &mut Vec<TransactionEffects>,
     ) -> anyhow::Result<()> {
         let timer = Instant::now();
@@ -663,6 +669,7 @@ impl CheckpointBuilder {
             .create_advance_epoch_tx_cert(
                 &self.epoch_store,
                 epoch_total_gas_cost,
+                epoch_start_timestamp_ms,
                 Duration::from_secs(60), // TODO: Is 60s enough?
                 self.transaction_certifier.deref(),
             )

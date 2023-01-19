@@ -102,5 +102,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
             current_epoch_amount: 0,
         },
         safe_mode: false,
+        epoch_start_timestamp_ms: 0,
     }
 }

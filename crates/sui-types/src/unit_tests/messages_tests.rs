@@ -729,7 +729,7 @@ fn verify_sender_signature_correctly_with_flag() {
 
 #[test]
 fn test_change_epoch_transaction() {
-    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
+    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0, 0);
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
