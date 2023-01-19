@@ -69,6 +69,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
@@ -79,6 +80,7 @@ use sui_types::error::{SuiError, SuiResult};
 pub struct ValidatorComponents {
     validator_server_handle: tokio::task::JoinHandle<Result<()>>,
     narwhal_manager: NarwhalManager,
+    narwhal_epoch_data_remover: EpochDataRemover,
     consensus_adapter: Arc<ConsensusAdapter>,
     // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
     // is copied into each checkpoint service task, and they are listening to any change to this
@@ -457,6 +459,12 @@ impl SuiNode {
         let narwhal_manager =
             Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
 
+        let mut narwhal_epoch_data_remover =
+            EpochDataRemover::new(narwhal_manager.get_storage_base_path());
+
+        // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
+        narwhal_epoch_data_remover.run().await;
+
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
@@ -468,6 +476,7 @@ impl SuiNode {
             epoch_store,
             state_sync_handle,
             narwhal_manager,
+            narwhal_epoch_data_remover,
             validator_server_handle,
             checkpoint_metrics,
             sui_tx_validator_metrics,
@@ -483,6 +492,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         narwhal_manager: NarwhalManager,
+        narwhal_epoch_data_remover: EpochDataRemover,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -538,6 +548,7 @@ impl SuiNode {
         Ok(ValidatorComponents {
             validator_server_handle,
             narwhal_manager,
+            narwhal_epoch_data_remover,
             consensus_adapter,
             checkpoint_service_exit,
             checkpoint_metrics,
@@ -723,6 +734,7 @@ impl SuiNode {
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
                 narwhal_manager,
+                narwhal_epoch_data_remover,
                 consensus_adapter,
                 checkpoint_service_exit,
                 checkpoint_metrics,
@@ -737,6 +749,10 @@ impl SuiNode {
 
                 self.reconfigure_state(next_epoch).await;
 
+                narwhal_epoch_data_remover
+                    .remove_old_data(next_epoch - 1)
+                    .await;
+
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator in the new epoch.
                     Some(
@@ -748,6 +764,7 @@ impl SuiNode {
                             self.state.epoch_store().clone(),
                             self.state_sync.clone(),
                             narwhal_manager,
+                            narwhal_epoch_data_remover,
                             validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,

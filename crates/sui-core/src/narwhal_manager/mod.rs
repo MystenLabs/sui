@@ -153,13 +153,14 @@ impl NarwhalManager {
                 let _guard = monitored_scope("NarwhalManagerShutdown");
 
                 let now = Instant::now();
-                tracing::info!("Shutting down Narwhal");
+                tracing::info!("Shutting down Narwhal epoch {:?}", epoch);
 
                 self.primary_node.shutdown().await;
                 self.worker_nodes.shutdown().await;
 
                 tracing::info!(
-                    "Narwhal shutdown is complete - took {} seconds",
+                    "Narwhal shutdown for epoch {:?} is complete - took {} seconds",
+                    epoch,
                     now.elapsed().as_secs_f64()
                 );
             }
