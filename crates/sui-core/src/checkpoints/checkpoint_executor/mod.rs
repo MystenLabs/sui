@@ -446,6 +446,9 @@ impl CheckpointExecutorEventLoop {
             epoch_store.epoch(),
         );
 
+        // Record checkpoint participation for tallying rule.
+        epoch_store.record_certified_checkpoint_signatures(checkpoint.inner())?;
+
         let next_committee = checkpoint.summary().next_epoch_committee.clone();
 
         if next_committee.is_some() {

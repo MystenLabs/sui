@@ -112,9 +112,9 @@ pub const STORAGE_REBATE_RATE: f64 = 1.0;
 pub const STORAGE_FUND_REINVEST_RATE: u64 = 0;
 
 // TODO: placeholder value here
-// 50% of the active validators will have to report one validator as non-performant
+// 66.67% of the active validators will have to report one validator as non-performant
 // during an epoch before this validator's rewards for this epoch are slashed.
-pub const REWARD_SLASHING_THRESHOLD_BPS: u64 = 5000;
+pub const REWARD_SLASHING_THRESHOLD_BPS: u64 = 6667;
 
 // TODO: placeholder value here
 // The share of rewards that will be slashed and redistributed is 10%.

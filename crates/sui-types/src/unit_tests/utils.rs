@@ -5,14 +5,18 @@ use fastcrypto::traits::KeyPair as KeypairTraits;
 use signature::Signer;
 
 use crate::{
-    base_types::{dbg_addr, ObjectID},
+    base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
     crypto::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
     },
+    gas::GasCostSummary,
     intent::Intent,
     messages::{Transaction, TransactionData, VerifiedTransaction},
+    messages_checkpoint::{
+        CertifiedCheckpointSummary, CheckpointContents, SignedCheckpointSummary,
+    },
     object::Object,
 };
 use std::collections::BTreeMap;
@@ -71,4 +75,34 @@ pub fn to_sender_signed_transaction(
         Intent::default(),
         signer,
     ))
+}
+
+pub fn mock_certified_checkpoint<'a>(
+    keys: impl Iterator<Item = &'a AuthorityKeyPair>,
+    committee: Committee,
+    seq_num: u64,
+) -> CertifiedCheckpointSummary {
+    let contents = CheckpointContents::new_with_causally_ordered_transactions(
+        [ExecutionDigests::random()].into_iter(),
+    );
+
+    let signed_checkpoints: Vec<_> = keys
+        .map(|k| {
+            let name = k.public().into();
+
+            SignedCheckpointSummary::new(
+                committee.epoch,
+                seq_num,
+                0,
+                name,
+                k,
+                &contents,
+                None,
+                GasCostSummary::default(),
+                None,
+            )
+        })
+        .collect();
+
+    CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).expect("Cert is OK")
 }
