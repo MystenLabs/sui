@@ -428,6 +428,7 @@ importers:
       '@fontsource/inter': ^4.5.14
       '@headlessui/react': ^1.7.7
       '@hookform/resolvers': ^2.9.10
+      '@mysten/core': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-kit': workspace:*
       '@tanstack/react-query': ^4.22.0
@@ -454,6 +455,7 @@ importers:
       '@fontsource/inter': 4.5.14
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
       '@hookform/resolvers': 2.9.10_react-hook-form@7.41.5
+      '@mysten/core': link:../../apps/core
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-kit': link:../../sdk/wallet-adapter/wallet-kit
       '@tanstack/react-query': 4.22.0_biqbaboplfbrettd7655fr4n2y
@@ -6780,7 +6782,7 @@ packages:
       '@babel/plugin-transform-react-jsx-source': 7.19.6_@babel+core@7.20.12
       magic-string: 0.27.0
       react-refresh: 0.14.0
-      vite: 4.0.4_@types+node@18.11.18
+      vite: 4.0.4
     transitivePeerDependencies:
       - supports-color
     dev: true
