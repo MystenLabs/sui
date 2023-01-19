@@ -417,8 +417,6 @@ module sui::sui_system {
         storage_rebate: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
-        reward_slashing_threshold_bps: u64, // threshold of validator reports filed this epoch
-                                             // before a validator's rewards are slashed, in bps.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
         ctx: &mut TxContext,
     ) {
@@ -428,8 +426,7 @@ module sui::sui_system {
         let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
         // Rates can't be higher than 100%.
         assert!(
-            storage_fund_reinvest_rate <= bps_denominator_u64 
-            && reward_slashing_threshold_bps <= bps_denominator_u64
+            storage_fund_reinvest_rate <= bps_denominator_u64
             && reward_slashing_rate <= bps_denominator_u64,
             EBPS_TOO_LARGE,
         );
@@ -474,14 +471,13 @@ module sui::sui_system {
             &mut computation_reward,
             &mut storage_fund_reward,
             self.validator_report_records,
-            reward_slashing_threshold_bps,
             reward_slashing_rate,
             ctx,
         );
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `storage_fund_reward` and `computation_reward`. 
+        // remaining balance in `storage_fund_reward` and `computation_reward`.
         // All of these go to the storage fund.
         balance::join(&mut self.storage_fund, storage_fund_reward);
         balance::join(&mut self.storage_fund, computation_reward);

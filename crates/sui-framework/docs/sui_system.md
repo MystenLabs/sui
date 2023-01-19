@@ -958,7 +958,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_threshold_bps: u64, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -975,8 +975,6 @@ gas coins.
     storage_rebate: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
-    reward_slashing_threshold_bps: u64, // threshold of <a href="validator.md#0x2_validator">validator</a> reports filed this epoch
-                                         // before a <a href="validator.md#0x2_validator">validator</a>'s rewards are slashed, in bps.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x2_validator">validator</a>, in bps.
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -987,7 +985,6 @@ gas coins.
     // Rates can't be higher than 100%.
     <b>assert</b>!(
         storage_fund_reinvest_rate &lt;= bps_denominator_u64
-        && reward_slashing_threshold_bps &lt;= bps_denominator_u64
         && reward_slashing_rate &lt;= bps_denominator_u64,
         <a href="sui_system.md#0x2_sui_system_EBPS_TOO_LARGE">EBPS_TOO_LARGE</a>,
     );
@@ -1032,7 +1029,6 @@ gas coins.
         &<b>mut</b> computation_reward,
         &<b>mut</b> storage_fund_reward,
         self.validator_report_records,
-        reward_slashing_threshold_bps,
         reward_slashing_rate,
         ctx,
     );

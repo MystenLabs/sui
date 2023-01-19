@@ -223,7 +223,6 @@ module sui::validator_set_tests {
             &mut dummy_storage_fund_reward,
             vec_map::empty(),
             0,
-            0,
             ctx
         );
 
