@@ -4,6 +4,8 @@
 use anyhow::anyhow;
 use fastcrypto::traits::EncodeDecodeBase64;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair};
+use tap::TapFallible;
+use tracing::error;
 
 /// Write Base64 encoded `flag || privkey` to file.
 pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
@@ -35,8 +37,22 @@ pub fn read_authority_keypair_from_file<P: AsRef<std::path::Path>>(
 
 /// Read from file as Base64 encoded `flag || privkey` and return a SuiKeypair.
 pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<SuiKeyPair> {
-    let contents = std::fs::read_to_string(path)?;
-    SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
+    let contents = std::fs::read_to_string(path.as_ref()).tap_err(|e| {
+        error!(
+            "failed to read keypair from {}. Error: {}",
+            path.as_ref().display(),
+            e
+        )
+    })?;
+    SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| {
+        error!(
+            "decode_base64 failed for key pair read from {}. Error: {}",
+            path.as_ref().display(),
+            e
+        );
+
+        anyhow!(e)
+    })
 }
 
 /// Read from file as Base64 encoded `flag || privkey` and return a NetworkKeyPair.

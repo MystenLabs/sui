@@ -152,9 +152,10 @@ impl NodeConfig {
     }
 
     pub fn network_key_pair(&self) -> &NetworkKeyPair {
-        match self.network_key_pair.keypair() {
+        let sui_keypair = self.network_key_pair.keypair();
+        match sui_keypair {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            _ => panic!("Invalid keypair type: {:?}", sui_keypair),
         }
     }
 
@@ -501,10 +502,7 @@ impl KeyPairWithPath {
                 KeyPairLocation::InPlace { value } => value.clone(),
                 KeyPairLocation::File { path } => {
                     // OK to unwrap panic because authority should not start without all keypairs loaded.
-                    Arc::new(
-                        read_keypair_from_file(path)
-                            .unwrap_or_else(|_| panic!("Invalid keypair file")),
-                    )
+                    Arc::new(read_keypair_from_file(path).expect("Invalid keypair file"))
                 }
             })
             .as_ref()

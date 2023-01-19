@@ -8991,8 +8991,10 @@ dependencies = [
  "signature",
  "slip10_ed25519",
  "sui-types",
+ "tap",
  "tempfile",
  "tiny-bip39",
+ "tracing",
  "workspace-hack",
 ]
 
