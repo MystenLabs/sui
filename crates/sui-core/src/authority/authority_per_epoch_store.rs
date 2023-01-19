@@ -1474,7 +1474,7 @@ impl AuthorityPerEpochStore {
             .set(stats.total_gas_reward as i64);
     }
 
-    pub(crate) fn record_epoch_reconfig_start_time_metric(&self) {
+    pub fn record_epoch_reconfig_start_time_metric(&self) {
         if let Some(epoch_close_time) = *self.epoch_close_time.read() {
             self.metrics
                 .epoch_reconfig_start_time_since_epoch_close_ms
