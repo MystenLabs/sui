@@ -237,7 +237,7 @@ export function DelegationDetailCard({
                                         stakeByValidatorAddress +
                                         '&unstake=true'
                                     }
-                                    className="w-full"
+                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker text-steel-dark hover:text-steel-darker"
                                 >
                                     <Icon
                                         icon={SuiIcons.Remove}
