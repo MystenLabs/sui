@@ -161,8 +161,6 @@ pub struct ValidatorPair {
 pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
-    pub total_voting_power: u64,
-    pub quorum_threshold: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,

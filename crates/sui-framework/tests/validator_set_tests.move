@@ -13,6 +13,7 @@ module sui::validator_set_tests {
     use sui::vec_map;
     use std::ascii;
     use std::option;
+    use sui::test_utils::assert_eq;
 
     #[test]
     fun test_validator_set_flow() {
@@ -116,7 +117,7 @@ module sui::validator_set_tests {
         // Create a validator set with only the first validator in it.
         let validator_set = validator_set::new(vector[v1]);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 0);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 45);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -124,7 +125,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 1);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 45);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -132,7 +133,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 42, 2);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 42);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -140,7 +141,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 41, 3);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 42);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -148,7 +149,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 43, 4);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 43);
 
         validator_set::destroy_for_testing(validator_set);
         test_scenario::end(scenario);
@@ -217,9 +218,9 @@ module sui::validator_set_tests {
 
         validator_set::advance_epoch(
             1, // dummy new epoch number
-            validator_set, 
-            &mut dummy_computation_reward, 
-            &mut dummy_storage_fund_reward, 
+            validator_set,
+            &mut dummy_computation_reward,
+            &mut dummy_storage_fund_reward,
             vec_map::empty(),
             0,
             0,

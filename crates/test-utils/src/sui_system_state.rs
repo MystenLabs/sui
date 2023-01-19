@@ -77,8 +77,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
     let validator_set = ValidatorSet {
         validator_stake: 1,
         delegation_stake: 1,
-        total_voting_power: 1,
-        quorum_threshold: 1,
         active_validators: validators,
         pending_validators: vec![],
         pending_removals: vec![],
