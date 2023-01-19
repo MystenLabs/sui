@@ -418,8 +418,8 @@ pub fn position_submit_certificate(
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
-    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
-    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
+    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained.
+    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
         let send_end_of_publish = {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             let send_end_of_publish = epoch_store.pending_consensus_certificates_empty();
@@ -435,7 +435,6 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
         }
-        Ok(())
     }
 }
 

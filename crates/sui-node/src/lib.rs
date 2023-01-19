@@ -306,6 +306,7 @@ impl SuiNode {
         self.state.epoch()
     }
 
+    // Init reconfig process by starting to reject user certs
     pub async fn close_epoch(&self) -> SuiResult {
         info!("close_epoch (current epoch = {})", self.state.epoch());
         self.validator_components
@@ -316,7 +317,8 @@ impl SuiNode {
             .consensus_adapter
             // TODO: If this function is ever called in non-testing code, we need to make sure this
             // function has no race with the passive reconfiguration.
-            .close_epoch(&self.state.epoch_store())
+            .close_epoch(&self.state.epoch_store());
+        Ok(())
     }
 
     pub fn is_transaction_executed_in_checkpoint(
