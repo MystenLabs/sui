@@ -307,7 +307,6 @@ module sui::validator_set {
         computation_reward: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
         validator_report_records: VecMap<address, VecSet<address>>,
-        reward_slashing_threshold_bps: u64,
         reward_slashing_rate: u64,
         ctx: &mut TxContext,
     ) {
@@ -327,8 +326,6 @@ module sui::validator_set {
             compute_slashed_validators_and_total_stake(
                 self,
                 copy validator_report_records,
-                total_stake,
-                reward_slashing_threshold_bps,
             );
 
         // Compute the reward adjustments of slashed validators, to be taken into
@@ -698,10 +695,7 @@ module sui::validator_set {
     fun compute_slashed_validators_and_total_stake(
         self: &ValidatorSet,
         validator_report_records: VecMap<address, VecSet<address>>,
-        total_stake: u64,
-        reward_slashing_threshold_bps: u64,
     ): (vector<address>, u64) {
-        let reward_slashing_threshold = (total_stake as u128) * (reward_slashing_threshold_bps as u128) / BASIS_POINT_DENOMINATOR;
         let slashed_validators = vector[];
         let sum_of_stake = 0;
         while (!vec_map::is_empty(&validator_report_records)) {
@@ -710,10 +704,10 @@ module sui::validator_set {
                 is_active_validator(self, validator_address),
                 ENON_VALIDATOR_IN_REPORT_RECORDS
             );
-            // Sum up the stakes of validators that have reported this validator and check if it has
+            // Sum up the voting power of validators that have reported this validator and check if it has
             // passed the slashing threshold.
-            let reporter_stake = sum_up_total_stake(&self.active_validators, &vec_set::into_keys(reporters));
-            if (reporter_stake >= (reward_slashing_threshold as u64)) {
+            let reporter_votes = sum_voting_power_by_addresses(&self.active_validators, &vec_set::into_keys(reporters));
+            if (reporter_votes >= voting_power::quorum_threshold()) {
                 sum_of_stake = sum_of_stake + validator_total_stake_amount(self, validator_address);
                 vector::push_back(&mut slashed_validators, validator_address);
             }
@@ -929,13 +923,13 @@ module sui::validator_set {
     }
 
     /// Sum up the total stake of a given list of validator addresses.
-    fun sum_up_total_stake(vs: &vector<Validator>, addresses: &vector<address>): u64 {
+    public fun sum_voting_power_by_addresses(vs: &vector<Validator>, addresses: &vector<address>): u64 {
         let sum = 0;
         let i = 0;
         let length = vector::length(addresses);
         while (i < length) {
             let validator = get_validator_ref(vs, *vector::borrow(addresses, i));
-            sum = sum + validator::total_stake_amount(validator);
+            sum = sum + validator::voting_power(validator);
             i = i + 1;
         };
         sum

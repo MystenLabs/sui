@@ -48,7 +48,7 @@
 -  [Function `distribute_reward`](#0x2_validator_set_distribute_reward)
 -  [Function `derive_next_epoch_validators`](#0x2_validator_set_derive_next_epoch_validators)
 -  [Function `emit_validator_epoch_events`](#0x2_validator_set_emit_validator_epoch_events)
--  [Function `sum_up_total_stake`](#0x2_validator_set_sum_up_total_stake)
+-  [Function `sum_voting_power_by_addresses`](#0x2_validator_set_sum_voting_power_by_addresses)
 -  [Function `active_validators`](#0x2_validator_set_active_validators)
 
 
@@ -741,7 +741,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(new_epoch: u64, self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_threshold_bps: u64, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_advance_epoch">advance_epoch</a>(new_epoch: u64, self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -756,7 +756,6 @@ It does the following things:
     computation_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
-    reward_slashing_threshold_bps: u64,
     reward_slashing_rate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
@@ -776,8 +775,6 @@ It does the following things:
         <a href="validator_set.md#0x2_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(
             self,
             <b>copy</b> validator_report_records,
-            total_stake,
-            reward_slashing_threshold_bps,
         );
 
     // Compute the reward adjustments of slashed validators, <b>to</b> be taken into
@@ -1570,7 +1567,7 @@ Process the validator report records of the epoch and return the addresses of th
 non-performant validators according to the input threshold.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, total_stake: u64, reward_slashing_threshold_bps: u64): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64)
+<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_report_records: <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64)
 </code></pre>
 
 
@@ -1582,10 +1579,7 @@ non-performant validators according to the input threshold.
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(
     self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
-    total_stake: u64,
-    reward_slashing_threshold_bps: u64,
 ): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64) {
-    <b>let</b> reward_slashing_threshold = (total_stake <b>as</b> u128) * (reward_slashing_threshold_bps <b>as</b> u128) / <a href="validator_set.md#0x2_validator_set_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
     <b>let</b> slashed_validators = <a href="">vector</a>[];
     <b>let</b> sum_of_stake = 0;
     <b>while</b> (!<a href="vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&validator_report_records)) {
@@ -1594,10 +1588,10 @@ non-performant validators according to the input threshold.
             <a href="validator_set.md#0x2_validator_set_is_active_validator">is_active_validator</a>(self, validator_address),
             <a href="validator_set.md#0x2_validator_set_ENON_VALIDATOR_IN_REPORT_RECORDS">ENON_VALIDATOR_IN_REPORT_RECORDS</a>
         );
-        // Sum up the stakes of validators that have reported this <a href="validator.md#0x2_validator">validator</a> and check <b>if</b> it <b>has</b>
+        // Sum up the voting power of validators that have reported this <a href="validator.md#0x2_validator">validator</a> and check <b>if</b> it <b>has</b>
         // passed the slashing threshold.
-        <b>let</b> reporter_stake = <a href="validator_set.md#0x2_validator_set_sum_up_total_stake">sum_up_total_stake</a>(&self.active_validators, &<a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(reporters));
-        <b>if</b> (reporter_stake &gt;= (reward_slashing_threshold <b>as</b> u64)) {
+        <b>let</b> reporter_votes = <a href="validator_set.md#0x2_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(&self.active_validators, &<a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(reporters));
+        <b>if</b> (reporter_votes &gt;= <a href="voting_power.md#0x2_voting_power_quorum_threshold">voting_power::quorum_threshold</a>()) {
             sum_of_stake = sum_of_stake + <a href="validator_set.md#0x2_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self, validator_address);
             <a href="_push_back">vector::push_back</a>(&<b>mut</b> slashed_validators, validator_address);
         }
@@ -1917,14 +1911,14 @@ including stakes, rewards, performance, etc.
 
 </details>
 
-<a name="0x2_validator_set_sum_up_total_stake"></a>
+<a name="0x2_validator_set_sum_voting_power_by_addresses"></a>
 
-## Function `sum_up_total_stake`
+## Function `sum_voting_power_by_addresses`
 
 Sum up the total stake of a given list of validator addresses.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_sum_up_total_stake">sum_up_total_stake</a>(vs: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, addresses: &<a href="">vector</a>&lt;<b>address</b>&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, addresses: &<a href="">vector</a>&lt;<b>address</b>&gt;): u64
 </code></pre>
 
 
@@ -1933,13 +1927,13 @@ Sum up the total stake of a given list of validator addresses.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_sum_up_total_stake">sum_up_total_stake</a>(vs: &<a href="">vector</a>&lt;Validator&gt;, addresses: &<a href="">vector</a>&lt;<b>address</b>&gt;): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x2_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(vs: &<a href="">vector</a>&lt;Validator&gt;, addresses: &<a href="">vector</a>&lt;<b>address</b>&gt;): u64 {
     <b>let</b> sum = 0;
     <b>let</b> i = 0;
     <b>let</b> length = <a href="_length">vector::length</a>(addresses);
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_ref">get_validator_ref</a>(vs, *<a href="_borrow">vector::borrow</a>(addresses, i));
-        sum = sum + <a href="validator.md#0x2_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x2_validator">validator</a>);
+        sum = sum + <a href="validator.md#0x2_validator_voting_power">validator::voting_power</a>(<a href="validator.md#0x2_validator">validator</a>);
         i = i + 1;
     };
     sum
