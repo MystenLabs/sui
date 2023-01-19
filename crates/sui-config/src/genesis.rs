@@ -706,6 +706,7 @@ fn create_genesis_checkpoint(
         previous_digest: None,
         epoch_rolling_gas_cost_summary: Default::default(),
         next_epoch_committee: None,
+        timestamp_ms: 0, /*todo - put a proper timestamp*/
     };
 
     (checkpoint, contents)

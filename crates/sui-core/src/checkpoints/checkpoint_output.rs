@@ -63,7 +63,10 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let checkpoint_seq = summary.sequence_number;
-        debug!("Sending checkpoint signature at sequence {checkpoint_seq} to consensus");
+        debug!(
+            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {}",
+            summary.timestamp_ms
+        );
         LogCheckpointOutput
             .checkpoint_created(summary, contents, epoch_store)
             .await?;
