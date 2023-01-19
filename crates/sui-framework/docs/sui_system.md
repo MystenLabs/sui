@@ -23,6 +23,7 @@
 -  [Function `request_add_delegation_mul_locked_coin`](#0x2_sui_system_request_add_delegation_mul_locked_coin)
 -  [Function `request_withdraw_delegation`](#0x2_sui_system_request_withdraw_delegation)
 -  [Function `request_switch_delegation`](#0x2_sui_system_request_switch_delegation)
+-  [Function `cancel_delegation_request`](#0x2_sui_system_cancel_delegation_request)
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
@@ -313,6 +314,15 @@ the epoch advancement transaction.
 
 
 <pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_EREPORT_RECORD_NOT_FOUND">EREPORT_RECORD_NOT_FOUND</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x2_sui_system_ESTAKED_SUI_FROM_WRONG_EPOCH"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_ESTAKED_SUI_FROM_WRONG_EPOCH">ESTAKED_SUI_FROM_WRONG_EPOCH</a>: u64 = 6;
 </code></pre>
 
 
@@ -850,6 +860,39 @@ Withdraw some portion of a delegation from a validator's staking pool.
 ) {
     <a href="validator_set.md#0x2_validator_set_request_switch_delegation">validator_set::request_switch_delegation</a>(
         &<b>mut</b> self.validators, delegation, staked_sui, new_validator_address, ctx
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_cancel_delegation_request"></a>
+
+## Function `cancel_delegation_request`
+
+Cancel a delegation requests sent during the current epoch.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_cancel_delegation_request">cancel_delegation_request</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_cancel_delegation_request">cancel_delegation_request</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    staked_sui: StakedSui,
+    ctx: &<b>mut</b> TxContext,
+) {
+    // The delegation request <b>has</b> <b>to</b> have happened within the current epoch.
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_delegation_request_epoch">staking_pool::delegation_request_epoch</a>(&staked_sui) == self.epoch, <a href="sui_system.md#0x2_sui_system_ESTAKED_SUI_FROM_WRONG_EPOCH">ESTAKED_SUI_FROM_WRONG_EPOCH</a>);
+    <a href="validator_set.md#0x2_validator_set_cancel_delegation_request">validator_set::cancel_delegation_request</a>(
+        &<b>mut</b> self.validators, staked_sui, ctx
     );
 }
 </code></pre>

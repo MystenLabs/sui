@@ -16,6 +16,7 @@
 -  [Function `adjust_stake_and_gas_price`](#0x2_validator_adjust_stake_and_gas_price)
 -  [Function `request_add_delegation`](#0x2_validator_request_add_delegation)
 -  [Function `request_withdraw_delegation`](#0x2_validator_request_withdraw_delegation)
+-  [Function `cancel_delegation_request`](#0x2_validator_cancel_delegation_request)
 -  [Function `decrease_next_epoch_delegation`](#0x2_validator_decrease_next_epoch_delegation)
 -  [Function `request_set_gas_price`](#0x2_validator_request_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_validator_request_set_commission_rate)
@@ -577,6 +578,36 @@ Request to withdraw delegation from the validator's staking pool, processed at t
     <b>let</b> principal_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation">staking_pool::request_withdraw_delegation</a>(
             &<b>mut</b> self.delegation_staking_pool, delegation, staked_sui, ctx);
     <a href="validator.md#0x2_validator_decrease_next_epoch_delegation">decrease_next_epoch_delegation</a>(self, principal_withdraw_amount);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_cancel_delegation_request"></a>
+
+## Function `cancel_delegation_request`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_cancel_delegation_request">cancel_delegation_request</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> (<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_cancel_delegation_request">cancel_delegation_request</a>(
+    self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>,
+    staked_sui: StakedSui,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> delegate_amount = <a href="staking_pool.md#0x2_staking_pool_staked_sui_amount">staking_pool::staked_sui_amount</a>(&staked_sui);
+    <a href="staking_pool.md#0x2_staking_pool_cancel_delegation_request">staking_pool::cancel_delegation_request</a>(&<b>mut</b> self.delegation_staking_pool, staked_sui, ctx);
+    self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - delegate_amount;
 }
 </code></pre>
 
