@@ -149,6 +149,7 @@ pub struct Parameters {
     /// Network admin server ports for primary & worker.
     pub network_admin_server: NetworkAdminServerParameters,
     /// Anemo network settings.
+    #[serde(default = "AnemoParameters::default")]
     pub anemo: AnemoParameters,
 }
 
