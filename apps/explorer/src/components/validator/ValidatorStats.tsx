@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type ActiveValidator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
 import { calculateAPY } from './calculateAPY';
-
-import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
