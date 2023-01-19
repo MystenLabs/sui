@@ -1019,4 +1019,13 @@ module sui::validator_set {
         vector::destroy_empty(pending_validators);
         vec_map::destroy_empty(pending_delegation_switches);
     }
+
+    #[test_only]
+    public fun destroy_validators_for_testing(v: vector<Validator>) {
+        while (!vector::is_empty(&v)) {
+            let v = vector::pop_back(&mut v);
+            validator::destroy(v, &mut tx_context::dummy());
+        };
+        vector::destroy_empty(v)
+    }
 }

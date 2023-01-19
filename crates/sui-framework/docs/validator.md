@@ -198,7 +198,7 @@
  Summary of the validator.
 </dd>
 <dt>
-<code>voting_power: u64</code>
+<code><a href="voting_power.md#0x2_voting_power">voting_power</a>: u64</code>
 </dt>
 <dd>
  The voting power of this validator, which might be different from its
@@ -368,7 +368,7 @@
         // Initialize the voting power <b>to</b> be the same <b>as</b> the <a href="stake.md#0x2_stake">stake</a> amount.
         // At the epoch change <b>where</b> this <a href="validator.md#0x2_validator">validator</a> is actually added <b>to</b> the
         // active <a href="validator.md#0x2_validator">validator</a> set, the voting power will be updated accordingly.
-        voting_power: stake_amount,
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>: stake_amount,
         stake_amount,
         pending_stake: 0,
         pending_withdraw: 0,
@@ -401,7 +401,7 @@
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_destroy">destroy</a>(self: <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="validator.md#0x2_validator_Validator">Validator</a> {
         metadata: _,
-        voting_power: _,
+        <a href="voting_power.md#0x2_voting_power">voting_power</a>: _,
         stake_amount: _,
         pending_stake: _,
         pending_withdraw: _,
@@ -891,7 +891,7 @@ Return the total amount staked with this validator, including both validator sta
 Return the voting power of this validator.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_voting_power">voting_power</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="voting_power.md#0x2_voting_power">voting_power</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): u64
 </code></pre>
 
 
@@ -900,8 +900,8 @@ Return the voting power of this validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_voting_power">voting_power</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
-    self.voting_power
+<pre><code><b>public</b> <b>fun</b> <a href="voting_power.md#0x2_voting_power">voting_power</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    self.<a href="voting_power.md#0x2_voting_power">voting_power</a>
 }
 </code></pre>
 
@@ -926,7 +926,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_set_voting_power">set_voting_power</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, new_voting_power: u64) {
-    self.voting_power = new_voting_power;
+    self.<a href="voting_power.md#0x2_voting_power">voting_power</a> = new_voting_power;
 }
 </code></pre>
 
