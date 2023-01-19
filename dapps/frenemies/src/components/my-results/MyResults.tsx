@@ -7,7 +7,7 @@ import TableHeader from "./TableHeader";
 /**
  * Table representing game score for the user.
  */
-function MyResults({ records }: { records: Record[] }) {
+export function MyResults({ records }: { records: Record[] }) {
   return (
     <div className="w-auto">
       <table className="table-fixed w-auto">
@@ -19,5 +19,3 @@ function MyResults({ records }: { records: Record[] }) {
     </div>
   );
 }
-
-export default MyResults;

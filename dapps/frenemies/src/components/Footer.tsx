@@ -3,9 +3,9 @@
 
 import { SocialDiscord24, SocialTwitter24 } from "@mysten/icons";
 
-function Footer() {
+export function Footer() {
   return (
-    <footer className="fixed bottom-0 left-0 right-0 flex items-center px-8 py-4 leading-none bg-sui-light text-steel-darker text-xs">
+    <footer className="fixed bottom-0 left-0 right-0 flex items-center px-8 py-4 leading-none bg-sui-light text-steel-darker text-xs flex-col sm:flex-row gap-2">
       <div className="flex-1">
         See{" "}
         <a
@@ -56,5 +56,3 @@ function Footer() {
     </footer>
   );
 }
-
-export default Footer;

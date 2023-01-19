@@ -27,7 +27,7 @@ bcs.registerStructType('frenemies::ScorecardUpdateEvent', {
 
 bcs.registerStructType('leaderboard::Leaderboard', {
     id: 'address',
-    topScores: 'vector<Score>',
+    topScores: 'vector<leaderboard::Score>',
     prevEpochStakes: 'table::Table',
     epoch: 'u64',
     startEpoch: 'u64'

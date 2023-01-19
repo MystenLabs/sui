@@ -5,7 +5,7 @@ import { ConnectButton } from "@mysten/wallet-kit";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 
-function Header() {
+export function Header() {
   const [scrolled, setScrolled] = useState(false);
 
   // TODO: Probably debounce this:
@@ -37,5 +37,3 @@ function Header() {
     </header>
   );
 }
-
-export default Header;

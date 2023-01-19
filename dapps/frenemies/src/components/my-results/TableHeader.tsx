@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-function TableHeader() {
+export function TableHeader() {
   return (
     <tr>
       <th>Round</th>
@@ -13,5 +13,3 @@ function TableHeader() {
     </tr>
   );
 }
-
-export default TableHeader;
