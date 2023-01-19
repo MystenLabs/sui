@@ -1,5 +1,5 @@
 {
-  "name": "dapp-frenemies",
+  "name": "@dapp/frenemies",
   "private": true,
   "type": "module",
   "scripts": {
