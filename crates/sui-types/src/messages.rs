@@ -415,8 +415,6 @@ impl SingleTransactionKind {
         // transaction.
         let mut used = HashSet::new();
         if !input_objects.iter().all(|o| used.insert(o.object_id())) {
-            dbg!(input_objects);
-            dbg!(used);
             return Err(SuiError::DuplicateObjectRefInput);
         }
         Ok(input_objects)

@@ -6,12 +6,16 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::execution_mode::{self, ExecutionMode};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use sui_types::base_types::{ObjectDigest, SequenceNumber};
+use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
 use crate::adapter;
 use sui_protocol_constants::{
+<<<<<<< HEAD
     MAX_TX_GAS, REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
+=======
+    REWARD_SLASHING_RATE, REWARD_SLASHING_THRESHOLD_BPS, STORAGE_FUND_REINVEST_RATE,
+>>>>>>> 6d8c886bb (fixup! [dev-inspect] Combine to a single end point)
 };
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
@@ -697,12 +701,6 @@ fn transfer_sui<S>(
 
     Ok(())
 }
-
-pub const FAKE_GAS_OBJECT: ObjectRef = (
-    ObjectID::ZERO,
-    SequenceNumber::from_u64(0),
-    ObjectDigest::MIN,
-);
 
 #[test]
 fn test_pay_empty_coins() {

@@ -8,8 +8,6 @@ use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_adapter::execution_engine::FAKE_GAS_OBJECT;
-use sui_protocol_constants::MAX_TX_GAS;
 use sui_types::committee::EpochId;
 use sui_types::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use tap::TapFallible;
@@ -236,6 +234,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
+        gas_price: Option<u64>,
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
         let epoch = match epoch {
@@ -244,20 +243,9 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         };
         let tx_kind: TransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        let tx_data =
-            TransactionData::new(tx_kind.clone(), sender_address, FAKE_GAS_OBJECT, MAX_TX_GAS);
-        let intent_msg = IntentMessage::new(
-            Intent {
-                version: IntentVersion::V0,
-                scope: IntentScope::TransactionData,
-                app_id: AppId::Sui,
-            },
-            tx_data,
-        );
-        let txn_digest = TransactionDigest::new(sha3_hash(&intent_msg.value));
         Ok(self
             .state
-            .dev_inspect_transaction(sender_address, tx_kind, txn_digest, epoch)
+            .dev_inspect_transaction(sender_address, tx_kind, gas_price.unwrap_or(1), epoch)
             .await?)
     }
 

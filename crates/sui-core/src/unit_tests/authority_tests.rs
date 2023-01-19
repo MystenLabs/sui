@@ -262,7 +262,6 @@ async fn test_dev_inspect_object_by_bytes() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "create",
@@ -275,8 +274,8 @@ async fn test_dev_inspect_object_by_bytes() {
     .await
     .unwrap();
     assert_eq!(effects.created.len(), 1);
-    // gas is not mutated
-    assert!(effects.mutated.is_empty());
+    // random gas is mutated
+    assert_eq!(effects.mutated.len(), 1);
     assert!(effects.deleted.is_empty());
     assert!(effects.gas_used.computation_cost > 0);
     let mut results = results.unwrap();
@@ -289,6 +288,7 @@ async fn test_dev_inspect_object_by_bytes() {
     assert_eq!(idx, 0);
     assert!(mutable_reference_outputs.is_empty());
     assert!(return_values.is_empty());
+    let dev_inspect_gas_summary = effects.gas_used;
 
     // actually make the call to make an object
     let effects = call_move_(
@@ -321,12 +321,14 @@ async fn test_dev_inspect_object_by_bytes() {
         .unwrap()
         .contents()
         .to_vec();
+    // gas used should be the same
+    let actual_gas_used: SuiGasCostSummary = effects.gas_used.into();
+    assert_eq!(actual_gas_used, dev_inspect_gas_summary);
 
     // use the created object directly, via its bytes
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "set_value",
@@ -340,7 +342,8 @@ async fn test_dev_inspect_object_by_bytes() {
     .unwrap();
     assert!(effects.created.is_empty());
     // the object is not marked as mutated, since it was passed in via bytes
-    assert!(effects.mutated.is_empty());
+    // but random gas is mutated
+    assert_eq!(effects.mutated.len(), 1);
     assert!(effects.deleted.is_empty());
     assert!(effects.gas_used.computation_cost > 0);
 
@@ -429,7 +432,6 @@ async fn test_dev_inspect_unowned_object() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &alice,
-        &alice_key,
         &object_basics,
         "object_basics",
         "set_value",
@@ -442,7 +444,8 @@ async fn test_dev_inspect_unowned_object() {
     .await
     .unwrap();
     assert!(effects.created.is_empty());
-    assert_eq!(effects.mutated.len(), 1);
+    // random gas and input object are mutated
+    assert_eq!(effects.mutated.len(), 2);
     assert!(effects.deleted.is_empty());
     assert!(effects.gas_used.computation_cost > 0);
 
@@ -503,7 +506,7 @@ async fn test_dev_inspect_dynamic_field() {
         (mk_obj!(), mk_obj!())
     };
 
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (_validator, fullnode, object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
@@ -512,7 +515,6 @@ async fn test_dev_inspect_dynamic_field() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "add_ofield",
@@ -531,7 +533,6 @@ async fn test_dev_inspect_dynamic_field() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "add_ofield",
@@ -545,8 +546,8 @@ async fn test_dev_inspect_dynamic_field() {
     .unwrap();
     let mut results = results.unwrap();
     assert_eq!(effects.created.len(), 1);
-    // gas is not mutated
-    assert!(effects.mutated.is_empty());
+    // random gas is mutated
+    assert_eq!(effects.mutated.len(), 1);
     // nothing is deleted
     assert!(effects.deleted.is_empty());
     assert!(effects.gas_used.computation_cost > 0);
@@ -605,7 +606,6 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "borrow_value_mut",
@@ -634,7 +634,6 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "borrow_value",
@@ -663,7 +662,6 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "get_value",
@@ -692,7 +690,6 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "get_contents",
@@ -720,30 +717,25 @@ async fn test_dev_inspect_return_values() {
 
 #[tokio::test]
 async fn test_dev_inspect_uses_unbound_object() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (_validator, fullnode, object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
-    let data = TransactionData::new_move_call(
-        sender,
-        object_basics,
-        Identifier::new("object_basics").unwrap(),
-        Identifier::new("freeze").unwrap(),
-        vec![],
-        FAKE_GAS_OBJECT,
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
-            FAKE_GAS_OBJECT,
+    let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
+        package: object_basics,
+        module: Identifier::new("object_basics").unwrap(),
+        function: Identifier::new("freeze").unwrap(),
+        type_arguments: vec![],
+        arguments: vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            random_object_ref(),
         ))],
-        MAX_GAS,
-    );
+    }));
 
-    let transaction = to_sender_signed_transaction(data.clone(), &sender_key);
-    let transaction_digest = *transaction.digest();
     let result = fullnode
-        .dev_inspect_transaction(sender, data.kind, transaction_digest, fullnode.epoch())
+        .dev_inspect_transaction(sender, kind, 1, fullnode.epoch())
         .await;
-    let Err(err) =  result else { panic!() };
+    let Err(err) = result else { panic!() };
     assert!(err
         .to_string()
         .contains("Error checking transaction input objects: [ObjectNotFound"));
@@ -751,7 +743,7 @@ async fn test_dev_inspect_uses_unbound_object() {
 
 #[tokio::test]
 async fn test_dev_inspect_on_validator() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (validator, object_basics) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
@@ -760,7 +752,6 @@ async fn test_dev_inspect_on_validator() {
     let result = call_dev_inspect(
         &validator,
         &sender,
-        &sender_key,
         &object_basics,
         "object_basics",
         "create",
@@ -3249,7 +3240,6 @@ pub async fn init_state_with_ids_and_object_basics<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, ObjectRef) {
-    use sui_adapter::adapter::generate_package_id;
     use sui_framework_build::compiled_package::BuildConfig;
 
     let state = init_state().await;
@@ -3261,7 +3251,7 @@ pub async fn init_state_with_ids_and_object_basics<
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let mut modules: Vec<_> = BuildConfig::default()
+    let modules: Vec<_> = BuildConfig::default()
         .build(path)
         .unwrap()
         .get_modules()
@@ -3269,8 +3259,6 @@ pub async fn init_state_with_ids_and_object_basics<
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let mut ctx = TxContext::new(&SuiAddress::ZERO, &digest, 0);
-    generate_package_id(&mut modules, &mut ctx).unwrap();
     let pkg = Object::new_package(modules, digest).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
@@ -3283,7 +3271,6 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>, ObjectRef) {
-    use sui_adapter::adapter::generate_package_id;
     use sui_framework_build::compiled_package::BuildConfig;
 
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
@@ -3296,7 +3283,7 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let mut modules: Vec<_> = BuildConfig::default()
+    let modules: Vec<_> = BuildConfig::default()
         .build(path)
         .unwrap()
         .get_modules()
@@ -3304,8 +3291,6 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let mut ctx = TxContext::new(&SuiAddress::ZERO, &digest, 0);
-    generate_package_id(&mut modules, &mut ctx).unwrap();
     let pkg = Object::new_package(modules, digest).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
@@ -3605,32 +3590,26 @@ pub async fn add_ofield(
 pub async fn call_dev_inspect(
     authority: &AuthorityState,
     sender: &SuiAddress,
-    sender_key: &AccountKeyPair,
     package: &ObjectRef,
     module: &str,
     function: &str,
-    type_args: Vec<TypeTag>,
+    type_arguments: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
 ) -> Result<DevInspectResults, anyhow::Error> {
-    let mut args = Vec::with_capacity(test_args.len());
+    let mut arguments = Vec::with_capacity(test_args.len());
     for a in test_args {
-        args.push(a.to_call_arg(authority).await)
+        arguments.push(a.to_call_arg(authority).await)
     }
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
-        *sender,
-        *package,
-        Identifier::new(module).unwrap(),
-        Identifier::new(function).unwrap(),
-        type_args,
-        FAKE_GAS_OBJECT,
-        args,
-        MAX_GAS,
-    );
 
-    let transaction = to_sender_signed_transaction(data.clone(), sender_key);
-    let transaction_digest = *transaction.digest();
+    let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
+        package: *package,
+        module: Identifier::new(module).unwrap(),
+        function: Identifier::new(function).unwrap(),
+        type_arguments,
+        arguments,
+    }));
     authority
-        .dev_inspect_transaction(*sender, data.kind, transaction_digest, authority.epoch())
+        .dev_inspect_transaction(*sender, kind, 1, authority.epoch())
         .await
 }
 

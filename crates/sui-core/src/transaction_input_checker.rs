@@ -61,17 +61,32 @@ pub async fn check_transaction_input(
     Ok((gas_status, input_objects))
 }
 
-#[instrument(level = "trace", skip_all)]
 /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
 /// bypasses many of the normal object checks
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
     kind: &TransactionKind,
-    gas_object: &ObjectRef,
-) -> SuiResult<InputObjects> {
-    TransactionData::validity_check_impl(kind, gas_object)?;
-    let input_objects = kind.input_objects()?;
-    let objects = store.check_input_objects(&input_objects)?;
+    gas_object: Object,
+) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
+    let gas_object_ref = gas_object.compute_object_reference();
+    TransactionData::validity_check_impl(kind, &gas_object_ref)?;
+    for k in kind.single_transactions() {
+        match k {
+            SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::Call(_)
+            | SingleTransactionKind::TransferSui(_)
+            | SingleTransactionKind::Pay(_)
+            | SingleTransactionKind::PaySui(_)
+            | SingleTransactionKind::PayAllSui(_) => (),
+            SingleTransactionKind::Publish(_)
+            | SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_) => {
+                anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
+            }
+        }
+    }
+    let mut input_objects = kind.input_objects()?;
+    let mut objects = store.check_input_objects(&input_objects)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
         if !object.is_immutable() {
@@ -84,12 +99,14 @@ pub(crate) async fn check_dev_inspect_input(
                         object.id()
                     ),
                 }
+                .into()
             );
         }
     }
-    Ok(InputObjects::new(
-        input_objects.into_iter().zip(objects).collect(),
-    ))
+    input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
+    objects.push(gas_object);
+    let input_objects = InputObjects::new(input_objects.into_iter().zip(objects).collect());
+    Ok((gas_object_ref, input_objects))
 }
 
 pub async fn check_certificate_input(

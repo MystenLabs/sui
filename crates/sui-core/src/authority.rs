@@ -58,7 +58,7 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, GasPrice, SuiGasStatus};
@@ -67,7 +67,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{Owner, PastObjectRead};
+use sui_types::object::{MoveObject, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
@@ -99,7 +99,7 @@ use crate::{
     event_handler::EventHandler, transaction_input_checker,
     transaction_manager::TransactionManager, transaction_streamer::TransactionStreamer,
 };
-use sui_adapter::execution_engine::{self, FAKE_GAS_OBJECT};
+use sui_adapter::execution_engine;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -1092,38 +1092,59 @@ impl AuthorityState {
         SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
     }
 
+    /// The object ID for gas can be any object ID, even for an uncreated object
     pub async fn dev_inspect_transaction(
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,
-        transaction_digest: TransactionDigest,
+        gas_price: u64,
         epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
         if !self.is_fullnode() {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
-        let gas_object = FAKE_GAS_OBJECT;
-        let input_objects = transaction_input_checker::check_dev_inspect_input(
+        let gas_object_id = ObjectID::random();
+        let gas_object = Object::new_move(
+            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, MAX_TX_GAS),
+            Owner::AddressOwner(sender),
+            TransactionDigest::genesis(),
+        );
+        let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
             &self.database,
             &transaction_kind,
-            &gas_object,
+            gas_object,
         )
         .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
+        // TODO should we error instead for 0?
+        let gas_price = std::cmp::max(gas_price, 1);
+        let gas_budget = MAX_TX_GAS;
+        let data = TransactionData::new(
+            transaction_kind,
+            sender,
+            gas_object_ref,
+            gas_price,
+            gas_budget,
+        );
+        let transaction_digest = TransactionDigest::new(sha3_hash(&data));
+        let transaction_kind = data.kind;
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let gas_status =
-            SuiGasStatus::new_uncharged(MAX_TX_GAS, GasPrice::from(1), STORAGE_GAS_PRICE.into());
+        let gas_status = SuiGasStatus::new_uncharged(
+            MAX_TX_GAS,
+            GasPrice::from(gas_price),
+            STORAGE_GAS_PRICE.into(),
+        );
         let (_inner_temp_store, effects, execution_result) =
             execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
                 shared_object_refs,
                 temporary_store,
                 transaction_kind,
                 sender,
-                gas_object,
+                gas_object_ref,
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,

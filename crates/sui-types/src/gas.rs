@@ -199,6 +199,7 @@ fn to_internal(external_units: GasUnits) -> InternalGas {
     GasUnits::to_unit(external_units)
 }
 
+#[derive(Debug)]
 pub struct SuiGasStatus<'a> {
     gas_status: GasStatus<'a>,
     init_budget: GasUnits,
@@ -221,28 +222,12 @@ impl<'a> SuiGasStatus<'a> {
         computation_gas_unit_price: GasPrice,
         storage_gas_unit_price: GasPrice,
     ) -> SuiGasStatus<'a> {
-        let charge = true;
-        Self::new_with_budget_impl(
+        Self::new(
+            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(gas_budget)),
             gas_budget,
+            true,
             computation_gas_unit_price,
-            storage_gas_unit_price,
-            charge,
-        )
-    }
-
-    /// WARNING! This should only be used in tests or in dev inspect and dry run. Gas will still
-    /// be measured, but not charged at the end of execution
-    pub fn new_uncharged(
-        gas_budget: u64,
-        computation_gas_unit_price: GasPrice,
-        storage_gas_unit_price: GasPrice,
-    ) -> SuiGasStatus<'a> {
-        let charge = false;
-        Self::new_with_budget_impl(
-            gas_budget,
-            computation_gas_unit_price,
-            storage_gas_unit_price,
-            charge,
+            storage_gas_unit_price.into(),
         )
     }
 
@@ -365,21 +350,6 @@ impl<'a> SuiGasStatus<'a> {
             storage_gas_units: GasUnits::new(0),
             storage_rebate: 0.into(),
         }
-    }
-
-    fn new_with_budget_impl(
-        gas_budget: u64,
-        computation_gas_unit_price: GasPrice,
-        storage_gas_unit_price: GasPrice,
-        charge: bool,
-    ) -> SuiGasStatus<'a> {
-        Self::new(
-            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(gas_budget)),
-            gas_budget,
-            charge,
-            computation_gas_unit_price,
-            storage_gas_unit_price.into(),
-        )
     }
 
     fn deduct_computation_cost(&mut self, cost: &InternalGas) -> Result<(), ExecutionError> {

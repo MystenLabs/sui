@@ -188,8 +188,9 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
-    /// Return dev-inpsect results of the transaction, including both the transaction
-    /// effects and return values of the transaction.
+    /// Runs the transaction in dev-inpsect mode. Which allows for nearly any
+    /// transaction (or Move call) with any arguments. Detailed results are
+    /// provided, including both the transaction effects and any return values.
     #[method(name = "devInspectTransaction")]
     async fn dev_inspect_transaction(
         &self,
@@ -197,6 +198,8 @@ pub trait RpcFullNodeReadApi {
         tx_bytes: Base64,
         /// The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<EpochId>,
+        /// Gas is not charged, but gas usage is still calculated. The default is 1
+        gas_price: Option<u64>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
