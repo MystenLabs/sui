@@ -197,15 +197,13 @@ function StakingCard() {
     });
     const unStakeToken = useMutation({
         mutationFn: async ({
-            principalWithdrawAmount,
             delegationId,
             stakeSuId,
         }: {
-            principalWithdrawAmount: string;
             delegationId: string;
             stakeSuId: string;
         }) => {
-            if (!principalWithdrawAmount || !delegationId || !stakeSuId) {
+            if (!delegationId || !stakeSuId) {
                 throw new Error(
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
                 );
@@ -214,8 +212,7 @@ function StakingCard() {
             const response = await Coin.unStakeCoin(
                 signer,
                 delegationId,
-                stakeSuId,
-                principalWithdrawAmount
+                stakeSuId
             );
             return response;
         },
@@ -247,7 +244,6 @@ function StakingCard() {
                         delegationId:
                             delegationData.delegation_status.Active.id.id,
                         stakeSuId: stakeIdParams,
-                        principalWithdrawAmount: bigIntAmount.toString(),
                     });
 
                     txDigest = getTransactionDigest(response);
@@ -331,9 +327,8 @@ function StakingCard() {
                                         color="gray-85"
                                         weight="semibold"
                                     >
-                                        {unstake
-                                            ? 'Enter the amount of SUI to unstake'
-                                            : 'Enter the amount of SUI to stake'}
+                                        {!unstake &&
+                                            'Enter the amount of SUI to stake'}
                                     </Text>
                                 </div>
                                 <StakeForm
@@ -346,7 +341,7 @@ function StakingCard() {
                                     }
                                 />
 
-                                {stakeIdParams && (
+                                {stakeIdParams && !unstake && (
                                     <div className="flex-1 mt-7.5">
                                         <Collapse
                                             title={

@@ -41,7 +41,7 @@ function StakeForm({
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
 
-    const [gasBudgetEstimation, symbol] = useFormatCoin(
+    const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
         SUI_TYPE_ARG
     );
@@ -50,12 +50,13 @@ function StakeForm({
         coinBalance -
         BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
-    const maxTokenFormate = useFormatCoin(coinBalanceMinusGas, coinType);
+    const [maxToken, symbol, queryResult] = useFormatCoin(
+        coinBalanceMinusGas,
+        coinType
+    );
 
-    const maxToken = maxTokenFormate[0];
-    const queryResult = maxTokenFormate[2];
     const [coinDecimals] = useCoinDecimals(coinType);
-    const tokenBalance = useFormatCoin(coinBalance, coinType)[0];
+    const [tokenBalance] = useFormatCoin(coinBalance, coinType);
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
@@ -126,7 +127,7 @@ function StakeForm({
                         </div>
                     }
                 >
-                    {+amount > 0 && (
+                    {+amount > 0 && !unstake && (
                         <div className="py-px flex justify-between w-full">
                             <Text
                                 variant="body"
