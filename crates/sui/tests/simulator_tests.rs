@@ -133,6 +133,7 @@ async fn test_net_determinism() {
     let (_transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
     sleep(Duration::from_millis(1000)).await;
+    sleep(Duration::from_millis(1000)).await;
 
     let node = test_cluster.start_fullnode().await.unwrap();
 

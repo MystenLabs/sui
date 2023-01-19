@@ -5,7 +5,7 @@ ENV GIT_REVISION=$GIT_REVISION
 RUN apt-get update && \
     apt-get install -y ca-certificates && \
     apt-get install -y cmake clang
-RUN apt-get install -y strace
+RUN apt-get install -y strace vim
 # Plan out the 3rd-party dependencies that need to be built.
 #
 # This is done by:
