@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::StreamExt;
+use futures::TryFutureExt;
+use futures::TryStreamExt;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
@@ -189,11 +192,11 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
     async fn pkg_for_address(
         &self,
-        addr: &AccountAddress,
+        addr: AccountAddress,
     ) -> Result<SuiRawMovePackage, SourceVerificationError> {
         // Move packages are specified with an AccountAddress, but are
         // fetched from a sui network via sui_getObject, which takes an object ID
-        let obj_id = ObjectID::from(*addr);
+        let obj_id = ObjectID::from(addr);
 
         // fetch the Sui object at the address specified for the package in the local resolution table
         // if future packages with a large set of dependency packages prove too slow to verify,
@@ -220,16 +223,21 @@ impl<'a> BytecodeSourceVerifier<'a> {
         &self,
         addresses: impl Iterator<Item = AccountAddress>,
     ) -> Result<OnChainBytes, SourceVerificationError> {
-        let mut map = OnChainBytes::new();
+        let resp: Vec<_> = futures::stream::iter(addresses)
+            .map(|addr| self.pkg_for_address(addr).map_ok(move |pkg| (addr, pkg)))
+            .buffered(100)
+            .try_collect()
+            .await?;
 
-        for addr in addresses {
-            let SuiRawMovePackage { module_map, .. } = self.pkg_for_address(&addr).await?;
-            for (module, bytes) in module_map {
-                map.insert((addr, Symbol::from(module)), bytes);
-            }
-        }
-
-        Ok(map)
+        Ok(resp
+            .into_iter()
+            .flat_map(|(addr, raw_package)| {
+                let SuiRawMovePackage { module_map, .. } = raw_package;
+                module_map
+                    .into_iter()
+                    .map(move |(module, bytes)| ((addr, Symbol::from(module)), bytes))
+            })
+            .collect())
     }
 }
 
