@@ -643,7 +643,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         signer: SuiAddress,
         delegation: ObjectID,
         staked_sui: ObjectID,
-        principal_withdraw_amount: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
@@ -665,7 +664,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
-                CallArg::Pure(bcs::to_bytes(&principal_withdraw_amount)?),
             ],
             gas_budget,
             gas_price,
@@ -678,7 +676,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         delegation: ObjectID,
         staked_sui: ObjectID,
         new_validator_address: SuiAddress,
-        switch_pool_token_amount: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
@@ -701,7 +698,6 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
                 CallArg::Pure(bcs::to_bytes(&new_validator_address)?),
-                CallArg::Pure(bcs::to_bytes(&switch_pool_token_amount)?),
             ],
             gas_budget,
             gas_price,
