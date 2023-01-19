@@ -47,21 +47,15 @@ diesel::table! {
 }
 
 diesel::table! {
-    event_logs (id) {
-        id -> Int4,
-        next_cursor_tx_dig -> Nullable<Text>,
-        next_cursor_event_seq -> Nullable<Int8>,
-    }
-}
-
-diesel::table! {
     events (id) {
         id -> Int8,
-        transaction_digest -> Nullable<Varchar>,
+        transaction_digest -> Varchar,
         event_sequence -> Int8,
         event_time -> Nullable<Timestamp>,
         event_type -> Varchar,
         event_content -> Varchar,
+        next_cursor_transaction_digest -> Nullable<Varchar>,
+        next_cursor_event_sequence -> Nullable<Int8>,
     }
 }
 
@@ -176,7 +170,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     checkpoint_logs,
     checkpoints,
     error_logs,
-    event_logs,
     events,
     object_event_logs,
     object_events,
