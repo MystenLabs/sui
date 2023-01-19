@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 
 pub type CheckpointSequenceNumber = u64;
+pub type CheckpointTimestamp = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
@@ -120,6 +121,11 @@ pub struct CheckpointSummary {
     /// TODO: If desired, we could also commit to the previous last checkpoint cert so that
     /// they form a hash chain.
     pub next_epoch_committee: Option<Vec<(AuthorityName, StakeUnit)>>,
+
+    /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
+    /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
+    /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
+    pub timestamp_ms: CheckpointTimestamp,
 }
 
 impl CheckpointSummary {
@@ -131,6 +137,7 @@ impl CheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
+        timestamp_ms: CheckpointTimestamp,
     ) -> CheckpointSummary {
         let content_digest = transactions.digest();
 
@@ -142,6 +149,7 @@ impl CheckpointSummary {
             previous_digest,
             epoch_rolling_gas_cost_summary,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
+            timestamp_ms,
         }
     }
 
@@ -226,6 +234,7 @@ impl SignedCheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
+        timestamp_ms: CheckpointTimestamp,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
             epoch,
@@ -235,6 +244,7 @@ impl SignedCheckpointSummary {
             previous_digest,
             epoch_rolling_gas_cost_summary,
             next_epoch_committee,
+            timestamp_ms,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
     }
@@ -528,6 +538,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    0,
                 )
             })
             .collect();
@@ -566,6 +577,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    0,
                 )
             })
             .collect();
@@ -595,6 +607,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    0,
                 )
             })
             .collect();
