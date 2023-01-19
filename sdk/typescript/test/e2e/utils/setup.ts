@@ -24,6 +24,9 @@ const DEFAULT_FULLNODE_URL =
   import.meta.env.VITE_FULLNODE_URL ?? TEST_ENDPOINTS.fullNode;
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
+const FAUCET_REQUEST_TIMEOUT_SECONDS = 60;
+const FULLNODE_SYNC_TIMEOUT_SECONDS = 600;
+
 export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
 export const DEFAULT_GAS_BUDGET = 10000;
@@ -69,14 +72,36 @@ export async function setup(providerType: ProviderType = 'rpc') {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   const provider = getProvider(providerType);
-  await retry(() => provider.requestSuiFromFaucet(address), {
-    backoff: 'EXPONENTIAL',
-    // overall timeout in 60 seconds
-    timeout: 1000 * 60,
-    // skip retry if we hit the rate-limit error
-    retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
-    logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
-  });
+  const faucetResponse = await retry(
+    () => provider.requestSuiFromFaucet(address),
+    {
+      backoff: 'EXPONENTIAL',
+      timeout: 1000 * FAUCET_REQUEST_TIMEOUT_SECONDS,
+      // skip retry if we hit the rate-limit error
+      retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
+      logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
+    }
+  );
+
+  const coinId = faucetResponse.transferred_gas_objects[0].id;
+
+  // Wait for the faucet transaction to sync to fullnode since the faucet might be connected
+  // with a different fullnode
+  await retry(
+    async () => {
+      const coin = await provider.getObject(coinId);
+      return coin.status === 'Exists' ? Promise.resolve(1) : Promise.reject(1);
+    },
+    {
+      backoff: 'EXPONENTIAL',
+      timeout: 1000 * FULLNODE_SYNC_TIMEOUT_SECONDS,
+      logger: (msg) =>
+        console.warn(
+          `Waiting the faucet transaction for Coin ID ${coinId} to sync to fullnode: ` +
+            msg
+        ),
+    }
+  );
 
   return new TestToolbox(keypair, provider);
 }
@@ -103,8 +128,8 @@ export async function publishPackage(
   });
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
-  const publishEvent = getEvents(publishTxn).filter(
+  const publishEvent = getEvents(publishTxn)!.filter(
     (e: any) => 'publish' in e
   )[0];
-  return publishEvent.publish.packageId.replace(/^0x(0+)/, '$1');
+  return (publishEvent as any).publish.packageId.replace(/^0x(0+)/, '$1');
 }
