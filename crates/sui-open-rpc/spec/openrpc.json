@@ -6585,8 +6585,6 @@
           "pending_delegation_switches",
           "pending_removals",
           "pending_validators",
-          "quorum_threshold",
-          "total_voting_power",
           "validator_stake"
         ],
         "properties": {
@@ -6623,16 +6621,6 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
-          },
-          "quorum_threshold": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "total_voting_power": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "validator_stake": {
             "type": "integer",
