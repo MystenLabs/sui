@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Row, { Record } from "./Row";
-import TableHeader from "./TableHeader";
+import { Row, Record } from "./Row";
+import { TableHeader } from "./TableHeader";
 
 /**
  * Table representing game score for the user.

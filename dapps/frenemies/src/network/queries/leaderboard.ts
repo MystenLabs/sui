@@ -21,14 +21,10 @@ export function useLeaderboard(objectId: string) {
         data: { bcs_bytes },
       } = objectData.details;
 
-      try {
-        return {
-          reference,
-          data: bcs.de("leaderboard::Leaderboard", bcs_bytes, "base64"),
-        };
-      } catch (e) {
-        console.error(e);
-      }
+      return {
+        reference,
+        data: bcs.de("leaderboard::Leaderboard", bcs_bytes, "base64"),
+      };
     }
   );
 }
