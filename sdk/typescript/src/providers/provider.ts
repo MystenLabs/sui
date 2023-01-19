@@ -115,7 +115,7 @@ export abstract class Provider {
    */
   abstract getAllBalances(
     owner: SuiAddress
-  ) : Promise<BalanceStruct>;
+  ) : Promise<BalanceStruct[]>;
 
   /**
    * Fetch CoinMetadata for a given coin type

@@ -7,4 +7,3 @@ Sui = { local = "../../../../../../crates/sui-framework" }
 
 [addresses]
 coin_read =  "0x0"
-sui =  "0000000000000000000000000000000000000002"

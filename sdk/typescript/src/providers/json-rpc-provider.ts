@@ -251,7 +251,7 @@ export class JsonRpcProvider extends Provider {
 
   async getAllBalances(
     owner: SuiAddress
-  ) : Promise<BalanceStruct> {
+  ) : Promise<BalanceStruct[]> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -259,7 +259,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getAllBalances',
         [owner],
-        BalanceStruct,
+        array(BalanceStruct),
         this.options.skipDataValidation
       );
     } catch (err) {
