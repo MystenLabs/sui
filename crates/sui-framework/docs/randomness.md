@@ -42,6 +42,7 @@ This object can be used as a shared-/owned-object.
 -  [Function `to_bytes`](#0x2_randomness_to_bytes)
 -  [Function `native_tbls_verify_signature`](#0x2_randomness_native_tbls_verify_signature)
 -  [Function `native_tbls_sign`](#0x2_randomness_native_tbls_sign)
+-  [Function `safe_selection`](#0x2_randomness_safe_selection)
 
 
 <pre><code><b>use</b> <a href="">0x1::hash</a>;
@@ -125,6 +126,16 @@ Already set object cannot be set again.
 
 
 <pre><code><b>const</b> <a href="randomness.md#0x2_randomness_EAlreadySet">EAlreadySet</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_randomness_EInvalidRndLength"></a>
+
+Supplied randomness is not of the right length.
+
+
+<pre><code><b>const</b> <a href="randomness.md#0x2_randomness_EInvalidRndLength">EInvalidRndLength</a>: u64 = 2;
 </code></pre>
 
 
@@ -404,6 +415,42 @@ Helper functions to sign on messages in tests.
 
 
 <pre><code><b>pragma</b> opaque;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_randomness_safe_selection"></a>
+
+## Function `safe_selection`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="randomness.md#0x2_randomness_safe_selection">safe_selection</a>(n: u64, rnd: &<a href="">vector</a>&lt;u8&gt;): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="randomness.md#0x2_randomness_safe_selection">safe_selection</a>(n: u64, rnd: &<a href="">vector</a>&lt;u8&gt;): u64 {
+    <b>assert</b>!(<a href="_length">vector::length</a>(rnd) &gt;= 16, <a href="randomness.md#0x2_randomness_EInvalidRndLength">EInvalidRndLength</a>);
+    <b>let</b> m: u128 = 0;
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; 16) {
+        m = m &lt;&lt; 8;
+        <b>let</b> curr_byte = *<a href="_borrow">vector::borrow</a>(rnd, i);
+        m = m + (curr_byte <b>as</b> u128);
+        i = i + 1;
+    };
+    <b>let</b> n_128 = (n <b>as</b> u128);
+    <b>let</b> module_128  = m % n_128;
+    <b>let</b> res = (module_128 <b>as</b> u64);
+    res
+}
 </code></pre>
 
 

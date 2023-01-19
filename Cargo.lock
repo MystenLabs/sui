@@ -11056,7 +11056,6 @@ dependencies = [
  "fail 0.5.1",
  "fastcrypto",
  "fastcrypto-derive",
- "fastcrypto-tbls",
  "fastcrypto-zkp",
  "fastrand",
  "fd-lock",
