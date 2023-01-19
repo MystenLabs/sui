@@ -7,10 +7,10 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use sui_types::{base_types::ObjectID, storage::ObjectKey};
+use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -30,14 +30,18 @@ pub struct TransactionManager {
 
 #[derive(Default)]
 struct Inner {
+    // Current epoch of TransactionManager.
+    epoch: EpochId,
+
     // Maps missing input objects to transactions in pending_certificates.
     // Note that except for immutable objects, a given key may only have one TransactionDigest in
     // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
     // cannot determine from TransactionData whether an input is mutable or immutable.
     missing_inputs: HashMap<ObjectKey, BTreeSet<TransactionDigest>>,
 
-    // Number of transactions that depend on each object ID.
-    // Used for throttling signing of hot objects.
+    // Number of transactions that depend on each object ID. Should match exactly with total
+    // number of transactions per object ID prefix in the missing_inputs table.
+    // Used for throttling signing and submitting transactions depending on hot objects.
     input_objects: HashMap<ObjectID, usize>,
 
     // A transaction enqueued to TransactionManager must be in either pending_certificates or
@@ -47,6 +51,15 @@ struct Inner {
     pending_certificates: HashMap<TransactionDigest, BTreeSet<ObjectKey>>,
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
+}
+
+impl Inner {
+    fn new(epoch: EpochId) -> Inner {
+        Inner {
+            epoch,
+            ..Default::default()
+        }
+    }
 }
 
 impl TransactionManager {
@@ -61,7 +74,7 @@ impl TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
             metrics,
-            inner: Default::default(),
+            inner: RwLock::new(Inner::new(epoch_store.epoch())),
             tx_ready_certificates,
         };
         transaction_manager
@@ -86,6 +99,12 @@ impl TransactionManager {
     ) -> SuiResult<()> {
         let inner = &mut self.inner.write();
         for cert in certs {
+            if inner.epoch != cert.epoch() {
+                warn!(
+                    "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                    inner.epoch, cert
+                );
+            }
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
             // don't race with a concurrent execution of this tx.
@@ -198,6 +217,10 @@ impl TransactionManager {
 
         {
             let inner = &mut self.inner.write();
+            if inner.epoch != epoch_store.epoch() {
+                warn!("Ignoring objects committed from wrong epoch. Expected={} Actual={} Objects={:?}", inner.epoch, epoch_store.epoch(), object_keys);
+                return;
+            }
             for object_key in object_keys {
                 if let Some(digests) = inner.missing_inputs.remove(&object_key) {
                     // Clean up object ID count table.
@@ -269,6 +292,10 @@ impl TransactionManager {
     ) {
         {
             let inner = &mut self.inner.write();
+            if inner.epoch != epoch_store.epoch() {
+                warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
+                return;
+            }
             inner.executing_certificates.remove(digest);
             self.metrics
                 .transaction_manager_num_executing_certificates
@@ -294,5 +321,12 @@ impl TransactionManager {
                 )
             })
             .collect()
+    }
+
+    // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
+    // because they are no longer relevant and may be incorrect in the new epoch.
+    pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
+        let mut inner = self.inner.write();
+        *inner = Inner::new(new_epoch);
     }
 }
