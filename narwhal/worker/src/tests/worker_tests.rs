@@ -11,6 +11,7 @@ use fastcrypto::{
     hash::Hash,
 };
 use futures::stream::FuturesOrdered;
+use futures::StreamExt;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::Registry;
 use std::time::Duration;
@@ -19,8 +20,8 @@ use store::rocks;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
-    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionsClient,
-    WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
+    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionProto,
+    TransactionsClient, WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
 };
 
 // A test validator that rejects every transaction / batch
