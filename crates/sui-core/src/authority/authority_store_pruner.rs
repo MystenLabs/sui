@@ -150,11 +150,22 @@ impl AuthorityStorePruner {
                         let start = Instant::now();
                         let min_key = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
                         let max_key = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);
-                        if let Ok(()) = perpetual_db.objects.compact_range(&min_key, &max_key) {
-                            info!("Completed compaction of objects table in {:?}", start.elapsed());
+                        if let Ok(()) = perpetual_db.objects.set_options(&[("disable_auto_compactions", "true")]) {
+                            info!("Disabled auto compaction for objects table");
+                            if let Ok(()) = perpetual_db.objects.compact_range(&min_key, &max_key) {
+                                info!("Completed compaction of objects table in {:?}", start.elapsed());
+                            } else {
+                                error!("Failed to compact objects table in  {:?}", start.elapsed());
+                            }
+                            if let Ok(()) = perpetual_db.objects.set_options(&[("disable_auto_compactions", "false")]) {
+                                info!("Enabled auto compaction for objects table");
+                            } else {
+                                error!("Failed to enable auto compaction on objects table");
+                            }
                         } else {
-                            error!("Failed to compact objects table in  {:?}", start.elapsed());
+                            error!("Failed to disable auto compaction on object table");
                         }
+
                     }
                     _ = &mut recv => break,
                 }
