@@ -21,6 +21,7 @@ module sui::validator {
     friend sui::genesis;
     friend sui::sui_system;
     friend sui::validator_set;
+    friend sui::voting_power;
 
     #[test_only]
     friend sui::validator_tests;
