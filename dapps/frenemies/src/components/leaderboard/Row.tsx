@@ -10,11 +10,11 @@ import { Score } from "../../network/types";
 function Row({ score }: { score: Score }) {
   return (
     <tr>
-      <td>{ score.name }</td>
-      <td>{ score.score }</td>
-      <td>{ score.participation }</td>
+      <td>{score.name}</td>
+      <td>{score.score}</td>
+      <td>{score.participation}</td>
     </tr>
-  )
+  );
 }
 
 export default Row;

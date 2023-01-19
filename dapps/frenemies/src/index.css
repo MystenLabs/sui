@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 body {
-    background: #A0B6C3;
-    /* mix-blend-mode: saturation; */
+    @apply font-sans antialiased bg-no-repeat bg-top bg-cover min-h-screen;
+    background-image: url('/backdrop.svg');
 }
 
 .leaderboard {

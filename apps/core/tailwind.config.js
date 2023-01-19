@@ -42,7 +42,7 @@ module.exports = {
       steel: {
         DEFAULT: "#A0B6C3",
         dark: "#758F9E",
-        darker: "#5C6F7A",
+        darker: "#566873",
       },
 
       issue: {

@@ -8,11 +8,11 @@
  * minus the start round for the Frenemies game.
  */
 function Round({ num }: { num: number }) {
-    return (
-        <div className="py-10">
-            <h2 className="round text-center">ROUND {num}</h2>
-        </div>
-    );
+  return (
+    <div className="py-10">
+      <h2 className="round text-center">ROUND {num}</h2>
+    </div>
+  );
 }
 
 export default Round;

@@ -1,24 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ConnectButton } from '@mysten/wallet-kit';
+import { ConnectButton } from "@mysten/wallet-kit";
+import { useEffect, useState } from "react";
+import clsx from "clsx";
 
 function Header() {
-    return (
-        <header className="py-5 bg-blue-700">
-            <div className="mx-auto flex h-full items-end px-5">
-                {/* Title + Description */}
-                <div className="h-full w-auto">
-                    <h1 className="mx-1">Sui Frenemies</h1>
-                </div>
+  const [scrolled, setScrolled] = useState(false);
 
-                {/* Connect button on the right */}
-                <div className="w-full align-middle text-right">
-                    <ConnectButton />
-                </div>
-            </div>
-        </header>
-    );
+  // TODO: Probably debounce this:
+  useEffect(() => {
+    const listener = () => setScrolled(window.pageYOffset > 40);
+    window.addEventListener("scroll", listener, { passive: true });
+    return () => window.removeEventListener("scroll", listener);
+  }, []);
+
+  return (
+    <header
+      className={clsx(
+        "py-4 px-8 flex items-center sticky top-0 transition-all",
+        scrolled ? "backdrop-blur-xl bg-white/70" : "bg-white/0"
+      )}
+    >
+      <div className="flex-1">
+        <div className="text-2xl font-semibold text-steel-darker leading-tight">
+          Sui Frenemies
+        </div>
+        <div className="text-sm text-steel-dark font-semibold uppercase leading-tight">
+          Staking Game
+        </div>
+      </div>
+
+      <div className="">
+        <ConnectButton className="!bg-white !text-steel-dark !px-5 !py-3 leading-none" />
+      </div>
+    </header>
+  );
 }
 
 export default Header;

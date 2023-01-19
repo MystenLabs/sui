@@ -23,13 +23,13 @@ export type Record = {
 function Row({ record }: { record: Record }) {
   return (
     <tr>
-      <td>{ record.round }</td>
-      <td>{ record.role }</td>
-      <td>{ formatAddress(record.validator) }</td>
-      <td>{ record.objectiveAchieved ? "Achieved" : "Failed" }</td>
-      <td>{ record.score > 0 ? ("+" + record.score) : record.score }</td>
+      <td>{record.round}</td>
+      <td>{record.role}</td>
+      <td>{formatAddress(record.validator)}</td>
+      <td>{record.objectiveAchieved ? "Achieved" : "Failed"}</td>
+      <td>{record.score > 0 ? "+" + record.score : record.score}</td>
     </tr>
-  )
+  );
 }
 
 export default Row;

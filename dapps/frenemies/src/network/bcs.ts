@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/**
- * Provides BCS schema for the used Move types.
- * @module network/bcs
- */
-
 import { bcs } from "@mysten/sui.js";
 
 bcs.registerStructType('frenemies::Assignment', {

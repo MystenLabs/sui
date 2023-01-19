@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 function TableHeader() {
-    return (
-      <tr>
-        <th>Round</th>
-        <th>Role</th>
-        <th>Assigned Validator</th>
-        <th>Assigned Validator</th>
-        <th>Objective</th>
-        <th>Score</th>
-      </tr>
-    );
-  }
+  return (
+    <tr>
+      <th>Round</th>
+      <th>Role</th>
+      <th>Assigned Validator</th>
+      <th>Assigned Validator</th>
+      <th>Objective</th>
+      <th>Score</th>
+    </tr>
+  );
+}
 
-  export default TableHeader;
+export default TableHeader;

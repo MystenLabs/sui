@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Row, { Record } from './Row';
+import Row, { Record } from "./Row";
 import TableHeader from "./TableHeader";
 
 /**
@@ -12,7 +12,9 @@ function MyResults({ records }: { records: Record[] }) {
     <div className="w-auto">
       <table className="table-fixed w-auto">
         <TableHeader />
-        {records.map((record) => <Row record={record} />)}
+        {records.map((record) => (
+          <Row record={record} />
+        ))}
       </table>
     </div>
   );

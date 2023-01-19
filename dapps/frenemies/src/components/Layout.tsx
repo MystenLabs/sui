@@ -7,13 +7,13 @@ import { ReactElement } from "react";
 
 function Layout({ children }: { children: ReactElement | ReactElement[] }) {
   return (
-    <div className="container">
+    <>
       <Header />
-      <div className="mx-auto max-w-4xl container">
-        {children}
+      <div className="container">
+        <div className="mx-auto max-w-4xl container">{children}</div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </>
   );
 }
 
