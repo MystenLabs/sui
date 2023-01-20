@@ -83,6 +83,7 @@ use sui_types::{
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
 use crate::authority_aggregator::TransactionCertifier;
 use crate::checkpoints::CheckpointStore;
@@ -117,6 +118,7 @@ mod gas_tests;
 mod tbls_tests;
 
 pub mod authority_per_epoch_store;
+pub mod authority_per_epoch_store_pruner;
 
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
@@ -433,6 +435,7 @@ pub struct AuthorityState {
     tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
 
     pub metrics: Arc<AuthorityMetrics>,
+    _pruner: AuthorityPerEpochStorePruner,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1588,6 +1591,7 @@ impl AuthorityState {
         transaction_streamer: Option<Arc<TransactionStreamer>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
+        pruning_config: &AuthorityStorePruningConfig,
     ) -> Arc<Self> {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -1611,6 +1615,9 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
+        let _pruner =
+            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), pruning_config);
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -1629,6 +1636,7 @@ impl AuthorityState {
             transaction_manager,
             tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
             metrics,
+            _pruner,
         });
 
         prometheus_registry
@@ -1718,6 +1726,7 @@ impl AuthorityState {
             None,
             checkpoint_store,
             &registry,
+            &AuthorityStorePruningConfig::default(),
         )
         .await;
 
@@ -2620,6 +2629,7 @@ impl AuthorityState {
 
     async fn reopen_epoch_db(&self, new_committee: Committee) {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
+
         let epoch_tables = self
             .epoch_store()
             .new_at_next_epoch(self.name, new_committee);

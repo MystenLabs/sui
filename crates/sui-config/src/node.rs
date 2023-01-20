@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
@@ -275,6 +276,8 @@ pub struct AuthorityStorePruningConfig {
     pub objects_num_latest_versions_to_retain: u64,
     pub objects_pruning_period_secs: u64,
     pub objects_pruning_initial_delay_secs: u64,
+    pub num_latest_epoch_dbs_to_retain: usize,
+    pub epoch_db_pruning_period_secs: u64,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -283,6 +286,8 @@ impl Default for AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: u64::MAX,
             objects_pruning_period_secs: u64::MAX,
             objects_pruning_initial_delay_secs: u64::MAX,
+            num_latest_epoch_dbs_to_retain: usize::MAX,
+            epoch_db_pruning_period_secs: u64::MAX,
         }
     }
 }
@@ -295,6 +300,8 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 2,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: usize::MAX,
+            epoch_db_pruning_period_secs: 60 * 60,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -302,6 +309,8 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 5,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: usize::MAX,
+            epoch_db_pruning_period_secs: 60 * 60,
         }
     }
 }

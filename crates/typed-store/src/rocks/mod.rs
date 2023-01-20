@@ -1774,3 +1774,7 @@ pub enum RocksDBAccessType {
     Primary,
     Secondary(Option<PathBuf>),
 }
+
+pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
+    rocksdb::DB::destroy(&rocksdb::Options::default(), path)
+}

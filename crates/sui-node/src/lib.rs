@@ -210,6 +210,7 @@ impl SuiNode {
             transaction_streamer,
             checkpoint_store.clone(),
             &prometheus_registry,
+            &config.authority_store_pruning_config,
         )
         .await;
 
