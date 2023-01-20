@@ -29,7 +29,7 @@ const APY_DECIMALS = 4;
 
 const ValidatorMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableDatas(validators: ActiveValidator[], epoch: number) {
+function validatorsTableData(validators: ActiveValidator[], epoch: number) {
     return {
         data: validators.map((validator, index) => {
             const validatorName = getName(
@@ -181,7 +181,7 @@ function ValidatorPageResult() {
 
         const validators = validatorsData.validators.fields.active_validators;
 
-        return validatorsTableDatas(validators, +validatorsData.epoch);
+        return validatorsTableData(validators, +validatorsData.epoch);
     }, [validatorsData]);
 
     const defaultSorting = [{ id: 'stake', desc: true }];
