@@ -495,7 +495,7 @@ treasury_cap:
 storage_fund:
   value: 1
 parameters:
-  min_validator_stake: 100000000000000
+  min_validator_stake: 1
   max_validator_candidate_count: 100
 reference_gas_price: 1
 validator_report_records:
