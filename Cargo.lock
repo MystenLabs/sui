@@ -8826,9 +8826,11 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anemo-build",
+ "anemo-tower",
  "anyhow",
  "async-trait",
  "futures",
+ "governor",
  "multiaddr",
  "mysten-network",
  "prometheus",
