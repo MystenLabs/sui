@@ -1,0 +1,20 @@
+[package]
+name = "sui-archival"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+integer-encoding = "3.0.4"
+crc = "3.0.0"
+anyhow = "1.0.68"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_derive = "1.0.152"
+sui-types = { path = "../sui-types" }
+bincode = "1.3.3"
+zstd = "0.12.2+zstd.1.5.2"
+byteorder = "1.4.3"
+num_enum = "0.5.9"
+tracing = "0.1.37"
+tempdir = "0.3.7"
