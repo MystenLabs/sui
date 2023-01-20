@@ -40,7 +40,7 @@ Initial value of the upper-bound on the number of validators.
 Initial value of the lower-bound on the amount of stake required to become a validator.
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>: u64 = 100000000000000;
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_MIN_VALIDATOR_STAKE">INIT_MIN_VALIDATOR_STAKE</a>: u64 = 1;
 </code></pre>
 
 
