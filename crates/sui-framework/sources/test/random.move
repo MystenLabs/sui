@@ -59,13 +59,13 @@ module sui::random {
         output
     }
 
-    /// Use the given pseudorandom generator to get a random u64 integer.
+    /// Use the given pseudorandom generator to get a random `u64` integer.
     public fun get_next_u64(random: &mut Random): u64 {
         let bytes = get_next_digest(random);
         bcs::peel_u64(&mut bcs::new(bytes))
     }
 
-    /// Use the given pseudorandom generator to get an u64 integer in the range [0, ...,
+    /// Use the given pseudorandom generator to get an `u64` integer in the range [0, ...,
     /// 2^bit_length - 1].
     fun get_next_u64_with_bit_length(random: &mut Random, bit_length: u8): u64 {
         assert!(bit_length > 0 && bit_length < 64, 0);
@@ -80,11 +80,11 @@ module sui::random {
         let length = 0;
 
         while (mid > 0) {
-            let half = n >> mid;
-            if (half > 0) {
+            let n_mod_mid = n >> mid;
+            if (n_mod_mid > 0) {
                 // The bit length of n is strictly larger than mid
                 length = length + mid;
-                n = half;
+                n = n_mod_mid;
             };
             mid = mid >> 1;
         };
@@ -96,8 +96,8 @@ module sui::random {
         length
     }
 
-    /// Use the given pseudo-random generator to get a random integer in the range [0, ...,
-    /// upper_bound - 1].
+    /// Use the given pseudo-random generator to get a random `u64` integer in the range
+    /// [0, ..., upper_bound - 1].
     public fun get_next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
         assert!(upper_bound > 0, 0);
         let bit_length = bit_length(upper_bound);
@@ -109,12 +109,12 @@ module sui::random {
     }
 
 
-    /// Use the given pseudorandom generator to get a random byte.
+    /// Use the given pseudorandom generator to get a random `u8`.
     public fun get_next_u8(random: &mut Random): u8 {
         *vector::borrow(&get_next_digest(random), 0)
     }
 
-    /// Use the given pseudorandom generator to get a random boolean.
+    /// Use the given pseudorandom generator to get a random `bool`.
     public fun get_next_bool(random: &mut Random): bool {
         get_next_u8(random) % 2 == 1
     }
