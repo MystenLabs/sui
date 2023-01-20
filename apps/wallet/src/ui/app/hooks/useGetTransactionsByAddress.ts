@@ -9,7 +9,7 @@ import {
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '_redux/store/thunk-extras';
-const STALE_TIME = 1000 * 1;
+const STALE_TIME = 1000 * 2;
 
 async function getTransactionsByAddress(
     address: string,
