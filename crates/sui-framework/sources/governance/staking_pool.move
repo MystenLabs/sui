@@ -13,6 +13,7 @@ module sui::staking_pool {
     use sui::coin;
     use std::vector;
     use sui::table_vec::{Self, TableVec};
+    use sui::linked_table::{Self, LinkedTable};
 
     friend sui::validator;
     friend sui::validator_set;
@@ -25,6 +26,7 @@ module sui::staking_pool {
     const EDESTROY_NON_ZERO_BALANCE: u64 = 5;
     const ETOKEN_TIME_LOCK_IS_SOME: u64 = 6;
     const EWRONG_DELEGATION: u64 = 7;
+    const EPENDING_DELEGATION_DOES_NOT_EXIST: u64 = 8;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has store {
@@ -43,7 +45,7 @@ module sui::staking_pool {
         /// Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
         /// and distribute staking pool tokens at the end-of-epoch exchange rate after the rewards for the current epoch
         /// have been deposited.
-        pending_delegations: TableVec<PendingDelegationEntry>,
+        pending_delegations: LinkedTable<ID, PendingDelegationEntry>,
         /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
         /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in. 
         pending_withdraws: TableVec<PendingWithdrawEntry>,
@@ -69,7 +71,6 @@ module sui::staking_pool {
     struct PendingDelegationEntry has store, drop {
         delegator: address, 
         sui_amount: u64,
-        staked_sui_id: ID,
     }
 
     /// Struct representing a pending delegation withdraw.
@@ -118,7 +119,7 @@ module sui::staking_pool {
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
-            pending_delegations: table_vec::empty(ctx),
+            pending_delegations: linked_table::new(ctx),
             pending_withdraws: table_vec::empty(ctx),
         }
     }
@@ -147,9 +148,10 @@ module sui::staking_pool {
             sui_token_lock,
         };
         // insert delegation info into the pending_delegations table.
-        table_vec::push_back(
+        linked_table::push_back(
             &mut pool.pending_delegations,
-            PendingDelegationEntry { delegator, sui_amount, staked_sui_id: object::id(&staked_sui) }
+            object::id(&staked_sui),
+            PendingDelegationEntry { delegator, sui_amount }
         );
         transfer::transfer(staked_sui, delegator);
     }
@@ -181,6 +183,37 @@ module sui::staking_pool {
             option::destroy_none(time_lock);
         };
         principal_withdraw_amount
+    }
+
+    public(friend) fun cancel_delegation_request(pool: &mut StakingPool, staked_sui: StakedSui, ctx: &mut TxContext) {
+        let delegator = tx_context::sender(ctx);
+        let staked_sui_id = object::id(&staked_sui);
+        assert!(linked_table::contains(&mut pool.pending_delegations, staked_sui_id), EPENDING_DELEGATION_DOES_NOT_EXIST);
+
+        linked_table::remove(&mut pool.pending_delegations, staked_sui_id);
+
+        let StakedSui { 
+            id,
+            validator_address,
+            pool_starting_epoch,
+            delegation_request_epoch: _,
+            principal,
+            sui_token_lock
+        } = staked_sui;
+
+        // sanity check that the StakedSui is indeed from this pool. Should never fail.
+        assert!(
+            validator_address == pool.validator_address &&
+            pool_starting_epoch == pool.starting_epoch,
+            EWRONG_POOL
+        );
+        object::delete(id);
+        if (option::is_some(&sui_token_lock)) {
+            locked_coin::new_from_balance(principal, option::destroy_some(sui_token_lock), delegator, ctx);
+        } else {
+            transfer::transfer(coin::from_balance(principal, ctx), delegator);
+            option::destroy_none(sui_token_lock);
+        };
     }
 
     /// Withdraw the requested amount of the principal SUI stored in the StakedSui object, as
@@ -251,7 +284,9 @@ module sui::staking_pool {
         let total_reward_withdraw = 0;
 
         while (!table_vec::is_empty(&pool.pending_withdraws)) {
-            let PendingWithdrawEntry { delegator, principal_withdraw_amount, withdrawn_pool_tokens } = table_vec::pop_back(&mut pool.pending_withdraws);
+            let PendingWithdrawEntry {
+                delegator, principal_withdraw_amount, withdrawn_pool_tokens
+            } = table_vec::pop_back(&mut pool.pending_withdraws);
             let reward_withdraw = withdraw_rewards_and_burn_pool_tokens(pool, principal_withdraw_amount, withdrawn_pool_tokens);
             total_reward_withdraw = total_reward_withdraw + balance::value(&reward_withdraw);
             transfer::transfer(coin::from_balance(reward_withdraw, ctx), delegator);
@@ -263,9 +298,9 @@ module sui::staking_pool {
     /// New delegators include both entirely new delegations and delegations switched to this staking pool
     /// during the previous epoch.
     public(friend) fun process_pending_delegations(pool: &mut StakingPool, ctx: &mut TxContext) {
-        while (!table_vec::is_empty(&pool.pending_delegations)) {
-            let PendingDelegationEntry { delegator, sui_amount, staked_sui_id } =
-                table_vec::pop_back(&mut pool.pending_delegations);
+        while (!linked_table::is_empty(&pool.pending_delegations)) {
+            let (staked_sui_id, PendingDelegationEntry { delegator, sui_amount }) =
+                linked_table::pop_back(&mut pool.pending_delegations);
             mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount;
         };
@@ -430,6 +465,10 @@ module sui::staking_pool {
     public fun validator_address(staked_sui: &StakedSui) : address { staked_sui.validator_address }
 
     public fun staked_sui_amount(staked_sui: &StakedSui): u64 { balance::value(&staked_sui.principal) }
+
+    public fun delegation_request_epoch(staked_sui: &StakedSui): u64 {
+        staked_sui.delegation_request_epoch
+    }
 
     public fun delegation_token_amount(delegation: &Delegation): u64 { balance::value(&delegation.pool_tokens) }
 

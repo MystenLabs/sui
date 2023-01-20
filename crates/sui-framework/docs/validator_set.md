@@ -16,6 +16,7 @@
 -  [Function `request_add_stake`](#0x2_validator_set_request_add_stake)
 -  [Function `request_withdraw_stake`](#0x2_validator_set_request_withdraw_stake)
 -  [Function `request_add_delegation`](#0x2_validator_set_request_add_delegation)
+-  [Function `cancel_delegation_request`](#0x2_validator_set_cancel_delegation_request)
 -  [Function `request_withdraw_delegation`](#0x2_validator_set_request_withdraw_delegation)
 -  [Function `request_switch_delegation`](#0x2_validator_set_request_switch_delegation)
 -  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
@@ -522,7 +523,6 @@ The remaining stake of the validator cannot be lower than <code>min_validator_st
 Called by <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>, to add a new delegation to the validator.
 This request is added to the validator's staking pool's pending delegation entries, processed at the end
 of the epoch.
-TODO: impl max stake requirement.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_request_add_delegation">request_add_delegation</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, delegated_stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, locking_period: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
@@ -554,6 +554,36 @@ TODO: impl max stake requirement.
             amount,
         }
     );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_cancel_delegation_request"></a>
+
+## Function `cancel_delegation_request`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_cancel_delegation_request">cancel_delegation_request</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> (<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_cancel_delegation_request">cancel_delegation_request</a>(
+    self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>,
+    staked_sui: StakedSui,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> validator_address = <a href="staking_pool.md#0x2_staking_pool_validator_address">staking_pool::validator_address</a>(&staked_sui);
+    <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
+    <a href="validator.md#0x2_validator_cancel_delegation_request">validator::cancel_delegation_request</a>(<a href="validator.md#0x2_validator">validator</a>, staked_sui, ctx);
 }
 </code></pre>
 

@@ -249,9 +249,12 @@ validators:
         delegation_token_supply:
           value: 0
         pending_delegations:
-          contents:
-            id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
-            size: 0
+          id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+          size: 0
+          head:
+            vec: []
+          tail:
+            vec: []
         pending_withdraws:
           contents:
             id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"

@@ -12,7 +12,8 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata, ValidatorSet,
+    LinkedTable, StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata,
+    ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
@@ -49,7 +50,7 @@ pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPo
         sui_balance,
         rewards_pool: Balance::new(0),
         delegation_token_supply: Supply { value: 0 },
-        pending_delegations: TableVec::default(),
+        pending_delegations: LinkedTable::default(),
         pending_withdraws: TableVec::default(),
     }
 }
