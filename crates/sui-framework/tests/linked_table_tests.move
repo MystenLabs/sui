@@ -27,6 +27,7 @@ use sui::linked_table::{
     drop,
 };
 use sui::test_scenario as ts;
+use sui::tx_context::TxContext;
 
 #[test]
 fun simple_all_functions() {
@@ -257,6 +258,87 @@ fun sanity_check_size() {
     drop(table);
 }
 
+#[test]
+fun test_all_orderings() {
+    let sender = @0x0;
+    let scenario = ts::begin(sender);
+    let ctx = ts::ctx(&mut scenario);
+    let keys = vector[b"a", b"b", b"c"];
+    let values = vector[3, 2, 1];
+    let all_bools = vector[
+        vector[true, true, true],
+        vector[true, false, true],
+        vector[true, true, false],
+        vector[true, false, false],
+        vector[false, false, true],
+        vector[false, false, false],
+    ];
+    let i = 0;
+    let j = 0;
+    let n = vector::length(&all_bools);
+    // all_bools indicate possible orderings of accessing the front vs the back of the
+    // table
+    // test all orderings of building up and tearing down the table, while mimicing
+    // the ordering in a vector, and checking the keys have the same order in the table
+    while (i < n) {
+        let pushes = vector::borrow(&all_bools, i);
+        while (j < n) {
+            let pops = vector::borrow(&all_bools, j);
+            build_up_and_tear_down(&keys, &values, pushes, pops, ctx);
+            j = j + 1;
+        };
+        i = i + 1;
+    };
+    ts::end(scenario);
+}
+
+fun build_up_and_tear_down<K: copy + drop + store, V: copy + drop + store>(
+    keys: &vector<K>,
+    values: &vector<V>,
+    // true for front, false for back
+    pushes: &vector<bool>,
+    // true for front, false for back
+    pops: &vector<bool>,
+    ctx: &mut TxContext,
+) {
+    let table = linked_table::new(ctx);
+    let n = vector::length(keys);
+    assert!(vector::length(values) == n, 0);
+    assert!(vector::length(pushes) == n, 0);
+    assert!(vector::length(pops) == n, 0);
+
+    let i = 0;
+    let order = vector[];
+    while (i < n) {
+        let k = *vector::borrow(keys, i);
+        let v = *vector::borrow(values, i);
+        if (*vector::borrow(pushes, i)) {
+            push_front(&mut table, k, v);
+            vector::insert(&mut order, k, 0);
+        } else {
+            push_front(&mut table, k, v);
+            vector::push_back(&mut order, k);
+        };
+        i = i + 1;
+    };
+
+    check_ordering(&table, &order);
+    let i = 0;
+    while (i < n) {
+        let (table_k, order_k) = if (*vector::borrow(pops, i)) {
+            let (table_k, _) = pop_front(&mut table);
+            (table_k, vector::remove(&mut order, 0))
+        } else {
+            let (table_k, _) = pop_back(&mut table);
+            (table_k, vector::pop_back(&mut order))
+        };
+        assert!(table_k == order_k, 0);
+        check_ordering(&table, &order);
+        i = i + 1;
+    };
+    destroy_empty(table)
+}
+
 fun check_ordering<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, keys: &vector<K>) {
     let n = length(table);
     assert!(n == vector::length(keys), 0);
@@ -285,5 +367,6 @@ fun check_ordering<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, 
         i = i + 1;
     }
 }
+
 
 }
