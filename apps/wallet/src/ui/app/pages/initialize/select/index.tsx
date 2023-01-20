@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
-
-import st from './Select.module.scss';
 
 const selections = [
     {
@@ -55,11 +52,13 @@ const SelectPage = () => {
 
                         <Link
                             to={aSelection.url}
-                            className={cl('btn mt-7.5', st.action)}
+                            className={
+                                'mt-3.5 flex flex-nowrap items-center justify-center bg-hero-dark text-white !rounded-xl py-3.75 px-5 w-full gap-2.5 no-underline font-semibold text-body hover:bg-hero'
+                            }
                         >
                             <Icon
                                 icon={aSelection.icon}
-                                className={cl(st.icon, 'font-normal')}
+                                className="font-semibold"
                             />
                             {aSelection.action}
                         </Link>
