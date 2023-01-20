@@ -300,7 +300,7 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 2,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
-            num_latest_epoch_dbs_to_retain: usize::MAX,
+            num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
         }
     }
@@ -309,7 +309,7 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 5,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
-            num_latest_epoch_dbs_to_retain: usize::MAX,
+            num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
         }
     }
