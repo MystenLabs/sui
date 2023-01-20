@@ -15,7 +15,8 @@ module sui::genesis {
     const INIT_STORAGE_FUND: u64 = 1;
 
     /// Initial value of the lower-bound on the amount of stake required to become a validator.
-    const INIT_MIN_VALIDATOR_STAKE: u64 = 100000000000000;
+    /// TODO: testnet only. Needs to be changed.
+    const INIT_MIN_VALIDATOR_STAKE: u64 = 1;
 
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
