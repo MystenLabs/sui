@@ -37,8 +37,8 @@ import {
   CoinMetadata,
   DevInspectResults,
   PaginatedCoins,
-  BalanceStruct,
-  SupplyStruct,
+  CoinBalance,
+  CoinSupply,
 } from '../types';
 import { Provider } from './provider';
 
@@ -91,13 +91,13 @@ export class VoidProvider extends Provider {
   async getBalance(
     _owner: string, 
     _coinType: String | null
-    ): Promise<BalanceStruct> {
+    ): Promise<CoinBalance> {
       throw this.newError('getBalance');
   }
 
   async getAllBalances(
     _owner: string, 
-    ): Promise<BalanceStruct[]> {
+    ): Promise<CoinBalance[]> {
       throw this.newError('getAllBalances');
   }
 
@@ -107,7 +107,7 @@ export class VoidProvider extends Provider {
 
   async getTotalSupply(
     _coinType: string
-  ) : Promise<SupplyStruct> {
+  ) : Promise<CoinSupply> {
     throw new Error('getTotalSupply');
   }
 
@@ -122,6 +122,9 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
+  /**
+   * @deprecated The method should not be used, replaced with getAllBalances
+   */
   async getCoinBalancesOwnedByAddress(
     _address: string,
     _typeArg?: string

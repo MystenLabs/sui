@@ -48,7 +48,6 @@ export type CoinMetadata = Infer<typeof CoinMetadataStruct>;
  * Utility class for 0x2::coin
  * as defined in https://github.com/MystenLabs/sui/blob/ca9046fd8b1a9e8634a4b74b0e7dabdc7ea54475/sui_programmability/framework/sources/Coin.move#L4
  */
-
 export class Coin {
   static isCoin(data: ObjectData): boolean {
     return Coin.getType(data)?.match(COIN_TYPE_ARG_REGEX) != null;

@@ -23,17 +23,17 @@ export const PaginatedCoins = object({
   
 export type PaginatedCoins = Infer<typeof PaginatedCoins>;
 
-export const BalanceStruct = object({
+export const CoinBalance = object({
     coinType: string(),
     coinObjectCount: number(),
     totalBalance: number(),
     lockedBalance: object({epochId: optional(number()), number: optional(number())})
 });
 
-export type BalanceStruct = Infer<typeof BalanceStruct>;
+export type CoinBalance = Infer<typeof CoinBalance>;
 
-export const SupplyStruct = object({
+export const CoinSupply = object({
     value: number()
 });
 
-export type SupplyStruct = Infer<typeof SupplyStruct>;
+export type CoinSupply = Infer<typeof CoinSupply>;

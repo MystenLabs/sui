@@ -50,8 +50,8 @@ import {
   GetOwnedObjectsResponse,
   DelegatedStake,
   ValidatorMetaData,
-  BalanceStruct,
-  SupplyStruct,
+  CoinBalance,
+  CoinSupply,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields'
 import {
@@ -231,7 +231,7 @@ export class JsonRpcProvider extends Provider {
   async getBalance(
     owner: SuiAddress,
     coinType: String | null = null,
-  ) : Promise<BalanceStruct> {
+  ) : Promise<CoinBalance> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -239,7 +239,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getBalance',
         [owner, coinType],
-        BalanceStruct,
+        CoinBalance,
         this.options.skipDataValidation
       );
     } catch (err) {
@@ -251,7 +251,7 @@ export class JsonRpcProvider extends Provider {
 
   async getAllBalances(
     owner: SuiAddress
-  ) : Promise<BalanceStruct[]> {
+  ) : Promise<CoinBalance[]> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -259,7 +259,7 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getAllBalances',
         [owner],
-        array(BalanceStruct),
+        array(CoinBalance),
         this.options.skipDataValidation
       );
     } catch (err) {
@@ -284,12 +284,12 @@ export class JsonRpcProvider extends Provider {
 
   async getTotalSupply(
     coinType: String
-  ) : Promise<SupplyStruct> {
+  ) : Promise<CoinSupply> {
     try {
       return await this.client.requestWithType(
         'sui_getTotalSupply',
         [coinType],
-        SupplyStruct,
+        CoinSupply,
         this.options.skipDataValidation
       );
     } catch (err) {
@@ -444,6 +444,9 @@ export class JsonRpcProvider extends Provider {
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
+  /**
+   * @deprecated The method should not be used, replaced with getAllBalances
+   */
   async getCoinBalancesOwnedByAddress(
     address: SuiAddress,
     typeArg?: string
@@ -466,7 +469,9 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
   ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
+    const coins = await this.getObjectBatch(coinIds);
     return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
       coins,
       amount,
@@ -480,7 +485,9 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
   ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
+    const coins = await this.getObjectBatch(coinIds);
     return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,

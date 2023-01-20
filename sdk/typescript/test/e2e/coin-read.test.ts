@@ -26,9 +26,9 @@ describe.each([{ useLocalTxnBuilder: true }])(
             ? new LocalTxnDataSerializer(toolbox.provider)
             : undefined
         );
-        const packagePath = __dirname + '/./data/coin_read';
+        const packagePath = __dirname + '/./data/coin_metadata';
         packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
-        testType = packageId + '::test_coin::TEST_COIN';
+        testType = packageId + '::test::TEST';
       });
     
       it("Get coins with/without type", async () => {

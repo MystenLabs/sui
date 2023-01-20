@@ -36,8 +36,8 @@ import {
   CoinMetadata,
   DevInspectResults,
   PaginatedCoins,
-  BalanceStruct,
-  SupplyStruct,
+  CoinBalance,
+  CoinSupply,
 } from '../types';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
@@ -108,14 +108,14 @@ export abstract class Provider {
   abstract getBalance(
     owner: SuiAddress,
     coinType: String | null
-  ) : Promise<BalanceStruct>;
+  ) : Promise<CoinBalance>;
 
   /**
    * Get the total coin balance for all coin type, owned by the address owner.
    */
   abstract getAllBalances(
     owner: SuiAddress
-  ) : Promise<BalanceStruct[]>;
+  ) : Promise<CoinBalance[]>;
 
   /**
    * Fetch CoinMetadata for a given coin type
@@ -131,7 +131,7 @@ export abstract class Provider {
    */
   abstract getTotalSupply(
     coinType: string
-  ) : Promise<SupplyStruct>;
+  ) : Promise<CoinSupply>;
 
   // Objects
   /**
@@ -149,8 +149,7 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
-   * Convenience method for getting all coins objects owned by an address
-   * @param typeArg optional argument for filter by coin type, e.g., '0x2::sui::SUI'
+   * @deprecated The method should not be used
    */
   abstract getCoinBalancesOwnedByAddress(
     address: string,
