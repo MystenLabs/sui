@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::StreamExt;
-use futures::TryFutureExt;
-use futures::TryStreamExt;
+use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use std::{collections::HashMap, fmt::Debug};
@@ -221,23 +219,21 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
     async fn on_chain_bytes(
         &self,
-        addresses: impl Iterator<Item = AccountAddress>,
+        addresses: impl Iterator<Item = AccountAddress> + Clone,
     ) -> Result<OnChainBytes, SourceVerificationError> {
-        let resp: Vec<_> = futures::stream::iter(addresses)
-            .map(|addr| self.pkg_for_address(addr).map_ok(move |pkg| (addr, pkg)))
-            .buffered(100)
-            .try_collect()
-            .await?;
+        let resp = future::join_all(addresses.clone().map(|addr| self.pkg_for_address(addr))).await;
+        let mut map = OnChainBytes::new();
 
-        Ok(resp
-            .into_iter()
-            .flat_map(|(addr, raw_package)| {
-                let SuiRawMovePackage { module_map, .. } = raw_package;
+        for (addr, pkg) in addresses.zip(resp) {
+            let SuiRawMovePackage { module_map, .. } = pkg?;
+            map.extend(
                 module_map
                     .into_iter()
-                    .map(move |(module, bytes)| ((addr, Symbol::from(module)), bytes))
-            })
-            .collect())
+                    .map(move |(module, bytes)| ((addr, Symbol::from(module)), bytes)),
+            )
+        }
+
+        Ok(map)
     }
 }
 
