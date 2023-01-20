@@ -445,7 +445,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   /**
-   * @deprecated The method should not be used, replaced with getAllBalances
+   * @deprecated The method should not be used
    */
   async getCoinBalancesOwnedByAddress(
     address: SuiAddress,

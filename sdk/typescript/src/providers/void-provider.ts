@@ -123,7 +123,7 @@ export class VoidProvider extends Provider {
   }
 
   /**
-   * @deprecated The method should not be used, replaced with getAllBalances
+   * @deprecated The method should not be used
    */
   async getCoinBalancesOwnedByAddress(
     _address: string,
