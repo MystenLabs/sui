@@ -28,6 +28,7 @@ use sui_types::governance::{
 use sui_types::messages::{
     CallArg, MoveCall, ObjectArg, PaySui, SingleTransactionKind, TransactionData, TransactionKind,
 };
+use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 
@@ -129,7 +130,7 @@ pub struct BlockIdentifier {
     pub hash: BlockHash,
 }
 
-pub type BlockHash = TransactionDigest;
+pub type BlockHash = CheckpointDigest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {

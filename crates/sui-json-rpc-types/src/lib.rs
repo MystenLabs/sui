@@ -52,7 +52,9 @@ use sui_types::messages::{
     PaySui, SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
     VerifiedCertificate,
 };
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
+};
 use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
@@ -2959,4 +2961,12 @@ impl TransactionBytes {
 pub struct Page<T, C> {
     pub data: Vec<T>,
     pub next_cursor: Option<C>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+pub struct Checkpoint {
+    #[serde(flatten)]
+    pub summary: CheckpointSummary,
+    #[serde(flatten)]
+    pub content: CheckpointContents,
 }

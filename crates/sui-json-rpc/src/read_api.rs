@@ -18,10 +18,11 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    DevInspectResults, DynamicFieldPage, GetObjectDataResponse, GetPastObjectDataResponse,
-    MoveFunctionArgType, ObjectValueKind, Page, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
-    SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag, TransactionsPage,
+    Checkpoint, DevInspectResults, DynamicFieldPage, GetObjectDataResponse,
+    GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind, Page,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionAuthSignersResponse, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
+    TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -29,7 +30,8 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceN
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::TransactionData;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSummary,
 };
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
@@ -450,6 +452,12 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
     }
 
+    fn get_checkpoint(&self, sequence_number: CheckpointSequenceNumber) -> RpcResult<Checkpoint> {
+        let summary = self.get_checkpoint_summary(sequence_number)?;
+        let content = self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
+        Ok(Checkpoint { summary, content })
+    }
+
     fn get_checkpoint_contents(
         &self,
         digest: CheckpointContentsDigest,
@@ -461,6 +469,12 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
                 e
             )
         })?)
+    }
+
+    fn get_checkpoint_by_digest(&self, digest: CheckpointDigest) -> RpcResult<Checkpoint> {
+        let summary = self.state.get_checkpoint_summary_by_digest(digest)?;
+        let content = self.get_checkpoint_contents(summary.content_digest)?;
+        Ok(Checkpoint { summary, content })
     }
 
     fn get_checkpoint_contents_by_sequence_number(
