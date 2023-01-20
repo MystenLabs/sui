@@ -267,7 +267,7 @@ impl CheckpointBlockProvider {
             block: Block {
                 block_identifier: BlockIdentifier { index, hash },
                 parent_block_identifier,
-                timestamp: 0,
+                timestamp: checkpoint.summary.timestamp_ms,
                 transactions,
                 metadata: None,
             },
