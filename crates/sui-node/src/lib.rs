@@ -299,7 +299,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub async fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+    pub fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
         self.end_of_epoch_channel.subscribe()
     }
 

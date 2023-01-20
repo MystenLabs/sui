@@ -27,7 +27,7 @@ async fn test_onsite_reconfig_observer_basic() {
                 .unwrap()
                 .clone_quorum_driver();
             assert_eq!(qd.current_epoch(), 0);
-            let rx = node.subscribe_to_epoch_change().await;
+            let rx = node.subscribe_to_epoch_change();
             let registry = Registry::new();
             let mut observer = OnsiteReconfigObserver::new(
                 rx,
