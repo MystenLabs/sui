@@ -68,23 +68,22 @@ module sui::random {
 
     /// Compute the bit length of n.
     fun bit_length(n: u64): u8 {
-        // Use binary search to find the bit length of n
-        let (length, mid) = (0, 32);
-        while (mid > 0) {
-            let n_mod_mid = n >> mid;
-            if (n_mod_mid > 0) {
-                // The bit length of n is strictly larger than mid.
-                length = length + mid;
-                n = n_mod_mid;
+        if (n == 0) {
+            0
+        } else {
+            // Use binary search to find the bit length of n
+            let (length, mid) = (1, 32);
+            while (mid > 0) {
+                let n_mod_mid = n >> mid;
+                if (n_mod_mid > 0) {
+                    // The bit length of n is strictly larger than mid.
+                    length = length + mid;
+                    n = n_mod_mid;
+                };
+                mid = mid >> 1;
             };
-            mid = mid >> 1;
-        };
-
-        if (n > 0) {
-            length = length + 1;
-        };
-
-        length
+            length
+        }
     }
 
     /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
