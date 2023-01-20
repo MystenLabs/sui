@@ -1,0 +1,163 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+#[test_only]
+module sui::random {
+    use std::hash;
+    use std::vector;
+    use sui::bcs;
+
+    /// Internally, this pseudorandom generator uses Sha3-256 which has an output length of 32 bytes.
+    const DIGEST_LENGTH: u64 = 32;
+
+    /// The represents a seeded pseudorandom generator. Note that the generated values are not safe to
+    /// use for cryptographic purposes.
+    struct Random has store, drop {
+        state: vector<u8>,
+    }
+
+    /// Update the state of the generator and return DIGEST_LENGTH random bytes.
+    fun get_next_digest(random: &mut Random): vector<u8> {
+        random.state = hash::sha3_256(random.state);
+        random.state
+    }
+
+    /// Create a new pseudorandom generator with the given seed.
+    public fun new(seed: vector<u8>): Random {
+        let state = hash::sha3_256(seed);
+        Random { state }
+    }
+
+    /// Use the given pseudorandom generator to get a vector with l random bytes.
+    public fun get_next_bytes(random: &mut Random, l: u64): vector<u8> {
+        assert!(l > 0, 0);
+
+        // We need ceil(l / DIGEST_LENGTH) digests to fill the array
+        let quotient = l / DIGEST_LENGTH;
+        let remainder = l - quotient * DIGEST_LENGTH;
+
+        let output = vector::empty<u8>();
+
+        let i = 0;
+        while (i < quotient) {
+            vector::append(&mut output, get_next_digest(random));
+            i = i + 1;
+        };
+
+        // If quotient is not exact, fill the remaining bytes
+        if (remainder > 0) {
+            let i = 0;
+            let digest = get_next_digest(random);
+            while (i < remainder) {
+                vector::push_back(&mut output, *vector::borrow(&mut digest, i));
+                i = i + 1;
+            };
+        };
+
+        output
+    }
+
+    /// Use the given pseudorandom generator to get an integer.
+    public fun get_next_u64(random: &mut Random): u64 {
+        let bytes = get_next_digest(random);
+        bcs::peel_u64(&mut bcs::new(bytes))
+    }
+
+    /// Use the given pseudorandom generator to get an integer in the range [0, ..., 2^bit_length - 1].
+    fun get_next_u64_with_bit_length(random: &mut Random, bit_length: u8): u64 {
+        assert!(bit_length > 0 && bit_length < 64, 0);
+        get_next_u64(random) >> (64 - bit_length)
+    }
+
+    /// Find the bit length of n.
+    fun bit_length(n: u64): u8 {
+
+        // Use binary search
+        let mid = 32;
+        let length = 0;
+
+        while (mid > 0) {
+            let half = n >> mid;
+            if (half > 0) {
+                // The bit length of n is strictly larger than mid
+                length = length + mid;
+                n = half;
+            };
+            mid = mid >> 1;
+        };
+
+        if (n > 0) {
+            length = length + 1;
+        };
+
+        length
+    }
+
+    /// Use the given pseudo-random generator to get a random integer in the range [0, ..., upper_bound - 1].
+    public fun get_next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
+        assert!(upper_bound > 0, 0);
+        let bit_length = bit_length(upper_bound);
+        let candidate = get_next_u64_with_bit_length(random, bit_length);
+        while (candidate >= upper_bound) {
+            candidate = get_next_u64_with_bit_length(random, bit_length);
+        };
+        candidate
+    }
+
+
+    /// Use the given pseudorandom generator to get a random byte.
+    public fun get_next_u8(random: &mut Random): u8 {
+        *vector::borrow(&get_next_digest(random), 0)
+    }
+
+    /// Use the given pseudorandom generator to get a random boolean.
+    public fun get_next_bool(random: &mut Random): bool {
+        get_next_u8(random) % 2 == 1
+    }
+
+    #[test]
+    fun test_get_next_bytes() {
+        let lengths = vector[1, 31, 32, 33, 63, 64, 65];
+
+        let i = 0;
+        while (i < vector::length(&lengths)) {
+            let length = *vector::borrow(&lengths, i);
+
+            // The length should be the requested length
+            let random1 = new(b"seed");
+            let bytes = get_next_bytes(&mut random1, length);
+            assert!(vector::length(&bytes) == length, 0);
+
+            // Two generators with different seeds should give different outputs
+            let random1 = new(b"seed 1");
+            let random2 = new(b"seed 2");
+            assert!(get_next_bytes(&mut random1, length) != get_next_bytes(&mut random2, length), 2);
+
+            // Two generators with the same seed should give the same output
+            let random1 = new(b"seed");
+            let random2 = new(b"seed");
+            assert!(get_next_bytes(&mut random1, length) == get_next_bytes(&mut random2, length), 3);
+
+            i = i + 1;
+        }
+    }
+
+    #[test]
+    fun test_get_next_integer_in_range() {
+        let random = new(b"seed");
+
+        let i = 0;
+        let bounds = vector[1, 7, 8, 9, 15, 16, 17];
+        let tests = 10;
+        while (i < vector::length(&bounds)) {
+            let upper_bound = *vector::borrow(&bounds, i);
+            let j = 0;
+            while (j < tests) {
+                assert!(get_next_u64_in_range(&mut random, upper_bound) < upper_bound, 0);
+                j = j + 1;
+            };
+            i = i + 1;
+        }
+    }
+
+}
