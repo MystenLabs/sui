@@ -675,7 +675,10 @@ impl CheckpointBuilder {
             .await?;
         debug!(
             "Effects of the change epoch transaction: {:?}",
-            signed_effect
+            signed_effect.data()
+        );
+        self.epoch_store.record_is_safe_mode_metric(
+            self.state.get_sui_system_state_object().unwrap().safe_mode,
         );
         // The change epoch transaction cannot fail to execute.
         // TODO: Audit the advance_epoch move call to make sure there is no way for it to fail.

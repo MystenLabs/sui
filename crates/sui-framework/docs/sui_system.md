@@ -27,6 +27,7 @@
 -  [Function `report_validator`](#0x2_sui_system_report_validator)
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
+-  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
@@ -167,6 +168,16 @@ The top-level object containing all information of the Sui system.
 </dt>
 <dd>
  Schedule of stake subsidies given out each epoch.
+</dd>
+<dt>
+<code>safe_mode: bool</code>
+</dt>
+<dd>
+ Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
+ This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
+ It can be reset once we are able to successfully execute advance_epoch.
+ TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
+ redistribute them.
 </dd>
 </dl>
 
@@ -368,6 +379,7 @@ This function will be called only once in genesis.
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(initial_stake_subsidy_amount),
+        safe_mode: <b>false</b>,
     };
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(state);
 }
@@ -1103,6 +1115,8 @@ gas coins.
             total_stake_rewards: total_rewards_amount,
         }
     );
+
+    self.safe_mode = <b>false</b>;
 }
 </code></pre>
 
@@ -1119,6 +1133,41 @@ Total supply of SUI increases by the amount of stake subsidy we minted.
 
 <pre><code><b>ensures</b> <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply)
     == <b>old</b>(<a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(self.sui_supply)) + <b>old</b>(<a href="stake_subsidy.md#0x2_stake_subsidy_current_epoch_subsidy_amount">stake_subsidy::current_epoch_subsidy_amount</a>(self.<a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>));
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_advance_epoch_safe_mode"></a>
+
+## Function `advance_epoch_safe_mode`
+
+An extremely simple version of advance_epoch.
+This is only called when the call to advance_epoch failed due to a bug, and we want to be able to keep the system
+running and continue making epoch changes.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
+    self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
+    new_epoch: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+
+    self.epoch = new_epoch;
+    self.safe_mode = <b>true</b>;
+}
 </code></pre>
 
 

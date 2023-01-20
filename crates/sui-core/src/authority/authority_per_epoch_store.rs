@@ -1594,6 +1594,10 @@ impl AuthorityPerEpochStore {
             .set(elapsed_ms);
     }
 
+    pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+        self.metrics.is_safe_mode.set(safe_mode as i64);
+    }
+
     fn record_epoch_total_duration_metric(&self) {
         self.metrics.current_epoch.set(self.epoch() as i64);
         self.metrics

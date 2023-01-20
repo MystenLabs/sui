@@ -66,6 +66,13 @@ module sui::sui_system {
         validator_report_records: VecMap<address, VecSet<address>>,
         /// Schedule of stake subsidies given out each epoch.
         stake_subsidy: StakeSubsidy,
+
+        /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
+        /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
+        /// It can be reset once we are able to successfully execute advance_epoch.
+        /// TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
+        /// redistribute them.
+        safe_mode: bool,
     }
 
     /// Event containing system-level epoch information, emitted during
@@ -121,6 +128,7 @@ module sui::sui_system {
             reference_gas_price,
             validator_report_records: vec_map::empty(),
             stake_subsidy: stake_subsidy::create(initial_stake_subsidy_amount),
+            safe_mode: false,
         };
         transfer::share_object(state);
     }
@@ -522,12 +530,29 @@ module sui::sui_system {
                 total_stake_rewards: total_rewards_amount,
             }
         );
+
+        self.safe_mode = false;
     }
 
     spec advance_epoch {
         /// Total supply of SUI increases by the amount of stake subsidy we minted.
         ensures balance::supply_value(self.sui_supply)
             == old(balance::supply_value(self.sui_supply)) + old(stake_subsidy::current_epoch_subsidy_amount(self.stake_subsidy));
+    }
+
+    /// An extremely simple version of advance_epoch.
+    /// This is only called when the call to advance_epoch failed due to a bug, and we want to be able to keep the system
+    /// running and continue making epoch changes.
+    public entry fun advance_epoch_safe_mode(
+        self: &mut SuiSystemState,
+        new_epoch: u64,
+        ctx: &mut TxContext,
+    ) {
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(tx_context::sender(ctx) == @0x0, 0);
+
+        self.epoch = new_epoch;
+        self.safe_mode = true;
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

@@ -28,6 +28,7 @@ use sui_types::messages::{GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui,
 use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
+use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -297,37 +298,8 @@ fn execution_loop<
                     .collect();
                 pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)?;
             }
-            SingleTransactionKind::ChangeEpoch(ChangeEpoch {
-                epoch,
-                storage_charge,
-                computation_charge,
-                storage_rebate,
-            }) => {
-                let module_id =
-                    ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
-                let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
-                adapter::execute::<execution_mode::Normal, _, _>(
-                    move_vm,
-                    temporary_store,
-                    module_id,
-                    &function,
-                    vec![],
-                    vec![
-                        CallArg::Object(ObjectArg::SharedObject {
-                            id: SUI_SYSTEM_STATE_OBJECT_ID,
-                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                        }),
-                        CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&STAKE_SUBSIDY_RATE).unwrap()),
-                    ],
-                    gas_status.create_move_gas_status(),
-                    tx_ctx,
-                )?;
+            SingleTransactionKind::ChangeEpoch(change_epoch) => {
+                advance_epoch(change_epoch, temporary_store, tx_ctx, move_vm, gas_status)?;
             }
             SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
                 if tx_ctx.epoch() != 0 {
@@ -355,6 +327,64 @@ fn execution_loop<
         };
     }
     Ok(results)
+}
+
+fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+    change_epoch: ChangeEpoch,
+    temporary_store: &mut TemporaryStore<S>,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    gas_status: &mut SuiGasStatus,
+) -> Result<(), ExecutionError> {
+    let module_id = ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
+    let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
+    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_SYSTEM_STATE_OBJECT_ID,
+        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    });
+    let result = adapter::execute::<execution_mode::Normal, _, _>(
+        move_vm,
+        temporary_store,
+        module_id.clone(),
+        &function,
+        vec![],
+        vec![
+            system_object_arg.clone(),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&STAKE_SUBSIDY_RATE).unwrap()),
+        ],
+        gas_status.create_move_gas_status(),
+        tx_ctx,
+    );
+    if result.is_err() {
+        tracing::error!(
+            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. System state object: {:?}. Tx data: {:?}",
+            result.as_ref().err(),
+            temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
+            change_epoch,
+        );
+        temporary_store.reset();
+        let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
+        adapter::execute::<execution_mode::Normal, _, _>(
+            move_vm,
+            temporary_store,
+            module_id,
+            &function,
+            vec![],
+            vec![
+                system_object_arg,
+                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            ],
+            gas_status.create_move_gas_status(),
+            tx_ctx,
+        )?;
+    }
+    Ok(())
 }
 
 fn transfer_object<S>(
