@@ -147,6 +147,11 @@ impl AuthorityStorePruner {
                         info!("Starting pruning of objects table");
                         let num_pruned = Self::prune_objects(num_versions_to_retain, perpetual_db.clone());
                         info!("Finished pruning with total object versions pruned = {}", num_pruned);
+                        if let Ok(()) = perpetual_db.objects.flush() {
+                            info!("Completed flushing objects table");
+                        } else {
+                            error!("Failed to flush objects table");
+                        }
                         let start = Instant::now();
                         let min_key = ObjectKey(ObjectID::ZERO, SequenceNumber::MIN);
                         let max_key = ObjectKey(ObjectID::MAX, SequenceNumber::MAX);

@@ -340,6 +340,10 @@ impl RocksDB {
         delegate_call!(self.flush())
     }
 
+    pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
+        delegate_call!(self.flush_cf(cf))
+    }
+
     pub fn set_options_cf(
         &self,
         cf: &impl AsColumnFamilyRef,
@@ -537,6 +541,10 @@ impl<K, V> DBMap<K, V> {
 
     pub fn iterator_cf(&self) -> RocksDBIter<'_> {
         self.rocksdb.iterator_cf(&self.cf(), IteratorMode::Start)
+    }
+
+    pub fn flush(&self) -> Result<(), rocksdb::Error> {
+        self.rocksdb.flush_cf(&self.cf())
     }
 
     pub fn set_options(&self, opts: &[(&str, &str)]) -> Result<(), rocksdb::Error> {
