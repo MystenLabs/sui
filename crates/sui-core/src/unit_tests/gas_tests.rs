@@ -264,6 +264,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         GAS_VALUE_FOR_TESTING,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -337,6 +338,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         budget,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -368,6 +370,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         budget,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();

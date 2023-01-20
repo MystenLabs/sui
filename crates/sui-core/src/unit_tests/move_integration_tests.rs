@@ -6,7 +6,7 @@ use super::*;
 use crate::authority::authority_tests::{
     call_move, call_move_, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
 };
-use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{object::Data, utils::to_sender_signed_transaction};
 
 use move_core_types::{
     language_storage::TypeTag,
@@ -24,6 +24,78 @@ use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
 
 const MAX_GAS: u64 = 10000;
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publishing_with_unpublished_deps() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let effects = build_and_try_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "depends_on_basics",
+        MAX_GAS,
+        /* with_unpublished_deps */ true,
+    )
+    .await
+    .1
+    .into_data();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.created.len(), 1);
+    let package = effects.created[0].0;
+
+    let ObjectRead::Exists(read_ref, package_obj, _) = authority
+        .get_object_read(&package.0)
+        .await
+        .unwrap()
+    else {
+        panic!("Can't read package")
+    };
+
+    assert_eq!(package, read_ref);
+    let Data::Package(move_package) = package_obj.data else {
+        panic!("Not a package")
+    };
+
+    // Check that the published package includes its depended upon module.
+    assert_eq!(
+        move_package
+            .serialized_module_map()
+            .keys()
+            .map(String::as_str)
+            .collect::<HashSet<_>>(),
+        HashSet::from(["depends_on_basics", "object_basics"]),
+    );
+
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "depends_on_basics",
+        "delegate",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.created.len(), 1);
+    let ((_, v, _), owner) = effects.created[0];
+
+    // Check that calling the function does what we expect
+    assert!(matches!(
+        owner,
+        Owner::Shared { initial_shared_version: initial } if initial == v
+    ));
+}
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -1845,6 +1917,7 @@ pub async fn build_and_try_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
+    with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -1852,7 +1925,7 @@ pub async fn build_and_try_publish_test_package(
     path.push(test_dir);
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
-        .get_package_bytes();
+        .get_package_bytes(with_unpublished_deps);
 
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -1887,6 +1960,7 @@ async fn build_and_publish_test_package(
         gas_object_id,
         test_dir,
         MAX_GAS,
+        /* with_unpublished_deps */ false,
     )
     .await
     .1
