@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/**
- * Provides BCS schema for the used Move types.
- * @module network/bcs
- */
-
 import { bcs } from "@mysten/sui.js";
 
 bcs.registerStructType('frenemies::Assignment', {
@@ -32,7 +27,7 @@ bcs.registerStructType('frenemies::ScorecardUpdateEvent', {
 
 bcs.registerStructType('leaderboard::Leaderboard', {
     id: 'address',
-    topScores: 'vector<Score>',
+    topScores: 'vector<leaderboard::Score>',
     prevEpochStakes: 'table::Table',
     epoch: 'u64',
     startEpoch: 'u64'

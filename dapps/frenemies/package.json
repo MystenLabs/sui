@@ -1,5 +1,5 @@
 {
-  "name": "dapp-frenemies",
+  "name": "@dapp/frenemies",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "@fontsource/inter": "^4.5.14",
     "@headlessui/react": "^1.7.7",
     "@hookform/resolvers": "^2.9.10",
+    "@mysten/icons": "workspace:*",
     "@mysten/core": "workspace:*",
     "@mysten/sui.js": "workspace:*",
     "@mysten/wallet-kit": "workspace:*",

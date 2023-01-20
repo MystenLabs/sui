@@ -3,14 +3,16 @@
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  presets: [require('@mysten/core/tailwind.config')],
+  presets: [require("@mysten/core/tailwind.config")],
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
-      container: {
-        center: true,
-        padding: '2rem'
-      }
+      boxShadow: {
+        notification: "0px 0px 20px rgba(29, 55, 87, 0.11)",
+      },
+      colors: {
+        frenemies: "#768AF7",
+      },
     },
   },
   plugins: [],

@@ -4,8 +4,8 @@
 import { Outlet } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { WalletKitProvider } from "@mysten/wallet-kit";
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import Layout from "../components/Layout";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { Layout } from "../components/Layout";
 
 export function Root() {
   return (
