@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight12 } from '@mysten/icons';
 import {
     flexRender,
     getCoreRowModel,
@@ -12,7 +13,6 @@ import {
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import { ReactComponent as ArrowRight } from '../assets/SVGIcons/12px/ArrowRight.svg';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
@@ -147,13 +147,13 @@ export function TableCard({
                                                   )}
                                             {{
                                                 asc: (
-                                                    <ArrowRight
+                                                    <ArrowRight12
                                                         fill="currentColor"
                                                         className="-rotate-90 text-steel-darker"
                                                     />
                                                 ),
                                                 desc: (
-                                                    <ArrowRight
+                                                    <ArrowRight12
                                                         fill="currentColor"
                                                         className="rotate-90 text-steel-darker"
                                                     />
