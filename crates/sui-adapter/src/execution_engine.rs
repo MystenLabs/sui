@@ -11,7 +11,9 @@ use sui_types::crypto::sha3_hash;
 use tracing::{debug, instrument};
 
 use crate::adapter;
-use sui_protocol_constants::{MAX_TX_GAS, REWARD_SLASHING_RATE, STORAGE_FUND_REINVEST_RATE};
+use sui_protocol_constants::{
+    MAX_TX_GAS, REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
+};
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
@@ -321,6 +323,7 @@ fn execution_loop<
                         CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
                         CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
                         CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&STAKE_SUBSIDY_RATE).unwrap()),
                     ],
                     gas_status.create_move_gas_status(),
                     tx_ctx,

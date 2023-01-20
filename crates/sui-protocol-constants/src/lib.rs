@@ -105,12 +105,18 @@ pub const OBJ_METADATA_COST_NON_REFUNDABLE: u64 = 50;
 
 /// === Tokenomics ===
 
-// TODO: placeholder value here
-pub const STORAGE_REBATE_RATE: f64 = 1.0;
+// TODO: this should be changed to u64.
+/// Sender of a txn that touches an object will get 99% of the storage rebate back.
+pub const STORAGE_REBATE_RATE: f64 = 0.99;
 
-// TODO: placeholder value here
-pub const STORAGE_FUND_REINVEST_RATE: u64 = 0;
+/// 5% of the storage fund's share of rewards are reinvested into the storage fund.
+/// In basis point.
+pub const STORAGE_FUND_REINVEST_RATE: u64 = 500;
 
-// TODO: placeholder value here
-// The share of rewards that will be slashed and redistributed is 10%.
-pub const REWARD_SLASHING_RATE: u64 = 1000;
+/// The share of rewards that will be slashed and redistributed is 50%.
+/// In basis point.
+pub const REWARD_SLASHING_RATE: u64 = 5000;
+
+/// The stake subsidy we mint each epoch is 0.01% of the total stake.
+/// In basis point.
+pub const STAKE_SUBSIDY_RATE: u64 = 1;
