@@ -491,9 +491,9 @@ validators:
   pending_delegation_switches:
     contents: []
 treasury_cap:
-  value: 100000000000001
+  value: 2
 storage_fund:
-  value: 100000000000000
+  value: 1
 parameters:
   min_validator_stake: 100000000000000
   max_validator_candidate_count: 100

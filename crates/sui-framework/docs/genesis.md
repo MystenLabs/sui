@@ -58,10 +58,9 @@ Stake subisidy to be given out in the very first epoch. Placeholder value.
 <a name="0x2_genesis_INIT_STORAGE_FUND"></a>
 
 The initial amount of SUI locked in the storage fund.
-10^14, an arbitrary number.
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>: u64 = 100000000000000;
+<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STORAGE_FUND">INIT_STORAGE_FUND</a>: u64 = 1;
 </code></pre>
 
 
