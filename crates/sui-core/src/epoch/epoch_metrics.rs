@@ -80,6 +80,9 @@ pub struct EpochMetrics {
 
     /// Tallying rule scores for all validators this epoch.
     pub tallying_rule_scores: IntGaugeVec,
+
+    /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
+    pub is_safe_mode: IntGauge,
 }
 
 impl EpochMetrics {
@@ -162,6 +165,11 @@ impl EpochMetrics {
                 "Tallying rule scores for validators each epoch",
                 &["validator", "epoch"],
                 registry
+            ).unwrap(),
+            is_safe_mode: register_int_gauge_with_registry!(
+                "is_safe_mode",
+                "Whether we are running in safe mode",
+                registry,
             ).unwrap(),
         };
         Arc::new(this)
