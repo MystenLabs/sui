@@ -27,7 +27,7 @@ function TransactionsPage() {
         data: txns,
         isError,
         isLoading,
-    } = useGetTransactionsByAddress(activeAddress || '');
+    } = useGetTransactionsByAddress(activeAddress);
 
     if (isError) {
         return (

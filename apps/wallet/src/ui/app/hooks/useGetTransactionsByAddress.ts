@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    normalizeSuiAddress,
-    type SuiAddress,
-    type SuiTransactionResponse,
-} from '@mysten/sui.js';
+import { type SuiAddress, type SuiTransactionResponse } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '_redux/store/thunk-extras';
@@ -27,12 +23,16 @@ async function getTransactionsByAddress(
 
 // Fetch transactions on mount and every 2 seconds
 export function useGetTransactionsByAddress(
-    address: SuiAddress
+    address?: SuiAddress | null
 ): UseQueryResult<SuiTransactionResponse[], unknown> {
-    const normalizedAddress = normalizeSuiAddress(address);
     return useQuery(
-        ['transactions-by-address', normalizedAddress],
-        () => getTransactionsByAddress(normalizedAddress),
+        ['transactions-by-address', address],
+        async () => {
+            if (!address) {
+                throw new Error('No wallet address provided');
+            }
+            return getTransactionsByAddress(address);
+        },
         {
             enabled: !!address,
             refetchOnMount: true,
