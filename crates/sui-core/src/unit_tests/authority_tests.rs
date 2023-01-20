@@ -2563,6 +2563,7 @@ async fn test_authority_persist() {
             None,
             checkpoint_store,
             &registry,
+            &AuthorityStorePruningConfig::default(),
         )
         .await
     }

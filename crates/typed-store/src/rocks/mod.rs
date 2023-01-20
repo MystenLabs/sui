@@ -1704,3 +1704,7 @@ impl DBMapTableConfigMap {
         self.0.clone()
     }
 }
+
+pub fn safe_drop_db(path: std::path::PathBuf) -> Result<(), rocksdb::Error> {
+    rocksdb::DB::destroy(&rocksdb::Options::default(), path)
+}
