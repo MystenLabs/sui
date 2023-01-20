@@ -9,13 +9,13 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CoinPage, DevInspectResults, DynamicFieldPage, EventPage,
-    GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
-    MoveFunctionArgType, RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope,
-    SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionAuthSignersResponse, SuiTransactionBuilderMode, SuiTransactionEffects,
-    SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes, TransactionsPage,
+    Balance, CoinPage, DevInspectResults, DynamicFieldPage, EventPage, GetObjectDataResponse,
+    GetPastObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
+    RPCTransactionRequestParams, SuiCoinMetadata, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionAuthSignersResponse,
+    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionFilter, SuiTransactionResponse,
+    SuiTypeTag, TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -303,26 +303,25 @@ pub trait RpcFullNodeReadApi {
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary>;
 
+    /// Return a checkpoint summary based on checkpoint digest
+    #[method(name = "getCheckpointSummaryByDigest")]
+    fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> RpcResult<CheckpointSummary>;
+
     /// Return contents of a checkpoint, namely a list of execution digests
     #[method(name = "getCheckpointContents")]
     fn get_checkpoint_contents(
         &self,
-        digest: CheckpointContentsDigest,
+        sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents>;
 
-    /// Return contents of a checkpoint, namely a list of execution digests
-    #[method(name = "getCheckpoint")]
-    fn get_checkpoint(&self, sequence_number: CheckpointSequenceNumber) -> RpcResult<Checkpoint>;
-
-    /// Return contents of a checkpoint, namely a list of execution digests
-    #[method(name = "getCheckpointByDigest")]
-    fn get_checkpoint_by_digest(&self, digest: CheckpointDigest) -> RpcResult<Checkpoint>;
-
-    /// Return contents of a checkpoint based on its sequence number
-    #[method(name = "getCheckpointContentsBySequenceNumber")]
-    fn get_checkpoint_contents_by_sequence_number(
+    /// Return contents of a checkpoint based on checkpoint content digest
+    #[method(name = "getCheckpointContentsByDigest")]
+    fn get_checkpoint_contents_by_digest(
         &self,
-        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;
 }
 

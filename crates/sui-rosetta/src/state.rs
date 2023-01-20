@@ -18,7 +18,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_sdk::rpc_types::Checkpoint;
+use sui_sdk::apis::Checkpoint;
 use sui_sdk::SuiClient;
 use sui_storage::default_db_options;
 use sui_types::base_types::{EpochId, SuiAddress};

@@ -614,10 +614,12 @@
       "description": "Return contents of a checkpoint, namely a list of execution digests",
       "params": [
         {
-          "name": "digest",
+          "name": "sequence_number",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/CheckpointContentsDigest"
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -630,21 +632,19 @@
       }
     },
     {
-      "name": "sui_getCheckpointContentsBySequenceNumber",
+      "name": "sui_getCheckpointContentsByDigest",
       "tags": [
         {
           "name": "Full Node API"
         }
       ],
-      "description": "Return contents of a checkpoint based on its sequence number",
+      "description": "Return contents of a checkpoint based on checkpoint content digest",
       "params": [
         {
-          "name": "sequence_number",
+          "name": "digest",
           "required": true,
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/CheckpointContentsDigest"
           }
         }
       ],
@@ -672,6 +672,31 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CheckpointSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/CheckpointSummary"
+        }
+      }
+    },
+    {
+      "name": "sui_getCheckpointSummaryByDigest",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a checkpoint summary based on checkpoint digest",
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointDigest"
           }
         }
       ],

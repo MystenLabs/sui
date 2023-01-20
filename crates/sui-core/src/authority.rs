@@ -2161,7 +2161,7 @@ impl AuthorityState {
             .ok_or_else(|| anyhow!("Latest checkpoint sequence number not found"))
     }
 
-    pub fn get_checkpoint_summary(
+    pub fn get_checkpoint_summary_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointSummary, anyhow::Error> {

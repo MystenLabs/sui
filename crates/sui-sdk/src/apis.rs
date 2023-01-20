@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
+    Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
     SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
@@ -147,15 +147,33 @@ impl ReadApi {
         &self,
         seq_number: CheckpointSequenceNumber,
     ) -> SuiRpcResult<Checkpoint> {
-        Ok(self.api.http.get_checkpoint(seq_number).await?)
+        let summary = self.get_checkpoint_summary(seq_number).await?;
+        let content = self.get_checkpoint_contents(seq_number).await?;
+        Ok(Checkpoint { summary, content })
     }
 
-    /// Return a checkpoint summary based on a checkpoint sequence number
+    /// Return a checkpoint summary based on a checkpoint digest
     pub async fn get_checkpoint_by_digest(
         &self,
         digest: CheckpointDigest,
     ) -> SuiRpcResult<Checkpoint> {
-        Ok(self.api.http.get_checkpoint_by_digest(digest).await?)
+        let summary = self.get_checkpoint_summary_by_digest(digest).await?;
+        let content = self
+            .get_checkpoint_contents_by_digest(summary.content_digest)
+            .await?;
+        Ok(Checkpoint { summary, content })
+    }
+
+    /// Return a checkpoint summary based on checkpoint digest
+    pub async fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> SuiRpcResult<CheckpointSummary> {
+        Ok(self
+            .api
+            .http
+            .get_checkpoint_summary_by_digest(digest)
+            .await?)
     }
 
     /// Return a checkpoint summary based on a checkpoint sequence number
@@ -178,22 +196,26 @@ impl ReadApi {
     }
 
     /// Return contents of a checkpoint, namely a list of execution digests
-    pub async fn get_checkpoint_contents(
+    pub async fn get_checkpoint_contents_by_digest(
         &self,
         digest: CheckpointContentsDigest,
     ) -> SuiRpcResult<CheckpointContents> {
-        Ok(self.api.http.get_checkpoint_contents(digest).await?)
+        Ok(self
+            .api
+            .http
+            .get_checkpoint_contents_by_digest(digest)
+            .await?)
     }
 
     /// Return contents of a checkpoint based on its sequence number
-    pub async fn get_checkpoint_contents_by_sequence_number(
+    pub async fn get_checkpoint_contents(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> SuiRpcResult<CheckpointContents> {
         Ok(self
             .api
             .http
-            .get_checkpoint_contents_by_sequence_number(sequence_number)
+            .get_checkpoint_contents(sequence_number)
             .await?)
     }
 
@@ -570,4 +592,10 @@ impl GovernanceApi {
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Checkpoint {
+    pub summary: CheckpointSummary,
+    pub content: CheckpointContents,
 }
