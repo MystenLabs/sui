@@ -107,7 +107,6 @@ module sui::random {
         candidate
     }
 
-
     /// Use the given pseudorandom generator to get a random `u8`.
     public fun get_next_u8(random: &mut Random): u8 {
         *vector::borrow(&get_next_digest(random), 0)
