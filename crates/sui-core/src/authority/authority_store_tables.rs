@@ -3,11 +3,13 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetails;
+use rand::Rng;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
+use tracing::log::info;
 use typed_store::rocks::{DBMap, DBOptions};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
@@ -68,6 +70,7 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "effects_table_default_config"]
     pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
 
+    #[default_options_override_fn = "effects_table_default_config"]
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
@@ -203,6 +206,26 @@ impl AuthorityPerpetualTables {
     }
 }
 
+fn enable_compression(opts: &mut Options) {
+    {
+        // TODO: Temporary code block to test this change in a control setting
+        let mut rng = rand::thread_rng();
+        let rnd: u32 = rng.gen();
+        if rnd % 2 == 0 {
+            return;
+        }
+        info!("Enabling compression on the node");
+    }
+    // Lz4 is more performant and recommended for upper levels of the LSM tree
+    opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
+    // ZSTD is recommended for bottom level because of its better compression ratio
+    opts.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
+    // https://rocksdb.org/blog/2021/05/31/dictionary-compression.html?utm_source=dbplatz
+    // https://github.com/facebook/rocksdb/blob/main/include/rocksdb/advanced_options.h
+    opts.set_bottommost_compression_options(-14, 32767, 0, 32767, true);
+    opts.set_bottommost_zstd_max_train_bytes(32767 * 100, true);
+}
+
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     default_db_options(None, None).1
@@ -211,8 +234,12 @@ fn objects_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn certificates_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    let mut db_options = default_db_options(None, None).1;
+    enable_compression(&mut db_options.options);
+    db_options
 }
 fn effects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    let mut db_options = default_db_options(None, None).1;
+    enable_compression(&mut db_options.options);
+    db_options
 }
