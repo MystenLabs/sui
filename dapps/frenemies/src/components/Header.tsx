@@ -22,12 +22,10 @@ export function Header() {
         scrolled ? "backdrop-blur-xl bg-white/70" : "bg-white/0"
       )}
     >
-      <div className="flex-1">
-        <div className="text-2xl font-semibold text-steel-darker leading-tight">
-          Sui Frenemies
-        </div>
-        <div className="text-sm text-steel-dark font-semibold uppercase leading-tight">
-          Staking Game
+      <div className="flex-1 flex items-center gap-2.5">
+        <img src="/sui.svg" alt="Sui Logo" />
+        <div className="text-2xl font-semibold text-hero-darkest leading-tight">
+          Frenemies Staking Game
         </div>
       </div>
 
