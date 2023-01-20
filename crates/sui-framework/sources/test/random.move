@@ -7,10 +7,12 @@ module sui::random {
     use std::vector;
     use sui::bcs;
 
-    /// Internally, this pseudorandom generator uses Sha3-256 which has an output length of 32 bytes.
+    /// Internally, this pseudorandom generator uses a hash chain over Sha3-256
+    /// which has an output length of 32 bytes.
     const DIGEST_LENGTH: u64 = 32;
 
-    /// The represents a seeded pseudorandom generator. Note that the generated values are not safe to
+    /// The represents a seeded pseudorandom generator. Note that the generated
+    /// values are not safe to
     /// use for cryptographic purposes.
     struct Random has store, drop {
         state: vector<u8>,
@@ -57,19 +59,20 @@ module sui::random {
         output
     }
 
-    /// Use the given pseudorandom generator to get an integer.
+    /// Use the given pseudorandom generator to get a random u64 integer.
     public fun get_next_u64(random: &mut Random): u64 {
         let bytes = get_next_digest(random);
         bcs::peel_u64(&mut bcs::new(bytes))
     }
 
-    /// Use the given pseudorandom generator to get an integer in the range [0, ..., 2^bit_length - 1].
+    /// Use the given pseudorandom generator to get an u64 integer in the range [0, ...,
+    /// 2^bit_length - 1].
     fun get_next_u64_with_bit_length(random: &mut Random, bit_length: u8): u64 {
         assert!(bit_length > 0 && bit_length < 64, 0);
         get_next_u64(random) >> (64 - bit_length)
     }
 
-    /// Find the bit length of n.
+    /// Compute the bit length of n.
     fun bit_length(n: u64): u8 {
 
         // Use binary search
@@ -93,7 +96,8 @@ module sui::random {
         length
     }
 
-    /// Use the given pseudo-random generator to get a random integer in the range [0, ..., upper_bound - 1].
+    /// Use the given pseudo-random generator to get a random integer in the range [0, ...,
+    /// upper_bound - 1].
     public fun get_next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
         assert!(upper_bound > 0, 0);
         let bit_length = bit_length(upper_bound);
@@ -131,12 +135,14 @@ module sui::random {
             // Two generators with different seeds should give different outputs
             let random1 = new(b"seed 1");
             let random2 = new(b"seed 2");
-            assert!(get_next_bytes(&mut random1, length) != get_next_bytes(&mut random2, length), 2);
+            assert!(get_next_bytes(&mut random1, length) !=
+                get_next_bytes(&mut random2, length), 2);
 
             // Two generators with the same seed should give the same output
             let random1 = new(b"seed");
             let random2 = new(b"seed");
-            assert!(get_next_bytes(&mut random1, length) == get_next_bytes(&mut random2, length), 3);
+            assert!(get_next_bytes(&mut random1, length) ==
+                get_next_bytes(&mut random2, length), 3);
 
             i = i + 1;
         }
