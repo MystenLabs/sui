@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ChevronDown16 as ChevronDownIcon } from '@mysten/icons';
 import {
     getMoveCallTransaction,
     getPublishTransaction,
@@ -51,7 +52,6 @@ import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
-import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function generateMutatedCreated(tx: SuiTransactionResponse) {
