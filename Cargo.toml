@@ -20,6 +20,82 @@ members = [
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
+    "crates/sui-json",
+    "crates/sui-json-rpc",
+    "crates/sui-json-rpc-types",
+    "crates/sui-keys",
+    "crates/sui-macros",
+    "crates/sui-network",
+    "crates/sui-node",
+    "crates/sui-open-rpc",
+    "crates/sui-open-rpc-macros",
+    "crates/sui-proc-macros",
+    "crates/sui-protocol-constants",
+    "crates/sui-rosetta",
+    "crates/sui-sdk",
+    "crates/sui-simulator",
+    "crates/sui-source-validation",
+    "crates/sui-storage",
+    "crates/sui-swarm",
+    "crates/sui-telemetry",
+    "crates/sui-test-validator",
+    "crates/sui-tool",
+    "crates/sui-transaction-builder",
+    "crates/sui-transactional-test-runner",
+    "crates/sui-types",
+    "crates/test-utils",
+    "crates/typed-store",
+    "crates/typed-store-derive",
+    "crates/workspace-hack",
+    "crates/x",
+    "narwhal/config",
+    "narwhal/consensus",
+    "narwhal/crypto",
+    "narwhal/dag",
+    "narwhal/executor",
+    "narwhal/network",
+    "narwhal/node",
+    "narwhal/primary",
+    "narwhal/storage",
+    "narwhal/test-utils",
+    "narwhal/types",
+    "narwhal/worker",
+]
+
+[workspace.package]
+# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
+version = "0.23.0"
+
+[profile.release]
+# debug = 1 means line charts only, which is minimum needed for good stack traces
+debug = 1
+# Write debug info into a separate file.
+split-debuginfo = 'packed'
+# Without stripping, sui binary size would be > 1GB.
+strip = 'debuginfo'
+# Exit process with SIGABRT when any thread panics
+panic = 'abort'
+
+members = [
+    "crates/component",
+    "crates/mysten-metrics",
+    "crates/mysten-network",
+    "crates/mysten-util-mem",
+    "crates/mysten-util-mem-derive",
+    "crates/prometheus-closure-metric",
+    "crates/rccheck",
+    "crates/sui",
+    "crates/sui-adapter",
+    "crates/sui-adapter-transactional-tests",
+    "crates/sui-benchmark",
+    "crates/sui-cluster-test",
+    "crates/sui-config",
+    "crates/sui-core",
+    "crates/sui-cost",
+    "crates/sui-cost-tables",
+    "crates/sui-faucet",
+    "crates/sui-framework",
+    "crates/sui-framework-build",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -67,19 +143,6 @@ members = [
     "narwhal/worker",
 ]
 
-[workspace.package]
-# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
-version = "0.23.0"
-
-[profile.release]
-# debug = 1 means line charts only, which is minimum needed for good stack traces
-debug = 1
-# Write debug info into a separate file.
-split-debuginfo = 'packed'
-# Without stripping, sui binary size would be > 1GB.
-strip = 'debuginfo'
-# Exit process with SIGABRT when any thread panics
-panic = 'abort'
 
 # Inherits from the release profile above.
 [profile.bench]

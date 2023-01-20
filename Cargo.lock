@@ -5283,20 +5283,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "narwhal-examples"
-version = "0.1.0"
-dependencies = [
- "base64",
- "clap 2.34.0",
- "prost",
- "protobuf-src",
- "tokio",
- "tonic",
- "tonic-build",
- "workspace-hack",
-]
-
-[[package]]
 name = "narwhal-executor"
 version = "0.1.0"
 dependencies = [
@@ -8856,42 +8842,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-indexer"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "backoff",
- "chrono",
- "clap 3.2.23",
- "diesel",
- "fastcrypto",
- "futures",
- "jsonrpsee",
- "narwhal-network",
- "prometheus",
- "serde 1.0.152",
- "serde_json",
- "sui",
- "sui-config",
- "sui-core",
- "sui-framework-build",
- "sui-json",
- "sui-json-rpc",
- "sui-json-rpc-types",
- "sui-keys",
- "sui-node",
- "sui-sdk",
- "sui-types",
- "telemetry-subscribers",
- "test-utils",
- "thiserror",
- "tokio",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-json"
 version = "0.0.0"
 dependencies = [
@@ -9479,15 +9429,6 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "sui-types",
- "workspace-hack",
-]
-
-[[package]]
-name = "sui-verifier-transactional-tests"
-version = "0.1.0"
-dependencies = [
- "datatest-stable",
- "sui-transactional-test-runner",
  "workspace-hack",
 ]
 
