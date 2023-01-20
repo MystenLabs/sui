@@ -24,7 +24,7 @@ type EnvInfo = {
 
 type ApiEndpoints = {
     fullNode: string;
-    faucet: string;
+    faucet?: string;
 } | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local' },
@@ -45,7 +45,8 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.customRPC]: null,
     [API_ENV.testNet]: {
         fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-        faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
+        // NOTE: Faucet is currently disabled for testnet:
+        // faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
     },
 };
 
