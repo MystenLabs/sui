@@ -69,7 +69,7 @@ export function ValidatorsCard() {
     }
 
     return (
-        <div className="flex flex-col flex-nowrap h-full overflow-x-scroll w-full">
+        <div className="flex flex-col flex-nowrap h-full w-full">
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">

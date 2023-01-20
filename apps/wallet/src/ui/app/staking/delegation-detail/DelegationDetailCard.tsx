@@ -68,17 +68,8 @@ export function DelegationDetailCard({
 
     const totalStake = delegationData?.staked_sui.principal.value || 0n;
 
-    const suiEarned = useMemo(() => {
-        if (
-            !delegationData ||
-            typeof delegationData.delegation_status !== 'object'
-        )
-            return 0n;
-        return BigInt(
-            delegationData.delegation_status.Active.pool_tokens.value -
-                delegationData.delegation_status.Active.principal_sui_amount
-        );
-    }, [delegationData]);
+    // Stake earned by ratio * pending_reward
+    const suiEarned = 0n;
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
@@ -95,6 +86,11 @@ export function DelegationDetailCard({
         address: validatorAddress,
         staked: stakedId,
     }).toString()}`;
+
+    const commission = useMemo(() => {
+        if (!validatorData) return 0;
+        return +validatorData?.fields.commission_rate * 100;
+    }, [validatorData]);
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -197,10 +193,7 @@ export function DelegationDetailCard({
                                                 weight="semibold"
                                                 color="gray-90"
                                             >
-                                                {
-                                                    validatorData?.fields
-                                                        .commission_rate
-                                                }
+                                                {commission}
                                             </Text>
 
                                             <Text

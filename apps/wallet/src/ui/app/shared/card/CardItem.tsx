@@ -21,7 +21,7 @@ export function CardItem({ title, children }: CardItemProps) {
                 {title}
             </Text>
 
-            <div className="overflow-x-hidden text-ellipsis">{children}</div>
+            {children}
         </div>
     );
 }
