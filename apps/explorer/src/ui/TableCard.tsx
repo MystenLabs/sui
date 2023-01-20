@@ -6,6 +6,7 @@ import {
     getCoreRowModel,
     getSortedRowModel,
     useReactTable,
+    //  type ColumnDef,
     type SortingState,
 } from '@tanstack/react-table';
 import clsx from 'clsx';
@@ -28,7 +29,7 @@ export type LinkObj = {
 type TableColumn = {
     headerLabel: string | (() => JSX.Element);
     accessorKey: string;
-    sorting?: boolean;
+    enableSorting?: boolean;
 };
 // TODO: update Link to use Tuple type
 // type Links = [Link, Link?];
@@ -51,14 +52,14 @@ type DataType = {
         | TxStatus;
 };
 
-function columnsContent(columns: TableColumn[]) {
+function columnsContent(columns: TableColumn[], sortTable: boolean) {
     return columns.map((column) => ({
-        accessorKey: column.accessorKey,
-        id: column.accessorKey,
         header: column.headerLabel,
-        enableSorting: !!column.sorting,
+        ...column,
         // cell renderer for each column from react-table
-        cell: (info: any) => info.getValue(),
+        // cell should be in the column definition
+        //TODO: move cell to column definition
+        ...(!sortTable && { cell: (info: any) => info.getValue() }),
     }));
 }
 
@@ -66,18 +67,23 @@ export interface TableCardProps {
     refetching?: boolean;
     data: DataType[];
     columns: TableColumn[];
-    enableSorting?: boolean;
+    sortTable?: boolean;
+    defaultSorting?: SortingState;
 }
 
 export function TableCard({
     refetching,
     data,
     columns,
-    enableSorting,
+    sortTable,
+    defaultSorting,
 }: TableCardProps) {
     // Use Columns to create a table
-    const processedcol = useMemo(() => columnsContent(columns), [columns]);
-    const [sorting, setSorting] = useState<SortingState>([]);
+    const processedcol = useMemo(
+        () => columnsContent(columns, !!sortTable),
+        [columns, sortTable]
+    );
+    const [sorting, setSorting] = useState<SortingState>(defaultSorting || []);
 
     const table = useReactTable({
         data,
@@ -85,7 +91,10 @@ export function TableCard({
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         onSortingChange: setSorting,
-        enableSorting: !!enableSorting,
+        enableSorting: !!sortTable,
+        initialState: {
+            sorting,
+        },
         state: {
             sorting,
         },
@@ -126,7 +135,7 @@ export function TableCard({
                                                 'flex items-center gap-1',
                                                 column.columnDef
                                                     .enableSorting &&
-                                                    'cursor-pointer'
+                                                    'cursor-pointer text-steel-darker'
                                             )}
                                         >
                                             {isPlaceholder
@@ -158,19 +167,21 @@ export function TableCard({
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map((row: any) => (
+                    {table.getRowModel().rows.map((row) => (
                         <tr key={row.id} className="group">
-                            {row.getVisibleCells().map((cell: any) => (
-                                <td
-                                    key={cell.id}
-                                    className="h-7.5 px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
-                                >
-                                    {flexRender(
-                                        cell.column.columnDef.cell,
-                                        cell.getContext()
-                                    )}
-                                </td>
-                            ))}
+                            {row
+                                .getVisibleCells()
+                                .map(({ column, id, getContext }) => (
+                                    <td
+                                        key={id}
+                                        className="h-7.5 px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
+                                    >
+                                        {flexRender(
+                                            column.columnDef.cell,
+                                            getContext()
+                                        )}
+                                    </td>
+                                ))}
                         </tr>
                     ))}
                 </tbody>
