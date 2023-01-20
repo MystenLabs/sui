@@ -64,8 +64,6 @@ export function Transaction({
         return Math.abs(amount || amountTransfers);
     }, [amountByRecipient, eventsSummary]);
 
-    const isSender = certificate.data.sender === address;
-
     const recipientAddress = useMemo(() => {
         const tranferObjectRecipientAddress =
             amountByRecipient &&
@@ -84,6 +82,10 @@ export function Transaction({
             certificate.data.sender
         );
     }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
+
+    // receiving transaction from move contract sometimes has the sender as the receiver
+    // so we need to check if the sender is the same as the address
+    const isSender = address === recipientAddress;
 
     const receiverAddress = useMiddleEllipsis(
         recipientAddress || '',

@@ -9,14 +9,7 @@ import {
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { api } from '_redux/store/thunk-extras';
-
-// Remove duplicate transactionsId, reduces the number of RPC calls
-const dedupe = (results: string[] | undefined) =>
-    results
-        ? results.filter((value, index, self) => self.indexOf(value) === index)
-        : [];
-
-const STALE_TIME = 1000 * 2;
+const STALE_TIME = 1000 * 1;
 
 async function getTransactionsByAddress(
     address: string,
@@ -29,7 +22,7 @@ async function getTransactionsByAddress(
         },
         cursor
     );
-    return rpc.getTransactionWithEffectsBatch(dedupe(txnsIds.data));
+    return rpc.getTransactionWithEffectsBatch(txnsIds.data);
 }
 
 // Fetch transactions on mount and every 2 seconds
