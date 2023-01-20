@@ -68,7 +68,7 @@ use sui_core::checkpoints::{
 };
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
-use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
@@ -78,13 +78,14 @@ use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
     validator_server_handle: tokio::task::JoinHandle<Result<()>>,
-    narwhal_manager: NarwhalManager<SuiTxValidator>,
+    narwhal_manager: NarwhalManager,
     consensus_adapter: Arc<ConsensusAdapter>,
     // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
     // is copied into each checkpoint service task, and they are listening to any change to this
     // channel. When the sender is dropped, a change is triggered and those tasks will exit.
     checkpoint_service_exit: watch::Sender<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
+    sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
 
@@ -299,7 +300,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub async fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+    pub fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
         self.end_of_epoch_channel.subscribe()
     }
 
@@ -453,14 +454,12 @@ impl SuiNode {
         )
         .await?;
 
-        let narwhal_manager = Self::construct_narwhal_manager(
-            config,
-            consensus_config,
-            epoch_store.clone(),
-            registry_service,
-        )?;
+        let narwhal_manager =
+            Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
 
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
+        let sui_tx_validator_metrics =
+            SuiTxValidatorMetrics::new(&registry_service.default_registry());
         Self::start_epoch_specific_validator_components(
             config,
             state.clone(),
@@ -471,6 +470,7 @@ impl SuiNode {
             narwhal_manager,
             validator_server_handle,
             checkpoint_metrics,
+            sui_tx_validator_metrics,
         )
         .await
     }
@@ -482,9 +482,10 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
-        narwhal_manager: NarwhalManager<SuiTxValidator>,
+        narwhal_manager: NarwhalManager,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
+        sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
         let (checkpoint_service, checkpoint_service_exit) = Self::start_checkpoint_service(
             config,
@@ -525,6 +526,7 @@ impl SuiNode {
                     committee.clone(),
                     SharedWorkerCache::from(worker_cache),
                     consensus_handler,
+                    SuiTxValidator::new(epoch_store, sui_tx_validator_metrics.clone()),
                 )
                 .await;
         } else {
@@ -539,6 +541,7 @@ impl SuiNode {
             consensus_adapter,
             checkpoint_service_exit,
             checkpoint_metrics,
+            sui_tx_validator_metrics,
         })
     }
 
@@ -581,16 +584,14 @@ impl SuiNode {
     fn construct_narwhal_manager(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
-        epoch_store: Arc<AuthorityPerEpochStore>,
         registry_service: &RegistryService,
-    ) -> Result<NarwhalManager<SuiTxValidator>> {
+    ) -> Result<NarwhalManager> {
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair().copy(),
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
-            tx_validator: SuiTxValidator::new(epoch_store, &registry_service.default_registry()),
             registry_service: registry_service.clone(),
         };
 
@@ -725,6 +726,7 @@ impl SuiNode {
                 consensus_adapter,
                 checkpoint_service_exit,
                 checkpoint_metrics,
+                sui_tx_validator_metrics,
             }) = self.validator_components.lock().await.take()
             {
                 info!("Reconfiguring the validator.");
@@ -748,6 +750,7 @@ impl SuiNode {
                             narwhal_manager,
                             validator_server_handle,
                             checkpoint_metrics,
+                            sui_tx_validator_metrics,
                         )
                         .await?,
                     )

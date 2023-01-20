@@ -14,6 +14,8 @@ use sui_types::{
     messages::{ConsensusTransaction, ConsensusTransactionKind},
 };
 
+use tracing::info;
+
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
@@ -22,9 +24,14 @@ pub struct SuiTxValidator {
 }
 
 impl SuiTxValidator {
-    pub fn new(epoch_store: Arc<AuthorityPerEpochStore>, registry: &Registry) -> Self {
-        let metrics = SuiTxValidatorMetrics::new(registry);
-        let metrics = Arc::new(metrics);
+    pub fn new(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        metrics: Arc<SuiTxValidatorMetrics>,
+    ) -> Self {
+        info!(
+            "SuiTxValidator constructed for epoch {}",
+            epoch_store.epoch()
+        );
         Self {
             epoch_store,
             metrics,
@@ -95,8 +102,8 @@ pub struct SuiTxValidatorMetrics {
 }
 
 impl SuiTxValidatorMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
             certificate_signatures_verified: register_int_counter_with_registry!(
                 "certificate_signatures_verified",
                 "Number of certificates verified in narwhal batch verifier",
@@ -109,7 +116,7 @@ impl SuiTxValidatorMetrics {
                 registry
             )
             .unwrap(),
-        }
+        })
     }
 }
 
@@ -120,10 +127,10 @@ mod tests {
     use narwhal_worker::TransactionValidator;
     use sui_types::{base_types::AuthorityName, messages::ConsensusTransaction};
 
+    use super::*;
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
-        consensus_validator::SuiTxValidator,
     };
 
     use sui_macros::sim_test;
@@ -156,7 +163,8 @@ mod tests {
         )
         .unwrap();
 
-        let validator = SuiTxValidator::new(state.epoch_store().clone(), &Default::default());
+        let metrics = SuiTxValidatorMetrics::new(&Default::default());
+        let validator = SuiTxValidator::new(state.epoch_store().clone(), metrics);
         let res = validator.validate(&first_transaction_bytes);
         assert!(res.is_ok(), "{res:?}");
 
