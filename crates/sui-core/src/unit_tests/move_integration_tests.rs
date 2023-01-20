@@ -6,7 +6,7 @@ use super::*;
 use crate::authority::authority_tests::{
     call_move, call_move_, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
 };
-use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{object::Data, utils::to_sender_signed_transaction};
 
 use move_core_types::{
     language_storage::TypeTag,
@@ -49,6 +49,29 @@ async fn test_publishing_with_unpublished_deps() {
     assert_eq!(effects.created.len(), 1);
     let package = effects.created[0].0;
 
+    let ObjectRead::Exists(read_ref, package_obj, _) = authority
+        .get_object_read(&package.0)
+        .await
+        .unwrap()
+    else {
+        panic!("Can't read package")
+    };
+
+    assert_eq!(package, read_ref);
+    let Data::Package(move_package) = package_obj.data else {
+        panic!("Not a package")
+    };
+
+    // Check that the published package includes its depended upon module.
+    assert_eq!(
+        move_package
+            .serialized_module_map()
+            .keys()
+            .map(String::as_str)
+            .collect::<HashSet<_>>(),
+        HashSet::from(["depends_on_basics", "object_basics"]),
+    );
+
     let effects = call_move(
         &authority,
         &gas,
@@ -67,6 +90,7 @@ async fn test_publishing_with_unpublished_deps() {
     assert_eq!(effects.created.len(), 1);
     let ((_, v, _), owner) = effects.created[0];
 
+    // Check that calling the function does what we expect
     assert!(matches!(
         owner,
         Owner::Shared { initial_shared_version: initial } if initial == v
