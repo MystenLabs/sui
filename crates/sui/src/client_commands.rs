@@ -1312,13 +1312,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
+            // Do not use writer for new address output, which may get sent to logs.
+            #[allow(clippy::print_in_format_impl)]
             SuiClientCommandResult::NewAddress((address, recovery_phrase, scheme)) => {
-                writeln!(
-                    writer,
+                println!(
                     "Created new keypair for address with scheme {:?}: [{address}]",
                     scheme
-                )?;
-                writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
+                );
+                println!("Secret Recovery Phrase : [{recovery_phrase}]");
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
