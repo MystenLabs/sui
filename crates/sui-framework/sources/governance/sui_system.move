@@ -454,7 +454,7 @@ module sui::sui_system {
 
         // Include stake subsidy in the rewards given out to validators and delegators.
         stake_subsidy::mint_stake_subsidy_proportional_to_total_stake_testnet(
-            &mut self.stake_subsidy, &mut self.sui_supply, stake_subsidy_rate, total_stake);
+            &mut self.stake_subsidy, &mut self.sui_supply, stake_subsidy_rate, delegation_stake + validator_stake);
         let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
         let stake_subsidy_amount = balance::value(&stake_subsidy);
         balance::join(&mut computation_reward, stake_subsidy);
