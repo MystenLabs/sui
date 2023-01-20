@@ -1,0 +1,12 @@
+{% extends "base" %}
+
+{% block content %}
+    <div class="row">
+      <h4>Run Cluster Test</h4>
+      <form action="/cluster_test" method="post">
+        <div>
+          <input type="submit" value="Go {{network}}">
+        </div>
+      </form>
+    </div>
+{% endblock content %}

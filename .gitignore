@@ -37,3 +37,5 @@ sui.log.*
 
 # misc
 *.key
+# rocket templates
+/templates

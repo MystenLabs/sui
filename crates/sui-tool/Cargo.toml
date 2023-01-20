@@ -24,12 +24,16 @@ strum_macros = "^0.24"
 strum = "0.24.1"
 serde = { version = "1.0.144", features = ["derive"] }
 eyre = "0.6.8"
+hex = "0.4.3"
+axum = "0.6.1"
+
 
 sui-storage = { path = "../sui-storage" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-network = { path = "../sui-network" }
+sui-cluster-test = { path = "../sui-cluster-test" }
 
 telemetry-subscribers.workspace = true
 typed-store.workspace = true

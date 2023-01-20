@@ -37,6 +37,8 @@ RUN cargo build --release
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY narwhal narwhal
+COPY sui_programmability/examples/basics sui_programmability/examples/basics
+
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
@@ -44,6 +46,9 @@ RUN cargo build --release \
     --bin stress \
     --bin sui-indexer \
     --bin sui-cluster-test
+
+# build gui-tool in debug mode so it doesn't crash on panic
+RUN cargo build --bin gui-tool
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -56,6 +61,13 @@ COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
 # sui-indexer needs postgres libpq5 and ca-certificates
 RUN apt update && apt install -y libpq5 ca-certificates
 COPY --from=builder /sui/target/release/sui-cluster-test /usr/local/bin
+
+
+# GUI tool
+COPY --from=builder /sui/target/debug/gui-tool /usr/local/bin
+COPY --from=builder /sui/crates/sui-tool/src/bin/templates /usr/local/bin/templates
+COPY --from=builder /sui/sui_programmability/examples/basics /usr/local/bin/sui_programmability/examples/basics
+COPY --from=builder /sui/crates/sui-framework /usr/local/bin/crates/sui-framework
 
 ARG BUILD_DATE
 ARG GIT_REVISION
