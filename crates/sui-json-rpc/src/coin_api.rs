@@ -66,6 +66,7 @@ impl CoinReadApi {
                 digest: o.digest(),
                 balance,
                 locked_until_epoch,
+                previous_transaction: o.previous_transaction,
             })
         } else {
             Err(Error::UnexpectedError(format!(

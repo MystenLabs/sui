@@ -3097,6 +3097,7 @@
           "coinObjectId",
           "coinType",
           "digest",
+          "previousTransaction",
           "version"
         ],
         "properties": {
@@ -3121,6 +3122,9 @@
             ],
             "format": "uint64",
             "minimum": 0.0
+          },
+          "previousTransaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
           },
           "version": {
             "$ref": "#/components/schemas/SequenceNumber"
