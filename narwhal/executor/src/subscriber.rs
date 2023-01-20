@@ -319,7 +319,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 return Some(batch);
             }
             Ok(None) => debug!("Payload {} not found locally", digest),
-            Err(err) => error!("Error communicating with own worker: {}", err),
+            Err(err) => warn!("Error communicating with own worker: {}", err),
         }
         None
     }
