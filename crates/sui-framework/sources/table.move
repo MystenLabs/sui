@@ -62,7 +62,7 @@ public fun borrow_mut<K: copy + drop + store, V: store>(table: &mut Table<K, V>,
     field::borrow_mut(&mut table.id, k)
 }
 
-/// Mutably borrows the key-value pair in the table `table: &mut Table<K, V>` and returns the value.
+/// Removes the key-value pair in the table `table: &mut Table<K, V>` and returns the value.
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
 /// that key `k: K`.
 public fun remove<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K): V {
