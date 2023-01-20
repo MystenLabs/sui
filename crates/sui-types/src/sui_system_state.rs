@@ -31,7 +31,7 @@ pub struct SystemParameters {
 
 /// Rust version of the Move std::option::Option type.
 /// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct MoveOption<T> {
     pub vec: Vec<T>,
 }
@@ -136,6 +136,27 @@ pub struct Table {
     pub size: u64,
 }
 
+/// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
+/// we only use it in sui_system in the framework.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct LinkedTable<K> {
+    pub id: ObjectID,
+    pub size: u64,
+    pub head: MoveOption<K>,
+    pub tail: MoveOption<K>,
+}
+
+impl<K> Default for LinkedTable<K> {
+    fn default() -> Self {
+        LinkedTable {
+            id: ObjectID::from(SuiAddress::ZERO),
+            size: 0,
+            head: MoveOption { vec: vec![] },
+            tail: MoveOption { vec: vec![] },
+        }
+    }
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
@@ -144,7 +165,7 @@ pub struct StakingPool {
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,
-    pub pending_delegations: TableVec,
+    pub pending_delegations: LinkedTable<ObjectID>,
     pub pending_withdraws: TableVec,
 }
 
