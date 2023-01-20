@@ -120,3 +120,6 @@ pub const REWARD_SLASHING_RATE: u64 = 5000;
 /// The stake subsidy we mint each epoch is 0.01% of the total stake.
 /// In basis point.
 pub const STAKE_SUBSIDY_RATE: u64 = 1;
+
+/// Unit gas price, Mist per internal gas unit.
+pub const STORAGE_GAS_PRICE: u64 = 1;

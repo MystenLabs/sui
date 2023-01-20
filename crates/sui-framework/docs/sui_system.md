@@ -87,12 +87,6 @@ A list of system config parameters.
  Maximum number of validator candidates at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
-<dt>
-<code>storage_gas_price: u64</code>
-</dt>
-<dd>
- Storage gas price denominated in SUI
-</dd>
 </dl>
 
 
@@ -331,7 +325,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, storage_gas_price: u64, initial_stake_subsidy_amount: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64)
 </code></pre>
 
 
@@ -346,7 +340,6 @@ This function will be called only once in genesis.
     storage_fund: Balance&lt;SUI&gt;,
     max_validator_candidate_count: u64,
     min_validator_stake: u64,
-    storage_gas_price: u64,
     initial_stake_subsidy_amount: u64,
 ) {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
@@ -361,7 +354,6 @@ This function will be called only once in genesis.
         parameters: <a href="sui_system.md#0x2_sui_system_SystemParameters">SystemParameters</a> {
             min_validator_stake,
             max_validator_candidate_count,
-            storage_gas_price
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),

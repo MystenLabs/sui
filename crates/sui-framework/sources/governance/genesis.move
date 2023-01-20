@@ -21,9 +21,6 @@ module sui::genesis {
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
 
-    /// Initial storage gas price
-    const INIT_STORAGE_GAS_PRICE: u64 = 1;
-
     /// Stake subisidy to be given out in the very first epoch. Placeholder value.
     const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
 
@@ -42,7 +39,7 @@ module sui::genesis {
         validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
-        validator_worker_addressess: vector<vector<u8>>,
+        validator_worker_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
@@ -61,7 +58,7 @@ module sui::genesis {
                 && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
                 && vector::length(&validator_consensus_addresses) == count
-                && vector::length(&validator_worker_addressess) == count
+                && vector::length(&validator_worker_addresses) == count
                 && vector::length(&validator_gas_prices) == count
                 && vector::length(&validator_commission_rates) == count,
             1
@@ -79,7 +76,7 @@ module sui::genesis {
             let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
-            let worker_address = *vector::borrow(&validator_worker_addressess, i);
+            let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
@@ -110,7 +107,6 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            INIT_STORAGE_GAS_PRICE,
             INIT_STAKE_SUBSIDY_AMOUNT,
         );
     }
@@ -127,7 +123,6 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            INIT_STORAGE_GAS_PRICE,
             INIT_STAKE_SUBSIDY_AMOUNT
         )
     }

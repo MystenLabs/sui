@@ -26,7 +26,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 use sui_config::node::AuthorityStorePruningConfig;
-use sui_protocol_constants::MAX_TX_GAS;
+use sui_protocol_constants::{MAX_TX_GAS, STORAGE_GAS_PRICE};
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -1131,14 +1131,12 @@ impl AuthorityState {
             execution_engine::manual_execute_move_call_fake_txn_digest(sender, move_call.clone());
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let storage_gas_price = self
-            .database
-            .get_sui_system_state_object()?
-            .parameters
-            .storage_gas_price
-            .into();
-        let gas_status =
-            SuiGasStatus::new_with_budget(MAX_TX_GAS, storage_gas_price, storage_gas_price);
+        let gas_status = SuiGasStatus::new_with_budget(
+            MAX_TX_GAS,
+            // TODO: Use proper computation gas price.
+            STORAGE_GAS_PRICE.into(),
+            STORAGE_GAS_PRICE.into(),
+        );
         let (effects, execution_result) =
             execution_engine::manual_execute_move_call::<execution_mode::DevInspect, _>(
                 shared_object_refs,
