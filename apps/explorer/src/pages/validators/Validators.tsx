@@ -25,6 +25,8 @@ import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 
+const APY_DECIMALS = 4;
+
 const ValidatorMap = lazy(() => import('../../components/node-map'));
 
 function validatorsTableDatas(validators: ActiveValidator[], epoch: number) {
@@ -59,6 +61,7 @@ function validatorsTableDatas(validators: ActiveValidator[], epoch: number) {
                 headerLabel: 'Name',
                 accessorKey: 'name',
                 enableSorting: true,
+
                 cell: (props: any) => {
                     const name = props.getValue();
                     return (
@@ -154,9 +157,11 @@ function ValidatorPageResult() {
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +validatorsData.epoch)
         );
-        return (
-            validatorsApy.reduce((acc, cur) => acc + cur, 0) /
-            validatorsApy.length
+        return parseFloat(
+            (
+                validatorsApy.reduce((acc, cur) => acc + cur, 0) /
+                validatorsApy.length
+            ).toFixed(APY_DECIMALS)
         );
     }, [validatorsData]);
 

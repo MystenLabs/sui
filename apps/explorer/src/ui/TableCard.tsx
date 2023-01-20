@@ -92,6 +92,7 @@ export function TableCard({
         getSortedRowModel: getSortedRowModel(),
         onSortingChange: setSorting,
         enableSorting: !!sortTable,
+        enableSortingRemoval: false,
         initialState: {
             sorting,
         },
