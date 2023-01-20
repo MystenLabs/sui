@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Similar to `sui::table` but the values are linked together. Allowing for ordered insertion and
+/// Similar to `sui::table` but the values are linked together, allowing for ordered insertion and
 /// removal
 module sui::linked_table {
 
@@ -10,9 +10,9 @@ use sui::object::{Self, UID};
 use sui::dynamic_field as field;
 use sui::tx_context::TxContext;
 
-// Attemped to destroy a non-empty table
+// Attempted to destroy a non-empty table
 const ETableNotEmpty: u64 = 0;
-// Attemped to remove the front or back of an empty table
+// Attempted to remove the front or back of an empty table
 const ETableIsEmpty: u64 = 1;
 
 struct LinkedTable<K: copy + drop + store, phantom V: store> has key, store {
@@ -137,7 +137,7 @@ public fun next<K: copy + drop + store, V: store>(table: &LinkedTable<K, V>, k: 
 /// Removes the key-value pair in the table `table: &mut LinkedTable<K, V>` and returns the value.
 /// This splices the element out of the ordering.
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
-/// that key `k: K`.
+/// that key `k: K`. Note: this is also what happens when the table is empty.
 public fun remove<K: copy + drop + store, V: store>(table: &mut LinkedTable<K, V>, k: K): V {
     let Node<K, V> { prev, next, value } = field::remove(&mut table.id, k);
     table.size = table.size - 1;

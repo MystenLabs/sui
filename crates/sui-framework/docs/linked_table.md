@@ -3,7 +3,7 @@
 
 # Module `0x2::linked_table`
 
-Similar to <code>sui::table</code> but the values are linked together. Allowing for ordered insertion and
+Similar to <code>sui::table</code> but the values are linked together, allowing for ordered insertion and
 removal
 
 
@@ -430,7 +430,7 @@ that key <code>k: K</code>
 Removes the key-value pair in the table <code><a href="table.md#0x2_table">table</a>: &<b>mut</b> <a href="linked_table.md#0x2_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;</code> and returns the value.
 This splices the element out of the ordering.
 Aborts with <code>sui::dynamic_field::EFieldDoesNotExist</code> if the table does not have an entry with
-that key <code>k: K</code>.
+that key <code>k: K</code>. Note: this is also what happens when the table is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="linked_table.md#0x2_linked_table_remove">remove</a>&lt;K: <b>copy</b>, drop, store, V: store&gt;(<a href="table.md#0x2_table">table</a>: &<b>mut</b> <a href="linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;K, V&gt;, k: K): V
