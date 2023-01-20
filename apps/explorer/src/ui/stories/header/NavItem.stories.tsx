@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Check24 } from '@mysten/icons';
 import { type Meta, type StoryObj } from '@storybook/react';
 
 import { NavItem, type NavItemProps } from '../../header/NavItem';
-import { ReactComponent as CheckIcon } from '../../icons/check_24x24.svg';
 
 export default {
     component: NavItem,
@@ -25,7 +25,7 @@ export const Default: StoryObj<NavItemProps> = {
 
 export const BeforeIcon: StoryObj<NavItemProps> = {
     args: {
-        beforeIcon: <CheckIcon />,
+        beforeIcon: <Check24 />,
         children: 'Nav Item',
     },
 };

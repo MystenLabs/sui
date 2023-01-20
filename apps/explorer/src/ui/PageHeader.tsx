@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+import {
+    Copy16 as CopyIcon,
+    Image16 as ImageIcon,
+    Sender16 as SenderIcon,
+    Call16 as CallIcon,
+    ChangeEpoch16 as ChangeEpochIcon,
+    Publish16 as PublishIcon,
+    Tokens32 as PayIcon,
+    TransferObject16 as TransferObjectIcon,
+    TransferSui16 as TransferSuiIcon,
+} from '@mysten/icons';
 import { type TransactionKindName } from '@mysten/sui.js';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
 import { Heading } from './Heading';
-import { ReactComponent as CopyIcon } from './icons/copy.svg';
-import { ReactComponent as ImageIcon } from './icons/image.svg';
-import { ReactComponent as SenderIcon } from './icons/sender.svg';
-import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
-import { ReactComponent as ChangeEpochIcon } from './icons/transactions/changeEpoch.svg';
-import { ReactComponent as PayIcon } from './icons/transactions/pay.svg';
-import { ReactComponent as PublishIcon } from './icons/transactions/publish.svg';
-import { ReactComponent as TransferObjectIcon } from './icons/transactions/transferObject.svg';
-import { ReactComponent as TransferSuiIcon } from './icons/transactions/transferSui.svg';
 
 export type PageHeaderType =
     | TransactionKindName

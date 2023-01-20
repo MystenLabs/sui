@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as PauseIcon } from './icons/pause.svg';
-import { ReactComponent as PlayIcon } from './icons/play.svg';
+import {
+    MediaPlay16 as PlayIcon,
+    MediaPause16 as PauseIcon,
+} from '@mysten/icons';
 
 export interface PlayPauseProps {
     paused?: boolean;

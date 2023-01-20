@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { X12 as XIcon, Check12 as CheckIcon } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
-
-import { ReactComponent as CheckIcon } from './icons/check_12x12.svg';
-import { ReactComponent as XIcon } from './icons/x.svg';
 
 const badgeStyles = cva(
     [

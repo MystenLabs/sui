@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as CloseIcon } from './icons/x.svg';
+import { X12 as CloseIcon } from '@mysten/icons';
+
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
 import type { FC } from 'react';

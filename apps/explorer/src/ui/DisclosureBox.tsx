@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Disclosure } from '@headlessui/react';
-
-import { ReactComponent as ChevronDownIcon } from './icons/chevron_down.svg';
+import { ChevronDown16 as ChevronDownIcon } from '@mysten/icons';
 
 import type { ReactNode } from 'react';
 

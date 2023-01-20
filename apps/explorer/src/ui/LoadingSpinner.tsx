@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as SpinnerSvg } from './icons/spinner.svg';
+import { Spinner16 as SpinnerSvg } from '@mysten/icons';
 
 export interface LoadingSpinnerProps {
     text?: string;

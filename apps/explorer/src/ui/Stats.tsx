@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as InfoSvg } from './icons/info_10x10.svg';
+import { Info12 as InfoSvg } from '@mysten/icons';
 
 import type { ReactNode } from 'react';
 

@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Info16 as InfoIcon } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
 import { IconButton } from './IconButton';
-import { ReactComponent as InfoIcon } from './icons/info.svg';
 
 const bannerStyles = cva(
     'inline-flex text-p2 font-medium rounded-lg overflow-hidden box-border gap-2 items-center flex-nowrap relative',

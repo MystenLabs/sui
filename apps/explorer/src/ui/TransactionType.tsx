@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    X12 as ContentFailedStatus,
+    Check12 as ContentSuccessStatus,
+} from '@mysten/icons';
 import { type TransactionKindName } from '@mysten/sui.js';
-
-import { ReactComponent as ContentSuccessStatus } from './icons/check_12x12.svg';
-import { ReactComponent as ContentFailedStatus } from './icons/x.svg';
 
 type TransactionTypeLabel = TransactionKindName | 'Batch';
 

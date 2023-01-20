@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as Recipient } from './icons/checkfill.svg';
-import { ReactComponent as Sender } from './icons/sender.svg';
+import { CheckFill16 as Recipient, Sender16 as Sender } from '@mysten/icons';
 
 import { Link } from '~/ui/Link';
 

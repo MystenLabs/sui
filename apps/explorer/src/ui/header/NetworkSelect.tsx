@@ -17,14 +17,16 @@ import {
     useFloating,
 } from '@floating-ui/react';
 import { Popover } from '@headlessui/react';
+import {
+    Check24 as CheckIcon,
+    ChevronDown16 as ChevronDownIcon,
+    HamburgerRest24 as MenuIcon,
+} from '@mysten/icons';
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
-import { ReactComponent as CheckIcon } from '../icons/check_16x16.svg';
-import { ReactComponent as ChevronDownIcon } from '../icons/chevron_down.svg';
-import { ReactComponent as MenuIcon } from '../icons/menu.svg';
 import { NavItem } from './NavItem';
 
 import type { ComponentProps, ReactNode } from 'react';
