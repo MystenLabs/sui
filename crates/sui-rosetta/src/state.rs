@@ -178,6 +178,7 @@ impl CheckpointBlockProvider {
                 let resp = self.create_block_response(checkpoint).await?;
                 self.update_balance(seq, resp.block.transactions).await?;
             }
+            self.index_store.last_checkpoint.insert(&true, &head)?;
         } else {
             debug!("No new checkpoints.")
         };
