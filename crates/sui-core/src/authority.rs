@@ -5,6 +5,8 @@
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use chrono::prelude::*;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::account_address::AccountAddress;
@@ -60,7 +62,8 @@ use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSummary,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{Owner, PastObjectRead};
@@ -2158,7 +2161,7 @@ impl AuthorityState {
             .ok_or_else(|| anyhow!("Latest checkpoint sequence number not found"))
     }
 
-    pub fn get_checkpoint_summary(
+    pub fn get_checkpoint_summary_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Result<CheckpointSummary, anyhow::Error> {
@@ -2170,6 +2173,22 @@ impl AuthorityState {
             None => Err(anyhow!(
                 "Verified checkpoint not found for sequence number {}",
                 sequence_number
+            )),
+        }
+    }
+
+    pub fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<CheckpointSummary, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_digest(&digest)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint.into_inner().summary),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for digest: {}",
+                Base58::encode(digest)
             )),
         }
     }
@@ -2193,14 +2212,7 @@ impl AuthorityState {
         match verified_checkpoint {
             Some(verified_checkpoint) => {
                 let content_digest = verified_checkpoint.into_inner().content_digest();
-                self.get_checkpoint_store()
-                    .get_checkpoint_contents(&content_digest)?
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "Checkpoint contents not found for sequence number: {}",
-                            sequence_number
-                        )
-                    })
+                self.get_checkpoint_contents(content_digest)
             }
             None => Err(anyhow!(
                 "Verified checkpoint not found for sequence number {}",

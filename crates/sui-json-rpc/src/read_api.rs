@@ -29,7 +29,8 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceN
 use sui_types::crypto::sha3_hash;
 use sui_types::messages::TransactionData;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSummary,
 };
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
@@ -442,28 +443,40 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             })?)
     }
 
+    fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> RpcResult<CheckpointSummary> {
+        Ok(self
+            .state
+            .get_checkpoint_summary_by_digest(digest)
+            .map_err(|e| {
+                anyhow!(
+                    "Checkpoint summary based on digest: {digest:?} were not found with error: {e}"
+                )
+            })?)
+    }
+
     fn get_checkpoint_summary(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary> {
-        Ok(self.state.get_checkpoint_summary(sequence_number)
+        Ok(self.state.get_checkpoint_summary_by_sequence_number(sequence_number)
         .map_err(|e| anyhow!("Checkpoint summary based on sequence number: {sequence_number} was not found with error :{e}"))?)
     }
 
-    fn get_checkpoint_contents(
+    fn get_checkpoint_contents_by_digest(
         &self,
         digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents> {
         Ok(self.state.get_checkpoint_contents(digest).map_err(|e| {
             anyhow!(
-                "Checkpoint contents based on digest: {:?} were not found with error: {}",
-                digest,
-                e
+                "Checkpoint contents based on digest: {digest:?} were not found with error: {e}"
             )
         })?)
     }
 
-    fn get_checkpoint_contents_by_sequence_number(
+    fn get_checkpoint_contents(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents> {
