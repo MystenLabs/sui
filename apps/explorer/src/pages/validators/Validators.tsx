@@ -38,7 +38,9 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
             return {
                 number: index + 1,
                 name: validatorName,
-                stake: validator.fields.stake_amount,
+                stake:
+                    +validator.fields.delegation_staking_pool.fields
+                        .sui_balance + +validator.fields.stake_amount,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate,
                 address: validator.fields.metadata.fields.sui_address,
@@ -49,7 +51,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
         }),
         columns: [
             {
-                headerLabel: '#',
+                header: '#',
                 accessorKey: 'number',
                 cell: (props: any) => (
                     <Text variant="bodySmall/medium" color="steel-dark">
@@ -58,10 +60,9 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 ),
             },
             {
-                headerLabel: 'Name',
+                header: 'Name',
                 accessorKey: 'name',
                 enableSorting: true,
-
                 cell: (props: any) => {
                     const name = props.getValue();
                     return (
@@ -90,13 +91,13 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
             },
             {
-                headerLabel: 'Stake',
+                header: 'Stake',
                 accessorKey: 'stake',
                 enableSorting: true,
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
             },
             {
-                headerLabel: 'APY',
+                header: 'APY',
                 accessorKey: 'apy',
                 cell: (props: any) => {
                     const apy = props.getValue();
@@ -108,7 +109,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
             },
             {
-                headerLabel: 'Commission',
+                header: 'Commission',
                 accessorKey: 'commission',
                 cell: (props: any) => {
                     const commissionRate = props.getValue();
@@ -120,7 +121,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
             },
             {
-                headerLabel: 'Last Epoch Rewards',
+                header: 'Last Epoch Rewards',
                 accessorKey: 'lastEpoch',
                 cell: (props: any) => {
                     const lastEpochReward = props.getValue();
@@ -148,7 +149,18 @@ function ValidatorPageResult() {
             ? (data.details.data.fields as ValidatorsFields)
             : null;
 
-    const totalStake = validatorsData?.validators.fields.total_validator_stake;
+    const totalStaked = useMemo(() => {
+        if (!validatorsData) return 0;
+        const validators = validatorsData.validators.fields.active_validators;
+
+        return validators.reduce(
+            (acc, cur) =>
+                acc +
+                +cur.fields.delegation_staking_pool.fields.sui_balance +
+                +cur.fields.stake_amount,
+            0
+        );
+    }, [validatorsData]);
 
     const averageAPY = useMemo(() => {
         if (!validatorsData) return 0;
@@ -237,7 +249,7 @@ function ValidatorPageResult() {
                             <div className="flex flex-col gap-8">
                                 <Stats label="Total Staked">
                                     <DelegationAmount
-                                        amount={totalStake || 0n}
+                                        amount={totalStaked || 0n}
                                         isStats
                                     />
                                 </Stats>

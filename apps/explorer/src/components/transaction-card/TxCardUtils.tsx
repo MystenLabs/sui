@@ -141,31 +141,31 @@ export const genTableDataFromTxData = (
         })),
         columns: [
             {
-                headerLabel: 'Time',
+                header: 'Time',
                 accessorKey: 'date',
             },
             {
-                headerLabel: 'Type',
+                header: 'Type',
                 accessorKey: 'txTypes',
             },
             {
-                headerLabel: () => (
+                header: () => (
                     <div className={styles.addresses}>Transaction ID</div>
                 ),
                 accessorKey: 'transactionId',
             },
             {
-                headerLabel: () => (
+                header: () => (
                     <div className={styles.addresses}>Addresses</div>
                 ),
                 accessorKey: 'addresses',
             },
             {
-                headerLabel: 'Amount',
+                header: 'Amount',
                 accessorKey: 'amounts',
             },
             {
-                headerLabel: 'Gas',
+                header: 'Gas',
                 accessorKey: 'gas',
             },
         ],

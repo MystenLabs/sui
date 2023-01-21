@@ -7,83 +7,41 @@ import {
     getCoreRowModel,
     getSortedRowModel,
     useReactTable,
-    //  type ColumnDef,
+    type ColumnDef,
     type SortingState,
 } from '@tanstack/react-table';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-
-import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
-
-type Category = 'object' | 'transaction' | 'address' | 'unknown';
-
-export type LinkObj = {
-    url: string;
-    name?: string;
-    copy?: boolean;
-    category?: Category;
-    isLink?: boolean;
-};
-
-type TableColumn = {
-    headerLabel: string | (() => JSX.Element);
-    accessorKey: string;
-    enableSorting?: boolean;
-};
-// TODO: update Link to use Tuple type
-// type Links = [Link, Link?];
-type Links = LinkObj[];
-
-type TxStatus = {
-    txTypeName: TransactionKindName | undefined;
-    status: ExecutionStatusType;
-};
-
-// support multiple types with special handling for 'addresses'/links and status
-// TODO: Not sure to allow HTML elements in the table
-type DataType = {
-    [key: string]:
-        | string
-        | number
-        | boolean
-        | Links
-        | React.ReactElement
-        | TxStatus;
-};
-
-function columnsContent(columns: TableColumn[], sortTable: boolean) {
-    return columns.map((column) => ({
-        header: column.headerLabel,
-        ...column,
-        // cell renderer for each column from react-table
-        // cell should be in the column definition
-        //TODO: move cell to column definition
-        ...(!sortTable && { cell: (info: any) => info.getValue() }),
-    }));
-}
-
-export interface TableCardProps {
+export interface TableCardProps<DataType extends object> {
     refetching?: boolean;
     data: DataType[];
-    columns: TableColumn[];
+    columns: ColumnDef<DataType>[];
     sortTable?: boolean;
     defaultSorting?: SortingState;
 }
 
-export function TableCard({
+
+export function TableCard<DataType extends object>({
     refetching,
     data,
     columns,
     sortTable,
     defaultSorting,
-}: TableCardProps) {
-    // Use Columns to create a table
-    const processedcol = useMemo(
-        () => columnsContent(columns, !!sortTable),
-        [columns, sortTable]
-    );
+}: TableCardProps<DataType>) {
     const [sorting, setSorting] = useState<SortingState>(defaultSorting || []);
+   
+    // Use Columns to create a table
+    const processedcol = useMemo<ColumnDef<DataType>[]>(() => {
+        return columns.map((column) => ({
+            ...column,
+            // cell renderer for each column from react-table
+            // cell should be in the column definition
+            //TODO: move cell to column definition
+            ...(!sortTable && { cell: ({getValue}) => getValue()}),
+        }));
+    }, [columns, sortTable]);
+
 
     const table = useReactTable({
         data,

@@ -43,15 +43,15 @@ const data = {
     ],
     columns: [
         {
-            headerLabel: 'Sardines',
+            header: 'Sardines',
             accessorKey: 'sardines',
         },
         {
-            headerLabel: 'Herrings',
+            header: 'Herrings',
             accessorKey: 'herrings',
         },
         {
-            headerLabel: () => <i>Salmon</i>,
+            header: () => <i>Salmon</i>,
             accessorKey: 'salmon',
         },
     ],
