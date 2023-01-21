@@ -5,6 +5,12 @@ import { type StoryObj, type Meta } from '@storybook/react';
 
 import { TableCard, type TableCardProps } from '../TableCard';
 
+type DataType = {
+    sardines: string | JSX.Element;
+    herrings: string | JSX.Element;
+    salmon: string;
+};
+
 const data = {
     data: [
         {
@@ -61,6 +67,6 @@ export default {
     component: TableCard,
 } as Meta;
 
-export const VaryingWidth: StoryObj<TableCardProps> = {
+export const VaryingWidth: StoryObj<TableCardProps<DataType>> = {
     render: () => <TableCard data={data.data} columns={data.columns} />,
 };
