@@ -55,12 +55,12 @@ impl FullNodeApi {
         Self { state }
     }
 
-    fn get_sui_system_state_object_epoch(&self) -> RpcResult<EpochId> {
-        Ok(self
+    fn get_sui_system_state_object_epoch_and_gas_price(&self) -> RpcResult<(EpochId, u64)> {
+        let sys_state = self
             .state
             .get_sui_system_state_object()
-            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?
-            .epoch)
+            .map_err(|e| anyhow!("Unable to retrieve sui system state object: {e}"))?;
+        Ok((sys_state.epoch, sys_state.reference_gas_price))
     }
 }
 
@@ -237,15 +237,22 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         gas_price: Option<u64>,
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
-        let epoch = match epoch {
-            None => self.get_sui_system_state_object_epoch()?,
-            Some(n) => n,
-        };
+        let (mut current_epoch, mut reference_gas_price) = (0, 0);
+        // Only fetch from DB if necessary
+        if gas_price == None || epoch == None {
+            (current_epoch, reference_gas_price) =
+                self.get_sui_system_state_object_epoch_and_gas_price()?
+        }
         let tx_kind: TransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state
-            .dev_inspect_transaction(sender_address, tx_kind, gas_price.unwrap_or(1), epoch)
+            .dev_inspect_transaction(
+                sender_address,
+                tx_kind,
+                gas_price.unwrap_or(reference_gas_price),
+                epoch.unwrap_or(current_epoch),
+            )
             .await?)
     }
 

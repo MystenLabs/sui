@@ -195,11 +195,12 @@ pub trait RpcFullNodeReadApi {
     async fn dev_inspect_transaction(
         &self,
         sender_address: SuiAddress,
+        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
         tx_bytes: Base64,
+        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
+        gas_price: Option<u64>,
         /// The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<EpochId>,
-        /// Gas is not charged, but gas usage is still calculated. The default is 1
-        gas_price: Option<u64>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
