@@ -99,6 +99,9 @@ pub struct Opts {
     // Stat collection interval seconds
     #[clap(long, default_value = "10", global = true)]
     pub stat_collection_interval: u64,
+    // Enable stress stat collection
+    #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+    pub stress_stat_collection: bool,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]

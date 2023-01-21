@@ -16,7 +16,7 @@ use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
-use tokio::sync::Mutex;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 
@@ -35,8 +35,8 @@ use tokio::sync::Barrier;
 use tokio::{time, time::Instant};
 use tracing::{debug, error, info};
 
-use super::BenchmarkStats;
 use super::Interval;
+use super::{BenchmarkStats, StressStats};
 pub struct BenchMetrics {
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
@@ -146,14 +146,16 @@ pub struct BenchWorker {
 
 pub struct BenchDriver {
     pub stat_collection_interval: u64,
+    pub stress_stat_collection: bool,
     pub start_time: Instant,
     pub token: CancellationToken,
 }
 
 impl BenchDriver {
-    pub fn new(stat_collection_interval: u64) -> BenchDriver {
+    pub fn new(stat_collection_interval: u64, stress_stat_collection: bool) -> BenchDriver {
         BenchDriver {
             stat_collection_interval,
+            stress_stat_collection,
             start_time: Instant::now(),
             token: CancellationToken::new(),
         }
@@ -232,7 +234,7 @@ async fn ctrl_c() -> std::io::Result<()> {
 }
 
 #[async_trait]
-impl Driver<BenchmarkStats> for BenchDriver {
+impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
         workloads: Vec<WorkloadInfo>,
@@ -240,18 +242,12 @@ impl Driver<BenchmarkStats> for BenchDriver {
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,
-    ) -> Result<BenchmarkStats, anyhow::Error> {
+    ) -> Result<(BenchmarkStats, StressStats), anyhow::Error> {
         info!("Running BenchDriver");
-
-        let system = Arc::new(Mutex::new(System::new_all()));
-
-        let mut system_instance = system.lock().await;
-        system_instance.refresh_cpu();
-        let num_cpu = system_instance.cpus().len();
-        drop(system_instance);
 
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
         for workload in workloads.iter() {
             bench_workers.extend(self.make_workers(workload, proxy.clone()).await);
@@ -278,11 +274,10 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 ),
         });
         for (i, worker) in bench_workers.into_iter().enumerate() {
-            let system_clone = system.clone();
             let cloned_token = self.token.clone();
             let request_delay_micros = 1_000_000 / worker.target_qps;
             let mut free_pool = worker.payload;
-            let progress = progress.clone();
+            let progress_cloned = progress.clone();
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
@@ -301,10 +296,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut num_submitted = 0;
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
-                let cpu_usage_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap();
-                let mut cpu_usage: Vec<hdrhistogram::Histogram<u64>> =
-                    vec![cpu_usage_histogram; num_cpu];
                 let mut request_interval =
                     time::interval(Duration::from_micros(request_delay_micros));
                 request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
@@ -319,24 +310,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                             break;
                         }
                         _ = stat_interval.tick() => {
-                             // Only want to check cpu usage on one worker because
-                             // they are running on the same machine.
-                            if i == 0 {
-                                let mut system_instance = system_clone.lock().await;
-                                system_instance.refresh_cpu();
-                                for (j, cpu) in system_instance.cpus().iter().enumerate() {
-                                    cpu_usage[j].saturating_record(cpu.cpu_usage() as u64);
-                                    metrics_cloned.cpu_usage.with_label_values(&[&format!("cpu_{}", j)]).set(cpu.cpu_usage().into());
-                                }
-
-                                let lock_cooldown = system_clone.clone();
-                                // This ensures we don't refresh the system too often
-                                tokio::spawn(async move {
-                                    tokio::time::sleep(<System as SystemExt>::MINIMUM_CPU_UPDATE_INTERVAL).await;
-                                    drop(lock_cooldown);
-                                });
-                            }
-
                             if tx_cloned
                                 .try_send(Stats {
                                     id: i as usize,
@@ -348,7 +321,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                         num_error,
                                         num_success,
                                         latency_ms: HistogramWrapper {histogram: latency_histogram.clone()},
-                                        cpu_usage: cpu_usage.iter().map(|histogram| HistogramWrapper {histogram: histogram.clone()}).collect(),
                                     },
                                 })
                                 .is_err()
@@ -456,8 +428,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                             match op {
                                 NextOp::Retry(b) => {
                                     retry_queue.push_back(b);
-                                    BenchDriver::update_progress(*start_time, run_duration, progress.clone());
-                                    if progress.is_finished() {
+                                    BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
+                                    if progress_cloned.is_finished() {
                                         break;
                                     }
                                 }
@@ -466,8 +438,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                     num_in_flight -= 1;
                                     free_pool.push(new_payload);
                                     latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
-                                    BenchDriver::update_progress(*start_time, run_duration, progress.clone());
-                                    if progress.is_finished() {
+                                    BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
+                                    if progress_cloned.is_finished() {
                                         break;
                                     }
                                 }
@@ -493,12 +465,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                             latency_ms: HistogramWrapper {
                                 histogram: latency_histogram,
                             },
-                            cpu_usage: cpu_usage
-                                .iter()
-                                .map(|histogram| HistogramWrapper {
-                                    histogram: histogram.clone(),
-                                })
-                                .collect(),
                         },
                     })
                     .is_err()
@@ -509,7 +475,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
             tasks.push(runner);
         }
 
-        let stat_task = tokio::spawn(async move {
+        let benchmark_stat_task = tokio::spawn(async move {
             let mut benchmark_stat = BenchmarkStats {
                 duration: Duration::ZERO,
                 num_error: 0,
@@ -517,12 +483,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 latency_ms: HistogramWrapper {
                     histogram: hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap(),
                 },
-                cpu_usage: vec![
-                    HistogramWrapper {
-                        histogram: hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap()
-                    };
-                    num_cpu
-                ],
             };
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
             let mut counter = 0;
@@ -546,11 +506,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
 
-                let cpu_usage_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap();
-                let mut cpu_usage: Vec<hdrhistogram::Histogram<u64>> =
-                    vec![cpu_usage_histogram; num_cpu];
-
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;
@@ -565,9 +520,6 @@ impl Driver<BenchmarkStats> for BenchDriver {
                     latency_histogram
                         .add(&v.bench_stats.latency_ms.histogram)
                         .unwrap();
-                    for (j, histogram) in v.bench_stats.cpu_usage.clone().into_iter().enumerate() {
-                        cpu_usage[j].add(histogram).unwrap();
-                    }
                 }
                 let denom = num_success + num_error;
                 let _error_rate = if denom > 0 {
@@ -586,6 +538,49 @@ impl Driver<BenchmarkStats> for BenchDriver {
             benchmark_stat
         });
         drop(tx);
+
+        if self.stress_stat_collection {
+            tasks.push(stress_stats_collector(
+                progress.clone(),
+                metrics.clone(),
+                stress_stat_tx.clone(),
+            ));
+        }
+        drop(stress_stat_tx);
+
+        let stress_stat_task = tokio::spawn(async move {
+            let mut stress_stat = StressStats {
+                cpu_usage: HistogramWrapper {
+                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap(),
+                },
+            };
+            let mut stat_collection: Vec<StressStats> = Vec::new();
+            let mut counter = 0;
+            while let Some(sample_stat @ StressStats { cpu_usage: _ }) = stress_stat_rx.recv().await
+            {
+                stress_stat.update(&sample_stat);
+                stat_collection.push(sample_stat);
+
+                let mut cpu_usage_histogram =
+                    hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap();
+                for stat in stat_collection.iter() {
+                    cpu_usage_histogram.add(&stat.cpu_usage.histogram).unwrap();
+                }
+                counter += 1;
+                if counter % num_workers == 0 {
+                    let stat = format!(
+                        "cpu_usage p50 = {}, p99 = {}",
+                        cpu_usage_histogram.value_at_quantile(0.5),
+                        cpu_usage_histogram.value_at_quantile(0.99)
+                    );
+                    if show_progress {
+                        eprintln!("{}", stat);
+                    }
+                }
+            }
+            stress_stat
+        });
+
         let all_tasks = try_join_all(tasks);
         let _res = tokio::select! {
             _ = ctrl_c() => {
@@ -594,7 +589,52 @@ impl Driver<BenchmarkStats> for BenchDriver {
             }
             res = all_tasks => res.unwrap().into_iter().collect()
         };
-        let benchmark_stat = stat_task.await.unwrap();
-        Ok(benchmark_stat)
+        let benchmark_stat = benchmark_stat_task.await.unwrap();
+        let stress_stat = stress_stat_task.await.unwrap();
+        Ok((benchmark_stat, stress_stat))
     }
+}
+
+fn stress_stats_collector(
+    progress: Arc<ProgressBar>,
+    metrics: Arc<BenchMetrics>,
+    stress_stat_tx: Sender<StressStats>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut system = System::new_all();
+
+        system.refresh_cpu();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        while !progress.is_finished() {
+            let mut cpu_usage_histogram =
+                hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap();
+            system.refresh_cpu();
+            for (i, cpu) in system.cpus().iter().enumerate() {
+                cpu_usage_histogram.saturating_record(cpu.cpu_usage() as u64);
+                metrics
+                    .cpu_usage
+                    .with_label_values(&[&format!("cpu_{i}").to_string()])
+                    .set(cpu.cpu_usage().into());
+            }
+
+            if stress_stat_tx
+                .try_send(StressStats {
+                    cpu_usage: HistogramWrapper {
+                        histogram: cpu_usage_histogram,
+                    },
+                })
+                .is_err()
+            {
+                debug!("Failed to update stress stats!");
+            }
+
+            tokio::select! {
+                _ = ctrl_c() => {
+                    break;
+                },
+                _ = tokio::time::sleep(Duration::from_secs(1)) => (),
+            }
+        }
+    })
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use duration_str::parse;
-use std::{borrow::Borrow, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 
 pub mod bench_driver;
 pub mod driver;
@@ -39,15 +39,8 @@ impl FromStr for Interval {
 
 // wrapper which implements serde
 #[allow(dead_code)]
-#[derive(Clone)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,
-}
-
-impl Borrow<hdrhistogram::Histogram<u64>> for HistogramWrapper {
-    fn borrow(&self) -> &hdrhistogram::Histogram<u64> {
-        &self.histogram
-    }
 }
 
 impl serde::Serialize for HistogramWrapper {
@@ -70,13 +63,42 @@ impl<'de> serde::Deserialize<'de> for HistogramWrapper {
     }
 }
 
+// Stores the final stress statisicts of the test run.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StressStats {
+    pub cpu_usage: HistogramWrapper,
+}
+
+impl StressStats {
+    pub fn update(&mut self, sample_stat: &StressStats) {
+        self.cpu_usage
+            .histogram
+            .add(&sample_stat.cpu_usage.histogram)
+            .unwrap();
+    }
+
+    pub fn to_table(&self) -> Table {
+        let mut table = Table::new();
+        table
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_width(200)
+            .set_header(vec!["-", "p50", "p99"]);
+
+        let mut row = Row::new();
+        row.add_cell(Cell::new("cpu usage"));
+        row.add_cell(Cell::new(self.cpu_usage.histogram.value_at_quantile(0.5)));
+        row.add_cell(Cell::new(self.cpu_usage.histogram.value_at_quantile(0.99)));
+        table.add_row(row);
+        table
+    }
+}
+
 /// Stores the final statistics of the test run.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkStats {
     pub duration: Duration,
     pub num_error: u64,
     pub num_success: u64,
-    pub cpu_usage: Vec<HistogramWrapper>,
     pub latency_ms: HistogramWrapper,
 }
 
@@ -89,10 +111,6 @@ impl BenchmarkStats {
             .histogram
             .add(&sample_stat.latency_ms.histogram)
             .unwrap();
-
-        for (i, histogram) in sample_stat.cpu_usage.clone().into_iter().enumerate() {
-            self.cpu_usage[i].histogram.add(histogram).unwrap();
-        }
     }
     pub fn to_table(&self) -> Table {
         let mut table = Table::new();
@@ -129,38 +147,6 @@ impl BenchmarkStats {
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.max()));
         table.add_row(row);
-        table
-    }
-
-    pub fn to_cpu_table(&self) -> Table {
-        let mut table = Table::new();
-        table
-            .set_content_arrangement(ContentArrangement::Dynamic)
-            .set_width(200)
-            .set_header(vec![
-                "stress cpu",
-                "min",
-                "p25",
-                "p50",
-                "p75",
-                "p90",
-                "p99",
-                "p99.9",
-                "max",
-            ]);
-        for (i, cpu) in self.cpu_usage.iter().enumerate() {
-            let mut row = Row::new();
-            row.add_cell(Cell::new(i));
-            row.add_cell(Cell::new(cpu.histogram.min()));
-            row.add_cell(Cell::new(cpu.histogram.value_at_quantile(0.25)));
-            row.add_cell(Cell::new(cpu.histogram.value_at_quantile(0.5)));
-            row.add_cell(Cell::new(cpu.histogram.value_at_quantile(0.75)));
-            row.add_cell(Cell::new(cpu.histogram.value_at_quantile(0.9)));
-            row.add_cell(Cell::new(cpu.histogram.value_at_quantile(0.99)));
-            row.add_cell(Cell::new(cpu.histogram.value_at_quantile(0.999)));
-            row.add_cell(Cell::new(cpu.histogram.max()));
-            table.add_row(row);
-        }
         table
     }
 }
