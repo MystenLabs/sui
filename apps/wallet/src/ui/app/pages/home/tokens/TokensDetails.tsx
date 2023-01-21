@@ -4,13 +4,16 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
+import { NetworkApy } from '_app/shared/network-apy';
 import PageTitle from '_app/shared/page-title';
 import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
+import Icon from '_components/icon';
 import Loading from '_components/loading';
 import RecentTransactions from '_components/transactions-card/RecentTransactions';
 import { SuiIcons } from '_font-icons/output/sui-icons';
@@ -152,14 +155,22 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                 </div>
 
                 {activeCoinType === GAS_TYPE_ARG ? (
-                    <div className={st.staking}>
-                        <IconLink
-                            icon={SuiIcons.Union}
-                            to="/stake"
-                            disabled={!stakingEnabled}
-                            text="Stake & Earn SUI"
-                        />
-                    </div>
+                    <Link
+                        to="/stake"
+                        className="flex mb-5 rounded-15 w-full p-5 justify-between no-underline bg-sui/10 text-hero text-body font-semibold"
+                        tabIndex={!stakingEnabled ? -1 : undefined}
+                    >
+                        <div className="flex gap-2.5">
+                            <Icon
+                                icon={SuiIcons.Union}
+                                className="text-heading4 font-normal"
+                            />
+                            Stake & Earn SUI
+                        </div>
+                        <div className="flex">
+                            {stakingEnabled && <NetworkApy />}
+                        </div>
+                    </Link>
                 ) : null}
 
                 {!coinType ? (
