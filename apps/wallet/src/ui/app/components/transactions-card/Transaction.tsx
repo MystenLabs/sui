@@ -142,7 +142,7 @@ export function Transaction({
                 <div className="w-7.5">
                     <TxnIcon
                         txnKindName={txnIconName}
-                        txnFailed={executionStatus === 'Failed'}
+                        txnFailed={executionStatus === 'Failed' || !!error}
                         isSender={isSender}
                     />
                 </div>
