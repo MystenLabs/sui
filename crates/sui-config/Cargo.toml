@@ -30,6 +30,7 @@ narwhal-config = { path = "../../narwhal/config" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
 
 sui-framework = { path = "../sui-framework" }
+sui-framework-override = { path = "../sui-framework-override" }
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
 sui-keys = { path = "../sui-keys" }

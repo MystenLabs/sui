@@ -8644,6 +8644,7 @@ dependencies = [
  "serde_yaml",
  "sui-adapter",
  "sui-framework",
+ "sui-framework-override",
  "sui-keys",
  "sui-simulator",
  "sui-types",
@@ -8852,6 +8853,38 @@ dependencies = [
  "serde-reflection",
  "sui-types",
  "sui-verifier",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-framework-override"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "better_any",
+ "curve25519-dalek-ng",
+ "digest 0.10.6",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-cli",
+ "move-compiler",
+ "move-core-types",
+ "move-package",
+ "move-stdlib",
+ "move-unit-test",
+ "move-vm-runtime",
+ "move-vm-test-utils",
+ "move-vm-types",
+ "num_enum",
+ "once_cell",
+ "serde 1.0.152",
+ "smallvec",
+ "sui-framework-build",
+ "sui-types",
  "workspace-hack",
 ]
 

@@ -8,6 +8,8 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 
 
 -  [Struct `SUI`](#0x2_sui_SUI)
+-  [Struct `Canary`](#0x2_sui_Canary)
+-  [Function `coal_mine`](#0x2_sui_coal_mine)
 -  [Function `new`](#0x2_sui_new)
 -  [Function `transfer`](#0x2_sui_transfer)
 
@@ -15,6 +17,7 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
+<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
@@ -46,6 +49,57 @@ Name of the coin
 
 </dd>
 </dl>
+
+
+</details>
+
+<a name="0x2_sui_Canary"></a>
+
+## Struct `Canary`
+
+
+
+<pre><code><b>struct</b> <a href="sui.md#0x2_sui_Canary">Canary</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>value: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_sui_coal_mine"></a>
+
+## Function `coal_mine`
+
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui.md#0x2_sui_coal_mine">coal_mine</a>()
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui.md#0x2_sui_coal_mine">coal_mine</a>() {
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="sui.md#0x2_sui_Canary">Canary</a> { value: 42 })
+}
+</code></pre>
+
 
 
 </details>

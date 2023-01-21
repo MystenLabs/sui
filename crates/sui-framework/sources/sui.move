@@ -9,11 +9,17 @@ module sui::sui {
     use sui::balance::Supply;
     use sui::transfer;
     use sui::coin;
+    use sui::event;
 
     friend sui::genesis;
 
     /// Name of the coin
     struct SUI has drop {}
+
+    struct Canary has copy, drop { value: u64 }
+    public entry fun coal_mine() {
+        event::emit(Canary { value: 42 })
+    }
 
     /// Register the `SUI` Coin to acquire its `Supply`.
     /// This should be called only once during genesis creation.
