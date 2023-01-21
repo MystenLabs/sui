@@ -17,28 +17,14 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transaction', async () => {
-    const resp = await toolbox.provider.getTransactions(
-      'All',
-      null,
-      1,
-    );
+    const resp = await toolbox.provider.getTransactions('All', null, 1);
     const digest = resp.data[0];
     const txn = await toolbox.provider.getTransactionWithEffects(digest);
     expect(txn.certificate.transactionDigest).toEqual(digest);
   });
 
   it('Get Transaction Auth Signers', async () => {
-    const version = await toolbox.provider.getRpcApiVersion();
-    // This endpoint is only available in 0.18 and above
-    if (version?.major === 0 && version?.minor < 18) { 
-      return;
-    }
-    
-    const resp = await toolbox.provider.getTransactions(
-      'All',
-      null,
-      1,
-    );
+    const resp = await toolbox.provider.getTransactions('All', null, 1);
     const digest = resp.data[0];
     const res = await toolbox.provider.getTransactionAuthSigners(digest);
     expect(res.signers.length).greaterThan(0);
@@ -54,19 +40,19 @@ describe('Transaction Reading API', () => {
     const allTransactions = await toolbox.provider.getTransactions(
       'All',
       null,
-      10,
+      10
     );
     expect(allTransactions.data.length).to.greaterThan(0);
 
     const resp2 = await toolbox.provider.getTransactions(
       { ToAddress: toolbox.address() },
       null,
-      null,
+      null
     );
     const resp3 = await toolbox.provider.getTransactions(
       { FromAddress: toolbox.address() },
       null,
-      null,
+      null
     );
     expect([...resp2.data, ...resp3.data]).toEqual(resp);
   });
