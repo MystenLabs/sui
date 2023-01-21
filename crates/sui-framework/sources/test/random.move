@@ -26,8 +26,7 @@ module sui::random {
 
     /// Create a new pseudorandom generator with the given seed.
     public fun new(seed: vector<u8>): Random {
-        let state = hash::sha3_256(seed);
-        Random { state }
+        Random { state: seed }
     }
 
     /// Use the given pseudorandom generator to generate a vector with l random bytes.
