@@ -696,11 +696,26 @@ impl SuiNode {
     /// epoch boundary.  If it does, the current framework is overwritten with the new framework,
     /// preserving its version and digest, and the node panics, so that it can be restarted with the
     /// new framework in place.
+    ///
+    /// Note that this function panics on success, and returns successfully outputting an error log
+    /// on failure (This is so that if the emergency upgrade cannot run, we can continue running in
+    /// safe mode).
+    ///
+    /// A fullnode that is catching up across multiple emergency upgrades needs to use the latest
+    /// version of the binary, expecting it to panic multiple times during catch-up (once for every
+    /// upgrade).
     pub async fn check_emergency_framework_upgrade(&self, next_epoch: u64) {
+        // Detected that a framework upgrade is needed before `next_epoch` starts.  This is decided
+        // among validators and fullnodes based on the binary they are running, so to issue an
+        // emergency framework upgrade, we create a binary with multiple copies of the framework in
+        // it, agree an epoch in advance to apply it from, and configure that information in this
+        // function (statically, in the binary).
         let Some(modules) = sui_config::framework::override_sui_framework(next_epoch) else {
             return;
         };
 
+        // Pretend that the package was created during genesis so that its ObjectRef does not change
+        // relative to the existing one.
         let new_package = match Object::new_package(modules, TransactionDigest::genesis()) {
             Ok(pkg) => pkg,
             Err(e) => {
@@ -715,14 +730,24 @@ impl SuiNode {
             return;
         };
 
+        // If the package we are about to set is the same, we don't need to do the actual upgrade.
+        // The most common reason for this is that we are half way through an emergency upgrade and
+        // have panicked -- on purpose -- before already, so we just need to let the reconfiguration
+        // go through to start the next epoch.
         if curr_package == new_package {
             info!(next_epoch, "Emergency Upgrade - picking up upgraded package");
             return;
         }
 
+        // Re-use the same package reference as the existing package (i.e. overwrite it completely).
+        // Note that the new package's digest (in actuality) should be different from the digest of
+        // the package it is replacing, but because we do not run a digest check for packages, this
+        // will work.
         let package_ref = curr_package.compute_object_reference();
         match store.insert_object_direct(package_ref, &new_package).await {
             Ok(()) => {
+                // The node needs to panic so that it is restarted, clearing its in-memory Module
+                // cache and restarting the VM with the new framework in place.
                 panic!("Emergency Upgrade - at epoch {next_epoch}, please restart.")
             },
 
