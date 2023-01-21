@@ -21,7 +21,6 @@ export interface TableCardProps<DataType extends object> {
     defaultSorting?: SortingState;
 }
 
-
 export function TableCard<DataType extends object>({
     refetching,
     data,
@@ -30,7 +29,7 @@ export function TableCard<DataType extends object>({
     defaultSorting,
 }: TableCardProps<DataType>) {
     const [sorting, setSorting] = useState<SortingState>(defaultSorting || []);
-   
+
     // Use Columns to create a table
     const processedcol = useMemo<ColumnDef<DataType>[]>(() => {
         return columns.map((column) => ({
@@ -38,10 +37,9 @@ export function TableCard<DataType extends object>({
             // cell renderer for each column from react-table
             // cell should be in the column definition
             //TODO: move cell to column definition
-            ...(!sortTable && { cell: ({getValue}) => getValue()}),
+            ...(!sortTable && { cell: ({ getValue }) => getValue() }),
         }));
     }, [columns, sortTable]);
-
 
     const table = useReactTable({
         data,
