@@ -85,7 +85,7 @@ export function Transaction({
 
     // receiving transaction from move contract sometimes has the sender as the receiver
     // so we need to check if the sender is the same as the address
-    const isSender = address === recipientAddress;
+    const isSender = address === certificate.data.sender;
 
     const receiverAddress = useMiddleEllipsis(
         recipientAddress || '',
@@ -150,7 +150,7 @@ export function Transaction({
                     {error ? (
                         <div className="flex flex-col w-full gap-1.5">
                             <Text color="gray-90" weight="semibold">
-                                Transaction failed
+                                Transaction Failed
                             </Text>
                             <div className="flex break-all text-issue-dark text-subtitle">
                                 {error}

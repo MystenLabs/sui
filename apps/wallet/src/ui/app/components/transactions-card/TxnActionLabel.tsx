@@ -14,14 +14,16 @@ export function TxnTypeLabel({ label, content }: TxnTypeProps) {
             <Text color="steel-darker" weight="semibold" variant="subtitle">
                 {label}:
             </Text>
-            <Text
-                color="steel-darker"
-                weight="normal"
-                variant="subtitle"
-                mono={label !== 'Action'}
-            >
-                {content}
-            </Text>
+            <div className="flex-1">
+                <Text
+                    color="steel-darker"
+                    weight="normal"
+                    variant="subtitle"
+                    mono={label !== 'Action'}
+                >
+                    {content}
+                </Text>
+            </div>
         </div>
     );
 }
