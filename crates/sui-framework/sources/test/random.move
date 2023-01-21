@@ -35,7 +35,7 @@ module sui::random {
         let quotient = l / DIGEST_LENGTH;
         let remainder = l - quotient * DIGEST_LENGTH;
 
-        let (i, output) = (0, vector::empty<u8>());
+        let (i, output) = (0, vector[]);
         while (i < quotient) {
             vector::append(&mut output, next_digest(random));
             i = i + 1;
