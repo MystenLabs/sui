@@ -9280,6 +9280,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-json-rpc-types",
+ "sui-simulator",
  "sui-types",
  "tap",
  "telemetry-subscribers",
