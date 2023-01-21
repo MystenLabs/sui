@@ -8,7 +8,8 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
-use typed_store::rocks::{DBMap, DBOptions};
+use typed_store::metrics::SamplingInterval;
+use typed_store::rocks::{DBMap, DBOptions, MetricConf};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
@@ -88,11 +89,16 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(Self::path(parent_path), db_options, None)
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            db_options,
+            None,
+        )
     }
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
-        Self::get_read_only_handle(Self::path(parent_path), None, None)
+        Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
     }
 
     /// Read an object and return it, or Ok(None) if the object was not found.

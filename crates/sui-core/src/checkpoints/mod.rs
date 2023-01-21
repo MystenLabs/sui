@@ -41,7 +41,7 @@ use sui_types::messages_checkpoint::{
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::time::Instant;
 use tracing::{debug, error, error_span, info, warn, Instrument};
-use typed_store::rocks::{DBMap, TypedStoreError};
+use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -87,7 +87,12 @@ pub struct CheckpointStore {
 
 impl CheckpointStore {
     pub fn new(path: &Path) -> Arc<Self> {
-        Arc::new(Self::open_tables_read_write(path.to_path_buf(), None, None))
+        Arc::new(Self::open_tables_read_write(
+            path.to_path_buf(),
+            MetricConf::default(),
+            None,
+            None,
+        ))
     }
 
     pub fn insert_genesis_checkpoint(

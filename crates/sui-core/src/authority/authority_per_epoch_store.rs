@@ -27,7 +27,7 @@ use sui_types::messages::{
     VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::{debug, info, trace, warn};
-use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
+use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
@@ -227,11 +227,21 @@ pub struct AuthorityEpochTables {
 
 impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_transactional(Self::path(epoch, parent_path), db_options, None)
+        Self::open_tables_transactional(
+            Self::path(epoch, parent_path),
+            MetricConf::with_db_name("epoch"),
+            db_options,
+            None,
+        )
     }
 
     pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly {
-        Self::get_read_only_handle(Self::path(epoch, parent_path), None, None)
+        Self::get_read_only_handle(
+            Self::path(epoch, parent_path),
+            None,
+            None,
+            MetricConf::with_db_name("epoch"),
+        )
     }
 
     pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {

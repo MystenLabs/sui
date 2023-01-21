@@ -12,14 +12,22 @@ fn temp_dir() -> std::path::PathBuf {
 #[tokio::test]
 async fn create_store() {
     // Create new store.
-    let db = rocks::DBMap::<usize, String>::open(temp_dir(), None, None).unwrap();
+    let db =
+        rocks::DBMap::<usize, String>::open(temp_dir(), rocks::MetricConf::default(), None, None)
+            .unwrap();
     let _ = Store::<usize, String>::new(db);
 }
 
 #[tokio::test]
 async fn read_async_write_value() {
     // Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Write value to the store.
@@ -38,7 +46,13 @@ async fn read_async_write_value() {
 #[tokio::test]
 async fn read_sync_write_value() {
     // Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Write value to the store.
@@ -57,7 +71,9 @@ async fn read_sync_write_value() {
 #[tokio::test]
 async fn read_raw_write_value() {
     // Create new store.
-    let db = rocks::DBMap::<Vec<u8>, String>::open(temp_dir(), None, None).unwrap();
+    let db =
+        rocks::DBMap::<Vec<u8>, String>::open(temp_dir(), rocks::MetricConf::default(), None, None)
+            .unwrap();
     let store = Store::new(db);
 
     // Write value to the store.
@@ -76,7 +92,13 @@ async fn read_raw_write_value() {
 #[tokio::test]
 async fn read_unknown_key() {
     // Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Try to read unknown key.
@@ -89,7 +111,13 @@ async fn read_unknown_key() {
 #[tokio::test]
 async fn read_notify() {
     // Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Try to read a kew that does not yet exist. Then write a value
@@ -116,7 +144,13 @@ async fn read_notify() {
 #[tokio::test]
 async fn remove_all_successfully() {
     // GIVEN Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // AND Write values to the store.
@@ -148,7 +182,13 @@ async fn remove_all_successfully() {
 #[tokio::test]
 async fn write_and_read_all_successfully() {
     // GIVEN Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // AND key-values to store.
@@ -180,7 +220,13 @@ async fn write_and_read_all_successfully() {
 #[tokio::test]
 async fn iter_successfully() {
     // GIVEN Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // AND key-values to store.
@@ -206,7 +252,13 @@ async fn iter_successfully() {
 #[tokio::test]
 async fn iter_and_filter_successfully() {
     // GIVEN Create new store.
-    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // AND key-values to store.

@@ -24,7 +24,7 @@ use sui_storage::default_db_options;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tracing::{debug, error, info};
-use typed_store::rocks::{DBMap, DBOptions};
+use typed_store::rocks::{DBMap, DBOptions, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
@@ -336,7 +336,12 @@ pub struct CheckpointIndexStore {
 
 impl CheckpointIndexStore {
     pub fn open(db_dir: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(db_dir.to_path_buf(), db_options, None)
+        Self::open_tables_read_write(
+            db_dir.to_path_buf(),
+            MetricConf::default(),
+            db_options,
+            None,
+        )
     }
 
     pub fn is_empty(&self) -> bool {
