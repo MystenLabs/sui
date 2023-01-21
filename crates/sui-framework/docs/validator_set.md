@@ -126,7 +126,7 @@
 </dt>
 <dd>
  The metadata of the validator set for the next epoch. This is kept up-to-dated.
- Everytime a change request is received, this set is updated.
+ Every time a change request is received, this set is updated.
  TODO: This is currently not used. We may use it latter for enforcing min/max stake.
 </dd>
 <dt>

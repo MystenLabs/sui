@@ -14,7 +14,7 @@ use tracing::info;
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerTransactionHandlerMetrics;
-use sui_indexer::models::transaction_logs::{commit_transction_log, read_transaction_log};
+use sui_indexer::models::transaction_logs::{commit_transaction_log, read_transaction_log};
 use sui_indexer::models::transactions::commit_transactions;
 use sui_indexer::utils::log_errors_to_pg;
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
@@ -92,11 +92,11 @@ impl TransactionHandler {
             // Transaction page's next cursor can be None when latest transaction page is
             // reached, if we use the None cursor to read transactions, it will read from genesis,
             // thus here we do not commit / use the None cursor.
-            // This will cause duplidate run of the current batch, but will not cause duplidate rows
+            // This will cause duplicate run of the current batch, but will not cause duplicate rows
             // b/c of the uniqueness restriction of the table.
             if let Some(next_cursor_val) = page.next_cursor {
                 // canonical txn digest is Base58 encoded
-                commit_transction_log(&mut pg_pool_conn, Some(next_cursor_val.base58_encode()))?;
+                commit_transaction_log(&mut pg_pool_conn, Some(next_cursor_val.base58_encode()))?;
                 self.transaction_handler_metrics
                     .total_transactions_processed
                     .inc_by(txn_count as u64);

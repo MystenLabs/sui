@@ -588,7 +588,7 @@ impl TransactionCertifier for NetworkTransactionCertifier {
             AuthAggMetrics::new(&registry),
         )?;
 
-        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
+        net.authority_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
             .await
     }
 }
@@ -615,7 +615,7 @@ impl TransactionCertifier for LocalTransactionCertifier {
             &Registry::new(),
         );
 
-        net.authorty_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
+        net.authority_ask_for_cert_with_retry_and_timeout(transaction, self_store, timeout)
             .await
     }
 }
@@ -679,7 +679,7 @@ where
 
     pub(crate) async fn quorum_map_then_reduce_with_timeout_and_prefs<'a, S, V, FMap, FReduce>(
         &'a self,
-        authority_prefences: Option<&BTreeSet<AuthorityName>>,
+        authority_preferences: Option<&BTreeSet<AuthorityName>>,
         initial_state: S,
         map_each_authority: FMap,
         reduce_result: FReduce,
@@ -694,7 +694,7 @@ where
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
-        let authorities_shuffled = self.committee.shuffle_by_stake(authority_prefences, None);
+        let authorities_shuffled = self.committee.shuffle_by_stake(authority_preferences, None);
 
         // First, execute in parallel for each authority FMap.
         let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
@@ -1068,7 +1068,7 @@ where
             .collect::<Vec<_>>();
         // Sort by votes. The last item is the one with the most votes, we will examine it.
         // We don't order by epoch to prevent it from being stuck when some byzantine validators
-        // give wrong results. At the end of day, we need quorum to make acertain.
+        // give wrong results. At the end of day, we need quorum to be certain.
         committee_and_votes.sort_by(|lhs, rhs| Ord::cmp(&lhs.1, &rhs.1));
         let (committee, votes) = committee_and_votes
             .pop()
@@ -1085,7 +1085,7 @@ where
 
     /// Return all the information in the network regarding the latest state of a specific object.
     /// For each authority queried, we obtain the latest object state along with the certificate that
-    /// lead up to that state. The results from each authority are aggreated for the return.
+    /// lead up to that state. The results from each authority are aggregated for the return.
     /// The first part of the return value is a map from each unique (ObjectRef, TransactionDigest)
     /// pair to the content of the object as well as a list of authorities that responded this
     /// pair.
@@ -1503,7 +1503,7 @@ where
         signed_effects: SignedTransactionEffects,
     ) -> Result<(), EffectsCertError> {
         // If we get a certificate in the same epoch, then we use it.
-        // A certificate in a past epoch does not guaranteee finality
+        // A certificate in a past epoch does not guarantee finality
         // and validators may reject to process it.
         if certificate.epoch() == self.committee.epoch {
             debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate from validator handle_transaction");
@@ -1847,7 +1847,7 @@ where
         .await
     }
 
-    pub async fn authorty_ask_for_cert_with_retry_and_timeout(
+    pub async fn authority_ask_for_cert_with_retry_and_timeout(
         &self,
         transaction: &VerifiedTransaction,
         self_store: &Arc<AuthorityStore>,
@@ -1889,7 +1889,7 @@ where
 }
 
 /// Given an AuthorityAggregator on genesis (epoch 0), catch up to the latest epoch and fill in
-/// all past epoches' committee information.
+/// all past epochs' committee information.
 /// Note: this function assumes >= 2/3 validators on genesis are still serving the network.
 pub async fn reconfig_from_genesis(
     mut aggregator: AuthorityAggregator<NetworkAuthorityClient>,

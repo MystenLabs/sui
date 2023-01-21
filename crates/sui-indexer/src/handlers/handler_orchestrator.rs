@@ -205,6 +205,6 @@ impl HandlerOrchestrator {
             publish_event_handle,
         ])
         .await
-        .expect("Handler orchestrator shoult not run into errors.");
+        .expect("Handler orchestrator should not run into errors.");
     }
 }

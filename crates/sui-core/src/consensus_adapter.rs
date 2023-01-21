@@ -402,7 +402,7 @@ pub fn position_submit_certificate(
     ourselves: &AuthorityName,
     tx_digest: &TransactionDigest,
 ) -> usize {
-    // the 32 is as requirement of the deault StdRng::from_seed choice
+    // the 32 is as requirement of the default StdRng::from_seed choice
     let digest_bytes = tx_digest.into_bytes();
 
     // permute the validators deterministically, based on the digest

@@ -507,7 +507,7 @@ async fn test_per_object_overload() {
 
     // Stop execution on the last authority, to simulate having a backlog.
     authorities[3].shutdown_execution_for_test();
-    // Make sure execution driver has exitted.
+    // Make sure execution driver has exited.
     sleep(Duration::from_secs(1)).await;
 
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.

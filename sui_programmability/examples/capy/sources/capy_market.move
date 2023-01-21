@@ -179,7 +179,7 @@ module capy::capy_market {
     }
 
     /// Withdraw profits from the marketplace as a single Coin (accumulated as a DOF).
-    /// Uses sender of transaction to determine storage and controll access.
+    /// Uses sender of transaction to determine storage and control access.
     entry fun take_profits<T: key + store>(
         market: &mut CapyMarket<T>,
         ctx: &TxContext

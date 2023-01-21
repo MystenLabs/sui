@@ -46,7 +46,7 @@ struct InnerDag {
     /// The Virtual DAG data structure, which lets us track certificates in a memory-conscious way
     dag: NodeDag<Certificate>,
 
-    /// Secondary index: An authority-aware map of the DAG's veertex Certificates
+    /// Secondary index: An authority-aware map of the DAG's vertex Certificates
     vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
 
     /// Metrics handler
@@ -471,7 +471,7 @@ impl Dag {
 
     /// Removes certificates from the Dag, reclaiming memory in the process.
     ///
-    /// Note: If some digests are unkown to the Dag, this will return an error, but will nonetheless delete
+    /// Note: If some digests are unknown to the Dag, this will return an error, but will nonetheless delete
     /// the certificates for known digests which are removable.
     ///
     pub async fn remove<J: Borrow<CertificateDigest>>(
@@ -494,7 +494,7 @@ impl Dag {
             .expect("Failed to receive reply to Remove command from store")
     }
     /// Returns the certificate for the digest by waiting until it is
-    /// avaialable in the dag
+    /// available in the dag
     pub async fn notify_read(
         &self,
         digest: CertificateDigest,

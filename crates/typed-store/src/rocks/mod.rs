@@ -576,7 +576,7 @@ impl<K, V> DBMap<K, V> {
     /// Opens a database from a path, with specific options and an optional column family.
     ///
     /// This database is used to perform operations on single column family, and parametrizes
-    /// all operations in `DBBatch` when writting across column families.
+    /// all operations in `DBBatch` when writing across column families.
     #[instrument(level="debug", skip_all, fields(path = ?path.as_ref(), cf = ?opt_cf), err)]
     pub fn open<P: AsRef<Path>>(
         path: P,

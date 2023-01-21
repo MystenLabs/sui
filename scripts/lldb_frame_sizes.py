@@ -7,7 +7,7 @@ import lldb
 #
 # LLDB Utility to print the current backtrace with estimated stack
 # frame sizes (useful for figuring out which frames are contributing
-# most to a stack overlow).
+# most to a stack overflow).
 #
 # == Usage ==
 #

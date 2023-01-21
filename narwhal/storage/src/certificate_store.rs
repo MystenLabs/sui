@@ -721,7 +721,7 @@ mod test {
             // and populate the rest with a write_all
             store.write_all(certs).unwrap();
 
-            // now wait on handle an assert result for a signle certificate
+            // now wait on handle an assert result for a single certificate
             let received_certificate = handle_1
                 .await
                 .expect("error")

@@ -76,7 +76,7 @@ as you want for a given <code>obj</code>, and each <code><a href="object.md#0x2_
 
 Globally unique IDs that define an object's ID in storage. Any Sui Object, that is a struct
 with the <code>key</code> ability, must have <code>id: <a href="object.md#0x2_object_UID">UID</a></code> as its first field.
-These are globaly unique in the sense that no two values of type <code><a href="object.md#0x2_object_UID">UID</a></code> are ever equal, in
+These are globally unique in the sense that no two values of type <code><a href="object.md#0x2_object_UID">UID</a></code> are ever equal, in
 other words for any two values <code>id1: <a href="object.md#0x2_object_UID">UID</a></code> and <code>id2: <a href="object.md#0x2_object_UID">UID</a></code>, <code>id1</code> != <code>id2</code>.
 This is a privileged type that can only be derived from a <code>TxContext</code>.
 <code><a href="object.md#0x2_object_UID">UID</a></code> doesn't have the <code>drop</code> ability, so deleting a <code><a href="object.md#0x2_object_UID">UID</a></code> requires a call to <code>delete</code>.
@@ -507,7 +507,7 @@ Get the inner bytes for the underlying <code><a href="object.md#0x2_object_ID">I
 Get the <code><a href="object.md#0x2_object_UID">UID</a></code> for <code>obj</code>.
 Safe because Sui has an extra bytecode verifier pass that forces every struct with
 the <code>key</code> ability to have a distinguished <code><a href="object.md#0x2_object_UID">UID</a></code> field.
-Cannot be made public as the access to <code><a href="object.md#0x2_object_UID">UID</a></code> for a given object must be privledged, and
+Cannot be made public as the access to <code><a href="object.md#0x2_object_UID">UID</a></code> for a given object must be privileged, and
 restrictable in the object's module.
 
 

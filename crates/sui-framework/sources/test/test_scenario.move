@@ -47,7 +47,7 @@ module sui::test_scenario {
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
     /// // Starting a new transaction moves any objects transferred into their respective
-    /// // inventiories. In other words, if you call `take_from_sender` before `next_tx`, `addr2`
+    /// // inventories. In other words, if you call `take_from_sender` before `next_tx`, `addr2`
     /// // will not yet have `some_object`
     /// test_scenario::next_tx(scenario, addr2);
     /// {
@@ -80,7 +80,7 @@ module sui::test_scenario {
         shared: vector<ID>,
         /// The objects frozen this transaction
         frozen: vector<ID>,
-        /// The number of user events emmitted this transaction
+        /// The number of user events emitted this transaction
         num_user_events: u64,
     }
 

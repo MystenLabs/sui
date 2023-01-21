@@ -96,7 +96,7 @@ module frenemies::frenemies {
         scorecard.assignment = assignment::get(state, ctx);
     }
 
-    /// Return the name associatd with this scorecard
+    /// Return the name associated with this scorecard
     public fun name(self: &Scorecard): &Name {
         &self.name
     }

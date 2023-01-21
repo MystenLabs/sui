@@ -152,12 +152,12 @@ fn test_basic_args_linter_pure_args_bad() {
                 Value::from(bad_hex_val),
                 MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             ),
-            // u8 vector from heterogenous array
+            // u8 vector from heterogeneous array
             (
                 json!([1, 2, 3, true, 5, 6, 7]),
                 MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
             ),
-            // U64 deep nest, bad because heterogenous array
+            // U64 deep nest, bad because heterogeneous array
             (
                 json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
                 MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)))),

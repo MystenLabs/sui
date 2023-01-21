@@ -77,7 +77,7 @@ module frenemies::frenemies_tests {
     #[expected_failure(abort_code = frenemies::frenemies::EScoreNotYetAvailable)]
     #[test]
     fun score_in_start_epoch() {
-        // attemping to get a score during the start epoch should fail
+        // attempting to get a score during the start epoch should fail
         let validators = vector[@0x1];
         let scenario_val = init_test(copy validators, validators);
         let scenario = &mut scenario_val;
@@ -99,7 +99,7 @@ module frenemies::frenemies_tests {
     #[expected_failure(abort_code = frenemies::frenemies::EScoreNotYetAvailable)]
     #[test]
     fun double_update() {
-        // attemping to update a scorecard twice should fail
+        // attempting to update a scorecard twice should fail
         let validators = vector[@0x1];
         let scenario_val = init_test(copy validators, validators);
         let scenario = &mut scenario_val;

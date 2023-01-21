@@ -438,7 +438,7 @@ mod tests {
             let mut digests = Vec::new();
             for node in dag.iter() {
                 digests.push(node.digest());
-                // the elements are generated in order & with no missing parents => no suprises
+                // the elements are generated in order & with no missing parents => no surprises
                 assert!(node_dag.try_insert(node.clone()).is_ok());
             }
             let mut heads = HashSet::new();
@@ -465,7 +465,7 @@ mod tests {
             let mut digests = Vec::new();
             for node in dag.iter() {
                 digests.push(node.digest());
-                // the elements are generated in order & with no missing parents => no suprises
+                // the elements are generated in order & with no missing parents => no surprises
                 assert!(node_dag.try_insert(node.clone()).is_ok());
             }
             let mut heads = HashSet::new();
@@ -495,7 +495,7 @@ mod tests {
                     if node.compressible(){
                         compressibles.push(node.digest());
                     }
-                    // the elements are generated in order & with no missing parents => no suprises
+                    // the elements are generated in order & with no missing parents => no surprises
                     assert!(node_dag.try_insert(node.clone()).is_ok());
                 }
             }
@@ -532,7 +532,7 @@ mod tests {
             {
                 for node in dag.iter() {
                     digests.push(node.digest());
-                    // the elements are generated in order & with no missing parents => no suprises
+                    // the elements are generated in order & with no missing parents => no surprises
                     assert!(node_dag.try_insert(node.clone()).is_ok());
                 }
             }

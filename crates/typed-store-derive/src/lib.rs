@@ -145,7 +145,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
         .iter()
         .map(|g| match g {
             syn::GenericParam::Type(t) => t.ident.clone(),
-            _ => panic!("Unspoorted generic type"),
+            _ => panic!("Unsupported generic type"),
         })
         .collect()
 }
@@ -154,13 +154,13 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// It operates on a struct where all the members are of Store<K, V> or DBMap<K, V>
 /// `TypedStoreDebug` traits are then derived
 /// The main features are:
-/// 1. Flexible confguration of each table (colum family) via defaults and overrides
+/// 1. Flexible configuration of each table (column family) via defaults and overrides
 /// 2. Auto-generated `open` routine
 /// 3. Auto-generated `read_only_mode` handle
 /// 4. Auto-generated memory stats method
 /// 5. Other convenience features
 ///
-/// 1. Flexible confguration:
+/// 1. Flexible configuration:
 /// a. Static options specified at struct definition
 /// The definer of the struct can specify the default options for each table using annotations
 /// We can also supply column family options on the default ones
@@ -190,7 +190,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///     table1: DBMap<String, String>,
 ///     #[default_options_override_fn = "custom_fn_name2"]
 ///     table2: DBMap<i32, String>,
-///     // Nothing specifed so `typed_store::rocks::default_db_options` is used
+///     // Nothing specified so `typed_store::rocks::default_db_options` is used
 ///     table3: DBMap<i32, String>,
 ///     #[default_options_override_fn = "custom_fn_name1"]
 ///     table4: DBMap<i32, String>,
@@ -248,7 +248,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 ///     table1: DBMap<String, String>,
 ///     #[default_options_override_fn = "custom_fn_name2"]
 ///     table2: DBMap<i32, String>,
-///     // Nothing specifed so `typed_store::rocks::default_db_options` is used
+///     // Nothing specified so `typed_store::rocks::default_db_options` is used
 ///     table3: DBMap<i32, String>,
 ///     #[default_options_override_fn = "custom_fn_name1"]
 ///     table4: DBMap<i32, String>,
@@ -421,7 +421,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                             )*
                         ]
                     };
-                    // Safe to call unwrap because we will have atleast one field_name entry in the struct
+                    // Safe to call unwrap because we will have at least one field_name entry in the struct
                     let rwopt_cfs: std::collections::HashMap<String, typed_store::rocks::ReadWriteOptions> = opt_cfs.iter().map(|q| (q.0.as_str().to_string(), q.1.rw_options.clone())).collect();
                     let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                     let db = match (as_secondary_with_path, is_transaction) {
@@ -794,7 +794,7 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
                                     )*
                                 ]
                             };
-                            // Safe to call unwrap because we will have atleast one field_name entry in the struct
+                            // Safe to call unwrap because we will have at least one field_name entry in the struct
                             let rwopt_cfs: std::collections::HashMap<String, typed_store::rocks::ReadWriteOptions> = opt_cfs.iter().map(|q| (q.0.as_str().to_string(), q.1.rw_options.clone())).collect();
                             let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), &q.1.options)).collect();
                             let db = match access_type {

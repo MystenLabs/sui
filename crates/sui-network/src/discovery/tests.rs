@@ -77,7 +77,7 @@ async fn get_known_peers() -> Result<()> {
     assert_eq!(response.own_info, our_info);
     assert!(response.known_peers.is_empty());
 
-    // Normal resonse with some known peers
+    // Normal response with some known peers
     let other_peer = NodeInfo {
         peer_id: PeerId([13; 32]),
         addresses: Vec::new(),
