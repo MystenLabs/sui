@@ -92,7 +92,7 @@ export function useTimeAgo(
     return formattedTime;
 }
 
-// TODO - this need a bit of modification to account for multiple display formate types
+// TODO - this need a bit of modification to account for multiple display format types
 export const timeAgo = (
     epochMilliSecs: number | null | undefined,
     timeNow?: number | null,

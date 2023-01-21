@@ -50,7 +50,7 @@ pub fn start_admin_server(
 
     handles.push(spawn_logged_monitored_task!(
         async move {
-            // retry a few times before quiting
+            // retry a few times before quitting
             let mut total_retries = 10;
 
             loop {

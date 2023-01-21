@@ -147,7 +147,7 @@ pub struct PayAllSui {
 /// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
 /// input coin, then use the first input coin as the gas coin object.
 /// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
-/// 4. all other input coints other than the first one are deleted.
+/// 4. all other input coins other than the first one are deleted.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct PaySui {
     /// The coins to be used for payment.
@@ -175,7 +175,7 @@ pub struct Pay {
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
-    /// The total amount of gas charged for staroge during the epoch.
+    /// The total amount of gas charged for storage during the epoch.
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,

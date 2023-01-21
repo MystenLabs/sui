@@ -163,7 +163,7 @@ impl<Network: SubscriberNetwork> Subscriber<Network> {
         // It's important to have the futures in ordered fashion as we want
         // to guarantee that will deliver to the executor the certificates
         // in the same order we received from rx_sequence. So it doesn't
-        // mater if we somehow managed to fetch the batches from a later
+        // matter if we somehow managed to fetch the batches from a later
         // certificate. Unless the earlier certificate's payload has been
         // fetched, no later certificate will be delivered.
         let mut waiting = FuturesOrdered::new();

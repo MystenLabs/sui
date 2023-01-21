@@ -86,7 +86,7 @@ pub const OBJ_ACCESS_COST_DELETE_PER_BYTE: u64 = 40;
 /// Meant to approximate the cost of checking locks for each object
 // TODO: I'm not sure that this cost makes sense. Checking locks is "free"
 // in the sense that an invalid tx that can never be committed/pay gas can
-// force validators to check an abitrary number of locks. If those checks are
+// force validators to check an arbitrary number of locks. If those checks are
 // "free" for invalid transactions, why charge for them in valid transactions
 // TODO: if we keep this, I think we probably want it to be a fixed cost rather
 // than a per-byte cost. checking an object lock should not require loading an

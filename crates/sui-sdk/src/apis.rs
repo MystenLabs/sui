@@ -470,7 +470,7 @@ impl QuorumDriver {
     /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
     /// but returned `confirmed_local_execution` is false, the client polls
-    /// the fullnode untils the fullnode recognizes this transaction, or
+    /// the fullnode until the fullnode recognizes this transaction, or
     /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
     /// error is returned from this call.
     pub async fn execute_transaction(

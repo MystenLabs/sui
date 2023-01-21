@@ -240,7 +240,7 @@ fn execute_inner(
     bytecode: &Bytecode,
     _: CodeOffset,
 ) -> PartialVMResult<()> {
-    // TODO: Better dianostics with location
+    // TODO: Better diagnostics with location
     match bytecode {
         Bytecode::Pop => {
             verifier.stack.pop().unwrap();

@@ -43,7 +43,7 @@ impl WritePathPendingTransactionLog {
 
     // Returns whether the table currently has this transaction in record.
     // If not, write the transaction and return true; otherwise return false.
-    // Because the record will be cleanded up when the transaction finishes,
+    // Because the record will be cleaned up when the transaction finishes,
     // even when it returns true, the callsite of this function should check
     // the transaction status before doing anything, to avoid duplicates.
     pub async fn write_pending_transaction_maybe(

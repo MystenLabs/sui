@@ -1027,7 +1027,7 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
 
 /**
  * Register the base set of primitive and common types.
- * Is called in the `BCS` contructor automatically but can
+ * Is called in the `BCS` constructor automatically but can
  * be ignored if the `withPrimitives` argument is not set.
  */
 export function registerPrimitives(bcs: BCS): void {

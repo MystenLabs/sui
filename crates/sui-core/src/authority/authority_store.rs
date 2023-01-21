@@ -1256,7 +1256,7 @@ impl ModuleResolver for AuthorityStore {
     // TODO: duplicated code with ModuleResolver for InMemoryStorage in memory_storage.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         // TODO: We should cache the deserialized modules to avoid
-        // fetching from the store / re-deserializing them everytime.
+        // fetching from the store / re-deserializing them every time.
         // https://github.com/MystenLabs/sui/issues/809
         Ok(self
             .get_package(&ObjectID::from(*module_id.address()))?

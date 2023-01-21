@@ -320,7 +320,7 @@ async fn init_executor_test(
 
 /// Creates and simulates syncing of a new checkpoint by StateSync, i.e. new
 /// checkpoint is persisted, along with its contents, highest synced checkpoint
-/// watermark is udpated, and message is broadcasted notifying of the newly synced
+/// watermark is updated, and message is broadcasted notifying of the newly synced
 /// checkpoint. Returns created checkpoints
 fn sync_new_checkpoints(
     checkpoint_store: &CheckpointStore,

@@ -373,7 +373,7 @@ impl TelemetryConfig {
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
         if config.json_log_output {
             // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
-            // Also Bunyan layer addes JSON logging for tracing spans with duration information
+            // Also Bunyan layer adds JSON logging for tracing spans with duration information
             let json_layer = JsonStorageLayer
                 .and_then(
                     BunyanFormattingLayer::new(config.service_name, nb_output)
