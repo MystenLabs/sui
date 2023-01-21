@@ -7,9 +7,12 @@ import { createContext, useLayoutEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Network } from './utils/api/DefaultRpcClient';
-import { DEFAULT_NETWORK } from './utils/envUtil';
 import { growthbook } from './utils/growthbook';
 import { queryClient } from './utils/queryClient';
+
+export const DEFAULT_NETWORK =
+    import.meta.env.VITE_NETWORK ||
+    (import.meta.env.DEV ? Network.LOCAL : Network.TESTNET);
 
 export const NetworkContext = createContext<
     [Network | string, (network: Network | string) => void]
