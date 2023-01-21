@@ -28,7 +28,7 @@ export function TxnImage({ id }: { id: string }) {
                 className="w-10 h-10 rounded"
                 alt={nftMeta.name || 'Nft image'}
             />
-            <div className="flex flex-col gap-1 justify-center">
+            <div className="flex flex-col gap-1 justify-center break-all">
                 <Text color="gray-90" weight="semibold" variant="subtitleSmall">
                     {name}
                 </Text>
