@@ -7,6 +7,7 @@ import { RecentModulesCard } from '../../components/recent-packages-card/RecentP
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
+import { HomeMetrics } from '~/components/HomeMetrics';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const NodeMap = lazy(() => import('../../components/node-map'));
@@ -20,15 +21,16 @@ function Home() {
             id="home"
             className="mx-auto grid grid-cols-1 gap-2 bg-white md:grid-cols-2"
         >
-            <section className="left-item mb-4 md:mb-0">
+            <section className="mb-4 md:mb-0">
                 <ErrorBoundary>
                     <LatestTxCard
                         txPerPage={TXN_PER_PAGE}
                         paginationtype="more button"
                     />
+                    <HomeMetrics />
                 </ErrorBoundary>
             </section>
-            <section className="right-item flex flex-col gap-10 md:gap-12">
+            <section className="flex flex-col gap-10 md:gap-12">
                 <div data-testid="validators-table">
                     <TabGroup>
                         <TabList>
