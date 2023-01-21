@@ -33,6 +33,8 @@ export const STATE_TO_COPY = {
 
 // For delegationsRequestEpoch n  through n + 2, show Start Earning
 // For delegationsRequestEpoch n + 3, show Staking Reward
+// Show epoch number or date/time for n + 3 epochs
+// TODO: Add cool-down state
 export function DelegationCard({
     delegationObject,
     activeValidators,
@@ -100,11 +102,11 @@ export function DelegationCard({
                             weight="semibold"
                             color="steel-dark"
                         >
-                            Epoch #{currentEpoch}
+                            Epoch #{delegationsRequestEpoch + 2}
                         </Text>
                     )}
 
-                {rewards > 0 && (
+                {rewards > 0 && numberOfEpochPastRequesting > 2 && (
                     <div className="text-success-dark text-bodySmall font-semibold">
                         {rewardsFormatted} SUI
                     </div>
