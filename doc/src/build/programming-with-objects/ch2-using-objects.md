@@ -149,9 +149,8 @@ let recipient = @0x2;
 test_scenario::next_tx(scenario, owner);
 {
     let object = test_scenario::take_from_sender<ColorObject>(scenario);
-    let ctx = test_scenario::ctx(scenario);
-    transfer::transfer(object, recipient, ctx);
-};
+    color_object::transfer(object, recipient);
+};          
 ```
 Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the transfer, we can verify that `owner` no longer owns the object, while `recipient` now owns it:
 ```rust
