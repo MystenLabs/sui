@@ -74,6 +74,9 @@ pub struct EpochMetrics {
     /// to become useful in the network after reconfiguration.
     // TODO: This needs to be reported properly.
     pub epoch_first_checkpoint_ready_time_since_epoch_begin_ms: IntGauge,
+
+    /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
+    pub is_safe_mode: IntGauge,
 }
 
 impl EpochMetrics {
@@ -150,6 +153,11 @@ impl EpochMetrics {
                 "epoch_first_checkpoint_created_time_since_epoch_begin_ms",
                 "Time interval from when the epoch opens at new epoch to the first checkpoint is created locally",
                 registry
+            ).unwrap(),
+            is_safe_mode: register_int_gauge_with_registry!(
+                "is_safe_mode",
+                "Whether we are running in safe mode",
+                registry,
             ).unwrap(),
         };
         Arc::new(this)
