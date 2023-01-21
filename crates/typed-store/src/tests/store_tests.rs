@@ -12,9 +12,14 @@ fn temp_dir() -> std::path::PathBuf {
 #[tokio::test]
 async fn create_store() {
     // Create new store.
-    let db =
-        rocks::DBMap::<usize, String>::open(temp_dir(), rocks::MetricConf::default(), None, None)
-            .unwrap();
+    let db = rocks::DBMap::<usize, String>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+        &rocks::ReadWriteOptions::default(),
+    )
+    .unwrap();
     let _ = Store::<usize, String>::new(db);
 }
 
@@ -26,6 +31,7 @@ async fn read_async_write_value() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -51,6 +57,7 @@ async fn read_sync_write_value() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -71,9 +78,14 @@ async fn read_sync_write_value() {
 #[tokio::test]
 async fn read_raw_write_value() {
     // Create new store.
-    let db =
-        rocks::DBMap::<Vec<u8>, String>::open(temp_dir(), rocks::MetricConf::default(), None, None)
-            .unwrap();
+    let db = rocks::DBMap::<Vec<u8>, String>::open(
+        temp_dir(),
+        rocks::MetricConf::default(),
+        None,
+        None,
+        &rocks::ReadWriteOptions::default(),
+    )
+    .unwrap();
     let store = Store::new(db);
 
     // Write value to the store.
@@ -97,6 +109,7 @@ async fn read_unknown_key() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -116,6 +129,7 @@ async fn read_notify() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -149,6 +163,7 @@ async fn remove_all_successfully() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -187,6 +202,7 @@ async fn write_and_read_all_successfully() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -225,6 +241,7 @@ async fn iter_successfully() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -257,6 +274,7 @@ async fn iter_and_filter_successfully() {
         rocks::MetricConf::default(),
         None,
         None,
+        &rocks::ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);

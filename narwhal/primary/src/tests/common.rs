@@ -4,7 +4,7 @@ use config::WorkerId;
 use crypto::NetworkKeyPair;
 use std::time::Duration;
 use storage::CertificateStore;
-use store::{reopen, rocks, rocks::DBMap, Store};
+use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions, Store};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_DIGEST_BY_ORIGIN_CF,
     CERTIFICATE_DIGEST_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF, VOTES_CF,

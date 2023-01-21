@@ -6,7 +6,7 @@ use config::WorkerId;
 use crypto::PublicKey;
 use std::sync::Arc;
 use store::rocks::DBMap;
-use store::rocks::{open_cf, MetricConf};
+use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{reopen, Store};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,

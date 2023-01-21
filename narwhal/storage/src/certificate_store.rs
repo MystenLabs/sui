@@ -438,7 +438,7 @@ mod test {
     use store::rocks::MetricConf;
     use store::{
         reopen,
-        rocks::{open_cf, DBMap},
+        rocks::{open_cf, DBMap, ReadWriteOptions},
     };
     use test_utils::{temp_dir, CommitteeFixture};
     use types::{Certificate, CertificateDigest, Round};

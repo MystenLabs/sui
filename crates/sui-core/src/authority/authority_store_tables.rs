@@ -9,7 +9,7 @@ use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::{DBMap, DBOptions, MetricConf};
+use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
@@ -214,7 +214,13 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn objects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    let db_options = default_db_options(None, None).1;
+    DBOptions {
+        options: db_options.options,
+        rw_options: ReadWriteOptions {
+            ignore_range_deletions: true,
+        },
+    }
 }
 fn certificates_table_default_config() -> DBOptions {
     default_db_options(None, None).1

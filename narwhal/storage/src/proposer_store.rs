@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use store::rocks::{open_cf, MetricConf};
-use store::{reopen, rocks::DBMap, Map};
+use store::{reopen, rocks::DBMap, rocks::ReadWriteOptions, Map};
 use types::{Header, StoreResult};
 
 pub type ProposerKey = u32;

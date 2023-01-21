@@ -18,6 +18,7 @@ use std::time::Duration;
 use storage::NodeStorage;
 use store::rocks;
 use store::rocks::MetricConf;
+use store::rocks::ReadWriteOptions;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
@@ -61,6 +62,7 @@ async fn reject_invalid_clients_transactions() {
         MetricConf::default(),
         None,
         Some("batches"),
+        &ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
@@ -154,6 +156,7 @@ async fn handle_clients_transactions() {
         MetricConf::default(),
         None,
         Some("batches"),
+        &ReadWriteOptions::default(),
     )
     .unwrap();
     let store = Store::new(db);
