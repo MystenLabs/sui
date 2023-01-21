@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
+import { getEarnToken } from '../getEarnToken';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { useFormatCoin } from '_app/hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
+
+import type { ActiveValidator, DelegatedStake } from '@mysten/sui.js';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',
@@ -16,11 +20,9 @@ export enum DelegationState {
 }
 
 interface DelegationCardProps {
-    staked: number | bigint;
-    state: DelegationState;
-    rewards?: number | bigint;
-    address: string;
-    stakedId: string;
+    delegationObject: DelegatedStake;
+    activeValidators: ActiveValidator[];
+    currentEpoch: number;
 }
 
 export const STATE_TO_COPY = {
@@ -29,15 +31,24 @@ export const STATE_TO_COPY = {
     [DelegationState.COOL_DOWN]: 'In Cool-down',
 };
 
-// TODO: Add these classes when we add delegation detail page.
-
+// For delegationsRequestEpoch n  through n + 2, show Start Earning
+// For delegationsRequestEpoch n + 3, show Staking Reward
 export function DelegationCard({
-    staked,
-    rewards,
-    state,
-    address,
-    stakedId,
+    delegationObject,
+    activeValidators,
+    currentEpoch,
 }: DelegationCardProps) {
+    const { staked_sui } = delegationObject;
+    const address = staked_sui.validator_address;
+    const staked = staked_sui.principal.value;
+    const rewards = useMemo(
+        () => getEarnToken(activeValidators, delegationObject),
+        [activeValidators, delegationObject]
+    );
+
+    const stakedId = staked_sui.id.id;
+    const delegationsRequestEpoch = staked_sui.delegation_request_epoch;
+    const numberOfEpochPastRequesting = currentEpoch - delegationsRequestEpoch;
     const [stakedFormatted] = useFormatCoin(staked, GAS_TYPE_ARG);
     const [rewardsFormatted] = useFormatCoin(rewards, GAS_TYPE_ARG);
 
@@ -76,12 +87,25 @@ export function DelegationCard({
                     </Text>
                 </div>
             </div>
-            <div>
+            <div className="flex flex-col gap-1">
                 <Text variant="subtitle" weight="medium" color="steel-dark">
-                    {STATE_TO_COPY[state]}
+                    {numberOfEpochPastRequesting > 2
+                        ? 'Staking Reward'
+                        : 'Starts Earning'}
                 </Text>
-                {!!rewards && (
-                    <div className="mt-1 text-success-dark text-bodySmall font-semibold">
+                {numberOfEpochPastRequesting > 0 &&
+                    numberOfEpochPastRequesting < 2 && (
+                        <Text
+                            variant="subtitle"
+                            weight="semibold"
+                            color="steel-dark"
+                        >
+                            Epoch #{currentEpoch}
+                        </Text>
+                    )}
+
+                {rewards > 0 && (
+                    <div className="text-success-dark text-bodySmall font-semibold">
                         {rewardsFormatted} SUI
                     </div>
                 )}

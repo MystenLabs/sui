@@ -32,7 +32,7 @@ export function ValidatorFormDetail({
     const [searchParams] = useSearchParams();
     const stakeIdParams = searchParams.get('staked');
     const {
-        data: validatetors,
+        data: validators,
         isLoading: loadingValidators,
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
@@ -45,10 +45,10 @@ export function ValidatorFormDetail({
     } = useGetDelegatedStake(accountAddress || '');
 
     const validatorsData =
-        validatetors &&
-        is(validatetors.details, SuiObject) &&
-        validatetors.details.data.dataType === 'moveObject'
-            ? (validatetors.details.data.fields as ValidatorsFields)
+        validators &&
+        is(validators.details, SuiObject) &&
+        validators.details.data.dataType === 'moveObject'
+            ? (validators.details.data.fields as ValidatorsFields)
             : null;
 
     const delegationData = useMemo(() => {

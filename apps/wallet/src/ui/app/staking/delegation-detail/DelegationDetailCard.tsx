@@ -6,6 +6,7 @@ import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
+import { getEarnToken } from '../getEarnToken';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -31,7 +32,7 @@ export function DelegationDetailCard({
     stakedId,
 }: DelegationDetailCardProps) {
     const {
-        data: validatetors,
+        data: validators,
         isLoading: loadingValidators,
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
@@ -45,10 +46,10 @@ export function DelegationDetailCard({
     } = useGetDelegatedStake(accountAddress || '');
 
     const validatorsData =
-        validatetors &&
-        is(validatetors.details, SuiObject) &&
-        validatetors.details.data.dataType === 'moveObject'
-            ? (validatetors.details.data.fields as ValidatorsFields)
+        validators &&
+        is(validators.details, SuiObject) &&
+        validators.details.data.dataType === 'moveObject'
+            ? (validators.details.data.fields as ValidatorsFields)
             : null;
 
     const validatorData = useMemo(() => {
@@ -69,7 +70,13 @@ export function DelegationDetailCard({
     const totalStake = delegationData?.staked_sui.principal.value || 0n;
 
     // Stake earned by ratio * pending_reward
-    const suiEarned = 0n;
+    const suiEarned = useMemo(() => {
+        if (!validatorsData || !delegationData) return 0n;
+        return getEarnToken(
+            validatorsData.validators.fields.active_validators,
+            delegationData
+        );
+    }, [delegationData, validatorsData]);
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
