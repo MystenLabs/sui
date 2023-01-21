@@ -5843,6 +5843,7 @@
           "info",
           "parameters",
           "reference_gas_price",
+          "safe_mode",
           "stake_subsidy",
           "storage_fund",
           "treasury_cap",
@@ -5865,6 +5866,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "safe_mode": {
+            "type": "boolean"
           },
           "stake_subsidy": {
             "$ref": "#/components/schemas/StakeSubsidy"
