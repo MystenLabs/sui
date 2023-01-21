@@ -11,7 +11,7 @@ module sui::random {
     // which has an output length of 32 bytes.
     const DIGEST_LENGTH: u64 = 32;
 
-    /// The represents a seeded pseudorandom generator. Note that the generated
+    /// This represents a seeded pseudorandom generator. Note that the generated
     /// values are not safe to use for cryptographic purposes.
     struct Random has store, drop {
         state: vector<u8>,
