@@ -16,6 +16,7 @@ use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
+use tracing::error;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -50,6 +51,8 @@ use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::messages::QuorumDriverResponse;
 use tokio::sync::broadcast;
+use sui_types::object::Object;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -689,6 +692,47 @@ impl SuiNode {
             .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
+    /// TEMPORARY: Checks whether the binary contains a new framework version to apply at the next
+    /// epoch boundary.  If it does, the current framework is overwritten with the new framework,
+    /// preserving its version and digest, and the node panics, so that it can be restarted with the
+    /// new framework in place.
+    pub async fn check_emergency_framework_upgrade(&self, next_epoch: u64) {
+        let Some(modules) = sui_config::framework::override_sui_framework(next_epoch) else {
+            return;
+        };
+
+        let new_package = match Object::new_package(modules, TransactionDigest::genesis()) {
+            Ok(pkg) => pkg,
+            Err(e) => {
+                error!(next_epoch, "Emergency Upgrade - failed to create new package: {e:#?}");
+                return;
+            }
+        };
+
+        let store = &self.state.database;
+        let Ok(Some(curr_package)) = store.get_object(&SUI_FRAMEWORK_OBJECT_ID) else {
+            error!(next_epoch, "Emergency Upgrade - can't find existing package");
+            return;
+        };
+
+        if curr_package == new_package {
+            info!(next_epoch, "Emergency Upgrade - picking up upgraded package");
+            return;
+        }
+
+        let package_ref = curr_package.compute_object_reference();
+        match store.insert_object_direct(package_ref, &new_package).await {
+            Ok(()) => {
+                panic!("Emergency Upgrade - at epoch {next_epoch}, please restart.")
+            },
+
+            Err(e) => {
+                error!(next_epoch, "Emergency Upgrade - failed to overwrite package: {e:#?}");
+                return;
+            }
+        }
+    }
+
     /// This function waits for a signal from the checkpoint executor to indicate that on-chain
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
     pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
@@ -711,6 +755,8 @@ impl SuiNode {
                 next_epoch,
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
+
+            self.check_emergency_framework_upgrade(next_epoch).await;
 
             self.state
                 .epoch_store()

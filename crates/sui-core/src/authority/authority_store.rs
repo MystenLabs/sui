@@ -518,7 +518,8 @@ impl AuthorityStore {
     /// Insert an object directly into the store, and also update relevant tables
     /// NOTE: does not handle transaction lock.
     /// This is used to insert genesis objects
-    async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
+    /// TEMPORARY: `pub` to expose to SuiNode, for emergency framework upgrades
+    pub async fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
         // Insert object
