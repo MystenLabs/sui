@@ -116,11 +116,8 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     // Publish the basic randomness example
 
     let compiled_modules = BuildConfig::default()
-        .build(
-            Path::new("../../sui_programmability/examples/math/sources/randomness_basic.move")
-                .to_path_buf(),
-        )?
-        .get_package_base64();
+        .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
+        .get_package_base64(false);
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;

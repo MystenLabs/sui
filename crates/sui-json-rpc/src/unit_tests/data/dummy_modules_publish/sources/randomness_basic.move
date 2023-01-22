@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Basic examples of how to work with Randomness objects.
-module math::randomness_basics {
+module examples::randomness_basics {
     use sui::randomness;
     use sui::tx_context::TxContext;
     use sui::tx_context;
