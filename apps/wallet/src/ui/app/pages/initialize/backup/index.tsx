@@ -85,7 +85,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                             </div>
                             <Loading loading={loading}>
                                 {mnemonic ? (
-                                    <div className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-[15px] bg-white border border-solid border-[#EBECED] shadow-button leading-snug">
+                                    <div className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-15 bg-white border border-solid border-gray-45 shadow-button leading-snug">
                                         {mnemonic}
                                     </div>
                                 ) : (

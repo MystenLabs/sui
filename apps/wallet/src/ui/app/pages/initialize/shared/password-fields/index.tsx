@@ -19,13 +19,13 @@ export default function PasswordFields() {
             <FieldLabel txt="Create Password">
                 <Field name="password" component={PasswordInput} />
                 {touched.password && errors.password ? (
-                    <Alert className="mt-2.5">{errors.password}</Alert>
+                    <Alert>{errors.password}</Alert>
                 ) : null}
             </FieldLabel>
             <FieldLabel txt="Confirm Password">
                 <Field name="confirmPassword" component={PasswordInput} />
                 {touched.confirmPassword && errors.confirmPassword ? (
-                    <Alert className="mt-2.5">{errors.confirmPassword}</Alert>
+                    <Alert>{errors.password}</Alert>
                 ) : null}
             </FieldLabel>
         </>

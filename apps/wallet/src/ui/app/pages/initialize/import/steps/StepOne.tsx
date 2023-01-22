@@ -58,13 +58,13 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                 );
                                 handleBlur(e);
                             }}
-                            className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-[15px] bg-white border border-solid border-[#EBECED] shadow-button leading-snug resize-none min-h-[100px] placeholder:text-steel-dark"
+                            className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-15 bg-white border border-solid border-gray-45 shadow-button leading-snug resize-none min-h-[100px] placeholder:text-steel-dark"
                             placeholder="Enter your 12-word recovery phrase"
                             name="mnemonic"
                             disabled={isSubmitting}
                         />
                         {touched.mnemonic && errors?.mnemonic && (
-                            <Alert className="mt-3.5">{errors?.mnemonic}</Alert>
+                            <Alert>{errors?.mnemonic}</Alert>
                         )}
                     </FieldLabel>
 
