@@ -1,4 +1,4 @@
-module my_first_package::my_module {
+module cw::policy {
     // Part 1: imports
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
@@ -12,10 +12,12 @@ module my_first_package::my_module {
         // TODO: here bind an operation type ID?
     }
 
+    // Private drop function force outputs to be used to setup auth flows.
     fun drop_setup_output<T>(out: AuthSetupOutput<T>) {
         let AuthSetupOutput { for_auth_id: _for_auth_id } = out;
     }
 
+    // Private drop function force outputs to be used to setup auth flows.
     fun drop_setup_outputs<T>(out: vector<AuthSetupOutput<T>>) {
 
         while (length(&out) > 0) {
@@ -34,7 +36,7 @@ module my_first_package::my_module {
         for_operation_id: ID, // the Operation ID for this authorization
     }
 
-    fun inner_drop<T>(out: AuthOutput<T>) {
+    public fun drop_auth<T>(out: AuthOutput<T>) {
         let AuthOutput<T> { id, valid_id: _, for_operation_id: _ } = out;
         object::delete(id);
     }
@@ -45,7 +47,7 @@ module my_first_package::my_module {
         addr: address,
     }
 
-    fun setup_signer_approval<T> (addr: address, ctx: &mut TxContext) : (AuthSignerApproval<T>, AuthSetupOutput<T>) {
+    public fun setup_signer_approval<T> (addr: address, ctx: &mut TxContext) : (AuthSignerApproval<T>, AuthSetupOutput<T>) {
         let id = object::new(ctx);
         let for_auth_id = object::uid_to_inner(&id);
 
@@ -60,7 +62,7 @@ module my_first_package::my_module {
         inner_authorize_signer_approval(sender, auth, for_operation_id, ctx)
     }
 
-    fun inner_authorize_signer_approval<T>(sender: &address, auth: &AuthSignerApproval<T>, for_operation_id: ID, ctx: &mut TxContext) :  AuthOutput<T> {
+    public fun inner_authorize_signer_approval<T>(sender: &address, auth: &AuthSignerApproval<T>, for_operation_id: ID, ctx: &mut TxContext) :  AuthOutput<T> {
         assert!(sender ==  &auth.addr, 0);
 
         let id = object::new(ctx);
@@ -71,7 +73,7 @@ module my_first_package::my_module {
         }
     }
 
-    fun drop<T>(auth: AuthSignerApproval<T>) {
+    public fun drop<T>(auth: AuthSignerApproval<T>) {
         let AuthSignerApproval { id, addr: _ } = auth;
         object::delete(id);
     }
@@ -139,7 +141,7 @@ module my_first_package::my_module {
             assert!(*borrow(&auth.input_ids, pos) == *&inp.valid_id, 0);
             // Check the input is for the operation expected
             assert!(*&inp.valid_id == for_operation_id, 0);
-            inner_drop(inp);
+            drop_auth(inp);
         };
 
         // This is empty by now per the condition for exiting while loop
@@ -178,7 +180,7 @@ module my_first_package::my_module {
         // Check the signal is tied to the operation ID
         let op_id =  object::uid_to_inner(&op.id);
         assert!(input.for_operation_id == op_id, 0);
-        inner_drop(input);
+        drop_auth(input);
 
         // Move to create an authorization for the operation
         ExecOperation(&auth.cap, op)
@@ -302,7 +304,7 @@ module my_first_package::my_module {
 
         // Check the output is ok
         assert!(auth_out.for_operation_id == op_id, 0);
-        inner_drop(auth_out);
+        drop_auth(auth_out);
 
 
         // use sui::tx_context;
