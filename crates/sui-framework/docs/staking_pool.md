@@ -960,6 +960,11 @@ time in <code>request_withdraw_stake</code>.
         <b>if</b> (total_sui_withdraw_amount &gt;= principal_withdraw_amount)
             total_sui_withdraw_amount - principal_withdraw_amount
         <b>else</b> 0;
+    // This may happen when we are withdrawing everything from the pool and
+    // the rewards pool <a href="balance.md#0x2_balance">balance</a> may be 1 less than reward_withdraw_amount.
+    <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&pool.rewards_pool) &lt; reward_withdraw_amount) {
+        reward_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&pool.rewards_pool);
+    };
     <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(
         &<b>mut</b> pool.delegation_token_supply,
         withdrawn_pool_tokens

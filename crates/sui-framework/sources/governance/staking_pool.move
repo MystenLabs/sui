@@ -352,6 +352,11 @@ module sui::staking_pool {
             if (total_sui_withdraw_amount >= principal_withdraw_amount)
                 total_sui_withdraw_amount - principal_withdraw_amount
             else 0;
+        // This may happen when we are withdrawing everything from the pool and
+        // the rewards pool balance may be 1 less than reward_withdraw_amount.
+        if (balance::value(&pool.rewards_pool) < reward_withdraw_amount) {
+            reward_withdraw_amount = balance::value(&pool.rewards_pool);
+        };
         balance::decrease_supply(
             &mut pool.delegation_token_supply, 
             withdrawn_pool_tokens
