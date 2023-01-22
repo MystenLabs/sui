@@ -4,7 +4,7 @@
 //! # Telemetry-subscribers
 //!
 //! This is a library for common telemetry functionality, especially subscribers for [Tokio tracing](https://github.com/tokio-rs/tracing)
-//! libraries.  Here we simply package many common subscribers, such as writing trace data to Jaeger, distributed tracing,
+//! libraries.  Here we simply package many common subscribers,
 //! common logs and metrics destinations, etc.  into a easy to configure common package.  There are also
 //! some unique layers such as one to automatically create Prometheus latency histograms for spans.
 //!
@@ -32,7 +32,6 @@
 //! ```
 //!
 //! ## Features
-//! - `jaeger` - this feature is enabled by default as it enables jaeger tracing
 //! - `json` - Bunyan formatter - JSON log output, optional
 //! - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 //!
@@ -50,24 +49,6 @@
 //!
 //! NOTE: JSON output requires the `json` crate feature to be enabled.
 //!
-//! ### Jaeger (seeing distributed traces)
-//!
-//! To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
-//!
-//! 1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`
-//! 2. Set `enable_jaeger` config setting to true or set `TOKIO_JAEGER` env var
-//! 3. Run your app
-//! 4. Browse to `http://localhost:16686/` and select the service you configured using `service_name`
-//!
-//! NOTE: separate spans (which are not nested) are not connected as a single trace for now.
-//!
-//! Jaeger subscriber is enabled by default but is protected by the jaeger feature flag.  If you'd like to leave
-//! out the Jaeger dependencies, you can turn off the default-features in your dependency:
-//!
-//! ```toml
-//!     telemetry = { url = "...", default-features = false }
-//! ```
-//!
 //! ### Automatic Prometheus span latencies
 //!
 //! Included in this library is a tracing-subscriber layer named `PrometheusSpanLatencyLayer`.  It will create
@@ -78,7 +59,7 @@
 //!
 //! ### Span levels vs log levels
 //!
-//! What spans are included for Jaeger output, automatic span latencies, etc.?  These are controlled by
+//! What spans are included for automatic span latencies, etc.?  These are controlled by
 //! the `span_level` config attribute, or the `TS_SPAN_LEVEL` environment variable.  Note that this is
 //! separate from `RUST_LOG`, so that you can separately control the logging verbosity from the level of
 //! spans that are to be recorded and traced.
@@ -136,7 +117,6 @@ pub struct TelemetryConfig {
     /// The name of the service for Jaeger and Bunyan
     pub service_name: String,
 
-    pub enable_jaeger: bool,
     /// Enables Tokio Console debugging on port 6669
     pub tokio_console: bool,
     /// Output JSON logs.
@@ -232,7 +212,6 @@ impl TelemetryConfig {
     pub fn new(service_name: &str) -> Self {
         Self {
             service_name: service_name.to_owned(),
-            enable_jaeger: false,
             tokio_console: false,
             json_log_output: false,
             log_file: None,
@@ -267,10 +246,6 @@ impl TelemetryConfig {
     pub fn with_env(mut self) -> Self {
         if env::var("CRASH_ON_PANIC").is_ok() {
             self.crash_on_panic = true
-        }
-
-        if env::var("TOKIO_JAEGER").is_ok() {
-            self.enable_jaeger = true
         }
 
         if env::var("ENABLE_JSON_LOGS").is_ok() {
@@ -328,27 +303,6 @@ impl TelemetryConfig {
             let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
                 .expect("Could not initialize span latency layer");
             layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
-        }
-
-        #[cfg(feature = "jaeger")]
-        if config.enable_jaeger {
-            // Install a tracer to send traces to Jaeger.  Batching for better performance.
-            let tracer = opentelemetry_jaeger::new_agent_pipeline()
-                .with_service_name(&config.service_name)
-                .with_max_packet_size(9216) // Default max UDP packet size on OSX
-                .with_auto_split_batch(true) // Auto split batches so they fit under packet size
-                .install_batch(opentelemetry::runtime::Tokio)
-                .expect("Could not create async Tracer");
-
-            // Create a tracing subscriber with the configured tracer
-            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-            // Enable Trace Contexts for tying spans together
-            opentelemetry::global::set_text_map_propagator(
-                opentelemetry::sdk::propagation::TraceContextPropagator::new(),
-            );
-
-            layers.push(telemetry.with_filter(span_filter.clone()).boxed());
         }
 
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
