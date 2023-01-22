@@ -136,7 +136,6 @@ crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 criterion-plot = { version = "0.5", default-features = false }
-crossbeam = { version = "0.8" }
 crossbeam-channel = { version = "0.5" }
 crossbeam-deque = { version = "0.8" }
 crossbeam-epoch = { version = "0.9", default-features = false, features = ["std"] }
@@ -291,7 +290,6 @@ itertools = { version = "0.10" }
 itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4" }
 itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
-json = { version = "0.12", default-features = false }
 jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["full"] }
 jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["tls", "web", "ws"] }
 jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
@@ -608,7 +606,6 @@ tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-bunyan-formatter = { version = "0.3" }
-tracing-chrome = { version = "0.6", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
 tracing-log = { version = "0.1" }
@@ -809,7 +806,6 @@ crc-catalog = { version = "2", default-features = false }
 crc32fast = { version = "1" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 criterion-plot = { version = "0.5", default-features = false }
-crossbeam = { version = "0.8" }
 crossbeam-channel = { version = "0.5" }
 crossbeam-deque = { version = "0.8" }
 crossbeam-epoch = { version = "0.9", default-features = false, features = ["std"] }
@@ -986,7 +982,6 @@ itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4" }
 itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
-json = { version = "0.12", default-features = false }
 jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["full"] }
 jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", default-features = false, features = ["tls", "web", "ws"] }
 jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee.git", rev = "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["async-client", "async-wasm-client", "http-helpers", "server", "soketto"] }
@@ -1360,7 +1355,6 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-bunyan-formatter = { version = "0.3" }
-tracing-chrome = { version = "0.6", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
 tracing-log = { version = "0.1" }

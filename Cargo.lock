@@ -1615,20 +1615,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2801af0d36612ae591caa9568261fddce32ce6e08a7275ea334a06a4ad021a2c"
-dependencies = [
- "cfg-if",
- "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-queue",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3749,12 +3735,6 @@ checksum = "49409df3e3bf0856b916e2ceaca09ee28e6871cf7d9ce97a692cacfdb2a25a47"
 dependencies = [
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "json"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "jsonrpsee"
@@ -9557,7 +9537,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
- "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.16",
  "workspace-hack",
@@ -10218,18 +10197,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.16",
-]
-
-[[package]]
-name = "tracing-chrome"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1ac1f6a3a47e9c755e65ef974653c978da2246487a16044a8ee1d9a0a67257c"
-dependencies = [
- "crossbeam",
- "json",
- "tracing",
  "tracing-subscriber 0.3.16",
 ]
 
@@ -11114,7 +11081,6 @@ dependencies = [
  "crc32fast",
  "criterion",
  "criterion-plot",
- "crossbeam",
  "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
@@ -11305,7 +11271,6 @@ dependencies = [
  "jemalloc-sys",
  "jobserver",
  "js-sys",
- "json",
  "jsonrpsee",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -11707,7 +11672,6 @@ dependencies = [
  "tracing-appender",
  "tracing-attributes",
  "tracing-bunyan-formatter",
- "tracing-chrome",
  "tracing-core",
  "tracing-futures",
  "tracing-log",
