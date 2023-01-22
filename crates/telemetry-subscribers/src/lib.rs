@@ -141,8 +141,6 @@ pub struct TelemetryConfig {
     pub tokio_console: bool,
     /// Output JSON logs.
     pub json_log_output: bool,
-    /// Write chrome trace output, which can be loaded from chrome://tracing
-    pub chrome_trace_output: bool,
     /// If defined, write output to a file starting with this name, ex app.log
     pub log_file: Option<String>,
     /// Log level to set, defaults to info
@@ -162,9 +160,6 @@ pub struct TelemetryConfig {
 #[allow(dead_code)]
 pub struct TelemetryGuards {
     worker_guard: WorkerGuard,
-
-    #[cfg(feature = "chrome")]
-    chrome_guard: Option<tracing_chrome::FlushGuard>,
 }
 
 #[derive(Clone, Debug)]
@@ -240,7 +235,6 @@ impl TelemetryConfig {
             enable_jaeger: false,
             tokio_console: false,
             json_log_output: false,
-            chrome_trace_output: false,
             log_file: None,
             log_string: None,
             span_level: None,
@@ -277,10 +271,6 @@ impl TelemetryConfig {
 
         if env::var("TOKIO_JAEGER").is_ok() {
             self.enable_jaeger = true
-        }
-
-        if env::var("TOKIO_CHROME").is_ok() {
-            self.chrome_trace_output = true;
         }
 
         if env::var("ENABLE_JSON_LOGS").is_ok() {
@@ -334,15 +324,6 @@ impl TelemetryConfig {
             layers.push(console_subscriber::spawn().boxed());
         }
 
-        #[cfg(feature = "chrome")]
-        let chrome_guard = if config.chrome_trace_output {
-            let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new().build();
-            layers.push(chrome_layer.boxed());
-            Some(guard)
-        } else {
-            None
-        };
-
         if let Some(registry) = config.prom_registry {
             let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
                 .expect("Could not initialize span latency layer");
@@ -372,6 +353,13 @@ impl TelemetryConfig {
 
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
         if config.json_log_output {
+            // // Output to file or to stderr in a newline-delimited JSON format
+            // let json_layer = fmt::layer()
+            //     .json()
+            //     .with_writer(nb_output)
+            //     .with_filter(log_filter)
+            //     .boxed();
+            // layers.push(json_layer);
             // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
             // Also Bunyan layer adds JSON logging for tracing spans with duration information
             let json_layer = JsonStorageLayer
@@ -401,8 +389,6 @@ impl TelemetryConfig {
         // gets flushed and closed. If this is dropped too early then no output will appear!
         let guards = TelemetryGuards {
             worker_guard,
-            #[cfg(feature = "chrome")]
-            chrome_guard,
         };
 
         (guards, filter_handle)
