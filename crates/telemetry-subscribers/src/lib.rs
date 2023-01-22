@@ -94,7 +94,6 @@ use std::{
 use tracing::metadata::LevelFilter;
 use tracing::Level;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_subscriber::{
     filter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter, Layer, Registry,
 };
@@ -223,6 +222,11 @@ impl TelemetryConfig {
         }
     }
 
+    pub fn with_json(mut self) -> Self {
+        self.json_log_output = true;
+        self
+    }
+
     pub fn with_log_level(mut self, log_string: &str) -> Self {
         self.log_string = Some(log_string.to_owned());
         self
@@ -307,20 +311,13 @@ impl TelemetryConfig {
 
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
         if config.json_log_output {
-            // // Output to file or to stderr in a newline-delimited JSON format
-            // let json_layer = fmt::layer()
-            //     .json()
-            //     .with_writer(nb_output)
-            //     .with_filter(log_filter)
-            //     .boxed();
-            // layers.push(json_layer);
-            // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
-            // Also Bunyan layer adds JSON logging for tracing spans with duration information
-            let json_layer = JsonStorageLayer
-                .and_then(
-                    BunyanFormattingLayer::new(config.service_name, nb_output)
-                        .with_filter(log_filter),
-                )
+            // Output to file or to stderr in a newline-delimited JSON format
+            let json_layer = fmt::layer()
+                .with_file(true)
+                .with_line_number(true)
+                .json()
+                .with_writer(nb_output)
+                .with_filter(log_filter)
                 .boxed();
             layers.push(json_layer);
         } else {
@@ -419,10 +416,8 @@ mod tests {
         panic!("This should cause error logs to be printed out!");
     }
 
-    /*
-    Both the following tests should be able to "race" to initialize logging without causing a
-    panic
-    */
+    // Both the following tests should be able to "race" to initialize logging without causing a
+    // panic
     #[test]
     fn testing_logger_1() {
         init_for_testing();
