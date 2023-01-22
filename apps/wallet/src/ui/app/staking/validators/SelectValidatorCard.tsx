@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    is,
-    SuiObject,
-    type ValidatorsFields,
-    type ActiveValidator,
-} from '@mysten/sui.js';
+import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
@@ -20,19 +15,6 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject } from '_hooks';
-
-function validatorsList(validator: ActiveValidator[], epoch: number) {
-    return validator.map((validator) => ({
-        name: getName(validator.fields.metadata.fields.name),
-        address: validator.fields.metadata.fields.sui_address,
-        apy: calculateAPY(validator, epoch),
-    }));
-}
-
-const collator = new Intl.Collator('en', {
-    sensitivity: 'base',
-    numeric: true,
-});
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
@@ -55,26 +37,31 @@ export function SelectValidatorCard() {
     };
 
     const handleSortByKey = (key: 'name' | 'apy') => {
+        if (key === sortKey) {
+            setSortAscending(!sortAscending);
+        }
         setSortKey(key);
-        setSortAscending(!sortAscending);
     };
 
     const validatorList = useMemo(() => {
         if (!validatorsData) return [];
 
-        return validatorsList(
-            validatorsData.validators.fields.active_validators,
-            +validatorsData.epoch
-        ).sort((a, b) => {
-            if (sortKey === 'name') {
-                return sortAscending
-                    ? collator.compare(a[sortKey], b[sortKey])
-                    : collator.compare(b[sortKey], a[sortKey]);
-            }
-            return sortAscending
-                ? b[sortKey] - a[sortKey]
-                : a[sortKey] - b[sortKey];
-        });
+        const sortedAsc = validatorsData.validators.fields.active_validators
+            .map((validator) => ({
+                name: getName(validator.fields.metadata.fields.name),
+                address: validator.fields.metadata.fields.sui_address,
+                apy: calculateAPY(validator, +validatorsData.epoch),
+            }))
+            .sort((a, b) => {
+                if (sortKey === 'name') {
+                    return a[sortKey].localeCompare(b[sortKey], 'en', {
+                        sensitivity: 'base',
+                        numeric: true,
+                    });
+                }
+                return a[sortKey] - b[sortKey];
+            });
+        return sortAscending ? sortedAsc : sortedAsc.reverse();
     }, [sortAscending, sortKey, validatorsData]);
 
     if (isLoading) {
