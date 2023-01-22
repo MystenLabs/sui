@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
-import { getEarnToken } from '../getEarnToken';
+import { getStakingRewards } from '../getStakingRewards';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { useFormatCoin } from '_app/hooks';
 import { Text } from '_src/ui/app/shared/text';
@@ -44,7 +44,7 @@ export function DelegationCard({
     const address = staked_sui.validator_address;
     const staked = staked_sui.principal.value;
     const rewards = useMemo(
-        () => getEarnToken(activeValidators, delegationObject),
+        () => getStakingRewards(activeValidators, delegationObject),
         [activeValidators, delegationObject]
     );
 

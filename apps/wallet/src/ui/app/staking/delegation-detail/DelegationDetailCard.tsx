@@ -6,7 +6,7 @@ import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
-import { getEarnToken } from '../getEarnToken';
+import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -72,7 +72,7 @@ export function DelegationDetailCard({
     // Stake earned by ratio * pending_reward
     const suiEarned = useMemo(() => {
         if (!validatorsData || !delegationData) return 0n;
-        return getEarnToken(
+        return getStakingRewards(
             validatorsData.validators.fields.active_validators,
             delegationData
         );

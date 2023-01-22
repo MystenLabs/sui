@@ -3,7 +3,7 @@
 
 import type { ActiveValidator, DelegatedStake } from '@mysten/sui.js';
 
-export function getEarnToken(
+export function getStakingRewards(
     activeValidators: ActiveValidator[],
     delegation: DelegatedStake
 ) {
@@ -27,9 +27,9 @@ export function getEarnToken(
     const delegationTokenSupply =
         validatorFields.delegation_staking_pool.fields.delegation_token_supply
             .fields.value;
-    const suiBlance =
+    const suiBalance =
         validatorFields.delegation_staking_pool.fields.sui_balance;
-    const currentSuiWorth = (poolTokens * +suiBlance) / +delegationTokenSupply;
+    const currentSuiWorth = (poolTokens * +suiBalance) / +delegationTokenSupply;
     const earnToken =
         currentSuiWorth -
         delegation.delegation_status.Active.principal_sui_amount;

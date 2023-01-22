@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
@@ -11,6 +10,7 @@ import { ValidatorListItem } from './ValidatorListItem';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Text } from '_app/shared/text';
+import { validatorsFields } from '_app/staking/validatorsFields';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -25,12 +25,7 @@ export function SelectValidatorCard() {
 
     const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 
-    const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorsFields)
-            : null;
+    const validatorsData = data && validatorsFields(data);
 
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));

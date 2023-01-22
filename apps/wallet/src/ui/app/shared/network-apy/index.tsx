@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../../staking/calculateAPY';
 import { STATE_OBJECT } from '../../staking/usePendingDelegation';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
+import { validatorsFields } from '_app/staking/validatorsFields';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { roundFloat } from '_helpers';
 import { useGetObject } from '_hooks';
 
 const APY_DECIMALS = 3;
@@ -16,12 +17,7 @@ const APY_DECIMALS = 3;
 export function NetworkApy() {
     const { data, isLoading } = useGetObject(STATE_OBJECT);
 
-    const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorsFields)
-            : null;
+    const validatorsData = data && validatorsFields(data);
 
     const averageNetworkAPY = useMemo(() => {
         if (!validatorsData) return 0;
@@ -30,11 +26,10 @@ export function NetworkApy() {
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +validatorsData.epoch)
         );
-        return parseFloat(
-            (
-                validatorsApy.reduce((acc, cur) => acc + cur, 0) /
-                validatorsApy.length
-            ).toFixed(APY_DECIMALS)
+        return roundFloat(
+            (validatorsApy.reduce((acc, cur) => acc + cur, 0) /
+                validatorsApy.length,
+            APY_DECIMALS)
         );
     }, [validatorsData]);
 

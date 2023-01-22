@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { getEarnToken } from '../getEarnToken';
+import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
+import { validatorsFields } from '../validatorsFields';
 import { DelegationCard } from './../home/DelegationCard';
 import BottomMenuLayout, {
     Menu,
@@ -34,12 +34,7 @@ export function ValidatorsCard() {
 
     const { data: validators } = useGetObject(STATE_OBJECT);
 
-    const validatorsData =
-        validators &&
-        is(validators.details, SuiObject) &&
-        validators.details.data.dataType === 'moveObject'
-            ? (validators.details.data.fields as ValidatorsFields)
-            : null;
+    const validatorsData = validators && validatorsFields(validators);
 
     const activeValidators =
         validatorsData?.validators.fields.active_validators;
@@ -52,7 +47,7 @@ export function ValidatorsCard() {
 
         return delegations.reduce(
             (acc, delegation) =>
-                acc + getEarnToken(activeValidators, delegation),
+                acc + getStakingRewards(activeValidators, delegation),
             0
         );
     }, [delegations, validatorsData]);
