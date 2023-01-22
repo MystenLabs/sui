@@ -16,6 +16,7 @@ use crate::metrics::RequestMetrics;
 
 /// Tower Layer for tracking metrics in Prometheus related to number, success-rate and latency of
 /// requests running through service.
+#[derive(Clone)]
 pub struct RequestMetricsLayer {
     metrics: Arc<RequestMetrics>,
 }

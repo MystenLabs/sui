@@ -100,8 +100,8 @@ async fn health() -> &'static str {
 }
 
 async fn faucet_request(
-    Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     let result = match payload {
         FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
