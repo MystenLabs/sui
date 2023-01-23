@@ -86,6 +86,28 @@ async fn test_tx_gas_balance_less_than_budget() {
 }
 
 #[tokio::test]
+async fn test_tx_gas_price_less_than_reference_gas_price() {
+    // This test creates a transaction that uses a gas object whose balance
+    // is not even enough to pay for the gas budget. This should fail early
+    // during handle transaction phase.
+    let gas_balance = *MIN_GAS_BUDGET - 1;
+    let budget = *MIN_GAS_BUDGET;
+    let gas_price = 0;
+    let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
+    assert_eq!(
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasPriceTooLow {
+            gas_price: 0,
+            reference_gas_price: 1
+        }
+    );
+}
+
+#[tokio::test]
 async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
