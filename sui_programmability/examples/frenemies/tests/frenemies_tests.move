@@ -264,6 +264,21 @@ module frenemies::frenemies_tests {
     }
 
     #[test]
+    fun repro() {
+        let validators = vector[@0x1, @0x2, @0x3, @0x4];
+        let scenario_val = init_test(copy validators, validators);
+        let scenario = &mut scenario_val;
+        ts::next_tx(scenario, @0x4);
+        {
+            let scorecard = ts::take_from_sender<Scorecard>(scenario); // works
+            ts::return_to_sender(scenario, scorecard);
+        };
+        let scorecard = ts::take_from_address<Scorecard>(scenario, @0x4); // crashes
+        ts::return_to_address(@0x4, scorecard);
+        ts::end(scenario_val);
+    }
+
+    #[test]
     fun basic_e2e() {
         let v1 = @0x1;
         let v2 = @0x2;
