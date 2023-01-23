@@ -24,13 +24,15 @@ export function Table({ data }: Props) {
   return (
     <table className="table-fixed w-full">
       <thead>
-        <Cell as="th">Name</Cell>
-        <Cell as="th">Score</Cell>
-        <Cell as="th">Participation</Cell>
+        <tr>
+          <Cell as="th">Name</Cell>
+          <Cell as="th">Score</Cell>
+          <Cell as="th">Active Rounds</Cell>
+        </tr>
       </thead>
       <tbody>
         {data.topScores.map((score) => (
-          <tr className="border-t border-white/20">
+          <tr key={score.name} className="border-t border-white/20">
             <Cell>{score.name}</Cell>
             <Cell>{score.score}</Cell>
             <Cell>{score.participation}</Cell>
