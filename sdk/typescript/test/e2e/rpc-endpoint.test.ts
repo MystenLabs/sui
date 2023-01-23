@@ -22,10 +22,27 @@ describe('Invoke any RPC endpoint', () => {
         expect(gasObjects).toStrictEqual(gasObjectsExpected);
     });
 
-    it('sui_getObjectOwnedByAddress Error', async () => {
+  it('sui_getObjectOwnedByAddress Error', async () => {
         expect(toolbox.provider.call(
             'sui_getObjectsOwnedByAddress',
             [],
         )).rejects.toThrowError();
     })
+
+    it('sui_getCommitteeInfo', async () => {
+      const committeeInfoExpected = await toolbox.provider.getCommitteeInfo();
+
+      const committeeInfo = await toolbox.provider.call(
+        'sui_getCommitteeInfo',
+        []
+      );
+
+      expect(committeeInfo).toStrictEqual(committeeInfoExpected);
+    });
+
+    it('sui_getCommitteeInfo Error', async () => {
+      expect(
+        toolbox.provider.call('sui_getCommitteeInfo', [])
+      ).rejects.toThrowError();
+    });
 });

@@ -410,7 +410,7 @@ export abstract class Provider {
 
   /**
    * Return the committee information for the asked epoch
-   * @param epoch The epoch of interest. If None, default to the latest epoch
+   * @param epoch The epoch of interest. If null, default to the latest epoch
    * @return {CommitteeInfo} the committee information
    */
   abstract getCommitteeInfo(epoch?: number): Promise<CommitteeInfo>;
