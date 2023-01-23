@@ -181,6 +181,60 @@ module sui::random {
     }
 
     #[test]
+    fun test_next_u8_in_range() {
+        let random = new(b"seed");
+
+        let i = 0;
+        let bounds = vector[1, 7, 8, 9, 15, 16, 17];
+        let tests = 10;
+        while (i < vector::length(&bounds)) {
+            let upper_bound = *vector::borrow(&bounds, i);
+            let j = 0;
+            while (j < tests) {
+                assert!(next_u8_in_range(&mut random, upper_bound) < upper_bound, 0);
+                j = j + 1;
+            };
+            i = i + 1;
+        }
+    }
+
+    #[test]
+    fun test_next_u16_in_range() {
+        let random = new(b"seed");
+
+        let i = 0;
+        let bounds = vector[1, 7, 8, 9, 15, 16, 17];
+        let tests = 10;
+        while (i < vector::length(&bounds)) {
+            let upper_bound = *vector::borrow(&bounds, i);
+            let j = 0;
+            while (j < tests) {
+                assert!(next_u16_in_range(&mut random, upper_bound) < upper_bound, 0);
+                j = j + 1;
+            };
+            i = i + 1;
+        }
+    }
+
+    #[test]
+    fun test_next_u32_in_range() {
+        let random = new(b"seed");
+
+        let i = 0;
+        let bounds = vector[1, 7, 8, 9, 15, 16, 17];
+        let tests = 10;
+        while (i < vector::length(&bounds)) {
+            let upper_bound = *vector::borrow(&bounds, i);
+            let j = 0;
+            while (j < tests) {
+                assert!(next_u32_in_range(&mut random, upper_bound) < upper_bound, 0);
+                j = j + 1;
+            };
+            i = i + 1;
+        }
+    }
+
+    #[test]
     fun test_next_u64_in_range() {
         let random = new(b"seed");
 
@@ -192,6 +246,42 @@ module sui::random {
             let j = 0;
             while (j < tests) {
                 assert!(next_u64_in_range(&mut random, upper_bound) < upper_bound, 0);
+                j = j + 1;
+            };
+            i = i + 1;
+        }
+    }
+
+    #[test]
+    fun test_next_u128_in_range() {
+        let random = new(b"seed");
+
+        let i = 0;
+        let bounds = vector[1, 7, 8, 9, 15, 16, 17];
+        let tests = 10;
+        while (i < vector::length(&bounds)) {
+            let upper_bound = *vector::borrow(&bounds, i);
+            let j = 0;
+            while (j < tests) {
+                assert!(next_u128_in_range(&mut random, upper_bound) < upper_bound, 0);
+                j = j + 1;
+            };
+            i = i + 1;
+        }
+    }
+
+    #[test]
+    fun test_next_u256_in_range() {
+        let random = new(b"seed");
+
+        let i = 0;
+        let bounds = vector[1, 7, 8, 9, 15, 16, 17];
+        let tests = 10;
+        while (i < vector::length(&bounds)) {
+            let upper_bound = *vector::borrow(&bounds, i);
+            let j = 0;
+            while (j < tests) {
+                assert!(next_u256_in_range(&mut random, upper_bound) < upper_bound, 0);
                 j = j + 1;
             };
             i = i + 1;
