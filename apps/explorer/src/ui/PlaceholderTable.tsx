@@ -38,7 +38,7 @@ export function PlaceholderTable({
         () => ({
             data: new Array(rowCount).fill(rowEntry),
             columns: colHeadings.map((header, index) => ({
-                headerLabel: header,
+                header: header,
                 accessorKey: `a${index}`,
             })),
         }),

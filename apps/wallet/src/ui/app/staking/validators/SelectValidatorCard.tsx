@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
+import { calculateAPY } from '../calculateAPY';
 import { STATE_OBJECT, getName } from '../usePendingDelegation';
 import { ValidatorListItem } from './ValidatorListItem';
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
+import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
@@ -21,6 +20,9 @@ export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
+    const [sortKey, setSortKey] = useState<'name' | 'apy'>('apy');
+    const [sortAscending, setSortAscending] = useState(true);
+
     const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 
     const validatorsData =
@@ -34,15 +36,33 @@ export function SelectValidatorCard() {
         setSelectedValidator((state) => (state !== address ? address : null));
     };
 
+    const handleSortByKey = (key: 'name' | 'apy') => {
+        if (key === sortKey) {
+            setSortAscending(!sortAscending);
+        }
+        setSortKey(key);
+    };
+
     const validatorList = useMemo(() => {
         if (!validatorsData) return [];
-        return validatorsData.validators.fields.active_validators.sort((a, b) =>
-            getName(a.fields.metadata.fields.name) >
-            getName(b.fields.metadata.fields.name)
-                ? 1
-                : -1
-        );
-    }, [validatorsData]);
+
+        const sortedAsc = validatorsData.validators.fields.active_validators
+            .map((validator) => ({
+                name: getName(validator.fields.metadata.fields.name),
+                address: validator.fields.metadata.fields.sui_address,
+                apy: calculateAPY(validator, +validatorsData.epoch),
+            }))
+            .sort((a, b) => {
+                if (sortKey === 'name') {
+                    return a[sortKey].localeCompare(b[sortKey], 'en', {
+                        sensitivity: 'base',
+                        numeric: true,
+                    });
+                }
+                return a[sortKey] - b[sortKey];
+            });
+        return sortAscending ? sortedAsc : sortedAsc.reverse();
+    }, [sortAscending, sortKey, validatorsData]);
 
     if (isLoading) {
         return (
@@ -65,45 +85,109 @@ export function SelectValidatorCard() {
     }
 
     return (
-        <BottomMenuLayout className="flex flex-col w-full items-center m-0 p-0">
+        <div className="flex flex-col w-full -my-5">
             <Content className="flex flex-col w-full items-center">
-                <div className="flex items-start w-full mb-7">
-                    <Text
-                        variant="subtitle"
-                        weight="medium"
-                        color="steel-darker"
-                    >
-                        Select a validator to start staking SUI.
-                    </Text>
-                </div>
-
-                {validatorsData &&
-                    validatorList.map((validators) => (
-                        <div
-                            className="cursor-pointer w-full relative"
-                            key={validators.fields.metadata.fields.sui_address}
-                            onClick={() =>
-                                selectValidator(
-                                    validators.fields.metadata.fields
-                                        .sui_address
-                                )
-                            }
+                <div className="flex flex-col w-full items-center -top-5 bg-white sticky pt-5 pb-2.5 z-50 mt-0">
+                    <div className="flex items-start w-full mb-2">
+                        <Text
+                            variant="subtitle"
+                            weight="medium"
+                            color="steel-darker"
                         >
-                            <ValidatorListItem
-                                validator={validators}
-                                selected={
-                                    selectedValidator ===
-                                    validators.fields.metadata.fields
-                                        .sui_address
-                                }
-                                epoch={+validatorsData.epoch}
-                            />
-                        </div>
-                    ))}
-            </Content>
+                            Sort by:
+                        </Text>
+                        <div className="flex items-center ml-2 gap-1.5">
+                            <button
+                                className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
+                                onClick={() => handleSortByKey('apy')}
+                            >
+                                <Text
+                                    variant="caption"
+                                    weight="medium"
+                                    color={
+                                        sortKey === 'apy'
+                                            ? 'hero'
+                                            : 'steel-darker'
+                                    }
+                                >
+                                    APY
+                                </Text>
+                                {sortKey === 'apy' && (
+                                    <Icon
+                                        icon={SuiIcons.ArrowLeft}
+                                        className={cl(
+                                            'text-captionSmall font-thin  text-hero',
+                                            sortAscending
+                                                ? '-rotate-90'
+                                                : 'rotate-90'
+                                        )}
+                                    />
+                                )}
+                            </button>
 
-            <Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
-                {selectedValidator && (
+                            <button
+                                className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
+                                onClick={() => handleSortByKey('name')}
+                            >
+                                <Text
+                                    variant="caption"
+                                    weight="medium"
+                                    color={
+                                        sortKey === 'name'
+                                            ? 'hero'
+                                            : 'steel-darker'
+                                    }
+                                >
+                                    Name
+                                </Text>
+                                {sortKey === 'name' && (
+                                    <Icon
+                                        icon={SuiIcons.ArrowLeft}
+                                        className={cl(
+                                            'text-captionSmall font-thin  text-hero',
+                                            sortAscending
+                                                ? '-rotate-90'
+                                                : 'rotate-90'
+                                        )}
+                                    />
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start w-full">
+                        <Text
+                            variant="subtitle"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            Select a validator to start staking SUI.
+                        </Text>
+                    </div>
+                </div>
+                <div className="flex items-start flex-col w-full mt-1 flex-1">
+                    {validatorsData &&
+                        validatorList.map(({ name, address, apy }) => (
+                            <div
+                                className="cursor-pointer w-full relative"
+                                key={address}
+                                onClick={() => selectValidator(address)}
+                            >
+                                <ValidatorListItem
+                                    selected={selectedValidator === address}
+                                    validatorAddress={address}
+                                    validatorName={name}
+                                    apy={apy}
+                                />
+                            </div>
+                        ))}
+                </div>
+            </Content>
+            {selectedValidator && (
+                <Menu
+                    stuckClass="staked-cta"
+                    className="w-full px-0 pb-5 mx-0 -bottom-5"
+                >
                     <Button
                         size="large"
                         mode="primary"
@@ -118,8 +202,8 @@ export function SelectValidatorCard() {
                             className="text-captionSmall text-white font-normal"
                         />
                     </Button>
-                )}
-            </Menu>
-        </BottomMenuLayout>
+                </Menu>
+            )}
+        </div>
     );
 }

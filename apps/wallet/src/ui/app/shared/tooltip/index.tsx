@@ -14,13 +14,13 @@ import {
     useInteractions,
     FloatingPortal,
     arrow,
-} from '@floating-ui/react-dom-interactions';
+} from '@floating-ui/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
 
 import Icon, { SuiIcons } from '_components/icon';
 
-import type { Placement } from '@floating-ui/react-dom-interactions';
+import type { Placement } from '@floating-ui/react';
 import type { ReactNode, CSSProperties } from 'react';
 
 const TOOLTIP_DELAY = 150;

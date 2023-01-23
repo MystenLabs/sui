@@ -86,15 +86,15 @@ const validatorsTable = (
         }),
         columns: [
             {
-                headerLabel: 'Name',
+                header: 'Name',
                 accessorKey: 'name',
             },
             {
-                headerLabel: 'Address',
+                header: 'Address',
                 accessorKey: 'address',
             },
             {
-                headerLabel: 'Stake',
+                header: 'Stake',
                 accessorKey: 'stake',
             },
         ],
