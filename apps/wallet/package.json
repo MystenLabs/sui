@@ -117,6 +117,7 @@
         "@growthbook/growthbook-react": "^0.10.1",
         "@metamask/browser-passworder": "^4.0.2",
         "@mysten/core": "workspace:*",
+        "@mysten/icons": "workspace:*",
         "@mysten/sui.js": "workspace:*",
         "@mysten/wallet-standard": "workspace:*",
         "@noble/hashes": "^1.1.5",
