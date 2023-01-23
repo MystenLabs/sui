@@ -18,6 +18,7 @@ custom coins with <code><a href="balance.md#0x2_balance_Supply">Supply</a></code
 -  [Function `decrease_supply`](#0x2_balance_decrease_supply)
 -  [Function `zero`](#0x2_balance_zero)
 -  [Function `join`](#0x2_balance_join)
+-  [Function `i_am_a_framework_change`](#0x2_balance_i_am_a_framework_change)
 -  [Function `split`](#0x2_balance_split)
 -  [Function `destroy_zero`](#0x2_balance_destroy_zero)
 -  [Function `create_staking_rewards`](#0x2_balance_create_staking_rewards)
@@ -323,6 +324,30 @@ Join two balances together.
 
 <pre><code><b>ensures</b> self.value == <b>old</b>(self.value) + <a href="balance.md#0x2_balance">balance</a>.value;
 <b>ensures</b> result == self.value;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_balance_i_am_a_framework_change"></a>
+
+## Function `i_am_a_framework_change`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="balance.md#0x2_balance_i_am_a_framework_change">i_am_a_framework_change</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="balance.md#0x2_balance_i_am_a_framework_change">i_am_a_framework_change</a>(): u64 {
+    1
+}
 </code></pre>
 
 
