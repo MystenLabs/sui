@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
+#[path = "../unit_tests/epoch_data_tests.rs"]
+pub mod epoch_data_tests;
+
 use mysten_metrics::spawn_monitored_task;
 use narwhal_config::Epoch;
 use std::fs;
