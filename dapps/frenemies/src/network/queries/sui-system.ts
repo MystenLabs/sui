@@ -2,22 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { normalizeSuiAddress } from "@mysten/sui.js";
-import { useQuery } from "@tanstack/react-query";
-import provider from "../provider";
-import { getRawObjectParsedUnsafe, ObjectData } from "../rawObject";
+import { useRawObject } from "./use-raw";
 import { SuiSystem } from "../types";
 
 /**
  * Address of the Sui System object.
  * Always the same in every Sui network (local, devnet, testnet).
  */
-const SUI_SYSTEM: string = normalizeSuiAddress("0x5");
+export const SUI_SYSTEM: string = normalizeSuiAddress("0x5");
 
 /**
  * Read the SuiSystem object.
  */
 export function useSuiSystem() {
-  return useQuery(["sui-system"], async (): Promise<ObjectData<SuiSystem> | null> => {
-    return getRawObjectParsedUnsafe(provider, SUI_SYSTEM, "sui_system::SuiSystemState");
-  });
+  return useRawObject<SuiSystem>(SUI_SYSTEM, "sui_system::SuiSystemState");
 }

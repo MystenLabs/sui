@@ -9,20 +9,22 @@ import { Validators } from "../components/Validators";
 import { YourScore } from "../components/your-score/YourScore";
 import { useScorecard } from "../network/queries/scorecard";
 import { formatAddress, formatGoal } from "../utils/format";
+import { useWalletKit } from "@mysten/wallet-kit";
 
 /**
  * The Home page.
  */
 export function Home() {
-  const { data } = useScorecard('0xcf267442d5331c079fc88f0e4a68c50eb1372426');
+  const { currentAccount } = useWalletKit();
+  const { data: scorecard } = useScorecard(currentAccount || '');
 
   // TODO: Render login screen (not registered)
   // TODO: Track wallet connection and make sure user is logged in
-  if (data == null) {
+  if (!scorecard || !currentAccount) {
     return null;
   }
 
-  const assignment = data.data.assignment;
+  const { assignment } = scorecard.data;
 
   return (
     <>

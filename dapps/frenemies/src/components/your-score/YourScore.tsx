@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useEffect } from "react";
-import { useAccount } from "../../network/queries/account";
 import { useScorecard } from "../../network/queries/scorecard";
 import { Card } from "../Card";
 import { Stat } from "../Stat";
@@ -25,14 +23,15 @@ import { Table } from "./Table";
  * Table representing a Leaderboard
  */
 export function YourScore() {
-  const { data: scorecard } = useScorecard('0xcf267442d5331c079fc88f0e4a68c50eb1372426');
+  const { currentAccount } = useWalletKit();
+  const { data: scorecard } = useScorecard(currentAccount || '');
 
   // TODO: Figure out ways of fetching your txs with a Scorecard
   // NOTE: To do so, fetch events with the scorecard; then parse moveEvents from each
   // of the transactions to get ScorecardUpdated event
 
   // TODO: Loading and error states:
-  if (!scorecard) {
+  if (scorecard == null || currentAccount == null) {
     return null;
   }
 

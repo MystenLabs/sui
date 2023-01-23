@@ -21,7 +21,7 @@ const SCORECARD_TYPE = "frenemies::Scorecard";
 export function useScorecard(account: string) {
   return useQuery(
     ["scorecard", account],
-    async (): Promise<ObjectData<Scorecard> | null> => {
+    async () => {
       const objects = await provider.getObjectsOwnedByAddress(account);
       const search = objects.find((v) => v.type.includes(SCORECARD_TYPE));
 

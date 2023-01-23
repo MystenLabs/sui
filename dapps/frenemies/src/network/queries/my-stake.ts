@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { StakedSui } from "./../types";
-import { getRawObjectParsedUnsafe, ObjectData } from "../rawObject";
-import provider from "../provider";
 import { useQuery } from "@tanstack/react-query";
+import { getRawObjectParsedUnsafe } from "../rawObject";
+import { StakedSui } from "./../types";
+import provider from "../provider";
 
 /**
  * Type signature for the Scorecard type.
@@ -21,7 +21,7 @@ const STAKED_SUI = "staking_pool::StakedSui";
 export function useMyStake(account: string) {
   return useQuery(
     ["my-stake", account],
-    async (): Promise<ObjectData<StakedSui>[] | null> => {
+    async () => {
       const objects = await provider.getObjectsOwnedByAddress(account);
       const search = objects.filter((v) => v.type.includes(STAKED_SUI));
 
