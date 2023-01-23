@@ -152,6 +152,54 @@ module sui::delegation_tests {
     }
 
     #[test]
+    fun test_switch_delegation_zero_rewards() {
+        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            // Create a delegation to VALIDATOR_ADDR_1.
+            sui_system::request_add_delegation(
+                &mut system_state, coin::mint_for_testing(50, ctx), VALIDATOR_ADDR_1, ctx);
+            test_scenario::return_shared(system_state);
+        };
+
+        // Advance the epoch with no rewards.
+        governance_test_utils::advance_epoch(scenario);
+        
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        { 
+            let delegation = test_scenario::take_from_sender<Delegation>(scenario);
+            let staked_sui = test_scenario::take_from_sender<StakedSui>(scenario);
+            let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+            let ctx = test_scenario::ctx(scenario);
+
+            // Switch stake from VALIDATOR_ADDR_1 to VALIDATOR_ADDR_2
+            sui_system::request_switch_delegation(
+                &mut system_state, delegation, staked_sui, VALIDATOR_ADDR_2, ctx);
+            test_scenario::return_shared(system_state);
+        };
+
+        governance_test_utils::advance_epoch(scenario);
+        test_scenario::next_tx(scenario, DELEGATOR_ADDR_1);
+        {
+            let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
+            // the delegator got no rewards from the previous validator so she
+            // didn't get any additional StakedSui object.
+            assert!(vector::length(&staked_sui_ids) == 1, 0);
+            let staked_sui = test_scenario::take_from_sender_by_id(scenario, *vector::borrow(&staked_sui_ids, 0));
+            assert!(staking_pool::staked_sui_amount(&staked_sui) == 50, 0); 
+            assert!(staking_pool::validator_address(&staked_sui) == VALIDATOR_ADDR_2, 0); 
+            test_scenario::return_to_sender(scenario, staked_sui);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     fun test_cancel_delegation_request() {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;

@@ -1409,13 +1409,18 @@ the <code>from</code> validator's pool, and deposits it into the <code><b>to</b>
         <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&rewards)) {
             <b>let</b> delegator = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> delegators);
             <b>let</b> new_stake = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> rewards);
-            <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(
-                to_validator,
-                new_stake,
-                <a href="_none">option::none</a>(), // no time lock for rewards
-                delegator,
-                ctx
-            );
+            // Only add delegation when the reward is non-empty.
+            <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&new_stake) == 0) {
+                <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(new_stake);
+            } <b>else</b> {
+                <a href="validator.md#0x2_validator_request_add_delegation">validator::request_add_delegation</a>(
+                    to_validator,
+                    new_stake,
+                    <a href="_none">option::none</a>(), // no time lock for rewards
+                    delegator,
+                    ctx
+                );
+            }
         };
         <a href="_destroy_empty">vector::destroy_empty</a>(rewards);
     };
