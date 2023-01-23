@@ -1,13 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ActiveValidator } from '@mysten/sui.js';
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo } from 'react';
 
-import { calculateAPY } from '../calculateAPY';
-import { getName } from '../usePendingDelegation';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
@@ -22,20 +18,16 @@ const TRUNCATE_PREFIX_LENGTH = 6;
 type ValidatorListItemProp = {
     selected?: boolean;
     // APY can be N/A
-    validator: ActiveValidator;
-    epoch: number;
+    apy: number;
+    validatorName: string;
+    validatorAddress: string;
 };
 export function ValidatorListItem({
     selected,
-    validator,
-    epoch,
+    validatorName,
+    apy,
+    validatorAddress,
 }: ValidatorListItemProp) {
-    const validatorAddress = validator.fields.metadata.fields.sui_address;
-    const apy = useMemo(
-        () => calculateAPY(validator, epoch),
-        [validator, epoch]
-    );
-
     const truncatedAddress = useMiddleEllipsis(
         validatorAddress,
         TRUNCATE_MAX_LENGTH,
@@ -43,7 +35,6 @@ export function ValidatorListItem({
     );
 
     const logo = null;
-    const validatorName = getName(validator.fields.metadata.fields.name);
 
     return (
         <AnimatePresence>
