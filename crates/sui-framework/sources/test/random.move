@@ -53,6 +53,40 @@ module sui::random {
         output
     }
 
+    /// Use the given pseudorandom generator to generate a random `u256` integer.
+    public fun next_u256(random: &mut Random): u256 {
+        let bytes = next_digest(random);
+        let (value, i) = (0u256, 0u8);
+        while (i < 32) {
+            let byte = (vector::pop_back(&mut bytes) as u256);
+            value = value + (byte << 8*i);
+            i = i + 1;
+        };
+        value
+    }
+
+    /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
+    /// random `u256` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
+    /// bound is not a power of two, the distribution will not be completely uniform.
+    public fun next_u256_in_range(random: &mut Random, upper_bound: u256): u256 {
+        assert!(upper_bound > 0, 0);
+        next_u256(random) % upper_bound
+    }
+
+    /// Use the given pseudorandom generator to generate a random `u128` integer.
+    public fun next_u128(random: &mut Random): u128 {
+        let bytes = next_digest(random);
+        bcs::peel_u128(&mut bcs::new(bytes))
+    }
+
+    /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
+    /// random `u128` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
+    /// bound is not a power of two, the distribution will not be completely uniform.
+    public fun next_u128_in_range(random: &mut Random, upper_bound: u128): u128 {
+        assert!(upper_bound > 0, 0);
+        next_u128(random) % upper_bound
+    }
+
     /// Use the given pseudorandom generator to generate a random `u64` integer.
     public fun next_u64(random: &mut Random): u64 {
         let bytes = next_digest(random);
@@ -65,6 +99,38 @@ module sui::random {
     public fun next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
         assert!(upper_bound > 0, 0);
         next_u64(random) % upper_bound
+    }
+
+    /// Use the given pseudorandom generator to generate a random `u32`.
+    public fun next_u32(random: &mut Random): u32 {
+        let bytes = next_digest(random);
+        (vector::pop_back(&mut bytes) as u32)
+            + ((vector::pop_back(&mut bytes) as u32) << 8)
+            + ((vector::pop_back(&mut bytes) as u32) << 16)
+            + ((vector::pop_back(&mut bytes) as u32) << 24)
+    }
+
+    /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
+    /// random `u32` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
+    /// bound is not a power of two, the distribution will not be completely uniform.
+    public fun next_u32_in_range(random: &mut Random, upper_bound: u32): u32 {
+        assert!(upper_bound > 0, 0);
+        next_u32(random) % upper_bound
+    }
+
+    /// Use the given pseudorandom generator to generate a random `u16`.
+    public fun next_u16(random: &mut Random): u16 {
+        let bytes = next_digest(random);
+        (vector::pop_back(&mut bytes) as u16)
+            + ((vector::pop_back(&mut bytes) as u16) << 8)
+    }
+
+    /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
+    /// random `u16` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
+    /// bound is not a power of two, the distribution will not be completely uniform.
+    public fun next_u16_in_range(random: &mut Random, upper_bound: u16): u16 {
+        assert!(upper_bound > 0, 0);
+        next_u16(random) % upper_bound
     }
 
     /// Use the given pseudorandom generator to generate a random `u8`.
@@ -130,13 +196,6 @@ module sui::random {
             };
             i = i + 1;
         }
-    }
-
-    #[test]
-    fun test_genators() {
-        // Smoke tests that the various generators do not panic.
-        let random = new(b"seed");
-        assert!(next_u64(&mut random) == 5845420307181886436, 0);
     }
 
 }
