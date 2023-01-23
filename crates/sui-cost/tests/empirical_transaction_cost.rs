@@ -18,6 +18,7 @@ use sui_types::{
     gas::GasCostSummary,
     messages::{CallArg, ExecutionStatus, ObjectArg},
 };
+use test_utils::authority::spawn_test_authorities;
 use test_utils::messages::move_transaction_with_type_tags;
 use test_utils::transaction::get_framework_object;
 use test_utils::transaction::make_publish_package;
@@ -73,7 +74,7 @@ async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     let mut common_costs_actual: BTreeMap<String, GasCostSummary> = BTreeMap::new();
 
     run_actual_costs().await?.iter().for_each(|(k, actual)| {
-        common_costs_actual.insert(k.clone().to_string(), actual.clone());
+        common_costs_actual.insert(k.to_string(), actual.clone());
     });
     assert_json_snapshot!(common_costs_actual);
 
@@ -270,6 +271,7 @@ async fn run_actual_costs(
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
+    let _ = spawn_test_authorities(gas_objects.clone(), &configs).await;
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -277,19 +279,19 @@ async fn run_actual_costs(
     let tx_map = create_txes(sender, &keypair, &gas_objects, &configs).await;
     for (tx_type, tx) in tx_map {
         let gas_used = if tx_type.is_shared_object_tx() {
-            submit_shared_object_transaction(tx.clone(), configs.validator_set())
+            submit_shared_object_transaction(tx, configs.validator_set())
                 .await
                 .unwrap()
                 .gas_cost_summary()
                 .clone()
         } else {
-            submit_single_owner_transaction(tx.clone(), configs.validator_set())
+            submit_single_owner_transaction(tx, configs.validator_set())
                 .await
                 .gas_cost_summary()
                 .clone()
         };
 
-        ret.insert(tx_type.clone(), gas_used.clone());
+        ret.insert(tx_type, gas_used);
     }
     Ok(ret)
 }
