@@ -49,7 +49,7 @@ use tokio::sync::Barrier;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
-    let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
+    let mut config = telemetry_subscribers::TelemetryConfig::new();
     config.log_string = Some("warn".to_string());
     if !opts.log_path.is_empty() {
         config.log_file = Some(opts.log_path.clone());

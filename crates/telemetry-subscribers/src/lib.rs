@@ -16,7 +16,7 @@
 //!
 //! ```rust
 //!   use telemetry_subscribers::TelemetryConfig;
-//!   let (_guard, _handle) = TelemetryConfig::new("my_app").init();
+//!   let (_guard, _handle) = TelemetryConfig::new().init();
 //! ```
 //!
 //! It is important to retain the guard until the end of the program.  Assign it in the main fn and keep it,
@@ -110,12 +110,8 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 /// - json_log_output: Output JSON logs to stdout only.
 /// - log_file: If defined, write output to a file starting with this name, ex app.log
 /// - log_level: error/warn/info/debug/trace, defaults to info
-/// - service_name:
 #[derive(Default, Clone, Debug)]
 pub struct TelemetryConfig {
-    /// The name of the service for Jaeger and Bunyan
-    pub service_name: String,
-
     /// Enables Tokio Console debugging on port 6669
     pub tokio_console: bool,
     /// Output JSON logs.
@@ -208,9 +204,8 @@ fn set_panic_hook(crash_on_panic: bool) {
 }
 
 impl TelemetryConfig {
-    pub fn new(service_name: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            service_name: service_name.to_owned(),
             tokio_console: false,
             json_log_output: false,
             log_file: None,
@@ -338,9 +333,7 @@ impl TelemetryConfig {
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
         // gets flushed and closed. If this is dropped too early then no output will appear!
-        let guards = TelemetryGuards {
-            worker_guard,
-        };
+        let guards = TelemetryGuards { worker_guard };
 
         (guards, filter_handle)
     }
@@ -380,7 +373,7 @@ mod tests {
     fn test_telemetry_init() {
         let registry = prometheus::Registry::new();
         // Default logging level is INFO, but here we set the span level to DEBUG.  TRACE spans should be ignored.
-        let config = TelemetryConfig::new("my_app")
+        let config = TelemetryConfig::new()
             .with_span_level(Level::DEBUG)
             .with_prom_registry(&registry);
         let _guard = config.init();

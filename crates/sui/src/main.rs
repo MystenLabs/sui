@@ -20,12 +20,12 @@ async fn main() {
     let cmd: SuiCommand = SuiCommand::parse();
     let _guard = match cmd {
         SuiCommand::Console { .. } | SuiCommand::Client { .. } => {
-            telemetry_subscribers::TelemetryConfig::new(bin_name)
+            telemetry_subscribers::TelemetryConfig::new()
                 .with_log_file(&format!("{bin_name}.log"))
                 .with_env()
                 .init()
         }
-        _ => telemetry_subscribers::TelemetryConfig::new(bin_name)
+        _ => telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init(),
     };
