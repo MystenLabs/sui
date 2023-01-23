@@ -161,6 +161,18 @@ Aborts with <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExist
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> intrinsic;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_dynamic_field_borrow"></a>
 
 ## Function `borrow`
