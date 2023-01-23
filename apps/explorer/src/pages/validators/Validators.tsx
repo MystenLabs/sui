@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ActiveValidator, type ValidatorsFields } from '@mysten/sui.js';
+import {
+    is,
+    SuiObject,
+    type ActiveValidator,
+    type ValidatorsFields,
+} from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -38,7 +43,8 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 name: validatorName,
                 stake:
                     +validator.fields.delegation_staking_pool.fields
-                        .sui_balance + +validator.fields.stake_amount,
+                        .delegation_token_supply.fields.value +
+                    +validator.fields.stake_amount,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate,
                 address: validator.fields.metadata.fields.sui_address,
@@ -154,7 +160,8 @@ function ValidatorPageResult() {
         return validators.reduce(
             (acc, cur) =>
                 acc +
-                +cur.fields.delegation_staking_pool.fields.sui_balance +
+                +cur.fields.delegation_staking_pool.fields
+                    .delegation_token_supply.fields.value +
                 +cur.fields.stake_amount,
             0
         );
@@ -229,7 +236,7 @@ function ValidatorPageResult() {
                                 />
 
                                 <Stats
-                                    label="Last Epoch Reward"
+                                    label="Last Epoch SUI Rewards"
                                     tooltip="Coming soon"
                                     unavailable={
                                         lastEpochRewardOnAllValidators <= 0
@@ -244,7 +251,7 @@ function ValidatorPageResult() {
                                 </Stats>
                             </div>
                             <div className="flex flex-col gap-8">
-                                <Stats label="Total Staked">
+                                <Stats label="Total SUI Staked">
                                     <DelegationAmount
                                         amount={totalStaked || 0n}
                                         isStats
