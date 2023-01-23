@@ -959,7 +959,12 @@ pub fn generate_genesis_system_object(
         consensus_addresses.push(validator.narwhal_primary_address());
         worker_addresses.push(validator.narwhal_worker_address());
         names.push(validator.name().to_owned().into_bytes());
-        descriptions.push(validator.description.clone().into_bytes());
+        descriptions.push({
+            // Replace newlines with spaces and truncate to at most 149 bytes
+            let mut description = validator.description.replace('\n', " ").into_bytes();
+            description.truncate(150);
+            description
+        });
         image_url.push(validator.image_url.clone().into_bytes());
         project_url.push(validator.project_url.clone().into_bytes());
         stakes.push(validator.stake());
