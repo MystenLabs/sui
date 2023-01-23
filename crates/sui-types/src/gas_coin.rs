@@ -73,7 +73,7 @@ impl GasCoin {
     }
 
     pub fn layout() -> MoveStructLayout {
-        Coin::layout(Self::type_())
+        Coin::layout(GAS::type_())
     }
 }
 
