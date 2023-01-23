@@ -235,6 +235,9 @@ module sui::test_scenario {
     /// Returns true if the object with `ID` id was in the inventory for `account`
     public native fun was_taken_from_address(account: address, id: ID): bool;
 
+    /// Returns true if there is an object of type `T` with `ID` id in the inventory for `account`.
+    public native fun is_owned_by_address_of_type<T: key>(account: address, id: ID): bool;
+
     // == from sender ==
 
     /// helper for `take_from_address_by_id` that operates over the transaction sender
@@ -339,7 +342,7 @@ module sui::test_scenario {
     // == internal ==
 
     // internal function that ends the transaction, realizing changes
-    native fun end_transaction(): TransactionEffects;
+    public native fun end_transaction(): TransactionEffects;
 
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...
 

@@ -60,8 +60,8 @@ module sui::governance_test_utils {
             balance::create_supply_for_testing(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
             1024, // max_validator_candidate_count
-            0, // min_validator_stake
-            0, // stake subsidy
+            1, // min_validator_stake
+            1000000, // stake subsidy
             0, // epoch_start_timestamp_ms
         )
     }

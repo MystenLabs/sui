@@ -36,6 +36,7 @@
 -  [Function `staked_sui_amount`](#0x2_staking_pool_staked_sui_amount)
 -  [Function `delegation_request_epoch`](#0x2_staking_pool_delegation_request_epoch)
 -  [Function `delegation_token_amount`](#0x2_staking_pool_delegation_token_amount)
+-  [Function `staked_sui_id`](#0x2_staking_pool_staked_sui_id)
 -  [Function `pool_token_exchange_rate`](#0x2_staking_pool_pool_token_exchange_rate)
 -  [Function `new_pending_withdraw_entry`](#0x2_staking_pool_new_pending_withdraw_entry)
 -  [Function `get_sui_amount`](#0x2_staking_pool_get_sui_amount)
@@ -1275,6 +1276,28 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_delegation_token_amount">delegation_token_amount</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>): u64 { <a href="balance.md#0x2_balance_value">balance::value</a>(&delegation.pool_tokens) }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_staked_sui_id"></a>
+
+## Function `staked_sui_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_staked_sui_id">staked_sui_id</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_staked_sui_id">staked_sui_id</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>): ID { delegation.staked_sui_id }
 </code></pre>
 
 

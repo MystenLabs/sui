@@ -572,6 +572,11 @@ module sui::sui_system {
     public fun epoch_start_timestamp_ms(self: &SuiSystemState): u64 {
         self.epoch_start_timestamp_ms
     }
+    
+    /// Return the balance of the storage fund.
+    public fun storage_fund_balance(self: &SuiSystemState): u64 {
+        balance::value(&self.storage_fund)
+    }
 
     /// Returns the amount of stake delegated to `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.

@@ -477,6 +477,8 @@ module sui::staking_pool {
 
     public fun delegation_token_amount(delegation: &Delegation): u64 { balance::value(&delegation.pool_tokens) }
 
+    public fun staked_sui_id(delegation: &Delegation): ID { delegation.staked_sui_id }
+
     public fun pool_token_exchange_rate(pool: &StakingPool): PoolTokenExchangeRate {
         PoolTokenExchangeRate {
             sui_amount: pool.sui_balance,

@@ -30,6 +30,7 @@
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
+-  [Function `storage_fund_balance`](#0x2_sui_system_storage_fund_balance)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
@@ -1230,6 +1231,31 @@ Returns unix timestamp of the start of current epoch
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
     self.epoch_start_timestamp_ms
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_storage_fund_balance"></a>
+
+## Function `storage_fund_balance`
+
+Return the balance of the storage fund.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_storage_fund_balance">storage_fund_balance</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_storage_fund_balance">storage_fund_balance</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
+    <a href="balance.md#0x2_balance_value">balance::value</a>(&self.storage_fund)
 }
 </code></pre>
 
