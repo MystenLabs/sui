@@ -3,6 +3,7 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import { SUI_TYPE_ARG, type SuiAddress } from '@mysten/sui.js';
+import cl from 'classnames';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -40,7 +41,10 @@ export function TokenIconLink({
     return (
         <Link
             to="/stake"
-            className="flex mb-5 rounded-2xl w-full p-5 justify-between no-underline bg-sui/10 text-hero"
+            className={cl(
+                !stakingEnabled && '!bg-gray-40 ',
+                'flex mb-5 rounded-2xl w-full p-3.75 justify-between no-underline bg-sui/10 '
+            )}
             tabIndex={!stakingEnabled ? -1 : undefined}
         >
             {isLoading || queryResult.isLoading ? (
@@ -51,16 +55,27 @@ export function TokenIconLink({
                 <div className="flex gap-2.5 items-center">
                     <Icon
                         icon={SuiIcons.Union}
-                        className="text-heading4 font-normal"
+                        className={cl(
+                            !stakingEnabled ? 'text-gray-60' : 'text-hero',
+                            'text-heading4 font-normal '
+                        )}
                     />
                     <div className="flex flex-col gap-1.25">
-                        <Text variant="body" weight="semibold" color="hero">
+                        <Text
+                            variant="body"
+                            weight="semibold"
+                            color={!stakingEnabled ? 'gray-60' : 'hero'}
+                        >
                             {totalActivePendingStake
                                 ? 'Currently Staked'
                                 : 'Stake & Earn SUI'}
                         </Text>
                         {!!totalActivePendingStake && (
-                            <Text variant="body" weight="semibold" color="hero">
+                            <Text
+                                variant="body"
+                                weight="semibold"
+                                color={!stakingEnabled ? 'gray-60' : 'hero'}
+                            >
                                 {formatted} {symbol}
                             </Text>
                         )}

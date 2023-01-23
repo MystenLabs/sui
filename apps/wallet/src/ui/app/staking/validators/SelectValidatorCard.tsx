@@ -21,7 +21,7 @@ export function SelectValidatorCard() {
         null
     );
     const [sortKey, setSortKey] = useState<'name' | 'apy'>('apy');
-    const [sortAscending, setSortAscending] = useState(true);
+    const [sortAscending, setSortAscending] = useState(false);
 
     const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 
@@ -113,8 +113,8 @@ export function SelectValidatorCard() {
                                         className={cl(
                                             'text-captionSmall font-thin  text-hero',
                                             sortAscending
-                                                ? '-rotate-90'
-                                                : 'rotate-90'
+                                                ? 'rotate-90'
+                                                : '-rotate-90'
                                         )}
                                     />
                                 )}
@@ -141,8 +141,8 @@ export function SelectValidatorCard() {
                                         className={cl(
                                             'text-captionSmall font-thin  text-hero',
                                             sortAscending
-                                                ? '-rotate-90'
-                                                : 'rotate-90'
+                                                ? 'rotate-90'
+                                                : '-rotate-90'
                                         )}
                                     />
                                 )}

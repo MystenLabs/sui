@@ -60,9 +60,9 @@ export function DelegationCard({
                 validator: address,
                 staked: stakedId,
             }).toString()}`}
-            className="flex no-underline flex-col py-3 px-3.75 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/30 bg-transparent"
+            className="flex no-underline flex-col p-3 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/30 bg-transparent"
         >
-            <div className="flex justify-between items-start mb-2">
+            <div className="flex justify-between items-start mb-1">
                 <ValidatorLogo
                     validatorAddress={address}
                     size="subtitle"
@@ -78,8 +78,8 @@ export function DelegationCard({
                 </div>
             </div>
 
-            <div className="flex-1">
-                <div className="flex items-baseline gap-1 mt-1">
+            <div className="flex-1 mb-4">
+                <div className="flex items-baseline gap-1">
                     <Text variant="body" weight="semibold" color="gray-90">
                         {stakedFormatted}
                     </Text>
