@@ -37,8 +37,8 @@ export function ValidatorStats({
     const delegatedStake =
         validatorData.fields.delegation_staking_pool.fields
             .delegation_token_supply.fields.value;
-    const selfStake = validatorData.fields.stake_amount;
-    const totalStake = +selfStake + +delegatedStake;
+    const selfStake = validatorData.fields.delegation_staking_pool.fields.sui_balance;
+    const totalStake = +validatorData.fields.delegation_staking_pool.fields.sui_balance + +delegatedStake;
     const commission = +validatorData.fields.commission_rate * 100;
     const lastEpoch = +epoch;
 
@@ -69,7 +69,7 @@ export function ValidatorStats({
                     <div className="flex flex-col gap-8 lg:flex-row">
                         <Stats
                             label="Staking APY"
-                            tooltip="Coming soon"
+                            tooltip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
                             unavailable={apy <= 0}
                         >
                             <Heading
@@ -93,18 +93,18 @@ export function ValidatorStats({
                                 {commission}%
                             </Heading>
                         </Stats>
-                        <Stats label="Total SUI Staked" tooltip="Coming soon">
+                        <Stats label="Total SUI Staked" tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards.">
                             <DelegationAmount amount={totalStake} isStats />
                         </Stats>
                     </div>
                     <div className="flex flex-col gap-8 lg:flex-row">
                         <Stats
                             label="Delegators"
-                            tooltip="Coming soon"
+                            tooltip="The number of active delegators"
                             unavailable
                         />
 
-                        <Stats label="Delegated Staked" tooltip="Coming soon">
+                        <Stats label="Delegated Staked" tooltip="The total SUI staked by delegators.">
                             <Heading
                                 as="h3"
                                 variant="heading3/semibold"
@@ -113,7 +113,7 @@ export function ValidatorStats({
                                 {delegatedStakePercentage}%
                             </Heading>
                         </Stats>
-                        <Stats label="Self Staked" tooltip="Coming soon">
+                        <Stats label="Self Staked" tooltip="The total SUI staked by this validator.">
                             <Heading
                                 as="h3"
                                 variant="heading3/semibold"
@@ -148,7 +148,7 @@ export function ValidatorStats({
 
                         <Stats
                             label="Total SUI Rewards"
-                            tooltip="Coming soon"
+                            tooltip="The total rewards collected throughout the network’s lifetime."
                             unavailable={+totalRewards <= 0}
                         >
                             <DelegationAmount amount={totalRewards} isStats />

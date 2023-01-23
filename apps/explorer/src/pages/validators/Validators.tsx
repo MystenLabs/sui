@@ -42,8 +42,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 number: index + 1,
                 name: validatorName,
                 stake:
-                    +validator.fields.delegation_staking_pool.fields
-                        .delegation_token_supply.fields.value +
+                    +validator.fields.delegation_staking_pool.fields.sui_balance +
                     +validator.fields.stake_amount,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate,
@@ -237,7 +236,7 @@ function ValidatorPageResult() {
 
                                 <Stats
                                     label="Last Epoch SUI Rewards"
-                                    tooltip="Coming soon"
+                                    tooltip="The stake rewards collected during the last epoch."
                                     unavailable={
                                         lastEpochRewardOnAllValidators <= 0
                                     }
