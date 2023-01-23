@@ -60,7 +60,7 @@ impl TransactionHandler {
             self.transaction_handler_metrics
                 .total_transaction_page_fetch_attempt
                 .inc();
-            let page = self.get_transaction_page(next_cursor).await?;
+            let page = get_transaction_page(self.rpc_client.clone(), next_cursor).await?;
             self.transaction_handler_metrics
                 .total_transaction_page_received
                 .inc();
@@ -72,7 +72,7 @@ impl TransactionHandler {
             let txn_response_res_vec = join_all(
                 txn_digest_vec
                     .into_iter()
-                    .map(|tx_digest| self.get_transaction_response(tx_digest)),
+                    .map(|tx_digest| get_transaction_response(self.rpc_client.clone(), tx_digest)),
             )
             .await;
             info!(
@@ -110,41 +110,41 @@ impl TransactionHandler {
             }
         }
     }
+}
 
-    async fn get_transaction_page(
-        &self,
-        cursor: Option<TransactionDigest>,
-    ) -> Result<TransactionsPage, IndexerError> {
-        self.rpc_client
-            .read_api()
-            .get_transactions(
-                TransactionQuery::All,
-                cursor,
-                Some(TRANSACTION_PAGE_SIZE),
-                false,
-            )
-            .await
-            .map_err(|e| {
-                IndexerError::FullNodeReadingError(format!(
-                    "Failed reading transaction page with cursor {:?} and err: {:?}",
-                    cursor, e
-                ))
-            })
-    }
+pub async fn get_transaction_page(
+    rpc_client: SuiClient,
+    cursor: Option<TransactionDigest>,
+) -> Result<TransactionsPage, IndexerError> {
+    rpc_client
+        .read_api()
+        .get_transactions(
+            TransactionQuery::All,
+            cursor,
+            Some(TRANSACTION_PAGE_SIZE),
+            false,
+        )
+        .await
+        .map_err(|e| {
+            IndexerError::FullNodeReadingError(format!(
+                "Failed reading transaction page with cursor {:?} and err: {:?}",
+                cursor, e
+            ))
+        })
+}
 
-    async fn get_transaction_response(
-        &self,
-        tx_digest: TransactionDigest,
-    ) -> Result<SuiTransactionResponse, IndexerError> {
-        self.rpc_client
-            .read_api()
-            .get_transaction(tx_digest)
-            .await
-            .map_err(|e| {
-                IndexerError::FullNodeReadingError(format!(
-                    "Failed reading transaction response with tx digest {:?} and err: {:?}",
-                    tx_digest, e
-                ))
-            })
-    }
+pub async fn get_transaction_response(
+    rpc_client: SuiClient,
+    tx_digest: TransactionDigest,
+) -> Result<SuiTransactionResponse, IndexerError> {
+    rpc_client
+        .read_api()
+        .get_transaction(tx_digest)
+        .await
+        .map_err(|e| {
+            IndexerError::FullNodeReadingError(format!(
+                "Failed reading transaction response with tx digest {:?} and err: {:?}",
+                tx_digest, e
+            ))
+        })
 }
