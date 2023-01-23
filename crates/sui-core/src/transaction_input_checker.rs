@@ -158,6 +158,21 @@ async fn check_gas(
             TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
             _ => 0,
         };
+
+        // Ensure that a supplied transaction has specified a sufficiently high gas price,
+        // otherwise reject the transaction
+        let reference_gas_price = store
+            .perpetual_tables
+            .get_sui_system_state_object()
+            .expect("must be able to load system state object")
+            .reference_gas_price;
+        if computation_gas_price < reference_gas_price {
+            return Err(SuiError::GasPriceTooLow {
+                gas_price: computation_gas_price,
+                reference_gas_price,
+            });
+        }
+
         // TODO: We should revisit how we compute gas price and compare to gas budget.
         let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
 

@@ -315,6 +315,15 @@ pub enum SuiError {
         gas_budget: u128,
         gas_price: u64,
     },
+    #[error(
+        "Gas price: {} is lower than reference_gas_price: {}.",
+        gas_price,
+        reference_gas_price
+    )]
+    GasPriceTooLow {
+        gas_price: u64,
+        reference_gas_price: u64,
+    },
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
