@@ -29,7 +29,8 @@ export function getEventsSummary(
         if (
             'coinBalanceChange' in event &&
             event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType)
+            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
+            event?.coinBalanceChange?.transactionModule !== 'gas'
         ) {
             const { coinBalanceChange } = event;
             const { coinType, amount, owner } = coinBalanceChange;
