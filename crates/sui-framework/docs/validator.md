@@ -732,10 +732,11 @@ Process pending delegations and withdraws, called at the end of the epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_process_pending_delegations_and_withdraws">process_pending_delegations_and_withdraws</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
-    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">staking_pool::process_pending_delegations</a>(&<b>mut</b> self.delegation_staking_pool, ctx);
     <b>let</b> reward_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraws">staking_pool::process_pending_delegation_withdraws</a>(
         &<b>mut</b> self.delegation_staking_pool, ctx);
     self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - reward_withdraw_amount;
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">staking_pool::process_pending_delegations</a>(&<b>mut</b> self.delegation_staking_pool, ctx);
+    // TODO: consider bringing this <b>assert</b> back when we are more confident.
     // <b>assert</b>!(<a href="validator.md#0x2_validator_delegate_amount">delegate_amount</a>(self) == self.metadata.next_epoch_delegation, 0);
 }
 </code></pre>

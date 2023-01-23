@@ -14,6 +14,7 @@ module sui::staking_pool {
     use std::vector;
     use sui::table_vec::{Self, TableVec};
     use sui::linked_table::{Self, LinkedTable};
+    use sui::math;
 
     friend sui::validator;
     friend sui::validator_set;
@@ -352,6 +353,10 @@ module sui::staking_pool {
             if (total_sui_withdraw_amount >= principal_withdraw_amount)
                 total_sui_withdraw_amount - principal_withdraw_amount
             else 0;
+        // This may happen when we are withdrawing everything from the pool and
+        // the rewards pool balance may be less than reward_withdraw_amount.
+        // TODO: FIGURE OUT EXACTLY WHY THIS CAN HAPPEN.
+        reward_withdraw_amount = math::min(reward_withdraw_amount, balance::value(&pool.rewards_pool));
         balance::decrease_supply(
             &mut pool.delegation_token_supply, 
             withdrawn_pool_tokens
