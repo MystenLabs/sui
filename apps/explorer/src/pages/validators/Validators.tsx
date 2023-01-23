@@ -85,7 +85,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                                 >
                                     {name}
                                 </Text>
-                            </div>{' '}
+                            </div>
                         </Link>
                     );
                 },

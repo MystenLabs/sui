@@ -21,6 +21,18 @@ export interface TableCardProps<DataType extends object> {
     defaultSorting?: SortingState;
 }
 
+function AscDescIcon({ sorting }: { sorting: 'asc' | 'desc' }) {
+    return (
+        <ArrowRight12
+            fill="currentColor"
+            className={clsx(
+                sorting === 'asc' ? '-rotate-90' : 'rotate-90',
+                ' text-steel-darker'
+            )}
+        />
+    );
+}
+
 export function TableCard<DataType extends object>({
     refetching,
     data,
@@ -84,7 +96,7 @@ export function TableCard<DataType extends object>({
                                         onClick={
                                             column.columnDef.enableSorting
                                                 ? column.getToggleSortingHandler()
-                                                : void 0
+                                                : undefined
                                         }
                                     >
                                         <div
@@ -101,21 +113,16 @@ export function TableCard<DataType extends object>({
                                                       column.columnDef.header,
                                                       getContext()
                                                   )}
-                                            {{
-                                                asc: (
-                                                    <ArrowRight12
-                                                        fill="currentColor"
-                                                        className="-rotate-90 text-steel-darker"
-                                                    />
-                                                ),
-                                                desc: (
-                                                    <ArrowRight12
-                                                        fill="currentColor"
-                                                        className="rotate-90 text-steel-darker"
-                                                    />
-                                                ),
-                                            }[column.getIsSorted() as string] ??
-                                                null}
+
+                                            {column.getIsSorted() && (
+                                                <AscDescIcon
+                                                    sorting={
+                                                        column.getIsSorted() as
+                                                            | 'asc'
+                                                            | 'desc'
+                                                    }
+                                                />
+                                            )}
                                         </div>
                                     </th>
                                 )
