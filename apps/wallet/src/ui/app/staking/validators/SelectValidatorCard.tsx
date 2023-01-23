@@ -89,18 +89,26 @@ export function SelectValidatorCard() {
             <Content className="flex flex-col w-full items-center">
                 <div className="flex flex-col w-full items-center -top-5 bg-white sticky pt-5 pb-2.5 z-50 mt-0">
                     <div className="flex items-start w-full mb-2">
-                        <Text variant="subtitle" weight="medium" color="hero">
+                        <Text
+                            variant="subtitle"
+                            weight="medium"
+                            color="steel-darker"
+                        >
                             Sort by:
                         </Text>
                         <div className="flex items-center ml-2 gap-1.5">
                             <button
-                                className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer w-10"
+                                className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
                                 onClick={() => handleSortByKey('apy')}
                             >
                                 <Text
                                     variant="caption"
                                     weight="medium"
-                                    color="steel-darker"
+                                    color={
+                                        sortKey === 'apy'
+                                            ? 'hero'
+                                            : 'steel-darker'
+                                    }
                                 >
                                     APY
                                 </Text>
@@ -108,7 +116,7 @@ export function SelectValidatorCard() {
                                     <Icon
                                         icon={SuiIcons.ArrowLeft}
                                         className={cl(
-                                            'text-captionSmall font-thin  text-steel-darker',
+                                            'text-captionSmall font-thin  text-hero',
                                             sortAscending
                                                 ? '-rotate-90'
                                                 : 'rotate-90'
@@ -124,7 +132,11 @@ export function SelectValidatorCard() {
                                 <Text
                                     variant="caption"
                                     weight="medium"
-                                    color="steel-darker"
+                                    color={
+                                        sortKey === 'name'
+                                            ? 'hero'
+                                            : 'steel-darker'
+                                    }
                                 >
                                     Name
                                 </Text>
@@ -132,7 +144,7 @@ export function SelectValidatorCard() {
                                     <Icon
                                         icon={SuiIcons.ArrowLeft}
                                         className={cl(
-                                            'text-captionSmall font-thin  text-steel-darker',
+                                            'text-captionSmall font-thin  text-hero',
                                             sortAscending
                                                 ? '-rotate-90'
                                                 : 'rotate-90'
