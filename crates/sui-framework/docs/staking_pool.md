@@ -48,6 +48,7 @@
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="linked_table.md#0x2_linked_table">0x2::linked_table</a>;
 <b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
+<b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
 <b>use</b> <a href="table_vec.md#0x2_table_vec">0x2::table_vec</a>;
@@ -960,6 +961,10 @@ time in <code>request_withdraw_stake</code>.
         <b>if</b> (total_sui_withdraw_amount &gt;= principal_withdraw_amount)
             total_sui_withdraw_amount - principal_withdraw_amount
         <b>else</b> 0;
+    // This may happen when we are withdrawing everything from the pool and
+    // the rewards pool <a href="balance.md#0x2_balance">balance</a> may be less than reward_withdraw_amount.
+    // TODO: FIGURE OUT EXACTLY WHY THIS CAN HAPPEN.
+    reward_withdraw_amount = <a href="math.md#0x2_math_min">math::min</a>(reward_withdraw_amount, <a href="balance.md#0x2_balance_value">balance::value</a>(&pool.rewards_pool));
     <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(
         &<b>mut</b> pool.delegation_token_supply,
         withdrawn_pool_tokens

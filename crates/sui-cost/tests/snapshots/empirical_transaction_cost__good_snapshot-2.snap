@@ -4,13 +4,13 @@ expression: common_costs_estimate
 ---
 {
   "MergeCoin": {
-    "computation_cost": 7820,
-    "storage_cost": 11259,
+    "computation_cost": 7824,
+    "storage_cost": 11264,
     "storage_rebate": 0
   },
   "Publish": {
-    "computation_cost": 8680,
-    "storage_cost": 12462,
+    "computation_cost": 8683,
+    "storage_cost": 12467,
     "storage_rebate": 0
   },
   "SharedCounterAssertValue": {
@@ -29,8 +29,8 @@ expression: common_costs_estimate
     "storage_rebate": 0
   },
   "SplitCoin": {
-    "computation_cost": 7798,
-    "storage_cost": 11226,
+    "computation_cost": 7802,
+    "storage_cost": 11232,
     "storage_rebate": 0
   },
   "TransferPortionSuiCoin": {
