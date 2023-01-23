@@ -64,7 +64,7 @@ module sui::random {
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
         assert!(upper_bound > 0, 0);
-        next_u64(random) & upper_bound
+        next_u64(random) % upper_bound
     }
 
     /// Use the given pseudorandom generator to generate a random `u8`.
@@ -75,9 +75,9 @@ module sui::random {
     /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
     /// random `u8` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
-    public fun next_u8_in_range(random: &mut Random, upper_bound: u64): u8 {
+    public fun next_u8_in_range(random: &mut Random, upper_bound: u8): u8 {
         assert!(upper_bound > 0, 0);
-        next_u8(random) & upper_bound
+        next_u8(random) % upper_bound
     }
 
     /// Use the given pseudorandom generator to generate a random `bool`.
