@@ -247,7 +247,7 @@ impl TelemetryConfig {
             self.crash_on_panic = true
         }
 
-        if env::var("ENABLE_JSON_LOGS").is_ok() {
+        if env::var("RUST_LOG_JSON").is_ok() {
             self.json_log_output = true;
         }
 
