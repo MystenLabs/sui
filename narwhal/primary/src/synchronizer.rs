@@ -1,13 +1,12 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use arc_swap::{ArcSwap, Guard};
-use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
 use network::{anemo_ext::NetworkExt, RetryConfig};
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::sync::watch;
@@ -29,8 +28,6 @@ pub mod synchronizer_tests;
 pub struct Synchronizer {
     /// The public key of this primary.
     name: PublicKey,
-    // The committee information.
-    committee: SharedCommittee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// The persistent storage.
@@ -41,7 +38,7 @@ pub struct Synchronizer {
     /// Get a signal when the round changes.
     rx_consensus_round_updates: watch::Receiver<Round>,
     /// The genesis and its digests.
-    genesis: Arc<ArcSwap<(Epoch, Vec<(CertificateDigest, Certificate)>)>>,
+    genesis: HashMap<CertificateDigest, Certificate>,
     /// The dag used for the external consensus
     dag: Option<Arc<Dag>>,
 }
@@ -60,57 +57,21 @@ impl Synchronizer {
         let genesis = Self::make_genesis(&committee.load());
         Self {
             name,
-            committee,
             worker_cache,
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
             rx_consensus_round_updates,
-            genesis: Arc::new(ArcSwap::from_pointee(genesis)),
+            genesis,
             dag,
         }
     }
 
-    fn make_genesis(committee: &Committee) -> (Epoch, Vec<(CertificateDigest, Certificate)>) {
-        (
-            committee.epoch(),
-            Certificate::genesis(committee)
-                .into_iter()
-                .map(|x| (x.digest(), x))
-                .collect(),
-        )
-    }
-
-    /// Returns genesis certificates for the given Epoch, or returns error if
-    /// the Epoch is not current.
-    fn genesis_for_epoch(
-        &self,
-        epoch: Epoch,
-    ) -> DagResult<Guard<Arc<(Epoch, Vec<(CertificateDigest, Certificate)>)>>> {
-        let genesis_guard = self.genesis.load();
-        match genesis_guard.0.cmp(&epoch) {
-            Ordering::Less => {
-                // Attempt to update cached genesis certs.
-                let committee = self.committee.load();
-                if committee.epoch() != epoch {
-                    debug!(
-                        "synchronizer unable to load a new enough committee: needed {epoch} but got {}",
-                        committee.epoch()
-                    );
-                    return Err(DagError::InvalidEpoch {
-                        expected: committee.epoch(),
-                        received: epoch,
-                    });
-                }
-                self.genesis.store(Arc::new(Self::make_genesis(&committee)));
-                self.genesis_for_epoch(epoch)
-            }
-            Ordering::Equal => Ok(genesis_guard),
-            Ordering::Greater => Err(DagError::InvalidEpoch {
-                expected: genesis_guard.0,
-                received: epoch,
-            }),
-        }
+    fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
+        Certificate::genesis(committee)
+            .into_iter()
+            .map(|x| (x.digest(), x))
+            .collect()
     }
 
     /// Synchronizes batches in the given header with other nodes (through our workers).
@@ -245,16 +206,15 @@ impl Synchronizer {
         &self,
         header: &Header,
     ) -> DagResult<(Vec<Certificate>, Vec<CertificateDigest>)> {
-        let genesis = self.genesis_for_epoch(header.epoch)?;
         let mut missing = Vec::new();
         let mut parents = Vec::new();
         for digest in &header.parents {
-            if let Some(genesis) = genesis.1.iter().find(|(x, _)| x == digest).map(|(_, x)| x) {
-                parents.push(genesis.clone());
-                continue;
-            }
-
-            match self.certificate_store.read(*digest)? {
+            let cert = if header.round == 1 {
+                self.genesis.get(digest).cloned()
+            } else {
+                self.certificate_store.read(*digest)?
+            };
+            match cert {
                 Some(certificate) => parents.push(certificate),
                 None => missing.push(*digest),
             };
@@ -267,12 +227,17 @@ impl Synchronizer {
     /// certificate to the `CertificateFetcher` which will trigger range fetching of missing
     /// certificates.
     pub async fn check_parents(&self, certificate: &Certificate) -> DagResult<bool> {
-        let genesis = self.genesis_for_epoch(certificate.epoch())?;
-        for digest in &certificate.header.parents {
-            if genesis.1.iter().any(|(x, _)| x == digest) {
-                continue;
+        if certificate.round() == 1 {
+            for digest in &certificate.header.parents {
+                if self.genesis.contains_key(digest) {
+                    continue;
+                }
+                return Ok(false);
             }
+            return Ok(true);
+        }
 
+        for digest in &certificate.header.parents {
             if !self.has_processed_certificate(*digest).await? {
                 self.tx_certificate_fetcher
                     .send(certificate.clone())
@@ -281,7 +246,6 @@ impl Synchronizer {
                 return Ok(false);
             }
         }
-
         Ok(true)
     }
 
@@ -294,6 +258,6 @@ impl Synchronizer {
         if let Some(dag) = &self.dag {
             return Ok(dag.has_ever_contained(digest).await);
         }
-        Ok(self.certificate_store.read(digest)?.is_some())
+        Ok(self.certificate_store.contains(&digest)?)
     }
 }

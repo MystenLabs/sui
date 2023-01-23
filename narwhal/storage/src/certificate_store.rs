@@ -177,6 +177,18 @@ impl CertificateStore {
         }
     }
 
+    /// Retrieves a certificate from the store. If not found
+    /// then None is returned as result.
+    pub fn contains(&self, id: &CertificateDigest) -> StoreResult<bool> {
+        fail::fail_point!("certificate-store-panic", |_| {
+            Err(RocksDBError(format!(
+                "Injected error in certificate store contains_digest"
+            )))
+        });
+
+        self.certificates_by_id.contains_key(id)
+    }
+
     /// Retrieves multiple certificates by their provided ids. The results
     /// are returned in the same sequence as the provided keys.
     pub fn read_all(
@@ -498,6 +510,26 @@ mod test {
         }
 
         result
+    }
+
+    #[tokio::test]
+    async fn test_write_and_read() {
+        // GIVEN
+        let store = new_store(temp_dir());
+
+        // create certificates for 10 rounds
+        let certs = certificates(10);
+
+        // store them
+        for cert in &certs {
+            store.write(cert.clone()).unwrap();
+        }
+
+        // verify
+        for cert in &certs {
+            store.contains(&cert.digest()).unwrap();
+            assert_eq!(cert, &store.read(cert.digest()).unwrap().unwrap())
+        }
     }
 
     #[tokio::test]
