@@ -595,7 +595,9 @@ impl Core {
             return Err(DagError::Suspended);
         }
 
-        // Store the certificate.
+        // Store the certificate. Afterwards, the certificate must be sent to consensus
+        // or Narwhal needs to shutdown, to avoid insistencies certificate store and
+        // consensus dag.
         self.certificate_store.write(certificate.clone())?;
 
         // Update metrics for processed certificates.
@@ -608,19 +610,30 @@ impl Core {
             .certificates_processed
             .with_label_values(&[certificate_source])
             .inc();
+
         // Append the certificate to the aggregator of the
         // corresponding round.
-        self.append_certificate_in_aggregator(certificate.clone())
-            .await?;
+        let digest = certificate.digest();
+        if let Err(e) = self
+            .append_certificate_in_aggregator(certificate.clone())
+            .await
+        {
+            warn!(
+                "Failed to aggregate certificate {} for header: {}",
+                digest, e
+            );
+            return Err(DagError::ShuttingDown);
+        }
 
         // Send it to the consensus layer.
-        let digest = certificate.header.digest();
         if let Err(e) = self.tx_new_certificates.send(certificate).await {
             warn!(
                 "Failed to deliver certificate {} to the consensus: {}",
                 digest, e
             );
+            return Err(DagError::ShuttingDown);
         }
+
         Ok(())
     }
 
