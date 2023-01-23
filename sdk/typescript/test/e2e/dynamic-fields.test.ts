@@ -25,12 +25,14 @@ describe.each([{ useLocalTxnBuilder: true }])(
       const packagePath = __dirname + '/./data/dynamic_fields';
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
 
-      const objs_owned_by_address =
-        await toolbox.provider.getObjectsOwnedByAddress(toolbox.address());
-      const obj = objs_owned_by_address.filter(
-        (o) => o.type === `${packageId}::dynamic_fields_test::Test`
-      );
-      parent_objectID = obj[0].objectId;
+      await toolbox.provider
+        .getObjectsOwnedByAddress(toolbox.address())
+        .then(async function (objects) {
+          const obj = await objects.filter(
+            (o) => o.type === `${packageId}::dynamic_fields_test::Test`
+          );
+          parent_objectID = obj[0].objectId;
+        });
     });
 
     it('get all dynamic fields', async () => {
@@ -51,18 +53,21 @@ describe.each([{ useLocalTxnBuilder: true }])(
       expect(dynamic_fields.nextCursor).not.toEqual(null);
     });
     it('go to next cursor', async () => {
-      const dynamic_fields = await toolbox.provider.getDynamicFields(
-        parent_objectID,
-        null,
-        1
-      );
-      const dynamic_fields2 = await toolbox.provider.getDynamicFields(
-        parent_objectID,
-        dynamic_fields.nextCursor,
-        null
-      );
-      expect(dynamic_fields2.data.length).greaterThan(0);
-      expect(dynamic_fields.nextCursor).not.toEqual(null);
+      return await toolbox.provider
+        .getDynamicFields(parent_objectID, null, 1)
+        .then(async function (dynamic_fields) {
+          expect(dynamic_fields.nextCursor).not.toEqual(null);
+          console.log(parent_objectID);
+          console.log(dynamic_fields);
+          console.log(dynamic_fields.nextCursor);
+
+          return await toolbox.provider
+            .getDynamicFields(parent_objectID, dynamic_fields.nextCursor, null)
+            .then(function (dynamic_fields2) {
+              console.log(dynamic_fields2);
+              expect(dynamic_fields2.data.length).greaterThan(0);
+            });
+        });
     });
     it('get dynamic object field', async () => {
       const dynamic_fields = await toolbox.provider.getDynamicFields(
