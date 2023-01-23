@@ -39,11 +39,10 @@ async fn main() -> Result<()> {
     let prometheus_registry = registry_service.default_registry();
 
     // Initialize logging
-    let (_guard, filter_handle) =
-        telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
-            .with_env()
-            .with_prom_registry(&prometheus_registry)
-            .init();
+    let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .with_prom_registry(&prometheus_registry)
+        .init();
 
     info!(
         "Started Prometheus HTTP endpoint at {}",

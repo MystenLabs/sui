@@ -71,7 +71,7 @@ const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
-    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
