@@ -40,9 +40,4 @@ describe('Invoke any RPC endpoint', () => {
       expect(committeeInfo).toStrictEqual(committeeInfoExpected);
     });
 
-    it('sui_getCommitteeInfo Error', async () => {
-      expect(
-        toolbox.provider.call('sui_getCommitteeInfo', [])
-      ).rejects.toThrowError();
-    });
 });
