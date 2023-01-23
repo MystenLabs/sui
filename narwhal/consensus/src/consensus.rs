@@ -68,7 +68,6 @@ impl ConsensusState {
     }
 
     pub fn new_from_store(
-        genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
         latest_sub_dag_index: SequenceNumber,
@@ -80,18 +79,13 @@ impl ConsensusState {
             .max_by(|a, b| a.1.cmp(b.1))
             .map(|(_k, v)| v)
             .unwrap_or_else(|| &0);
-
-        if last_committed_round == 0 {
-            return Self::new(genesis, metrics);
-        }
-        metrics.recovered_consensus_state.inc();
-
         let dag = Self::construct_dag_from_cert_store(
             cert_store,
             last_committed_round,
             &recover_last_committed,
             gc_depth,
         );
+        metrics.recovered_consensus_state.inc();
 
         Self {
             last_committed_round,
@@ -128,7 +122,7 @@ impl ConsensusState {
             }
         }
         info!(
-            "Dag was restored and contains {} certs for {} rounds",
+            "Dag is restored and contains {} certs for {} rounds",
             num_certs,
             dag.len()
         );
@@ -267,11 +261,9 @@ where
         gc_depth: Round,
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
-        let genesis = Certificate::genesis(&committee);
         let recovered_last_committed = store.read_last_committed();
         let latest_sub_dag_index = store.get_latest_sub_dag_index();
         let state = ConsensusState::new_from_store(
-            genesis,
             metrics.clone(),
             recovered_last_committed,
             latest_sub_dag_index,
