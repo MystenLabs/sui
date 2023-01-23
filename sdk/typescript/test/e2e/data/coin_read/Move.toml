@@ -1,9 +1,0 @@
-[package]
-name = "coin_read"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../../../../crates/sui-framework" }
-
-[addresses]
-coin_read =  "0x0"
