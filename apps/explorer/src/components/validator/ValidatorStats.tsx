@@ -38,8 +38,10 @@ export function ValidatorStats({
         validatorData.fields.delegation_staking_pool.fields
             .delegation_token_supply.fields.value;
     const selfStake = validatorData.fields.stake_amount;
-    const totalStake = +selfStake + +delegatedStake; // +validatorData.fields.delegation_staking_pool.fields.sui_balance + +delegatedStake;
-    const lastEpoch = epoch;
+    const totalStake = +selfStake + +delegatedStake;
+    const commission = +validatorData.fields.commission_rate * 100;
+    const lastEpoch = +epoch;
+
     const delegatedStakePercentage = useMemo(
         () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
         [delegatedStake, totalStake]
@@ -71,6 +73,19 @@ export function ValidatorStats({
                             unavailable={apy <= 0}
                         >
                             {apy}%
+                        </Stats>
+                        <Stats
+                            label="Commission"
+                            tooltip="Coming soon"
+                            unavailable={commission <= 0}
+                        >
+                            <Heading
+                                as="h3"
+                                variant="heading2/semibold"
+                                color="steel-darker"
+                            >
+                                {commission}%
+                            </Heading>
                         </Stats>
                         <Stats label="Total SUI Staked" tooltip="Coming soon">
                             <DelegationAmount amount={totalStake} isStats />
@@ -109,11 +124,7 @@ export function ValidatorStats({
                         Validator Staking Rewards
                     </Heading>
                     <div className="flex flex-col gap-8">
-                        <Stats
-                            label="Last SUI Epoch"
-                            tooltip="Coming soon"
-                            unavailable
-                        >
+                        <Stats label="Last SUI Epoch" tooltip="Coming soon">
                             <Heading
                                 as="div"
                                 variant="heading4/semibold"
@@ -146,7 +157,7 @@ export function ValidatorStats({
                     <div className="flex flex-col gap-8">
                         <div className="flex flex-col gap-8 lg:flex-row">
                             <Stats
-                                label="Staking Participation"
+                                label="Checkpoint Participation"
                                 tooltip="Coming soon"
                                 unavailable
                             />
