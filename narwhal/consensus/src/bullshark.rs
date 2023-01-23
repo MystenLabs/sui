@@ -88,7 +88,7 @@ impl ConsensusProtocol for Bullshark {
         self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
-        // f+1 certificates. This is because we need them to reveal the common coin, or provide
+        // f+1 certificates. This is because we need them to provide
         // enough support to the leader.
         let r = round - 1;
 
