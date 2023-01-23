@@ -24,6 +24,7 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
 
@@ -169,11 +170,10 @@ function ValidatorPageResult() {
         const validatorsApy = validators.map((av) =>
             calculateAPY(av, +validatorsData.epoch)
         );
-        return parseFloat(
-            (
-                validatorsApy.reduce((acc, cur) => acc + cur, 0) /
-                validatorsApy.length
-            ).toFixed(APY_DECIMALS)
+        return roundFloat(
+            validatorsApy.reduce((acc, cur) => acc + cur, 0) /
+                validatorsApy.length,
+            APY_DECIMALS
         );
     }, [validatorsData]);
 
