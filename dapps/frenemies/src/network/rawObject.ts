@@ -41,11 +41,8 @@ export function getRawObject(provider: Provider, objectId: string): Promise<RawO
 /**
  * Wrapper for the `getRawObject` which adds bcs deserialization call on the response.
  */
-export async function getRawObjectParsed<T>(provider: Provider, objectId: string, bcsType: string): Promise<ObjectData<T> | null> {
+export async function getRawObjectParsedUnsafe<T>(provider: Provider, objectId: string, bcsType: string): Promise<ObjectData<T>> {
     const objectData = await getRawObject(provider, objectId);
-    if (objectData.status != 'Exists') {
-        return null;
-    }
 
     const {
       reference,

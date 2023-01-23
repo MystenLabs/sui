@@ -4,7 +4,7 @@
 import { normalizeSuiAddress } from "@mysten/sui.js";
 import { useQuery } from "@tanstack/react-query";
 import provider from "../provider";
-import { getRawObjectParsed, ObjectData } from "../rawObject";
+import { getRawObjectParsedUnsafe, ObjectData } from "../rawObject";
 import { SuiSystem } from "../types";
 
 /**
@@ -18,6 +18,6 @@ const SUI_SYSTEM: string = normalizeSuiAddress("0x5");
  */
 export function useSuiSystem() {
   return useQuery(["sui-system"], async (): Promise<ObjectData<SuiSystem> | null> => {
-    return getRawObjectParsed(provider, SUI_SYSTEM, "sui_system::SuiSystemState");
+    return getRawObjectParsedUnsafe(provider, SUI_SYSTEM, "sui_system::SuiSystemState");
   });
 }

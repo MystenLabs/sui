@@ -203,3 +203,23 @@ export type StakingPool = {
     /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
     pending_withdraws: any,
 };
+
+/**
+ * Object marking a stake for a Validator.
+ */
+export type StakedSui = {
+    id: SuiAddress,
+    /** The validator we are staking with. */
+    validatorAddress: SuiAddress,
+    /** The epoch at which the staking pool started operating. */
+    poolStartingEpoch: bigint,
+    /** The epoch at which the delegation is requested. */
+    delegationRequestEpoch: bigint,
+    /** The staked SUI tokens. */
+    staked: bigint,
+    /**
+     * If the stake comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>,
+     * this field will record the original lock expiration epoch, to be used when unstaking.
+     */
+    suiTokenLock: { some: bigint } | { none: true }
+}

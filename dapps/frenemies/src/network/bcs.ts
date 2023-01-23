@@ -49,6 +49,15 @@ bcs.registerStructType('table::Table', {
 
 // Sui System + Validators schema
 
+bcs.registerStructType('staking_pool::StakedSui', {
+    id: 'address',
+    validatorAddress: 'address',
+    poolStartingEpoch: 'u64',
+    delegationRequestEpoch: 'u64',
+    staked: 'u64',
+    suiTokenLock: 'Option<u64>'
+});
+
 bcs.registerStructType('sui_system::SuiSystemState', {
     id: 'address',
     epoch: 'u64',

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMyStake } from "../../network/queries/my-stake";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useSuiSystem } from "../../network/queries/sui-system";
 import { formatGoal } from "../../utils/format";
@@ -11,11 +12,12 @@ import { Table } from "./Table";
 export function Validators() {
   const { data: system } = useSuiSystem();
   const { data: scorecard } = useScorecard('0xcf267442d5331c079fc88f0e4a68c50eb1372426');
+  const { data: stakes } = useMyStake('0xcf267442d5331c079fc88f0e4a68c50eb1372426');
 
   // TODO: SuiSystem doesn't exist.
   // Redundant check; it must exist if RPC is set correctly
   // TODO: What do we do if user is not connected?
-  if (!system || !scorecard) {
+  if (!system || !scorecard || !stakes) {
     return null;
   }
 
@@ -33,7 +35,7 @@ export function Validators() {
 
         <Balance />
       </div>
-      <Table validators={validators} assignment={assignment} />
+      <Table validators={validators} assignment={assignment} stakes={stakes} />
     </Card>
   );
 }

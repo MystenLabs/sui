@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Leaderboard } from "../types";
-import { getRawObjectParsed, ObjectData } from "../rawObject";
+import { getRawObjectParsedUnsafe, ObjectData } from "../rawObject";
 import provider from "../provider";
 import { useQuery } from "@tanstack/react-query";
 
@@ -13,8 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 export function useLeaderboard(objectId: string) {
   return useQuery(
     ["leaderboard", objectId],
-    async (): Promise<ObjectData<Leaderboard> | null> => {
-      return getRawObjectParsed(provider, objectId, "leaderboard::Leaderboard");
+    async (): Promise<ObjectData<Leaderboard>> => {
+      return getRawObjectParsedUnsafe(provider, objectId, "leaderboard::Leaderboard");
     }
   );
 }

@@ -32,7 +32,7 @@ export function Table({ data }: Props) {
       </thead>
       <tbody>
         {data.topScores.map((score) => (
-          <tr className="border-t border-white/20">
+          <tr key={score.name} className="border-t border-white/20">
             <Cell>{score.name}</Cell>
             <Cell>{score.score}</Cell>
             <Cell>{score.participation}</Cell>

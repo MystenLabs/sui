@@ -3,7 +3,8 @@
 
 import clsx from "clsx";
 import { ReactNode } from "react";
-import { Assignment, Validator } from "../../network/types";
+import { ObjectData } from "../../network/rawObject";
+import { Assignment, StakedSui, Validator } from "../../network/types";
 import { formatAddress } from "../../utils/format";
 import { Stake } from "./Stake";
 import { Target } from "./Target";
@@ -17,8 +18,12 @@ function Header({ children }: { children: ReactNode }) {
 }
 
 interface Props {
-  validators: Validator[],
-  assignment: Assignment,
+  /** Set of 40 currently active validators */
+  validators: Validator[];
+  /** My assignment */
+  assignment: Assignment;
+  /** Currently staked Sui */
+  stakes: ObjectData<StakedSui>[];
 }
 
 function GridItem({
@@ -41,9 +46,15 @@ function GridItem({
   );
 }
 
-export function Table({ validators, assignment }: Props) {
+export function Table({ validators, assignment, stakes }: Props) {
+  // sort validators by their voting power in DESC order (not by stake - these are different)
+  const sorted = validators.sort((a, b) =>
+    Number(b.votingPower - a.votingPower)
+  );
 
-  const sorted = validators.sort((a, b) => Number(b.votingPower - a.votingPower));
+  const stakeByValidator: { [key: string]: ObjectData<StakedSui> } = stakes.reduce((acc, stake) => Object.assign(acc, {
+    [stake.data.validatorAddress]: stake
+  }), {});
 
   return (
     <>
@@ -54,15 +65,20 @@ export function Table({ validators, assignment }: Props) {
       </GridItem>
       {sorted.map((validator, index) => {
         return (
-          <GridItem className="px-5 py-2 rounded-xl bg-[#F5FAFA] text-steel-dark items-center">
-            <div>{(index + 1) + ` (${validator.votingPower})`}</div>
+          <GridItem
+            key={validator.metadata.suiAddress}
+            className="px-5 py-2 rounded-xl bg-[#F5FAFA] text-steel-dark items-center"
+          >
+            <div>{index + 1 + ` (${validator.votingPower})`}</div>
             <div>{formatAddress(validator.metadata.suiAddress)}</div>
             <div>
-              <Stake />
+              <Stake stake={stakeByValidator[validator.metadata.suiAddress] || null} />
             </div>
-            {validator.metadata.suiAddress == assignment.validator && <Target goal={assignment.goal} />}
+            {validator.metadata.suiAddress == assignment.validator && (
+              <Target goal={assignment.goal} />
+            )}
           </GridItem>
-        )
+        );
       })}
     </>
   );
