@@ -59,47 +59,25 @@ module sui::random {
         bcs::peel_u64(&mut bcs::new(bytes))
     }
 
-    /// Use the given pseudorandom generator to generate an `u64` integer in the range
-    /// [0, ..., 2^bit_length - 1].
-    fun next_u64_with_bit_length(random: &mut Random, bit_length: u8): u64 {
-        next_u64(random) >> (64 - bit_length)
-    }
-
-    /// Compute the bit length of n.
-    fun bit_length(n: u64): u8 {
-        if (n == 0) {
-            0
-        } else {
-            // Use binary search to find the bit length of n
-            let (length, mid) = (1, 32);
-            while (mid > 0) {
-                let n_mod_mid = n >> mid;
-                if (n_mod_mid > 0) {
-                    // The bit length of n is strictly larger than mid.
-                    length = length + mid;
-                    n = n_mod_mid;
-                };
-                mid = mid >> 1;
-            };
-            length
-        }
-    }
-
     /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
-    /// random `u64` integer in the range [0, ..., upper_bound - 1].
+    /// random `u64` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
+    /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
         assert!(upper_bound > 0, 0);
-        let bit_length = bit_length(upper_bound);
-        let candidate = next_u64_with_bit_length(random, bit_length);
-        while (candidate >= upper_bound) {
-            candidate = next_u64_with_bit_length(random, bit_length);
-        };
-        candidate
+        next_u64(random) & upper_bound
     }
 
     /// Use the given pseudorandom generator to generate a random `u8`.
     public fun next_u8(random: &mut Random): u8 {
         *vector::borrow(&next_digest(random), 0)
+    }
+
+    /// Use the given pseudo-random generator and a non-zero `upper_bound` to generate a
+    /// random `u8` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
+    /// bound is not a power of two, the distribution will not be completely uniform.
+    public fun next_u8_in_range(random: &mut Random, upper_bound: u64): u8 {
+        assert!(upper_bound > 0, 0);
+        next_u8(random) & upper_bound
     }
 
     /// Use the given pseudorandom generator to generate a random `bool`.
@@ -152,6 +130,13 @@ module sui::random {
             };
             i = i + 1;
         }
+    }
+
+    #[test]
+    fun test_genators() {
+        // Smoke tests that the various generators do not panic.
+        let random = new(b"seed");
+        assert!(next_u64(&mut random) == 5845420307181886436, 0);
     }
 
 }
