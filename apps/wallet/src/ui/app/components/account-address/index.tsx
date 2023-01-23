@@ -42,7 +42,11 @@ function AccountAddress({
     return address ? (
         <span className={cl(st.addressContainer, className)}>
             {copyable ? (
-                <CopyToClipboard txt={address} mode={cpIconMode}>
+                <CopyToClipboard
+                    txt={address}
+                    mode={cpIconMode}
+                    copySuccessMessage="Address copied"
+                >
                     {addressLink}
                 </CopyToClipboard>
             ) : (
