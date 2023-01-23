@@ -116,7 +116,7 @@ impl ConsensusState {
 
         let mut num_certs = 0;
         for cert in &certificates {
-            if Self::try_insert_in_dag(&mut dag, last_committed, cert).is_ok() {
+            if Self::try_insert_in_dag(&mut dag, last_committed, cert) {
                 info!("Inserted certificate: {:?}", cert);
                 num_certs += 1;
             }
@@ -130,27 +130,27 @@ impl ConsensusState {
         dag
     }
 
-    #[allow(clippy::result_unit_err)]
-    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<(), ()> {
+    /// Returns true if certificate is inserted in the dag.
+    pub fn try_insert(&mut self, certificate: &Certificate) -> bool {
         Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
     }
 
-    #[allow(clippy::result_unit_err)]
+    /// Returns true if certificate is inserted in the dag.
     fn try_insert_in_dag(
         dag: &mut Dag,
         last_committed: &HashMap<PublicKey, Round>,
         certificate: &Certificate,
-    ) -> Result<(), ()> {
+    ) -> bool {
         let last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
             .unwrap_or_default();
         if certificate.round() < last_committed_round {
             debug!(
-                "Ignoring certificate {:?} as it is past last committed round for this origin {}",
+                "Ignoring certificate {:?} as it is before last committed round for this origin {}",
                 certificate, last_committed_round
             );
-            return Err(());
+            return false;
         }
 
         dag.entry(certificate.round())
@@ -159,7 +159,7 @@ impl ConsensusState {
                 certificate.origin(),
                 (certificate.digest(), certificate.clone()),
             );
-        Ok(())
+        true
     }
 
     /// Update and clean up internal state base on committed certificates.
@@ -212,8 +212,6 @@ pub trait ConsensusProtocol {
         // The new certificate.
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>>;
-
-    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()>;
 }
 
 pub struct Consensus<ConsensusProtocol> {
@@ -309,10 +307,7 @@ where
                 }
 
                 Some(certificate) = self.rx_new_certificates.recv() => {
-                    // If the core already moved to the next epoch we should pull the next
-                    // committee as well.
                     match certificate.epoch().cmp(&self.committee.epoch()) {
-
                         Ordering::Equal => {
                             // we can proceed.
                         }

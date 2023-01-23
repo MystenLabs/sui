@@ -124,11 +124,6 @@ impl ConsensusProtocol for Tusk {
 
         Ok(committed_sub_dags)
     }
-
-    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {
-        self.committee = new_committee;
-        self.store.clear()
-    }
 }
 
 impl Tusk {

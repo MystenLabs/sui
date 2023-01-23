@@ -142,7 +142,8 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         })?;
         r.map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
             .tap_err(|r| {
-                error!("Submit transaction failed with: {:?}", r);
+                // Will be logged by caller as well.
+                warn!("Submit transaction failed with: {:?}", r);
             })?;
         Ok(())
     }
@@ -341,18 +342,23 @@ impl ConsensusAdapter {
                 .opt_metrics
                 .as_ref()
                 .map(|m| m.sequencing_acknowledge_latency.start_timer());
+            let mut retries = 0;
             while let Err(e) = self
                 .consensus_client
                 .submit_to_consensus(&transaction, epoch_store)
                 .await
             {
-                error!(
-                    "Error submitting transaction to own narwhal worker: {:?}",
-                    e
-                );
+                // This can happen during Narwhal reconfig, so wait for a few retries.
+                if retries > 3 {
+                    error!(
+                        "Error submitting transaction to own narwhal worker: {:?}",
+                        e
+                    );
+                }
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_failures.inc();
                 });
+                retries += 1;
                 time::sleep(Duration::from_secs(10)).await;
             }
             debug!("Submitted {transaction_key:?} to consensus");
