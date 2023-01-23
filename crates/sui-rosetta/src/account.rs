@@ -32,7 +32,7 @@ pub async fn balance(
     if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
         let balances = get_sub_account_balances(account_type, &ctx.client, address).await?;
         Ok(AccountBalanceResponse {
-            block_identifier: ctx.blocks().current_block_identifier()?,
+            block_identifier: ctx.blocks().current_block_identifier().await?,
             balances,
         })
     } else {
@@ -43,7 +43,7 @@ pub async fn balance(
             let response = ctx.blocks().get_block_by_hash(hash).await?;
             response.block.block_identifier
         } else {
-            ctx.blocks().current_block_identifier()?
+            ctx.blocks().current_block_identifier().await?
         };
 
         ctx.blocks()
@@ -137,7 +137,7 @@ pub async fn coins(
         .await;
 
     Ok(AccountCoinsResponse {
-        block_identifier: context.blocks().current_block_identifier()?,
+        block_identifier: context.blocks().current_block_identifier().await?,
         coins,
     })
 }

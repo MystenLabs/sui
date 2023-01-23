@@ -356,6 +356,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
         verify_dependencies: true,
+        with_unpublished_dependencies: false,
     }
     .execute(context)
     .await?;
@@ -520,6 +521,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
         verify_dependencies: true,
+        with_unpublished_dependencies: false,
     }
     .execute(context)
     .await?;

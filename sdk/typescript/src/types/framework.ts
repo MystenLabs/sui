@@ -113,7 +113,7 @@ export class Coin {
    *
    * @param amount coin balance
    * @param exclude object ids of the coins to exclude
-   * @return an arbitray coin with balance greater than or equal to `amount
+   * @return an arbitrary coin with balance greater than or equal to `amount
    */
   static selectCoinWithBalanceGreaterThanOrEqual(
     coins: ObjectDataFull[],

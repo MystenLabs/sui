@@ -21,18 +21,18 @@ use std::collections::BTreeMap;
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
+pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
-    pub storage_gas_price: u64,
 }
 
 /// Rust version of the Move std::option::Option type.
 /// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct MoveOption<T> {
     pub vec: Vec<T>,
 }
@@ -137,6 +137,27 @@ pub struct Table {
     pub size: u64,
 }
 
+/// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
+/// we only use it in sui_system in the framework.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct LinkedTable<K> {
+    pub id: ObjectID,
+    pub size: u64,
+    pub head: MoveOption<K>,
+    pub tail: MoveOption<K>,
+}
+
+impl<K> Default for LinkedTable<K> {
+    fn default() -> Self {
+        LinkedTable {
+            id: ObjectID::from(SuiAddress::ZERO),
+            size: 0,
+            head: MoveOption { vec: vec![] },
+            tail: MoveOption { vec: vec![] },
+        }
+    }
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
@@ -145,7 +166,7 @@ pub struct StakingPool {
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,
-    pub pending_delegations: TableVec,
+    pub pending_delegations: LinkedTable<ObjectID>,
     pub pending_withdraws: TableVec,
 }
 
@@ -161,8 +182,6 @@ pub struct ValidatorPair {
 pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
-    pub total_voting_power: u64,
-    pub quorum_threshold: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
@@ -182,6 +201,7 @@ pub struct SuiSystemState {
     pub reference_gas_price: u64,
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
     pub stake_subsidy: StakeSubsidy,
+    pub safe_mode: bool,
     // TODO: Use getters instead of all pub.
 }
 

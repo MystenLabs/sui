@@ -26,6 +26,7 @@ impl Test {
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         // pre build for Sui-specific verifications
+        let with_unpublished_deps = false;
         let dump_bytecode_as_base64 = false;
         let generate_struct_layouts: bool = false;
         build::Build::execute_internal(
@@ -36,6 +37,7 @@ impl Test {
                 test_mode: false, // make sure to verify tests
                 ..build_config.clone()
             },
+            with_unpublished_deps,
             dump_bytecode_as_base64,
             generate_struct_layouts,
         )?;

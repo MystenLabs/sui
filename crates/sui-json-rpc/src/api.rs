@@ -28,7 +28,8 @@ use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSummary,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
@@ -302,18 +303,25 @@ pub trait RpcFullNodeReadApi {
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary>;
 
+    /// Return a checkpoint summary based on checkpoint digest
+    #[method(name = "getCheckpointSummaryByDigest")]
+    fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> RpcResult<CheckpointSummary>;
+
     /// Return contents of a checkpoint, namely a list of execution digests
     #[method(name = "getCheckpointContents")]
     fn get_checkpoint_contents(
         &self,
-        digest: CheckpointContentsDigest,
+        sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents>;
 
-    /// Return contents of a checkpoint based on its sequence number
-    #[method(name = "getCheckpointContentsBySequenceNumber")]
-    fn get_checkpoint_contents_by_sequence_number(
+    /// Return contents of a checkpoint based on checkpoint content digest
+    #[method(name = "getCheckpointContentsByDigest")]
+    fn get_checkpoint_contents_by_digest(
         &self,
-        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;
 }
 
@@ -566,7 +574,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Withdraw some portion of a delegation from a validator's staking pool.
+    /// Withdraw a delegation from a validator's staking pool.
     #[method(name = "requestWithdrawDelegation")]
     async fn request_withdraw_delegation(
         &self,
@@ -576,8 +584,6 @@ pub trait RpcTransactionBuilder {
         delegation: ObjectID,
         /// StakedSui object ID
         staked_sui: ObjectID,
-        /// Principal amount to withdraw
-        principal_withdraw_amount: u64,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -596,8 +602,6 @@ pub trait RpcTransactionBuilder {
         staked_sui: ObjectID,
         /// Validator to switch to
         new_validator_address: SuiAddress,
-        /// Switching stake amount
-        switch_pool_token_amount: u64,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget

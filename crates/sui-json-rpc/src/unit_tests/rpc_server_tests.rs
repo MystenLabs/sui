@@ -99,7 +99,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
     let compiled_modules = BuildConfig::default()
         .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
-        .get_package_base64();
+        .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
@@ -257,7 +257,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     // Publish test coin package
     let compiled_modules = BuildConfig::default()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64();
+        .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
@@ -316,7 +316,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     // Publish test coin package
     let compiled_modules = BuildConfig::default()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
-        .get_package_base64();
+        .get_package_base64(/* with_unpublished_deps */ false);
 
     let transaction_bytes: TransactionBytes = http_client
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)

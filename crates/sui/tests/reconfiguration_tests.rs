@@ -120,7 +120,7 @@ async fn basic_reconfig_end_to_end_test() {
 async fn reconfig_with_revert_end_to_end_test() {
     let (sender, keypair) = get_account_key_pair();
     let gas1 = Object::with_owner_for_testing(sender); // committed
-    let gas2 = Object::with_owner_for_testing(sender); // reverted
+    let gas2 = Object::with_owner_for_testing(sender); // (most likely) reverted
     let authorities = spawn_test_authorities(
         [gas1.clone(), gas2.clone()].into_iter(),
         &test_authority_configs(),
@@ -150,7 +150,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .unwrap();
     assert_eq!(0, effects1.epoch());
 
-    // gas2 transaction is reverted
+    // gas2 transaction is (most likely) reverted
     let tx = make_transfer_sui_transaction(
         gas2.compute_object_reference(),
         sender,
@@ -218,6 +218,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .collect();
     join_all(handles).await;
 
+    let mut epoch = None;
     for handle in authorities.iter() {
         handle
             .with_async(|node| async {
@@ -231,7 +232,11 @@ async fn reconfig_with_revert_end_to_end_test() {
                     .unwrap()
                     .unwrap();
                 assert_eq!(2, object.version().value());
-                // verify that **all* authorities (including 0) have not executed transaction(or reverted it)
+                // Due to race conditions, it's possible that tx2 went in
+                // before 2f+1 validators sent EndOfPublish messges and close
+                // the curtain of epoch 0. So, we are asserting that
+                // the object version is either 1 or 2, but needs to be
+                // consistent in all validators.
                 // Note that previously test checked that object version == 2 on authority 0
                 let object = node
                     .state()
@@ -242,7 +247,13 @@ async fn reconfig_with_revert_end_to_end_test() {
                     .next()
                     .unwrap()
                     .unwrap();
-                assert_eq!(1, object.version().value());
+                let object_version = object.version().value();
+                if epoch.is_none() {
+                    assert!(object_version == 1 || object_version == 2);
+                    epoch.replace(object_version);
+                } else {
+                    assert_eq!(epoch, Some(object_version));
+                }
             })
             .await;
     }
@@ -250,22 +261,35 @@ async fn reconfig_with_revert_end_to_end_test() {
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
-#[ignore] // test is flaky right now
 async fn test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
 
-    let _test_cluster = TestClusterBuilder::new()
+    let test_cluster = TestClusterBuilder::new()
         .with_checkpoints_per_epoch(10)
         .build()
         .await
         .unwrap();
 
-    let duration_secs: u64 = std::env::var("RECONFIG_TEST_DURATION")
+    let mut epoch_rx = test_cluster
+        .fullnode_handle
+        .sui_node
+        .subscribe_to_epoch_change();
+
+    let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
         .map(|v| v.parse().unwrap())
-        .unwrap_or(30);
+        .unwrap_or(4);
 
-    sleep(Duration::from_secs(duration_secs)).await;
+    timeout(Duration::from_secs(60), async move {
+        while let Ok(committee) = epoch_rx.recv().await {
+            info!("received epoch {}", committee.epoch);
+            if committee.epoch >= target_epoch {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("Timed out waiting for cluster to target epoch");
 }
 
 #[sim_test]

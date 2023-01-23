@@ -145,7 +145,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interval_period_ms: Option<u64>,
 
-    /// Target number of conncurrent connections to establish.
+    /// Target number of concurrent connections to establish.
     ///
     /// If unspecified, this will default to `4`.
     #[serde(skip_serializing_if = "Option::is_none")]

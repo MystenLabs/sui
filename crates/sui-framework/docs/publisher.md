@@ -207,7 +207,7 @@ Check whether type belongs to the same package as the publisher object.
 
 ## Function `is_module`
 
-Check whether a type belogs to the same module as the publisher object.
+Check whether a type belongs to the same module as the publisher object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="publisher.md#0x2_publisher_is_module">is_module</a>&lt;T&gt;(self: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>): bool

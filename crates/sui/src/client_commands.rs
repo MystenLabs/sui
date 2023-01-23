@@ -138,6 +138,10 @@ pub enum SuiClientCommands {
         /// dependency found on-chain.
         #[clap(long)]
         verify_dependencies: bool,
+
+        /// Also publish transitive dependencies that have not already been published.
+        #[clap(long)]
+        with_unpublished_dependencies: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -460,6 +464,7 @@ impl SuiClientCommands {
                 build_config,
                 gas_budget,
                 verify_dependencies,
+                with_unpublished_dependencies,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -486,7 +491,8 @@ impl SuiClientCommands {
                     }
                 }
 
-                let compiled_modules = compiled_package.get_package_bytes();
+                let compiled_modules =
+                    compiled_package.get_package_bytes(with_unpublished_dependencies);
 
                 let client = context.get_client().await?;
                 if verify_dependencies {
@@ -1306,13 +1312,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
+            // Do not use writer for new address output, which may get sent to logs.
+            #[allow(clippy::print_in_format_impl)]
             SuiClientCommandResult::NewAddress((address, recovery_phrase, scheme)) => {
-                writeln!(
-                    writer,
+                println!(
                     "Created new keypair for address with scheme {:?}: [{address}]",
                     scheme
-                )?;
-                writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
+                );
+                println!("Secret Recovery Phrase : [{recovery_phrase}]");
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI

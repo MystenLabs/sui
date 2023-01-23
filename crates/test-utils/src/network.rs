@@ -279,7 +279,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
     let handles: Vec<_> = nodes
         .map(|handle| {
             handle.with_async(|node| async move {
-                let mut rx = node.subscribe_to_epoch_change().await;
+                let mut rx = node.subscribe_to_epoch_change();
                 let epoch = node.current_epoch();
                 if epoch != expected_epoch {
                     let committee = rx.recv().await.unwrap();

@@ -21,7 +21,7 @@ use anemo_tower::set_header::SetResponseHeaderLayer;
 use anemo_tower::{
     auth::AllowedPeers,
     callback::CallbackLayer,
-    inflight_limit,
+    inflight_limit, rate_limit,
     set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
@@ -222,7 +222,7 @@ impl Primary {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
+        let mut primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             name: name.clone(),
             committee: committee.clone(),
             worker_cache: worker_cache.clone(),
@@ -240,7 +240,39 @@ impl Primary {
         // This is required for correctness.
         .add_layer_for_request_vote(InboundRequestLayer::new(
             inflight_limit::InflightLimitLayer::new(1, inflight_limit::WaitMode::ReturnError),
+        ))
+        // Allow only one inflight FetchCertificates RPC at a time per peer.
+        // These are already a batch request; an individual peer should never need more than one.
+        .add_layer_for_fetch_certificates(InboundRequestLayer::new(
+            inflight_limit::InflightLimitLayer::new(1, inflight_limit::WaitMode::ReturnError),
         ));
+
+        // Apply other rate limits from configuration as needed.
+        if let Some(limit) = parameters.anemo.send_message_rate_limit {
+            primary_service = primary_service.add_layer_for_send_message(InboundRequestLayer::new(
+                rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                ),
+            ));
+        }
+        if let Some(limit) = parameters.anemo.get_payload_availability_rate_limit {
+            primary_service = primary_service.add_layer_for_get_payload_availability(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        if let Some(limit) = parameters.anemo.get_certificates_rate_limit {
+            primary_service = primary_service.add_layer_for_get_certificates(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
             payload_store: payload_store.clone(),

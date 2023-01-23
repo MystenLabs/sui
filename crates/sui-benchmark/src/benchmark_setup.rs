@@ -116,6 +116,8 @@ impl Env {
         let cloned_config = config.clone();
         let fullnode_ip = format!("{}", utils::get_local_ip_for_tests());
         let fullnode_rpc_port = utils::get_available_port(&fullnode_ip);
+        let fullnode_barrier = Arc::new(Barrier::new(2));
+        let fullnode_barrier_clone = fullnode_barrier.clone();
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.
         // running forever
         let _validators = std::thread::spawn(move || {
@@ -131,6 +133,7 @@ impl Env {
                 let _validators: Vec<_> =
                     spawn_test_authorities(generated_gas, &cloned_config).await;
                 let _fullnode = spawn_fullnode(&cloned_config, Some(fullnode_rpc_port)).await;
+                fullnode_barrier_clone.wait().await;
                 barrier.wait().await;
                 // This thread cannot exit, otherwise validators will shutdown.
                 loop {
@@ -142,6 +145,7 @@ impl Env {
         sleep(Duration::from_secs(5)).await;
         let fullnode_rpc_url = format!("http://{fullnode_ip}:{fullnode_rpc_port}");
         info!("Fullnode rpc url: {fullnode_rpc_url}");
+        fullnode_barrier.wait().await;
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
             LocalValidatorAggregatorProxy::from_network_config(
                 &config,

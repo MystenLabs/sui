@@ -614,10 +614,12 @@
       "description": "Return contents of a checkpoint, namely a list of execution digests",
       "params": [
         {
-          "name": "digest",
+          "name": "sequence_number",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/CheckpointContentsDigest"
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -630,21 +632,19 @@
       }
     },
     {
-      "name": "sui_getCheckpointContentsBySequenceNumber",
+      "name": "sui_getCheckpointContentsByDigest",
       "tags": [
         {
           "name": "Full Node API"
         }
       ],
-      "description": "Return contents of a checkpoint based on its sequence number",
+      "description": "Return contents of a checkpoint based on checkpoint content digest",
       "params": [
         {
-          "name": "sequence_number",
+          "name": "digest",
           "required": true,
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/CheckpointContentsDigest"
           }
         }
       ],
@@ -672,6 +672,31 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CheckpointSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/CheckpointSummary"
+        }
+      }
+    },
+    {
+      "name": "sui_getCheckpointSummaryByDigest",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a checkpoint summary based on checkpoint digest",
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointDigest"
           }
         }
       ],
@@ -1238,7 +1263,7 @@
               "details": {
                 "data": {
                   "dataType": "moveObject",
-                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "has_public_transfer": true,
                   "fields": {
                     "balance": "10000",
@@ -2447,16 +2472,6 @@
           }
         },
         {
-          "name": "switch_pool_token_amount",
-          "description": "Switching stake amount",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
           "name": "gas",
           "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
           "schema": {
@@ -2489,7 +2504,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Withdraw some portion of a delegation from a validator's staking pool.",
+      "description": "Withdraw a delegation from a validator's staking pool.",
       "params": [
         {
           "name": "signer",
@@ -2513,16 +2528,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "principal_withdraw_amount",
-          "description": "Principal amount to withdraw",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         },
         {
@@ -2881,7 +2886,7 @@
               "details": {
                 "data": {
                   "dataType": "moveObject",
-                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "has_public_transfer": true,
                   "fields": {
                     "balance": "10000",
@@ -3039,7 +3044,8 @@
           "epoch",
           "epoch_rolling_gas_cost_summary",
           "network_total_transactions",
-          "sequence_number"
+          "sequence_number",
+          "timestamp_ms"
         ],
         "properties": {
           "content_digest": {
@@ -3100,6 +3106,12 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "timestamp_ms": {
+            "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -3110,6 +3122,7 @@
           "coinObjectId",
           "coinType",
           "digest",
+          "previousTransaction",
           "version"
         ],
         "properties": {
@@ -3134,6 +3147,9 @@
             ],
             "format": "uint64",
             "minimum": 0.0
+          },
+          "previousTransaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
           },
           "version": {
             "$ref": "#/components/schemas/SequenceNumber"
@@ -4318,6 +4334,32 @@
           }
         ]
       },
+      "LinkedTable_for_ObjectID": {
+        "description": "Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since we only use it in sui_system in the framework.",
+        "type": "object",
+        "required": [
+          "head",
+          "id",
+          "size",
+          "tail"
+        ],
+        "properties": {
+          "head": {
+            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
+          },
+          "id": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "size": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "tail": {
+            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
+          }
+        }
+      },
       "MoveCall": {
         "type": "object",
         "required": [
@@ -4403,6 +4445,21 @@
             "additionalProperties": false
           }
         ]
+      },
+      "MoveOption_for_ObjectID": {
+        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
+        "type": "object",
+        "required": [
+          "vec"
+        ],
+        "properties": {
+          "vec": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
       },
       "MovePackage": {
         "type": "object",
@@ -5145,7 +5202,7 @@
             "$ref": "#/components/schemas/Supply"
           },
           "pending_delegations": {
-            "$ref": "#/components/schemas/TableVec"
+            "$ref": "#/components/schemas/LinkedTable_for_ObjectID"
           },
           "pending_withdraws": {
             "$ref": "#/components/schemas/TableVec"
@@ -5786,6 +5843,7 @@
           "info",
           "parameters",
           "reference_gas_price",
+          "safe_mode",
           "stake_subsidy",
           "storage_fund",
           "treasury_cap",
@@ -5808,6 +5866,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "safe_mode": {
+            "type": "boolean"
           },
           "stake_subsidy": {
             "$ref": "#/components/schemas/StakeSubsidy"
@@ -5909,8 +5970,7 @@
         "type": "object",
         "required": [
           "max_validator_candidate_count",
-          "min_validator_stake",
-          "storage_gas_price"
+          "min_validator_stake"
         ],
         "properties": {
           "max_validator_candidate_count": {
@@ -5919,11 +5979,6 @@
             "minimum": 0.0
           },
           "min_validator_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_gas_price": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6605,8 +6660,6 @@
           "pending_delegation_switches",
           "pending_removals",
           "pending_validators",
-          "quorum_threshold",
-          "total_voting_power",
           "validator_stake"
         ],
         "properties": {
@@ -6643,16 +6696,6 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
-          },
-          "quorum_threshold": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "total_voting_power": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "validator_stake": {
             "type": "integer",

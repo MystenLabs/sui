@@ -8,7 +8,7 @@
 /// round. This creates two objects:
 /// - Game - an immutable object that includes all parameters to be used when buying tickets.
 /// - Reward - a shared object that holds the reward. It can be withdrawn by any winner ("first come, first served").
-///   If not withdrawn within a few epoches, can be returned to the game creator.
+///   If not withdrawn within a few epochs, can be returned to the game creator.
 ///
 /// A user who wishes to play game G should:
 /// - Check if G.epoch is the current epoch, and that G.base_drand_round + 24h is in the future.
@@ -132,7 +132,7 @@ module games::drand_based_scratch_card {
         // The randomness for the current ticket is derived by HMAC(drand randomness, ticket id).
         // A solution like checking if (drand randomness % reward_factor) == (ticket id % reward_factor) is not secure
         // as the adversary can control the values of ticket id. (For this particular game this attack is not
-        // devestating, but for similar games it might be.)
+        // devastating, but for similar games it might be.)
         let random_key = drand_lib::derive_randomness(drand_sig);
         let randomness = hmac_sha3_256(&random_key, &object::id_to_bytes(&object::id(&ticket)));
         let is_winner = (drand_lib::safe_selection(game.reward_factor, digest::sha3_256_digest_to_bytes(&randomness)) == 0);

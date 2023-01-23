@@ -42,7 +42,7 @@ module.exports = {
       steel: {
         DEFAULT: "#A0B6C3",
         dark: "#758F9E",
-        darker: "#5C6F7A",
+        darker: "#566873",
       },
 
       issue: {
@@ -53,6 +53,7 @@ module.exports = {
       hero: {
         DEFAULT: "#0284AD",
         dark: "#007195",
+        darkest: "#15527B",
       },
       success: {
         DEFAULT: "#2DD7A7",
@@ -132,7 +133,7 @@ module.exports = {
         1.25: "0.3125rem",
         3.75: "0.9375rem",
         4.5: "1.125rem",
-        7.5: '1.875rem',
+        7.5: "1.875rem",
         50: "12.5rem",
         verticalListShort: "13.0625rem",
         verticalListLong: "35.6875rem",

@@ -435,9 +435,10 @@ mod test {
         collections::{BTreeSet, HashSet},
         time::Instant,
     };
+    use store::rocks::MetricConf;
     use store::{
         reopen,
-        rocks::{open_cf, DBMap},
+        rocks::{open_cf, DBMap, ReadWriteOptions},
     };
     use test_utils::{temp_dir, CommitteeFixture};
     use types::{Certificate, CertificateDigest, Round};
@@ -450,6 +451,7 @@ mod test {
         let rocksdb = open_cf(
             path,
             None,
+            MetricConf::default(),
             &[
                 CERTIFICATES_CF,
                 CERTIFICATE_ID_BY_ROUND_CF,
@@ -719,7 +721,7 @@ mod test {
             // and populate the rest with a write_all
             store.write_all(certs).unwrap();
 
-            // now wait on handle an assert result for a signle certificate
+            // now wait on handle an assert result for a single certificate
             let received_certificate = handle_1
                 .await
                 .expect("error")

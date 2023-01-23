@@ -12,6 +12,7 @@ Basic math for nicer programmability
 -  [Function `pow`](#0x2_math_pow)
 -  [Function `sqrt`](#0x2_math_sqrt)
 -  [Function `sqrt_u128`](#0x2_math_sqrt_u128)
+-  [Function `divide_and_round_up`](#0x2_math_divide_and_round_up)
 
 
 <pre><code></code></pre>
@@ -260,6 +261,35 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
     };
 
     (res <b>as</b> u128)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_math_divide_and_round_up"></a>
+
+## Function `divide_and_round_up`
+
+Calculate x / y, but round up the result.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64 {
+    <b>if</b> (x % y == 0) {
+        x / y
+    } <b>else</b> {
+        x / y + 1
+    }
 }
 </code></pre>
 

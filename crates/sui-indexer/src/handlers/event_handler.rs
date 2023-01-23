@@ -9,12 +9,11 @@ use sui_sdk::SuiClient;
 use sui_types::event::EventID;
 use sui_types::query::EventQuery;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerEventHandlerMetrics;
-use sui_indexer::models::event_logs::{commit_event_log, read_event_log};
-use sui_indexer::models::events::commit_events;
+use sui_indexer::models::events::{commit_events, read_last_event};
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
 
 const EVENT_PAGE_SIZE: usize = 100;
@@ -44,22 +43,34 @@ impl EventHandler {
         let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
 
         let mut next_cursor = None;
-        let event_log = read_event_log(&mut pg_pool_conn)?;
-        let (tx_dig_opt, event_seq_opt) = (
-            event_log.next_cursor_tx_dig,
-            event_log.next_cursor_event_seq,
-        );
-        if let (Some(tx_dig), Some(event_seq)) = (tx_dig_opt, event_seq_opt) {
-            let tx_digest = tx_dig.parse().map_err(|e| {
-                IndexerError::TransactionDigestParsingError(format!(
-                    "Failed parsing transaction digest {:?} with error: {:?}",
-                    tx_dig, e
-                ))
-            })?;
-            next_cursor = Some(EventID {
-                tx_digest,
-                event_seq,
-            });
+        let last_event_opt = read_last_event(&mut pg_pool_conn)?;
+        if let Some(last_event) = last_event_opt {
+            match (
+                last_event.next_cursor_transaction_digest,
+                last_event.next_cursor_event_sequence,
+            ) {
+                (Some(tx_digest_str), Some(event_seq)) => {
+                    let tx_digest = tx_digest_str.parse().map_err(|e| {
+                        IndexerError::TransactionDigestParsingError(format!(
+                            "Failed parsing transaction digest {:?} with error: {:?}",
+                            tx_digest_str, e
+                        ))
+                    })?;
+                    next_cursor = Some(EventID {
+                        tx_digest,
+                        event_seq,
+                    });
+                }
+                (Some(_), None) => {
+                    error!("Last event was found but it has no next cursor event sequence, this should never happen!");
+                }
+                (None, Some(_)) => {
+                    error!("Last event was found but it has no next cursor tx digest, this should never happen!");
+                }
+                (None, None) => {
+                    error!("Last event was found but it has no next cursor tx digest and no next cursor event sequence, this should never happen!");
+                }
+            }
         }
 
         loop {
@@ -76,26 +87,22 @@ impl EventHandler {
             self.event_handler_metrics
                 .total_events_received
                 .inc_by(event_count as u64);
-            commit_events(&mut pg_pool_conn, event_page.clone())?;
-            // Event page's next cursor can be None when latest event page is reached,
-            // if we use the None cursor to read events, it will start from genesis,
-            // thus here we do not commit / use the None cursor.
-            // This will cause duplicate run of the current batch, but will not cause
-            // duplicate rows b/c of the uniqueness restriction of the table.
-            if let Some(next_cursor_val) = event_page.next_cursor.clone() {
-                commit_event_log(
-                    &mut pg_pool_conn,
-                    Some(next_cursor_val.tx_digest.base58_encode()),
-                    Some(next_cursor_val.event_seq),
-                )?;
+            let commit_result = commit_events(&mut pg_pool_conn, event_page.clone())?;
+
+            if let Some((commit_count, next_cursor_val)) = commit_result {
+                next_cursor = Some(next_cursor_val);
+
+                self.event_handler_metrics.total_event_page_committed.inc();
                 self.event_handler_metrics
                     .total_events_processed
-                    .inc_by(event_count as u64);
-                next_cursor = Some(next_cursor_val);
+                    .inc_by(commit_count as u64);
+                info!(
+                    "Committed {} events, next cursor: {:?}",
+                    commit_count, next_cursor
+                );
             }
-            self.event_handler_metrics.total_event_page_committed.inc();
-            // sleep when the event page has been the latest page
-            if event_count < EVENT_PAGE_SIZE || event_page.next_cursor.is_none() {
+
+            if event_page.next_cursor.is_none() {
                 sleep(Duration::from_secs_f32(0.1)).await;
             }
         }

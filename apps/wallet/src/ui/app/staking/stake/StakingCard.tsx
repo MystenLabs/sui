@@ -40,7 +40,11 @@ import {
     accountItemizedBalancesSelector,
     ownedObjects,
 } from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import {
+    Coin,
+    GAS_TYPE_ARG,
+    DEFAULT_GAS_BUDGET_FOR_STAKE,
+} from '_redux/slices/sui-objects/Coin';
 import { Text } from '_src/ui/app/shared/text';
 
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -65,15 +69,13 @@ function StakingCard() {
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
     );
+
+    // TODO: this is a hack to get the total amount of gas coins
     const totalGasCoins = useMemo(
-        () => balances[GAS_TYPE_ARG]?.length || 0,
-        [balances]
+        () => (unstake ? 2 : balances[GAS_TYPE_ARG]?.length || 0),
+        [balances, unstake]
     );
 
-    const gasAggregateBalance = useMemo(
-        () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
-        [aggregateBalances]
-    );
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return BigInt(0);
         // return only the total amount of tokens staked for a specific stakeId
@@ -116,6 +118,16 @@ function StakingCard() {
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
+
+    //TODO: this is a hack to get the total amount of gas coins
+    // for unstake add gas
+    const gasAggregateBalance = useMemo(
+        () =>
+            unstake
+                ? coinBalance + BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
+                : aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
+        [aggregateBalances, coinBalance, unstake]
+    );
 
     const validationSchema = useMemo(
         () =>
@@ -185,15 +197,13 @@ function StakingCard() {
     });
     const unStakeToken = useMutation({
         mutationFn: async ({
-            principalWithdrawAmount,
             delegationId,
             stakeSuId,
         }: {
-            principalWithdrawAmount: string;
             delegationId: string;
             stakeSuId: string;
         }) => {
-            if (!principalWithdrawAmount || !delegationId || !stakeSuId) {
+            if (!delegationId || !stakeSuId) {
                 throw new Error(
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
                 );
@@ -202,8 +212,7 @@ function StakingCard() {
             const response = await Coin.unStakeCoin(
                 signer,
                 delegationId,
-                stakeSuId,
-                principalWithdrawAmount
+                stakeSuId
             );
             return response;
         },
@@ -235,7 +244,6 @@ function StakingCard() {
                         delegationId:
                             delegationData.delegation_status.Active.id.id,
                         stakeSuId: stakeIdParams,
-                        principalWithdrawAmount: bigIntAmount.toString(),
                     });
 
                     txDigest = getTransactionDigest(response);
@@ -319,9 +327,8 @@ function StakingCard() {
                                         color="gray-85"
                                         weight="semibold"
                                     >
-                                        {unstake
-                                            ? 'Enter the amount of SUI to unstake'
-                                            : 'Enter the amount of SUI to stake'}
+                                        {!unstake &&
+                                            'Enter the amount of SUI to stake'}
                                     </Text>
                                 </div>
                                 <StakeForm
@@ -334,7 +341,7 @@ function StakingCard() {
                                     }
                                 />
 
-                                {stakeIdParams && (
+                                {stakeIdParams && !unstake && (
                                     <div className="flex-1 mt-7.5">
                                         <Collapse
                                             title={
@@ -374,7 +381,7 @@ function StakingCard() {
                                     size="large"
                                     mode="primary"
                                     onClick={submitForm}
-                                    className=" w-1/2"
+                                    className="w-1/2"
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||

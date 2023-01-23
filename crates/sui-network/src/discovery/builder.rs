@@ -34,7 +34,7 @@ impl Builder {
     pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
         let Builder { config } = self;
         let config = config.unwrap();
-        let (sender, reciever) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel();
 
         let handle = Handle {
             _shutdown_handle: Arc::new(sender),
@@ -56,7 +56,7 @@ impl Builder {
             UnstartedDiscovery {
                 handle,
                 config,
-                shutdown_handle: reciever,
+                shutdown_handle: receiver,
                 state,
             },
             server,

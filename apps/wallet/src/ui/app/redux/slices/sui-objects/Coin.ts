@@ -109,20 +109,14 @@ export class Coin {
     public static async unStakeCoin(
         signer: SignerWithProvider,
         delegation: ObjectId,
-        stakedSuiId: ObjectId,
-        principalWithdrawAmount: string
+        stakedSuiId: ObjectId
     ): Promise<SuiExecuteTransactionResponse> {
         const txn = {
             packageObjectId: '0x2',
             module: 'sui_system',
             function: 'request_withdraw_delegation',
             typeArguments: [],
-            arguments: [
-                SUI_SYSTEM_STATE_OBJECT_ID,
-                delegation,
-                stakedSuiId,
-                principalWithdrawAmount,
-            ],
+            arguments: [SUI_SYSTEM_STATE_OBJECT_ID, delegation, stakedSuiId],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
         };
         return signer.executeMoveCall(txn);

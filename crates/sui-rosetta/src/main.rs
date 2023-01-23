@@ -262,7 +262,7 @@ fn test_read_keystore() {
 async fn main() -> Result<(), anyhow::Error> {
     let cmd: RosettaServerCommand = RosettaServerCommand::parse();
 
-    let (_guard, _) = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let (_guard, _) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 

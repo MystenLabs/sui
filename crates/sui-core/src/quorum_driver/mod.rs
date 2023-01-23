@@ -231,7 +231,7 @@ where
         Ok(ticket)
     }
 
-    // Used when the it is called in a compoent holding the notifier, and a ticket is
+    // Used when the it is called in a component holding the notifier, and a ticket is
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
     pub async fn submit_transaction_no_ticket(
         &self,
@@ -366,7 +366,7 @@ where
 
     pub async fn update_validators(&self, new_validators: Arc<AuthorityAggregator<A>>) {
         info!(
-            "Quorum Drvier updating AuthorityAggregator with committee {}",
+            "Quorum Driver updating AuthorityAggregator with committee {}",
             new_validators.committee
         );
         self.validators.store(new_validators);
@@ -584,7 +584,7 @@ where
         }
     }
 
-    // Used when the it is called in a compoent holding the notifier, and a ticket is
+    // Used when the it is called in a component holding the notifier, and a ticket is
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
     pub async fn submit_transaction_no_ticket(
         &self,

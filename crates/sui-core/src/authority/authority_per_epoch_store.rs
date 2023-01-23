@@ -27,12 +27,15 @@ use sui_types::messages::{
     VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::{debug, info, trace, warn};
-use typed_store::rocks::{DBBatch, DBMap, DBOptions, TypedStoreError};
+use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::{CertTxGuard, MAX_TX_RECOVERY_RETRY};
-use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNotify, EpochStats};
+use crate::checkpoints::{
+    CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
+    PendingCheckpointInfo,
+};
 use crate::consensus_handler::{
     SequencedConsensusTransaction, VerifiedSequencedConsensusTransaction,
 };
@@ -60,6 +63,7 @@ use typed_store_derive::DBMapUtils;
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
+pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
 pub struct CertLockGuard(LockGuard);
 
@@ -197,7 +201,7 @@ pub struct AuthorityEpochTables {
     /// the sequence number of checkpoint does not match height here.
     ///
     /// The boolean value indicates whether this is the last checkpoint of the epoch.
-    pending_checkpoints: DBMap<CheckpointCommitHeight, (Vec<TransactionDigest>, bool)>,
+    pending_checkpoints: DBMap<CheckpointCommitHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
@@ -223,15 +227,25 @@ pub struct AuthorityEpochTables {
 
 impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_transactional(Self::path(epoch, parent_path), db_options, None)
+        Self::open_tables_transactional(
+            Self::path(epoch, parent_path),
+            MetricConf::with_db_name("epoch"),
+            db_options,
+            None,
+        )
     }
 
     pub fn open_readonly(epoch: EpochId, parent_path: &Path) -> AuthorityEpochTablesReadOnly {
-        Self::get_read_only_handle(Self::path(epoch, parent_path), None, None)
+        Self::get_read_only_handle(
+            Self::path(epoch, parent_path),
+            None,
+            None,
+            MetricConf::with_db_name("epoch"),
+        )
     }
 
     pub fn path(epoch: EpochId, parent_path: &Path) -> PathBuf {
-        parent_path.join(format!("epoch_{}", epoch))
+        parent_path.join(format!("{}{}", EPOCH_DB_PREFIX, epoch))
     }
 
     fn load_reconfig_state(&self) -> SuiResult<ReconfigState> {
@@ -301,6 +315,10 @@ impl AuthorityPerEpochStore {
             epoch_close_time: Default::default(),
             metrics,
         })
+    }
+
+    pub fn get_parent_path(&self) -> PathBuf {
+        self.parent_path.clone()
     }
 
     pub fn new_at_next_epoch(&self, name: AuthorityName, new_committee: Committee) -> Arc<Self> {
@@ -1371,7 +1389,15 @@ impl AuthorityPerEpochStore {
                 Some(CmpOrdering::Greater) => false,
                 None => false,
             };
-            checkpoint_service.notify_checkpoint(self, index, roots, final_checkpoint)?;
+            let checkpoint = PendingCheckpoint {
+                roots,
+                details: PendingCheckpointInfo {
+                    timestamp_ms: committed_dag.leader.metadata.created_at,
+                    last_of_epoch: final_checkpoint,
+                    commit_height: index,
+                },
+            };
+            checkpoint_service.notify_checkpoint(self, checkpoint)?;
             if final_checkpoint {
                 info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
                 self.record_end_of_message_quorum_time_metric();
@@ -1380,25 +1406,23 @@ impl AuthorityPerEpochStore {
         self.record_checkpoint_boundary(round)
     }
 
-    pub fn get_pending_checkpoints(
-        &self,
-    ) -> Vec<(CheckpointCommitHeight, (Vec<TransactionDigest>, bool))> {
+    pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
         self.tables.pending_checkpoints.iter().collect()
     }
 
     pub fn get_pending_checkpoint(
         &self,
         index: &CheckpointCommitHeight,
-    ) -> Result<Option<(Vec<TransactionDigest>, bool)>, TypedStoreError> {
+    ) -> Result<Option<PendingCheckpoint>, TypedStoreError> {
         self.tables.pending_checkpoints.get(index)
     }
 
     pub fn insert_pending_checkpoint(
         &self,
         index: &CheckpointCommitHeight,
-        transactions: &(Vec<TransactionDigest>, bool),
+        checkpoint: &PendingCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        self.tables.pending_checkpoints.insert(index, transactions)
+        self.tables.pending_checkpoints.insert(index, checkpoint)
     }
 
     pub fn process_pending_checkpoint(
@@ -1578,6 +1602,10 @@ impl AuthorityPerEpochStore {
         self.metrics
             .epoch_last_transaction_cert_creation_time_ms
             .set(elapsed_ms);
+    }
+
+    pub(crate) fn record_is_safe_mode_metric(&self, safe_mode: bool) {
+        self.metrics.is_safe_mode.set(safe_mode as i64);
     }
 
     fn record_epoch_total_duration_metric(&self) {

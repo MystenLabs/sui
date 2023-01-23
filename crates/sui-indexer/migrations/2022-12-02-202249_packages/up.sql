@@ -2,7 +2,7 @@ CREATE TABLE packages (
     package_id TEXT PRIMARY KEY,
     author TEXT NOT NULL,
     -- means the column cannot be null,
-    -- the element in the array can stil be null
+    -- the element in the array can still be null
     module_names TEXT[] NOT NULL,
     package_content TEXT NOT NULL
 );

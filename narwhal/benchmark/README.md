@@ -133,14 +133,14 @@ The 'Consensus TPS' and 'Consensus latency' report the average throughput and la
 
 Memory profiling for benchmarks are possible via `jemalloc` on Linux. It can be enabled in the following way:
 
-- Intall `jemalloc`, e.g. `sudo apt install libjemalloc-dev`
+- Install `jemalloc`, e.g. `sudo apt install libjemalloc-dev`
 - Enable `jemalloc` by setting `export MALLOC_CONF=prof:true,prof_prefix:jeprof.out,lg_prof_interval:33` before launching the benchmark script.
 
 Memory profiles with names `jeprof.out*` will be written to the currently directory.
 
 To visualize the profile,
 
-- Intall `graphviz`, e.g. `sudo apt install graphviz`
+- Install `graphviz`, e.g. `sudo apt install graphviz`
 - `sudo jeprof --svg <path to Narwhal binary> <path to profile> > prof.svg`
 
 ## AWS Benchmarks

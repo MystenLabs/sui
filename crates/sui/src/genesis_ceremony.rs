@@ -173,7 +173,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
             let mut builder = Builder::load(&dir)?;
 
-            // Don't sign unless the unsinged checkpoint has already been created
+            // Don't sign unless the unsigned checkpoint has already been created
             if builder.unsigned_genesis_checkpoint().is_none() {
                 return Err(anyhow::anyhow!(
                     "Unable to verify and sign genesis checkpoint; it hasn't been built yet"

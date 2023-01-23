@@ -1,20 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Header from "./header/Header";
-import Footer from "./footer/Footer";
+import { Header } from "./Header";
+import { Footer } from "./Footer";
 import { ReactElement } from "react";
 
-function Layout({ children }: { children: ReactElement | ReactElement[] }) {
+export function Layout({ children }: { children: ReactElement | ReactElement[] }) {
   return (
-    <div className="container">
+    <>
       <Header />
-      <div className="mx-auto max-w-4xl container">
+      <div className="mx-auto max-w-6xl px-4 w-full flex flex-col gap-5 mb-24 mt-4">
         {children}
       </div>
       <Footer />
-    </div>
+    </>
   );
 }
-
-export default Layout;

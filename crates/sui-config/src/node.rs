@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
@@ -157,14 +158,20 @@ impl NodeConfig {
     pub fn worker_key_pair(&self) -> &NetworkKeyPair {
         match self.worker_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            other => panic!(
+                "Invalid keypair type: {:?}, only Ed25519 is allowed for worker key",
+                other
+            ),
         }
     }
 
     pub fn network_key_pair(&self) -> &NetworkKeyPair {
         match self.network_key_pair.keypair() {
             SuiKeyPair::Ed25519(kp) => kp,
-            _ => panic!("Invalid keypair type"),
+            other => panic!(
+                "Invalid keypair type: {:?}, only Ed25519 is allowed for network key",
+                other
+            ),
         }
     }
 
@@ -269,6 +276,8 @@ pub struct AuthorityStorePruningConfig {
     pub objects_num_latest_versions_to_retain: u64,
     pub objects_pruning_period_secs: u64,
     pub objects_pruning_initial_delay_secs: u64,
+    pub num_latest_epoch_dbs_to_retain: usize,
+    pub epoch_db_pruning_period_secs: u64,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -277,6 +286,8 @@ impl Default for AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: u64::MAX,
             objects_pruning_period_secs: u64::MAX,
             objects_pruning_initial_delay_secs: u64::MAX,
+            num_latest_epoch_dbs_to_retain: usize::MAX,
+            epoch_db_pruning_period_secs: u64::MAX,
         }
     }
 }
@@ -289,6 +300,8 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 2,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: 3,
+            epoch_db_pruning_period_secs: 60 * 60,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -296,6 +309,8 @@ impl AuthorityStorePruningConfig {
             objects_num_latest_versions_to_retain: 5,
             objects_pruning_period_secs: 24 * 60 * 60,
             objects_pruning_initial_delay_secs: 60 * 60,
+            num_latest_epoch_dbs_to_retain: 3,
+            epoch_db_pruning_period_secs: 60 * 60,
         }
     }
 }
@@ -484,7 +499,7 @@ impl KeyPairWithPath {
         let cell: OnceCell<Arc<SuiKeyPair>> = OnceCell::new();
         // OK to unwrap panic because authority should not start without all keypairs loaded.
         cell.set(Arc::new(read_keypair_from_file(&path).unwrap_or_else(
-            |_| panic!("Invalid keypair file at path {:?}", &path),
+            |e| panic!("Invalid keypair file at path {:?}: {e}", &path),
         )))
         .expect("Failed to set keypair");
         Self {
@@ -500,8 +515,9 @@ impl KeyPairWithPath {
                 KeyPairLocation::File { path } => {
                     // OK to unwrap panic because authority should not start without all keypairs loaded.
                     Arc::new(
-                        read_keypair_from_file(path)
-                            .unwrap_or_else(|_| panic!("Invalid keypair file")),
+                        read_keypair_from_file(path).unwrap_or_else(|e| {
+                            panic!("Invalid keypair file at path {:?}: {e}", path)
+                        }),
                     )
                 }
             })

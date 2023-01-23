@@ -37,6 +37,17 @@ export function ValidatorsCard() {
         );
     }, [stakeValidators]);
 
+    const numberOfValidators = useMemo(() => {
+        if (!stakeValidators) return 0;
+        return [
+            ...new Set(
+                stakeValidators.map(
+                    ({ staked_sui }) => staked_sui.validator_address
+                )
+            ),
+        ].length;
+    }, [stakeValidators]);
+
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading) {
@@ -71,8 +82,8 @@ export function ValidatorsCard() {
                                         weight="semibold"
                                         color="steel-darker"
                                     >
-                                        Staking on {stakeValidators.length}
-                                        {stakeValidators.length > 1
+                                        Staking on {numberOfValidators}
+                                        {numberOfValidators > 1
                                             ? ' Validators'
                                             : ' Validator'}
                                     </Text>

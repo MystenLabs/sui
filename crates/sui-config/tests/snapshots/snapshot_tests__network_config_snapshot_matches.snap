@@ -46,6 +46,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -58,6 +64,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -105,6 +113,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -117,6 +131,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -164,6 +180,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -176,6 +198,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -223,6 +247,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -235,6 +265,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -282,6 +314,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -294,6 +332,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -341,6 +381,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -353,6 +399,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -400,6 +448,12 @@ validator_configs:
         network_admin_server:
           primary_network_admin_server_port: 5678
           worker_network_admin_server_base_port: 8765
+        anemo:
+          send_message_rate_limit: ~
+          get_payload_availability_rate_limit: ~
+          get_certificates_rate_limit: ~
+          report_batch_rate_limit: ~
+          request_batch_rate_limit: ~
     enable-event-processing: false
     checkpoints-per-epoch: 3000
     grpc-load-shed: ~
@@ -412,6 +466,8 @@ validator_configs:
       objects-num-latest-versions-to-retain: 2
       objects-pruning-period-secs: 86400
       objects-pruning-initial-delay-secs: 3600
+      num-latest-epoch-dbs-to-retain: 3
+      epoch-db-pruning-period-secs: 3600
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100

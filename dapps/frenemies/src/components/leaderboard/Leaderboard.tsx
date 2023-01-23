@@ -1,22 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Row from './Row';
-import TableHeader from "./TableHeader";
-import type { Leaderboard as LeaderboardType } from '../../network/types';
+import { useLeaderboard } from "../../network/queries/leaderboard";
+import { config } from "../../config";
+import { Card } from "../Card";
+import { Stat } from "../Stat";
+import { Table } from "./Table";
 
 /**
  * Table representing a Leaderboard
  */
-function Leaderboard({ board }: { board: LeaderboardType}) {
+export function Leaderboard() {
+  const { data } = useLeaderboard(
+    config.VITE_LEADERBOARD || "0x7127db02f6313c03af19f7677b5155254dca8c52"
+  );
+
+  // TODO: Loading and error states:
+  if (!data) {
+    return null;
+  }
+
   return (
-    <div className="leaderboard w-auto">
-      <table className="table-fixed w-auto">
-        <TableHeader />
-        {board.topScores.map((score) => <Row score={score} />)}
-      </table>
-    </div>
+    <Card variant="leaderboard">
+      <h2 className="font-semibold text-3xl leading-tight">Your Score</h2>
+      <div className="flex gap-16 mt-3 mb-7">
+        <Stat variant="leaderboard" label="Rank">
+          420
+        </Stat>
+        <Stat variant="leaderboard" label="Total Score">
+          420
+        </Stat>
+      </div>
+      <Table data={data.data} />
+    </Card>
   );
 }
-
-export default Leaderboard;

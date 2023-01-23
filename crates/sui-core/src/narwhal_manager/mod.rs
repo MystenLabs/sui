@@ -20,31 +20,28 @@ use std::time::Instant;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
 
-pub struct NarwhalConfiguration<TxValidator: TransactionValidator> {
+pub struct NarwhalConfiguration {
     pub primary_keypair: AuthorityKeyPair,
     pub network_keypair: NetworkKeyPair,
     pub worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
 
     pub storage_base_path: PathBuf,
     pub parameters: Parameters,
-    pub tx_validator: TxValidator,
-
     pub registry_service: RegistryService,
 }
 
-pub struct NarwhalManager<TxValidator> {
+pub struct NarwhalManager {
     storage_base_path: PathBuf,
     primary_keypair: AuthorityKeyPair,
     network_keypair: NetworkKeyPair,
     worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
-    tx_validator: TxValidator,
     running: Mutex<bool>,
 }
 
-impl<TxValidator: TransactionValidator> NarwhalManager<TxValidator> {
-    pub fn new(config: NarwhalConfiguration<TxValidator>) -> Self {
+impl NarwhalManager {
+    pub fn new(config: NarwhalConfiguration) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node = PrimaryNode::new(
             config.parameters.clone(),
@@ -59,7 +56,6 @@ impl<TxValidator: TransactionValidator> NarwhalManager<TxValidator> {
         Self {
             primary_node,
             worker_nodes,
-            tx_validator: config.tx_validator,
             primary_keypair: config.primary_keypair,
             network_keypair: config.network_keypair,
             worker_ids_and_keypairs: config.worker_ids_and_keypairs,
@@ -69,11 +65,12 @@ impl<TxValidator: TransactionValidator> NarwhalManager<TxValidator> {
     }
 
     // Starts the Narwhal (primary & worker(s)) - if not already running.
-    pub async fn start<State>(
+    pub async fn start<State, TxValidator: TransactionValidator>(
         &self,
         committee: Arc<Committee>,
         shared_worker_cache: SharedWorkerCache,
         execution_state: Arc<State>,
+        tx_validator: TxValidator,
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
@@ -125,7 +122,7 @@ impl<TxValidator: TransactionValidator> NarwhalManager<TxValidator> {
                 Arc::new(ArcSwap::new(committee.clone())),
                 shared_worker_cache,
                 &store,
-                self.tx_validator.clone(),
+                tx_validator.clone(),
             )
             .await
             .expect("Unable to start Narwhal Worker");
