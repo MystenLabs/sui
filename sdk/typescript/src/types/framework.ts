@@ -279,7 +279,7 @@ export class Coin {
         inputCoins: inputCoinObjs.map(Coin.getID),
         recipients: [recipient],
         // TODO: change this to string to avoid losing precision
-        amounts: [Number(amountToSend)],
+        amounts: [BigInt(amountToSend)],
         gasBudget: Number(gasBudget),
       },
     };

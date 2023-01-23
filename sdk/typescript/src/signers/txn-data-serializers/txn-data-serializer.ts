@@ -17,7 +17,7 @@ export interface TransferSuiTransaction {
   suiObjectId: ObjectId;
   gasBudget: number;
   recipient: SuiAddress;
-  amount: number | null;
+  amount: bigint | null;
 }
 
 /// Send Coin<T> to a list of addresses, where `T` can be any coin type, following a list of amounts,
@@ -32,7 +32,7 @@ export interface PayTransaction {
    */
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
-  amounts: number[];
+  amounts: bigint[];
   gasPayment?: ObjectId;
   gasBudget: number;
 }
@@ -54,7 +54,7 @@ export interface PaySuiTransaction {
    */
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
-  amounts: number[];
+  amounts: bigint[];
   gasBudget: number;
 }
 

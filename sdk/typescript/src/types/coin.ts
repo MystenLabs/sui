@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { array, Infer, literal, nullable, number, object, optional, string, union } from 'superstruct';
+import { array, bigint, Infer, literal, nullable, number, object, optional, string, union } from 'superstruct';
 import { ObjectId, TransactionDigest } from './common';
 
 export const CoinStruct = object({
@@ -27,7 +27,7 @@ export type PaginatedCoins = Infer<typeof PaginatedCoins>;
 export const CoinBalance = object({
     coinType: string(),
     coinObjectCount: number(),
-    totalBalance: number(),
+    totalBalance: union([bigint(), number()]),
     lockedBalance: object({epochId: optional(number()), number: optional(number())})
 });
 

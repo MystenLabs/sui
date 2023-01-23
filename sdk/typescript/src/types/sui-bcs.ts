@@ -60,7 +60,7 @@ bcs.registerStructType('TransferObjectTx', {
 export type TransferSuiTx = {
   TransferSui: {
     recipient: string;
-    amount: { Some: number } | { None: null };
+    amount: { Some: bigint } | { None: null };
   };
 };
 
@@ -71,7 +71,7 @@ export type PayTx = {
   Pay: {
     coins: SuiObjectRef[];
     recipients: string[];
-    amounts: number[];
+    amounts: bigint[];
   };
 };
 
@@ -79,7 +79,7 @@ export type PaySuiTx = {
   PaySui: {
     coins: SuiObjectRef[];
     recipients: string[];
-    amounts: number[];
+    amounts: bigint[];
   };
 };
 
