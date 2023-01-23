@@ -144,8 +144,8 @@ impl RandomNodeRestarter {
 
     pub fn run(&self) -> JoinHandle<()> {
         let test_cluster = self.test_cluster.clone();
-        let kill_interval = self.kill_interval.clone();
-        let restart_delay = self.restart_delay.clone();
+        let kill_interval = self.kill_interval;
+        let restart_delay = self.restart_delay;
         let validators = self.test_cluster.get_validator_addresses();
         tokio::task::spawn(async move {
             loop {

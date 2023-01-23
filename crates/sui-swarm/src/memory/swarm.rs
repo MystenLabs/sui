@@ -15,7 +15,7 @@ use std::{
 use sui_config::builder::{CommitteeConfig, ConfigBuilder};
 use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::NetworkConfig;
-use sui_types::base_types::{AuthorityName, SuiAddress};
+use sui_types::base_types::AuthorityName;
 use tempfile::TempDir;
 
 pub struct SwarmBuilder<R = OsRng> {

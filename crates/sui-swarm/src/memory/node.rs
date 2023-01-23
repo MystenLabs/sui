@@ -76,10 +76,12 @@ impl Node {
     /// * Checking that the node is running
     /// * Calling the Node's gRPC Health service if it's a validator.
     pub async fn health_check(&self, is_validator: bool) -> Result<(), HealthCheckError> {
-        let lock = self.container.lock().unwrap();
-        let container = lock.as_ref().ok_or(HealthCheckError::NotRunning)?;
-        if !container.is_alive() {
-            return Err(HealthCheckError::NotRunning);
+        {
+            let lock = self.container.lock().unwrap();
+            let container = lock.as_ref().ok_or(HealthCheckError::NotRunning)?;
+            if !container.is_alive() {
+                return Err(HealthCheckError::NotRunning);
+            }
         }
 
         if is_validator {
@@ -130,9 +132,9 @@ mod test {
     #[tokio::test]
     async fn start_and_stop() {
         telemetry_subscribers::init_for_testing();
-        let mut swarm = Swarm::builder().build();
+        let swarm = Swarm::builder().build();
 
-        let validator = swarm.validators_mut().next().unwrap();
+        let validator = swarm.validators().next().unwrap();
 
         validator.start().await.unwrap();
         validator.health_check(true).await.unwrap();
