@@ -45,10 +45,13 @@ import {
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
+  PaginatedCoins,
   GetObjectDataResponse,
   GetOwnedObjectsResponse,
   DelegatedStake,
   ValidatorMetaData,
+  CoinBalance,
+  CoinSupply,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields'
 import {
@@ -169,6 +172,103 @@ export class JsonRpcProvider extends Provider {
     return undefined;
   }
 
+  async requestSuiFromFaucet(
+    recipient: SuiAddress,
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    if (!this.endpoints.faucet) {
+      throw new Error('Faucet URL is not specified');
+    }
+    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+  }
+
+  // Coins
+  async getCoins(
+    owner: SuiAddress,
+    coinType: String | null = null,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ) : Promise<PaginatedCoins> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getCoins',
+        [owner, coinType, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting coins for owner ${owner}: ${err}`
+      );
+    }
+  }
+
+  async getAllCoins(
+    owner: SuiAddress,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ) : Promise<PaginatedCoins> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getAllCoins',
+        [owner, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting all coins for owner ${owner}: ${err}`
+      )
+    }
+  }
+
+  async getBalance(
+    owner: SuiAddress,
+    coinType: String | null = null,
+  ) : Promise<CoinBalance> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getBalance',
+        [owner, coinType],
+        CoinBalance,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting balance for coin type ${coinType} for owner ${owner}: ${err}`
+      )
+    }
+  }
+
+  async getAllBalances(
+    owner: SuiAddress
+  ) : Promise<CoinBalance[]> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getAllBalances',
+        [owner],
+        array(CoinBalance),
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting all balances for owner ${owner}: ${err}`
+      )
+    }
+  }
+
   async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
     try {
       return await this.client.requestWithType(
@@ -182,14 +282,21 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async requestSuiFromFaucet(
-    recipient: SuiAddress,
-    httpHeaders?: HttpHeaders
-  ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
-      throw new Error('Faucet URL is not specified');
+  async getTotalSupply(
+    coinType: String
+  ) : Promise<CoinSupply> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getTotalSupply',
+        [coinType],
+        CoinSupply,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching total supply for Coin type ${coinType}: ${err}`
+      );
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
   }
 
   // RPC endpoint
@@ -337,6 +444,9 @@ export class JsonRpcProvider extends Provider {
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
+  /**
+   * @deprecated The method should not be used
+   */
   async getCoinBalancesOwnedByAddress(
     address: SuiAddress,
     typeArg?: string
@@ -359,7 +469,9 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
   ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
+    const coins = await this.getObjectBatch(coinIds);
     return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
       coins,
       amount,
@@ -373,7 +485,9 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
   ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
+    const coins = await this.getObjectBatch(coinIds);
     return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,

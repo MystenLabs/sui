@@ -36,6 +36,9 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  PaginatedCoins,
+  CoinBalance,
+  CoinSupply,
 } from '../types';
 import { Provider } from './provider';
 
@@ -45,10 +48,6 @@ export class VoidProvider extends Provider {
   // API Version
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
     throw this.newError('getRpcApiVersion');
-  }
-
-  getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
-    throw new Error('getCoinMetadata');
   }
 
   // Governance
@@ -71,6 +70,47 @@ export class VoidProvider extends Provider {
     throw this.newError('call');
   }
 
+  // Coins
+  async getCoins(
+    _owner: SuiAddress,
+    _coinType: String | null,
+    _cursor: ObjectId | null,
+    _limit: number | null
+  ) : Promise<PaginatedCoins> {
+    throw this.newError('getCoins');
+  }
+
+  async getAllCoins(
+    _owner: SuiAddress,
+    _cursor: ObjectId | null,
+    _limit: number | null
+  ) : Promise<PaginatedCoins> {
+    throw this.newError('getAllCoins');
+  }
+
+  async getBalance(
+    _owner: string, 
+    _coinType: String | null
+    ): Promise<CoinBalance> {
+      throw this.newError('getBalance');
+  }
+
+  async getAllBalances(
+    _owner: string, 
+    ): Promise<CoinBalance[]> {
+      throw this.newError('getAllBalances');
+  }
+
+  async getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
+    throw new Error('getCoinMetadata');
+  }
+
+  async getTotalSupply(
+    _coinType: string
+  ) : Promise<CoinSupply> {
+    throw new Error('getTotalSupply');
+  }
+
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
@@ -82,6 +122,9 @@ export class VoidProvider extends Provider {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
+  /**
+   * @deprecated The method should not be used
+   */
   async getCoinBalancesOwnedByAddress(
     _address: string,
     _typeArg?: string
