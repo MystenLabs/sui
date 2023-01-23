@@ -5,10 +5,12 @@ import { Text } from '_app/shared/text';
 
 type TxnTypeProps = {
     label: 'Action' | 'From' | 'To';
-    content: string;
+    address: string;
+    actionLabel: string;
 };
 
-export function TxnTypeLabel({ label, content }: TxnTypeProps) {
+export function TxnTypeLabel({ label, address, actionLabel }: TxnTypeProps) {
+    const content = label !== 'Action' ? address : actionLabel;
     return (
         <div className="flex gap-1 break-all capitalize">
             <Text color="steel-darker" weight="semibold" variant="subtitle">

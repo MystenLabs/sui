@@ -40,13 +40,13 @@ export function Transaction({
         address || ''
     );
 
-    const objectIds = useMemo(() => {
+    const objectId = useMemo(() => {
         const transferId = getTransferObjectTransaction(
             certificate.data.transactions[0]
         )?.objectRef?.objectId;
         return transferId
-            ? [transferId]
-            : getTxnEffectsEventID(txn.effects, address || '');
+            ? transferId
+            : getTxnEffectsEventID(txn.effects, address || '')[0];
     }, [address, certificate.data.transactions, txn.effects]);
 
     const amountByRecipient = getAmount(
@@ -93,10 +93,6 @@ export function Transaction({
         TRUNCATE_PREFIX_LENGTH
     );
 
-    const moveCallTxn = getMoveCallTransaction(
-        certificate.data.transactions[0]
-    );
-
     const txnLabel = useMemo(() => {
         const moveCallTxn = getMoveCallTransaction(
             certificate.data.transactions[0]
@@ -106,9 +102,6 @@ export function Transaction({
         if (txnKind === 'ChangeEpoch') return txnKind;
         return recipientAddress;
     }, [certificate.data.transactions, recipientAddress, txnKind]);
-
-    const isMint = txnKind === 'Call' && moveCallTxn?.function === 'mint';
-    const txnIconName = isMint ? 'Minted' : txnKind;
 
     const txnDate = useMemo(() => {
         return txn?.timestamp_ms
@@ -141,7 +134,6 @@ export function Transaction({
             <div className="flex items-start w-full justify-between gap-3">
                 <div className="w-7.5">
                     <TxnIcon
-                        txnKindName={txnIconName}
                         txnFailed={executionStatus === 'Failed' || !!error}
                         isSender={isSender}
                     />
@@ -162,11 +154,7 @@ export function Transaction({
                                 <div className="flex w-full justify-between ">
                                     <div className="flex gap-1 align-middle  items-baseline">
                                         <Text color="gray-90" weight="semibold">
-                                            {isMint
-                                                ? 'Minted'
-                                                : isSender
-                                                ? 'Sent'
-                                                : 'Received'}
+                                            {isSender ? 'Sent' : 'Received'}
                                         </Text>
                                         {isSuTransfer && (
                                             <Text
@@ -185,15 +173,10 @@ export function Transaction({
                                     <div className="flex flex-col w-full gap-1.5">
                                         <TxnTypeLabel
                                             label={label}
-                                            content={
-                                                label !== 'Action'
-                                                    ? receiverAddress
-                                                    : txnLabel
-                                            }
+                                            address={receiverAddress}
+                                            actionLabel={txnLabel}
                                         />
-                                        {objectIds[0] && (
-                                            <TxnImage id={objectIds[0]} />
-                                        )}
+                                        {objectId && <TxnImage id={objectId} />}
                                     </div>
                                 </div>
                             </div>

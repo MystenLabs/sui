@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQueryClient } from '@tanstack/react-query';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
@@ -13,15 +12,6 @@ import Alert from '_src/ui/app/components/alert';
 
 function TransactionsPage() {
     const activeAddress = useAppSelector(({ account: { address } }) => address);
-    const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
-    const queryClient = useQueryClient();
-
-    // Switching between accounts should invalidate the query cache
-    useEffect(() => {
-        queryClient.invalidateQueries({
-            queryKey: ['transactions-by-address', activeAddress],
-        });
-    }, [activeAddress, queryClient, selectedApiEnv]);
 
     const {
         data: txns,

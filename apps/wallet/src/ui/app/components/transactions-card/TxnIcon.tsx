@@ -6,45 +6,30 @@ import { useMemo } from 'react';
 
 import Icon, { SuiIcons } from '_components/icon';
 
-import type { TransactionKindName } from '@mysten/sui.js';
-
 interface TxnItemIconProps {
-    txnKindName: TransactionKindName | 'Minted';
     txnFailed?: boolean;
     isSender: boolean;
 }
 
-export function TxnIcon({
-    txnKindName,
-    txnFailed,
-    isSender,
-}: TxnItemIconProps) {
+const icons = {
+    Send: (
+        <Icon
+            icon={SuiIcons.ArrowLeft}
+            className="text-gradient-blue-start rotate-135"
+        />
+    ),
+    Receive: (
+        <Icon
+            icon={SuiIcons.ArrowLeft}
+            className="text-gradient-blue-start -rotate-45"
+        />
+    ),
+};
+
+export function TxnIcon({ txnFailed, isSender }: TxnItemIconProps) {
     const variant = useMemo(() => {
-        if (txnKindName === 'Minted') return 'Minted';
         return isSender ? 'Send' : 'Receive';
-    }, [isSender, txnKindName]);
-
-    const icons = {
-        Minted: (
-            <Icon icon={SuiIcons.Buy} className="text-gradient-blue-start" />
-        ),
-        Send: (
-            <Icon
-                icon={SuiIcons.ArrowLeft}
-                className="text-gradient-blue-start rotate-135"
-            />
-        ),
-        Receive: (
-            <Icon
-                icon={SuiIcons.ArrowLeft}
-                className="text-gradient-blue-start -rotate-45"
-            />
-        ),
-
-        Swapped: (
-            <Icon icon={SuiIcons.Swap} className="text-gradient-blue-start" />
-        ),
-    };
+    }, [isSender]);
 
     return (
         <div

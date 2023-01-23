@@ -4,39 +4,29 @@
 import { type SuiAddress, type SuiTransactionResponse } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import { api } from '_redux/store/thunk-extras';
-const STALE_TIME = 1000 * 2;
+import { useRpc } from '_hooks';
 
-async function getTransactionsByAddress(
-    address: string,
-    cursor?: string
-): Promise<SuiTransactionResponse[]> {
-    const rpc = api.instance.fullNode;
-    const txnsIds = await api.instance.fullNode.getTransactions(
-        {
-            FromAddress: address,
-        },
-        cursor
-    );
-    return rpc.getTransactionWithEffectsBatch(txnsIds.data);
-}
+const REFETCH_INTERVAL = 2000;
 
-// Fetch transactions on mount and every 2 seconds
 export function useGetTransactionsByAddress(
     address?: SuiAddress | null
 ): UseQueryResult<SuiTransactionResponse[], unknown> {
+    const rpc = useRpc();
+
     return useQuery(
         ['transactions-by-address', address],
         async () => {
-            if (!address) {
-                throw new Error('No wallet address provided');
-            }
-            return getTransactionsByAddress(address);
+            const currentAddress = address ?? '';
+
+            const txnsIds = await rpc.getTransactions({
+                ToAddress: currentAddress,
+            });
+            return rpc.getTransactionWithEffectsBatch(txnsIds.data);
         },
         {
-            enabled: !!address,
+            enabled: address != null,
             refetchOnMount: true,
-            staleTime: STALE_TIME,
+            refetchInterval: REFETCH_INTERVAL,
         }
     );
 }
