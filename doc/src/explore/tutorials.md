@@ -29,7 +29,7 @@ gas units) times the price of gas in the SUI currency (i.e. the gas price).
 When you complete the setup steps, you can either use the following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
 
 ## Quick script
-If you prefer not to enter command step by step, or need to go though it multiple
+If you prefer not to enter command step by step, or need to go through it multiple
 times (such as when you change some Move source code), the following automated script
 may be useful to save some time.
 Run this script from the project repo root.
