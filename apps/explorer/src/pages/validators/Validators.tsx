@@ -42,8 +42,8 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 number: index + 1,
                 name: validatorName,
                 stake:
-                    +validator.fields.delegation_staking_pool.fields.sui_balance +
-                    +validator.fields.stake_amount,
+                    +validator.fields.delegation_staking_pool.fields
+                        .sui_balance + +validator.fields.stake_amount,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate,
                 address: validator.fields.metadata.fields.sui_address,

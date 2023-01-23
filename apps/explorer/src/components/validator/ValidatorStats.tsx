@@ -37,8 +37,11 @@ export function ValidatorStats({
     const delegatedStake =
         validatorData.fields.delegation_staking_pool.fields
             .delegation_token_supply.fields.value;
-    const selfStake = validatorData.fields.delegation_staking_pool.fields.sui_balance;
-    const totalStake = +validatorData.fields.delegation_staking_pool.fields.sui_balance + +delegatedStake;
+    const selfStake =
+        validatorData.fields.delegation_staking_pool.fields.sui_balance;
+    const totalStake =
+        +validatorData.fields.delegation_staking_pool.fields.sui_balance +
+        +delegatedStake;
     const commission = +validatorData.fields.commission_rate * 100;
     const lastEpoch = +epoch;
 
@@ -93,7 +96,10 @@ export function ValidatorStats({
                                 {commission}%
                             </Heading>
                         </Stats>
-                        <Stats label="Total SUI Staked" tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards.">
+                        <Stats
+                            label="Total SUI Staked"
+                            tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards."
+                        >
                             <DelegationAmount amount={totalStake} isStats />
                         </Stats>
                     </div>
@@ -104,7 +110,10 @@ export function ValidatorStats({
                             unavailable
                         />
 
-                        <Stats label="Delegated Staked" tooltip="The total SUI staked by delegators.">
+                        <Stats
+                            label="Delegated Staked"
+                            tooltip="The total SUI staked by delegators."
+                        >
                             <Heading
                                 as="h3"
                                 variant="heading3/semibold"
@@ -113,7 +122,10 @@ export function ValidatorStats({
                                 {delegatedStakePercentage}%
                             </Heading>
                         </Stats>
-                        <Stats label="Self Staked" tooltip="The total SUI staked by this validator.">
+                        <Stats
+                            label="Self Staked"
+                            tooltip="The total SUI staked by this validator."
+                        >
                             <Heading
                                 as="h3"
                                 variant="heading3/semibold"

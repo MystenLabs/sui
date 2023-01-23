@@ -134,7 +134,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
                             }}
                             {...getFloatingProps({ ref: floating })}
                         >
-                            <div className="flex flex-col flex-nowrap gap-px rounded-md bg-gray-100 p-2 max-w-xs leading-1">
+                            <div className="leading-1 flex max-w-xs flex-col flex-nowrap gap-px rounded-md bg-gray-100 p-2">
                                 {tip}
                             </div>
                             <div
