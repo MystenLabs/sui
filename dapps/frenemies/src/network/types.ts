@@ -89,3 +89,117 @@ export type Score = {
     /** Number of epochs the player has participated in */
     participation: number;
 };
+
+/**
+ * Defined in the sui::sui_system
+ */
+export type SuiSystem = {
+    /** ID - always the same: 0x5 */
+    id: SuiAddress;
+    /** Current system epoch */
+    epoch: number;
+    /** Contains information about current validators */
+    validators: ValidatorSet;
+};
+
+export type ValidatorSet = {
+    /** Total amount of stake from all active validators (not including delegation), at the beginning of the epoch. */
+    totalValidatorStake: number,
+    /** Total amount of stake from delegation, at the beginning of the epoch. */
+    totalDelegationStake: number,
+    /** The current list of active validators. */
+    activeValidators: Validator[],
+    /** List of new validator candidates added during the current epoch. They will be processed at the end of the epoch. */
+    pendingValidators: Validator[],
+    /** Removal requests from the validators. Each element is an index pointing to `active_validators`. */
+    pendingRemovals: number[],
+    /** The metadata of the validator set for the next epoch. This is kept up-to-dated. */
+    nextEpochValidators: ValidatorMetadata[],
+    /**
+     * Delegation switches requested during the current epoch, processed at epoch boundaries
+     * so that all the rewards with be added to the new delegation.
+     */
+    // pendingDelegationSwitches: 'VecMap<ValidatorPair, table::Table>',
+};
+
+export type Validator = {
+    /** Summary of the validator. */
+    metadata: ValidatorMetadata,
+    /** The voting power of this validator, which might be different from its stake amount. */
+    votingPower: bigint,
+    /** The current active stake amount. This will not change during an epoch. It can only be updated at the end of epoch. */
+    stakeAmount: bigint,
+    /** Pending stake deposit amount, processed at end of epoch. */
+    pendingStake: bigint,
+    /** Pending withdraw amount, processed at end of epoch. */
+    pendingWithdraw: bigint,
+    /** Gas price quote, updated only at end of epoch. */
+    gasPrice: bigint,
+    /** Staking pool for the stakes delegated to this validator. */
+    delegationStakingPool: 'StakingPool',
+    /** Commission rate of the validator, in basis point. */
+    commissionRate: number,
+};
+
+export type ValidatorMetadata = {
+    /**
+     * The Sui Address of the validator. This is the sender that created the Validator object
+     * and also the address to send validator/coins to during withdraws.
+     */
+    suiAddress: SuiAddress,
+    /**
+     * The public key bytes corresponding to the private key that the validator
+     * holds to sign transactions. For now, this is the same as AuthorityName.
+     */
+    pubkeyBytes: number[],
+    /**
+     * The public key bytes corresponding to the private key that the validator
+     * uses to establish TLS connections
+     */
+    networkPubkeyBytes: number[],
+    /** The public key bytes correstponding to the Narwhal Worker  */
+    workerPubkeyBytes: number[],
+    /** This is a proof that the validator has ownership of the private key  */
+    proofOfPossession: number[],
+    /**A unique human-readable name of this validator.  */
+    name: string,
+    description: string,
+    imageUrl: string,
+    projectUrl: string,
+    /** The network address of the validator (could also contain extra info such as port, DNS and etc.).  */
+    netAddress: number[],
+    /** The address of the narwhal primary  */
+    consensusAddress: number[],
+    /** The address of the narwhal worker  */
+    workerAddress: number[],
+    /** Total amount of validator stake that would be active in the next epoch.  */
+    nextEpochStake: bigint,
+    /** Total amount of delegated stake that would be active in the next epoch.  */
+    nextEpochDelegation: bigint,
+    /** This validator's gas price quote for the next epoch.  */
+    nextEpochGasPrice: bigint,
+    /** The commission rate of the validator starting the next epoch, in basis point.  */
+    nextEpochCommissionRate: bigint,
+};
+
+export type StakingPool = {
+    /// The sui address of the validator associated with this pool.
+    validatorAddress: SuiAddress,
+    /// The epoch at which this pool started operating. Should be the epoch at which the validator became active.
+    starting_epoch: bigint,
+    /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
+    /// in the `Delegation` object, updated at epoch boundaries.
+    sui_balance: bigint,
+    /// The epoch delegation rewards will be added here at the end of each epoch.
+    rewards_pool: bigint,
+    /// The number of delegation pool tokens we have issued so far. This number should equal the sum of
+    /// pool token balance in all the `Delegation` objects delegated to this pool. Updated at epoch boundaries.
+    delegation_token_supply: bigint,
+    /// Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
+    /// and distribute staking pool tokens at the end-of-epoch exchange rate after the rewards for the current epoch
+    /// have been deposited.
+    pending_delegations: any,
+    /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
+    /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
+    pending_withdraws: any,
+};

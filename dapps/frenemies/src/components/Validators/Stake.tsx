@@ -3,7 +3,7 @@
 
 export function Stake() {
   return (
-    <div className="w-1/2">
+    <div className="w-3/4">
       <div className="relative flex items-center">
         <input
           type="text"

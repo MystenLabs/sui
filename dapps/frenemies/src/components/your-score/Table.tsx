@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactNode } from "react";
-import { Leaderboard } from "../../network/types";
+import { Scorecard } from "../../network/types";
 
 interface Props {
-  data: Leaderboard;
+  data: Scorecard;
 }
 
 const Cell = ({
@@ -25,19 +25,23 @@ export function Table({ data }: Props) {
     <table className="table-fixed w-full">
       <thead>
         <tr>
-          <Cell as="th">Name</Cell>
+          <Cell as="th">Round</Cell>
+          <Cell as="th">Role</Cell>
+          <Cell as="th">Assigned Validator</Cell>
+          <Cell as="th">Objective</Cell>
           <Cell as="th">Score</Cell>
-          <Cell as="th">Participation</Cell>
         </tr>
       </thead>
       <tbody>
-        {data.topScores.map((score) => (
+        {/* {data.topScores.map((score) => (
           <tr className="border-t border-white/20">
-            <Cell>{score.name}</Cell>
-            <Cell>{score.score}</Cell>
-            <Cell>{score.participation}</Cell>
+            <Cell>{record.round}</Cell>
+            <Cell>{record.role}</Cell>
+            <Cell>{formatAddress(record.validator)}</Cell>
+            <Cell>{record.objectiveAchieved ? "Achieved" : "Failed"}</Cell>
+            <Cell>{record.score > 0 ? "+" + record.score : record.score}</Cell>
           </tr>
-        ))}
+        ))} */}
       </tbody>
     </table>
   );

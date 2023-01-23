@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Scorecard } from "../types";
-import { getRawObject, ObjectData } from "../rawObject";
+import { getRawObjectParsed, ObjectData } from "../rawObject";
 import provider from "../provider";
-import bcs from "../bcs";
 import { useQuery } from "@tanstack/react-query";
 
 /**
@@ -30,16 +29,7 @@ export function useScorecard(account: string) {
         return null;
       }
 
-      const objectData = await getRawObject(provider, search.objectId);
-      const {
-        reference,
-        data: { bcs_bytes },
-      } = objectData.details;
-
-      return {
-        reference,
-        data: bcs.de("frenemies::Scorecard", bcs_bytes, "base64"),
-      };
+      return getRawObjectParsed(provider, search.objectId, "frenemies::Scorecard");
     }
   );
 }

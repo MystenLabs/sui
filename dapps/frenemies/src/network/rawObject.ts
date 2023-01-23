@@ -5,6 +5,7 @@
 // speed up data processing and lessen network load by using BCS
 
 import { ObjectOwner, ObjectStatus, Provider, SuiObjectRef } from "@mysten/sui.js";
+import { bcs } from "./bcs";
 
 /**
  * Filling in the missing piece in TS SDK.
@@ -35,4 +36,24 @@ export type ObjectData<T> = {
  */
 export function getRawObject(provider: Provider, objectId: string): Promise<RawObjectResponse> {
     return provider.call('sui_getRawObject', [ objectId ]);
+}
+
+/**
+ * Wrapper for the `getRawObject` which adds bcs deserialization call on the response.
+ */
+export async function getRawObjectParsed<T>(provider: Provider, objectId: string, bcsType: string): Promise<ObjectData<T> | null> {
+    const objectData = await getRawObject(provider, objectId);
+    if (objectData.status != 'Exists') {
+        return null;
+    }
+
+    const {
+      reference,
+      data: { bcs_bytes },
+    } = objectData.details;
+
+    return {
+      reference,
+      data: bcs.de(bcsType, bcs_bytes, "base64"),
+    };
 }
