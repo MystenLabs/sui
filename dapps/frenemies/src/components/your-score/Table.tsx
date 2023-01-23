@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactNode } from "react";
-import { Scorecard } from "../../network/types";
+import { Leaderboard, Scorecard, ScorecardUpdatedEvent } from "../../network/types";
+import { formatGoal, formatAddress } from "../../utils/format";
 
 interface Props {
-  data: Scorecard;
+  data: ScorecardUpdatedEvent[];
+  scorecard: Scorecard,
+  leaderboard: Leaderboard,
 }
 
 const Cell = ({
@@ -20,7 +23,7 @@ const Cell = ({
   </As>
 );
 
-export function Table({ data }: Props) {
+export function Table({ data, scorecard, leaderboard }: Props) {
   return (
     <table className="table-fixed w-full">
       <thead>
@@ -33,15 +36,22 @@ export function Table({ data }: Props) {
         </tr>
       </thead>
       <tbody>
-        {/* {data.topScores.map((score) => (
-          <tr className="border-t border-white/20">
-            <Cell>{record.round}</Cell>
-            <Cell>{record.role}</Cell>
-            <Cell>{formatAddress(record.validator)}</Cell>
-            <Cell>{record.objectiveAchieved ? "Achieved" : "Failed"}</Cell>
-            <Cell>{record.score > 0 ? "+" + record.score : record.score}</Cell>
-          </tr>
-        ))} */}
+        {data.map((evt) => {
+
+          const round = evt.assignment.epoch - leaderboard.startEpoch;
+          const goal = evt.assignment.goal;
+
+
+          return (
+            <tr className="border-t border-white/20">
+              <Cell>{round.toString()}</Cell>
+              <Cell>{formatGoal(goal)}</Cell>
+              <Cell>{formatAddress(evt.assignment.validator)}</Cell>
+              <Cell>{evt.epochScore !== 0 ? "Achieved" : "Failed"}</Cell>
+              <Cell>{`${evt.totalScore} (+${evt.epochScore})`}</Cell>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

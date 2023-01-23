@@ -18,10 +18,14 @@ const STAKED_SUI = "staking_pool::StakedSui";
  * We do not guarantee correct behavior if people registered more than once,
  * lookup is done with `Array.prototype.find` for the first occurrence.
  */
-export function useMyStake(account: string) {
+export function useMyStake(account: string | null) {
   return useQuery(
     ["my-stake", account],
     async () => {
+      if (!account) {
+        return null;
+      }
+
       const objects = await provider.getObjectsOwnedByAddress(account);
       const search = objects.filter((v) => v.type.includes(STAKED_SUI));
 

@@ -18,7 +18,7 @@ export const bcs = suiBcs
     epoch: "u64",
   })
   .registerStructType("frenemies::ScorecardUpdateEvent", {
-    player: "string",
+    scorecard: "address",
     assignment: "frenemies::Assignment",
     totalScore: "u16",
     epochScore: "u16",

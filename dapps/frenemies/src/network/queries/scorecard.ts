@@ -18,10 +18,14 @@ const SCORECARD_TYPE = "frenemies::Scorecard";
  * We do not guarantee correct behavior if people registered more than once,
  * lookup is done with `Array.prototype.find` for the first occurrence.
  */
-export function useScorecard(account: string) {
+export function useScorecard(account: string | null) {
   return useQuery(
     ["scorecard", account],
     async () => {
+      if (!account) {
+        return null;
+      }
+
       const objects = await provider.getObjectsOwnedByAddress(account);
       const search = objects.find((v) => v.type.includes(SCORECARD_TYPE));
 

@@ -25,7 +25,7 @@ export type Assignment = {
     /** Goal: Friend, Neutal or Enemy */
     goal: Goal;
     /** Epoch this assignment is for */
-    epoch: number;
+    epoch: bigint;
 };
 
 /**
@@ -53,7 +53,7 @@ export type Scorecard = {
  */
 export type ScorecardUpdatedEvent = {
     /** Name of the player */
-    player: string;
+    scorecard: SuiAddress;
     /** Player's assignment for the epoch */
     assignment: Assignment;
     /** Player's total score after scoring `assignment` */
@@ -73,9 +73,9 @@ export type Leaderboard = {
     // redundant field as it gives no information directly
     // prev_epoch_stakes: { id: SuiAddress, size: number }
     /** Current epoch */
-    epoch: number;
+    epoch: bigint;
     /** Epoch where the competition began; */
-    startEpoch: number;
+    startEpoch: bigint;
 };
 
 /**
@@ -97,16 +97,16 @@ export type SuiSystem = {
     /** ID - always the same: 0x5 */
     id: SuiAddress;
     /** Current system epoch */
-    epoch: number;
+    epoch: bigint;
     /** Contains information about current validators */
     validators: ValidatorSet;
 };
 
 export type ValidatorSet = {
     /** Total amount of stake from all active validators (not including delegation), at the beginning of the epoch. */
-    totalValidatorStake: number,
+    totalValidatorStake: bigint,
     /** Total amount of stake from delegation, at the beginning of the epoch. */
-    totalDelegationStake: number,
+    totalDelegationStake: bigint,
     /** The current list of active validators. */
     activeValidators: Validator[],
     /** List of new validator candidates added during the current epoch. They will be processed at the end of the epoch. */
