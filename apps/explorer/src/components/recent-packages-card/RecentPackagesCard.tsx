@@ -23,19 +23,19 @@ const TRUNCATE_LENGTH = 16;
 
 const columns = [
     {
-        headerLabel: 'Time',
+        header: 'Time',
         accessorKey: 'time',
     },
     {
-        headerLabel: 'Package ID',
+        header: 'Package ID',
         accessorKey: 'packageId',
     },
     {
-        headerLabel: 'Transaction ID',
+        header: 'Transaction ID',
         accessorKey: 'txnDigest',
     },
     {
-        headerLabel: 'Sender',
+        header: 'Sender',
         accessorKey: 'sender',
     },
 ];
