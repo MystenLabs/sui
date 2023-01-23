@@ -3208,7 +3208,7 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_outer_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -3303,6 +3303,41 @@ async fn test_dynamic_field_address_name_parsing() {
 
     assert_eq!(fields.len(), 1);
     assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
+    assert_eq!(parse_type_tag("address").unwrap(), fields[0].name.type_);
+    assert_eq!(json!(sender), fields[0].name.value);
+}
+
+#[tokio::test]
+async fn test_dynamic_object_field_struct_name_parsing() {
+    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield_with_struct_name")).await;
+
+    assert_eq!(fields.len(), 1);
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
+    assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
+    assert_eq!(
+        parse_type_tag("0x0::object_basics::Name").unwrap(),
+        fields[0].name.type_
+    )
+}
+
+#[tokio::test]
+async fn test_dynamic_object_field_bytearray_name_parsing() {
+    let (_, fields) =
+        create_and_retrieve_df_info(ident_str!("add_ofield_with_bytearray_name")).await;
+
+    assert_eq!(fields.len(), 1);
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
+    assert_eq!(parse_type_tag("vector<u8>").unwrap(), fields[0].name.type_);
+    assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
+}
+
+#[tokio::test]
+async fn test_dynamic_object_field_address_name_parsing() {
+    let (sender, fields) =
+        create_and_retrieve_df_info(ident_str!("add_ofield_with_address_name")).await;
+
+    assert_eq!(fields.len(), 1);
+    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
     assert_eq!(parse_type_tag("address").unwrap(), fields[0].name.type_);
     assert_eq!(json!(sender), fields[0].name.value);
 }

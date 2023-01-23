@@ -58,6 +58,22 @@ impl DynamicFieldInfo {
             && tag.name.as_str() == "Field"
     }
 
+    pub fn try_extract_field_name(tag: &StructTag, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
+        match (type_, tag.type_params.first()) {
+            (DynamicFieldType::DynamicField, Some(name_type)) => Ok(name_type.clone()),
+            (DynamicFieldType::DynamicObject, Some(TypeTag::Struct(s))) => Ok(s
+                .type_params
+                .first()
+                .ok_or_else(|| SuiError::ObjectDeserializationError {
+                    error: format!("Error extracting dynamic object name from object: {tag}"),
+                })?
+                .clone()),
+            _ => Err(SuiError::ObjectDeserializationError {
+                error: format!("Error extracting dynamic object name from object: {tag}"),
+            }),
+        }
+    }
+
     pub fn parse_move_object(
         move_struct: &MoveStruct,
     ) -> SuiResult<(MoveValue, DynamicFieldType, ObjectID)> {

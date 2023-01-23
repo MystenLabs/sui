@@ -1276,8 +1276,7 @@ impl AuthorityState {
         let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
 
-        // Safe to unwrap, we checked this is a dynamic field object, it must have type parameters.
-        let name_type = move_object.type_.type_params.first().unwrap().clone();
+        let name_type = DynamicFieldInfo::try_extract_field_name(&move_object.type_, &type_)?;
 
         let name = DynamicFieldName {
             type_: name_type,

@@ -34,7 +34,6 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
-use sui_adapter::execution_mode::DevInspect;
 use sui_types::dynamic_field::DynamicFieldName;
 use tracing::debug;
 

@@ -115,12 +115,24 @@ module examples::object_basics {
         sui::dynamic_field::add(&mut o.id, Name {name_str: std::string::utf8(b"Test Name")}, v);
     }
 
+    public entry fun add_ofield_with_struct_name(o: &mut Object, v: Object) {
+        ofield::add(&mut o.id, Name {name_str: std::string::utf8(b"Test Name")}, v);
+    }
+
     public entry fun add_field_with_bytearray_name(o: &mut Object, v: Object) {
         sui::dynamic_field::add(&mut o.id,b"Test Name", v);
     }
 
+    public entry fun add_ofield_with_bytearray_name(o: &mut Object, v: Object) {
+        ofield::add(&mut o.id,b"Test Name", v);
+    }
+
     public entry fun add_field_with_address_name(o: &mut Object, v: Object,  ctx: &mut TxContext) {
         sui::dynamic_field::add(&mut o.id,tx_context::sender(ctx), v);
+    }
+
+    public entry fun add_ofield_with_address_name(o: &mut Object, v: Object,  ctx: &mut TxContext) {
+        ofield::add(&mut o.id,tx_context::sender(ctx), v);
     }
 
     public entry fun generic_test<T>() {}
