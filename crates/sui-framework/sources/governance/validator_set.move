@@ -604,13 +604,18 @@ module sui::validator_set {
             while (!vector::is_empty(&rewards)) {
                 let delegator = vector::pop_back(&mut delegators);
                 let new_stake = vector::pop_back(&mut rewards);
-                validator::request_add_delegation(
-                    to_validator,
-                    new_stake,
-                    option::none(), // no time lock for rewards
-                    delegator,
-                    ctx
-                );
+                // Only add delegation when the reward is non-empty.
+                if (balance::value(&new_stake) == 0) {
+                    balance::destroy_zero(new_stake);
+                } else {
+                    validator::request_add_delegation(
+                        to_validator,
+                        new_stake,
+                        option::none(), // no time lock for rewards
+                        delegator,
+                        ctx
+                    );
+                }
             };
             vector::destroy_empty(rewards);
         };
