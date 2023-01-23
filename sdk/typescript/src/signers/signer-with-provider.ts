@@ -11,7 +11,6 @@ import {
   ExecuteTransactionRequestType,
   FaucetResponse,
   generateTransactionDigest,
-  getTotalGasUsed,
   getTotalGasUsedUpperBound,
   SuiAddress,
   SuiExecuteTransactionResponse,
