@@ -20,7 +20,7 @@
         "preview-storybook": "pnpm dlx serve ./storybook-static"
     },
     "dependencies": {
-        "@floating-ui/react-dom-interactions": "^0.13.3",
+        "@floating-ui/react": "^0.18.0",
         "@fontsource/inter": "^4.5.14",
         "@fontsource/red-hat-mono": "^4.5.11",
         "@growthbook/growthbook": "^0.20.1",
@@ -50,7 +50,7 @@
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-error-boundary": "^3.1.4",
-        "react-hook-form": "^7.41.5",
+        "react-hook-form": "^7.42.1",
         "react-hot-toast": "^2.4.0",
         "react-router-dom": "^6.5.0",
         "topojson-client": "^3.1.0",
