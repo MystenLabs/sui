@@ -27,7 +27,7 @@ export function Table({ data }: Props) {
         <tr>
           <Cell as="th">Name</Cell>
           <Cell as="th">Score</Cell>
-          <Cell as="th">Participation</Cell>
+          <Cell as="th">Active Rounds</Cell>
         </tr>
       </thead>
       <tbody>

@@ -76,7 +76,7 @@ bcs.registerStructType('validator_set::ValidatorSet', {
     /** Removal requests from the validators. Each element is an index pointing to `active_validators`. */
     pendingRemovals: 'vector<u64>',
     /** The metadata of the validator set for the next epoch. This is kept up-to-dated. */
-    // nextEpochValidators: 'vector<validator::ValidatorMetadata>',
+    nextEpochValidators: 'vector<validator::ValidatorMetadata>',
     /**
      * Delegation switches requested during the current epoch, processed at epoch boundaries
      * so that all the rewards with be added to the new delegation.
@@ -91,7 +91,7 @@ bcs.registerStructType('validator_set::ValidatorPair', {
 
 bcs.registerStructType('validator::Validator', {
     /** Summary of the validator. */
-    metadata: 'validator::ValidatorMetada',
+    metadata: 'validator::ValidatorMetadata',
     /** The voting power of this validator, which might be different from its stake amount. */
     votingPower: 'u64',
     /** The current active stake amount. This will not change during an epoch. It can only be updated at the end of epoch. */
@@ -108,7 +108,7 @@ bcs.registerStructType('validator::Validator', {
     commissionRate: 'u64',
 });
 
-bcs.registerStructType('validator::ValidatorMetada', {
+bcs.registerStructType('validator::ValidatorMetadata', {
     /**
      * The Sui Address of the validator. This is the sender that created the Validator object
      * and also the address to send validator/coins to during withdraws.
@@ -147,7 +147,19 @@ bcs.registerStructType('validator::ValidatorMetada', {
     nextEpochGasPrice: 'u64',
     /** The commission rate of the validator starting the next epoch, in basis point.  */
     nextEpochCommissionRate: 'u64',
-})
+});
+
+bcs.registerEnumType('Option<T>', {
+    none: null,
+    some: 'T',
+});
+
+bcs.registerStructType('linked_table::LinkedTable<T>', {
+    id: 'address',
+    size: 'u64',
+    head: 'Option<T>',
+    tail: 'Option<T>',
+});
 
 bcs.registerStructType('staking_pool::StakingPool', {
     /// The sui address of the validator associated with this pool.
@@ -169,18 +181,6 @@ bcs.registerStructType('staking_pool::StakingPool', {
     /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
     /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
     pendingWithdraws: 'table::Table',
-});
-
-bcs.registerEnumType('Option<T>', {
-    none: null,
-    some: 'T',
-});
-
-bcs.registerStructType('linked_table::LinkedTable<T>', {
-    id: 'address',
-    size: 'u64',
-    head: 'Option<T>',
-    tail: 'Option<T>',
 });
 
 export { bcs };
