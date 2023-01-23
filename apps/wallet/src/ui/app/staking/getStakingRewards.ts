@@ -34,5 +34,4 @@ export function getStakingRewards(
         currentSuiWorth -
         delegation.delegation_status.Active.principal_sui_amount;
     return earnToken > 0 ? earnToken : 0;
-    // return list
 }
