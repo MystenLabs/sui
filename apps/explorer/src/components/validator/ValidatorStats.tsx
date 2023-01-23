@@ -34,18 +34,20 @@ export function ValidatorStats({
         () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
-    const totalRewards =
-        validatorData.fields.delegation_staking_pool.fields.rewards_pool;
     const delegatedStake =
-        validatorData.fields.delegation_staking_pool.fields.sui_balance;
+        validatorData.fields.delegation_staking_pool.fields
+            .delegation_token_supply.fields.value;
     const selfStake = validatorData.fields.stake_amount;
-    const totalStake = +selfStake + +delegatedStake;
+    const totalStake = +selfStake + +delegatedStake; // +validatorData.fields.delegation_staking_pool.fields.sui_balance + +delegatedStake;
     const lastEpoch = epoch;
     const delegatedStakePercentage = useMemo(
         () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
         [delegatedStake, totalStake]
     );
 
+    const totalRewards =
+        +validatorData.fields.delegation_staking_pool.fields.sui_balance -
+        +delegatedStake;
     const selfStakePercentage = useMemo(
         () => getStakedPercent(BigInt(selfStake), BigInt(totalStake)),
         [selfStake, totalStake]
