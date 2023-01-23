@@ -27,3 +27,8 @@ CREATE TABLE transactions (
     transaction_content TEXT NOT NULL,
     UNIQUE(transaction_digest) 
 );
+
+CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest);
+CREATE INDEX transactions_transaction_time ON transactions (transaction_time);
+CREATE INDEX transactions_sender ON transactions (sender);
+CREATE INDEX transactions_gas_object_id ON transactions (gas_object_id);

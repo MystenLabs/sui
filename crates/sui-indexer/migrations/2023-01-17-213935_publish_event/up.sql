@@ -11,6 +11,9 @@ CREATE TABLE publish_events (
     UNIQUE (transaction_digest, event_sequence)
 );
 
+CREATE INDEX publish_events_transaction_digest ON publish_events (transaction_digest);
+CREATE INDEX publish_events_event_time ON publish_events (event_time);
+
 CREATE TABLE publish_event_logs (
     id SERIAL PRIMARY KEY,
     next_cursor_tx_dig TEXT,
