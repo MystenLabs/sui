@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::IndexerError;
-use crate::schema::publish_events;
-use crate::schema::publish_events::{event_sequence, transaction_digest};
+use crate::schema::move_events;
+use crate::schema::move_events::{event_sequence, transaction_digest};
 use crate::utils::log_errors_to_pg;
 use crate::PgPoolConnection;
 
@@ -13,7 +13,7 @@ use diesel::result::Error;
 use sui_json_rpc_types::{EventPage, SuiEventEnvelope};
 
 #[derive(Queryable, Debug)]
-pub struct PublishEvent {
+pub struct MoveEvent {
     pub id: i64,
     pub transaction_digest: Option<String>,
     pub event_sequence: i64,
@@ -23,8 +23,8 @@ pub struct PublishEvent {
 }
 
 #[derive(Debug, Insertable)]
-#[diesel(table_name = publish_events)]
-pub struct NewPublishEvent {
+#[diesel(table_name = move_events)]
+pub struct NewMoveEvent {
     pub transaction_digest: String,
     pub event_sequence: i64,
     pub event_time: Option<NaiveDateTime>,
@@ -32,7 +32,7 @@ pub struct NewPublishEvent {
     pub event_content: String,
 }
 
-fn event_to_new_publish_event(e: SuiEventEnvelope) -> Result<NewPublishEvent, IndexerError> {
+fn event_to_new_move_event(e: SuiEventEnvelope) -> Result<NewMoveEvent, IndexerError> {
     let event_json = serde_json::to_string(&e.event).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
             "Failed converting event to JSON with error: {:?}",
@@ -46,7 +46,7 @@ fn event_to_new_publish_event(e: SuiEventEnvelope) -> Result<NewPublishEvent, In
         ))
     })?;
 
-    Ok(NewPublishEvent {
+    Ok(NewMoveEvent {
         transaction_digest: e.tx_digest.base58_encode(),
         event_sequence: e.id.event_seq,
         event_time: Some(timestamp),
@@ -61,9 +61,9 @@ pub fn commit_events(
 ) -> Result<usize, IndexerError> {
     let events = event_page.data;
     let mut errors = vec![];
-    let new_events: Vec<NewPublishEvent> = events
+    let new_events: Vec<NewMoveEvent> = events
         .into_iter()
-        .map(event_to_new_publish_event)
+        .map(event_to_new_move_event)
         .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
     log_errors_to_pg(pg_pool_conn, errors);
@@ -72,7 +72,7 @@ pub fn commit_events(
         .build_transaction()
         .read_write()
         .run::<_, Error, _>(|conn| {
-        diesel::insert_into(publish_events::table)
+        diesel::insert_into(move_events::table)
             .values(&new_events)
             .on_conflict((transaction_digest, event_sequence))
             .do_nothing()
@@ -81,7 +81,7 @@ pub fn commit_events(
 
     event_commit_result.map_err(|e| {
         IndexerError::PostgresWriteError(format!(
-            "Failed writing publish events to PostgresDB with publish events {:?} and error: {:?}",
+            "Failed writing move events to PostgresDB with events {:?} and error: {:?}",
             new_events, e
         ))
     })
