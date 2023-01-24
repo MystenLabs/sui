@@ -47,7 +47,7 @@ fn event_to_new_object_event(e: SuiEventEnvelope) -> Result<NewObjectEvent, Inde
     })?;
 
     Ok(NewObjectEvent {
-        transaction_digest: format!("{:?}", e.tx_digest),
+        transaction_digest: e.tx_digest.base58_encode(),
         event_sequence: e.id.event_seq,
         event_time: Some(timestamp),
         event_type: e.event.get_event_type(),
