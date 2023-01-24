@@ -40,8 +40,8 @@ use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
-use sui_network::discovery;
 use sui_network::state_sync;
+use sui_network::{default_mysten_network_config, discovery};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     IndexStore,
@@ -617,8 +617,10 @@ impl SuiNode {
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
         let consensus_address = consensus_config.address().to_owned();
+        let client_config = default_mysten_network_config();
         let consensus_client = TransactionsClient::new(
-            mysten_network::client::connect_lazy(&consensus_address)
+            client_config
+                .connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         );
 
