@@ -1,8 +1,11 @@
 CREATE TABLE addresses (
-    account_address VARCHAR(255) PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    account_address VARCHAR(255) NOT NULL UNIQUE,
     first_appearance_tx VARCHAR(255) NOT NULL, 
     first_appearance_time TIMESTAMP
 );
+
+CREATE INDEX addresses_account_address ON addresses (account_address);
 
 CREATE TABLE address_logs (
     -- this is essentially BIGSERIAL starting from 1

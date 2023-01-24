@@ -9,7 +9,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    addresses (account_address) {
+    addresses (id) {
+        id -> Int8,
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
         first_appearance_time -> Nullable<Timestamp>,
@@ -84,7 +85,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects (object_id) {
+    objects (id) {
+        id -> Int8,
         object_id -> Varchar,
         version -> Int8,
         owner_type -> Varchar,
@@ -104,7 +106,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    packages (package_id) {
+    packages (id) {
+        id -> Int8,
         package_id -> Text,
         author -> Text,
         module_names -> Array<Nullable<Text>>,

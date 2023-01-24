@@ -14,6 +14,7 @@ use diesel::result::Error;
 #[derive(Queryable, Debug)]
 #[diesel(primary_key(account_address))]
 pub struct Addresses {
+    pub id: i64,
     pub account_address: String,
     pub first_appearance_tx: String,
     pub first_appearance_time: Option<NaiveDateTime>,
