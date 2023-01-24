@@ -31,6 +31,7 @@ Use the following cURL command to request tokens directly from the faucet server
 ```
 curl --location --request POST 'https://faucet.devnet.sui.io/gas' \
 --header 'Content-Type: application/json' \
+--header 'Cookie: __cf_bm=DZ4EG6GULlrwnyZMGoqwFjD8p6trJzWsY0LxvHd.NJs-1674598151-0-ARjqPuQjq1efkiQX6ItAI/4QejXhgHfA5rgr8oNoKiRskODMvTraH7VHGx7PF7IjgvEJTbIRB52Yia/Z6UfVlpo=; _cfuvid=hwMbc_CMbJrDSx2dM9tblANlIrpdLoCGFTbOdAhl4HM-1674172742724-0-604800000' \
 --data-raw '{
     "FixedAmountRequest": {
         "recipient": "<YOUR SUI ADDRESS>"
