@@ -181,6 +181,8 @@ pub struct ChangeEpoch {
     pub computation_charge: u64,
     /// The total amount of storage rebate refunded during the epoch.
     pub storage_rebate: u64,
+    /// Unix timestamp when epoch started
+    pub epoch_start_timestamp_ms: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -1099,12 +1101,14 @@ impl VerifiedTransaction {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        epoch_start_timestamp_ms: u64,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
             storage_charge,
             computation_charge,
             storage_rebate,
+            epoch_start_timestamp_ms,
         }
         .pipe(SingleTransactionKind::ChangeEpoch)
         .pipe(Self::new_system_transaction)

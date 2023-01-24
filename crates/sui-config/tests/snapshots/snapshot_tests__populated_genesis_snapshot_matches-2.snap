@@ -506,4 +506,4 @@ stake_subsidy:
     value: 0
   current_epoch_amount: 1000000
 safe_mode: false
-
+epoch_start_timestamp_ms: 10

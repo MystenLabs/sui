@@ -357,6 +357,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
             CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
             CallArg::Pure(bcs::to_bytes(&STAKE_SUBSIDY_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
         ],
         gas_status.create_move_gas_status(),
         tx_ctx,

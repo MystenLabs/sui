@@ -29,6 +29,7 @@
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
 -  [Function `epoch`](#0x2_sui_system_epoch)
+-  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
 -  [Function `get_reporters_of`](#0x2_sui_system_get_reporters_of)
@@ -178,6 +179,12 @@ The top-level object containing all information of the Sui system.
  It can be reset once we are able to successfully execute advance_epoch.
  TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
  redistribute them.
+</dd>
+<dt>
+<code>epoch_start_timestamp_ms: u64</code>
+</dt>
+<dd>
+ Unix timestamp of the current epoch start
 </dd>
 </dl>
 
@@ -346,7 +353,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, epoch_start_timestamp_ms: u64)
 </code></pre>
 
 
@@ -362,6 +369,7 @@ This function will be called only once in genesis.
     max_validator_candidate_count: u64,
     min_validator_stake: u64,
     initial_stake_subsidy_amount: u64,
+    epoch_start_timestamp_ms: u64,
 ) {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
@@ -380,6 +388,7 @@ This function will be called only once in genesis.
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(initial_stake_subsidy_amount),
         safe_mode: <b>false</b>,
+        epoch_start_timestamp_ms,
     };
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(state);
 }
@@ -1005,7 +1014,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, stake_subsidy_rate: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, stake_subsidy_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1024,10 +1033,13 @@ gas coins.
                                      // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x2_validator">validator</a>, in bps.
     stake_subsidy_rate: u64, // what percentage of the total <a href="stake.md#0x2_stake">stake</a> do we mint <b>as</b> <a href="stake.md#0x2_stake">stake</a> subsidy.
+    epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+
+    self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
     <b>let</b> bps_denominator_u64 = (<a href="sui_system.md#0x2_sui_system_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u64);
     // Rates can't be higher than 100%.
@@ -1193,6 +1205,31 @@ since epochs are ever-increasing and epoch changes are intended to happen every 
 
 <pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_epoch">epoch</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
     self.epoch
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_epoch_start_timestamp_ms"></a>
+
+## Function `epoch_start_timestamp_ms`
+
+Returns unix timestamp of the start of current epoch
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="sui_system.md#0x2_sui_system_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>(self: &<a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
+    self.epoch_start_timestamp_ms
 }
 </code></pre>
 
