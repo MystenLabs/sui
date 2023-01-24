@@ -40,10 +40,9 @@ export function ValidatorStats({
     const selfStake =
         validatorData.fields.delegation_staking_pool.fields.sui_balance;
     const totalStake =
-        (+validatorData.fields.delegation_staking_pool.fields.sui_balance +
-        +delegatedStake);
+        +validatorData.fields.delegation_staking_pool.fields.sui_balance +
+        +delegatedStake;
     const commission = +validatorData.fields.commission_rate * 100;
-
 
     const delegatedStakePercentage = useMemo(
         () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
@@ -51,8 +50,8 @@ export function ValidatorStats({
     );
 
     const totalRewards =
-        (+validatorData.fields.delegation_staking_pool.fields.sui_balance -
-        +delegatedStake) ;
+        +validatorData.fields.delegation_staking_pool.fields.sui_balance -
+        +delegatedStake;
     const selfStakePercentage = useMemo(
         () => getStakedPercent(BigInt(selfStake), BigInt(totalStake)),
         [selfStake, totalStake]
@@ -151,8 +150,11 @@ export function ValidatorStats({
                         Validator Staking Rewards
                     </Heading>
                     <div className="flex flex-col gap-8">
-                        <Stats label="Last Epoch SUI Rewards" tooltip="The stake rewards collected during the last epoch." unavailable />
-                            
+                        <Stats
+                            label="Last Epoch SUI Rewards"
+                            tooltip="The stake rewards collected during the last epoch."
+                            unavailable
+                        />
 
                         <Stats
                             label="Total SUI Rewards"
