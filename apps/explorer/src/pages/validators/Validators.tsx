@@ -265,7 +265,7 @@ function ValidatorPageResult() {
                                 </Stats>
                                 <Stats
                                     label="AVG APY"
-                                    tooltip="Average APY"
+                                    tooltip="The global average of annualized percentage yield of all participating validators."
                                     unavailable={averageAPY <= 0}
                                 >
                                     {averageAPY}%
