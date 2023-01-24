@@ -51,7 +51,7 @@ You can also access the faucet through the TS-SDK.
 import { JsonRpcProvider, Network } from '@mysten/sui.js';
 // connect to Devnet
 const provider = new JsonRpcProvider(Network.DEVNET);
-// get tokens from the DevNet faucet server
+// get tokens from the Devnet faucet server
 await provider.requestSuiFromFaucet(
   '<YOUR SUI ADDRESS>'
 );
