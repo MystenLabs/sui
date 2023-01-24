@@ -19,7 +19,7 @@ jobs:
   localnet:
     name: Localnet
     needs: diff
-    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'
+    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true'
     runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
