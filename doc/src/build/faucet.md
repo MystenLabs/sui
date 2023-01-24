@@ -41,7 +41,7 @@ curl --location --request POST 'https://faucet.devnet.sui.io/gas' \
 
 Replace `'https://faucet.devnet.sui.io/gas'` with `http://127.0.0.1:5003/gas` when working with a local network.
 
-Note: This option will be disabled for TestNet in TestNet Wave 2. Please use Discord channel instead for TestNet wave 2.
+**Important:** This option is disabled for Testnet in Testnet Wave 2. Use the Discord channels instead for Testnet Wave 2.
 
 ## 4. Request test tokens through TypeScript SDK
 
