@@ -4,6 +4,37 @@ module cw::policy {
     use sui::tx_context::{Self, TxContext};
     use std::vector::{length, push_back, borrow, pop_back, destroy_empty};
 
+    /// A module for defining Clack-Wilson Security policies and access control rules on-chain
+    /// 
+    /// This module allows one to wrap an object as a ControlledObject, and the controlled object 
+    /// is associated with a ControlledObjectPolicyCap. This capability allows its owner to 
+    /// extract a &mut reference to it, as well as define combinations of checks and polices on it.
+    ///
+    /// A policy ties together 3 structures: a controlled object, a structure describing some checks
+    /// for an operation, and the concrete parameters of the operation. A policy is initialized through
+    /// InitPolicy which takes a controlled object capability and a checks structure that constrains 
+    /// the operations that can happen through this policy. This yields a PolicyOperationInitCap that 
+    /// can be used to initiate operations within this policy, and a PolicyOperationAuthCap that may
+    /// be used to authorize operations. An operation is initated using the InitOperation using the 
+    /// abovecapability and some concrete parameters. The resulting PolicyOperation becomes a
+    /// an AuthorizedOperation by calling AuthorizeOperation with the PolicyOperationAuthCap capability.
+    /// 
+    /// Complex access control rules may also be defined to protect and unlock access to PolicyOperationAuthCap
+    /// capabilities and therefore to gate authorization of operations within the policy. The set of 
+    /// structures AuthCapability, AuthSignerApproval, AuthThreshold, and AuthUnlockCap may be used to 
+    /// and combined to create threshold policies based on specific capabilities or signers aproving 
+    /// a PolicyOperation. The access control logic is setup using their corresponding `setup_` operations
+    /// and authorizations use their `authorize_` operations. Ultimately an PolicyOperationAuthCap is
+    /// protected wihtin a AuthUnlockCap, which when unlocked directly yields an AuthorizeOperation.
+    /// 
+    /// A user of this library needs to define the type of the controlled object with function like:
+    /// `public fun controlled_inc(self : &mut policy::ControlledObject<TestDummy>, op: policy::AuthorizedOperation<TestDummy, TestDummyChecks, TestDummyParams>)`
+    /// that only mutate access to the object if a valid AuthorizedOperation exists. Within these
+    /// function unlock may be used on the controlled object and the AuthorizedOperation to get
+    /// mutable references to the object, the checks and the parameters of the operation. Note that
+    /// it is the responsibility of the function to implement the checks.
+
+
     // Part 2: struct definitions
 
     // AuthSetup Outputs are used to define and initialize the authoritzation policy
@@ -198,7 +229,7 @@ module cw::policy {
         cap: C,
     }
 
-    public fun drop_unlock_cap<T, CH : copy+drop, P: drop>(auth: AuthUnlockCap<T, PolicyOperationExecCap<CH, P>>) {
+    public fun drop_unlock_cap<T, CH : copy+drop, P: drop>(auth: AuthUnlockCap<T, PolicyOperationAuthCap<CH, P>>) {
         let AuthUnlockCap { id, input_id: _, cap} = auth;
         object::delete(id);
         drop_exec_cap(cap);
@@ -215,7 +246,7 @@ module cw::policy {
         }
     }
 
-    public fun authorize_unlock_op<T, O, CH : store+copy+drop, P: store+drop>(auth: &AuthUnlockCap<T, PolicyOperationExecCap<CH, P>>, input: AuthOutput<T>, op: PolicyOperation<CH, P>) : AuthorizedOperation<O, CH, P>{
+    public fun authorize_unlock_op<T, O, CH : store+copy+drop, P: store+drop>(auth: &AuthUnlockCap<T, PolicyOperationAuthCap<CH, P>>, input: AuthOutput<T>, op: PolicyOperation<CH, P>) : AuthorizedOperation<O, CH, P>{
         // Check this is the correct input signal to unlock capability
         assert!(input.valid_id == auth.input_id, 0);
 
@@ -282,15 +313,15 @@ module cw::policy {
     }
 
     // A capability to authorize execution of an operation within the policy.
-    struct PolicyOperationExecCap<phantom CH, phantom P> has store {
+    struct PolicyOperationAuthCap<phantom CH, phantom P> has store {
         id: UID,
     }
 
     // A capability to present to enable execution of a policy.
     struct PolicyOperationRevokeCookie has copy, drop {}
 
-    public fun drop_exec_cap<CH, P>(cap : PolicyOperationExecCap<CH, P>) {
-        let PolicyOperationExecCap { id } = cap;
+    public fun drop_exec_cap<CH, P>(cap : PolicyOperationAuthCap<CH, P>) {
+        let PolicyOperationAuthCap { id } = cap;
         object::delete(id);
     }
 
@@ -344,11 +375,11 @@ module cw::policy {
     // The revoke cooking is given, and will be required when the operation will be executed, to allow dropping the cookie to invalidate the policy
     // The function returns a capability to initiate an operation, as well as to execute and operation.
     public fun InitPolicy<O, CH: drop + copy, P: drop>(object: &ControlledObjectPolicyCap, checks: PolicyChecks<CH>, // _revoke_cookie: &PolicyOperationRevokeCookie, 
-            ctx: &mut TxContext) : (PolicyOperationInitCap<CH, P>, PolicyOperationExecCap<CH, P>) {
+            ctx: &mut TxContext) : (PolicyOperationInitCap<CH, P>, PolicyOperationAuthCap<CH, P>) {
         let id = object::new(ctx);
         let init_for_policy_id = object::uid_to_inner(&id);
         let controlled_object_id = object.controlled_object_id;
-        ( PolicyOperationInitCap { id: object::new(ctx), init_for_policy_id, controlled_object_id, checks }, PolicyOperationExecCap { id, } )
+        ( PolicyOperationInitCap { id: object::new(ctx), init_for_policy_id, controlled_object_id, checks }, PolicyOperationAuthCap { id, } )
     } 
 
     /// Initialize an operation that should be within the policy
@@ -364,7 +395,7 @@ module cw::policy {
         }
     }
 
-    public fun AuthorizeOperation<O, CH : copy+drop, P: drop>(exec_cap: &PolicyOperationExecCap<CH, P>, op: PolicyOperation<CH, P> ) : AuthorizedOperation<O, CH, P> {
+    public fun AuthorizeOperation<O, CH : copy+drop, P: drop>(exec_cap: &PolicyOperationAuthCap<CH, P>, op: PolicyOperation<CH, P> ) : AuthorizedOperation<O, CH, P> {
         // Check that the capability to execute is tied to the capability to initiate the operation
         let cap_id = object::uid_to_inner(&exec_cap.id);
         assert!(cap_id == op.init_for_policy_id, 0);
