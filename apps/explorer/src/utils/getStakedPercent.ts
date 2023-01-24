@@ -9,9 +9,10 @@ export const getStakedPercent = (
 ): number => {
     const bnStake = new BigNumber(stake.toString());
     const bnTotal = new BigNumber(total.toString());
-    return bnStake
-        .div(bnTotal)
-        .multipliedBy(100)
-        .decimalPlaces(3, BigNumber.ROUND_DOWN)
-        .toNumber();
+    const bnPercent = bnStake
+    .div(bnTotal)
+    .multipliedBy(100)
+    .decimalPlaces(3, BigNumber.ROUND_DOWN)
+    .toNumber()
+    return bnPercent || 0;
 };

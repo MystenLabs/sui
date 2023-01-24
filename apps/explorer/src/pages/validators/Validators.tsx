@@ -250,7 +250,7 @@ function ValidatorPageResult() {
                                 </Stats>
                             </div>
                             <div className="flex flex-col gap-8">
-                                <Stats label="Total SUI Staked">
+                                <Stats label="Total SUI Staked" tooltip='The total SUI staked on the network by validators and delegators to validate the network and earn rewards.' unavailable={totalStaked <= 0}>
                                     <DelegationAmount
                                         amount={totalStaked || 0n}
                                         isStats
