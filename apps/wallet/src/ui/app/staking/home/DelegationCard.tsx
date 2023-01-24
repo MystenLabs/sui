@@ -71,7 +71,7 @@ export function DelegationCard({
 
                 <div className="text-gray-60 text-p1 opacity-0 group-hover:opacity-100">
                     <IconTooltip
-                        tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
+                        tip="Object containing the delegated staked SUI tokens, owned by each delegator"
                         placement="top"
                     />
                 </div>
@@ -94,16 +94,15 @@ export function DelegationCard({
                         ? 'Staking Reward'
                         : 'Starts Earning'}
                 </Text>
-                {numberOfEpochPastRequesting > 0 &&
-                    numberOfEpochPastRequesting < 2 && (
-                        <Text
-                            variant="subtitle"
-                            weight="semibold"
-                            color="steel-dark"
-                        >
-                            Epoch #{delegationsRequestEpoch + 2}
-                        </Text>
-                    )}
+                {numberOfEpochPastRequesting <= 2 && (
+                    <Text
+                        variant="subtitle"
+                        weight="semibold"
+                        color="steel-dark"
+                    >
+                        Epoch #{delegationsRequestEpoch + 2}
+                    </Text>
+                )}
 
                 {rewards > 0 && numberOfEpochPastRequesting > 2 && (
                     <div className="text-success-dark text-bodySmall font-semibold">
