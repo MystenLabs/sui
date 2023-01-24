@@ -12,6 +12,7 @@ import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { Root } from "./routes/Root";
 import { Home } from "./routes/Home";
 import { Connect } from "./routes/Connect";
+import { Setup } from "./routes/Setup";
 
 const plausible = Plausible({});
 plausible.enableAutoPageviews();
@@ -30,6 +31,9 @@ const router = createBrowserRouter([
       {
         path: 'connect',
         element: <Connect />
+      },{
+        path: 'setup',
+        element: <Setup />
       }
     ],
   },

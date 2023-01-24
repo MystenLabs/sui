@@ -15,6 +15,7 @@ const cardStyles = cva(["rounded-2xl", "shadow-notification"], {
       sm: "p-6",
       md: "p-8",
       lg: "p-10",
+      xl: 'p-12'
     },
   },
   defaultVariants: {

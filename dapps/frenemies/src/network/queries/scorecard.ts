@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getRawObjectParsedUnsafe, ObjectData } from "../rawObject";
+import { getRawObjectParsedUnsafe } from "../rawObject";
 import { useQuery } from "@tanstack/react-query";
 import { Scorecard } from "../types";
 import provider from "../provider";
@@ -18,7 +18,7 @@ const SCORECARD_TYPE = "frenemies::Scorecard";
  * We do not guarantee correct behavior if people registered more than once,
  * lookup is done with `Array.prototype.find` for the first occurrence.
  */
-export function useScorecard(account: string | null) {
+export function useScorecard(account?: string | null) {
   return useQuery(
     ["scorecard", account],
     async () => {
@@ -33,7 +33,14 @@ export function useScorecard(account: string | null) {
         return null;
       }
 
-      return getRawObjectParsedUnsafe<Scorecard>(provider, search.objectId, "frenemies::Scorecard");
+      return getRawObjectParsedUnsafe<Scorecard>(
+        provider,
+        search.objectId,
+        "frenemies::Scorecard"
+      );
+    },
+    {
+      enabled: !!account,
     }
   );
 }
