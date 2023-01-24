@@ -33,7 +33,7 @@ export function Transaction({
     address: SuiAddress;
 }) {
     const { certificate } = txn;
-    const executionStatus = getExecutionStatusType(txn) as 'Success' | 'Failed';
+    const executionStatus = getExecutionStatusType(txn);
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
     const { coins: eventsSummary } = getEventsSummary(
         txn.effects,
@@ -110,19 +110,19 @@ export function Transaction({
     }, [txn]);
 
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
-    const isSuTransfer =
+    const isSuiTransfer =
         txnKind === 'PaySui' ||
         txnKind === 'TransferSui' ||
         txnKind === 'PayAllSui' ||
         txnKind === 'Pay';
 
     const label = useMemo(() => {
-        return isSuTransfer || txnKind === 'TransferObject'
+        return isSuiTransfer || txnKind === 'TransferObject'
             ? isSender
                 ? 'To'
                 : 'From'
             : 'Action';
-    }, [isSender, isSuTransfer, txnKind]);
+    }, [isSender, isSuiTransfer, txnKind]);
 
     return (
         <Link
@@ -134,7 +134,7 @@ export function Transaction({
             <div className="flex items-start w-full justify-between gap-3">
                 <div className="w-7.5">
                     <TxnIcon
-                        txnFailed={executionStatus === 'Failed' || !!error}
+                        txnFailed={executionStatus !== 'success' || !!error}
                         isSender={isSender}
                     />
                 </div>
@@ -156,7 +156,7 @@ export function Transaction({
                                         <Text color="gray-90" weight="semibold">
                                             {isSender ? 'Sent' : 'Received'}
                                         </Text>
-                                        {isSuTransfer && (
+                                        {isSuiTransfer && (
                                             <Text
                                                 color="gray-90"
                                                 weight="normal"
