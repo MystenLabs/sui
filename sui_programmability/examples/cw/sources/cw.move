@@ -34,9 +34,6 @@ module cw::policy {
     /// mutable references to the object, the checks and the parameters of the operation. Note that
     /// it is the responsibility of the function to implement the checks.
 
-
-    // Part 2: struct definitions
-
     // AuthSetup Outputs are used to define and initialize the authoritzation policy
     struct AuthSetupOutput<phantom T> { // Cannot store / drop must use
         for_auth_id: ID,
@@ -395,6 +392,7 @@ module cw::policy {
         }
     }
 
+    /// Authorize the PolicyOperation to create an AuthorizedOperation.
     public fun AuthorizeOperation<O, CH : copy+drop, P: drop>(exec_cap: &PolicyOperationAuthCap<CH, P>, op: PolicyOperation<CH, P> ) : AuthorizedOperation<O, CH, P> {
         // Check that the capability to execute is tied to the capability to initiate the operation
         let cap_id = object::uid_to_inner(&exec_cap.id);
@@ -404,14 +402,8 @@ module cw::policy {
         }
     }
 
-    // Part 3: module initializer to be executed when this module is published
+    // Module initializer to be executed when this module is published
     fun init(_ctx: &mut TxContext) {
     }
-
-    // Part 4: accessors required to read the struct attributes
-
-    // part 5: public/ entry functions (introduced later in the tutorial)
-
-    // part 6: private functions (if any)
     
 }
