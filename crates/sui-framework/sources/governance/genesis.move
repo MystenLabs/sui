@@ -43,6 +43,7 @@ module sui::genesis {
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
+        epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
@@ -108,6 +109,7 @@ module sui::genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STAKE_SUBSIDY_AMOUNT,
+            epoch_start_timestamp_ms,
         );
     }
 
@@ -123,7 +125,8 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            INIT_STAKE_SUBSIDY_AMOUNT
+            INIT_STAKE_SUBSIDY_AMOUNT,
+            0,
         )
     }
 }

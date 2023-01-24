@@ -695,7 +695,13 @@ fn build_unsigned_genesis_data(
         sui_framework::get_sui_framework(),
     ];
 
-    let objects = create_genesis_objects(&mut genesis_ctx, &modules, objects, validators);
+    let objects = create_genesis_objects(
+        &mut genesis_ctx,
+        &modules,
+        objects,
+        validators,
+        parameters.timestamp_ms,
+    );
 
     let (genesis_transaction, genesis_effects, objects) = create_genesis_transaction(objects);
     let (checkpoint, checkpoint_contents) =
@@ -819,6 +825,7 @@ fn create_genesis_objects(
     modules: &[Vec<CompiledModule>],
     input_objects: &[Object],
     validators: &[GenesisValidatorInfo],
+    epoch_start_timestamp_ms: u64,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
 
@@ -841,7 +848,14 @@ fn create_genesis_objects(
         store.insert_object(object.to_owned());
     }
 
-    generate_genesis_system_object(&mut store, &move_vm, validators, genesis_ctx).unwrap();
+    generate_genesis_system_object(
+        &mut store,
+        &move_vm,
+        validators,
+        genesis_ctx,
+        epoch_start_timestamp_ms,
+    )
+    .unwrap();
 
     store
         .into_inner()
@@ -924,6 +938,7 @@ pub fn generate_genesis_system_object(
     move_vm: &MoveVM,
     committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
+    epoch_start_timestamp_ms: u64,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
@@ -989,6 +1004,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&epoch_start_timestamp_ms).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,

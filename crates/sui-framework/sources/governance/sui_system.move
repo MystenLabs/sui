@@ -73,6 +73,8 @@ module sui::sui_system {
         /// TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
         /// redistribute them.
         safe_mode: bool,
+        /// Unix timestamp of the current epoch start
+        epoch_start_timestamp_ms: u64,
     }
 
     /// Event containing system-level epoch information, emitted during
@@ -111,6 +113,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         initial_stake_subsidy_amount: u64,
+        epoch_start_timestamp_ms: u64,
     ) {
         let validators = validator_set::new(validators);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
@@ -129,6 +132,7 @@ module sui::sui_system {
             validator_report_records: vec_map::empty(),
             stake_subsidy: stake_subsidy::create(initial_stake_subsidy_amount),
             safe_mode: false,
+            epoch_start_timestamp_ms,
         };
         transfer::share_object(state);
     }
@@ -439,10 +443,13 @@ module sui::sui_system {
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
         stake_subsidy_rate: u64, // what percentage of the total stake do we mint as stake subsidy.
+        epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
+
+        self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
         let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
         // Rates can't be higher than 100%.
@@ -559,6 +566,11 @@ module sui::sui_system {
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
     public fun epoch(self: &SuiSystemState): u64 {
         self.epoch
+    }
+
+    /// Returns unix timestamp of the start of current epoch
+    public fun epoch_start_timestamp_ms(self: &SuiSystemState): u64 {
+        self.epoch_start_timestamp_ms
     }
 
     /// Returns the amount of stake delegated to `validator_addr`.

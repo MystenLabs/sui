@@ -40,7 +40,7 @@ async fn local_advance_epoch_tx_test() {
     let (net, states, _, _) = init_local_authorities(4, vec![]).await;
 
     // Make sure that validators do not accept advance epoch sent externally.
-    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
+    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0, 0);
     let client0 = net.get_client(&states[0].name).unwrap().authority_client();
     assert!(matches!(
         client0.handle_transaction(tx.into_inner()).await,
@@ -76,6 +76,7 @@ async fn advance_epoch_tx_test_impl(
         .create_advance_epoch_tx_cert(
             &states[0].epoch_store_for_testing(),
             &GasCostSummary::new(0, 0, 0),
+            0,
             Duration::from_secs(15),
             certifier,
         )
@@ -91,6 +92,7 @@ async fn advance_epoch_tx_test_impl(
                 .create_advance_epoch_tx_cert(
                     &state.epoch_store_for_testing(),
                     &GasCostSummary::new(0, 0, 0),
+                    0,
                     Duration::from_secs(1000), // A very very long time
                     certifier,
                 )

@@ -5840,6 +5840,7 @@
         "type": "object",
         "required": [
           "epoch",
+          "epoch_start_timestamp_ms",
           "info",
           "parameters",
           "reference_gas_price",
@@ -5852,6 +5853,11 @@
         ],
         "properties": {
           "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_start_timestamp_ms": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
