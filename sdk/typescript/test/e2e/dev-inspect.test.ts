@@ -38,7 +38,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
     });
 
-    it('Dev inspect transaction with PayAllSui', async () => {
+    it('Dev inspect transaction with Pay', async () => {
       const gasBudget = 1000;
       const coins =
         await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
@@ -59,10 +59,11 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
       await validateDevInspectTransaction(
         signer,
         {
-          kind: 'payAllSui',
+          kind: 'pay',
           data: {
             inputCoins: splitCoins,
-            recipient: DEFAULT_RECIPIENT,
+            recipients: [DEFAULT_RECIPIENT],
+            amounts: [4000],
             gasBudget: gasBudget,
           },
         },

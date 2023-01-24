@@ -821,8 +821,8 @@ export class JsonRpcProvider extends Provider {
   ): Promise<DevInspectResults> {
     try {
       const version = await this.getRpcApiVersion();
-      // TODO: remove after 0.23.0 is deployed in both DevNet and TestNet
-      if (version?.major == 0 && version?.minor < 23) {
+      // TODO: remove after 0.24.0 is deployed in both DevNet and TestNet
+      if (version?.major == 0 && version?.minor < 24) {
         return this.devInspectTransactionDeprecated(sender, tx, epoch);
       }
 
