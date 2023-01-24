@@ -13,6 +13,7 @@ module cw::tests {
     struct TestDummyChecks has store, copy, drop {}
     struct TestDummyParams has store, drop {}
 
+    // This is an operation gated by (TestDummyChecks, TestDummyParams) to increment the value by 1
     public fun controlled_inc(self : &mut policy::ControlledObject<TestDummy>, op: policy::AuthorizedOperation<TestDummy, TestDummyChecks, TestDummyParams>){
         let (obj, _ch, _param, _policy_id) = policy::unlock(self, op);
         obj.val = *&obj.val + 1;
@@ -27,6 +28,10 @@ module cw::tests {
         threshold : vector<address>,
     }
 
+    // Note this call is gated through an authorized operation with (TestDummyAdminChecks, TestDummyAdminParams)
+    //
+    // This illustrates how the access control logic may be used to modify the access control logic. Here we specifically
+    // allow someone with an authorizd operation to add a 2-out-of-3 policy for performing the (TestDummyChecks, TestDummyParams) operation.
     public fun controlled_admin(self : &mut policy::ControlledObject<TestDummy>, op: policy::AuthorizedOperation<TestDummy, TestDummyAdminChecks, TestDummyAdminParams>, ctx: &mut TxContext){
         let (obj, _ch, param, _policy_id) = policy::unlock(self, op);
 
