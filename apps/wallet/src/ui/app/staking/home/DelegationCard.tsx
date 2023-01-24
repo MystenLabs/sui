@@ -71,7 +71,7 @@ export function DelegationCard({
 
                 <div className="text-gray-60 text-p1 opacity-0 group-hover:opacity-100">
                     <IconTooltip
-                        tip="Annual Percentage Yield"
+                        tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
                         placement="top"
                     />
                 </div>
