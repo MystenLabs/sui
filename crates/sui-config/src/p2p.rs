@@ -92,6 +92,30 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `100`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_download_concurrency: Option<usize>,
+
+    /// Per-peer rate-limit (in requests/sec) for the PushCheckpointSummary RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_checkpoint_summary_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetCheckpointSummary RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_summary_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetCheckpointContents RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_contents_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetTransactionAndEffects RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_transaction_and_effects_rate_limit: Option<NonZeroU32>,
 }
 
 impl StateSyncConfig {
