@@ -245,9 +245,9 @@ mod tests {
         Ok(())
     }
 
-    fn read_keys(objects: &DBMap<ObjectKey, Object>) -> Result<(), anyhow::Error> {
+    fn read_keys(objects: &DBMap<ObjectKey, Object>, num_reads: u32) -> Result<(), anyhow::Error> {
         let mut i = 0;
-        while i < 1000 {
+        while i < num_reads {
             let _res = objects.get(&ObjectKey(ObjectID::random(), VersionNumber::MAX))?;
             i += 1;
         }
@@ -403,7 +403,7 @@ mod tests {
             .frequency(1000)
             .build()
             .unwrap();
-        read_keys(&objects)?;
+        read_keys(&objects, 10)?;
         if let Ok(report) = guard.report().build() {
             assert!(report.data.keys().any(|f| f
                 .frames
@@ -429,7 +429,7 @@ mod tests {
             .frequency(1000)
             .build()
             .unwrap();
-        read_keys(&perpetual_db.objects)?;
+        read_keys(&perpetual_db.objects, 1000)?;
         if let Ok(report) = guard.report().build() {
             assert!(!report.data.keys().any(|f| f
                 .frames
@@ -459,7 +459,7 @@ mod tests {
             .frequency(1000)
             .build()
             .unwrap();
-        read_keys(&perpetual_db.objects)?;
+        read_keys(&perpetual_db.objects, 1000)?;
         if let Ok(report) = guard.report().build() {
             assert!(!report.data.keys().any(|f| f
                 .frames
