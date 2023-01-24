@@ -713,15 +713,9 @@ impl SuiNode {
         );
 
         loop {
-            checkpoint_executor
+            let committee = checkpoint_executor
                 .run_epoch(self.state.epoch_store().clone())
                 .await;
-            let committee = self
-                .state
-                .get_sui_system_state_object()
-                .unwrap()
-                .get_current_epoch_committee()
-                .committee;
             let next_epoch = committee.epoch();
 
             info!(

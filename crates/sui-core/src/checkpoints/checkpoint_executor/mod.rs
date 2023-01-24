@@ -264,11 +264,12 @@ impl CheckpointExecutor {
         let tx_manager = self.tx_manager.clone();
 
         pending.push_back(spawn_monitored_task!(async move {
+            let epoch_store = epoch_store.clone();
             while let Err(err) = execute_checkpoint(
                 checkpoint.clone(),
                 authority_store.clone(),
                 checkpoint_store.clone(),
-                epoch_store.clone(),
+                &epoch_store,
                 tx_manager.clone(),
                 local_execution_timeout_sec,
                 &metrics,
@@ -316,7 +317,7 @@ pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_store: Arc<AuthorityStore>,
     checkpoint_store: Arc<CheckpointStore>,
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    epoch_store: &AuthorityPerEpochStore,
     transaction_manager: Arc<TransactionManager>,
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
@@ -358,7 +359,7 @@ pub async fn execute_checkpoint(
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_store: Arc<AuthorityStore>,
-    epoch_store: Arc<AuthorityPerEpochStore>,
+    epoch_store: &AuthorityPerEpochStore,
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
     checkpoint_sequence: CheckpointSequenceNumber,
@@ -406,7 +407,7 @@ async fn execute_transactions(
     }
     epoch_store.insert_pending_certificates(&synced_txns)?;
 
-    transaction_manager.enqueue(synced_txns, &epoch_store)?;
+    transaction_manager.enqueue(synced_txns, epoch_store)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
