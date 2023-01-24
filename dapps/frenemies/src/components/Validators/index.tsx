@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMyStake } from "../../network/queries/my-stake";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useSuiSystem } from "../../network/queries/sui-system";
+import { useMyType } from "../../network/queries/use-raw";
+import { Delegation, DELEGATION, StakedSui, STAKED_SUI } from "../../network/types";
 import { formatGoal } from "../../utils/format";
 import { Card } from "../Card";
 import { Balance } from "./Balance";
@@ -13,12 +14,11 @@ import { Table } from "./Table";
 export function Validators() {
   const { currentAccount } = useWalletKit();
   const { data: system } = useSuiSystem();
-  const { data: scorecard } = useScorecard(currentAccount || '');
-  const { data: stakes } = useMyStake(currentAccount || '');
+  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI, currentAccount);
+  const { data: delegations } = useMyType<Delegation>(DELEGATION, currentAccount);
 
-  // TODO: SuiSystem doesn't exist.
-  // Redundant check; it must exist if RPC is set correctly
-  // TODO: What do we do if user is not connected?
+  // At this point there's no way it errors out.
   if (!system || !scorecard || !stakes || !currentAccount) {
     return null;
   }

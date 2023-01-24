@@ -14,13 +14,13 @@ export function Balance() {
     async () => {
       const [{ decimals }, { totalBalance }] = await Promise.all([
         provider.getCoinMetadata(SUI_TYPE_ARG),
-        provider.getBalance(currentAccount!, SUI_TYPE_ARG)
+        provider.getBalance(currentAccount!, SUI_TYPE_ARG),
       ]);
 
       return {
         balance: BigInt(totalBalance),
-        decimals
-      }
+        decimals,
+      };
     },
     {
       enabled: !!currentAccount,
@@ -34,7 +34,10 @@ export function Balance() {
           In your wallet
         </div>
         <div className="text-steel-dark">
-          <span className="font-semibold">{data && formatBalance(data.balance, data.decimals) || '--'}</span> SUI
+          <span className="font-semibold">
+            {(data && formatBalance(data.balance, data.decimals)) || "--"}
+          </span>{" "}
+          SUI
         </div>
       </div>
       <div>

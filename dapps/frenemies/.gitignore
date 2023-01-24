@@ -1,2 +1,0 @@
-.env
-.DS_Store

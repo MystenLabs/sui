@@ -18,7 +18,7 @@ import { Scoreboard } from "../components/Scoreboard";
 export function Home() {
   const navigate = useNavigate();
   const { currentAccount } = useWalletKit();
-  const { data: scorecard, isSuccess } = useScorecard(currentAccount || "");
+  const { data: scorecard, isSuccess } = useScorecard(currentAccount);
 
   useEffect(() => {
     if (!currentAccount) {
