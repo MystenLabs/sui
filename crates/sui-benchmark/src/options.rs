@@ -99,6 +99,12 @@ pub struct Opts {
     // Stat collection interval seconds
     #[clap(long, default_value = "10", global = true)]
     pub stat_collection_interval: u64,
+    // Enable stress stat collection. When enabled the sysinfo crate will be used
+    // to gather system information. For example cpu usage will be polled every
+    // 1 second and the P50/P99 usage statistics will be outputted either at
+    // the end of the benchmark or periodically during a continuous run.
+    #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+    pub stress_stat_collection: bool,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]

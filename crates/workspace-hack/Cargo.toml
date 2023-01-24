@@ -553,6 +553,7 @@ symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
+sysinfo = { version = "0.27" }
 tabular = { version = "0.2", features = ["ansi-cell"] }
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
@@ -1283,6 +1284,7 @@ syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-t
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
 synstructure = { version = "0.12" }
+sysinfo = { version = "0.27" }
 tabular = { version = "0.2", features = ["ansi-cell"] }
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
@@ -1554,6 +1556,7 @@ error-code = { version = "2", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 ipnet = { version = "2" }
 native-tls = { version = "0.2", default-features = false }
+ntapi = { version = "0.4" }
 output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
@@ -1563,7 +1566,7 @@ str-buf = { version = "1", default-features = false }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
-winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
 windows_x86_64_msvc = { version = "0.42", default-features = false }
@@ -1581,6 +1584,7 @@ error-code = { version = "2", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 ipnet = { version = "2" }
 native-tls = { version = "0.2", default-features = false }
+ntapi = { version = "0.4" }
 output_vt100 = { version = "0.1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
@@ -1590,7 +1594,7 @@ str-buf = { version = "1", default-features = false }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 widestring = { version = "0.5" }
-winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-debug", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "roapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winreg", "winsock2", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys = { version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
 windows_x86_64_msvc = { version = "0.42", default-features = false }

@@ -4164,7 +4164,7 @@ dependencies = [
  "libc",
  "log",
  "miow",
- "ntapi",
+ "ntapi 0.3.7",
  "winapi",
 ]
 
@@ -5702,6 +5702,15 @@ name = "ntapi"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28774a7fd2fbb4f0babd8237ce554b73af68021b5f695a3cebd6c59bac0980f"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc51db7b362b205941f71232e56c625156eb9a929f8cf74a428fd5bc094a4afc"
 dependencies = [
  "winapi",
 ]
@@ -8385,6 +8394,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-types",
+ "sysinfo",
  "telemetry-subscribers",
  "tempfile",
  "test-utils",
@@ -9368,6 +9378,21 @@ dependencies = [
  "quote 1.0.23",
  "syn 1.0.107",
  "unicode-xid 0.2.4",
+]
+
+[[package]]
+name = "sysinfo"
+version = "0.27.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c215311383d25d03753375c53ab9fad8fc0cf46953c409211e065edeabf577ee"
+dependencies = [
+ "cfg-if",
+ "core-foundation-sys",
+ "libc",
+ "ntapi 0.4.0",
+ "once_cell",
+ "rayon",
+ "winapi",
 ]
 
 [[package]]
@@ -11215,6 +11240,7 @@ dependencies = [
  "nom 7.1.2",
  "nonzero_ext",
  "normalize-line-endings",
+ "ntapi 0.4.0",
  "nu-ansi-term",
  "num",
  "num-bigint",
@@ -11458,6 +11484,7 @@ dependencies = [
  "syn 1.0.107",
  "sync_wrapper",
  "synstructure",
+ "sysinfo",
  "tabular",
  "tap",
  "target-lexicon",

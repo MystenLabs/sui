@@ -182,7 +182,7 @@ mod test {
             .init(workload_init_gas, proxy.clone())
             .await;
 
-        let driver = BenchDriver::new(5);
+        let driver = BenchDriver::new(5, false);
 
         // Use 0 for unbounded
         let test_duration_secs = get_var("SIM_STRESS_TEST_DURATION_SECS", test_duration_secs);
@@ -194,7 +194,7 @@ mod test {
         let interval = Interval::Time(test_duration);
 
         let show_progress = interval.is_unbounded();
-        let stats = driver
+        let (benchmark_stats, _) = driver
             .run(
                 vec![combination_workload],
                 proxy,
@@ -205,6 +205,6 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(stats.num_error, 0);
+        assert_eq!(benchmark_stats.num_error, 0);
     }
 }

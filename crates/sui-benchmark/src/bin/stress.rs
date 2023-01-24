@@ -67,6 +67,7 @@ async fn main() -> Result<()> {
     let cloned_barrier = barrier.clone();
     let env = if opts.local { Env::Local } else { Env::Remote };
     let benchmark_setup = env.setup(cloned_barrier, &registry, &opts).await?;
+    let stress_stat_collection = opts.stress_stat_collection;
     barrier.wait().await;
     // create client runtime
     let client_runtime = Builder::new_multi_thread()
@@ -100,7 +101,7 @@ async fn main() -> Result<()> {
             // otherwise summarized benchmark results are
             // published in the end
             let show_progress = interval.is_unbounded();
-            let driver = BenchDriver::new(opts.stat_collection_interval);
+            let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
             driver
                 .run(
                     workloads,
@@ -116,15 +117,22 @@ async fn main() -> Result<()> {
     if let Err(err) = joined {
         Err(anyhow!("Failed to join client runtime: {:?}", err))
     } else {
-        let stats: BenchmarkStats = joined.unwrap().unwrap();
-        let table = stats.to_table();
+        let (benchmark_stats, stress_stats) = joined.unwrap().unwrap();
+        let benchmark_table = benchmark_stats.to_table();
         eprintln!("Benchmark Report:");
-        eprintln!("{}", table);
+        eprintln!("{}", benchmark_table);
+
+        if stress_stat_collection {
+            eprintln!("Stress Performance Report:");
+            let stress_stats_table = stress_stats.to_table();
+            eprintln!("{}", stress_stats_table);
+        }
+
         if !prev_benchmark_stats_path.is_empty() {
             let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
             let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
             let cmp = BenchmarkCmp {
-                new: &stats,
+                new: &benchmark_stats,
                 old: &prev_stats,
             };
             let cmp_table = cmp.to_table();
@@ -135,7 +143,7 @@ async fn main() -> Result<()> {
             eprintln!("{}", cmp_table);
         }
         if !curr_benchmark_stats_path.is_empty() {
-            let serialized = serde_json::to_string(&stats)?;
+            let serialized = serde_json::to_string(&benchmark_stats)?;
             std::fs::write(curr_benchmark_stats_path, serialized)?;
         }
         Ok(())
