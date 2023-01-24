@@ -19,6 +19,7 @@ import { Text } from '_app/shared/text';
 import { getEventsSummary, getAmount, formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
+import Alert from '_src/ui/app/components/alert';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
 
@@ -144,8 +145,12 @@ export function Transaction({
                             <Text color="gray-90" weight="semibold">
                                 Transaction Failed
                             </Text>
-                            <div className="flex break-all text-issue-dark text-subtitle">
-                                {error}
+                            <div className="p-2">
+                                <Alert mode="warning">
+                                    <div className="mb-1 font-medium">
+                                        {error}
+                                    </div>
+                                </Alert>
                             </div>
                         </div>
                     ) : (
