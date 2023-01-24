@@ -30,7 +30,7 @@ importers:
   apps/explorer:
     specifiers:
       '@babel/core': ^7.20.12
-      '@floating-ui/react-dom-interactions': ^0.13.3
+      '@floating-ui/react': ^0.18.0
       '@fontsource/inter': ^4.5.14
       '@fontsource/red-hat-mono': ^4.5.11
       '@growthbook/growthbook': ^0.20.1
@@ -87,15 +87,11 @@ importers:
       react: ^18.2.0
       react-dom: ^18.2.0
       react-error-boundary: ^3.1.4
-      react-hook-form: ^7.41.5
+      react-hook-form: ^7.42.1
       react-hot-toast: ^2.4.0
       react-router-dom: ^6.5.0
       start-server-and-test: ^1.15.2
       storybook: 7.0.0-beta.3
-      stylelint: ^14.5.0
-      stylelint-config-prettier: ^9.0.3
-      stylelint-config-standard: ^25.0.0
-      stylelint-config-standard-scss: ^3.0.0
       tailwindcss: ^3.2.4
       topojson-client: ^3.1.0
       tsconfig-paths: ^4.1.1
@@ -106,13 +102,13 @@ importers:
       web-vitals: ^3.1.0
       zod: ^3.20.2
     dependencies:
-      '@floating-ui/react-dom-interactions': 0.13.3_ib3m5ricvtkl2cll7qpr2f6lvq
+      '@floating-ui/react': 0.18.0_ib3m5ricvtkl2cll7qpr2f6lvq
       '@fontsource/inter': 4.5.14
       '@fontsource/red-hat-mono': 4.5.11
       '@growthbook/growthbook': 0.20.1
       '@growthbook/growthbook-react': 0.10.1_react@18.2.0
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
-      '@hookform/resolvers': 2.9.10_react-hook-form@7.41.5
+      '@hookform/resolvers': 2.9.10_react-hook-form@7.42.1
       '@mysten/core': link:../core
       '@mysten/icons': link:../icons
       '@mysten/sui.js': link:../../sdk/typescript
@@ -136,7 +132,7 @@ importers:
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-error-boundary: 3.1.4_react@18.2.0
-      react-hook-form: 7.41.5_react@18.2.0
+      react-hook-form: 7.42.1_react@18.2.0
       react-hot-toast: 2.4.0_biqbaboplfbrettd7655fr4n2y
       react-router-dom: 6.6.2_biqbaboplfbrettd7655fr4n2y
       topojson-client: 3.1.0
@@ -173,10 +169,6 @@ importers:
       prettier-plugin-tailwindcss: 0.2.1_prettier@2.8.1
       start-server-and-test: 1.15.2
       storybook: 7.0.0-beta.3_o4scbtliisanygemawej7x2d6i
-      stylelint: 14.10.0
-      stylelint-config-prettier: 9.0.3_stylelint@14.10.0
-      stylelint-config-standard: 25.0.0_stylelint@14.10.0
-      stylelint-config-standard-scss: 3.0.0_lwdmwgkdh7rva7x26l3nn5sgpa
       tailwindcss: 3.2.4_postcss@8.4.21
       tsconfig-paths: 4.1.2
       typescript: 4.9.4
@@ -447,7 +439,7 @@ importers:
       react: ^18.2.0
       react-dom: ^18.2.0
       react-error-boundary: ^3.1.4
-      react-hook-form: ^7.41.5
+      react-hook-form: ^7.42.1
       react-hot-toast: ^2.4.0
       react-router-dom: ^6.6.2
       tailwindcss: ^3.2.4
@@ -457,7 +449,7 @@ importers:
     dependencies:
       '@fontsource/inter': 4.5.14
       '@headlessui/react': 1.7.7_biqbaboplfbrettd7655fr4n2y
-      '@hookform/resolvers': 2.9.10_react-hook-form@7.41.5
+      '@hookform/resolvers': 2.9.10_react-hook-form@7.42.1
       '@mysten/core': link:../../apps/core
       '@mysten/icons': link:../../apps/icons
       '@mysten/sui.js': link:../../sdk/typescript
@@ -470,7 +462,7 @@ importers:
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-error-boundary: 3.1.4_react@18.2.0
-      react-hook-form: 7.41.5_react@18.2.0
+      react-hook-form: 7.42.1_react@18.2.0
       react-hot-toast: 2.4.0_biqbaboplfbrettd7655fr4n2y
       react-router-dom: 6.6.2_biqbaboplfbrettd7655fr4n2y
       zod: 3.20.2
@@ -3731,7 +3723,7 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
     dependencies:
-      '@floating-ui/react-dom': 1.1.1_biqbaboplfbrettd7655fr4n2y
+      '@floating-ui/react-dom': 1.2.1_biqbaboplfbrettd7655fr4n2y
       aria-hidden: 1.2.2_kzbn2opkn2327fwg5yzwzya5o4
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -3740,8 +3732,8 @@ packages:
       - '@types/react'
     dev: false
 
-  /@floating-ui/react-dom/1.1.1_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-F27E+7SLB5NZvwF9Egqx/PlvxOhMnA6k/yNMQUqaQ9BPZdr4fQgSW6J6AKNIrBQElBT8IRDtv9j6h7FDkgp3dA==}
+  /@floating-ui/react-dom/1.2.1_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-YCLlqibZtgUhxUpxkSp1oekvYgH/jI4KdZEJv85E62twlZHN43xdlQNe6JcF4ROD3/Zu6juNHN+aOygN+6yZjg==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -3749,6 +3741,21 @@ packages:
       '@floating-ui/dom': 1.1.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
+    dev: false
+
+  /@floating-ui/react/0.18.0_ib3m5ricvtkl2cll7qpr2f6lvq:
+    resolution: {integrity: sha512-zxgwWigxaph1TIBdezCDdc3eo+4FUDKY2MiBR3gywZtx5Eeb0KBRRZ9PyzznTXuYO5Y9BFHAC0Yikqp7rr+oKQ==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    dependencies:
+      '@floating-ui/react-dom': 1.2.1_biqbaboplfbrettd7655fr4n2y
+      aria-hidden: 1.2.2_kzbn2opkn2327fwg5yzwzya5o4
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+      tabbable: 6.0.1
+    transitivePeerDependencies:
+      - '@types/react'
     dev: false
 
   /@fontsource/inter/4.5.14:
@@ -3899,12 +3906,12 @@ packages:
       tailwindcss: 3.2.4
     dev: true
 
-  /@hookform/resolvers/2.9.10_react-hook-form@7.41.5:
+  /@hookform/resolvers/2.9.10_react-hook-form@7.42.1:
     resolution: {integrity: sha512-JIL1DgJIlH9yuxcNGtyhsWX/PgNltz+5Gr6+8SX9fhXc/hPbEIk6wPI82nhgvp3uUb6ZfAM5mqg/x7KR7NAb+A==}
     peerDependencies:
       react-hook-form: ^7.0.0
     dependencies:
-      react-hook-form: 7.41.5_react@18.2.0
+      react-hook-form: 7.42.1_react@18.2.0
     dev: false
 
   /@httptoolkit/httpolyglot/2.0.1:
@@ -15561,8 +15568,8 @@ packages:
     resolution: {integrity: sha512-suNP+J1VU1MWFKcyt7RtjiSWUjvidmQSlqu+eHslq+342xCbGTYmC0mEhPCOHxlW0CywylOC1u2DFAT+bv4dBw==}
     dev: false
 
-  /react-hook-form/7.41.5_react@18.2.0:
-    resolution: {integrity: sha512-DAKjSJ7X9f16oQrP3TW2/eD9N6HOgrmIahP4LOdFphEWVfGZ2LulFd6f6AQ/YS/0cx/5oc4j8a1PXxuaurWp/Q==}
+  /react-hook-form/7.42.1_react@18.2.0:
+    resolution: {integrity: sha512-2UIGqwMZksd5HS55crTT1ATLTr0rAI4jS7yVuqTaoRVDhY2Qc4IyjskCmpnmdYqUNOYFy04vW253tb2JRVh+IQ==}
     engines: {node: '>=12.22.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18
@@ -17095,19 +17102,6 @@ packages:
       stylelint: 14.10.0
     dev: true
 
-  /stylelint-config-recommended-scss/5.0.2_lwdmwgkdh7rva7x26l3nn5sgpa:
-    resolution: {integrity: sha512-b14BSZjcwW0hqbzm9b0S/ScN2+3CO3O4vcMNOw2KGf8lfVSwJ4p5TbNEXKwKl1+0FMtgRXZj6DqVUe/7nGnuBg==}
-    peerDependencies:
-      stylelint: ^14.0.0
-    dependencies:
-      postcss-scss: 4.0.4_postcss@8.4.21
-      stylelint: 14.10.0
-      stylelint-config-recommended: 6.0.0_stylelint@14.10.0
-      stylelint-scss: 4.3.0_stylelint@14.10.0
-    transitivePeerDependencies:
-      - postcss
-    dev: true
-
   /stylelint-config-recommended-scss/7.0.0_lwdmwgkdh7rva7x26l3nn5sgpa:
     resolution: {integrity: sha512-rGz1J4rMAyJkvoJW4hZasuQBB7y9KIrShb20l9DVEKKZSEi1HAy0vuNlR8HyCKy/jveb/BdaQFcoiYnmx4HoiA==}
     peerDependencies:
@@ -17121,40 +17115,12 @@ packages:
       - postcss
     dev: true
 
-  /stylelint-config-recommended/6.0.0_stylelint@14.10.0:
-    resolution: {integrity: sha512-ZorSSdyMcxWpROYUvLEMm0vSZud2uB7tX1hzBZwvVY9SV/uly4AvvJPPhCcymZL3fcQhEQG5AELmrxWqtmzacw==}
-    peerDependencies:
-      stylelint: ^14.0.0
-    dependencies:
-      stylelint: 14.10.0
-    dev: true
-
-  /stylelint-config-recommended/7.0.0_stylelint@14.10.0:
-    resolution: {integrity: sha512-yGn84Bf/q41J4luis1AZ95gj0EQwRX8lWmGmBwkwBNSkpGSpl66XcPTulxGa/Z91aPoNGuIGBmFkcM1MejMo9Q==}
-    peerDependencies:
-      stylelint: ^14.4.0
-    dependencies:
-      stylelint: 14.10.0
-    dev: true
-
   /stylelint-config-recommended/8.0.0_stylelint@14.10.0:
     resolution: {integrity: sha512-IK6dWvE000+xBv9jbnHOnBq01gt6HGVB2ZTsot+QsMpe82doDQ9hvplxfv4YnpEuUwVGGd9y6nbaAnhrjcxhZQ==}
     peerDependencies:
       stylelint: ^14.8.0
     dependencies:
       stylelint: 14.10.0
-    dev: true
-
-  /stylelint-config-standard-scss/3.0.0_lwdmwgkdh7rva7x26l3nn5sgpa:
-    resolution: {integrity: sha512-zt3ZbzIbllN1iCmc94e4pDxqpkzeR6CJo5DDXzltshuXr+82B8ylHyMMARNnUYrZH80B7wgY7UkKTYCFM0UUyw==}
-    peerDependencies:
-      stylelint: ^14.0.0
-    dependencies:
-      stylelint: 14.10.0
-      stylelint-config-recommended-scss: 5.0.2_lwdmwgkdh7rva7x26l3nn5sgpa
-      stylelint-config-standard: 24.0.0_stylelint@14.10.0
-    transitivePeerDependencies:
-      - postcss
     dev: true
 
   /stylelint-config-standard-scss/5.0.0_lwdmwgkdh7rva7x26l3nn5sgpa:
@@ -17167,24 +17133,6 @@ packages:
       stylelint-config-standard: 26.0.0_stylelint@14.10.0
     transitivePeerDependencies:
       - postcss
-    dev: true
-
-  /stylelint-config-standard/24.0.0_stylelint@14.10.0:
-    resolution: {integrity: sha512-+RtU7fbNT+VlNbdXJvnjc3USNPZRiRVp/d2DxOF/vBDDTi0kH5RX2Ny6errdtZJH3boO+bmqIYEllEmok4jiuw==}
-    peerDependencies:
-      stylelint: ^14.0.0
-    dependencies:
-      stylelint: 14.10.0
-      stylelint-config-recommended: 6.0.0_stylelint@14.10.0
-    dev: true
-
-  /stylelint-config-standard/25.0.0_stylelint@14.10.0:
-    resolution: {integrity: sha512-21HnP3VSpaT1wFjFvv9VjvOGDtAviv47uTp3uFmzcN+3Lt+RYRv6oAplLaV51Kf792JSxJ6svCJh/G18E9VnCA==}
-    peerDependencies:
-      stylelint: ^14.4.0
-    dependencies:
-      stylelint: 14.10.0
-      stylelint-config-recommended: 7.0.0_stylelint@14.10.0
     dev: true
 
   /stylelint-config-standard/26.0.0_stylelint@14.10.0:
