@@ -13,7 +13,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{validity_threshold, Committee, EpochId, StakeUnit};
-use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
+use sui_types::quorum_driver_types::{
+    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
+};
 use tap::TapFallible;
 use thiserror::Error;
 use tokio::time::{sleep_until, Instant};
@@ -39,7 +41,7 @@ use self::reconfig_observer::ReconfigObserver;
 mod tests;
 
 const TASK_QUEUE_SIZE: usize = 10000;
-const EFFECTS_QUEUE_SIZE: usize = 1000;
+const EFFECTS_QUEUE_SIZE: usize = 10000;
 const TX_MAX_RETRY_TIMES: u8 = 10;
 
 /// Quorum Driver Internal types
@@ -88,7 +90,7 @@ impl Debug for QuorumDriverTask {
 pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumDriverTask>,
-    effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverResponse>,
+    effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
     notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
     metrics: Arc<QuorumDriverMetrics>,
     max_retry_times: u8,
@@ -98,7 +100,7 @@ impl<A> QuorumDriver<A> {
     pub(crate) fn new(
         validators: ArcSwap<AuthorityAggregator<A>>,
         task_sender: Sender<QuorumDriverTask>,
-        effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverResponse>,
+        effects_subscribe_sender: tokio::sync::broadcast::Sender<QuorumDriverEffectsQueueResult>,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,
         metrics: Arc<QuorumDriverMetrics>,
         max_retry_times: u8,
@@ -190,19 +192,26 @@ impl<A> QuorumDriver<A> {
         response: &QuorumDriverResult,
         total_attempts: u8,
     ) {
-        match &response {
-            Ok(_) => {
+        let effects_queue_result = match &response {
+            Ok(resp) => {
                 self.metrics.total_ok_responses.inc();
                 self.metrics
                     .attempt_times_ok_response
                     .report(total_attempts as u64);
+                Ok(resp.clone())
             }
             Err(err) => {
                 self.metrics
                     .total_err_responses_by_err
                     .with_label_values(&[err.as_ref()])
                     .inc();
+                Err((*tx_digest, err.clone()))
             }
+        };
+        // On fullnode we expect the send to always succeed because TransactionOrchestrator should be subscribing
+        // to this queue all the time. However the if QuorumDriver is used elsewhere log may be noisy.
+        if let Err(err) = self.effects_subscribe_sender.send(effects_queue_result) {
+            warn!(?tx_digest, "No subscriber found for effects: {}", err);
         }
         self.notifier.notify(tx_digest, response);
     }
@@ -351,16 +360,11 @@ where
             .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
             .await
             .map_err(QuorumDriverInternalError::CertificateError)?;
-        let tx_digest = *certificate.digest();
         let response = QuorumDriverResponse {
             tx_cert: certificate,
             effects_cert: effects,
         };
-        // On fullnode we expect the send to always succeed because TransactionOrchestrator should be subscribing
-        // to this queue all the time. However the if QuorumDriver is used elsewhere log may be noisy.
-        if let Err(err) = self.effects_subscribe_sender.send(response.clone()) {
-            warn!(?tx_digest, "No subscriber found for effects: {}", err);
-        }
+
         Ok(response)
     }
 
@@ -528,7 +532,7 @@ where
 
 pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
-    effects_subscriber: tokio::sync::broadcast::Receiver<QuorumDriverResponse>,
+    effects_subscriber: tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>,
     quorum_driver_metrics: Arc<QuorumDriverMetrics>,
     reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
     _processor_handle: JoinHandle<()>,
@@ -652,7 +656,9 @@ where
         self.quorum_driver.clone()
     }
 
-    pub fn subscribe_to_effects(&self) -> tokio::sync::broadcast::Receiver<QuorumDriverResponse> {
+    pub fn subscribe_to_effects(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult> {
         self.effects_subscriber.resubscribe()
     }
 
