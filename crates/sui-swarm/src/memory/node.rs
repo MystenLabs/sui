@@ -3,8 +3,9 @@
 
 use anyhow::anyhow;
 use anyhow::Result;
+use std::sync::Mutex;
 use sui_config::NodeConfig;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::AuthorityName;
 use tap::TapFallible;
 use tracing::{error, info};
 
@@ -18,7 +19,7 @@ use super::container::Container;
 /// explicitly stopped by calling [`Node::stop`]) by simply dropping that Node's runtime.
 #[derive(Debug)]
 pub struct Node {
-    container: Option<Container>,
+    container: Mutex<Option<Container>>,
     config: NodeConfig,
     runtime_type: RuntimeType,
 }
@@ -32,15 +33,15 @@ impl Node {
     /// [`NodeConfig`]: sui_config::NodeConfig
     pub fn new(config: NodeConfig) -> Self {
         Self {
-            container: None,
+            container: Default::default(),
             config,
             runtime_type: RuntimeType::SingleThreaded,
         }
     }
 
     /// Return the `name` of this Node
-    pub fn name(&self) -> SuiAddress {
-        self.config.sui_address()
+    pub fn name(&self) -> AuthorityName {
+        self.config.protocol_public_key()
     }
 
     pub fn json_rpc_address(&self) -> std::net::SocketAddr {
@@ -48,39 +49,39 @@ impl Node {
     }
 
     /// Start this Node
-    pub async fn spawn(&mut self) -> Result<()> {
+    pub async fn spawn(&self) -> Result<()> {
         info!(name =% self.name(), "starting in-memory node");
-        let container = Container::spawn(self.config.clone(), self.runtime_type).await;
-        self.container = Some(container);
+        *self.container.lock().unwrap() =
+            Some(Container::spawn(self.config.clone(), self.runtime_type).await);
         Ok(())
     }
 
     /// Start this Node, waiting until its completely started up.
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(&self) -> Result<()> {
         self.spawn().await
     }
 
     /// Stop this Node
-    pub fn stop(&mut self) {
+    pub fn stop(&self) {
         info!(name =% self.name(), "stopping in-memory node");
-        self.container = None;
+        *self.container.lock().unwrap() = None;
     }
 
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
-        self.container.is_some()
+        self.container.lock().unwrap().is_some()
     }
 
     /// Perform a health check on this Node by:
     /// * Checking that the node is running
     /// * Calling the Node's gRPC Health service if it's a validator.
     pub async fn health_check(&self, is_validator: bool) -> Result<(), HealthCheckError> {
-        let container = self
-            .container
-            .as_ref()
-            .ok_or(HealthCheckError::NotRunning)?;
-        if !container.is_alive() {
-            return Err(HealthCheckError::NotRunning);
+        {
+            let lock = self.container.lock().unwrap();
+            let container = lock.as_ref().ok_or(HealthCheckError::NotRunning)?;
+            if !container.is_alive() {
+                return Err(HealthCheckError::NotRunning);
+            }
         }
 
         if is_validator {
@@ -131,9 +132,9 @@ mod test {
     #[tokio::test]
     async fn start_and_stop() {
         telemetry_subscribers::init_for_testing();
-        let mut swarm = Swarm::builder().build();
+        let swarm = Swarm::builder().build();
 
-        let validator = swarm.validators_mut().next().unwrap();
+        let validator = swarm.validators().next().unwrap();
 
         validator.start().await.unwrap();
         validator.health_check(true).await.unwrap();
