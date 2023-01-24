@@ -24,7 +24,7 @@ export function Setup() {
           packageObjectId: config.VITE_PKG,
           module: "frenemies",
           function: "register",
-          arguments: [username],
+          arguments: [username, config.VITE_REGISTRY, "0x5"],
           typeArguments: [],
           gasBudget: 10000,
         },
@@ -54,6 +54,11 @@ export function Setup() {
     const formData = new FormData(e.currentTarget);
     createScorecard.mutate(formData.get("username") as string);
   };
+
+  // TODO: Loading UI:
+  if (!isSuccess || scorecard) {
+    return null;
+  }
 
   return (
     <div className="max-w-4xl w-full mx-auto text-center">

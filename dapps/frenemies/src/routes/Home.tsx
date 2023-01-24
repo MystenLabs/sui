@@ -18,14 +18,20 @@ import { useEffect } from "react";
  */
 export function Home() {
   const navigate = useNavigate();
-  const { currentAccount } = useWalletKit();
-  const { data: scorecard } = useScorecard(currentAccount || "");
+  const { currentAccount, signAndExecuteTransaction } = useWalletKit();
+  const { data: scorecard, isSuccess } = useScorecard(currentAccount || "");
 
   useEffect(() => {
     if (!currentAccount) {
-      navigate("/connect");
+      navigate("/connect", { replace: true });
     }
   }, [currentAccount]);
+
+  useEffect(() => {
+    if (isSuccess && !scorecard) {
+      navigate("/setup", { replace: true });
+    }
+  }, [scorecard, isSuccess]);
 
   // TODO: Render login screen (not registered)
   // TODO: Track wallet connection and make sure user is logged in
