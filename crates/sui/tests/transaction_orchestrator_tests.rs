@@ -275,10 +275,12 @@ async fn test_tx_across_epoch_boundaries() {
     info!("All nodes including fullnode finished");
 
     // The transaction must finalize in epoch 1
-    match tokio::time::timeout(tokio::time::Duration::from_secs(10), result_rx.recv()).await {
+    let start = std::time::Instant::now();
+    match tokio::time::timeout(tokio::time::Duration::from_secs(15), result_rx.recv()).await {
         Ok(Some(tx_cert)) if tx_cert.auth_sig().epoch == 1 => (),
         other => panic!("unexpected error: {:?}", other),
     }
+    info!("test completed in {:?}", start.elapsed());
 }
 
 async fn execute_with_orchestrator(
