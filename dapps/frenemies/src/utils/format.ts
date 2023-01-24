@@ -23,8 +23,13 @@ export function formatGoal(goal: Goal): string {
     }
 }
 
+/** 0x-prefix (required for addresses) */
+export function x0(str: string): string {
+    return str.startsWith('0x') ? str : '0x' + str;
+}
+
 /** Pretty-print balance of the currency based on the decimals */
-export function formatBalance(num: bigint, decimals: number): string {
+export function formatBalance(num: bigint | string, decimals: number): string {
     let withPad = num.toString().padStart(18, '0');
 
       // remove prepend 0s

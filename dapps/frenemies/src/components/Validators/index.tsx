@@ -5,7 +5,12 @@ import { useWalletKit } from "@mysten/wallet-kit";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useSuiSystem } from "../../network/queries/sui-system";
 import { useMyType } from "../../network/queries/use-raw";
-import { Delegation, DELEGATION, StakedSui, STAKED_SUI } from "../../network/types";
+import {
+  Delegation,
+  DELEGATION,
+  StakedSui,
+  STAKED_SUI,
+} from "../../network/types";
 import { formatGoal } from "../../utils/format";
 import { Card } from "../Card";
 import { Balance } from "./Balance";
@@ -16,7 +21,6 @@ export function Validators() {
   const { data: system } = useSuiSystem();
   const { data: scorecard } = useScorecard(currentAccount);
   const { data: stakes } = useMyType<StakedSui>(STAKED_SUI, currentAccount);
-  const { data: delegations } = useMyType<Delegation>(DELEGATION, currentAccount);
 
   // At this point there's no way it errors out.
   if (!system || !scorecard || !stakes || !currentAccount) {
@@ -31,7 +35,8 @@ export function Validators() {
     <Card variant="white" spacing="lg">
       <div className="flex items-center justify-between mb-10">
         <h2 className="text-steel-dark font-normal text-2xl">
-          Stake SUI to achieve your goal as {goal.charAt(0) == 'E' ? 'an ' : 'a '}
+          Stake SUI to achieve your goal as{" "}
+          {goal.charAt(0) == "E" ? "an " : "a "}
           <span className="font-bold">{goal}</span>.
         </h2>
 

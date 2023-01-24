@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import clsx from "clsx";
-import { ReactNode } from "react";
+import { FormEvent, ReactNode, useId, useState } from "react";
 import { ObjectData } from "../../network/rawObject";
-import { Assignment, StakedSui, Validator } from "../../network/types";
-import { formatAddress } from "../../utils/format";
-import { Unstake } from "./actions/Unstake";
-import { Stake } from "./actions/Stake";
+import { Assignment, DELEGATION, Delegation, StakedSui, Validator } from "../../network/types";
+import { formatAddress, formatBalance } from "../../utils/format";
+import { WithdrawDelegation } from "./actions/WithdrawDelegation";
+import { AddDelegation } from "./actions/AddDelegation";
 import { Target } from "./Target";
+import { useWalletKit } from "@mysten/wallet-kit";
+import { useMyType } from "../../network/queries/use-raw";
+import { CancelDelegation } from "./actions/CancelDelegation";
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -17,6 +20,9 @@ function Header({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+/** Number of decimals for SUI */
+const DEC = 9;
 
 interface Props {
   /** Set of 40 currently active validators */
@@ -48,6 +54,9 @@ function GridItem({
 }
 
 export function Table({ validators, assignment, stakes }: Props) {
+  const { currentAccount } = useWalletKit();
+  const { data: delegations } = useMyType<Delegation>(DELEGATION, currentAccount);
+
   // sort validators by their voting power in DESC order (not by stake - these are different)
   const sorted = validators.sort((a, b) =>
     Number(b.votingPower - a.votingPower)
@@ -62,8 +71,6 @@ export function Table({ validators, assignment, stakes }: Props) {
       {}
     );
 
-  console.log(stakeByValidator);
-
   return (
     <>
       <GridItem className="px-5 py-4">
@@ -73,6 +80,29 @@ export function Table({ validators, assignment, stakes }: Props) {
       </GridItem>
       {sorted.map((validator, index) => {
         const address = validator.metadata.suiAddress;
+        const stake = stakeByValidator[address];
+        const delegation = stake && (delegations || []).find((d) => d.data.stakedSuiId == stake.data.id);
+
+        const [amount, setAmount] = useState('0');
+        const onInputAmount = (evt: FormEvent<HTMLInputElement>) => {
+          setAmount(fromUserInput(evt.currentTarget.value));
+        };
+
+        const actionButton = () => {
+          switch (true) {
+            // when delegation is present and it matches current Validator
+            // we can only request to withdraw delegation
+            case !!delegation:
+              return <WithdrawDelegation delegation={delegation!} stake={stakeByValidator[address]} />
+            // no delegation but there's StakedSui object; we can cancel request
+            case !!stake:
+              return (<CancelDelegation stake={stake} />);
+            // else the only action is to stake Sui for a validator
+            default:
+              return <AddDelegation validator={address} amount={amount} />
+          }
+        };
+
         return (
           <GridItem
             key={address}
@@ -81,11 +111,19 @@ export function Table({ validators, assignment, stakes }: Props) {
             <div>{index + 1}</div>
             <div>{formatAddress(address)}</div>
             <div>
-              {stakeByValidator[address] ? (
-                <Unstake validator={address} stake={stakeByValidator[address]} />
-              ) : (
-                <Stake validator={address} />
-              )}
+              <div className="w-3/4">
+                <div className="relative flex items-center">
+                  <input
+                    disabled={!!stake}
+                    type="text"
+                    onInput={onInputAmount}
+                    className="block w-full pr-12 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border"
+                    placeholder="0 SUI"
+                    defaultValue={stake && formatBalance(stake?.data.staked.toString() || "0", DEC)}
+                  />
+                  {actionButton()}
+                </div>
+              </div>
             </div>
             {address == assignment.validator && (
               <Target goal={assignment.goal} />
@@ -95,4 +133,21 @@ export function Table({ validators, assignment, stakes }: Props) {
       })}
     </>
   );
+}
+
+/**
+ * Helper function to parse user input (with decimals
+ * separator) and turn it into a correctly-formed 9 decimals
+ * SUI value.
+ */
+function fromUserInput(num: string): string {
+  // todo: possibly move it as arg
+  const decimals = 9;
+
+  if (num.includes(".")) {
+    let [lhs, rhs] = num.split(".");
+    return lhs + rhs.padEnd(decimals, "0");
+  } else {
+    return num.padEnd(decimals + num.length, "0");
+  }
 }
