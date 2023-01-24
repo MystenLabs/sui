@@ -22,7 +22,7 @@ To request tokens from the faucet, you must own a wallet address that can receiv
 
 You can request test tokens within [Sui Wallet](../explore/wallet-browser.md#add-sui-tokens-to-your-sui-wallet).
 
-Note: This option will be disabled for TestNet in TestNet Wave 2. Please use Discord channel instead for TestNet Wave 2.
+**Important:** This option is disabled for Testnet in Testnet Wave 2. Use the Discord channels instead for Testnet Wave 2.
 
 ## 3. Request test tokens through Curl
 
