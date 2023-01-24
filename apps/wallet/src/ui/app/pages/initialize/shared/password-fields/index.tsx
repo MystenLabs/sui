@@ -14,6 +14,7 @@ export type PasswordFieldsValues = {
 
 export default function PasswordFields() {
     const { touched, errors } = useFormikContext<PasswordFieldsValues>();
+
     return (
         <>
             <FieldLabel txt="Create Password">
