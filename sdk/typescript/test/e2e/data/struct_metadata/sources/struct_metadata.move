@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module struct_metadata::struct_metadata{
   use std::string::{Self, String};
   use sui::tx_context::{Self, TxContext};
