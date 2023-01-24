@@ -10,12 +10,12 @@ Within each epoch, operations are processed by a fixed set of validators, each w
 
 ## Economic model
 
-We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the staking and tokenomics diagram in the [Sui Tokenomics](index.md) overview.
+We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the staking and tokenomics diagram in the [Sui Tokenomics](../learn/index.md) overview.
 
 The Sui economic model works as follows:
 
 At the beginning of each epoch: Three important things happen:
-  * SUI holders delegate (some) of their tokens to validators and a new [committee](../architecture/validators#committees ) is formed. 
+  * SUI holders delegate (some) of their tokens to validators and a new [committee](../architecture/validators#committees) is formed. 
   * The reference gas prices are set as described in Sui’s [gas price mechanism](gas-pricing.md).
   * The [storage fund’s](storage-fund.md) size is adjusted using the previous epoch’s net inflow.
   
@@ -31,7 +31,7 @@ $$ DelegatorRewards_v \ = \Big[ \alpha(1-\delta_v)(1-\beta_v)\Big]\mu_v\sigma_v 
 
 $$ ValidatorRewards_v \ = \ \Bigg[\alpha\Big(\beta_v+\delta_v(1-\beta_v)\Big)\mu_v\sigma_v+(1-\alpha)\frac{\gamma}{N}\Bigg] \times StakeRewards $$
 
-The $\mu_v$ variable captures the output of the tallying rule computed as part of the [gas price mechanism](gas-pricing.md) and corresponds to $\mu_v\geq1$ for performant validators and $\mu_v<1$ for non-performant validators. This variable ensures that validators have "skin in the game" and are incentivized to operate Sui efficiently. The $\sigma_v$ parameter captures each validator's share of total stake. 
+The $\mu_v$ variable captures the output of the [tallying rule](gas-pricing.md#tallying-rule) computed as part of the [gas price mechanism](gas-pricing.md) and corresponds to $\mu_v\geq1$ for performant validators and $\mu_v<1$ for non-performant validators. This variable ensures that validators have "skin in the game" and are incentivized to operate Sui efficiently. The $\sigma_v$ parameter captures each validator's share of total stake. 
 
 Consequently, validators with more stake earn more stake rewards and the joint $\mu_v\sigma_v$ term incentivizes validators to increase their share of stake while also operating the network performantly. In the long-run, this incentive encourages delegators to shift the stake distribution towards the network's most efficient validators, delivering a cost-efficient and decentralized network.
 
