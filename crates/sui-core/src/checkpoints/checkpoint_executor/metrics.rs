@@ -12,7 +12,7 @@ pub struct CheckpointExecutorMetrics {
     pub last_executed_checkpoint: IntGauge,
     pub checkpoint_exec_errors: IntCounter,
     pub checkpoint_exec_recv_channel_overflow: IntCounter,
-    pub current_local_epoch: IntGauge,
+    pub checkpoint_exec_epoch: IntGauge,
     pub checkpoint_transaction_count: Histogram,
 }
 
@@ -37,9 +37,9 @@ impl CheckpointExecutorMetrics {
                 registry
             )
             .unwrap(),
-            current_local_epoch: register_int_gauge_with_registry!(
+            checkpoint_exec_epoch: register_int_gauge_with_registry!(
                 "current_local_epoch",
-                "Current local epoch sequence number",
+                "Current epoch number in the checkpoint executor",
                 registry
             )
             .unwrap(),

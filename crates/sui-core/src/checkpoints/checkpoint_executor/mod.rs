@@ -24,10 +24,9 @@ use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
+use sui_types::committee::{Committee, EpochId};
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    committee::{Committee, EpochId},
-    crypto::AuthorityPublicKeyBytes,
     error::SuiResult,
     messages::{TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
@@ -54,12 +53,7 @@ mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
-type CheckpointExecutionBuffer = FuturesOrdered<
-    JoinHandle<(
-        VerifiedCheckpoint,
-        Option<Vec<(AuthorityPublicKeyBytes, u64)>>,
-    )>,
->;
+type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
@@ -67,10 +61,6 @@ pub struct CheckpointExecutor {
     authority_store: Arc<AuthorityStore>,
     tx_manager: Arc<TransactionManager>,
     config: CheckpointExecutorConfig,
-    highest_scheduled_seq_num: Option<CheckpointSequenceNumber>,
-    latest_synced_checkpoint: Option<VerifiedCheckpoint>,
-    // If true, need to run crash recovery
-    cold_start: bool,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
 
@@ -89,9 +79,6 @@ impl CheckpointExecutor {
             authority_store,
             tx_manager,
             config,
-            highest_scheduled_seq_num: None,
-            latest_synced_checkpoint: None,
-            cold_start: true,
             metrics: CheckpointExecutorMetrics::new(prometheus_registry),
         }
     }
@@ -108,255 +95,147 @@ impl CheckpointExecutor {
             authority_store,
             tx_manager,
             config: Default::default(),
-            highest_scheduled_seq_num: None,
-            latest_synced_checkpoint: None,
-            cold_start: true,
             metrics: CheckpointExecutorMetrics::new_for_tests(),
         }
     }
 
     pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
         self.metrics
-            .current_local_epoch
+            .checkpoint_exec_epoch
             .set(epoch_store.epoch() as i64);
 
-        if self.cold_start {
-            let end_of_epoch_recovery = self
-                .handle_crash_recovery(epoch_store.epoch())
-                .await
-                .unwrap();
-            self.cold_start = false;
-
-            if let Some(committee) = end_of_epoch_recovery {
-                return committee;
-            }
-        }
-
-        self.run_epoch_impl(epoch_store).await
-    }
-
-    async fn handle_crash_recovery(&self, epoch: EpochId) -> SuiResult<Option<Committee>> {
-        let mut highest_executed_metric = 0;
-
-        match self.checkpoint_store.get_highest_executed_checkpoint()? {
-            // TODO this invariant may no longer hold once we introduce snapshots
-            None => assert_eq!(epoch, 0),
-
-            Some(last_checkpoint) => {
-                highest_executed_metric = last_checkpoint.sequence_number();
-
-                match last_checkpoint.next_epoch_committee() {
-                    // Make sure there was not an epoch change in this case
-                    None => assert_eq!(epoch, last_checkpoint.epoch()),
-                    // Last executed checkpoint before shutdown was last of epoch.
-                    // Make sure reconfig was successful, otherwise redo
-                    Some(committee) => {
-                        if last_checkpoint.epoch() == epoch {
-                            info!(
-                                old_epoch = epoch,
-                                new_epoch = epoch.saturating_add(1),
-                                "Handling end of epoch pre-reconfig crash recovery",
-                            );
-
-                            self.metrics
-                                .last_executed_checkpoint
-                                .set(highest_executed_metric as i64);
-
-                            return Ok(Some(self.create_committee_object(
-                                last_checkpoint.clone(),
-                                committee.to_vec(),
-                            )));
-                        }
-                    }
-                }
-            }
-        }
-
-        self.metrics
-            .last_executed_checkpoint
-            .set(highest_executed_metric as i64);
-        Ok(None)
-    }
-
-    /// Executes all checkpoints for the current epoch and returns the next committee
-    async fn run_epoch_impl(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
+        // Decide the first checkpoint to schedule for execution.
+        // If we haven't executed anything in the past, we schedule checkpoint 0.
+        // Otherwise we schedule the one after highest executed.
+        let mut highest_executed = self
+            .checkpoint_store
+            .get_highest_executed_checkpoint()
+            .unwrap();
+        let mut next_to_schedule = highest_executed
+            .as_ref()
+            .map(|c| c.sequence_number() + 1)
+            .unwrap_or_default();
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
-
+        // Indicates whether we have scheduled all checkpoints in the epoch. If so, we stop
+        // scheduling more.
+        let mut no_more_scheduling = false;
         loop {
-            self.schedule_synced_checkpoints(&mut pending, epoch_store.clone())
-                .unwrap_or_else(|err| {
-                    self.metrics.checkpoint_exec_errors.inc();
-                    panic!(
-                        "Failed to schedule synced checkpoints for execution: {:?}",
-                        err
-                    );
-                });
-
+            // If we have executed the last checkpoint of the current epoch, stop.
+            if let Some(next_epoch_committee) =
+                check_epoch_last_checkpoint(epoch_store.epoch(), &highest_executed)
+            {
+                // be extra careful to ensure we don't have orphans
+                assert!(
+                    pending.is_empty(),
+                    "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
+                );
+                return next_epoch_committee;
+            }
+            if !no_more_scheduling {
+                no_more_scheduling = self.schedule_synced_checkpoints(
+                    &mut pending,
+                    // next_to_schedule will be updated to the next checkpoint to schedule.
+                    // This makes sure we don't re-schedule the same checkpoint multiple times.
+                    &mut next_to_schedule,
+                    epoch_store.clone(),
+                );
+            }
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
-                Some(Ok((checkpoint, next_committee))) = pending.next() => {
-                    // Ensure that we are not skipping checkpoints at any point
-                    if let Some(prev_highest) = self.checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap() {
-                        assert_eq!(prev_highest + 1, checkpoint.sequence_number());
-                    } else {
-                        assert_eq!(checkpoint.sequence_number(), 0);
-                    }
-
-                    match next_committee {
-                        None => {
-                            let new_highest = checkpoint.sequence_number();
-                            debug!(
-                                "Bumping highest_executed_checkpoint watermark to {:?}",
-                                new_highest,
-                            );
-
-                            self.checkpoint_store
-                                .update_highest_executed_checkpoint(&checkpoint)
-                                .unwrap();
-                            self.metrics.last_executed_checkpoint.set(new_highest as i64);
-                        }
-                        Some(committee) => {
-                            info!(
-                                ended_epoch = checkpoint.epoch(),
-                                last_checkpoint=checkpoint.sequence_number(),
-                                "Reached end of epoch",
-                            );
-                            self.checkpoint_store
-                                .update_highest_executed_checkpoint(&checkpoint)
-                                .unwrap();
-                            self.metrics.last_executed_checkpoint.set(checkpoint.sequence_number() as i64);
-
-                            // be extra careful to ensure we don't have orphans
-                            assert!(
-                                pending.is_empty(),
-                                "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
-                            );
-
-                            return self.create_committee_object(checkpoint, committee);
-                        }
-                    }
+                Some(Ok(checkpoint)) = pending.next() => {
+                    self.finished_executing_checkpoint(&checkpoint);
+                    highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
-                received = self.mailbox.recv() => match received {
-                    Ok(checkpoint) => {
-                        debug!(
-                            "Received new synced checkpoint message for checkpoint {:?}",
-                            checkpoint.sequence_number(),
-                        );
-                        self.latest_synced_checkpoint = Some(checkpoint);
-                    }
-                    // In this case, messages in the mailbox have been overwritten
-                    // as a result of lagging too far behind. In this case, we need to
-                    // nullify self.latest_synced_checkpoint as the latest synced needs to
-                    // be read from the watermark
-                    Err(RecvError::Lagged(num_skipped)) => {
-                        self.latest_synced_checkpoint = None;
-
-                        warn!(
-                            "Checkpoint Execution Recv channel overflowed {:?} messages",
-                            num_skipped,
-                        );
-                        self.metrics
-                            .checkpoint_exec_recv_channel_overflow
-                            .inc_by(num_skipped);
-                    }
-                    Err(RecvError::Closed) => {
-                        panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
-                    }
-                },
+                received = self.mailbox.recv() => self.checkpoint_received(received),
             }
         }
     }
 
+    fn finished_executing_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+        // Ensure that we are not skipping checkpoints at any point
+        let seq = checkpoint.sequence_number();
+        if let Some(prev_highest) = self
+            .checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+        {
+            assert_eq!(prev_highest + 1, seq);
+        } else {
+            assert_eq!(seq, 0);
+        }
+        debug!("Bumping highest_executed_checkpoint watermark to {:?}", seq,);
+
+        self.checkpoint_store
+            .update_highest_executed_checkpoint(checkpoint)
+            .unwrap();
+        self.metrics.last_executed_checkpoint.set(seq as i64);
+    }
+
+    fn checkpoint_received(&self, received: Result<VerifiedCheckpoint, RecvError>) {
+        match received {
+            Ok(checkpoint) => {
+                debug!(
+                    "Received new synced checkpoint message for checkpoint {:?}",
+                    checkpoint.sequence_number(),
+                );
+            }
+            // In this case, messages in the mailbox have been overwritten
+            // as a result of lagging too far behind.
+            Err(RecvError::Lagged(num_skipped)) => {
+                debug!(
+                    "Checkpoint Execution Recv channel overflowed {:?} messages",
+                    num_skipped,
+                );
+                self.metrics
+                    .checkpoint_exec_recv_channel_overflow
+                    .inc_by(num_skipped);
+            }
+            Err(RecvError::Closed) => {
+                panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
+            }
+        }
+    }
+
+    /// Returns whether we have scheduled the last checkpoint of the epoch.
     fn schedule_synced_checkpoints(
         &mut self,
         pending: &mut CheckpointExecutionBuffer,
+        next_to_schedule: &mut CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        let latest_synced_checkpoint = match self.latest_synced_checkpoint.clone() {
-            Some(checkpoint) => checkpoint,
-            // Either nothing to sync or we have lagged too far behind in the recv channel
-            // and `self.latest_synced_checkpoint` is stale. Need to read watermark
-            None => {
-                if let Some(checkpoint) = self
-                    .checkpoint_store
-                    .get_highest_synced_checkpoint()
-                    .expect("Failed to read highest synced checkpoint")
-                {
-                    self.latest_synced_checkpoint = Some(checkpoint.clone());
-                    checkpoint
-                } else {
-                    return Ok(());
-                }
-            }
+    ) -> bool {
+        let Some(latest_synced_checkpoint) = self
+            .checkpoint_store
+            .get_highest_synced_checkpoint()
+            .expect("Failed to read highest synced checkpoint") else {
+            return false;
         };
 
-        let highest_executed_seq_num = self
-            .checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap_or_else(|err| {
-                panic!(
-                    "Failed to read highest executed checkpoint sequence number: {:?}",
-                    err
-                )
-            });
-
-        // If self.highest_scheduled_seq_num is None, we have just started up, and should
-        // use the highest executed watermark
-        let next_to_exec = self
-            .highest_scheduled_seq_num
-            .map(|highest| highest.saturating_add(1))
-            .unwrap_or_else(|| {
-                highest_executed_seq_num
-                    .map(|highest| highest.saturating_add(1))
-                    .unwrap_or(0)
-            });
-
-        let mut i = next_to_exec;
-
-        while i < latest_synced_checkpoint.sequence_number() {
+        while *next_to_schedule <= latest_synced_checkpoint.sequence_number()
+            && pending.len() < self.config.checkpoint_execution_max_concurrency
+        {
             let checkpoint = self
                 .checkpoint_store
-                .get_checkpoint_by_sequence_number(i)?
+                .get_checkpoint_by_sequence_number(*next_to_schedule)
+                .unwrap()
                 .unwrap_or_else(|| {
                     panic!(
                         "Checkpoint sequence number {:?} does not exist in checkpoint store",
-                        i
+                        *next_to_schedule
                     )
                 });
-
-            if !self.should_schedule_checkpoint(&checkpoint, epoch_store.epoch(), pending) {
-                return Ok(());
+            if checkpoint.epoch() > epoch_store.epoch() {
+                return true;
             }
 
-            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone())?;
-            i += 1;
+            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
+            *next_to_schedule += 1;
         }
 
-        if i == latest_synced_checkpoint.sequence_number()
-            && self.should_schedule_checkpoint(
-                &latest_synced_checkpoint,
-                epoch_store.epoch(),
-                pending,
-            )
-        {
-            self.schedule_checkpoint(latest_synced_checkpoint, pending, epoch_store)?;
-        }
-
-        Ok(())
-    }
-
-    fn should_schedule_checkpoint(
-        &self,
-        checkpoint: &VerifiedCheckpoint,
-        epoch: EpochId,
-        pending: &CheckpointExecutionBuffer,
-    ) -> bool {
-        epoch == checkpoint.epoch()
-            && pending.len() < self.config.checkpoint_execution_max_concurrency
+        false
     }
 
     fn schedule_checkpoint(
@@ -364,7 +243,7 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
         epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) {
         debug!(
             "Scheduling checkpoint {:?} for execution",
             checkpoint.sequence_number()
@@ -381,10 +260,10 @@ impl CheckpointExecutor {
         );
 
         // Record checkpoint participation for tallying rule.
-        epoch_store.record_certified_checkpoint_signatures(checkpoint.inner())?;
+        epoch_store
+            .record_certified_checkpoint_signatures(checkpoint.inner())
+            .unwrap();
 
-        let next_committee = checkpoint.summary().next_epoch_committee.clone();
-        let highest_scheduled = checkpoint.sequence_number();
         let metrics = self.metrics.clone();
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
         let authority_store = self.authority_store.clone();
@@ -411,23 +290,32 @@ impl CheckpointExecutor {
                 metrics.checkpoint_exec_errors.inc();
             }
 
-            (checkpoint, next_committee)
+            checkpoint
         }));
-
-        self.highest_scheduled_seq_num = Some(highest_scheduled);
-
-        Ok(())
     }
+}
 
-    fn create_committee_object(
-        &self,
-        last_checkpoint: VerifiedCheckpoint,
-        next_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
-    ) -> Committee {
-        let next_epoch = last_checkpoint.epoch().saturating_add(1);
-        Committee::new(next_epoch, next_committee.into_iter().collect())
-            .unwrap_or_else(|err| panic!("Failed to create new committee object: {:?}", err))
+fn check_epoch_last_checkpoint(
+    cur_epoch: EpochId,
+    checkpoint: &Option<VerifiedCheckpoint>,
+) -> Option<Committee> {
+    if let Some(checkpoint) = checkpoint {
+        if checkpoint.epoch() == cur_epoch {
+            if let Some(next_committee) = checkpoint.summary.next_epoch_committee.clone() {
+                info!(
+                    ended_epoch = cur_epoch,
+                    last_checkpoint = checkpoint.sequence_number(),
+                    "Reached end of epoch",
+                );
+                let next_epoch = cur_epoch + 1;
+                return Some(
+                    Committee::new(next_epoch, next_committee.into_iter().collect())
+                        .expect("Creating new committee object cannot fail"),
+                );
+            }
+        }
     }
+    None
 }
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]

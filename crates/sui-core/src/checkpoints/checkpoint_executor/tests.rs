@@ -161,10 +161,13 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     .unwrap();
 
     // We should have synced up to epoch boundary
-    assert!(matches!(
-        checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
-        Some(highest) if highest == (num_to_sync_per_epoch as u64),
-    ));
+    assert_eq!(
+        checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap(),
+        num_to_sync_per_epoch as u64,
+    );
 
     authority_state
         .reconfigure(second_committee.committee().clone())
@@ -181,10 +184,13 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     .await
     .unwrap();
 
-    assert!(matches!(
-        checkpoint_store.get_highest_executed_checkpoint_seq_number().unwrap(),
-        Some(highest) if highest == (2 * num_to_sync_per_epoch as u64) + 1,
-    ));
+    assert_eq!(
+        checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            .unwrap(),
+        2 * num_to_sync_per_epoch as u64 + 1,
+    );
 }
 
 /// Test that if we crash at end of epoch / during reconfig, we recover on startup
