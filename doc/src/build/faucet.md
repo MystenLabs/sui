@@ -14,7 +14,7 @@ To request tokens from the faucet, you must own a wallet address that can receiv
 
 1. Join [Discord](https://discord.gg/sui).
    If you try to join the Sui Discord channel using a newly created Discord account, you may need to wait a few days for validation.
-1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channel. Note that the TestNet faucet is only available when TestNet is live.
+1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels. Note that the Testnet faucet is only available while Testnet is live.
    Send the following message to the channel with your client address:
    !faucet <Your client address>
 
