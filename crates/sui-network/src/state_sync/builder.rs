@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo::codegen::InboundRequestLayer;
+use anemo_tower::rate_limit;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -62,8 +64,45 @@ where
     <S as ReadStore>::Error: std::error::Error,
 {
     pub fn build(self) -> (UnstartedStateSync<S>, StateSyncServer<impl StateSync>) {
+        let state_sync_config = self.config.clone().unwrap_or_default();
         let (builder, server) = self.build_internal();
-        (builder, StateSyncServer::new(server))
+        let mut state_sync_server = StateSyncServer::new(server);
+
+        // Apply rate limits from configuration as needed.
+        if let Some(limit) = state_sync_config.push_checkpoint_summary_rate_limit {
+            state_sync_server = state_sync_server.add_layer_for_push_checkpoint_summary(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        if let Some(limit) = state_sync_config.get_checkpoint_summary_rate_limit {
+            state_sync_server = state_sync_server.add_layer_for_get_checkpoint_summary(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        if let Some(limit) = state_sync_config.get_checkpoint_contents_rate_limit {
+            state_sync_server = state_sync_server.add_layer_for_get_checkpoint_contents(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        if let Some(limit) = state_sync_config.get_transaction_and_effects_rate_limit {
+            state_sync_server = state_sync_server.add_layer_for_get_transaction_and_effects(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+
+        (builder, state_sync_server)
     }
 
     pub(super) fn build_internal(self) -> (UnstartedStateSync<S>, Server<S>) {
@@ -77,7 +116,7 @@ where
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
 
         let (sender, mailbox) = mpsc::channel(config.mailbox_capacity());
-        let (checkpoint_event_sender, _reciever) =
+        let (checkpoint_event_sender, _receiver) =
             broadcast::channel(config.synced_checkpoint_broadcast_channel_capacity());
         let weak_sender = sender.downgrade();
         let handle = Handle {
