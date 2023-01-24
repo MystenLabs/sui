@@ -35,6 +35,7 @@ diesel::table! {
         total_transactions -> Int8,
         previous_digest -> Nullable<Varchar>,
         next_epoch_committee -> Nullable<Text>,
+        timestamp_ms -> Int8,
     }
 }
 
