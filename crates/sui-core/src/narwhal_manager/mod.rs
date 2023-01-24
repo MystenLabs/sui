@@ -43,7 +43,8 @@ pub struct NarwhalManager {
     worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
-    running: Mutex<Running>,
+    primary_running: Mutex<Running>,
+    worker_running: Mutex<Running>,
 }
 
 impl NarwhalManager {
@@ -66,7 +67,8 @@ impl NarwhalManager {
             network_keypair: config.network_keypair,
             worker_ids_and_keypairs: config.worker_ids_and_keypairs,
             storage_base_path: config.storage_base_path,
-            running: Mutex::new(Running::False),
+            primary_running: Mutex::new(Running::False),
+            worker_running: Mutex::new(Running::False),
         }
     }
 
@@ -80,11 +82,20 @@ impl NarwhalManager {
     ) where
         State: ExecutionState + Send + Sync + 'static,
     {
-        let mut running = self.running.lock().await;
+        let mut primary_running = self.primary_running.lock().await;
+        let mut worker_running = self.worker_running.lock().await;
 
-        if let Running::True(epoch) = *running {
+        if let Running::True(epoch) = *primary_running {
             tracing::warn!(
-                "Narwhal node is already Running at epoch {:?} - shutdown first before starting",
+                "Narwhal primary is already Running at epoch {:?} - shutdown first before starting",
+                epoch
+            );
+            return;
+        }
+
+        if let Running::True(epoch) = *worker_running {
+            tracing::warn!(
+                "Narwhal worker is already Running at epoch {:?} - shutdown first before starting",
                 epoch
             );
             return;
@@ -114,6 +125,8 @@ impl NarwhalManager {
             .await
             .expect("Unable to start Narwhal Primary");
 
+        *primary_running = Running::True(committee.epoch());
+
         // Start Narwhal Workers with configuration
         // Copy the config for this iteration of the loop
         let id_keypair_copy = self
@@ -140,38 +153,59 @@ impl NarwhalManager {
             now.elapsed().as_secs_f64()
         );
 
-        *running = Running::True(committee.epoch());
+        *worker_running = Running::True(committee.epoch());
     }
 
     // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
     // have shutdown.
     pub async fn shutdown(&self) {
-        let mut running = self.running.lock().await;
+        let mut primary_running = self.primary_running.lock().await;
+        let mut worker_running = self.primary_running.lock().await;
+        let _guard = monitored_scope("NarwhalManagerShutdown");
 
-        match *running {
+        match *primary_running {
             Running::True(epoch) => {
-                let _guard = monitored_scope("NarwhalManagerShutdown");
-
                 let now = Instant::now();
-                tracing::info!("Shutting down Narwhal epoch {:?}", epoch);
+                tracing::info!("Shutting down Narwhal Primary epoch {:?}", epoch);
 
                 self.primary_node.shutdown().await;
-                self.worker_nodes.shutdown().await;
 
                 tracing::info!(
-                    "Narwhal shutdown for epoch {:?} is complete - took {} seconds",
+                    "Narwhal Primary shutdown for epoch {:?} is complete - took {} seconds",
                     epoch,
                     now.elapsed().as_secs_f64()
                 );
             }
             Running::False => {
                 tracing::info!(
-                    "Narwhal Manager shutdown was called but Narwhal node is not running"
+                    "Narwhal Manager shutdown was called but Narwhal primary is not running"
                 );
             }
         }
 
-        *running = Running::False;
+        *primary_running = Running::False;
+
+        match *worker_running {
+            Running::True(epoch) => {
+                let now = Instant::now();
+                tracing::info!("Shutting down Narwhal worker epoch {:?}", epoch);
+
+                self.worker_nodes.shutdown().await;
+
+                tracing::info!(
+                    "Narwhal Worker shutdown for epoch {:?} is complete - took {} seconds",
+                    epoch,
+                    now.elapsed().as_secs_f64()
+                );
+            }
+            Running::False => {
+                tracing::info!(
+                    "Narwhal Manager shutdown was called but Narwhal worker is not running"
+                );
+            }
+        }
+
+        *worker_running = Running::False;
     }
 
     fn get_store_path(&self, epoch: Epoch) -> PathBuf {
