@@ -68,7 +68,7 @@ tempfile = "3.3.0"
 futures = "0.3.23"
 prometheus = "0.13.3"
 
-jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["full"] }
+jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
 
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
