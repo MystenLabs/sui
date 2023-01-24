@@ -31,7 +31,9 @@ use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse, VerifiedCertificate, VerifiedCertifiedTransactionEffects,
 };
-use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
+use sui_types::quorum_driver_types::{
+    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
+};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
@@ -299,16 +301,16 @@ where
 
     async fn loop_execute_finalized_tx_locally(
         validator_state: Arc<AuthorityState>,
-        mut effects_receiver: Receiver<QuorumDriverResponse>,
+        mut effects_receiver: Receiver<QuorumDriverEffectsQueueResult>,
         pending_transaction_log: Arc<WritePathPendingTransactionLog>,
         metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(QuorumDriverResponse {
+                Ok(Ok(QuorumDriverResponse {
                     tx_cert,
                     effects_cert,
-                }) => {
+                })) => {
                     let tx_digest = tx_cert.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         error!(
@@ -323,6 +325,14 @@ where
                         &metrics,
                     )
                     .await;
+                }
+                Ok(Err((tx_digest, _err))) => {
+                    if let Err(err) = pending_transaction_log.finish_transaction(&tx_digest) {
+                        error!(
+                            ?tx_digest,
+                            "Failed to finish transaction in pending transaction log: {err}"
+                        );
+                    }
                 }
                 Err(RecvError::Closed) => {
                     error!("Sender of effects subscriber queue has been dropped!");
@@ -347,7 +357,7 @@ where
         self.quorum_driver().authority_aggregator().load_full()
     }
 
-    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumDriverResponse> {
+    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumDriverEffectsQueueResult> {
         self.quorum_driver_handler.subscribe_to_effects()
     }
 
