@@ -183,6 +183,7 @@ mod tests {
     use tracing::log::{error, info};
 
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+    #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
     use sui_types::base_types::VersionNumber;
     use sui_types::{
@@ -296,6 +297,7 @@ mod tests {
         Ok(total_pruned)
     }
 
+    #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
     async fn test_correct_object_versions_are_pruned() -> Result<(), anyhow::Error> {
         {
@@ -337,6 +339,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
     async fn test_db_size_after_compaction() -> Result<(), anyhow::Error> {
         let primary_path = tempfile::tempdir()?.into_path();
@@ -371,6 +374,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
     async fn ensure_tombstone_fragmentation_in_stack_frame_without_ignore_range_delete(
     ) -> Result<(), anyhow::Error> {
@@ -409,6 +413,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(not(target_env = "msvc"))]
     #[tokio::test]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
     ) -> Result<(), anyhow::Error> {
