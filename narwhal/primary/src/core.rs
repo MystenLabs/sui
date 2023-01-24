@@ -91,7 +91,7 @@ pub struct Core {
     /// Handle to propose_header task. Our target is to have only one task running always, thus
     /// we cancel the previously running before we spawn the next one. However, we don't wait for
     /// the previous to finish to spawn the new one, so we might temporarily have more that one
-    ///  parallel running, which should be fine though.
+    /// parallel running, which should be fine though.
     propose_header_tasks: JoinSet<DagResult<Certificate>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
