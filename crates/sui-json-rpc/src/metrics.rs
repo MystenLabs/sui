@@ -47,7 +47,7 @@ impl MetricsLayer {
             errors_by_route: register_int_counter_vec_with_registry!(
                 "errors_by_route",
                 "Number of errors by route",
-                &["route"],
+                &["route", "error"],
                 registry,
             )
             .unwrap(),
@@ -145,7 +145,7 @@ where
             };
 
             let fut = inner.call(req);
-            let res = fut.await.map_err(|err| err.into())?;
+            let res: Response<Body> = fut.await.map_err(|err| err.into())?;
 
             // Record metrics if the request is a http RPC request.
             if let Some(name) = rpc_name {
@@ -156,10 +156,30 @@ where
                         .req_latency_by_route
                         .with_label_values(&[&name])
                         .observe(req_latency_secs);
-
-                    if res.status().is_server_error() {
-                        metrics.errors_by_route.with_label_values(&[&name]).inc();
+                    // Parse error code from response
+                    #[derive(Deserialize)]
+                    struct RPCResponse {
+                        #[serde(default)]
+                        error: Option<RPCError>,
                     }
+                    #[derive(Deserialize)]
+                    struct RPCError {
+                        code: i16,
+                    }
+                    let (parts, body) = res.into_parts();
+                    let bytes = body::to_bytes(body).await?;
+                    let error_code = serde_json::from_slice::<RPCResponse>(&bytes)
+                        .ok()
+                        .and_then(|rpc| rpc.error)
+                        .map(|error| error.code);
+
+                    if let Some(error_code) = error_code {
+                        metrics
+                            .errors_by_route
+                            .with_label_values(&[&name, &error_code_to_message(error_code)])
+                            .inc();
+                    }
+                    return Ok(Response::from_parts(parts, bytes.into()));
                 } else {
                     // Only record request count for spams
                     metrics
@@ -182,4 +202,16 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
                 || content.eq_ignore_ascii_case("application/json; charset=utf-8")
                 || content.eq_ignore_ascii_case("application/json;charset=utf-8")
         })
+}
+
+fn error_code_to_message(code: i16) -> String {
+    match code {
+        -32700 => "Parse error".into(),
+        -32600 => "Invalid Request".into(),
+        -32601 => "Method not found".into(),
+        -32602 => "Invalid params".into(),
+        -32603 => "Internal error".into(),
+        -32099..=-32000 => "Server error".into(),
+        code => format!("Unknown error code [{code}]"),
+    }
 }
