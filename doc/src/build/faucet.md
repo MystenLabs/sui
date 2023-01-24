@@ -26,7 +26,7 @@ Note: This option will be disabled for TestNet in TestNet Wave 2. Please use Dis
 
 ## 3. Request test tokens through Curl
 
-You can also use the following Curl command to request tokens directly from the faucet server.
+Use the following cURL command to request tokens directly from the faucet server:
 
 ```
 curl --location --request POST 'https://faucet.devnet.sui.io/gas' \
