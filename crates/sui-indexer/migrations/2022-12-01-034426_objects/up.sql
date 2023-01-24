@@ -1,5 +1,6 @@
 CREATE TABLE objects (
-    object_id VARCHAR(255) PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
+    object_id VARCHAR(255) NOT NULL UNIQUE,
     version BIGINT NOT NULL,
 
     -- owner related
@@ -20,6 +21,7 @@ CREATE TABLE objects (
 
 CREATE INDEX objects_owner_address ON objects (owner_address);
 CREATE INDEX objects_package_id ON objects (package_id);
+CREATE INDEX objects_object_id ON objects (object_id);
 
 CREATE TABLE object_logs (
     last_processed_id BIGINT PRIMARY KEY

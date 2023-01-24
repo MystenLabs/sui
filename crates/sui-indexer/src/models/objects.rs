@@ -19,6 +19,7 @@ use sui_types::object::Owner;
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(primary_key(object_id))]
 pub struct Object {
+    pub id: i64,
     pub object_id: String,
     pub version: i64,
     pub owner_type: String,
