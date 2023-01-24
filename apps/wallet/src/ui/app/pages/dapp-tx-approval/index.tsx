@@ -159,6 +159,9 @@ export function DappTxApprovalPage() {
             const id = txData?.arguments?.[index] as string;
             if (!id) return;
 
+            // TODO: Support non-flat arguments.
+            if (typeof id !== 'string') return;
+
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
