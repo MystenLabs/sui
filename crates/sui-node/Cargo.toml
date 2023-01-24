@@ -21,6 +21,7 @@ parking_lot = "0.12.1"
 futures = "0.3.23"
 chrono = "0.4.23"
 tower = "0.4.13"
+fail = "0.5.1"
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }

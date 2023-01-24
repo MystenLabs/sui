@@ -11,7 +11,7 @@ use sui_node::metrics;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case", version)]
@@ -55,6 +55,15 @@ async fn main() -> Result<()> {
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;
+    }
+
+    // Only enabled if failpoints feature flag is set
+    let _failpoints_scenario: fail::FailScenario<'_>;
+    if fail::has_failpoints() {
+        warn!("Failpoints are enabled");
+        _failpoints_scenario = fail::FailScenario::setup();
+    } else {
+        info!("Failpoints are not enabled");
     }
 
     // Spins up a thread to check memory usage every minute, and dump out stack traces/profiles

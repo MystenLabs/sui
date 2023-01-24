@@ -8858,6 +8858,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap 3.2.23",
+ "fail 0.5.1",
  "futures",
  "multiaddr",
  "mysten-metrics",
