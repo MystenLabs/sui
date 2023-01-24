@@ -235,6 +235,8 @@ impl Worker {
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
             config.shutdown_idle_timeout_ms = Some(1_000);
+            config.connectivity_check_interval_ms = Some(2_000);
+            config.connection_backoff_ms = Some(5_000);
             config
         };
 
