@@ -28,7 +28,7 @@ use std::fs;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus};
+use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary};
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
 };

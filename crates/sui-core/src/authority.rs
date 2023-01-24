@@ -1133,11 +1133,12 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let gas_status = SuiGasStatus::new_uncharged(
+        let mut gas_status = SuiGasStatus::new_with_budget(
             MAX_TX_GAS,
             GasPrice::from(gas_price),
             STORAGE_GAS_PRICE.into(),
         );
+        gas_status.charge_min_tx_gas()?;
         let (_inner_temp_store, effects, execution_result) =
             execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
                 shared_object_refs,

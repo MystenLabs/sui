@@ -11,11 +11,7 @@ use tracing::{debug, instrument};
 
 use crate::adapter;
 use sui_protocol_constants::{
-<<<<<<< HEAD
-    MAX_TX_GAS, REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
-=======
-    REWARD_SLASHING_RATE, REWARD_SLASHING_THRESHOLD_BPS, STORAGE_FUND_REINVEST_RATE,
->>>>>>> 6d8c886bb (fixup! [dev-inspect] Combine to a single end point)
+    REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
 };
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
