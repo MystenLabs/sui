@@ -57,6 +57,7 @@ await provider.requestSuiFromFaucet(
 );
 ```
 
+Note: This option will be disabled for TestNet in TestNet Wave 2. Please use Discord channel instead for TestNet wave 2.
 Related topics:
 
 - [Connect to Sui Devnet](../build/devnet.md).
