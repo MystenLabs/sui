@@ -6,7 +6,7 @@ Sui faucet is a helpful tool where Sui developers can get free test SUI tokens t
 
 Test tokens can be requested in the following ways:
 
-## Pre-requisites
+## Prerequisites
 
 To request tokens from the faucet, one must own a wallet address that can receive the SUI tokens. An address can be generated via the [Sui CLI tool](https://docs.sui.io/devnet/build/cli-client#active-address) or the [Sui wallet](https://docs.sui.io/devnet/explore/wallet-browser).
 
