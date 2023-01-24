@@ -83,15 +83,50 @@ export interface SplitCoinTransaction extends TransactionCommon {
   coinObjectId: ObjectId;
   splitAmounts: number[];
   gasPayment?: ObjectId;
+  gasBudget: number;
 }
 
-export interface MoveCallTransaction extends TransactionCommon {
+export interface RequestAddDelegationTransaction {
+  coins: ObjectId[];
+  amount: number | null;
+  validator: SuiAddress;
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+export interface RequestWithdrawDelegationTransaction {
+  delegation: ObjectId;
+  stakedSui: ObjectId;
+  principalWithdrawAmount: number;
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+export interface RequestSwitchDelegationTransaction {
+  delegation: ObjectId;
+  stakedSui: ObjectId;
+  newValidatorAddress: SuiAddress;
+  switchPoolTokenAmount: number;
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+export interface MoveCallTransaction {
   packageObjectId: ObjectId;
   module: string;
   function: string;
   typeArguments: string[] | TypeTag[];
   arguments: (SuiJsonValue | PureArg)[];
   gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+export interface RawMoveCall {
+  packageObjectId: ObjectId;
+  module: string;
+  function: string;
+  typeArguments: string[];
+  arguments: SuiJsonValue[];
 }
 
 export type UnserializedSignableTransaction =
@@ -130,6 +165,18 @@ export type UnserializedSignableTransaction =
   | {
       kind: 'publish';
       data: PublishTransaction;
+    }
+  | {
+      kind: 'requestAddDelegation';
+      data: RequestAddDelegationTransaction;
+    }
+  | {
+      kind: 'requestWithdrawDelegation';
+      data: RequestWithdrawDelegationTransaction;
+    }
+  | {
+      kind: 'requestSwitchDelegation';
+      data: RequestSwitchDelegationTransaction;
     };
 
 /** A type that represents the possible transactions that can be signed: */

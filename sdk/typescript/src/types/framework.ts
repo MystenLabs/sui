@@ -24,6 +24,14 @@ export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
 
+export const SUI_SYSTEM_MODULE_NAME = 'sui_system';
+export const ADD_DELEGATION_MUL_COIN_FUN_NAME =
+  'request_add_delegation_mul_coin';
+export const ADD_DELEGATION_LOCKED_COIN_FUN_NAME =
+  'request_add_delegation_mul_locked_coin';
+export const WITHDRAW_DELEGATION_FUN_NAME = 'request_withdraw_delegation';
+export const SWITCHDELEGATION_FUN_NAME = 'request_switch_delegation';
+
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
 export const PAY_SPLIT_COIN_VEC_FUNC_NAME = 'split_vec';

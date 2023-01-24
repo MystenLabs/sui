@@ -18,6 +18,9 @@ import {
   TxnDataSerializer,
   UnserializedSignableTransaction,
   TransactionBuilderMode,
+  RequestAddDelegationTransaction,
+  RequestWithdrawDelegationTransaction,
+  RequestSwitchDelegationTransaction,
 } from './txn-data-serializer';
 
 /**
@@ -154,6 +157,46 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           splitCoin.splitAmounts,
           splitCoin.gasPayment,
           splitCoin.gasBudget,
+        ];
+        break;
+      case 'requestAddDelegation':
+        const requestAddDelegation =
+          unserializedTxn.data as RequestAddDelegationTransaction;
+        endpoint = 'sui_requestAddDelegation';
+        args = [
+          signerAddress,
+          requestAddDelegation.coins,
+          requestAddDelegation.amount,
+          requestAddDelegation.validator,
+          requestAddDelegation.gasPayment,
+          requestAddDelegation.gasBudget,
+        ];
+        break;
+      case 'requestWithdrawDelegation':
+        const requestWithdrawDelegation =
+          unserializedTxn.data as RequestWithdrawDelegationTransaction;
+        endpoint = 'sui_requestWithdrawDelegation';
+        args = [
+          signerAddress,
+          requestWithdrawDelegation.delegation,
+          requestWithdrawDelegation.stakedSui,
+          requestWithdrawDelegation.principalWithdrawAmount,
+          requestWithdrawDelegation.gasPayment,
+          requestWithdrawDelegation.gasBudget,
+        ];
+        break;
+      case 'requestSwitchDelegation':
+        const requestSwitchDelegation =
+          unserializedTxn.data as RequestSwitchDelegationTransaction;
+        endpoint = 'sui_requestSwitchDelegation';
+        args = [
+          signerAddress,
+          requestSwitchDelegation.delegation,
+          requestSwitchDelegation.stakedSui,
+          requestSwitchDelegation.newValidatorAddress,
+          requestSwitchDelegation.switchPoolTokenAmount,
+          requestSwitchDelegation.gasPayment,
+          requestSwitchDelegation.gasBudget,
         ];
         break;
       case 'publish':
