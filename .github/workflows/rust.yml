@@ -83,6 +83,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install python dependencies
         run: |
+          pip install pyopenssl --upgrade
           if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
       - name: cargo test
         run: |
@@ -90,7 +91,7 @@ jobs:
       - name: benchmark (smoke)
         run: |
           # cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s
-          # pushd narwhal/benchmark && fab smoke && popd
+          pushd narwhal/benchmark && fab smoke && popd
       - name: doctests
         run: |
           cargo test --doc
