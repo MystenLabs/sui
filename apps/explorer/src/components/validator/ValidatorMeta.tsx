@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowUpRight12 } from '@mysten/icons';
 import { Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -14,8 +15,6 @@ import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
-import { Link } from '~/ui/Link';
-import { ArrowUpRight12 } from '@mysten/icons';
 
 type ValidatorMetaProps = {
     validatorData: ActiveValidator;
