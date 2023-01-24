@@ -106,5 +106,5 @@ export async function publishPackage(
   const publishEvent = getEvents(publishTxn).filter(
     (e: any) => 'publish' in e
   )[0];
-  return publishEvent.publish.packageId;
+  return publishEvent.publish.packageId.replace(/^0x(0+)/, '$1');
 }
