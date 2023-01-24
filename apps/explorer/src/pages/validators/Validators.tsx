@@ -28,7 +28,7 @@ import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
 
-const ValidatorMap = lazy(() => import('../../components/node-map'));
+const NodeMap = lazy(() => import('../../components/node-map'));
 
 function validatorsTableData(validators: ActiveValidator[], epoch: number) {
     return {
@@ -258,13 +258,7 @@ function ValidatorPageResult() {
                                     tooltip="Average APY"
                                     unavailable={averageAPY <= 0}
                                 >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >
-                                        {averageAPY}%
-                                    </Heading>
+                                    {averageAPY}%
                                 </Stats>
                             </div>
                         </div>
@@ -273,7 +267,7 @@ function ValidatorPageResult() {
 
                 <ErrorBoundary>
                     <Suspense fallback={null}>
-                        <ValidatorMap />
+                        <NodeMap minHeight={230} />
                     </Suspense>
                 </ErrorBoundary>
             </div>

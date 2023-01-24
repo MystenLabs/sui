@@ -1,35 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
+import { MetricGroup } from './MetricGroup';
+
 import { useAppsBackend } from '~/hooks/useAppsBackend';
-import { useGetObject } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Text } from '~/ui/Text';
-
-interface MetricProps {
-    label: string;
-    value?: string | number | null;
-}
+import { Stats } from '~/ui/Stats';
+import { Network } from '~/utils/api/rpcSetting';
+import { useNetwork } from '~/context';
 
 const numberFormatter = new Intl.NumberFormat(undefined);
-function Metric({ label, value }: MetricProps) {
-    return (
-        <div className="flex items-center justify-between">
-            <Text variant="caption/semibold" color="steel-darker">
-                {label}
-            </Text>
-            <Heading variant="heading6/semibold" color="steel-darker">
-                {typeof value === 'number'
-                    ? numberFormatter.format(value)
-                    : value ?? '--'}
-            </Heading>
-        </div>
-    );
-}
 
 interface CountsResponse {
     addresses: number;
@@ -46,52 +30,80 @@ function roundFloat(number: number, decimals: number) {
     return parseFloat(number.toFixed(decimals));
 }
 
+function formatStat(value?: number) {
+    return typeof value === 'number'
+        ? numberFormatter.format(value)
+        : value ?? '--';
+}
+
+const SUPPORTED_NETWORKS: string[] = [Network.LOCAL, Network.TESTNET];
+
 export function HomeMetrics() {
+    const [network] = useNetwork();
+    const indexerSupported = SUPPORTED_NETWORKS.includes(network);
+
     const request = useAppsBackend();
-    const { data: systemData } = useGetObject('0x5');
-    const systemObject =
-        systemData &&
-        is(systemData.details, SuiObject) &&
-        systemData.details.data.dataType === 'moveObject'
-            ? (systemData.details.data.fields as ValidatorsFields)
-            : null;
+    const { data: systemData } = useGetSystemObject();
 
-    const { data: countsData } = useQuery(['home', 'counts'], () =>
-        request<CountsResponse>('counts', { network: 'PRIVATE_TESTNET' })
+    const { data: countsData } = useQuery(
+        ['home', 'counts'],
+        () => request<CountsResponse>('counts', { network }),
+        { enabled: indexerSupported }
     );
 
-    const { data: tpsData } = useQuery(['home', 'tps'], () =>
-        request<TPSResponse>('tps', { network: 'PRIVATE_TESTNET' })
+    const { data: tpsData } = useQuery(
+        ['home', 'tps'],
+        () => request<TPSResponse>('tps', { network }),
+        { enabled: indexerSupported }
     );
+
+    if (!indexerSupported) return null;
 
     return (
-        <Card>
-            <div className="grid grid-cols-1 space-y-3 lg:grid-cols-2 lg:gap-10 lg:space-y-0">
-                <div className="space-y-3">
-                    <Metric label="Total Objects" value={countsData?.objects} />
-                    <Metric
-                        label="Total Packages"
-                        value={countsData?.packages}
-                    />
-                    <Metric
-                        label="Total Transactions"
-                        value={countsData?.transactions}
-                    />
-                </div>
-                <div className="space-y-3">
-                    <Metric label="Current Epoch" value={systemObject?.epoch} />
-                    <Metric
-                        label="Current Validators"
-                        value={
-                            systemObject?.validators.fields.active_validators
-                                .length
-                        }
-                    />
-                    <Metric
-                        label="Current TPS"
-                        value={tpsData?.tps ? roundFloat(tpsData.tps, 2) : null}
-                    />
-                </div>
+        <Card spacing="lg">
+            <Heading variant="heading4/semibold" color="steel-darker">
+                Sui Network Stats
+            </Heading>
+
+            <div className="mt-8 space-y-7">
+                <MetricGroup label="Current">
+                    <Stats label="TPS" tooltip="Transactions per second">
+                        {tpsData?.tps ? roundFloat(tpsData.tps, 2) : null}
+                    </Stats>
+                    <Stats label="Gas Price" tooltip="Current gas price">
+                        {systemData?.reference_gas_price}
+                    </Stats>
+                    <Stats label="Epoch" tooltip="The current epoch">
+                        {systemData?.epoch}
+                    </Stats>
+                </MetricGroup>
+
+                <MetricGroup label="Total">
+                    <Stats
+                        label="Packages"
+                        tooltip="Total packages counter (updates every one min)"
+                    >
+                        {formatStat(countsData?.packages)}
+                    </Stats>
+                    <Stats
+                        label="Objects"
+                        tooltip="Total objects counter (updates every one min)"
+                    >
+                        {formatStat(countsData?.objects)}
+                    </Stats>
+                    <Stats
+                        label="Transactions"
+                        tooltip="Total transactions counter (updates every one min)"
+                    >
+                        {formatStat(countsData?.transactions)}
+                    </Stats>
+                    <Stats
+                        label="Addresses"
+                        tooltip="Total addresses counter (updates every one min)"
+                    >
+                        {formatStat(countsData?.addresses)}
+                    </Stats>
+                </MetricGroup>
             </div>
         </Card>
     );
