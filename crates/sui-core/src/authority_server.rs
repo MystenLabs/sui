@@ -134,8 +134,7 @@ pub struct ValidatorServiceMetrics {
     pub tx_verification_latency: Histogram,
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
-    pub handle_transaction_consensus_latency: Histogram,
-    pub handle_transaction_non_consensus_latency: Histogram,
+    pub handle_transaction_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
 
@@ -177,16 +176,9 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            handle_transaction_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_transaction_consensus_latency",
-                "Latency of handling a consensus transaction",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_transaction_non_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_transaction_non_consensus_latency",
-                "Latency of handling a non-consensus transaction",
+            handle_transaction_latency: register_histogram_with_registry!(
+                "validator_service_handle_transaction_latency",
+                "Latency of handling a transaction",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -252,15 +244,7 @@ impl ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let transaction = request.into_inner();
 
-        let is_consensus_tx = transaction.contains_shared_object();
-
-        let _metrics_guard = if is_consensus_tx {
-            metrics.handle_transaction_consensus_latency.start_timer()
-        } else {
-            metrics
-                .handle_transaction_non_consensus_latency
-                .start_timer()
-        };
+        let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
         let transaction = transaction.verify().tap_err(|_| {
