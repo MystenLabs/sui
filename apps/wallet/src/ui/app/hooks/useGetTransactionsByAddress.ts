@@ -10,7 +10,7 @@ const REFETCH_INTERVAL = 2000;
 
 export function useGetTransactionsByAddress(
     address?: SuiAddress | null
-): UseQueryResult<SuiTransactionResponse[], unknown> {
+): UseQueryResult<SuiTransactionResponse[], Error> {
     const rpc = useRpc();
 
     return useQuery(
