@@ -4,6 +4,7 @@
 import { SuiAddress, SUI_FRAMEWORK_ADDRESS } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { ObjectData } from "../../../network/rawObject";
@@ -22,8 +23,8 @@ export function Stake({ validator }: Props) {
 
   const stakeFor = useMutation(
     ["stake-for-validator"],
-    async ([validator, coins]: [SuiAddress, ObjectData<Coin>[]]) => {
-      if (coins.length < 2) {
+    async ([validator, coins]: [SuiAddress, ObjectData<Coin>[] | null | undefined]) => {
+      if (!coins || coins.length < 2) {
         return null;
       }
       // using the smallest coin as the Gas payment (DESC order, last element popped)
@@ -49,6 +50,8 @@ export function Stake({ validator }: Props) {
     }
   );
 
+  const handleStakeAll = () => stakeFor.mutate([validator, coins]);
+
   return (
     <div className="w-3/4">
       <div className="relative flex items-center">
@@ -59,7 +62,7 @@ export function Stake({ validator }: Props) {
           disabled={!!coins}
           // defaultValue={stake?.data.staked.toString() || 0}
         />
-        <button className="absolute right-0 flex py-1 px-4 text-sm leading-none bg-gradient-to-b from-[#D0E8EF] to-[#B9DAE4] opacity-60 hover:opacity-100  uppercase mr-2 rounded-[4px]">
+        <button onClick={handleStakeAll} className="absolute right-0 flex py-1 px-4 text-sm leading-none bg-gradient-to-b from-[#D0E8EF] to-[#B9DAE4] opacity-60 hover:opacity-100  uppercase mr-2 rounded-[4px]">
           Stake All
         </button>
       </div>
