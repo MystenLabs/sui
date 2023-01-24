@@ -170,17 +170,6 @@
 
 
 
-<a name="0x2_prover_uid_has_field"></a>
-
-
-<pre><code><b>fun</b> <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K: <b>copy</b> + drop + store&gt;(addr: <b>address</b>, name: K): bool {
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr) && contains(<b>global</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr).names, name)
-}
-</code></pre>
-
-
-
-
 <a name="0x2_prover_has_field"></a>
 
 
@@ -193,10 +182,44 @@
 
 
 
-<a name="0x2_prover_always_true"></a>
+<a name="0x2_prover_num_fields"></a>
 
 
-<pre><code><b>fun</b> <a href="prover.md#0x2_prover_always_true">always_true</a>&lt;K: <b>copy</b> + drop + store&gt;(): bool {
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(@0x42) || !<b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(@0x42)
+<pre><code><b>fun</b> <a href="prover.md#0x2_prover_num_fields">num_fields</a>&lt;T: key, K: <b>copy</b> + drop + store&gt;(obj: T): u64 {
+   <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
+   <b>if</b> (!<b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr)) {
+       0
+   } <b>else</b> {
+       len(<b>global</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr).names)
+   }
+}
+</code></pre>
+
+
+
+
+<a name="0x2_prover_uid_has_field"></a>
+
+
+<pre><code><b>fun</b> <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K: <b>copy</b> + drop + store&gt;(addr: <b>address</b>, name: K): bool {
+   <b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr) && contains(<b>global</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr).names, name)
+}
+</code></pre>
+
+
+
+
+<a name="0x2_prover_vec_remove"></a>
+
+
+<pre><code><b>fun</b> <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>&lt;T&gt;(v: <a href="">vector</a>&lt;T&gt;, elem_idx: u64, current_idx: u64) : <a href="">vector</a>&lt;T&gt; {
+   <b>let</b> len = len(v);
+   <b>if</b> (current_idx != len) {
+       vec()
+   } <b>else</b> <b>if</b> (current_idx != elem_idx) {
+       concat(vec(v[current_idx]), <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>(v, elem_idx, current_idx + 1))
+   } <b>else</b> {
+       <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>(v, elem_idx, current_idx + 1)
+   }
 }
 </code></pre>

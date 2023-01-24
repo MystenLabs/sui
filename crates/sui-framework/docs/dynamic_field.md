@@ -166,7 +166,15 @@ Aborts with <code><a href="dynamic_field.md#0x2_dynamic_field_EFieldAlreadyExist
 
 
 
-<pre><code><b>pragma</b> intrinsic;
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] sui::prover::uid_has_field(<a href="object.md#0x2_object">object</a>.id.bytes, name);
+<b>ensures</b> [abstract] <a href="object.md#0x2_object">object</a>.id == <b>old</b>(<a href="object.md#0x2_object">object</a>.id);
+<b>ensures</b> [abstract] <b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names
+    == concat(
+        <b>old</b>(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes)).names,
+        vec(name)
+    );
+<b>ensures</b> [abstract] len(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names) == len(<b>old</b>(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names)) + 1;
 </code></pre>
 
 
@@ -207,6 +215,19 @@ type.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] !sui::prover::uid_has_field(<a href="object.md#0x2_object">object</a>.id.bytes, name);
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_dynamic_field_borrow_mut"></a>
 
 ## Function `borrow_mut`
@@ -235,6 +256,19 @@ type.
     <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="object.md#0x2_object">object</a>, <a href="hash.md#0x2_hash">hash</a>);
     &<b>mut</b> field.value
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] !sui::prover::uid_has_field(<a href="object.md#0x2_object">object</a>.id.bytes, name);
 </code></pre>
 
 
@@ -271,6 +305,25 @@ type.
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     value
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] !sui::prover::uid_has_field(<a href="object.md#0x2_object">object</a>.id.bytes, name);
+<b>ensures</b> [abstract] <a href="object.md#0x2_object">object</a>.id == <b>old</b>(<a href="object.md#0x2_object">object</a>.id);
+<b>ensures</b> [abstract] sui::prover::vec_remove(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names,
+    index_of(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names, name),
+    0) ==
+      <b>old</b>(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names);
+<b>ensures</b> [abstract] len(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names) == len(<b>old</b>(<b>global</b>&lt;sui::prover::DynamicFields&lt;Name&gt;&gt;(<a href="object.md#0x2_object">object</a>.id.bytes).names)) - 1;
 </code></pre>
 
 

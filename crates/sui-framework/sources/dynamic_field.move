@@ -57,7 +57,15 @@ public fun add<Name: copy + drop + store, Value: store>(
 }
 
 spec add {
-    pragma intrinsic;
+    pragma opaque;
+    aborts_if [abstract] sui::prover::uid_has_field(object.id.bytes, name);
+    ensures [abstract] object.id == old(object.id);
+    ensures [abstract] global<sui::prover::DynamicFields<Name>>(object.id.bytes).names
+        == concat(
+            old(global<sui::prover::DynamicFields<Name>>(object.id.bytes)).names,
+            vec(name)
+        );
+    ensures [abstract] len(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names) == len(old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names)) + 1;
 }
 
 /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
@@ -74,6 +82,11 @@ public fun borrow<Name: copy + drop + store, Value: store>(
     &field.value
 }
 
+spec borrow {
+    pragma opaque;
+    aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
+}
+
 /// Mutably borrows the `object`s dynamic field with the name specified by `name: Name`.
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
 /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
@@ -86,6 +99,11 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
     let hash = hash_type_and_key(object_addr, name);
     let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
     &mut field.value
+}
+
+spec borrow_mut {
+    pragma opaque;
+    aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
 }
 
 /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
@@ -103,6 +121,18 @@ public fun remove<Name: copy + drop + store, Value: store>(
     object::delete(id);
     value
 }
+
+spec remove {
+    pragma opaque;
+    aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
+    ensures [abstract] object.id == old(object.id);
+    ensures [abstract] sui::prover::vec_remove(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names,
+        index_of(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names, name),
+        0) ==
+          old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names);
+    ensures [abstract] len(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names) == len(old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names)) - 1;
+}
+
 
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` but without specifying the `Value` type

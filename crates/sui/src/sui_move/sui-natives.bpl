@@ -130,36 +130,6 @@ procedure {:inline 1} $2_types_is_one_time_witness{{S}}(_: {{T}}) returns (res: 
 // ==================================================================================
 // Native dynamic_field
 
-procedure {:inline 1} $2_dynamic_field_has_child_object(parent: int, id: int) returns (res: bool);
-
-{%- for instance_0 in dynamic_field_instances %}
-{%- for instance_1 in dynamic_field_instances %}
-{%- set S = "'" ~ instance_0.suffix ~ "'" -%}
-{%- set T = instance_0.name -%}
-{%- set K = "'" ~ instance_0.suffix ~ "_" ~ instance_1.suffix ~ "'" -%}
-
-// ----------------------------------------------------------------------------------
-// Native dynamic field implementation for object type `{{instance_0.suffix}}_{{instance_1.suffix}}
-// This may be suboptimal as this template will be expanded for all combinations of concrete types
-// but handling it probelry would require non-trivial changes to prelude generation code in the core Move repo
-
-procedure {:inline 1} $2_dynamic_field_add{{K}}(parent: $Mutation $2_object_UID, name: {{T}}, value: {{T}}) returns (res: $Mutation $2_object_UID) {
-    var id: int;
-    var v: $2_prover_DynamicFields{{S}};
-    id := $bytes#$2_object_ID($id#$2_object_UID($Dereference(parent)));
-    if ($2_prover_uid_has_field{{S}}($2_prover_DynamicFields{{S}}_$memory, id, name)) {
-        call $ExecFailureAbort();
-        return;
-    }
-    v := $2_prover_DynamicFields{{S}}(ExtendVec($names#$2_prover_DynamicFields{{S}}($ResourceValue($2_prover_DynamicFields{{S}}_$memory, id)), name));
-    $2_prover_DynamicFields{{S}}_$memory := ownership_update($2_prover_DynamicFields{{S}}_$memory, id, v);
-    res := parent;
-}
-
-{%- endfor %}
-{%- endfor %}
-
-
 {%- for instance in dynamic_field_instances %}
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
 {%- set T = instance.name -%}
