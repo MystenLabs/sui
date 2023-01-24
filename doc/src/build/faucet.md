@@ -39,7 +39,7 @@ curl --location --request POST 'https://faucet.devnet.sui.io/gas' \
 }'
 ```
 
-Replace `'https://faucet.devnet.sui.io/gas'` with `http://127.0.0.1:5003/gas` when working with local network.
+Replace `'https://faucet.devnet.sui.io/gas'` with `http://127.0.0.1:5003/gas` when working with a local network.
 
 Note: This option will be disabled for TestNet in TestNet Wave 2. Please use Discord channel instead for TestNet wave 2.
 
