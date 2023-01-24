@@ -50,7 +50,12 @@ const validatorsTable = (
     const validators = processValidators(
         validatorsData.validators.fields.active_validators,
         totalStake
-    ).sort((a, b) => (a.name > b.name ? 1 : -1));
+    ).sort((a, b) =>
+        a.name.localeCompare(b.name, 'en', {
+            sensitivity: 'base',
+            numeric: true,
+        })
+    );
 
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
@@ -68,9 +73,10 @@ const validatorsTable = (
                                 circle
                             />
                         )}
-                        <Text variant="bodySmall/medium" color="steel-darker">
+
+                        <Link to={`/validator/${encodeURIComponent(address)}`}>
                             {name}
-                        </Text>
+                        </Link>
                     </div>
                 ),
                 stake: <StakeColumn stake={stake} />,
