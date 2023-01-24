@@ -560,7 +560,7 @@ that the location of the package sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies
+sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 --gas-budget 30000 --verify-dependencies --with-unpublished-dependencies
 ```
 
 The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:
@@ -581,6 +581,8 @@ The `--verify-dependencies` flag can fail the publish for other reasons, as well
 * There's nothing at the address that the dependency points to (it was deleted or never existed).
 * The address supplied for the dependency points to an object instead of a package.
 * The CLI fails to connect to the node to fetch the package.
+
+**Note:** If your package includes unpublished depenedencies, you can add the `--with-unpublished-dependencies` flag to the `sui client publish` command to include modules from those packages in the published build.
 
 If successful, your response resembles the following:
 
