@@ -31,11 +31,7 @@ use sui_types::{
     messages::{TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
-use tokio::{
-    sync::broadcast::{self, error::RecvError},
-    task::JoinHandle,
-    time::timeout,
-};
+use tokio::{sync::broadcast, task::JoinHandle, time::timeout};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, instrument, warn};
 use typed_store::Map;
@@ -101,6 +97,8 @@ impl CheckpointExecutor {
 
     /// Ensure that all checkpoints in the current epoch will be executed.
     /// Return the committee of the next epoch.
+    /// We don't technically need &mut on self, but passing it to make sure only one instance is
+    /// running at one time.
     pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
         self.metrics
             .checkpoint_exec_epoch
@@ -116,7 +114,11 @@ impl CheckpointExecutor {
         let mut next_to_schedule = highest_executed
             .as_ref()
             .map(|c| c.sequence_number() + 1)
-            .unwrap_or_default();
+            .unwrap_or_else(|| {
+                // TODO this invariant may no longer hold once we introduce snapshots
+                assert_eq!(epoch_store.epoch(), 0);
+                0
+            });
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
@@ -143,7 +145,7 @@ impl CheckpointExecutor {
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok(checkpoint)) = pending.next() => {
-                    self.finished_executing_checkpoint(&checkpoint);
+                    self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
@@ -154,7 +156,7 @@ impl CheckpointExecutor {
 
     /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
     /// to be called in the order of checkpoint sequence number.
-    fn finished_executing_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+    fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = checkpoint.sequence_number();
         if let Some(prev_highest) = self
@@ -175,7 +177,7 @@ impl CheckpointExecutor {
     }
 
     fn schedule_synced_checkpoints(
-        &mut self,
+        &self,
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -210,7 +212,7 @@ impl CheckpointExecutor {
     }
 
     fn schedule_checkpoint(
-        &mut self,
+        &self,
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
         epoch_store: Arc<AuthorityPerEpochStore>,
