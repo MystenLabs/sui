@@ -25,7 +25,7 @@ export default function PasswordFields() {
             <FieldLabel txt="Confirm Password">
                 <Field name="confirmPassword" component={PasswordInput} />
                 {touched.confirmPassword && errors.confirmPassword ? (
-                    <Alert>{errors.password}</Alert>
+                    <Alert>{errors.confirmPassword}</Alert>
                 ) : null}
             </FieldLabel>
         </>
