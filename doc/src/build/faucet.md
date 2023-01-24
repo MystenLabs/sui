@@ -8,7 +8,7 @@ You can request test tokens in the following ways:
 
 ## Prerequisites
 
-To request tokens from the faucet, one must own a wallet address that can receive the SUI tokens. An address can be generated via the [Sui CLI tool](https://docs.sui.io/devnet/build/cli-client#active-address) or the [Sui wallet](https://docs.sui.io/devnet/explore/wallet-browser).
+To request tokens from the faucet, you must own a wallet address that can receive the SUI tokens. You can generate an address via the [Sui CLI tool](../build/cli-client.md#active-address) or the [Sui wallet](../explore/wallet-browser.md).
 
 ## 1. Request test tokens through Discord
 
