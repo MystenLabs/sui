@@ -582,6 +582,8 @@ The `--verify-dependencies` flag can fail the publish for other reasons, as well
 * The address supplied for the dependency points to an object instead of a package.
 * The CLI fails to connect to the node to fetch the package.
 
+**Note:** If your package includes unpublished depenedencies, you can add the `--with-unpublished-dependencies` flag to the `sui client publish` command to include modules from those packages in the published build.
+
 If successful, your response resembles the following:
 
 ```shell
