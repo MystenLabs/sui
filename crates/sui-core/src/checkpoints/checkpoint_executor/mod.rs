@@ -99,6 +99,8 @@ impl CheckpointExecutor {
         }
     }
 
+    /// Ensure that all checkpoints in the current epoch will be executed.
+    /// Return the committee of the next epoch.
     pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
         self.metrics
             .checkpoint_exec_epoch
@@ -145,11 +147,13 @@ impl CheckpointExecutor {
                     highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
-                received = self.mailbox.recv() => self.checkpoint_received(received),
+                _ = self.mailbox.recv() => (),
             }
         }
     }
 
+    /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
+    /// to be called in the order of checkpoint sequence number.
     fn finished_executing_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = checkpoint.sequence_number();
@@ -170,32 +174,6 @@ impl CheckpointExecutor {
         self.metrics.last_executed_checkpoint.set(seq as i64);
     }
 
-    fn checkpoint_received(&self, received: Result<VerifiedCheckpoint, RecvError>) {
-        match received {
-            Ok(checkpoint) => {
-                debug!(
-                    "Received new synced checkpoint message for checkpoint {:?}",
-                    checkpoint.sequence_number(),
-                );
-            }
-            // In this case, messages in the mailbox have been overwritten
-            // as a result of lagging too far behind.
-            Err(RecvError::Lagged(num_skipped)) => {
-                debug!(
-                    "Checkpoint Execution Recv channel overflowed {:?} messages",
-                    num_skipped,
-                );
-                self.metrics
-                    .checkpoint_exec_recv_channel_overflow
-                    .inc_by(num_skipped);
-            }
-            Err(RecvError::Closed) => {
-                panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
-            }
-        }
-    }
-
-    /// Returns whether we have scheduled the last checkpoint of the epoch.
     fn schedule_synced_checkpoints(
         &mut self,
         pending: &mut CheckpointExecutionBuffer,
@@ -289,6 +267,8 @@ impl CheckpointExecutor {
     }
 }
 
+/// Check whether `checkpoint` is the last checkpoint of the current epoch. If so, return the
+/// committee of the next epoch.
 fn check_epoch_last_checkpoint(
     cur_epoch: EpochId,
     checkpoint: &Option<VerifiedCheckpoint>,
