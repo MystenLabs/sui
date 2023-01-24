@@ -7,7 +7,7 @@ import cl from 'classnames';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import { NetworkApy } from '_app/shared/network-apy';
+import { DelegatedAPY } from '_app/shared/delegated-apy';
 import { Text } from '_app/shared/text';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
 import Icon from '_components/icon';
@@ -33,6 +33,13 @@ export function TokenIconLink({
         );
     }, [delegations]);
 
+    const stakedValidators = useMemo(() => {
+        if (!delegations) return [];
+        return delegations.map(
+            ({ staked_sui }) => staked_sui.validator_address
+        );
+    }, [delegations]);
+
     const [formatted, symbol, queryResult] = useFormatCoin(
         totalActivePendingStake,
         SUI_TYPE_ARG
@@ -42,13 +49,13 @@ export function TokenIconLink({
         <Link
             to="/stake"
             className={cl(
-                !stakingEnabled && '!bg-gray-40 ',
+                !stakingEnabled && '!bg-gray-40',
                 'flex mb-5 rounded-2xl w-full p-3.75 justify-between no-underline bg-sui/10 '
             )}
             tabIndex={!stakingEnabled ? -1 : undefined}
         >
             {isLoading || queryResult.isLoading ? (
-                <div className="p-2 w-full flex justify-center items-center h-full">
+                <div className="p-2 w-full flex justify-start items-center h-full">
                     <LoadingIndicator />
                 </div>
             ) : (
@@ -82,7 +89,11 @@ export function TokenIconLink({
                     </div>
                 </div>
             )}
-            <div className="flex">{stakingEnabled && <NetworkApy />}</div>
+            <div className="flex">
+                {stakingEnabled && (
+                    <DelegatedAPY stakedValidators={stakedValidators} />
+                )}
+            </div>
         </Link>
     );
 }

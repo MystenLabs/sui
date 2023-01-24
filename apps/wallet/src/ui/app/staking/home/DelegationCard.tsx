@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import { GAS_TYPE_ARG } from '../../redux/slices/sui-objects/Coin';
 import { getStakingRewards } from '../getStakingRewards';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { useFormatCoin } from '_app/hooks';
@@ -30,7 +30,6 @@ export const STATE_TO_COPY = {
     [DelegationState.EARNING]: 'Staking Reward',
     [DelegationState.COOL_DOWN]: 'In Cool-down',
 };
-
 // For delegationsRequestEpoch n  through n + 2, show Start Earning
 // For delegationsRequestEpoch n + 3, show Staking Reward
 // Show epoch number or date/time for n + 3 epochs
@@ -51,8 +50,8 @@ export function DelegationCard({
     const stakedId = staked_sui.id.id;
     const delegationsRequestEpoch = staked_sui.delegation_request_epoch;
     const numberOfEpochPastRequesting = currentEpoch - delegationsRequestEpoch;
-    const [stakedFormatted] = useFormatCoin(staked, GAS_TYPE_ARG);
-    const [rewardsFormatted] = useFormatCoin(rewards, GAS_TYPE_ARG);
+    const [stakedFormatted] = useFormatCoin(staked, SUI_TYPE_ARG);
+    const [rewardsFormatted] = useFormatCoin(rewards, SUI_TYPE_ARG);
 
     return (
         <Link

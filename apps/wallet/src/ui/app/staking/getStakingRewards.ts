@@ -23,15 +23,16 @@ export function getStakingRewards(
     if (!validator) return 0;
     const { fields: validatorFields } = validator;
 
-    const poolTokens = delegation.delegation_status.Active.pool_tokens.value;
+    const poolTokens = +delegation.delegation_status.Active.pool_tokens.value;
     const delegationTokenSupply =
-        validatorFields.delegation_staking_pool.fields.delegation_token_supply
+        +validatorFields.delegation_staking_pool.fields.delegation_token_supply
             .fields.value;
     const suiBalance =
-        validatorFields.delegation_staking_pool.fields.sui_balance;
-    const currentSuiWorth = (poolTokens * +suiBalance) / +delegationTokenSupply;
+        +validatorFields.delegation_staking_pool.fields.sui_balance;
+    const currentSuiWorth = (poolTokens * suiBalance) / delegationTokenSupply;
+
     const earnToken =
-        currentSuiWorth -
+        Math.floor(currentSuiWorth) -
         delegation.delegation_status.Active.principal_sui_amount;
     return earnToken > 0 ? earnToken : 0;
 }
