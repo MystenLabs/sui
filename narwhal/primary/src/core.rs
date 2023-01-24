@@ -13,9 +13,9 @@ use anyhow::Result;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
+use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use futures::{future::OptionFuture, stream::FuturesUnordered};
-use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
+use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{anemo_ext::NetworkExt, CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
@@ -88,8 +88,11 @@ pub struct Core {
     /// Used to cancel vote requests for a previously-proposed header that is being replaced
     /// before a certificate could be formed.
     cancel_proposed_header: Option<oneshot::Sender<()>>,
-    /// Handle to propose_header task.
-    propose_header_future: OptionFuture<JoinHandle<DagResult<Certificate>>>,
+    /// Handle to propose_header task. Our target is to have only one task running always, thus
+    /// we cancel the previously running before we spawn the next one. However, we don't wait for
+    /// the previous to finish to spawn the new one, so we might temporarily have more that one
+    /// parallel running, which should be fine though.
+    propose_header_tasks: JoinSet<DagResult<Certificate>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
     /// A network sender to send the batches to the other workers.
@@ -146,7 +149,7 @@ impl Core {
                     pending_certificates: HashMap::new(),
                     background_tasks: JoinSet::new(),
                     cancel_proposed_header: None,
-                    propose_header_future: None.into(),
+                    propose_header_tasks: JoinSet::new(),
                     certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
                     network: primary_network,
                     metrics,
@@ -745,7 +748,7 @@ impl Core {
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
                     let network = self.network.clone();
-                    self.propose_header_future = Some(spawn_monitored_task!(Self::propose_header(
+                    self.propose_header_tasks.spawn(monitored_future!(Self::propose_header(
                         name,
                         committee,
                         header_store,
@@ -755,15 +758,12 @@ impl Core {
                         network,
                         header,
                         rx_cancel,
-                    ))).into();
+                    )));
                     Ok(())
                 },
 
                 // Process certificates formed after receiving enough votes.
-                Some(result) = &mut self.propose_header_future => {
-                    // Clear the future so we only process it once.
-                    self.propose_header_future = None.into();
-
+                Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
                             self.process_own_certificate(certificate).await
