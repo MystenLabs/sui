@@ -819,7 +819,9 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getCommitteeInfo(epoch: number | null = null): Promise<CommitteeInfoResponse> {
+  async getCommitteeInfo(
+    epoch: number | null = null
+  ): Promise<CommitteeInfoResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getCommitteeInfo',

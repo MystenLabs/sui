@@ -30,7 +30,7 @@ export const ADD_DELEGATION_MUL_COIN_FUN_NAME =
 export const ADD_DELEGATION_LOCKED_COIN_FUN_NAME =
   'request_add_delegation_mul_locked_coin';
 export const WITHDRAW_DELEGATION_FUN_NAME = 'request_withdraw_delegation';
-export const SWITCHDELEGATION_FUN_NAME = 'request_switch_delegation';
+export const SWITCH_DELEGATION_FUN_NAME = 'request_switch_delegation';
 
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';
