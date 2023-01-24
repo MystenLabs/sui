@@ -18,6 +18,7 @@ use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority_aggregator::{AuthorityAggregator, NetworkTransactionCertifier};
 use sui_core::authority_server::ValidatorService;
@@ -40,8 +41,8 @@ use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
-use sui_network::state_sync;
-use sui_network::{default_mysten_network_config, discovery};
+use sui_network::discovery;
+use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     IndexStore,
@@ -617,7 +618,11 @@ impl SuiNode {
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
         let consensus_address = consensus_config.address().to_owned();
-        let client_config = default_mysten_network_config();
+        let mut client_config = mysten_network::config::Config::new();
+        client_config.connect_timeout = Some(DEFAULT_CONNECT_TIMEOUT_SEC);
+        client_config.request_timeout = Some(Duration::from_secs(10_000));
+        client_config.http2_keepalive_interval = Some(DEFAULT_HTTP2_KEEPALIVE_SEC);
+        //let client_config = default_mysten_network_config();
         let consensus_client = TransactionsClient::new(
             client_config
                 .connect_lazy(&consensus_address)
