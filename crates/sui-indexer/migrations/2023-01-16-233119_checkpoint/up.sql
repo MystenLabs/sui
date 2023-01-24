@@ -13,6 +13,9 @@ CREATE TABLE checkpoints (
     UNIQUE(sequence_number) 
 );
 
+CREATE INDEX checkpoints_content_digest ON checkpoints (content_digest);
+CREATE INDEX checkpoints_epoch ON checkpoints (epoch);
+
 CREATE TABLE checkpoint_logs (
     next_cursor_sequence_number BIGINT PRIMARY KEY
 );

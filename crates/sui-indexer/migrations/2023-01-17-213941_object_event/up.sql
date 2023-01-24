@@ -11,6 +11,9 @@ CREATE TABLE object_events (
     UNIQUE (transaction_digest, event_sequence)
 );
 
+CREATE INDEX object_events_transaction_digest ON object_events (transaction_digest);
+CREATE INDEX object_events_event_time ON object_events (event_time);
+
 CREATE TABLE object_event_logs (
     id SERIAL PRIMARY KEY,
     next_cursor_tx_dig TEXT,

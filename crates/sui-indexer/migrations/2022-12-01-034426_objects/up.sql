@@ -18,6 +18,9 @@ CREATE TABLE objects (
     object_status VARCHAR(255) NOT NULL
 );
 
+CREATE INDEX objects_owner_address ON objects (owner_address);
+CREATE INDEX objects_package_id ON objects (package_id);
+
 CREATE TABLE object_logs (
     last_processed_id BIGINT PRIMARY KEY
 );

@@ -9,3 +9,6 @@ CREATE TABLE EVENTS (
     next_cursor_transaction_digest VARCHAR(255),
     next_cursor_event_sequence BIGINT
 );
+
+CREATE INDEX events_transaction_digest ON events (transaction_digest);
+CREATE INDEX events_event_time ON events (event_time);
