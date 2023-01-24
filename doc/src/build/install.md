@@ -53,7 +53,7 @@ Install the prerequisites and tools you need to work with Sui. Click a marker in
 
 ### Rust and Cargo
 
-Sui requires Rust and Cargo on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
+Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
 
 Use the following command to install Rust and Cargo on macOS or Linux:
 ```shell
@@ -200,9 +200,9 @@ If the progress appears to freeze, press **Enter** in the command prompt to fix 
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
-## Install Sui binaries
+## Install (or update) Sui binaries
 
-With Cargo installed, use the following command to install Sui binaries:
+With Cargo installed, use the following command to install or update the sui executable:
 
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
@@ -211,12 +211,19 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devn
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 
-If the previous command fails, make sure you have the latest version of Rust installed:
+Install procedure to expect: (40min (depends on the RAM you have available for the build process))
+- update git repository
+- update crates.io index
+- compile (~1850) dependencies
+- (replace the previous version of the 'sui' package with the new one)
 
+Throubleshooting:
+* make sure you have the latest version of Rust installed:
 ```
 rustup update stable
 source "$HOME/.cargo/env"
 ```
+* reach out on [Discord](https://discord.com/invite/sui)
 
 ### macOS and Linux
 
