@@ -39,3 +39,8 @@ rstest = "0.16.0"
 rand = "0.8.5"
 syn = { version = "1.0.104", features = ["derive"] }
 typed-store-derive = {path = "../typed-store-derive"}
+
+# Most packages should depend on sui-simulator instead of directly on msim, but for typed-store
+# that creates a circular dependency.
+[target.'cfg(msim)'.dependencies]
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "2bd1f8d83eeb9be60e9570391b01b29bb90421f5", package = "msim" }

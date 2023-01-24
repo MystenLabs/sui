@@ -8849,6 +8849,7 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
+ "once_cell",
  "sui-proc-macros",
  "workspace-hack",
 ]
@@ -10235,6 +10236,7 @@ dependencies = [
  "eyre",
  "fdlimit",
  "hdrhistogram",
+ "msim",
  "num_cpus",
  "once_cell",
  "ouroboros 0.15.5",

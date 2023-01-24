@@ -32,7 +32,7 @@ use tracing::{debug, error, info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
-use sui_macros::nondeterministic;
+use sui_macros::{fail_point, nondeterministic};
 
 // Write buffer size per RocksDB instance can be set via the env var below.
 // If the env var is not set, use the default value in MiB.
@@ -264,6 +264,7 @@ impl RocksDB {
         K: AsRef<[u8]>,
         V: AsRef<[u8]>,
     {
+        fail_point!("put-cf");
         delegate_call!(self.put_cf_opt(cf, key, value, writeopts))
     }
 
@@ -281,6 +282,7 @@ impl RocksDB {
     }
 
     pub fn write(&self, batch: RocksDBBatch) -> Result<(), TypedStoreError> {
+        fail_point!("batch-write");
         match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
                 db.underlying.write(batch)?;
@@ -1278,6 +1280,7 @@ impl<'a> DBTransaction<'a> {
     }
 
     pub fn commit(self) -> Result<(), TypedStoreError> {
+        fail_point!("transaction-commit");
         self.transaction.commit().map_err(|e| match e.kind() {
             // empirically, this is what you get when there is a write conflict. it is not
             // documented whether this is the only time you can get this error.
