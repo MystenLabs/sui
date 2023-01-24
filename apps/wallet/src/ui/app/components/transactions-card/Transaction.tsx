@@ -36,10 +36,7 @@ export function Transaction({
     const { certificate } = txn;
     const executionStatus = getExecutionStatusType(txn);
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
-    const { coins: eventsSummary } = getEventsSummary(
-        txn.effects,
-        address || ''
-    );
+    const { coins: eventsSummary } = getEventsSummary(txn.effects, address);
 
     const objectId = useMemo(() => {
         const transferId = getTransferObjectTransaction(
@@ -47,7 +44,7 @@ export function Transaction({
         )?.objectRef?.objectId;
         return transferId
             ? transferId
-            : getTxnEffectsEventID(txn.effects, address || '')[0];
+            : getTxnEffectsEventID(txn.effects, address)[0];
     }, [address, certificate.data.transactions, txn.effects]);
 
     const amountByRecipient = getAmount(
@@ -56,7 +53,7 @@ export function Transaction({
     );
 
     const amount = useMemo(() => {
-        const amount = amountByRecipient && amountByRecipient[0]?.amount;
+        const amount = amountByRecipient && amountByRecipient?.[0]?.amount;
         const amountTransfers = eventsSummary.reduce(
             (acc, { amount }) => acc + amount,
             0
@@ -89,7 +86,7 @@ export function Transaction({
     const isSender = address === certificate.data.sender;
 
     const receiverAddress = useMiddleEllipsis(
-        recipientAddress || '',
+        recipientAddress,
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
@@ -159,7 +156,11 @@ export function Transaction({
                                 <div className="flex w-full justify-between ">
                                     <div className="flex gap-1 align-middle  items-baseline">
                                         <Text color="gray-90" weight="semibold">
-                                            {isSender ? 'Sent' : 'Received'}
+                                            {isSender
+                                                ? 'Sent'
+                                                : isSuiTransfer
+                                                ? 'Bought'
+                                                : 'Received'}
                                         </Text>
                                         {isSuiTransfer && (
                                             <Text
