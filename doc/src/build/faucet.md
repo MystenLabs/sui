@@ -2,7 +2,7 @@
 title: Requesting Gas Tokens from Faucet
 ---
 
-Sui faucet is a helpful tool where Sui developers can get free test SUI tokens to deploy and interact with their programs on Sui's DevNet and TestNet.
+Sui faucet is a helpful tool where Sui developers can get free test SUI tokens to deploy and interact with their programs on Sui's Devnet and Testnet.
 
 Test tokens can be requested in the following ways:
 
