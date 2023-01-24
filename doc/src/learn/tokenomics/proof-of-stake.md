@@ -10,7 +10,7 @@ Within each epoch, operations are processed by a fixed set of validators, each w
 
 ## Economic model
 
-We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the staking and tokenomics diagram in the [Sui Tokenomics](../learn/index.md) overview.
+We now discuss how the different components of the Sui economy interact with each other in order to introduce Sui’s delegated proof-of-stake system. As a complementary reference, see the staking and tokenomics diagram in the [Sui Tokenomics](../tokenomics/index.md) overview.
 
 The Sui economic model works as follows:
 
