@@ -5,7 +5,6 @@ import { memo, useCallback, useMemo } from 'react';
 
 import { getObjectUrl, getAddressUrl, getTransactionUrl } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
-import { API_ENV } from '_app/ApiProvider';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
@@ -48,34 +47,40 @@ function useAddress(props: ExplorerLinkProps) {
 function ExplorerLink(props: ExplorerLinkProps) {
     const { type, children, className, title, showIcon = true } = props;
     const address = useAddress(props);
-    const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
-    const notCustomRPC = selectedApiEnv !== API_ENV.customRPC;
+    const [selectedApiEnv, customRPC] = useAppSelector(({ app }) => [
+        app.apiEnv,
+        app.customRPC,
+    ]);
 
     const objectID = type === ExplorerLinkType.object ? props.objectID : null;
     const transactionID =
         type === ExplorerLinkType.transaction ? props.transactionID : null;
+
+    // fallback to localhost if customRPC is not set
+    const customRPCUrl = customRPC || 'http://localhost:3000/';
     const explorerHref = useMemo(() => {
         switch (type) {
             case ExplorerLinkType.address:
                 return (
                     address &&
-                    notCustomRPC &&
-                    getAddressUrl(address, selectedApiEnv)
+                    getAddressUrl(address, selectedApiEnv, customRPCUrl)
                 );
             case ExplorerLinkType.object:
                 return (
                     objectID &&
-                    notCustomRPC &&
-                    getObjectUrl(objectID, selectedApiEnv)
+                    getObjectUrl(objectID, selectedApiEnv, customRPCUrl)
                 );
             case ExplorerLinkType.transaction:
                 return (
                     transactionID &&
-                    notCustomRPC &&
-                    getTransactionUrl(transactionID, selectedApiEnv)
+                    getTransactionUrl(
+                        transactionID,
+                        selectedApiEnv,
+                        customRPCUrl
+                    )
                 );
         }
-    }, [type, address, notCustomRPC, selectedApiEnv, objectID, transactionID]);
+    }, [type, address, selectedApiEnv, objectID, transactionID, customRPCUrl]);
 
     const handleclick = useCallback(() => {
         if (props.track) {
@@ -86,9 +91,7 @@ function ExplorerLink(props: ExplorerLinkProps) {
     if (!explorerHref) {
         return null;
     }
-    if (selectedApiEnv === API_ENV.customRPC) {
-        return null;
-    }
+
     return (
         <ExternalLink
             href={explorerHref}
