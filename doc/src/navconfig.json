@@ -121,6 +121,10 @@
         "fileName": "build/cli-client"
       },
       {
+        "label": "Sui Faucet",
+        "fileName": "build/faucet"
+      },
+      {
         "label": "Sui Local Network",
         "fileName": "build/sui-local-network"
       },      
