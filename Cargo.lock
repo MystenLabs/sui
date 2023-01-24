@@ -8479,6 +8479,7 @@ dependencies = [
  "clap 3.2.23",
  "either",
  "eyre",
+ "fail 0.5.1",
  "fastcrypto",
  "fs_extra",
  "futures",

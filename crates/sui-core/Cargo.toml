@@ -36,6 +36,7 @@ tap = "1.0"
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 either = "1.8.0"
 rand = "0.8.5"
+fail = "0.5.1"
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }

@@ -127,6 +127,8 @@ impl NarwhalManager {
 
         *primary_running = Running::True(committee.epoch());
 
+        fail::fail_point!("narwhal_manager_start");
+
         // Start Narwhal Workers with configuration
         // Copy the config for this iteration of the loop
         let id_keypair_copy = self
