@@ -5,6 +5,7 @@ const {
     default: getWebpackConfig,
 } = require('../configs/webpack/webpack.config.dev.ts');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const path = require('path');
 
 module.exports = {
     stories: ['../src/ui/**/*.mdx', '../src/ui/**/*.stories.@(js|jsx|ts|tsx)'],
@@ -29,9 +30,14 @@ module.exports = {
         const cssRule = custom.module.rules.find((rule) =>
             rule.test.test('.css')
         );
+        const tsRule = custom.module.rules.find((rule) =>
+            rule.test.test('.tsx')
+        );
+        tsRule.include = path.resolve('../icons/src');
 
         config.module.rules = [
             ...config.module.rules.filter((rule) => !rule.test.test('.css')),
+            tsRule,
             cssRule,
         ];
 

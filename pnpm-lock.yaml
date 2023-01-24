@@ -203,6 +203,7 @@ importers:
       '@growthbook/growthbook-react': ^0.10.1
       '@metamask/browser-passworder': ^4.0.2
       '@mysten/core': workspace:*
+      '@mysten/icons': workspace:*
       '@mysten/sui.js': workspace:*
       '@mysten/wallet-standard': workspace:*
       '@noble/hashes': ^1.1.5
@@ -311,6 +312,7 @@ importers:
       '@growthbook/growthbook-react': 0.10.1_react@18.2.0
       '@metamask/browser-passworder': 4.0.2
       '@mysten/core': link:../core
+      '@mysten/icons': link:../icons
       '@mysten/sui.js': link:../../sdk/typescript
       '@mysten/wallet-standard': link:../../sdk/wallet-adapter/wallet-standard
       '@noble/hashes': 1.1.5
