@@ -13,10 +13,8 @@ import provider from "../provider";
 const STAKED_SUI = "staking_pool::StakedSui";
 
 /**
- * Get a Scorecard for an account if this account has at least one.
- *
- * We do not guarantee correct behavior if people registered more than once,
- * lookup is done with `Array.prototype.find` for the first occurrence.
+ * Get all `StakedSui` objects for the account. Each object marks a
+ * `delegation` for a specific validator and can be `undelegated`.
  */
 export function useMyStake(account: string | null) {
   return useQuery(

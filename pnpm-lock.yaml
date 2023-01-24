@@ -430,7 +430,6 @@ importers:
       '@types/react-dom': ^18.0.9
       '@vitejs/plugin-react': ^3.0.0
       autoprefixer: ^10.4.13
-      bignumber.js: ^9.1.1
       class-variance-authority: ^0.4.0
       clsx: ^1.2.1
       plausible-tracker: ^0.3.8
@@ -455,7 +454,6 @@ importers:
       '@mysten/wallet-kit': link:../../sdk/wallet-adapter/wallet-kit
       '@tanstack/react-query': 4.22.0_biqbaboplfbrettd7655fr4n2y
       '@tanstack/react-query-devtools': 4.22.0_gp275tdwez2a4eujt75dnnp754
-      bignumber.js: 9.1.1
       class-variance-authority: 0.4.0_typescript@4.9.4
       clsx: 1.2.1
       plausible-tracker: 0.3.8
