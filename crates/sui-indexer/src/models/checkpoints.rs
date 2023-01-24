@@ -23,6 +23,7 @@ pub struct Checkpoint {
     pub total_transactions: i64,
     pub previous_digest: Option<String>,
     pub next_epoch_committee: Option<String>,
+    pub timestamp_ms: i64,
 }
 
 #[derive(Debug, Insertable, Clone)]
@@ -38,6 +39,7 @@ pub struct NewCheckpoint {
     pub total_transactions: i64,
     pub previous_digest: Option<String>,
     pub next_epoch_committee: Option<String>,
+    pub timestamp_ms: i64,
 }
 
 pub fn commit_checkpoint(
@@ -74,6 +76,7 @@ pub fn commit_checkpoint(
         total_transactions: checkpoint_summary.network_total_transactions as i64,
         previous_digest: checkpoint_summary.previous_digest.map(|d| d.encode()),
         next_epoch_committee: next_committee_json,
+        timestamp_ms: checkpoint_summary.timestamp_ms as i64,
     };
     commit_checkpoint_impl(pg_pool_conn, checkpoint)
 }

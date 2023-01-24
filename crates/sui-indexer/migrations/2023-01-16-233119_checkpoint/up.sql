@@ -10,6 +10,8 @@ CREATE TABLE checkpoints (
     total_transactions BIGINT NOT NULL,
     previous_digest VARCHAR(255),
     next_epoch_committee TEXT,
+    -- number of milliseconds from the Unix epoch
+    timestamp_ms BIGINT NOT NULL,
     UNIQUE(sequence_number) 
 );
 
