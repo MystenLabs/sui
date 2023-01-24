@@ -6,7 +6,6 @@ import {
     SUI_TYPE_ARG,
     normalizeSuiAddress,
     type SuiAddress,
-    type SuiMoveObject,
 } from '@mysten/sui.js';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
@@ -38,7 +37,7 @@ import {
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,
-    ownedObjects,
+    createCoinsForTypeSelector,
 } from '_redux/slices/account';
 import {
     Coin,
@@ -162,7 +161,16 @@ function StakingCard() {
 
     const navigate = useNavigate();
     const signer = useSigner();
-    const allCoins = useAppSelector(ownedObjects);
+    const allCoinsForStakeSelector = useMemo(
+        () => createCoinsForTypeSelector(coinType),
+        [coinType]
+    );
+    const allCoinsForStake = useAppSelector(allCoinsForStakeSelector);
+    const allSuiCoinsSelector = useMemo(
+        () => createCoinsForTypeSelector(SUI_TYPE_ARG),
+        []
+    );
+    const allSuiCoins = useAppSelector(allSuiCoinsSelector);
     const stakeToken = useMutation({
         mutationFn: async ({
             tokenTypeArg,
@@ -176,19 +184,10 @@ function StakingCard() {
             if (!validatorAddress || !amount || !tokenTypeArg) {
                 throw new Error('Failed, missing required field');
             }
-
-            const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
-            const coins: SuiMoveObject[] = allCoins
-                .filter(
-                    (anObj) =>
-                        anObj.data.dataType === 'moveObject' &&
-                        anObj.data.type === coinType
-                )
-                .map(({ data }) => data as SuiMoveObject);
-
             const response = Coin.stakeCoin(
                 signer,
-                coins,
+                allCoinsForStake,
+                allSuiCoins,
                 amount,
                 validatorAddress
             );

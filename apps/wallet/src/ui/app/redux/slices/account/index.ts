@@ -197,3 +197,9 @@ export function createAccountNftByIdSelector(nftId: ObjectId) {
             allNfts.find((nft) => getObjectId(nft.reference) === nftId) || null
     );
 }
+
+export function createCoinsForTypeSelector(coinTypeArg: string) {
+    return createSelector(accountCoinsSelector, (allCoins) =>
+        allCoins.filter((aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg)
+    );
+}
