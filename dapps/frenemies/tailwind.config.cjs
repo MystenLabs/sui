@@ -9,6 +9,7 @@ module.exports = {
     extend: {
       boxShadow: {
         notification: "0px 0px 20px rgba(29, 55, 87, 0.11)",
+        button: "0px 1px 2px rgba(16, 24, 40, 0.05)",
       },
       colors: {
         frenemies: "#768AF7",
