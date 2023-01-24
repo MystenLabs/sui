@@ -10,6 +10,7 @@ describe('Test Struct Metadata', () => {
   let signer: RawSigner;
   let packageId: ObjectId;
   let objectId: string;
+  let address: string;
 
   beforeAll(async () => {
     toolbox = await setup();
@@ -21,11 +22,10 @@ describe('Test Struct Metadata', () => {
 
     const packagePath = __dirname + '/./data/struct_metadata';
     packageId = await publishPackage(signer, true, packagePath);
+    address = await signer.getAddress();
   });
 
   it('Test accessing struct metadata', async () => {
-
-    let address = await signer.getAddress();
 
     const structMetadata = await toolbox.provider.getObjectsOwnedByAddress(
       address
@@ -39,7 +39,21 @@ describe('Test Struct Metadata', () => {
     const dummyObject = await toolbox.provider.getObject(objectId);
     expect(dummyObject.details.data.fields.description).to.equal("Hello");
     expect(dummyObject.details.data.fields.number).to.equal('1');
+  });
+
+  it('Test accessing dynamic object field', async () => {
+    const dummyDofInfo = await toolbox.provider.getDynamicFields(objectId);
+
+    // make sure that only one dynamic object field is added
+    expect(dummyDofInfo.data.length).to.equal(1);
+    
+    let dofName = dummyDofInfo.data[0].name;
+    const dummyDof = await toolbox.provider.getDynamicFieldObject(objectId, dofName);
+
+    expect(dummyDof.details.data.fields.description).to.equal("dummy dof");
+
+  });
 });
 
-});
+
 
