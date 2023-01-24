@@ -181,6 +181,37 @@ impl IndexerPublishEventHandlerMetrics {
     }
 }
 
+pub struct IndexerMoveEventHandlerMetrics {
+    pub total_move_events_received: IntCounter,
+    pub total_move_events_processed: IntCounter,
+    pub total_move_event_handler_error: IntCounter,
+}
+
+impl IndexerMoveEventHandlerMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_move_events_received: register_int_counter_with_registry!(
+                "total_move_events_received",
+                "Total number of move events received",
+                registry,
+            )
+            .unwrap(),
+            total_move_events_processed: register_int_counter_with_registry!(
+                "total_move_events_processed",
+                "Total number of move events processed",
+                registry,
+            )
+            .unwrap(),
+            total_move_event_handler_error: register_int_counter_with_registry!(
+                "total_move_event_handler_error",
+                "Total number of move event handler error",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct IndexerCheckpointHandlerMetrics {
     pub total_checkpoint_requested: IntCounter,
     pub total_checkpoint_received: IntCounter,

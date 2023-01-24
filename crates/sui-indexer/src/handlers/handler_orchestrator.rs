@@ -15,6 +15,7 @@ use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::handlers::event_handler::EventHandler;
 use crate::handlers::transaction_handler::TransactionHandler;
 
+use crate::handlers::move_event_handler::MoveEventHandler;
 use crate::handlers::object_event_handler::ObjectEventHandler;
 use crate::handlers::publish_event_handler::PublishEventHandler;
 const BACKOFF_MAX_INTERVAL_IN_SECS: u64 = 600;
@@ -62,6 +63,11 @@ impl HandlerOrchestrator {
             &self.prometheus_registry,
         );
         let txn_handler = TransactionHandler::new(
+            self.rpc_client.clone(),
+            self.pg_connection_pool.clone(),
+            &self.prometheus_registry,
+        );
+        let move_handler = MoveEventHandler::new(
             self.rpc_client.clone(),
             self.pg_connection_pool.clone(),
             &self.prometheus_registry,
@@ -197,12 +203,39 @@ impl HandlerOrchestrator {
                 );
             }
         });
+        let move_event_handle = tokio::task::spawn(async move {
+            let backoff_config = ExponentialBackoffBuilder::new()
+                .with_max_interval(std::time::Duration::from_secs(BACKOFF_MAX_INTERVAL_IN_SECS))
+                .build();
+            let move_event_res = retry(backoff_config, || async {
+                let move_event_handler_exec_res = move_handler.start().await;
+                if let Err(e) = move_event_handler_exec_res.clone() {
+                    move_handler
+                        .event_handler_metrics
+                        .total_move_event_handler_error
+                        .inc();
+                    warn!(
+                        "Indexer move event handler failed with error: {:?}, retrying...",
+                        e
+                    );
+                }
+                Ok(move_event_handler_exec_res?)
+            })
+            .await;
+            if let Err(e) = move_event_res {
+                error!(
+                    "Indexer move event handler failed after retrials with error: {:?}",
+                    e
+                );
+            }
+        });
         try_join_all(vec![
             txn_handle,
             event_handle,
             checkpoint_handle,
             object_event_handle,
             publish_event_handle,
+            move_event_handle,
         ])
         .await
         .expect("Handler orchestrator shoult not run into errors.");
