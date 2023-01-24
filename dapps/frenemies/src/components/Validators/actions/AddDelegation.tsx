@@ -67,7 +67,7 @@ export function AddDelegation({ validator, amount }: Props) {
   );
 
   const handleStake = () => {
-    stakeFor.mutate({ validator, coins, amount })
+    stakeFor.mutate({ validator, coins, amount });
   };
 
   return (

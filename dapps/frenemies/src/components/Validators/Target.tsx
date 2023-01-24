@@ -4,13 +4,11 @@
 import { Goal } from "../../network/types";
 
 interface Props {
-    goal: Goal
+  goal: Goal;
 }
 
 export function Target({ goal }: Props) {
-    return (
-        <div className="text-sm text-left">{note(goal)}</div>
-    );
+  return <div className="text-sm text-left">{note(goal)}</div>;
 }
 
 /**
@@ -19,9 +17,12 @@ export function Target({ goal }: Props) {
  * @param goal
  */
 function note(goal: Goal): string {
-    switch (goal) {
-        case Goal.Friend: return 'Friend, Goal 1-13 Rank';
-        case Goal.Neutral: return 'Neutral, Goal 14-25 Rank';
-        case Goal.Enemy: return 'Enemy, Goal 26-40 Rank';
-    }
+  switch (goal) {
+    case Goal.Friend:
+      return "Friend, Goal 1-13 Rank";
+    case Goal.Neutral:
+      return "Neutral, Goal 14-25 Rank";
+    case Goal.Enemy:
+      return "Enemy, Goal 26-40 Rank";
+  }
 }

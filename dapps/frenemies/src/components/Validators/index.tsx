@@ -5,12 +5,7 @@ import { useWalletKit } from "@mysten/wallet-kit";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useSuiSystem } from "../../network/queries/sui-system";
 import { useMyType } from "../../network/queries/use-raw";
-import {
-  Delegation,
-  DELEGATION,
-  StakedSui,
-  STAKED_SUI,
-} from "../../network/types";
+import { StakedSui, STAKED_SUI } from "../../network/types";
 import { formatGoal } from "../../utils/format";
 import { Card } from "../Card";
 import { Balance } from "./Balance";

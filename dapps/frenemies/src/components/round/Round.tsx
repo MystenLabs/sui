@@ -14,7 +14,10 @@ import { LEADERBOARD, Leaderboard } from "../../network/types";
  */
 export function Round() {
   const { data: system } = useSuiSystem();
-  const { data: leaderboard } = useRawObject<Leaderboard>(config.VITE_LEADERBOARD, LEADERBOARD);
+  const { data: leaderboard } = useRawObject<Leaderboard>(
+    config.VITE_LEADERBOARD,
+    LEADERBOARD
+  );
 
   if (!system || !leaderboard) {
     return null;

@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import clsx from "clsx";
-import { FormEvent, ReactNode, useId, useState } from "react";
+import { FormEvent, ReactNode, useState } from "react";
 import { ObjectData } from "../../network/rawObject";
-import { Assignment, DELEGATION, Delegation, StakedSui, Validator } from "../../network/types";
+import {
+  Assignment,
+  DELEGATION,
+  Delegation,
+  StakedSui,
+  Validator,
+} from "../../network/types";
 import { formatAddress, formatBalance } from "../../utils/format";
 import { WithdrawDelegation } from "./actions/WithdrawDelegation";
 import { AddDelegation } from "./actions/AddDelegation";
@@ -55,7 +61,10 @@ function GridItem({
 
 export function Table({ validators, assignment, stakes }: Props) {
   const { currentAccount } = useWalletKit();
-  const { data: delegations } = useMyType<Delegation>(DELEGATION, currentAccount);
+  const { data: delegations } = useMyType<Delegation>(
+    DELEGATION,
+    currentAccount
+  );
 
   // sort validators by their voting power in DESC order (not by stake - these are different)
   const sorted = validators.sort((a, b) =>
@@ -81,9 +90,11 @@ export function Table({ validators, assignment, stakes }: Props) {
       {sorted.map((validator, index) => {
         const address = validator.metadata.suiAddress;
         const stake = stakeByValidator[address];
-        const delegation = stake && (delegations || []).find((d) => d.data.stakedSuiId == stake.data.id);
+        const delegation =
+          stake &&
+          (delegations || []).find((d) => d.data.stakedSuiId == stake.data.id);
 
-        const [amount, setAmount] = useState('0');
+        const [amount, setAmount] = useState("0");
         const onInputAmount = (evt: FormEvent<HTMLInputElement>) => {
           setAmount(fromUserInput(evt.currentTarget.value));
         };
@@ -93,13 +104,18 @@ export function Table({ validators, assignment, stakes }: Props) {
             // when delegation is present and it matches current Validator
             // we can only request to withdraw delegation
             case !!delegation:
-              return <WithdrawDelegation delegation={delegation!} stake={stakeByValidator[address]} />
+              return (
+                <WithdrawDelegation
+                  delegation={delegation!}
+                  stake={stakeByValidator[address]}
+                />
+              );
             // no delegation but there's StakedSui object; we can cancel request
             case !!stake:
-              return (<CancelDelegation stake={stake} />);
+              return <CancelDelegation stake={stake} />;
             // else the only action is to stake Sui for a validator
             default:
-              return <AddDelegation validator={address} amount={amount} />
+              return <AddDelegation validator={address} amount={amount} />;
           }
         };
 
@@ -119,7 +135,10 @@ export function Table({ validators, assignment, stakes }: Props) {
                     onInput={onInputAmount}
                     className="block w-full pr-12 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border"
                     placeholder="0 SUI"
-                    defaultValue={stake && formatBalance(stake?.data.staked.toString() || "0", DEC)}
+                    defaultValue={
+                      stake &&
+                      formatBalance(stake?.data.staked.toString() || "0", DEC)
+                    }
                   />
                   {actionButton()}
                 </div>

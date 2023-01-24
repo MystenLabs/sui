@@ -7,7 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { ObjectData } from "../../../network/rawObject";
-import { Coin, Delegation, StakedSui, SUI_COIN } from "../../../network/types";
+import { Coin, StakedSui, SUI_COIN } from "../../../network/types";
 import { x0 } from "../../../utils/format";
 
 interface Props {
