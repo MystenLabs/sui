@@ -41,6 +41,8 @@ module cw::policy {
         object::delete(id);
     }
 
+    // An authentication policy that is unlocked by an owned capability.
+
     struct AuthCapability<phantom T> has key, store {
         id : UID,
     }
@@ -52,38 +54,41 @@ module cw::policy {
 
     public fun setup_capability<T> (ctx: &mut TxContext) : (AuthCapability<T>, AuthSetupOutput<T>) {
         let id = object::new(ctx);
-        let for_auth_id = object::uid_to_inner(&id);
-
-        let auth_output = AuthSetupOutput<T> { for_auth_id, };
         let auth_object = AuthCapability<T> { id, };
-
+        let for_auth_id = object::id(&auth_object);
+        let auth_output = AuthSetupOutput<T> { for_auth_id, };
+        
         (auth_object, auth_output)
     }
 
     public fun authorize_capability<T>(auth: &AuthCapability<T>, for_operation_id: ID, ctx: &mut TxContext) :  AuthOutput<T> {
-
         let id = object::new(ctx);
-        let valid_id = object::uid_to_inner(&auth.id);
+        let valid_id = object::id(auth);
         
         AuthOutput {
             id, valid_id, for_operation_id,
         }
     }
 
-
     // This is a leaf of an Authorization policy that requires a signature from a sender
-    struct AuthSignerApproval<phantom T> {
+
+    struct AuthSignerApproval<phantom T> has key, store {
         id : UID,
         addr: address,
     }
 
+
+    public fun drop_signer_approval<T>(auth: AuthSignerApproval<T>) {
+        let AuthSignerApproval { id, addr: _ } = auth;
+        object::delete(id);
+    }
+
     public fun setup_signer_approval<T> (addr: address, ctx: &mut TxContext) : (AuthSignerApproval<T>, AuthSetupOutput<T>) {
         let id = object::new(ctx);
-        let for_auth_id = object::uid_to_inner(&id);
-
-        let auth_output = AuthSetupOutput<T> { for_auth_id, };
         let auth_object = AuthSignerApproval<T> { id, addr, };
-
+        let for_auth_id = object::id(&auth_object);
+        let auth_output = AuthSetupOutput<T> { for_auth_id, };
+        
         (auth_object, auth_output)
     }
 
@@ -96,22 +101,17 @@ module cw::policy {
         assert!(sender ==  &auth.addr, 0);
 
         let id = object::new(ctx);
-        let valid_id = object::uid_to_inner(&auth.id);
+        let valid_id = object::id(auth);
         
         AuthOutput {
             id, valid_id, for_operation_id,
         }
     }
 
-    public fun drop<T>(auth: AuthSignerApproval<T>) {
-        let AuthSignerApproval { id, addr: _ } = auth;
-        object::delete(id);
-    }
-
     // A K out of N authorization policy that requires a threshold k to activate.
     // An AND policy has a threshold of N out of N.
     // An OR policy has a threshold of 1 out of N.
-    struct AuthThreshold<phantom T> {
+    struct AuthThreshold<phantom T> has key, store {
         id : UID,
         input_ids: vector<ID>,
         k : u64,
@@ -144,10 +144,9 @@ module cw::policy {
 
         // Create authorization object and output to setup downstream authorizations.
         let id = object::new(ctx);
-        let for_auth_id = object::uid_to_inner(&id);
-
-        let auth_output = AuthSetupOutput<T> { for_auth_id, };
         let auth_object = AuthThreshold<T> { id, input_ids, k };
+        let for_auth_id = object::id(&auth_object);
+        let auth_output = AuthSetupOutput<T> { for_auth_id, };
 
         (auth_object, auth_output)
 
@@ -175,7 +174,7 @@ module cw::policy {
             // Check that the input corresponds to the ID expected.
             assert!(*borrow(&auth.input_ids, pos) == *&inp.valid_id, 0);
             // Check the input is for the operation expected
-            assert!(*&inp.valid_id == for_operation_id, 0);
+            assert!(*&inp.for_operation_id == for_operation_id, 0);
             drop_auth(inp);
         };
 
@@ -184,20 +183,28 @@ module cw::policy {
 
         // We create the output for this auth bound to the operation.
         let id = object::new(ctx);
-        let valid_id = object::uid_to_inner(&auth.id);
+        let valid_id = object::id(auth);
         
         AuthOutput {
             id, valid_id, for_operation_id,
         }
     }
 
-    struct AuthUnlockCap<phantom T, C> {
+    // A final authentication step to authorize an operation.
+
+    struct AuthUnlockCap<phantom T, C> has key, store {
         id : UID,
         input_id: ID,
         cap: C,
     }
 
-    fun setup_unlock_cap<T, C>(input : AuthSetupOutput<T>, cap : C, ctx: &mut TxContext) : AuthUnlockCap<T, C> {
+    public fun drop_unlock_cap<T, CH : copy+drop, P: drop>(auth: AuthUnlockCap<T, PolicyOperationExecCap<CH, P>>) {
+        let AuthUnlockCap { id, input_id: _, cap} = auth;
+        object::delete(id);
+        drop_exec_cap(cap);
+    }
+
+    public fun setup_unlock_cap<T, C>(input : AuthSetupOutput<T>, cap : C, ctx: &mut TxContext) : AuthUnlockCap<T, C> {
         let id = object::new(ctx);
         let input_id = input.for_auth_id;
 
@@ -208,39 +215,40 @@ module cw::policy {
         }
     }
 
-    fun authorize_unlock_op<T, O, CH : copy+drop, P: drop>(auth: &AuthUnlockCap<T, PolicyOperationExecCap<CH, P>>, input: AuthOutput<T>, op: PolicyOperation<CH, P>) : AuthorizedOperation<O, CH, P>{
+    public fun authorize_unlock_op<T, O, CH : store+copy+drop, P: store+drop>(auth: &AuthUnlockCap<T, PolicyOperationExecCap<CH, P>>, input: AuthOutput<T>, op: PolicyOperation<CH, P>) : AuthorizedOperation<O, CH, P>{
         // Check this is the correct input signal to unlock capability
         assert!(input.valid_id == auth.input_id, 0);
 
         // Check the signal is tied to the operation ID
-        let op_id =  object::uid_to_inner(&op.id);
-        assert!(input.for_operation_id == op_id, 0);
+        assert!(input.for_operation_id == object::id(&op), 0);
         drop_auth(input);
 
         // Move to create an authorization for the operation
-        ExecOperation(&auth.cap, op)
+        AuthorizeOperation(&auth.cap, op)
     }
-
-
-    // TODO: extract an authorized operation once we define the controlled resources and ops hierarchy
 
     // Operation Checks, Controlled Operations, Controlled Objects
 
     // The checks procedure defines checks that an invocstion to a controlled procedure must under take. 
-    struct PolicyChecks<CH : copy> has copy, drop {
+    struct PolicyChecks<CH : copy> has store, copy, drop {
         checks: CH,
     }
 
+    // Make an PolicyChecks object from an app specific checks spec
     public fun make_checks<CH:copy>(checks : CH) : PolicyChecks<CH> {
         PolicyChecks { checks }
     }
 
-    public fun into_inner<CH:copy>(checks: PolicyChecks<CH>) : CH {
+    // Return the app specifc checks
+    public fun into_inner_checks<CH:copy>(checks: PolicyChecks<CH>) : CH {
         let PolicyChecks {checks } = checks;
         checks
     }
 
-    struct PolicyOperation<CH : copy + drop, P: drop> {
+    // Define a policy operation tied to a specific policy, a specific controlled object
+    // and a specific set of checks. The parameters are application specific to the operation
+    // to be performed.
+    struct PolicyOperation<CH : copy + drop, P: drop> has key, store {
         id: UID,
         init_for_policy_id: ID, 
         controlled_object_id : ID,
@@ -248,20 +256,37 @@ module cw::policy {
         params: P,
     }
 
+    // Cancel (and drop) the operation
     public fun cancel_operation<CH : copy + drop, P: drop>(op : PolicyOperation<CH, P>) {
         let PolicyOperation { id, init_for_policy_id: _, controlled_object_id: _, 
           checks: _, params: _ } = op;
         object::delete(id);
     }
 
-    struct PolicyOperationInitCap<CH : copy, phantom P> has copy, drop {
+    // Extract the ID of the operation.
+    public fun op_id<CH : store + copy + drop, P: store + drop>(op : &PolicyOperation<CH, P>) : ID {
+        object::id(op)
+    }
+
+    // A capability to initiate an operation within the policy on a controlled object.
+    struct PolicyOperationInitCap<CH : copy, phantom P> has key, store {
+        id: UID,
         init_for_policy_id: ID,
         controlled_object_id : ID,
         checks: PolicyChecks<CH>,
     }
-    struct PolicyOperationExecCap<phantom CH, phantom P> {
+
+    public fun drop_init_cap<CH: copy+drop, P: drop>(cap : PolicyOperationInitCap<CH,P>) {
+        let PolicyOperationInitCap {id, init_for_policy_id: _, controlled_object_id: _, checks: _ } = cap;
+        object::delete(id);
+    }
+
+    // A capability to authorize execution of an operation within the policy.
+    struct PolicyOperationExecCap<phantom CH, phantom P> has store {
         id: UID,
     }
+
+    // A capability to present to enable execution of a policy.
     struct PolicyOperationRevokeCookie has copy, drop {}
 
     public fun drop_exec_cap<CH, P>(cap : PolicyOperationExecCap<CH, P>) {
@@ -269,33 +294,34 @@ module cw::policy {
         object::delete(id);
     }
 
-    //struct ControlledObject<O> {
-    //    id: UID,
-    //    object: O,
-    //}
-
+    // A controlled object, has an ID to tie it to a policy.
     struct ControlledObject<O: store> has key, store {
         id: UID,
         object: O
     }
 
-    struct ControlledObjectPolicyCap<phantom O> has copy, drop {
+    // A capability that allows the definition of policies for the controlled object.
+    struct ControlledObjectPolicyCap has store, copy, drop {
         controlled_object_id: ID
     }
 
-    public fun ControlObject<O : store>(object : O, ctx: &mut TxContext) : (ControlledObject<O>, ControlledObjectPolicyCap<O>) {
+    public fun ControlObject<O : store>(object : O, ctx: &mut TxContext) : (ControlledObject<O>, ControlledObjectPolicyCap) {
         let id = object::new(ctx);
-        let controlled_object_id = object::uid_to_inner(&id);
-
-        let policy_cap = ControlledObjectPolicyCap<O> {
-            controlled_object_id
-        };
 
         let controlled_object = ControlledObject {
             id, object
         };
 
+        let policy_cap = ControlledObjectPolicyCap {
+            controlled_object_id: object::id(&controlled_object)
+        };
+
         (controlled_object, policy_cap)
+    }
+
+    public fun controlled_mut<O : store>(obj: &mut ControlledObject<O>, cap: ControlledObjectPolicyCap) : &mut O{
+        assert!(cap.controlled_object_id == object::id(obj), 0);
+        &mut obj.object
     }
 
 
@@ -304,25 +330,25 @@ module cw::policy {
         op: PolicyOperation<CH, P>,
     }
 
-    public fun unlock<O: store, CH: copy+drop, P: drop>(obj : &mut ControlledObject<O>, op: AuthorizedOperation<O, CH, P>): (&mut O, CH, P) {
+    public fun unlock<O: store, CH: copy+drop, P: drop>(obj : &mut ControlledObject<O>, op: AuthorizedOperation<O, CH, P>): (&mut O, CH, P, ID) {
         let AuthorizedOperation { op } = op;
-        let PolicyOperation { id, init_for_policy_id: _, controlled_object_id, 
+        let PolicyOperation { id, init_for_policy_id, controlled_object_id, 
           checks, params } = op;
         object::delete(id);
-        assert!(controlled_object_id == object::uid_to_inner(&obj.id), 0);
+        assert!(controlled_object_id == object::id(obj), 0);
 
-        (&mut obj.object, into_inner(checks), params)   
+        (&mut obj.object, into_inner_checks(checks), params, init_for_policy_id)   
     }
 
     // Initialize a policy associated with the given controlled object and the given checks (implicitelly associated with an operation).
     // The revoke cooking is given, and will be required when the operation will be executed, to allow dropping the cookie to invalidate the policy
     // The function returns a capability to initiate an operation, as well as to execute and operation.
-    public fun InitPolicy<O, CH: drop + copy, P: drop>(object: &ControlledObjectPolicyCap<O>, checks: PolicyChecks<CH>, // _revoke_cookie: &PolicyOperationRevokeCookie, 
+    public fun InitPolicy<O, CH: drop + copy, P: drop>(object: &ControlledObjectPolicyCap, checks: PolicyChecks<CH>, // _revoke_cookie: &PolicyOperationRevokeCookie, 
             ctx: &mut TxContext) : (PolicyOperationInitCap<CH, P>, PolicyOperationExecCap<CH, P>) {
         let id = object::new(ctx);
         let init_for_policy_id = object::uid_to_inner(&id);
         let controlled_object_id = object.controlled_object_id;
-        ( PolicyOperationInitCap { init_for_policy_id, controlled_object_id, checks }, PolicyOperationExecCap { id, } )
+        ( PolicyOperationInitCap { id: object::new(ctx), init_for_policy_id, controlled_object_id, checks }, PolicyOperationExecCap { id, } )
     } 
 
     /// Initialize an operation that should be within the policy
@@ -338,7 +364,7 @@ module cw::policy {
         }
     }
 
-    public fun ExecOperation<O, CH : copy+drop, P: drop>(exec_cap: &PolicyOperationExecCap<CH, P>, op: PolicyOperation<CH, P> ) : AuthorizedOperation<O, CH, P> {
+    public fun AuthorizeOperation<O, CH : copy+drop, P: drop>(exec_cap: &PolicyOperationExecCap<CH, P>, op: PolicyOperation<CH, P> ) : AuthorizedOperation<O, CH, P> {
         // Check that the capability to execute is tied to the capability to initiate the operation
         let cap_id = object::uid_to_inner(&exec_cap.id);
         assert!(cap_id == op.init_for_policy_id, 0);
@@ -346,9 +372,6 @@ module cw::policy {
             op,
         }
     }
-
-
-
 
     // Part 3: module initializer to be executed when this module is published
     fun init(_ctx: &mut TxContext) {
@@ -359,61 +382,5 @@ module cw::policy {
     // part 5: public/ entry functions (introduced later in the tutorial)
 
     // part 6: private functions (if any)
-
-    struct TestX {}
-
-    #[test]
-    public fun test_simple_sign() {
-        use sui::tx_context;
-
-        // Some dummy addresses
-        let dummy_address_A = @0xAAAA;
-        let _dummy_address_B = @0xBBBB;
-        let _dummy_address_C = @0xCCCC;
-
-        // create a dummy TxContext for testing
-        let ctx = tx_context::dummy();
-
-        // Setup a signer approval
-        let (auth, output) = setup_signer_approval<TestX>(dummy_address_A, &mut ctx);
-
-        // Test that a correct signer gets an output
-
-        let id = object::new(&mut ctx);
-        let op_id = object::uid_to_inner(&id);
-        let auth_out = inner_authorize_signer_approval<TestX>(&dummy_address_A, &auth, op_id, &mut ctx);
-
-        // clean-up
-
-        drop(auth);
-        object::delete(id);
-        drop_setup_output<TestX>(output);
-
-        // Check the output is ok
-        assert!(auth_out.for_operation_id == op_id, 0);
-        drop_auth(auth_out);
-
-
-        // use sui::tx_context;
-        // use sui::transfer;
-
-        // // create a dummy TxContext for testing
-        // let ctx = tx_context::dummy();
-
-        // // create a sword
-        // let sword = Sword {
-        //     id: object::new(&mut ctx),
-        //     magic: 42,
-        //     strength: 7,
-        // };
-
-        // // check if accessor functions return correct values
-        // assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
-
-        // // create a dummy address and transfer the sword
-        // let dummy_address = @0xCAFE;
-        // transfer::transfer(sword, dummy_address);
-    }
-
     
 }
