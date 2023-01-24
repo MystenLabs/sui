@@ -239,7 +239,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
     ) -> RpcResult<DevInspectResults> {
         let (mut current_epoch, mut reference_gas_price) = (0, 0);
         // Only fetch from DB if necessary
-        if gas_price == None || epoch == None {
+        if gas_price.is_none() || epoch.is_none() {
             (current_epoch, reference_gas_price) =
                 self.get_sui_system_state_object_epoch_and_gas_price()?
         }
