@@ -355,7 +355,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
-        verify_dependencies: true,
+        verify_dependencies: false,
+        skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
     .execute(context)
@@ -520,7 +521,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
-        verify_dependencies: true,
+        verify_dependencies: false,
+        skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
     .execute(context)

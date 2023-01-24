@@ -134,10 +134,14 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: u64,
 
-        /// Confirms that compiling dependencies from source results in bytecode matching the
-        /// dependency found on-chain.
+        /// (Deprecated) This flag is deprecated, dependency verification is on by default.
         #[clap(long)]
         verify_dependencies: bool,
+
+        /// Publish the package without checking whether compiling dependencies from source results
+        /// in bytecode matching the dependencies found on-chain.
+        #[clap(long)]
+        skip_dependency_verification: bool,
 
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
@@ -464,6 +468,7 @@ impl SuiClientCommands {
                 build_config,
                 gas_budget,
                 verify_dependencies,
+                skip_dependency_verification,
                 with_unpublished_dependencies,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
@@ -491,15 +496,32 @@ impl SuiClientCommands {
                     }
                 }
 
+                let client = context.get_client().await?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
 
-                let client = context.get_client().await?;
                 if verify_dependencies {
+                    eprintln!(
+                        "{}",
+                        "Dependency verification is on by default. --verify-dependencies is \
+                         deprecated and will be removed in the next release."
+                            .bold()
+                            .yellow(),
+                    );
+                }
+
+                if !skip_dependency_verification {
                     BytecodeSourceVerifier::new(client.read_api(), false)
                         .verify_package_deps(&compiled_package.package)
                         .await?;
-                    println!("Successfully verified dependencies on-chain against source.");
+                    eprintln!(
+                        "{}",
+                        "Successfully verified dependencies on-chain against source."
+                            .bold()
+                            .green(),
+                    );
+                } else {
+                    eprintln!("{}", "Skipping dependency verification".bold().yellow());
                 }
 
                 let data = client
