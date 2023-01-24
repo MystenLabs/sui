@@ -116,9 +116,6 @@ impl CheckpointExecutor {
             .map(|c| c.sequence_number() + 1)
             .unwrap_or_default();
         let mut pending: CheckpointExecutionBuffer = FuturesOrdered::new();
-        // Indicates whether we have scheduled all checkpoints in the epoch. If so, we stop
-        // scheduling more.
-        let mut no_more_scheduling = false;
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
             if let Some(next_epoch_committee) =
@@ -131,15 +128,13 @@ impl CheckpointExecutor {
                 );
                 return next_epoch_committee;
             }
-            if !no_more_scheduling {
-                no_more_scheduling = self.schedule_synced_checkpoints(
-                    &mut pending,
-                    // next_to_schedule will be updated to the next checkpoint to schedule.
-                    // This makes sure we don't re-schedule the same checkpoint multiple times.
-                    &mut next_to_schedule,
-                    epoch_store.clone(),
-                );
-            }
+            self.schedule_synced_checkpoints(
+                &mut pending,
+                // next_to_schedule will be updated to the next checkpoint to schedule.
+                // This makes sure we don't re-schedule the same checkpoint multiple times.
+                &mut next_to_schedule,
+                epoch_store.clone(),
+            );
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -206,12 +201,12 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> bool {
+    ) {
         let Some(latest_synced_checkpoint) = self
             .checkpoint_store
             .get_highest_synced_checkpoint()
             .expect("Failed to read highest synced checkpoint") else {
-            return false;
+            return;
         };
 
         while *next_to_schedule <= latest_synced_checkpoint.sequence_number()
@@ -228,14 +223,12 @@ impl CheckpointExecutor {
                     )
                 });
             if checkpoint.epoch() > epoch_store.epoch() {
-                return true;
+                return;
             }
 
             self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
             *next_to_schedule += 1;
         }
-
-        false
     }
 
     fn schedule_checkpoint(
