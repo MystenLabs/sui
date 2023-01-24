@@ -18,6 +18,7 @@
     "@mysten/wallet-kit": "workspace:*",
     "@tanstack/react-query": "^4.22.0",
     "@tanstack/react-query-devtools": "^4.22.0",
+    "bignumber.js": "^9.1.1",
     "class-variance-authority": "^0.4.0",
     "clsx": "^1.2.1",
     "plausible-tracker": "^0.3.8",
