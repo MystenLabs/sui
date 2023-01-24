@@ -952,7 +952,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let QuorumDriverResponse {
         tx_cert: certified_txn,
         effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap();
+    } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
@@ -977,7 +977,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let QuorumDriverResponse {
         tx_cert: certified_txn,
         effects_cert: certified_txn_effects,
-    } = rx.recv().await.unwrap();
+    } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
