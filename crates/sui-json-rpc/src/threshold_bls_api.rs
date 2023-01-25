@@ -48,7 +48,7 @@ impl ThresholdBlsApi {
             Err(Error::InternalError(anyhow!("Object does not have a layout")))?};
         if !Self::is_randomness_object(&layout) {
             Err(Error::SuiError(SuiError::BadObjectType {
-                error: format!("Not a Randomness object"),
+                error: "Not a Randomness object".to_string(),
             }))?
         }
         Ok(obj)
