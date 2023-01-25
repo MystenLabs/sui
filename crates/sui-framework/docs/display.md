@@ -11,6 +11,8 @@ and keeping it separate from the ecosystem agreements.
 Each of the fields of the Display object should allow for pattern
 substitution and filling-in the pieces using the data from the object T.
 
+More entry functions might be added in the future depending on the use cases.
+
 
 -  [Resource `Display`](#0x2_display_Display)
 -  [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
