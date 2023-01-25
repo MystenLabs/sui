@@ -11,6 +11,7 @@ import {
   SCORECARD_UPDATED,
   STAKED_SUI,
   SUI_SYSTEM,
+  SYSTEM_EPOCH_INFO,
 } from "./types";
 
 export const bcs = suiBcs
@@ -76,7 +77,17 @@ export const bcs = suiBcs
     epoch: "u64",
     validators: "validator_set::ValidatorSet",
   })
-
+  .registerStructType(SYSTEM_EPOCH_INFO, {
+    epoch: "u64",
+    referenceGasPrice: "u64",
+    totalStake: "u64",
+    storageFundInflows: "u64",
+    storageFundOutflows: "u64",
+    storageFundBalance: "u64",
+    stakeSubsidyAmount: "u64",
+    totalGasFees: "u64",
+    totalStakeRewards: "u64",
+  })
   .registerStructType("validator_set::ValidatorSet", {
     /** Total amount of stake from all active validators (not including delegation), at the beginning of the epoch. */
     totalValidatorStake: "u64",
@@ -96,7 +107,6 @@ export const bcs = suiBcs
      */
     // pendingDelegationSwitches: 'VecMap<ValidatorPair, table::Table>',
   })
-
   .registerStructType("validator_set::ValidatorPair", {
     from: "address",
     to: "address",

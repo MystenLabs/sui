@@ -57,7 +57,7 @@ export function Setup() {
   };
 
   // TODO: Loading UI:
-  if (!isSuccess || scorecard) {
+  if (!isSuccess || !scorecard) {
     return null;
   }
 
