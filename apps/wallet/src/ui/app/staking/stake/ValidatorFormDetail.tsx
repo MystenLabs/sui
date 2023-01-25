@@ -117,20 +117,25 @@ export function ValidatorFormDetail({
                         </div>
                     }
                     footer={
-                        <>
-                            <Text
-                                variant="body"
-                                weight="medium"
-                                color="steel-darker"
-                            >
-                                Your Staked SUI
-                            </Text>
+                        !unstake && (
+                            <>
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    Your Staked SUI
+                                </Text>
 
-                            <StakeAmount balance={totalStake} variant="body" />
-                        </>
+                                <StakeAmount
+                                    balance={totalStake}
+                                    variant="body"
+                                />
+                            </>
+                        )
                     }
                 >
-                    <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5 mb-3.5">
+                    <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5">
                         <div className="flex gap-2 items-center justify-between ">
                             <div className="flex gap-1 items-baseline text-steel">
                                 <Text
@@ -140,7 +145,7 @@ export function ValidatorFormDetail({
                                 >
                                     Staking APY
                                 </Text>
-                                <IconTooltip tip="Annual Percentage Yield" />
+                                <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
                             </div>
 
                             <Text
@@ -152,7 +157,7 @@ export function ValidatorFormDetail({
                             </Text>
                         </div>
                         {!unstake && (
-                            <div className="flex gap-2 items-center justify-between">
+                            <div className="flex gap-2 items-center justify-between mb-3.5">
                                 <div className="flex gap-1 items-baseline text-steel">
                                     <Text
                                         variant="body"

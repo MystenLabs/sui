@@ -64,7 +64,6 @@ export function DelegationDetailCard({
 
     const totalStake = delegationData?.staked_sui.principal.value || 0n;
 
-    // Stake earned by ratio * pending_reward
     const suiEarned = useMemo(() => {
         if (!validatorsData || !delegationData) return 0n;
         return getStakingRewards(

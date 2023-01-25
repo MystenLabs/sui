@@ -12,10 +12,13 @@ import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
+import { validatorsFields } from '../validatorsFields';
 import { DelegationState, STATE_TO_COPY } from './../home/DelegationCard';
 import StakeForm from './StakeForm';
+import { UnStakeForm } from './UnstakeForm';
 import { ValidatorFormDetail } from './ValidatorFormDetail';
 import { createValidationSchema } from './validation';
 import BottomMenuLayout, {
@@ -33,6 +36,7 @@ import {
     useAppSelector,
     useCoinDecimals,
     useIndividualCoinMaxBalance,
+    useGetObject,
 } from '_hooks';
 import {
     accountAggregateBalancesSelector,
@@ -68,6 +72,12 @@ function StakingCard() {
     const { data: allDelegation, isLoading } = useGetDelegatedStake(
         accountAddress || ''
     );
+
+    //TODO: since we only require epoch number, probably we can use a different query
+    const { data: validators, isLoading: validatorsIsloading } =
+        useGetObject(STATE_OBJECT);
+
+    const validatorsData = validators && validatorsFields(validators);
 
     // TODO: this is a hack to get the total amount of gas coins
     const totalGasCoins = useMemo(
@@ -113,6 +123,14 @@ function StakingCard() {
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
         [coinType]
     );
+
+    const suiEarned = useMemo(() => {
+        if (!validatorsData || !delegationData) return 0;
+        return getStakingRewards(
+            validatorsData.validators.fields.active_validators,
+            delegationData
+        );
+    }, [delegationData, validatorsData]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
@@ -184,7 +202,7 @@ function StakingCard() {
             if (!validatorAddress || !amount || !tokenTypeArg) {
                 throw new Error('Failed, missing required field');
             }
-            const response = Coin.stakeCoin(
+            const response = await Coin.stakeCoin(
                 signer,
                 allCoinsForStake,
                 allSuiCoins,
@@ -296,14 +314,14 @@ function StakingCard() {
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
-    if (!coinType || !validatorAddress) {
+    if (!coinType || !validatorAddress || !validatorsData) {
         return <Navigate to="/" replace={true} />;
     }
 
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
-                loading={loadingBalance || isLoading}
+                loading={loadingBalance || isLoading || validatorsIsloading}
                 className="flex justify-center w-full h-full items-center "
             >
                 <Formik
@@ -315,32 +333,48 @@ function StakingCard() {
                     {({ isSubmitting, isValid, submitForm }) => (
                         <BottomMenuLayout>
                             <Content>
-                                <ValidatorFormDetail
-                                    validatorAddress={validatorAddress}
-                                    unstake={unstake}
-                                    stakedId={stakeIdParams}
-                                />
-                                <div className="flex flex-col justify-between items-center mb-2 mt-6 w-full">
-                                    <Text
-                                        variant="caption"
-                                        color="gray-85"
-                                        weight="semibold"
-                                    >
-                                        {!unstake &&
-                                            'Enter the amount of SUI to stake'}
-                                    </Text>
+                                <div className="mb-4">
+                                    <ValidatorFormDetail
+                                        validatorAddress={validatorAddress}
+                                        unstake={unstake}
+                                        stakedId={stakeIdParams}
+                                    />
                                 </div>
-                                <StakeForm
-                                    submitError={sendError}
-                                    coinBalance={coinBalance}
-                                    coinType={coinType}
-                                    unstake={unstake}
-                                    onClearSubmitError={
-                                        handleOnClearSubmitError
-                                    }
-                                />
+                                {!unstake && (
+                                    <div className="flex flex-col justify-between items-center mb-2 mt-7.5 w-full">
+                                        <Text
+                                            variant="caption"
+                                            color="gray-85"
+                                            weight="semibold"
+                                        >
+                                            Enter the amount of SUI to stake
+                                        </Text>
+                                    </div>
+                                )}
 
-                                {stakeIdParams && !unstake && (
+                                {unstake ? (
+                                    <UnStakeForm
+                                        submitError={sendError}
+                                        coinBalance={coinBalance}
+                                        coinType={coinType}
+                                        stakingReward={suiEarned}
+                                        onClearSubmitError={
+                                            handleOnClearSubmitError
+                                        }
+                                    />
+                                ) : (
+                                    <StakeForm
+                                        submitError={sendError}
+                                        coinBalance={coinBalance}
+                                        coinType={coinType}
+                                        epoch={validatorsData.epoch}
+                                        onClearSubmitError={
+                                            handleOnClearSubmitError
+                                        }
+                                    />
+                                )}
+
+                                {!unstake && (
                                     <div className="flex-1 mt-7.5">
                                         <Collapse
                                             title={
@@ -353,7 +387,18 @@ function StakingCard() {
                                             }
                                             initialIsOpen
                                         >
-                                            --
+                                            <Text
+                                                variant="p3"
+                                                color="steel-dark"
+                                                weight="normal"
+                                            >
+                                                The staked SUI starts earning
+                                                reward at the end of the Epoch
+                                                in which it was staked. The
+                                                rewards will become available at
+                                                the end of one full Epoch of
+                                                staking.
+                                            </Text>
                                         </Collapse>
                                     </div>
                                 )}
