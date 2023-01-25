@@ -27,7 +27,6 @@ const WelcomePage = () => {
                                 <Logo
                                     size="normal"
                                     className="text-hero mt-7.5"
-                                    txt={true}
                                 />
                                 <div className="mx-auto text-center mt-12">
                                     <Heading

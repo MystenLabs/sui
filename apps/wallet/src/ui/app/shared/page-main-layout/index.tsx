@@ -4,6 +4,7 @@
 import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
+import { useAppSelector } from '../../hooks';
 import { Toaster } from '../toaster';
 import DappStatus from '_app/shared/dapp-status';
 import { ErrorBoundary } from '_components/error-boundary';
@@ -32,6 +33,7 @@ export default function PageMainLayout({
     centerLogo = false,
     className,
 }: PageMainLayoutProps) {
+    const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
     return (
         <div className={st.container}>
             <div
@@ -41,7 +43,7 @@ export default function PageMainLayout({
                 })}
             >
                 <Link to="/tokens" className={st.logoLink}>
-                    <Logo className={st.logo} txt={true} />
+                    <Logo className={st.logo} networkName={networkName} />
                 </Link>
                 {dappStatusEnabled ? <DappStatus /> : null}
                 {topNavMenuEnabled ? (
