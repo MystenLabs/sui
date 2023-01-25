@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Round } from "../components/round/Round";
-import { Leaderboard } from "../components/leaderboard/Leaderboard";
 import { Card } from "../components/Card";
 import { Stat } from "../components/Stat";
 import { Validators } from "../components/Validators";
-import { YourScore } from "../components/your-score/YourScore";
 import { useScorecard } from "../network/queries/scorecard";
 import { formatAddress, formatGoal } from "../utils/format";
 import { useWalletKit } from "@mysten/wallet-kit";
@@ -19,8 +17,8 @@ import { Scoreboard } from "../components/Scoreboard";
  */
 export function Home() {
   const navigate = useNavigate();
-  const { currentAccount, signAndExecuteTransaction } = useWalletKit();
-  const { data: scorecard, isSuccess } = useScorecard(currentAccount || "");
+  const { currentAccount } = useWalletKit();
+  const { data: scorecard, isSuccess } = useScorecard(currentAccount);
 
   useEffect(() => {
     if (!currentAccount) {

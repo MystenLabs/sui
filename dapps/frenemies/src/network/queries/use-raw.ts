@@ -13,3 +13,33 @@ export function useRawObject<T>(objectId: string, bcsType: string) {
     return getRawObjectParsedUnsafe<T>(provider, objectId, bcsType);
   });
 }
+
+/**
+ * Get all objects by type.
+ */
+export function useMyType<T>(type: string, account?: string | null) {
+  return useQuery(
+    [type, account],
+    async () => {
+      if (!account) {
+        return null;
+      }
+
+      const objects = await provider.getObjectsOwnedByAddress(account);
+      const search = objects.filter((v) => v.type.includes(type));
+
+      if (!search.length) {
+        return null;
+      }
+
+      return Promise.all(
+        search.map((obj) =>
+          getRawObjectParsedUnsafe<T>(provider, obj.objectId, type)
+        )
+      );
+    },
+    {
+      enabled: !!account,
+    }
+  );
+}

@@ -3,14 +3,8 @@
 
 import { getRawObjectParsedUnsafe } from "../rawObject";
 import { useQuery } from "@tanstack/react-query";
-import { Scorecard } from "../types";
+import { SCORECARD, Scorecard } from "../types";
 import provider from "../provider";
-
-/**
- * Type signature for the Scorecard type.
- * TODO: Ideally should include the packageID.
- */
-const SCORECARD_TYPE = "frenemies::Scorecard";
 
 /**
  * Get a Scorecard for an account if this account has at least one.
@@ -27,7 +21,7 @@ export function useScorecard(account?: string | null) {
       }
 
       const objects = await provider.getObjectsOwnedByAddress(account);
-      const search = objects.find((v) => v.type.includes(SCORECARD_TYPE));
+      const search = objects.find((v) => v.type.includes(SCORECARD));
 
       if (!search) {
         return null;
@@ -36,7 +30,7 @@ export function useScorecard(account?: string | null) {
       return getRawObjectParsedUnsafe<Scorecard>(
         provider,
         search.objectId,
-        "frenemies::Scorecard"
+        SCORECARD
       );
     },
     {
