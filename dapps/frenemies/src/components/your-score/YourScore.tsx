@@ -6,7 +6,6 @@ import { config } from "../../config";
 import { useLeaderboard } from "../../network/queries/leaderboard";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
-import { Card } from "../Card";
 import { Stat } from "../Stat";
 import { Table } from "./Table";
 
@@ -24,14 +23,15 @@ export function YourScore() {
     return null;
   }
 
-  const rank = leaderboard.data.topScores.findIndex((score) => score.name == scorecard.data.name);
+  const rank = leaderboard.data.topScores.findIndex(
+    (score) => score.name == scorecard.data.name
+  );
 
   return (
-    <Card key="your-score" variant="leaderboard">
-      <h2 className="font-semibold text-3xl leading-tight">Your Score</h2>
+    <>
       <div className="flex gap-16 mt-3 mb-7">
         <Stat variant="leaderboard" label="Rank">
-          {rank == -1 ? '1000+' : (rank + 1)}
+          {rank == -1 ? "1000+" : rank + 1}
         </Stat>
         <Stat variant="leaderboard" label="Score">
           {scorecard.data.score}
@@ -42,6 +42,6 @@ export function YourScore() {
         leaderboard={leaderboard.data}
         scorecard={scorecard.data}
       />
-    </Card>
+    </>
   );
 }

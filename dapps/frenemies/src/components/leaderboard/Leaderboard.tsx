@@ -3,7 +3,6 @@
 
 import { useLeaderboard } from "../../network/queries/leaderboard";
 import { config } from "../../config";
-import { Card } from "../Card";
 import { Stat } from "../Stat";
 import { Table } from "./Table";
 
@@ -21,8 +20,7 @@ export function Leaderboard() {
   }
 
   return (
-    <Card key="leaderboard" variant="leaderboard">
-      <h2 className="font-semibold text-3xl leading-tight">Leaderboard</h2>
+    <>
       <div className="flex gap-16 mt-3 mb-7">
         <Stat variant="leaderboard" label="Highest Score">
           420
@@ -32,6 +30,6 @@ export function Leaderboard() {
         </Stat> */}
       </div>
       <Table data={data.data} />
-    </Card>
+    </>
   );
 }
