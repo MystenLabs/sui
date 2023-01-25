@@ -14,6 +14,10 @@ procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 // ==================================================================================
 // Native transfer
 
+function {:inline} ownership_update<T>(m: $Memory T, id: int, v: T): $Memory T {
+    $Memory(domain#$Memory(m)[id := true], contents#$Memory(m)[id := v])
+}
+
 {%- for instance in transfer_instances %}
 
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
@@ -23,27 +27,40 @@ procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 // Native transfer implementation for object type `{{instance.suffix}}`
 
 
-//procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int);
 
 procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int) {
     var id: int;
-    id := $bytes#$2_object_ID($id#$2_object_UID($id#{{T}}(obj)));
-    owner[id] := $ObjState(false, recipient);
-    {{T}}_$memory := transfer({{T}}_$memory, id, obj, recipient);
+    var v: $2_prover_Ownership;
+    id := $bytes#$2_object_ID($2_object_$id{{S}}(obj));
+    v := $2_prover_Ownership($1_option_spec_some'address'(recipient), 1);
+    $2_prover_Ownership_$memory := ownership_update($2_prover_Ownership_$memory, id, v);
 }
 
 procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}}) {
     var id: int;
-    id := $bytes#$2_object_ID($id#$2_object_UID($id#{{T}}(obj)));
-    if ($2_prover_owned({{T}}_$memory, owner, id)) {
+    var v: $2_prover_Ownership;
+    if ($2_prover_owned{{S}}($2_prover_Ownership_$memory, obj)) {
         call $ExecFailureAbort();
         return;
     }
-    owner[id] := $ObjState(true, 0);
-    {{T}}_$memory := share({{T}}_$memory, id, obj);
+    
+    id := $bytes#$2_object_ID($2_object_$id{{S}}(obj));
+    v := $2_prover_Ownership($1_option_Option'address'(EmptyVec()), 2);
+    $2_prover_Ownership_$memory := ownership_update($2_prover_Ownership_$memory, id, v);
 }
 
-procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}});
+procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}}) {
+    var id: int;
+    var v: $2_prover_Ownership;
+    if ($2_prover_owned{{S}}($2_prover_Ownership_$memory, obj)) {
+        call $ExecFailureAbort();
+        return;
+    }
+    
+    id := $bytes#$2_object_ID($2_object_$id{{S}}(obj));
+    v := $2_prover_Ownership($1_option_Option'address'(EmptyVec()), 3);
+    $2_prover_Ownership_$memory := ownership_update($2_prover_Ownership_$memory, id, v);
+}
 
 {%- endfor %}
 
@@ -65,6 +82,11 @@ procedure {:inline 1} $2_object_record_new_uid(id: int);
 procedure {:inline 1} $2_object_borrow_uid{{S}}(obj: {{T}}) returns (res: $2_object_UID) {
     res := $id#{{T}}(obj);
 }
+
+function $2_object_$borrow_uid{{S}}(obj: {{T}}): $2_object_UID {
+    $id#{{T}}(obj)
+}
+
 
 {%- endfor %}
 
@@ -110,8 +132,35 @@ procedure {:inline 1} $2_types_is_one_time_witness{{S}}(_: {{T}}) returns (res: 
 
 procedure {:inline 1} $2_dynamic_field_has_child_object(parent: int, id: int) returns (res: bool);
 
-{%- for instance in dynamic_field_instances %}
+{%- for instance_0 in dynamic_field_instances %}
+{%- for instance_1 in dynamic_field_instances %}
+{%- set S = "'" ~ instance_0.suffix ~ "'" -%}
+{%- set T = instance_0.name -%}
+{%- set K = "'" ~ instance_0.suffix ~ "_" ~ instance_1.suffix ~ "'" -%}
 
+// ----------------------------------------------------------------------------------
+// Native dynamic field implementation for object type `{{instance_0.suffix}}_{{instance_1.suffix}}
+// This may be suboptimal as this template will be expanded for all combinations of concrete types
+// but handling it probelry would require non-trivial changes to prelude generation code in the core Move repo 
+
+procedure {:inline 1} $2_dynamic_field_add{{K}}(parent: $Mutation $2_object_UID, name: {{T}}, value: {{T}}) returns (res: $Mutation $2_object_UID) {
+    var id: int;
+    var v: $2_prover_DynamicFields{{S}};
+    id := $bytes#$2_object_ID($id#$2_object_UID($Dereference(parent)));
+    if ($2_prover_uid_has_field{{S}}($2_prover_DynamicFields{{S}}_$memory, id, name)) {
+        call $ExecFailureAbort();
+        return;
+    }
+    v := $2_prover_DynamicFields{{S}}(ExtendVec($names#$2_prover_DynamicFields{{S}}($ResourceValue($2_prover_DynamicFields{{S}}_$memory, id)), name));
+    $2_prover_DynamicFields{{S}}_$memory := ownership_update($2_prover_DynamicFields{{S}}_$memory, id, v);
+    res := parent;    
+}
+
+{%- endfor %}
+{%- endfor %}
+
+
+{%- for instance in dynamic_field_instances %}
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
 {%- set T = instance.name -%}
 
@@ -138,48 +187,6 @@ procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int
 function GetDynField<T, V>(o: T, addr: int): V;
 
 function UpdateDynField<T, V>(o: T, addr: int, v: V): T;
-
-// ==================================================================================
-// Spec native functions to be used in specs to tap into Sui storage model
-
-
-// Representation of object state. The owner value is meaningless if object is shared,
-// otherwise itcontains address of the object owner
-
-type {:datatype} $ObjState;
-function {:constructor} $ObjState(shared: bool, owner: int): $ObjState;
-
-
-// Representation of memory for a given type.
-//type {:datatype} $SuiMemory _;
-
-//function {:constructor} $SuiMemory<T>(domain: [int]bool, contents: [int]T): $SuiMemory T;
-
-var owner: [int]$ObjState;
-
-// Functions to change memory state used in in native function Boogie implementations
-
-function {:inline} transfer<T>(m: $Memory T, id: int, v: T, recipient: int): $Memory T {
-    $Memory(domain#$Memory(m)[id := true], contents#$Memory(m)[id := v])
-}
-
-function {:inline} share<T>(m: $Memory T, id: int, v: T): $Memory T {
-    $Memory(domain#$Memory(m)[id := true], contents#$Memory(m)[id := v])
-}
-
-// Functions to query memory state
-
-function {:inline} $2_prover_owned<T>(m: $Memory T, o: [int]$ObjState, id: int): bool {
-    domain#$Memory(m)[id] && !shared#$ObjState(o[id])
-}
-
-function {:inline} $2_prover_owned_by<T>(m: $Memory T, o: [int]$ObjState, id: int, owner: int): bool {
-    domain#$Memory(m)[id] && !shared#$ObjState(o[id]) && owner#$ObjState(o[id]) == owner
-}
-
-function {:inline} $2_prover_shared<T>(m: $Memory T, o: [int]$ObjState, id: int): bool {
-    domain#$Memory(m)[id] && shared#$ObjState(o[id])
-}
 
 
 

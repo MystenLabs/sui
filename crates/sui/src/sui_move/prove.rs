@@ -81,8 +81,6 @@ impl Prove {
             ),
         );
 
-        options.model_builder.globals_access = vec!["owner".to_string()];
-
         let prover_result = std::thread::spawn(move || {
             prove::run_move_prover(
                 build_config,
