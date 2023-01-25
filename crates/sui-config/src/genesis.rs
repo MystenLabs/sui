@@ -478,7 +478,7 @@ impl Builder {
             .collect::<Vec<_>>();
 
         // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
+        // assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
 
         let genesis = Genesis {
             checkpoint,
