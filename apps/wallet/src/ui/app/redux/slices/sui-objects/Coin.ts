@@ -17,7 +17,7 @@ const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 export const DEFAULT_GAS_BUDGET_FOR_PAY = 150;
-export const DEFAULT_GAS_BUDGET_FOR_STAKE = 10000;
+export const DEFAULT_GAS_BUDGET_FOR_STAKE = 15000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
@@ -81,26 +81,60 @@ export class Coin {
      *
      * @param signer A signer with connection to fullnode
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
+     * @param gasCoins A list of Sui coins owned by the signer
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
      */
     public static async stakeCoin(
         signer: SignerWithProvider,
         coins: SuiMoveObject[],
+        gasCoins: SuiMoveObject[],
         amount: bigint,
         validator: SuiAddress
     ): Promise<SuiExecuteTransactionResponse> {
-        const coin = await Coin.requestSuiCoinWithExactAmount(
-            signer,
-            coins,
-            amount
+        // sort to get the smallest one for gas
+        const sortedGasCoins = CoinAPI.sortByBalance(gasCoins);
+        const gasCoin = CoinAPI.selectCoinWithBalanceGreaterThanOrEqual(
+            sortedGasCoins,
+            BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
         );
+        if (!gasCoin) {
+            throw new Error(
+                'Insufficient funds, not enough funds to cover for gas fee.'
+            );
+        }
+        if (!coins.length) {
+            throw new Error('Insufficient funds, no coins found.');
+        }
+        const isSui = CoinAPI.getCoinTypeArg(coins[0]) === SUI_TYPE_ARG;
+        const stakeCoins =
+            CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+                coins,
+                amount,
+                isSui ? [CoinAPI.getID(gasCoin)] : undefined
+            ).map(CoinAPI.getID);
+        if (!stakeCoins.length) {
+            if (stakeCoins.length === 1 && isSui) {
+                throw new Error(
+                    'Not enough coin objects, at least 2 coin objects are required.'
+                );
+            } else {
+                throw new Error(
+                    'Insufficient funds, try reducing the stake amount.'
+                );
+            }
+        }
         const txn = {
             packageObjectId: '0x2',
             module: 'sui_system',
-            function: 'request_add_delegation',
+            function: 'request_add_delegation_mul_coin',
             typeArguments: [],
-            arguments: [SUI_SYSTEM_STATE_OBJECT_ID, coin, validator],
+            arguments: [
+                SUI_SYSTEM_STATE_OBJECT_ID,
+                stakeCoins,
+                [String(amount)],
+                validator,
+            ],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
         };
         return await signer.executeMoveCall(txn);
