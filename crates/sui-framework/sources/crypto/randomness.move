@@ -31,7 +31,7 @@
 ///
 module sui::randomness {
     use std::hash::sha3_256;
-    use std::option;
+    use std::option::{Self, Option};
     use std::vector;
     use sui::bcs;
     use sui::object::{Self, UID, ID};

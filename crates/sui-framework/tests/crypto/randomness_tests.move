@@ -11,7 +11,7 @@ module sui::randomness_tests {
 
     const TEST_USER_ADDR: address = @0xA11CE;
 
-    struct WITENESS has drop {}
+    struct WITNESS has drop {}
 
     #[test]
     fun test_tbls_happy_flow() {
