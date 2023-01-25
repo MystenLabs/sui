@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api::ThresholdBlsApiServer;
+use crate::error::Error;
 use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -19,6 +20,7 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::construct_tbls_randomness_object_message;
+use sui_types::error::SuiError;
 use sui_types::object::{Object, ObjectRead};
 
 pub struct ThresholdBlsApi {
@@ -38,17 +40,16 @@ impl ThresholdBlsApi {
     }
 
     /// Get the object and check if it is a Randomness object.
-    async fn get_randomness_object(&self, object_id: ObjectID) -> RpcResult<Object> {
-        let obj_read = self
-            .state
-            .get_object_read(&object_id)
-            .await
-            .map_err(|e| anyhow!(e))?;
+    async fn get_randomness_object(&self, object_id: ObjectID) -> Result<Object, Error> {
+        let obj_read = self.state.get_object_read(&object_id).await?;
         let ObjectRead::Exists(_obj_ref, obj, layout) = obj_read else {
-            Err(anyhow!("Object not found"))? };
-        let Some(layout) = layout else { Err(anyhow!("Object does not have a layout"))? };
+            Err(Error::SuiError(SuiError::ObjectNotFound{ object_id, version: None }))? };
+        let Some(layout) = layout else {
+            Err(Error::InternalError(anyhow!("Object does not have a layout")))?};
         if !Self::is_randomness_object(&layout) {
-            Err(anyhow!("Not a Randomness object"))?
+            Err(Error::SuiError(SuiError::BadObjectType {
+                error: format!("Not a Randomness object"),
+            }))?
         }
         Ok(obj)
     }
@@ -57,7 +58,7 @@ impl ThresholdBlsApi {
     ///
     /// Currently only checks if the object exists in the local storage, but in the future
     /// validators will verify that the object had been created in a transaction that was committed.
-    async fn verify_object_alive_and_committed(&self, object_id: ObjectID) -> RpcResult<()> {
+    async fn verify_object_alive_and_committed(&self, object_id: ObjectID) -> Result<(), Error> {
         let _obj = self.get_randomness_object(object_id).await?;
         Ok(())
     }
@@ -66,7 +67,7 @@ impl ThresholdBlsApi {
         &self,
         object_id: ObjectID,
         effects_cert: &SuiCertifiedTransactionEffects,
-    ) -> RpcResult<()> {
+    ) -> Result<(), Error> {
         if effects_cert.auth_sign_info.epoch != self.state.epoch() {
             Err(anyhow!(
                 "Old effects certificate, check instead if committed by consensus"
@@ -76,9 +77,8 @@ impl ThresholdBlsApi {
         let _committee = self
             .state
             .committee_store()
-            .get_committee(&self.state.epoch())
-            .map_err(|e| anyhow!(e))?
-            .ok_or_else(|| anyhow!("Committee not available"))?;
+            .get_committee(&self.state.epoch())?
+            .ok_or_else(|| Error::InternalError(anyhow!("Committee not available")))?;
 
         // TODO: convert SuiTransactionEffects to TransactionEffects before the next line.
         // effects_cert
