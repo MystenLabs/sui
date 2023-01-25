@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
@@ -11,8 +12,6 @@ import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
-import { Network } from '~/utils/api/rpcSetting';
-import { useFeature } from '@growthbook/growthbook-react';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 const numberFormatter = new Intl.NumberFormat(undefined);
@@ -38,8 +37,6 @@ function formatStat(value?: number) {
         ? numberFormatter.format(value)
         : value ?? '--';
 }
-
-const SUPPORTED_NETWORKS: string[] = [Network.LOCAL, Network.TESTNET];
 
 export function HomeMetrics() {
     const [network] = useNetwork();
