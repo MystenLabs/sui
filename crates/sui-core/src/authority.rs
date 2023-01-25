@@ -29,6 +29,7 @@ use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_protocol_constants::{MAX_TX_GAS, STORAGE_GAS_PRICE};
+use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -2272,8 +2273,9 @@ impl AuthorityState {
                     .await?
             }
             EventQuery::MoveEvent(struct_name) => {
+                let normalized_struct_name = parse_sui_struct_tag(&struct_name)?.to_string();
                 es.events_by_move_event_struct_name(
-                    &struct_name,
+                    &normalized_struct_name,
                     tx_num,
                     event_num,
                     limit,
