@@ -35,23 +35,18 @@ export function ValidatorStats({
         [validatorData, epoch]
     );
     const delegatedStake =
-        validatorData.fields.delegation_staking_pool.fields
-            .delegation_token_supply.fields.value;
-    const selfStake =
-        validatorData.fields.delegation_staking_pool.fields.sui_balance;
-    const totalStake =
-        +validatorData.fields.delegation_staking_pool.fields.sui_balance +
-        +delegatedStake;
+        +validatorData.fields.delegation_staking_pool.fields.sui_balance;
+    const selfStake = +validatorData.fields.stake_amount;
+    const totalStake = selfStake + delegatedStake;
     const commission = +validatorData.fields.commission_rate * 100;
+    const rewardsPoolBalance =
+        +validatorData.fields.delegation_staking_pool.fields.rewards_pool;
 
     const delegatedStakePercentage = useMemo(
         () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
         [delegatedStake, totalStake]
     );
 
-    const totalRewards =
-        +validatorData.fields.delegation_staking_pool.fields.sui_balance -
-        +delegatedStake;
     const selfStakePercentage = useMemo(
         () => getStakedPercent(BigInt(selfStake), BigInt(totalStake)),
         [selfStake, totalStake]
@@ -139,11 +134,14 @@ export function ValidatorStats({
                         />
 
                         <Stats
-                            label="Total SUI Rewards"
-                            tooltip="The total rewards collected throughout the network’s lifetime."
-                            unavailable={+totalRewards <= 0}
+                            label="Reward Pool"
+                            tooltip="Amount currently in this validator’s reward pool"
+                            unavailable={+rewardsPoolBalance <= 0}
                         >
-                            <DelegationAmount amount={totalRewards} isStats />
+                            <DelegationAmount
+                                amount={rewardsPoolBalance}
+                                isStats
+                            />
                         </Stats>
                     </div>
                 </div>
