@@ -15,6 +15,8 @@ import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
+const HIDE_MAX = true;
+
 export type StakeFromProps = {
     submitError: string | null;
     coinBalance: bigint;
@@ -69,15 +71,16 @@ function StakeForm({
                                 className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
                                 decimals
                             />
-
-                            <button
-                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
-                                onClick={setMaxToken}
-                                disabled={queryResult.isLoading}
-                                type="button"
-                            >
-                                Max
-                            </button>
+                            {!HIDE_MAX ? (
+                                <button
+                                    className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
+                                    onClick={setMaxToken}
+                                    disabled={queryResult.isLoading}
+                                    type="button"
+                                >
+                                    Max
+                                </button>
+                            ) : null}
                         </div>
                     }
                     footer={
