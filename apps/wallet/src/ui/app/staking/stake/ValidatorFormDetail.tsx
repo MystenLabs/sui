@@ -47,16 +47,6 @@ export function ValidatorFormDetail({
 
     const validatorsData = validatorsFields(validators);
 
-    const delegationData = useMemo(() => {
-        if (!allDelegation) return null;
-
-        return allDelegation.find(
-            ({ staked_sui }) => staked_sui.id.id === stakedId
-        );
-    }, [allDelegation, stakedId]);
-
-    const totalSuiStake = delegationData?.staked_sui.principal.value || 0n;
-
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
         return validatorsData.validators.fields.active_validators.find(
@@ -64,7 +54,8 @@ export function ValidatorFormDetail({
         );
     }, [validatorAddress, validatorsData]);
 
-    const totalValidatorStake = validatorData?.fields.stake_amount || 0;
+    const totalValidatorStake =
+        validatorData?.fields.delegation_staking_pool.fields.sui_balance || 0;
 
     const totalStake = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -170,13 +161,10 @@ export function ValidatorFormDetail({
                                     >
                                         Total Staked
                                     </Text>
+                                    <IconTooltip tip="The total SUI staked on the network by this validator and its delegators, to validate the network and earn rewards." />
                                 </div>
                                 <StakeAmount
-                                    balance={
-                                        stakedId
-                                            ? totalSuiStake
-                                            : totalValidatorStake
-                                    }
+                                    balance={totalValidatorStake}
                                     variant="body"
                                 />
                             </div>
