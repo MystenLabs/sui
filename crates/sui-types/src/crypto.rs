@@ -30,7 +30,7 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
 
-use crate::base_types::{AuthorityName, SuiAddress};
+use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::intent::IntentMessage;
@@ -68,6 +68,7 @@ pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"kosk";
 pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
+pub const TBLS_RANDOMNESS_OBJECT_DOMAIN: &[u8; 10] = b"randomness";
 
 // Creates a proof that the keypair is possesed, as well as binds this proof to a specific SuiAddress.
 pub fn generate_proof_of_possession<K: KeypairTraits>(
@@ -1622,4 +1623,12 @@ impl SignatureScheme {
             )),
         }
     }
+}
+
+pub fn construct_tbls_randomness_object_message(epoch: EpochId, obj_id: &ObjectID) -> Vec<u8> {
+    let mut msg = TBLS_RANDOMNESS_OBJECT_DOMAIN.to_vec();
+    // Unwrap is safe here since to_bytes will never fail on u64.
+    msg.extend_from_slice(bcs::to_bytes(&epoch).unwrap().as_slice());
+    msg.extend_from_slice(obj_id.as_ref());
+    msg
 }

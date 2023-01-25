@@ -40,12 +40,12 @@
 /// the above curl commands.
 ///
 module games::drand_based_lottery {
-    use sui::object::{Self, ID, UID};
+    use games::drand_lib::{derive_randomness, verify_drand_signature};
     use std::option::{Self, Option};
+    use sui::object::{Self, ID, UID};
+    use sui::randomness::safe_selection;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-
-    use games::drand_lib::{derive_randomness, safe_selection, verify_drand_signature};
 
 
     /// Error codes
@@ -111,7 +111,7 @@ module games::drand_based_lottery {
         game.status = COMPLETED;
         // The randomness is derived from drand_sig by passing it through sha2_256 to make it uniform.
         let digest = derive_randomness(drand_sig);
-        game.winner = option::some(safe_selection(game.participants, digest));
+        game.winner = option::some(safe_selection(game.participants, &digest));
     }
 
     /// Anyone can participate in the game and receive a ticket.
