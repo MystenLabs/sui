@@ -12,9 +12,8 @@ import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
+import { formatAmount } from '~/utils/formatAmount';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
-
-const numberFormatter = new Intl.NumberFormat(undefined);
 
 interface CountsResponse {
     addresses: number;
@@ -30,12 +29,6 @@ interface TPSCheckpointResponse {
 
 function roundFloat(number: number, decimals: number) {
     return parseFloat(number.toFixed(decimals));
-}
-
-function formatStat(value?: number) {
-    return typeof value === 'number'
-        ? numberFormatter.format(value)
-        : value ?? '--';
 }
 
 export function HomeMetrics() {
@@ -71,12 +64,17 @@ export function HomeMetrics() {
                         {tpsData?.tps ? roundFloat(tpsData.tps, 2) : null}
                     </Stats>
                     <Stats label="Gas Price" tooltip="Current gas price">
-                        {systemData?.reference_gas_price}
+                        {systemData?.reference_gas_price
+                            ? `${systemData?.reference_gas_price} MIST`
+                            : null}
                     </Stats>
                     <Stats label="Epoch" tooltip="The current epoch">
                         {systemData?.epoch}
                     </Stats>
-                    <Stats label="Checkpoint" tooltip="The current checkpoint (updates every one min)">
+                    <Stats
+                        label="Checkpoint"
+                        tooltip="The current checkpoint (updates every one min)"
+                    >
                         {tpsData?.checkpoint}
                     </Stats>
                 </MetricGroup>
@@ -86,25 +84,25 @@ export function HomeMetrics() {
                         label="Packages"
                         tooltip="Total packages counter (updates every one min)"
                     >
-                        {formatStat(countsData?.packages)}
+                        {formatAmount(countsData?.packages)}
                     </Stats>
                     <Stats
                         label="Objects"
                         tooltip="Total objects counter (updates every one min)"
                     >
-                        {formatStat(countsData?.objects)}
+                        {formatAmount(countsData?.objects)}
                     </Stats>
                     <Stats
                         label="Transactions"
                         tooltip="Total transactions counter (updates every one min)"
                     >
-                        {formatStat(countsData?.transactions)}
+                        {formatAmount(countsData?.transactions)}
                     </Stats>
                     <Stats
                         label="Addresses"
                         tooltip="Total addresses counter (updates every one min)"
                     >
-                        {formatStat(countsData?.addresses)}
+                        {formatAmount(countsData?.addresses)}
                     </Stats>
                 </MetricGroup>
             </div>
