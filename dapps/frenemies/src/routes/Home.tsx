@@ -12,6 +12,7 @@ import { formatAddress, formatGoal } from "../utils/format";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { Scoreboard } from "../components/Scoreboard";
 
 /**
  * The Home page.
@@ -43,8 +44,7 @@ export function Home() {
 
   return (
     <>
-      <Leaderboard />
-      <YourScore />
+      <Scoreboard />
       <Round />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card spacing="sm">

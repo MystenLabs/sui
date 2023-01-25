@@ -4,8 +4,11 @@
 import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { ReactElement } from "react";
+import { useAutoconnect } from "../utils/useAutoconnect";
 
 export function Layout({ children }: { children: ReactElement | ReactElement[] }) {
+  useAutoconnect();
+
   return (
     <>
       <Header />
