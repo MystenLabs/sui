@@ -3,6 +3,8 @@
 
 # Module `0x2::randomness`
 
+WARNING: This module is currently insecure as the randomness source it depends on is not yet secure
+(work-in-progress). Please use it for testing purposes only.
 Randomness objects can only be created, set or consumed. They cannot be created and consumed
 in the *same* transaction since it might allow validators decide whether to create and use those
 objects *after* seeing the randomness they depend on.
@@ -25,7 +27,6 @@ creation so even if the user aborts, depending on the randomness it received, th
 is not harmed).
 
 - Once set, the random value can be read/consumed.
-
 
 This object can be used as a shared-/owned-object.
 
@@ -60,6 +61,8 @@ This object can be used as a shared-/owned-object.
 
 ## Resource `Randomness`
 
+WARNING: This object is currently insecure as the randomness source it depends on is not yet secure
+(work-in-progress). Please use it for testing purposes only.
 
 
 <pre><code><b>struct</b> <a href="randomness.md#0x2_randomness_Randomness">Randomness</a>&lt;T&gt; <b>has</b> key
@@ -313,7 +316,7 @@ Read the current value of the object.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="randomness.md#0x2_randomness_value">value</a>&lt;T&gt;(self: &<a href="randomness.md#0x2_randomness_Randomness">Randomness</a>&lt;T&gt;): &<a href="_Option">option::Option</a>&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="randomness.md#0x2_randomness_value">value</a>&lt;T&gt;(self: &<a href="randomness.md#0x2_randomness_Randomness">Randomness</a>&lt;T&gt;): &Option&lt;<a href="">vector</a>&lt;u8&gt;&gt; {
     &self.value
 }
 </code></pre>
