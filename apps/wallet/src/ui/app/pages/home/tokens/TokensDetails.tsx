@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import cl from 'classnames';
 import { useMemo } from 'react';
 
+import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
@@ -17,7 +17,6 @@ import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
-import { FEATURES } from '_src/shared/experimentation/features';
 
 import st from './TokensPage.module.scss';
 
@@ -82,6 +81,7 @@ function MyTokens({
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || GAS_TYPE_ARG;
+    const accountAddress = useAppSelector(({ account }) => account.address);
     const balances = useAppSelector(accountAggregateBalancesSelector);
     const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);
@@ -92,8 +92,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
         () => Coin.getCoinSymbol(activeCoinType),
         [activeCoinType]
     );
-
-    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     return (
         <>
@@ -151,15 +149,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                     />
                 </div>
 
-                {activeCoinType === GAS_TYPE_ARG ? (
-                    <div className={st.staking}>
-                        <IconLink
-                            icon={SuiIcons.Union}
-                            to="/stake"
-                            disabled={!stakingEnabled}
-                            text="Stake & Earn SUI"
-                        />
-                    </div>
+                {activeCoinType === GAS_TYPE_ARG && accountAddress ? (
+                    <TokenIconLink accountAddress={accountAddress} />
                 ) : null}
 
                 {!coinType ? (
