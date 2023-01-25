@@ -23,7 +23,9 @@ use move_vm_types::{
 };
 use std::sync::Arc;
 
-use self::crypto::{bls12381, bulletproofs, ecdsa_k1, ed25519, elliptic_curve, groth16, hmac};
+use self::crypto::{
+    bls12381, bulletproofs, ecdsa_k1, ed25519, elliptic_curve, groth16, hmac, tbls,
+};
 
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,
@@ -147,6 +149,16 @@ pub fn all_natives(
             "object",
             "record_new_uid",
             make_native!(object::record_new_uid),
+        ),
+        (
+            "randomness",
+            "native_tbls_verify_signature",
+            make_native!(tbls::tbls_verify_signature),
+        ),
+        (
+            "randomness",
+            "native_tbls_sign",
+            make_native!(tbls::tbls_sign),
         ),
         (
             "test_scenario",

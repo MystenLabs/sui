@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
+use fastcrypto::encoding::{Base64, Encoding};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -27,10 +28,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-
-use fastcrypto::encoding::{Base64, Encoding};
-use tracing::warn;
-
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -58,6 +55,7 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
+use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -397,6 +395,19 @@ impl Display for SuiParsedTransactionResponse {
             SuiParsedTransactionResponse::SplitCoin(r) => r.fmt(f),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum SuiTBlsSignObjectCommitmentType {
+    /// Check that the object is committed by the consensus.
+    ConsensusCommitted,
+    /// Check that the object is committed using the effects certificate.
+    FastPathCommitted(SuiCertifiedTransactionEffects),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiTBlsSignRandomnessObjectResponse {
+    pub signature: fastcrypto_tbls::types::RawSignature,
 }
 
 #[allow(clippy::large_enum_variant)]

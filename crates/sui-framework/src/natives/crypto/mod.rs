@@ -8,3 +8,4 @@ pub mod ed25519;
 pub mod elliptic_curve;
 pub mod groth16;
 pub mod hmac;
+pub mod tbls;

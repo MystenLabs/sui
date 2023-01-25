@@ -9,7 +9,8 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.61"
 anyhow = "1.0.64"
-fastcrypto = { workspace = true }
+fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 schemars = { version = "0.8.10", features = ["either"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
@@ -19,6 +20,7 @@ either = "1.7.0"
 itertools = "0.10.5"
 tracing = "0.1.36"
 bcs = "0.1.4"
+bincode = "1.3.3"
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
