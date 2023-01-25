@@ -11,7 +11,7 @@ use sui_core::{
     quorum_driver::{reconfig_observer::ReconfigObserver, QuorumDriver},
     safe_client::SafeClientMetricsBase,
 };
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::committee::Committee;
 use tracing::{debug, error, trace};
 
@@ -36,7 +36,8 @@ impl FullNodeReconfigObserver {
         auth_agg_metrics: AuthAggMetrics,
     ) -> Self {
         Self {
-            fullnode_client: SuiClient::new(fullnode_rpc_url, None, None)
+            fullnode_client: SuiClientBuilder::default()
+                .build(fullnode_rpc_url)
                 .await
                 .unwrap_or_else(|e| {
                     panic!(

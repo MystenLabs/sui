@@ -23,7 +23,7 @@ use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTOR
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
@@ -321,7 +321,10 @@ pub async fn start_fullnode_from_config(
 
     let ws_url = format!("ws://{}", config.json_rpc_address);
     let ws_client = WsClientBuilder::default().build(&ws_url).await?;
-    let sui_client = SuiClient::new(&rpc_url, Some(&ws_url), None).await?;
+    let sui_client = SuiClientBuilder::default()
+        .ws_url(&ws_url)
+        .build(&rpc_url)
+        .await?;
 
     Ok(FullNodeHandle {
         sui_node,

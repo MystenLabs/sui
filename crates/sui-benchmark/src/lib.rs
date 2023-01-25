@@ -16,7 +16,7 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -268,7 +268,7 @@ pub struct FullNodeProxy {
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
         // Each request times out after 60s (default value)
-        let sui_client = SuiClient::new(http_url, None, None).await?;
+        let sui_client = SuiClientBuilder::default().build(http_url).await?;
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
