@@ -37,7 +37,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 validator.fields.metadata.fields.name
             );
             const delegatedStake =
-            +validator.fields.delegation_staking_pool.fields.sui_balance;
+                +validator.fields.delegation_staking_pool.fields.sui_balance;
             const selfStake = +validator.fields.stake_amount;
             const totalStake = selfStake + delegatedStake;
             const img =
@@ -51,7 +51,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                     name: validatorName,
                     logo: validator.fields.metadata.fields.image_url,
                 },
-                stake:  totalStake,
+                stake: totalStake,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate / 100,
                 img: img,

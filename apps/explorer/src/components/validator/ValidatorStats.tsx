@@ -104,14 +104,14 @@ export function ValidatorStats({
                             tooltip="The total SUI staked by delegators."
                             unavailable={delegatedStakePercentage <= 0}
                         >
-                           {delegatedStakePercentage}%
+                            {delegatedStakePercentage}%
                         </Stats>
                         <Stats
                             label="Self Staked"
                             tooltip="The total SUI staked by this validator."
                             unavailable={selfStakePercentage <= 0}
                         >
-                           {selfStakePercentage}%
+                            {selfStakePercentage}%
                         </Stats>
                     </div>
                 </div>
