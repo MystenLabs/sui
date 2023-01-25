@@ -142,7 +142,10 @@ export interface NextEpochValidator {
 
 export interface NextEpochValidatorFields {
     consensus_address: number[];
-    name: number[];
+    name: number[] | string;
+    image_url?: number[] | string;
+    description?: number[] | string;
+    project_url?: number[] | string;
     net_address: number[];
     network_pubkey_bytes: number[];
     next_epoch_commission_rate: string;
