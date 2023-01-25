@@ -63,3 +63,7 @@ test = []
 [[bench]]
 name = "batch_digest"
 harness = false
+
+[[bench]]
+name = "verify_certificate"
+harness = false
