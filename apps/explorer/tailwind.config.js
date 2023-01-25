@@ -10,6 +10,6 @@ module.exports = {
      * When we fix this, we should use the following as a CSS reset: @tailwind base;
      */
     corePlugins: {
-        // preflight: false,
+        preflight: false,
     },
 };
