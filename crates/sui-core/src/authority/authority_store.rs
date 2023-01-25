@@ -17,7 +17,6 @@ use sui_storage::mutex_table::{LockGuard, MutexTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
-use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -373,8 +372,9 @@ impl AuthorityStore {
                     }
                 }
                 InputObjectKind::MovePackage(id) => {
-                    if !self.object_version_exists(id, PACKAGE_VERSION)? {
-                        missing.push(ObjectKey(*id, PACKAGE_VERSION));
+                    if !self.object_exists(*id)? {
+                        // The cert cannot have been formed if the package was missing.
+                        missing.push(ObjectKey::max_for_id(id));
                     }
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {

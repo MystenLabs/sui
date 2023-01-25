@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SequenceNumber},
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
 };
 use move_binary_format::access::ModuleAccess;
@@ -45,6 +45,7 @@ pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
     id: ObjectID,
+    version: SequenceNumber,
     // TODO use session cache
     #[serde_as(as = "BTreeMap<_, Bytes>")]
     module_map: BTreeMap<String, Vec<u8>>,
@@ -53,11 +54,13 @@ pub struct MovePackage {
 impl MovePackage {
     pub fn new(
         id: ObjectID,
+        version: SequenceNumber,
         module_map: &BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
         let pkg = Self {
             id,
+            version,
             module_map: module_map.clone(),
         };
         let object_size = pkg.size() as u64;
@@ -72,6 +75,7 @@ impl MovePackage {
     }
 
     pub fn from_module_iter<T: IntoIterator<Item = CompiledModule>>(
+        version: SequenceNumber,
         iter: T,
         max_move_package_size: u64,
     ) -> Result<Self, ExecutionError> {
@@ -86,6 +90,7 @@ impl MovePackage {
 
         Self::new(
             id,
+            version,
             &iter
                 .map(|module| {
                     let mut bytes = Vec::new();
@@ -105,6 +110,20 @@ impl MovePackage {
 
     pub fn id(&self) -> ObjectID {
         self.id
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        self.version
+    }
+
+    /// Approximate size of the package in bytes. This is used for gas metering.
+    pub fn object_size_for_gas_metering(&self) -> usize {
+        // + 8 for version
+        self.serialized_module_map()
+            .iter()
+            .map(|(name, module)| name.len() + module.len())
+            .sum::<usize>()
+            + 8
     }
 
     pub fn serialized_module_map(&self) -> &BTreeMap<String, Vec<u8>> {

@@ -32,9 +32,6 @@ use sui_protocol_config::ProtocolConfig;
 pub const GAS_VALUE_FOR_TESTING: u64 = 1_000_000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
-/// Packages are immutable, version is always 1
-pub const PACKAGE_VERSION: SequenceNumber = OBJECT_START_VERSION;
-
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
@@ -457,6 +454,7 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         Ok(Object {
             data: Data::Package(MovePackage::from_module_iter(
+                OBJECT_START_VERSION,
                 modules,
                 max_move_package_size,
             )?),
@@ -525,8 +523,8 @@ impl Object {
         use Data::*;
 
         match &self.data {
-            Move(v) => v.version(),
-            Package(_) => PACKAGE_VERSION,
+            Move(o) => o.version(),
+            Package(p) => p.version(),
         }
     }
 
@@ -546,11 +544,7 @@ impl Object {
         let meta_data_size = size_of::<Owner>() + size_of::<TransactionDigest>() + size_of::<u64>();
         let data_size = match &self.data {
             Data::Move(m) => m.object_size_for_gas_metering(),
-            Data::Package(p) => p
-                .serialized_module_map()
-                .iter()
-                .map(|(name, module)| name.len() + module.len())
-                .sum(),
+            Data::Package(p) => p.object_size_for_gas_metering(),
         };
         meta_data_size + data_size
     }
