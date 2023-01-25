@@ -13,12 +13,7 @@ import { Client as WsRpcClient } from 'rpc-websockets';
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   const url = new URL(httpUrl);
   url.protocol = url.protocol.replace('http', 'ws');
-  if (!url.port) {
-    if (!port) {
-      throw new Error(
-        'A port number needs to be specified for WebSocket client'
-      );
-    }
+  if (port) {
     url.port = port.toString();
   }
   return url.toString();
