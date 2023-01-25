@@ -15,14 +15,14 @@ substitution and filling-in the pieces using the data from the object T.
 -  [Resource `Display`](#0x2_display_Display)
 -  [Struct `DisplayCreated`](#0x2_display_DisplayCreated)
 -  [Constants](#@Constants_0)
--  [Function `set_name`](#0x2_display_set_name)
--  [Function `set_link`](#0x2_display_set_link)
--  [Function `set_image`](#0x2_display_set_image)
--  [Function `set_description`](#0x2_display_set_description)
--  [Function `set_custom`](#0x2_display_set_custom)
 -  [Function `set_owned`](#0x2_display_set_owned)
 -  [Function `empty`](#0x2_display_empty)
 -  [Function `share`](#0x2_display_share)
+-  [Function `create_and_share`](#0x2_display_create_and_share)
+-  [Function `create_with_fields`](#0x2_display_create_with_fields)
+-  [Function `set`](#0x2_display_set)
+-  [Function `set_multiple`](#0x2_display_set_multiple)
+-  [Function `set_internal`](#0x2_display_set_internal)
 
 
 <pre><code><b>use</b> <a href="">0x1::string</a>;
@@ -136,136 +136,16 @@ For when T does not belong to package in PublisherCap.
 
 
 
-<a name="0x2_display_set_name"></a>
+<a name="0x2_display_EVecLengthMismatch"></a>
 
-## Function `set_name`
-
-Set a name for the display.
-Eg: <code>My lovely capy {{genes}}</code> (for Capy project).
+For when vectors passed into one of the multiple insert functions
+don't match in their lengths.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set_name">set_name</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
+<pre><code><b>const</b> <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>: u64 = 1;
 </code></pre>
 
 
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_name">set_name</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String) {
-    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, utf8(b"name"), name)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_display_set_link"></a>
-
-## Function `set_link`
-
-Set a link.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set_link">set_link</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, link: <a href="_String">string::String</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_link">set_link</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, link: String) {
-    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, utf8(b"link"), link)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_display_set_image"></a>
-
-## Function `set_image`
-
-Set a link to an image
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set_image">set_image</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, image: <a href="_String">string::String</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_image">set_image</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, image: String) {
-    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, utf8(b"image"), image)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_display_set_description"></a>
-
-## Function `set_description`
-
-Set a description for the object.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set_description">set_description</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, desc: <a href="_String">string::String</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_description">set_description</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, desc: String) {
-    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, utf8(b"description"), desc)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_display_set_custom"></a>
-
-## Function `set_custom`
-
-Sets a custom <code>name</code> field with the <code>value</code>.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set_custom">set_custom</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="_String">string::String</a>, value: <a href="_String">string::String</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_custom">set_custom</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
-    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, name, value)
-}
-</code></pre>
-
-
-
-</details>
 
 <a name="0x2_display_set_owned"></a>
 
@@ -289,7 +169,7 @@ vector<u8> is the best type for that purpose.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_owned">set_owned</a>&lt;T: key&gt;(d: <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: <a href="">vector</a>&lt;u8&gt;, value: <a href="">vector</a>&lt;u8&gt;): <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt; {
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, utf8(name), utf8(value));
+    <a href="display.md#0x2_display_set_internal">set_internal</a>(&<b>mut</b> d, utf8(name), utf8(value));
     d
 }
 </code></pre>
@@ -302,8 +182,8 @@ vector<u8> is the best type for that purpose.
 
 ## Function `empty`
 
-Create an empty Display object. It can either be
-shared empty of filled with data later on.
+Create an empty Display object. It can either be shared empty of filled
+with data right away via cheaper <code>set_owned</code> method.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_empty">empty</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;
@@ -339,8 +219,7 @@ shared empty of filled with data later on.
 
 ## Function `share`
 
-Share an object. If the object was initially created
-empty and its values were set later.
+Share an object after the initialization is complete.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_share">share</a>&lt;T: key&gt;(d: <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;)
@@ -354,6 +233,152 @@ empty and its values were set later.
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_share">share</a>&lt;T: key&gt;(d: <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;) {
     <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(d);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_create_and_share"></a>
+
+## Function `create_and_share`
+
+Create a new empty Display<T> object and share it.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_and_share">create_and_share</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_share">create_and_share</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
+    <a href="display.md#0x2_display_share">share</a>(<a href="display.md#0x2_display_empty">empty</a>&lt;T&gt;(pub, ctx))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_create_with_fields"></a>
+
+## Function `create_with_fields`
+
+Create a new Display<T> object with a set of fields.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_create_with_fields">create_with_fields</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, fields: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, values: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_with_fields">create_with_fields</a>&lt;T: key&gt;(
+    pub: &Publisher, fields: <a href="">vector</a>&lt;String&gt;, values: <a href="">vector</a>&lt;String&gt;, ctx: &<b>mut</b> TxContext
+) {
+    <b>let</b> len = <a href="_length">vector::length</a>(&fields);
+    <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
+
+    <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_empty">empty</a>&lt;T&gt;(pub, ctx);
+    <b>while</b> (len &gt; 0) {
+        <a href="display.md#0x2_display_set_internal">set_internal</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, *<a href="_borrow">vector::borrow</a>(&fields, len), *<a href="_borrow">vector::borrow</a>(&values, len));
+        len = len - 1;
+    };
+
+    <a href="display.md#0x2_display_share">share</a>(<a href="display.md#0x2_display">display</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_set"></a>
+
+## Function `set`
+
+Sets a custom <code>name</code> field with the <code>value</code>.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set">set</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="_String">string::String</a>, value: <a href="_String">string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set">set</a>&lt;T: key&gt;(pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
+    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
+    <a href="display.md#0x2_display_set_internal">set_internal</a>(d, name, value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_set_multiple"></a>
+
+## Function `set_multiple`
+
+Sets multiple <code>fields</code> with <code>values</code>.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="display.md#0x2_display_set_multiple">set_multiple</a>&lt;T: key&gt;(pub: &<a href="publisher.md#0x2_publisher_Publisher">publisher::Publisher</a>, d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, fields: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;, values: <a href="">vector</a>&lt;<a href="_String">string::String</a>&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_set_multiple">set_multiple</a>&lt;T: key&gt;(
+    pub: &Publisher, d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, fields: <a href="">vector</a>&lt;String&gt;, values: <a href="">vector</a>&lt;String&gt;
+) {
+    <b>let</b> len = <a href="_length">vector::length</a>(&fields);
+    <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
+
+    <b>while</b> (len &gt; 0) {
+        <a href="display.md#0x2_display_set_internal">set_internal</a>(d, *<a href="_borrow">vector::borrow</a>(&fields, len), *<a href="_borrow">vector::borrow</a>(&values, len));
+        len = len - 1;
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_set_internal"></a>
+
+## Function `set_internal`
+
+Private method for inserting fields without security checks.
+
+
+<pre><code><b>fun</b> <a href="display.md#0x2_display_set_internal">set_internal</a>&lt;T: key&gt;(d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;, name: <a href="_String">string::String</a>, value: <a href="_String">string::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="display.md#0x2_display_set_internal">set_internal</a>&lt;T: key&gt;(d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;, name: String, value: String) {
+    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> d.fields, name, value)
 }
 </code></pre>
 
