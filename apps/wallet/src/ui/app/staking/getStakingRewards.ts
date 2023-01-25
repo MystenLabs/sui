@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import BigNumber from 'bignumber.js';
+
 import type { ActiveValidator, DelegatedStake } from '@mysten/sui.js';
 
 export function getStakingRewards(
@@ -23,16 +25,22 @@ export function getStakingRewards(
     if (!validator) return 0;
     const { fields: validatorFields } = validator;
 
-    const poolTokens = +delegation.delegation_status.Active.pool_tokens.value;
-    const delegationTokenSupply =
-        +validatorFields.delegation_staking_pool.fields.delegation_token_supply
-            .fields.value;
-    const suiBalance =
-        +validatorFields.delegation_staking_pool.fields.sui_balance;
-    const currentSuiWorth = (poolTokens * suiBalance) / delegationTokenSupply;
+    const poolTokens = new BigNumber(
+        delegation.delegation_status.Active.pool_tokens.value
+    );
+    const delegationTokenSupply = new BigNumber(
+        validatorFields.delegation_staking_pool.fields.delegation_token_supply.fields.value
+    );
+    const suiBalance = new BigNumber(
+        validatorFields.delegation_staking_pool.fields.sui_balance
+    );
+    const pricipalAmout = new BigNumber(
+        delegation.delegation_status.Active.principal_sui_amount
+    );
+    const currentSuiWorth = poolTokens
+        .multipliedBy(suiBalance)
+        .dividedBy(delegationTokenSupply);
 
-    const earnToken =
-        Math.floor(currentSuiWorth) -
-        delegation.delegation_status.Active.principal_sui_amount;
-    return earnToken > 0 ? earnToken : 0;
+    const earnToken = currentSuiWorth.decimalPlaces(0, 1).minus(pricipalAmout);
+    return earnToken.toNumber();
 }
