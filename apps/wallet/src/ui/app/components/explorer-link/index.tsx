@@ -3,7 +3,12 @@
 
 import { memo, useCallback, useMemo } from 'react';
 
-import { getObjectUrl, getAddressUrl, getTransactionUrl } from './Explorer';
+import {
+    getObjectUrl,
+    getAddressUrl,
+    getTransactionUrl,
+    getValidatorUrl,
+} from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
@@ -28,6 +33,7 @@ export type ExplorerLinkProps = (
       }
     | { type: ExplorerLinkType.object; objectID: ObjectId }
     | { type: ExplorerLinkType.transaction; transactionID: TransactionDigest }
+    | { type: ExplorerLinkType.validator; validator: SuiAddress }
 ) & {
     track?: boolean;
     children?: ReactNode;
@@ -55,6 +61,8 @@ function ExplorerLink(props: ExplorerLinkProps) {
     const objectID = type === ExplorerLinkType.object ? props.objectID : null;
     const transactionID =
         type === ExplorerLinkType.transaction ? props.transactionID : null;
+    const validator =
+        type === ExplorerLinkType.validator ? props.validator : null;
 
     // fallback to localhost if customRPC is not set
     const customRPCUrl = customRPC || 'http://localhost:3000/';
@@ -79,8 +87,21 @@ function ExplorerLink(props: ExplorerLinkProps) {
                         customRPCUrl
                     )
                 );
+            case ExplorerLinkType.validator:
+                return (
+                    validator &&
+                    getValidatorUrl(validator, selectedApiEnv, customRPCUrl)
+                );
         }
-    }, [type, address, selectedApiEnv, objectID, transactionID, customRPCUrl]);
+    }, [
+        type,
+        address,
+        selectedApiEnv,
+        customRPCUrl,
+        objectID,
+        transactionID,
+        validator,
+    ]);
 
     const handleclick = useCallback(() => {
         if (props.track) {

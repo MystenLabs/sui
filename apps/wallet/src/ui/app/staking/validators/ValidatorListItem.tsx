@@ -74,8 +74,8 @@ export function ValidatorListItem({
                                 {validatorName}
                             </Text>
                             <ExplorerLink
-                                type={ExplorerLinkType.address}
-                                address={validatorAddress}
+                                type={ExplorerLinkType.validator}
+                                validator={validatorAddress}
                                 className={cl(
                                     selected && 'text-hero-dark',
                                     'text-steel-dark no-underline font-mono font-medium group-hover:text-hero-dark'
