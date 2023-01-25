@@ -617,12 +617,16 @@ impl SuiNode {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
+        const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
         let consensus_address = consensus_config.address().to_owned();
-        let mut client_config = mysten_network::config::Config::new();
-        client_config.connect_timeout = Some(DEFAULT_CONNECT_TIMEOUT_SEC);
-        client_config.request_timeout = Some(Duration::from_secs(10_000));
-        client_config.http2_keepalive_interval = Some(DEFAULT_HTTP2_KEEPALIVE_SEC);
-        //let client_config = default_mysten_network_config();
+        let client_config = mysten_network::config::Config {
+            connect_timeout: Some(DEFAULT_CONNECT_TIMEOUT_SEC),
+            http2_keepalive_interval: Some(DEFAULT_HTTP2_KEEPALIVE_SEC),
+            request_timeout: Some(REQUEST_TIMEOUT),
+            ..Default::default()
+        };
+
         let consensus_client = TransactionsClient::new(
             client_config
                 .connect_lazy(&consensus_address)
