@@ -20,10 +20,7 @@ module games::randomness_based_lottery_tests {
 
     #[test]
     fun test_play_randomness_lottery() {
-        let user1 = @0x0;
-        let user2 = @0x1;
-        let user3 = @0x2;
-        let user4 = @0x3;
+        let (user1, user2, user3, user4) = (@0x0, @0x1, @0x2, @0x3);
 
         let scenario_val = test_scenario::begin(user1);
         let scenario = &mut scenario_val;
@@ -36,24 +33,31 @@ module games::randomness_based_lottery_tests {
         test_scenario::next_tx(scenario, user1);
         mint(user1, 1, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+
         test_scenario::next_tx(scenario, user1);
         randomness_based_lottery::buy_ticket(&mut lottery, coin, test_scenario::ctx(scenario));
+
         // User2 buys a ticket.
         test_scenario::next_tx(scenario, user2);
         mint(user2, 1, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+
         test_scenario::next_tx(scenario, user2);
         randomness_based_lottery::buy_ticket(&mut lottery, coin, test_scenario::ctx(scenario));
+
         // User3 buys a ticket
         test_scenario::next_tx(scenario, user3);
         mint(user3, 1, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+
         test_scenario::next_tx(scenario, user3);
         randomness_based_lottery::buy_ticket(&mut lottery, coin, test_scenario::ctx(scenario));
+
         // User4 buys a ticket
         test_scenario::next_tx(scenario, user4);
         mint(user4, 1, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+
         test_scenario::next_tx(scenario, user4);
         randomness_based_lottery::buy_ticket(&mut lottery, coin, test_scenario::ctx(scenario));
 
@@ -63,6 +67,7 @@ module games::randomness_based_lottery_tests {
         test_scenario::next_tx(scenario, user2);
         let r = test_scenario::take_shared<Randomness<randomness_based_lottery::RANDOMNESS_WITNESS>>(scenario);
         assert!(option::is_none(randomness::value(&r)), 0);
+
         let sig = randomness::sign(&r);
         randomness_based_lottery::determine_winner(&mut lottery, &mut r, sig);
         assert!(option::is_some(randomness::value(&r)), 0);

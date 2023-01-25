@@ -1,7 +1,8 @@
 // // Copyright (c) Mysten Labs, Inc.
 // // SPDX-License-Identifier: Apache-2.0
 
-// TODO: Since the first version is insecure, should we name the module differently? e.g., insecure_randomness?
+/// WARNING: This module is currently insecure as the randomness source it depends on is not yet secure
+/// (work-in-progress). Please use it for testing purposes only.
 
 /// Randomness objects can only be created, set or consumed. They cannot be created and consumed
 /// in the *same* transaction since it might allow validators decide whether to create and use those
@@ -26,7 +27,6 @@
 ///
 /// - Once set, the random value can be read/consumed.
 ///
-///
 /// This object can be used as a shared-/owned-object.
 ///
 module sui::randomness {
@@ -48,10 +48,12 @@ module sui::randomness {
     /// All signatures are prefixed with Domain.
     const Domain: vector<u8> = b"randomness";
 
+    /// WARNING: This object is currently insecure as the randomness source it depends on is not yet secure
+    /// (work-in-progress). Please use it for testing purposes only.
     struct Randomness<phantom T> has key {
         id: UID,
         epoch: u64,
-        value: option::Option<vector<u8>>
+        value: Option<vector<u8>>
     }
 
     public fun new<T: drop>(_w: T, ctx: &mut TxContext): Randomness<T> {
@@ -92,7 +94,7 @@ module sui::randomness {
     }
 
     /// Read the current value of the object.
-    public fun value<T>(self: &Randomness<T>): &option::Option<vector<u8>> {
+    public fun value<T>(self: &Randomness<T>): &Option<vector<u8>> {
         &self.value
     }
 
@@ -116,7 +118,6 @@ module sui::randomness {
         let msg = to_bytes(&Domain, self.epoch, &object::id(self));
         native_tbls_sign(self.epoch, &msg)
     }
-
 
     // Helper functions for working with the outputs of Randomness
 

@@ -20,7 +20,7 @@ module sui::randomness_tests {
         let ctx = test_scenario::ctx(scenario);
 
         // Create a new Randomness
-        let r = randomness::new(WITENESS {}, ctx);
+        let r = randomness::new(WITNESS {}, ctx);
         assert!(randomness::epoch(&r) == tx_context::epoch(ctx), 0);
         assert!(option::is_none(randomness::value(&r)), 0);
 
@@ -40,8 +40,8 @@ module sui::randomness_tests {
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
-        let r1 = randomness::new(WITENESS {}, ctx);
-        let r2 = randomness::new(WITENESS {}, ctx);
+        let r1 = randomness::new(WITNESS {}, ctx);
+        let r2 = randomness::new(WITNESS {}, ctx);
 
         // Signature should be invalid since we use the the other object.
         let sig = randomness::sign(&r2);
@@ -56,7 +56,7 @@ module sui::randomness_tests {
         let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
-        let r = randomness::new(WITENESS {}, ctx);
+        let r = randomness::new(WITNESS {}, ctx);
         let sig = randomness::sign(&r);
 
         // Signature should be invalid because the deserialization would fail.
