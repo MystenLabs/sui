@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SUI_FRAMEWORK_ADDRESS } from "@mysten/sui.js";
+import { normalizeSuiAddress, SUI_FRAMEWORK_ADDRESS } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { ObjectData } from "../../../network/rawObject";
 import { Coin, Delegation, StakedSui, SUI_COIN } from "../../../network/types";
-import { x0 } from "../../../utils/format";
 
 interface Props {
   stake: ObjectData<StakedSui>;
@@ -50,11 +49,11 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
           function: "request_withdraw_delegation",
           gasBudget: 10000,
           typeArguments: [],
-          gasPayment: x0(coins.pop()!.reference.objectId),
+          gasPayment: normalizeSuiAddress(coins.pop()!.reference.objectId),
           arguments: [
             SUI_SYSTEM_ID,
-            x0(delegation.reference.objectId),
-            x0(stake.reference.objectId),
+            normalizeSuiAddress(delegation.reference.objectId),
+            normalizeSuiAddress(stake.reference.objectId),
           ],
         },
       });

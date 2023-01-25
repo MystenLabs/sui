@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import clsx from "clsx";
 import { FormEvent, ReactNode, useState } from "react";
 import { ObjectData } from "../../network/rawObject";
 import {
@@ -18,6 +17,10 @@ import { Target } from "./Target";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMyType } from "../../network/queries/use-raw";
 import { CancelDelegation } from "./actions/CancelDelegation";
+import { GridItem } from "./GridItem";
+
+/** Number of decimals for SUI */
+const DEC = 9;
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -26,9 +29,6 @@ function Header({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-/** Number of decimals for SUI */
-const DEC = 9;
 
 interface Props {
   /** Set of 40 currently active validators */
@@ -39,26 +39,6 @@ interface Props {
   stakes: ObjectData<StakedSui>[];
 }
 
-function GridItem({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={clsx("grid", className)}
-      style={{
-        gridTemplateColumns:
-          "minmax(100px, 1fr) minmax(100px, 2fr) minmax(min-content, 5fr) minmax(min-content, 2fr)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function Table({ validators, assignment, stakes }: Props) {
   const { currentAccount } = useWalletKit();
   const { data: delegations } = useMyType<Delegation>(
@@ -67,18 +47,17 @@ export function Table({ validators, assignment, stakes }: Props) {
   );
 
   // sort validators by their voting power in DESC order (not by stake - these are different)
-  const sorted = validators.sort((a, b) =>
+  const sorted = [...validators].sort((a, b) =>
     Number(b.votingPower - a.votingPower)
   );
 
-  const stakeByValidator: { [key: string]: ObjectData<StakedSui> } =
-    stakes.reduce(
-      (acc, stake) =>
-        Object.assign(acc, {
-          [stake.data.validatorAddress]: stake,
-        }),
-      {}
-    );
+  const stakeByValidator: Record<string, ObjectData<StakedSui>> = stakes.reduce(
+    (acc, stake) =>
+      Object.assign(acc, {
+        [stake.data.validatorAddress]: stake,
+      }),
+    {}
+  );
 
   return (
     <>
@@ -87,69 +66,64 @@ export function Table({ validators, assignment, stakes }: Props) {
         <Header>Validator</Header>
         <Header>Your Sui Stake</Header>
       </GridItem>
-      {sorted.map((validator, index) => {
-        const address = validator.metadata.suiAddress;
-        const stake = stakeByValidator[address];
-        const delegation =
-          stake &&
-          (delegations || []).find((d) => d.data.stakedSuiId == stake.data.id);
 
-        const [amount, setAmount] = useState("0");
-        const onInputAmount = (evt: FormEvent<HTMLInputElement>) => {
-          setAmount(fromUserInput(evt.currentTarget.value));
-        };
+      <div className="flex flex-col gap-1">
+        {sorted.map((validator, index) => {
+          const address = validator.metadata.suiAddress;
+          const stake = stakeByValidator[address];
+          const delegation =
+            stake &&
+            (delegations || []).find(
+              (d) => d.data.stakedSuiId == stake.data.id
+            );
 
-        const actionButton = () => {
-          switch (true) {
-            // when delegation is present and it matches current Validator
-            // we can only request to withdraw delegation
-            case !!delegation:
-              return (
-                <WithdrawDelegation
-                  delegation={delegation!}
-                  stake={stakeByValidator[address]}
-                />
-              );
-            // no delegation but there's StakedSui object; we can cancel request
-            case !!stake:
-              return <CancelDelegation stake={stake} />;
-            // else the only action is to stake Sui for a validator
-            default:
-              return <AddDelegation validator={address} amount={amount} />;
-          }
-        };
+          const [amount, setAmount] = useState("0");
+          const onInputAmount = (evt: FormEvent<HTMLInputElement>) => {
+            setAmount(fromUserInput(evt.currentTarget.value));
+          };
 
-        return (
-          <GridItem
-            key={address}
-            className="px-5 py-2 rounded-xl bg-[#F5FAFA] text-steel-dark items-center"
-          >
-            <div>{index + 1}</div>
-            <div>{formatAddress(address)}</div>
-            <div>
-              <div className="w-3/4">
-                <div className="relative flex items-center">
-                  <input
-                    disabled={!!stake}
-                    type="text"
-                    onInput={onInputAmount}
-                    className="block w-full pr-12 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border"
-                    placeholder="0 SUI"
-                    defaultValue={
-                      stake &&
-                      formatBalance(stake?.data.staked.toString() || "0", DEC)
-                    }
-                  />
-                  {actionButton()}
+          return (
+            <GridItem
+              key={address}
+              className="px-5 py-2 rounded-xl bg-[#F5FAFA] text-steel-dark items-center"
+            >
+              <div>{index + 1}</div>
+              <div>{formatAddress(address)}</div>
+              <div>
+                <div className="w-3/4">
+                  <div className="relative flex items-center">
+                    <input
+                      disabled={!!stake}
+                      type="text"
+                      onInput={onInputAmount}
+                      className="block w-full pr-12 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border"
+                      placeholder="0 SUI"
+                      defaultValue={
+                        stake &&
+                        formatBalance(stake?.data.staked.toString() || "0", DEC)
+                      }
+                    />
+
+                    {delegation ? (
+                      <WithdrawDelegation
+                        delegation={delegation!}
+                        stake={stakeByValidator[address]}
+                      />
+                    ) : stake ? (
+                      <CancelDelegation stake={stake} />
+                    ) : (
+                      <AddDelegation validator={address} amount={amount} />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            {address == assignment.validator && (
-              <Target goal={assignment.goal} />
-            )}
-          </GridItem>
-        );
-      })}
+              {address == assignment.validator && (
+                <Target goal={assignment.goal} />
+              )}
+            </GridItem>
+          );
+        })}
+      </div>
     </>
   );
 }

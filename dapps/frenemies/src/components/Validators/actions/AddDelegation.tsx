@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, SUI_FRAMEWORK_ADDRESS } from "@mysten/sui.js";
+import {
+  normalizeSuiAddress,
+  SuiAddress,
+  SUI_FRAMEWORK_ADDRESS,
+} from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
@@ -41,10 +45,11 @@ export function AddDelegation({ validator, amount }: Props) {
       if (!coins || coins.length < 2) {
         return null;
       }
+
       // using the smallest coin as the Gas payment (DESC order, last element popped)
-      const gas = coins
-        .sort((a, b) => Number(b.data.value - a.data.value))
-        .pop()!;
+      const [gas, ...restCoins] = [...coins].sort((a, b) =>
+        Number(b.data.value - a.data.value)
+      );
 
       await signAndExecuteTransaction({
         kind: "moveCall",
@@ -52,14 +57,14 @@ export function AddDelegation({ validator, amount }: Props) {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
           module: "sui_system",
           function: "request_add_delegation_mul_coin",
-          gasPayment: x0(gas.reference.objectId),
+          gasPayment: normalizeSuiAddress(gas.reference.objectId),
           typeArguments: [],
           gasBudget: 10000,
           arguments: [
             SUI_SYSTEM_ID,
-            coins.map((c) => x0(c.reference.objectId)),
+            restCoins.map((c) => normalizeSuiAddress(c.reference.objectId)),
             [amount], // Option<u64> // [amt] = Some(amt)
-            x0(validator),
+            normalizeSuiAddress(validator),
           ],
         },
       });
@@ -80,8 +85,4 @@ export function AddDelegation({ validator, amount }: Props) {
       Stake
     </button>
   );
-}
-
-function x0(str: string): string {
-  return str.startsWith("0x") ? str : "0x" + str;
 }

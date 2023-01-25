@@ -28,15 +28,18 @@ export function useMyType<T>(type: string, account?: string | null) {
       const objects = await provider.getObjectsOwnedByAddress(account);
       const search = objects.filter((v) => v.type.includes(type));
 
-      if (!search) {
+      if (!search.length) {
         return null;
       }
 
       return Promise.all(
-        search.map((obj) => getRawObjectParsedUnsafe<T>(provider, obj.objectId, type))
+        search.map((obj) =>
+          getRawObjectParsedUnsafe<T>(provider, obj.objectId, type)
+        )
       );
     },
     {
-      enabled: !!account
-    });
+      enabled: !!account,
+    }
+  );
 }
