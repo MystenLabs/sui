@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowUpRight12 } from '@mysten/icons';
 import { Base64DataBuffer } from '@mysten/sui.js';
 import { useMemo } from 'react';
+
+import { StakeButton } from './StakeButton';
 
 import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
@@ -18,21 +21,35 @@ type ValidatorMetaProps = {
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
-    const validatorName = useMemo(() => {
-        return getName(validatorData.fields.metadata.fields.name);
-    }, [validatorData]);
+    const metadata = validatorData.fields.metadata.fields;
 
-    const logo = null;
+    const validatorName = useMemo(() => {
+        return getName(metadata.name);
+    }, [metadata]);
 
     const validatorPublicKey = useMemo(
         () =>
             new Base64DataBuffer(
-                new Uint8Array(
-                    validatorData.fields.metadata.fields.pubkey_bytes
-                )
+                new Uint8Array(metadata.pubkey_bytes)
             ).toString(),
-        [validatorData]
+        [metadata]
     );
+
+    // NOTE: We only support the string-encoded metadata fields, which will become the only encoding soon:
+    const logo =
+        !metadata.image_url || typeof metadata.image_url !== 'string'
+            ? null
+            : metadata.image_url;
+
+    const description =
+        !metadata.description || typeof metadata.description !== 'string'
+            ? null
+            : metadata.description;
+
+    const projectUrl =
+        !metadata.project_url || typeof metadata.project_url !== 'string'
+            ? null
+            : metadata.project_url;
 
     return (
         <>
@@ -47,13 +64,27 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     <Heading as="h1" variant="heading2/bold" color="gray-90">
                         {validatorName}
                     </Heading>
+                    {projectUrl && (
+                        <a
+                            href={projectUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="mt-2.5 inline-flex items-center gap-1.5 text-body font-medium text-sui-dark no-underline"
+                        >
+                            {projectUrl}
+                            <ArrowUpRight12 className="text-steel" />
+                        </a>
+                    )}
+                    <div className="mt-3.5">
+                        <StakeButton />
+                    </div>
                 </div>
             </div>
             <div className="basis-full break-all md:basis-2/3">
                 <DescriptionList>
                     <DescriptionItem title="Description">
                         <Text variant="p1/medium" color="gray-90">
-                            --
+                            {description || '--'}
                         </Text>
                     </DescriptionItem>
                     <DescriptionItem title="Location">
