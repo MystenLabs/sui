@@ -106,6 +106,18 @@ export function DappTxApprovalPage() {
             );
         }
 
+        if (txRequest?.tx?.type === 'v2' && !txRequest.metadata) {
+            const reqData = txRequest.tx.data.data as MoveCallTransaction;
+            dispatch(
+                loadTransactionResponseMetadata({
+                    txRequestID: txRequest.id,
+                    objectId: reqData.packageObjectId,
+                    moduleName: reqData.module,
+                    functionName: reqData.function,
+                })
+            );
+        }
+
         if (
             txRequest?.tx?.type === 'serialized-move-call' &&
             !txRequest.unSerializedTxn &&
@@ -123,15 +135,20 @@ export function DappTxApprovalPage() {
     const metadata = useMemo(() => {
         if (
             (txRequest?.tx?.type !== 'move-call' &&
+                txRequest?.tx?.type !== 'v2' &&
                 txRequest?.tx?.type !== 'serialized-move-call' &&
                 !txRequest?.unSerializedTxn) ||
             !txRequest?.metadata
         ) {
             return null;
         }
+        const moveTxData =
+            txRequest?.tx?.type === 'v2'
+                ? txRequest.tx.data.data
+                : txRequest.tx.data;
         const txData =
             (txRequest?.unSerializedTxn?.data as MoveCallTransaction) ??
-            txRequest.tx.data;
+            moveTxData;
 
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
@@ -139,7 +156,12 @@ export function DappTxApprovalPage() {
 
         txRequest.metadata.parameters.forEach((param, index) => {
             if (typeof param !== 'object') return;
-            const id = txData?.arguments[index] as string;
+            const id = txData?.arguments?.[index] as string;
+            if (!id) return;
+
+            // TODO: Support non-flat arguments.
+            if (typeof id !== 'string') return;
+
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
@@ -172,12 +194,7 @@ export function DappTxApprovalPage() {
             modify,
             read,
         };
-    }, [
-        txRequest?.metadata,
-        txRequest?.tx.data,
-        txRequest?.tx?.type,
-        txRequest?.unSerializedTxn,
-    ]);
+    }, [txRequest]);
 
     useEffect(() => {
         if (
@@ -208,10 +225,20 @@ export function DappTxApprovalPage() {
     }[] = useMemo(() => {
         switch (txRequest?.tx.type) {
             case 'v2': {
+                const moveCallTxn = txRequest.tx.data
+                    .data as MoveCallTransaction;
                 return [
                     {
                         label: 'Transaction Type',
                         content: txRequest.tx.data.kind,
+                    },
+                    {
+                        label: 'Function',
+                        content: moveCallTxn.function,
+                    },
+                    {
+                        label: 'Module',
+                        content: moveCallTxn.module,
                     },
                 ];
             }
@@ -222,11 +249,19 @@ export function DappTxApprovalPage() {
                         label: 'Function',
                         content: txRequest.tx.data.function,
                     },
+                    {
+                        label: 'Module',
+                        content: txRequest.tx.data.module,
+                    },
                 ];
             case 'serialized-move-call':
                 return [
                     ...(txRequest?.unSerializedTxn
                         ? [
+                              {
+                                  label: 'Transaction Type',
+                                  content: 'SerializedMoveCall',
+                              },
                               {
                                   label: 'Function',
                                   content:
@@ -254,7 +289,7 @@ export function DappTxApprovalPage() {
             default:
                 return [];
         }
-    }, [txRequest?.tx, txRequest?.unSerializedTxn]);
+    }, [txRequest]);
 
     const address = useAppSelector(({ account: { address } }) => address);
 
@@ -284,24 +319,29 @@ export function DappTxApprovalPage() {
                                         Transaction Type
                                     </div>
                                     <div className="font-semibold text-sui-steel-darker">
-                                        {txRequest?.unSerializedTxn?.kind ??
-                                            txRequest?.tx?.type}
+                                        {valuesContent[0].content}
                                     </div>
                                 </>
                             }
                         >
                             <div className={st.content}>
-                                {valuesContent.map(
-                                    ({ label, content, loading = false }) => (
-                                        <div key={label} className={st.row}>
-                                            <TransactionTypeCard
-                                                label={label}
-                                                content={content}
-                                                loading={loading}
-                                            />
-                                        </div>
-                                    )
-                                )}
+                                {valuesContent
+                                    .slice(1)
+                                    .map(
+                                        ({
+                                            label,
+                                            content,
+                                            loading = false,
+                                        }) => (
+                                            <div key={label} className={st.row}>
+                                                <TransactionTypeCard
+                                                    label={label}
+                                                    content={content}
+                                                    loading={loading}
+                                                />
+                                            </div>
+                                        )
+                                    )}
                             </div>
                         </SummaryCard>
                     </section>

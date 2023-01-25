@@ -272,8 +272,7 @@ Sets a custom <code>name</code> field with the <code>value</code>.
 ## Function `set_owned`
 
 Since the only way to own a Display is before it has been published,
-we don't need to perform an authorization check every time the value is
-set in the initializer.
+we don't need to perform an authorization check.
 
 Also, the only place it can be used is the function where the Display
 object was created; hence values and names are likely to be hardcoded and

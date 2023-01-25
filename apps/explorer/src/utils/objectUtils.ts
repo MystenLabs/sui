@@ -22,7 +22,7 @@ export function parseImageURL(data: any): string {
 
     if (findIPFSvalue(url)) return url;
 
-    // String respresenting true http/https URLs are valid:
+    // String representing true http/https URLs are valid:
     try {
         new URL(url);
         return url;

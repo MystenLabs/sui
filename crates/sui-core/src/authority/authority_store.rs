@@ -39,7 +39,7 @@ pub struct AuthorityStore {
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
-    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, SignedTransactionEffects>,
+    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, VerifiedSignedTransactionEffects>,
     _store_pruner: AuthorityStorePruner,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
@@ -143,7 +143,7 @@ impl AuthorityStore {
     pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<SignedTransactionEffects>> {
+    ) -> SuiResult<Option<TrustedSignedTransactionEffects>> {
         Ok(self
             .perpetual_tables
             .executed_effects
@@ -169,7 +169,7 @@ impl AuthorityStore {
             .perpetual_tables
             .executed_effects
             .get(transaction_digest)?
-            .map(|data| data.into_data()))
+            .map(|data| data.into_inner().into_data()))
     }
 
     /// Returns true if we have an effects structure for this transaction digest
@@ -195,6 +195,7 @@ impl AuthorityStore {
             digests.iter().map(|d| (*d, (epoch, sequence))),
         )?;
         batch.write()?;
+        debug!("Transactions {digests:?} finalized at checkpoint {sequence} epoch {epoch}");
         Ok(())
     }
 
@@ -275,7 +276,7 @@ impl AuthorityStore {
             .contains_key(&ObjectKey(*object_id, version))?)
     }
 
-    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.perpetual_tables.get_object(object_id)
     }
@@ -289,6 +290,7 @@ impl AuthorityStore {
         Ok(result)
     }
 
+    // Transaction input errors should be aggregated in TransactionInputObjectsErrors
     pub fn check_input_objects(
         &self,
         objects: &[InputObjectKind],
@@ -605,7 +607,7 @@ impl AuthorityStore {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
-        effects: &SignedTransactionEffects,
+        effects: &VerifiedSignedTransactionEffects,
         effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
         // Extract the new state from the execution
@@ -636,7 +638,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects)],
+                [(transaction_digest, effects.serializable_ref())],
             )?
             .insert_batch(
                 &self.perpetual_tables.effects,
@@ -743,7 +745,7 @@ impl AuthorityStore {
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.objects,
             written.iter().map(|(_, (obj_ref, new_object, _kind))| {
-                trace!(tx_digest=?transaction_digest, ?obj_ref, "writing object");
+                debug!(?obj_ref, "writing object");
                 (ObjectKey::from(obj_ref), new_object)
             }),
         )?;
@@ -794,7 +796,7 @@ impl AuthorityStore {
         // TODO: replace with optimistic transactions (i.e. set lock to tx if none)
         let _mutexes = self.acquire_locks(owned_input_objects).await;
 
-        debug!(?tx_digest, ?owned_input_objects, "acquire_locks");
+        debug!(?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
 
         let locks = self
@@ -845,7 +847,7 @@ impl AuthorityStore {
                     // Exactly the same epoch and same transaction, nothing to lock here.
                     continue;
                 } else {
-                    debug!(prev_epoch =? previous_epoch, cur_epoch =? epoch, ?tx_digest, "Overriding an old lock from previous epoch");
+                    debug!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
                     // Fall through and override the old lock.
                 }
             }
@@ -1254,7 +1256,7 @@ impl ModuleResolver for AuthorityStore {
     // TODO: duplicated code with ModuleResolver for InMemoryStorage in memory_storage.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         // TODO: We should cache the deserialized modules to avoid
-        // fetching from the store / re-deserializing them everytime.
+        // fetching from the store / re-deserializing them every time.
         // https://github.com/MystenLabs/sui/issues/809
         Ok(self
             .get_package(&ObjectID::from(*module_id.address()))?
@@ -1290,18 +1292,21 @@ pub trait EffectsStore {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>>;
 }
 
 impl EffectsStore for Arc<AuthorityStore> {
     fn get_effects<'a>(
         &self,
         transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
         Ok(self
             .perpetual_tables
             .executed_effects
-            .multi_get(transactions)?)
+            .multi_get(transactions)?
+            .into_iter()
+            .map(|e_opt| e_opt.map(|e| e.into()))
+            .collect())
     }
 }
 

@@ -6,6 +6,7 @@ use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use narwhal_worker::TransactionValidator;
 use sui_types::message_envelope::Message;
 use sui_types::{
@@ -13,22 +14,28 @@ use sui_types::{
     messages::{ConsensusTransaction, ConsensusTransactionKind},
 };
 
-use crate::authority::AuthorityState;
+use tracing::info;
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
-    // a pointer to the Authority state, mostly in order to get access to consensus
-    // todo - change it to AuthorityPerEpochStore to avoid race conditions
-    state: Arc<AuthorityState>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
 
 impl SuiTxValidator {
-    pub fn new(state: Arc<AuthorityState>, registry: &Registry) -> Self {
-        let metrics = SuiTxValidatorMetrics::new(registry);
-        let metrics = Arc::new(metrics);
-        Self { state, metrics }
+    pub fn new(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        metrics: Arc<SuiTxValidatorMetrics>,
+    ) -> Self {
+        info!(
+            "SuiTxValidator constructed for epoch {}",
+            epoch_store.epoch()
+        );
+        Self {
+            epoch_store,
+            metrics,
+        }
     }
 }
 
@@ -52,7 +59,6 @@ impl TransactionValidator for SuiTxValidator {
             .iter()
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;
-        let epoch_store = self.state.epoch_store();
 
         let mut obligation = VerificationObligation::default();
         for tx in txs.into_iter() {
@@ -62,7 +68,7 @@ impl TransactionValidator for SuiTxValidator {
                     certificate.data().verify()?;
                     let idx = obligation.add_message(certificate.data(), certificate.epoch());
                     certificate.auth_sig().add_to_verification_obligation(
-                        epoch_store.committee(),
+                        self.epoch_store.committee(),
                         &mut obligation,
                         idx,
                     )?;
@@ -75,7 +81,7 @@ impl TransactionValidator for SuiTxValidator {
                         .summary
                         .auth_signature
                         .add_to_verification_obligation(
-                            epoch_store.committee(),
+                            self.epoch_store.committee(),
                             &mut obligation,
                             idx,
                         )?;
@@ -96,8 +102,8 @@ pub struct SuiTxValidatorMetrics {
 }
 
 impl SuiTxValidatorMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
             certificate_signatures_verified: register_int_counter_with_registry!(
                 "certificate_signatures_verified",
                 "Number of certificates verified in narwhal batch verifier",
@@ -110,7 +116,7 @@ impl SuiTxValidatorMetrics {
                 registry
             )
             .unwrap(),
-        }
+        })
     }
 }
 
@@ -121,10 +127,10 @@ mod tests {
     use narwhal_worker::TransactionValidator;
     use sui_types::{base_types::AuthorityName, messages::ConsensusTransaction};
 
+    use super::*;
     use crate::{
         authority::authority_tests::init_state_with_objects_and_committee,
         consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
-        consensus_validator::SuiTxValidator,
     };
 
     use sui_macros::sim_test;
@@ -157,7 +163,8 @@ mod tests {
         )
         .unwrap();
 
-        let validator = SuiTxValidator::new(state, &Default::default());
+        let metrics = SuiTxValidatorMetrics::new(&Default::default());
+        let validator = SuiTxValidator::new(state.epoch_store().clone(), metrics);
         let res = validator.validate(&first_transaction_bytes);
         assert!(res.is_ok(), "{res:?}");
 

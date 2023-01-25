@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-axum = "0.6.1"
+axum = "0.6.2"
 axum-extra = "0.4.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 tracing = "0.1.36"
@@ -55,3 +55,4 @@ sui-framework-build = { path = "../sui-framework-build" }
 test-utils = { path = "../test-utils" }
 tempfile = "3.3.0"
 rand = "0.8.5"
+reqwest = "0.11.13"

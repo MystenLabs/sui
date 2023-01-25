@@ -9,10 +9,10 @@ use std::{
 use mysten_metrics::spawn_monitored_task;
 use sui_types::messages::VerifiedCertificate;
 use tokio::{
-    sync::{mpsc::UnboundedReceiver, Semaphore},
+    sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, error_span, info, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -30,6 +30,7 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<VerifiedCertificate>,
+    mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
 
@@ -38,14 +39,24 @@ pub async fn execution_process(
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
-        let certificate = if let Some(cert) = rx_ready_certificates.recv().await {
-            cert
-        } else {
-            // Should only happen after the AuthorityState has shut down and tx_ready_certificate
-            // has been dropped by TransactionManager.
-            info!("No more certificate will be received. Exiting ...");
-            return;
+        let certificate;
+        tokio::select! {
+            result = rx_ready_certificates.recv() => {
+                if let Some(cert) = result {
+                    certificate = cert;
+                } else {
+                    // Should only happen after the AuthorityState has shut down and tx_ready_certificate
+                    // has been dropped by TransactionManager.
+                    info!("No more certificate will be received. Exiting executor ...");
+                    return;
+                };
+            }
+            _ = &mut rx_execution_shutdown => {
+                info!("Shutdown signal received. Exiting executor ...");
+                return;
+            }
         };
+
         let authority = if let Some(authority) = authority_state.upgrade() {
             authority
         } else {
@@ -62,7 +73,7 @@ pub async fn execution_process(
 
         // Process any tx that failed to commit.
         if let Err(err) = authority.process_tx_recovery_log(None, &epoch_store).await {
-            tracing::error!("Error processing tx recovery log: {:?}", err);
+            error!("Error processing tx recovery log: {:?}", err);
         }
 
         let limit = limit.clone();
@@ -104,6 +115,7 @@ pub async fn execution_process(
                 .metrics
                 .execution_driver_executed_transactions
                 .inc();
-        });
+
+        }.instrument(error_span!("execution_driver", tx_digest = ?digest)));
     }
 }

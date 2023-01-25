@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.21.0"
+    "version": "0.23.0"
   },
   "methods": [
     {
@@ -215,6 +215,15 @@
               "$ref": "#/components/schemas/SuiJsonValue"
             }
           }
+        },
+        {
+          "name": "epoch",
+          "description": "The epoch to perform the call. Will be set from the system state object if not provided",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
         }
       ],
       "result": {
@@ -239,6 +248,15 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "epoch",
+          "description": "The epoch to perform the call. Will be set from the system state object if not provided",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -596,10 +614,12 @@
       "description": "Return contents of a checkpoint, namely a list of execution digests",
       "params": [
         {
-          "name": "digest",
+          "name": "sequence_number",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/CheckpointContentsDigest"
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -612,21 +632,19 @@
       }
     },
     {
-      "name": "sui_getCheckpointContentsBySequenceNumber",
+      "name": "sui_getCheckpointContentsByDigest",
       "tags": [
         {
           "name": "Full Node API"
         }
       ],
-      "description": "Return contents of a checkpoint based on its sequence number",
+      "description": "Return contents of a checkpoint based on checkpoint content digest",
       "params": [
         {
-          "name": "sequence_number",
+          "name": "digest",
           "required": true,
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/CheckpointContentsDigest"
           }
         }
       ],
@@ -654,6 +672,31 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CheckpointSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/CheckpointSummary"
+        }
+      }
+    },
+    {
+      "name": "sui_getCheckpointSummaryByDigest",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a checkpoint summary based on checkpoint digest",
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointDigest"
           }
         }
       ],
@@ -906,7 +949,7 @@
         },
         {
           "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
           "schema": {
             "type": "boolean"
           }
@@ -932,7 +975,7 @@
             {
               "name": "cursor",
               "value": {
-                "txSeq": 500,
+                "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                 "eventSeq": 10
               }
             },
@@ -953,7 +996,7 @@
                   "timestamp": 0,
                   "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                   "id": {
-                    "txSeq": 0,
+                    "txDigest": "FBPTp2FqjT3NbK85GFTDtKTTU5qJpBqEX44GE9CfUQor",
                     "eventSeq": 0
                   },
                   "event": {
@@ -972,7 +1015,7 @@
                 }
               ],
               "nextCursor": {
-                "txSeq": 1000,
+                "txDigest": "11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX",
                 "eventSeq": 5
               }
             }
@@ -1220,7 +1263,7 @@
               "details": {
                 "data": {
                   "dataType": "moveObject",
-                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "has_public_transfer": true,
                   "fields": {
                     "balance": "10000",
@@ -1476,6 +1519,25 @@
           }
         }
       ]
+    },
+    {
+      "name": "sui_getReferenceGasPrice",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the reference gas price for the network",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
     },
     {
       "name": "sui_getSuiSystemState",
@@ -1773,7 +1835,7 @@
         },
         {
           "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.  ",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
           "schema": {
             "type": "boolean"
           }
@@ -2410,16 +2472,6 @@
           }
         },
         {
-          "name": "switch_pool_token_amount",
-          "description": "Switching stake amount",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
           "name": "gas",
           "description": "gas object to be used in this transaction, node will pick one from the signer's possession if not provided",
           "schema": {
@@ -2452,7 +2504,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Withdraw some portion of a delegation from a validator's staking pool.",
+      "description": "Withdraw a delegation from a validator's staking pool.",
       "params": [
         {
           "name": "signer",
@@ -2476,16 +2528,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "principal_withdraw_amount",
-          "description": "Principal amount to withdraw",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         },
         {
@@ -2844,7 +2886,7 @@
               "details": {
                 "data": {
                   "dataType": "moveObject",
-                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>",
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "has_public_transfer": true,
                   "fields": {
                     "balance": "10000",
@@ -2966,23 +3008,25 @@
           }
         }
       },
-      "ChainId": {
-        "description": "Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware that this field maybe updated to be uleb64 in the future",
-        "type": "integer",
-        "format": "uint8",
-        "minimum": 0.0
-      },
       "CheckpointContents": {
         "description": "CheckpointContents are the transactions included in an upcoming checkpoint. They must have already been causally ordered. Since the causal order algorithm is the same among validators, we expect all honest validators to come up with the same order for each checkpoint content.",
         "type": "object",
         "required": [
-          "transactions"
+          "transactions",
+          "user_signatures"
         ],
         "properties": {
           "transactions": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExecutionDigests"
+            }
+          },
+          "user_signatures": {
+            "description": "This field 'pins' user signatures for the checkpoint:\n\n* For normal checkpoint this field will contain same number of elements as transactions. * Genesis checkpoint has transactions but this field is empty. * Last checkpoint in the epoch will have (last)extra system transaction in the transactions list not covered in the signatures list",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Signature"
             }
           }
         }
@@ -3000,7 +3044,8 @@
           "epoch",
           "epoch_rolling_gas_cost_summary",
           "network_total_transactions",
-          "sequence_number"
+          "sequence_number",
+          "timestamp_ms"
         ],
         "properties": {
           "content_digest": {
@@ -3061,6 +3106,12 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "timestamp_ms": {
+            "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -3071,6 +3122,7 @@
           "coinObjectId",
           "coinType",
           "digest",
+          "previousTransaction",
           "version"
         ],
         "properties": {
@@ -3095,6 +3147,9 @@
             ],
             "format": "uint64",
             "minimum": 0.0
+          },
+          "previousTransaction": {
+            "$ref": "#/components/schemas/TransactionDigest"
           },
           "version": {
             "$ref": "#/components/schemas/SequenceNumber"
@@ -3696,7 +3751,8 @@
         "required": [
           "event",
           "id",
-          "timestamp"
+          "timestamp",
+          "txDigest"
         ],
         "properties": {
           "event": {
@@ -3722,13 +3778,10 @@
             "minimum": 0.0
           },
           "txDigest": {
-            "description": "Transaction digest of associated transaction, if any",
-            "anyOf": [
+            "description": "Transaction digest of associated transaction",
+            "allOf": [
               {
                 "$ref": "#/components/schemas/TransactionDigest"
-              },
-              {
-                "type": "null"
               }
             ]
           }
@@ -3912,16 +3965,15 @@
         "type": "object",
         "required": [
           "eventSeq",
-          "txSeq"
+          "txDigest"
         ],
         "properties": {
           "eventSeq": {
             "type": "integer",
             "format": "int64"
           },
-          "txSeq": {
-            "type": "integer",
-            "format": "int64"
+          "txDigest": {
+            "$ref": "#/components/schemas/TransactionDigest"
           }
         }
       },
@@ -4282,6 +4334,32 @@
           }
         ]
       },
+      "LinkedTable_for_ObjectID": {
+        "description": "Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since we only use it in sui_system in the framework.",
+        "type": "object",
+        "required": [
+          "head",
+          "id",
+          "size",
+          "tail"
+        ],
+        "properties": {
+          "head": {
+            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
+          },
+          "id": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "size": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "tail": {
+            "$ref": "#/components/schemas/MoveOption_for_ObjectID"
+          }
+        }
+      },
       "MoveCall": {
         "type": "object",
         "required": [
@@ -4367,6 +4445,21 @@
             "additionalProperties": false
           }
         ]
+      },
+      "MoveOption_for_ObjectID": {
+        "description": "Rust version of the Move std::option::Option type. Putting it in this file because it's only used here.",
+        "type": "object",
+        "required": [
+          "vec"
+        ],
+        "properties": {
+          "vec": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
       },
       "MovePackage": {
         "type": "object",
@@ -5109,7 +5202,7 @@
             "$ref": "#/components/schemas/Supply"
           },
           "pending_delegations": {
-            "$ref": "#/components/schemas/TableVec"
+            "$ref": "#/components/schemas/LinkedTable_for_ObjectID"
           },
           "pending_withdraws": {
             "$ref": "#/components/schemas/TableVec"
@@ -5746,11 +5839,12 @@
         "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
         "type": "object",
         "required": [
-          "chain_id",
           "epoch",
+          "epoch_start_timestamp_ms",
           "info",
           "parameters",
           "reference_gas_price",
+          "safe_mode",
           "stake_subsidy",
           "storage_fund",
           "treasury_cap",
@@ -5758,10 +5852,12 @@
           "validators"
         ],
         "properties": {
-          "chain_id": {
-            "$ref": "#/components/schemas/ChainId"
-          },
           "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch_start_timestamp_ms": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -5776,6 +5872,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "safe_mode": {
+            "type": "boolean"
           },
           "stake_subsidy": {
             "$ref": "#/components/schemas/StakeSubsidy"
@@ -5877,8 +5976,7 @@
         "type": "object",
         "required": [
           "max_validator_candidate_count",
-          "min_validator_stake",
-          "storage_gas_price"
+          "min_validator_stake"
         ],
         "properties": {
           "max_validator_candidate_count": {
@@ -5887,11 +5985,6 @@
             "minimum": 0.0
           },
           "min_validator_stake": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storage_gas_price": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6371,7 +6464,8 @@
           "metadata",
           "pending_stake",
           "pending_withdraw",
-          "stake_amount"
+          "stake_amount",
+          "voting_power"
         ],
         "properties": {
           "commission_rate": {
@@ -6404,6 +6498,11 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "voting_power": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -6411,6 +6510,8 @@
         "type": "object",
         "required": [
           "consensus_address",
+          "description",
+          "image_url",
           "name",
           "net_address",
           "network_pubkey_bytes",
@@ -6418,6 +6519,7 @@
           "next_epoch_delegation",
           "next_epoch_gas_price",
           "next_epoch_stake",
+          "project_url",
           "proof_of_possession_bytes",
           "pubkey_bytes",
           "sui_address",
@@ -6426,6 +6528,22 @@
         ],
         "properties": {
           "consensus_address": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "description": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "image_url": {
             "type": "array",
             "items": {
               "type": "integer",
@@ -6476,6 +6594,14 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "project_url": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           },
           "proof_of_possession_bytes": {
             "type": "array",
@@ -6540,7 +6666,6 @@
           "pending_delegation_switches",
           "pending_removals",
           "pending_validators",
-          "quorum_stake_threshold",
           "validator_stake"
         ],
         "properties": {
@@ -6577,11 +6702,6 @@
             "items": {
               "$ref": "#/components/schemas/Validator"
             }
-          },
-          "quorum_stake_threshold": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           },
           "validator_stake": {
             "type": "integer",

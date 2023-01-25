@@ -1,32 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future;
-
 use axum::{Extension, Json};
 use fastcrypto::encoding::{Encoding, Hex};
-use futures::StreamExt;
-use sui_sdk::SUI_COIN_TYPE;
-
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
+use sui_types::messages::{
+    ExecuteTransactionRequestType, SingleTransactionKind, Transaction, TransactionData,
+    TransactionKind,
+};
 
 use crate::errors::Error;
 use crate::types::{
-    ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
+    Amount, ConstructionCombineRequest, ConstructionCombineResponse, ConstructionDeriveRequest,
     ConstructionDeriveResponse, ConstructionHashRequest, ConstructionMetadata,
     ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
     ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
     ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
-    TransactionIdentifierResponse,
+    InternalOperation, MetadataOptions, SignatureType, SigningPayload, TransactionIdentifier,
+    TransactionIdentifierResponse, TransactionMetadata,
 };
 use crate::{OnlineServerContext, SuiEnv};
-use anyhow::anyhow;
 use axum::extract::State;
 use axum_extra::extract::WithRejection;
+use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::intent::{Intent, IntentMessage};
 
 /// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
@@ -56,9 +54,12 @@ pub async fn payloads(
 ) -> Result<ConstructionPayloadsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
+    let address = metadata.sender;
 
-    let data = request.operations.into_transaction_data(metadata)?;
-    let address = data.signer();
+    let data = request
+        .operations
+        .into_internal(Some(metadata.tx_metadata.clone().into()))?
+        .try_into_data(metadata)?;
     let intent_msg = IntentMessage::new(Intent::default(), data);
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
@@ -81,10 +82,7 @@ pub async fn combine(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionCombineRequest>, Error>,
 ) -> Result<ConstructionCombineResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let unsigned_tx = request
-        .unsigned_transaction
-        .to_vec()
-        .map_err(|e| anyhow!(e))?;
+    let unsigned_tx = request.unsigned_transaction.to_vec()?;
     let intent_msg: IntentMessage<TransactionData> = bcs::from_bytes(&unsigned_tx)?;
     let sig = request
         .signatures
@@ -132,6 +130,12 @@ pub async fn submit(
         )
         .await?;
 
+    if let Some(effect) = response.effects {
+        if let SuiExecutionStatus::Failure { error } = effect.status {
+            return Err(Error::TransactionExecutionError(error));
+        }
+    }
+
     Ok(TransactionIdentifierResponse {
         transaction_identifier: TransactionIdentifier {
             hash: response.tx_digest,
@@ -150,30 +154,11 @@ pub async fn preprocess(
 ) -> Result<ConstructionPreprocessResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let (sender, amount) = request
-        .operations
-        .iter()
-        .find_map(|op| match (&op.account, &op.amount) {
-            (Some(acc), Some(amount)) => {
-                if amount.value.is_negative() {
-                    Some((acc.address, amount.value.abs()))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        })
-        .ok_or_else(|| {
-            Error::MalformedOperationError(
-                "Cannot extract sender's address from operations.".to_string(),
-            )
-        })?;
+    let internal_operation = request.operations.into_internal(request.metadata)?;
+    let sender = internal_operation.sender();
 
     Ok(ConstructionPreprocessResponse {
-        options: Some(MetadataOptions {
-            sender,
-            amount: amount as u128,
-        }),
+        options: Some(MetadataOptions { internal_operation }),
         required_public_keys: vec![sender.into()],
     })
 }
@@ -186,10 +171,7 @@ pub async fn hash(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionHashRequest>, Error>,
 ) -> Result<TransactionIdentifierResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let tx_bytes = request
-        .signed_transaction
-        .to_vec()
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let tx_bytes = request.signed_transaction.to_vec()?;
     let tx: Transaction = bcs::from_bytes(&tx_bytes)?;
 
     Ok(TransactionIdentifierResponse {
@@ -209,36 +191,90 @@ pub async fn metadata(
     WithRejection(Json(request), _): WithRejection<Json<ConstructionMetadataRequest>, Error>,
 ) -> Result<ConstructionMetadataResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-
-    let sender_coins = if let Some(option) = request.options {
-        let mut total = 0u128;
-        let coins = context
-            .client
-            .coin_read_api()
-            .get_coins_stream(option.sender, Some(SUI_COIN_TYPE.to_string()))
-            .take_while(|coin| {
-                let ready = future::ready(total < option.amount);
-                total += coin.balance as u128;
-                ready
-            })
-            .map(|c| c.object_ref())
-            .collect::<Vec<_>>()
-            .await;
-
-        if total < option.amount {
-            return Err(Error::InsufficientFund {
-                address: option.sender,
-                amount: option.amount,
-            });
+    let option = request.options.ok_or(Error::MissingMetadata)?;
+    let sender = option.internal_operation.sender();
+    let (tx_metadata, gas) = match &option.internal_operation {
+        InternalOperation::PaySui {
+            sender, amounts, ..
+        } => {
+            let amount = amounts.iter().sum::<u64>() as u128;
+            let sender_coins = context
+                .client
+                .coin_read_api()
+                .select_coins(*sender, None, amount + 1000, None, vec![])
+                .await?
+                .into_iter()
+                .map(|coin| coin.object_ref())
+                .collect::<Vec<_>>();
+            // gas is always the first coin for pay_sui
+            let gas = sender_coins[0];
+            (TransactionMetadata::PaySui(sender_coins), gas)
         }
-        coins
-    } else {
-        Default::default()
+        InternalOperation::Delegation {
+            sender,
+            validator,
+            amount,
+            locked_until_epoch,
+        } => {
+            let coins = context
+                .client
+                .coin_read_api()
+                .select_coins(*sender, None, *amount as u128, *locked_until_epoch, vec![])
+                .await?
+                .into_iter()
+                .map(|coin| coin.object_ref())
+                .collect::<Vec<_>>();
+
+            let data = context
+                .client
+                .transaction_builder()
+                .request_add_delegation(
+                    *sender,
+                    coins.iter().map(|coin| coin.0).collect(),
+                    Some(*amount as u64),
+                    *validator,
+                    None,
+                    2000,
+                )
+                .await?;
+
+            let gas = data.gas();
+            let TransactionKind::Single(SingleTransactionKind::Call(call)) = data.kind else{
+                // This will not happen because `request_add_delegation` call creates a move call transaction.
+                panic!("Malformed transaction received from TransactionBuilder.")
+            };
+
+            (
+                TransactionMetadata::Delegation {
+                    sui_framework: call.package,
+                    coins,
+                    locked_until_epoch: *locked_until_epoch,
+                },
+                gas,
+            )
+        }
     };
+    // get gas estimation from dry-run, this will also return any tx error.
+    let data = option
+        .internal_operation
+        .try_into_data(ConstructionMetadata {
+            tx_metadata: tx_metadata.clone(),
+            sender,
+            gas,
+            budget: 1000,
+        })?;
+    let dry_run = context.client.read_api().dry_run_transaction(data).await?;
+
+    let budget = dry_run.gas_used.computation_cost + dry_run.gas_used.storage_cost;
 
     Ok(ConstructionMetadataResponse {
-        metadata: ConstructionMetadata { sender_coins },
-        suggested_fee: vec![],
+        metadata: ConstructionMetadata {
+            tx_metadata,
+            sender,
+            gas,
+            budget,
+        },
+        suggested_fee: vec![Amount::new(budget as i128)],
     })
 }
 
@@ -253,16 +289,11 @@ pub async fn parse(
     env.check_network_identifier(&request.network_identifier)?;
 
     let data = if request.signed {
-        let tx: Transaction = bcs::from_bytes(
-            &request
-                .transaction
-                .to_vec()
-                .map_err(|e| anyhow::anyhow!(e))?,
-        )?;
+        let tx: Transaction = bcs::from_bytes(&request.transaction.to_vec()?)?;
         tx.into_data().intent_message.value
     } else {
         let intent: IntentMessage<TransactionData> =
-            bcs::from_bytes(&request.transaction.to_vec().map_err(|e| anyhow!(e))?)?;
+            bcs::from_bytes(&request.transaction.to_vec()?)?;
         intent.value
     };
     let account_identifier_signers = if request.signed {

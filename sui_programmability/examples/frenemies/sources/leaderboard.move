@@ -219,8 +219,27 @@ module frenemies::leaderboard {
         abort(0)
     }
 
-    /// Return the current validator stake rankings
-    public fun current_stakes(self: &Leaderboard): &vector<Validator> {
+    /// Return live stake info based on pending delegations and withdrawals
+    /// Intended for client usage, helpful if you want to see how your assigned
+    /// validator is doing in the middle of an epoch
+    /// Note: assumes static validator set
+    public fun next_epoch_stakes(state: &SuiSystemState): vector<Validator> {
+        let validators = validator_set::active_validators(sui_system::validators(state));
+        let next_epoch_stakes = vector[];
+        let i = 0;
+        let num_validators = vector::length(validators);
+        while (i < num_validators) {
+            let validator = vector::borrow(validators, i);
+            let addr = validator::sui_address(validator);
+            let stake = validator::total_stake(validator) + validator::pending_stake_amount(validator) - validator::pending_withdraw(validator);
+            validator_insertion_sort(&mut next_epoch_stakes, Validator { addr, stake });
+            i = i + 1
+        };
+        next_epoch_stakes
+    }
+
+    /// Return the evalidator stake rankings
+    public fun last_epoch_stakes(self: &Leaderboard): &vector<Validator> {
         table::borrow(&self.prev_epoch_stakes, self.epoch - 1)
     }
 

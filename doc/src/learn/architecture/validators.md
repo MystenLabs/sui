@@ -8,7 +8,7 @@ Sui uses proof of stake (PoS) to determine which validators operate the network 
 
 ## Epochs
 
-Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../../build/cli-client.md#genesis) and the new set of validators as the operators.
+Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../../build/cli-client.md#genesis) and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as delegated staking/unstaking, and distribution of staking rewards are also processed at epoch boundaries.
 
 ## Quorums
 
@@ -50,5 +50,5 @@ Now, once this is done Sui can execute all certificates that had their locks set
 
 ## Further reading
 
-* Transactions take objects as input and produce objects as output&mdash;check out the [objects](../../build/objects.md) section to learn more about the structure and attributes of objects.
-* Sui supports several different transaction types&mdash;see the [transactions](../../build/transactions.md) section for full details.
+* Transactions take objects as input and produce objects as output&mdash;check out the [objects](../../learn/objects.md) section to learn more about the structure and attributes of objects.
+* Sui supports several different transaction types&mdash;see the [transactions](../../learn/transactions.md) section for full details.

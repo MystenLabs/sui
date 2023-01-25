@@ -11,7 +11,7 @@ import {
   ExecuteTransactionRequestType,
   FaucetResponse,
   generateTransactionDigest,
-  getTotalGasUsed,
+  getTotalGasUsedUpperBound,
   SuiAddress,
   SuiExecuteTransactionResponse,
   TransactionEffects,
@@ -381,7 +381,7 @@ export abstract class SignerWithProvider implements Signer {
     ...args: Parameters<SignerWithProvider['dryRunTransaction']>
   ) {
     const txEffects = await this.dryRunTransaction(...args);
-    const gasEstimation = getTotalGasUsed(txEffects);
+    const gasEstimation = getTotalGasUsedUpperBound(txEffects);
     if (typeof gasEstimation === 'undefined') {
       throw new Error('Failed to estimate the gas cost from transaction');
     }

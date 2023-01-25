@@ -12,7 +12,7 @@ import st from './Overlay.module.scss';
 
 type OverlayProps = {
     title: ReactNode;
-    children: ReactNode | ReactNode[];
+    children: ReactNode;
     showModal: boolean;
     closeOverlay?: () => void;
     closeIcon?: SuiIcons;
@@ -39,13 +39,8 @@ function Overlay({
         <>
             {showModal ? (
                 <div className={st.container}>
-                    <div className={cl(st.header, 'bg-gray-40')}>
-                        <div
-                            className={cl(
-                                st.headerContent,
-                                'text-steel-darker'
-                            )}
-                        >
+                    <div className="bg-gray-40 h-12 w-full">
+                        <div className="text-steel-darker bg-gray-40 flex justify-center h-12 items-center text-heading4 font-semibold">
                             {title}
                         </div>
                     </div>

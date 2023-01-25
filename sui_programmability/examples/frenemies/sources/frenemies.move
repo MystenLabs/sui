@@ -6,7 +6,8 @@ module frenemies::frenemies {
     use frenemies::registry::{Self, Name, Registry};
     use frenemies::leaderboard::{Self, Leaderboard};
     use std::string::String;
-    use sui::object::{Self, UID};
+    use sui::event;
+    use sui::object::{Self, ID, UID};
     use sui::sui_system::SuiSystemState;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -24,6 +25,18 @@ module frenemies::frenemies {
         participation: u16,
         /// Latest epoch for which an assignment has been recorded, but a score has not yet been assigned
         epoch: u64
+    }
+
+    /// Emitted each time a user updates their scorecard
+    struct ScorecardUpdateEvent has copy, drop {
+        /// ID of the player's `Scorecard`
+        scorecard: ID,
+        /// player's assignment for the epoch
+        assignment: Assignment,
+        /// player's total score after scoring `assignment`
+        total_score: u16,
+        /// score for the epoch. 0 if the player was not successful
+        epoch_score: u16,
     }
 
     /// Attempting to call `update` with an epoch N assignment during epoch N
@@ -74,13 +87,16 @@ module frenemies::frenemies {
         if (epoch_score != 0) {
             let new_score = scorecard.score + epoch_score;
             scorecard.score = new_score;
-            leaderboard::update(leaderboard, scorecard.name, new_score, scorecard.participation, cur_epoch)
+            leaderboard::update(leaderboard, scorecard.name, new_score, scorecard.participation, cur_epoch);
+            event::emit(ScorecardUpdateEvent { scorecard: object::id(scorecard), assignment: scorecard.assignment, epoch_score, total_score: new_score })
+        } else {
+            event::emit(ScorecardUpdateEvent { scorecard: object::id(scorecard), assignment: scorecard.assignment, epoch_score: 0, total_score: scorecard.score })
         };
         // TODO: move into update_scorecard by making get_assignment work off of `state`
         scorecard.assignment = assignment::get(state, ctx);
     }
 
-    /// Return the name associatd with this scorecard
+    /// Return the name associated with this scorecard
     public fun name(self: &Scorecard): &Name {
         &self.name
     }

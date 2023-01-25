@@ -19,12 +19,14 @@ class CommandMaker:
         return f'rm -r {PathMaker.logs_path()} ; mkdir -p {PathMaker.logs_path()}'
 
     @staticmethod
-    def compile(failpoints=False):
-        cmd = ["cargo", "build", "--quiet",
-               "--release", "--features", "benchmark"]
+    def compile(failpoints=False, release=True):
+        cmd = ["cargo", "build", "--quiet", "--features", "benchmark"]
 
         if failpoints:
             cmd = cmd + [cmd.pop(-1) + " fail/failpoints"]
+
+        if release:
+            cmd = cmd + ["--release"]
 
         return cmd
 

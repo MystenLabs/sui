@@ -16,6 +16,7 @@ import SearchResult from './search-result/SearchResult';
 import SearchError from './searcherror/SearchError';
 import TransactionResult from './transaction-result/TransactionResult';
 import Transactions from './transactions/Transactions';
+import { ValidatorDetails } from './validator/ValidatorDetails';
 import { ValidatorPageResult } from './validators/Validators';
 
 import { Layout } from '~/components/Layout';
@@ -39,6 +40,7 @@ export const router = sentryCreateBrowserRouter([
             { path: 'transaction/:id', element: <TransactionResult /> },
             { path: 'address/:id', element: <AddressResult /> },
             { path: 'validators', element: <ValidatorPageResult /> },
+            { path: 'validator/:id', element: <ValidatorDetails /> },
             { path: 'search-result/:id', element: <SearchResult /> },
             { path: 'error/:category/:id', element: <SearchError /> },
         ],
@@ -57,7 +59,6 @@ export const router = sentryCreateBrowserRouter([
         path: '/addresses/:id',
         element: <RedirectWithId base="address" />,
     },
-
     // 404 route:
     { path: '*', element: <Navigate to="/" replace /> },
 ]);

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from './provider';
-import { HttpHeaders, JsonRpcClient } from '../rpc/client';
+import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   Coin,
   ExecuteTransactionRequestType,
@@ -45,9 +45,15 @@ import {
   normalizeSuiObjectId,
   SuiTransactionAuthSignersResponse,
   CoinMetadataStruct,
+  PaginatedCoins,
   GetObjectDataResponse,
   GetOwnedObjectsResponse,
+  DelegatedStake,
+  ValidatorMetaData,
+  CoinBalance,
+  CoinSupply,
 } from '../types';
+import { DynamicFieldPage } from '../types/dynamic_fields'
 import {
   PublicKey,
   SignatureScheme,
@@ -62,7 +68,7 @@ import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
-import { any, number } from 'superstruct';
+import { any, is, number, array } from 'superstruct';
 import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
 
 /**
@@ -166,30 +172,105 @@ export class JsonRpcProvider extends Provider {
     return undefined;
   }
 
+  async requestSuiFromFaucet(
+    recipient: SuiAddress,
+    httpHeaders?: HttpHeaders
+  ): Promise<FaucetResponse> {
+    if (!this.endpoints.faucet) {
+      throw new Error('Faucet URL is not specified');
+    }
+    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+  }
+
+  // Coins
+  async getCoins(
+    owner: SuiAddress,
+    coinType: String | null = null,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ) : Promise<PaginatedCoins> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getCoins',
+        [owner, coinType, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting coins for owner ${owner}: ${err}`
+      );
+    }
+  }
+
+  async getAllCoins(
+    owner: SuiAddress,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ) : Promise<PaginatedCoins> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getAllCoins',
+        [owner, cursor, limit],
+        PaginatedCoins,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting all coins for owner ${owner}: ${err}`
+      )
+    }
+  }
+
+  async getBalance(
+    owner: SuiAddress,
+    coinType: String | null = null,
+  ) : Promise<CoinBalance> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getBalance',
+        [owner, coinType],
+        CoinBalance,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting balance for coin type ${coinType} for owner ${owner}: ${err}`
+      )
+    }
+  }
+
+  async getAllBalances(
+    owner: SuiAddress
+  ) : Promise<CoinBalance[]> {
+    try {
+      if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
+        throw new Error('Invalid Sui address');
+      }
+      return await this.client.requestWithType(
+        'sui_getAllBalances',
+        [owner],
+        array(CoinBalance),
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting all balances for owner ${owner}: ${err}`
+      )
+    }
+  }
+
   async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
     try {
-      const version = await this.getRpcApiVersion();
-      // TODO: clean up after 0.17.0 is deployed on both DevNet and TestNet
-      if (version && lt(versionToString(version), '0.17.0')) {
-        const [packageId, module, symbol] = coinType.split('::');
-        if (
-          normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-          module != 'sui' ||
-          symbol !== 'SUI'
-        ) {
-          throw new Error(
-            'only SUI coin is supported in getCoinMetadata for RPC version priort to 0.17.0.'
-          );
-        }
-        return {
-          decimals: 9,
-          name: 'Sui',
-          symbol: 'SUI',
-          description: '',
-          iconUrl: null,
-          id: null,
-        };
-      }
       return await this.client.requestWithType(
         'sui_getCoinMetadata',
         [coinType],
@@ -201,14 +282,42 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async requestSuiFromFaucet(
-    recipient: SuiAddress,
-    httpHeaders?: HttpHeaders
-  ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
-      throw new Error('Faucet URL is not specified');
+  async getTotalSupply(
+    coinType: String
+  ) : Promise<CoinSupply> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getTotalSupply',
+        [coinType],
+        CoinSupply,
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching total supply for Coin type ${coinType}: ${err}`
+      );
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+  }
+
+  // RPC endpoint
+  async call(
+    endpoint: string,
+    params: Array<any>
+  ) : Promise<any> {
+    try {
+      const response = await this.client.request(
+        endpoint,
+        params
+      );
+      if (is(response, ErrorResponse)) {
+        throw new Error(`RPC Error: ${response.error.message}`);
+      }
+      return response.result;
+    } catch (err) {
+      throw new Error(
+        `Error calling RPC endpoint ${endpoint}: ${err}`
+      );
+    }
   }
 
   // Move info
@@ -335,6 +444,9 @@ export class JsonRpcProvider extends Provider {
     return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
+  /**
+   * @deprecated The method should not be used
+   */
   async getCoinBalancesOwnedByAddress(
     address: SuiAddress,
     typeArg?: string
@@ -357,7 +469,9 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
   ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
+    const coins = await this.getObjectBatch(coinIds);
     return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
       coins,
       amount,
@@ -371,7 +485,9 @@ export class JsonRpcProvider extends Provider {
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = []
   ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
+    const coinsStruct = await this.getCoins(address, typeArg);
+    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
+    const coins = await this.getObjectBatch(coinIds);
     return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
       coins,
       amount,
@@ -599,7 +715,7 @@ export class JsonRpcProvider extends Provider {
           ],
           SuiExecuteTransactionResponse,
           this.options.skipDataValidation
-        );
+      );
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);
@@ -650,6 +766,25 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(`Error fetching transaction auth signers: ${err}`);
+    }
+  }
+
+  // Governance
+  async getReferenceGasPrice(): Promise<number> {
+    const version = await this.getRpcApiVersion();
+    // TODO: clean up after 0.22.0 is deployed on both DevNet and TestNet
+    if (version && lt(versionToString(version), '0.22.0')) {
+      return 1;
+    }
+    try {
+      return await this.client.requestWithType(
+        'sui_getReferenceGasPrice',
+        [],
+        number(),
+        this.options.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(`Error getting the reference gas price ${err}`);
     }
   }
 
@@ -738,6 +873,77 @@ export class JsonRpcProvider extends Provider {
       throw new Error(
         `Error dry running transaction with request type: ${err}`
       );
+    }
+  }
+
+  // Dynamic Fields
+  async getDynamicFields(
+    parent_object_id: ObjectId,
+    cursor: ObjectId | null = null,
+    limit: number | null = null
+  ): Promise<DynamicFieldPage> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getDynamicFields',
+        [parent_object_id, cursor, limit],
+        DynamicFieldPage,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting dynamic fields with request type: ${err} for parent_object_id: ${parent_object_id}, cursor: ${cursor} and limit: ${limit}.`
+      );
+    }
+  }
+
+  async getDynamicFieldObject(
+    parent_object_id: ObjectId,
+    name: string
+  ): Promise<GetObjectDataResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getDynamicFieldObject',
+        [parent_object_id, name],
+        GetObjectDataResponse,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting dynamic field object with request type: ${err} for parent_object_id: ${parent_object_id} and name: ${name}.`
+      );
+    }
+  }
+
+  async getDelegatedStake(address: SuiAddress): Promise<DelegatedStake[]> {
+    try {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+        throw new Error('Invalid Sui address');
+      }
+      const resp = await this.client.requestWithType(
+        'sui_getDelegatedStakes',
+        [address],
+        array(DelegatedStake),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getDelegatedStake: ${err}`);
+    }
+  }
+
+  async getValidators(): Promise<ValidatorMetaData[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getValidators',
+        [],
+        array(ValidatorMetaData),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getValidators: ${err}`);
     }
   }
 }

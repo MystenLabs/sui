@@ -247,7 +247,7 @@ impl Cluster {
 
         for authority in self.authorities().await {
             let primary = authority.primary().await;
-            if let Some(metric) = primary.metric("narwhal_primary_last_committed_round").await {
+            if let Some(metric) = primary.metric("last_committed_round").await {
                 let value = metric.get_gauge().get_value();
 
                 authorities_latest_commit.insert(primary.id, value);
@@ -798,7 +798,7 @@ pub fn setup_tracing() -> TelemetryGuards {
 
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},quinn={network_tracing_level}");
 
-    telemetry_subscribers::TelemetryConfig::new("narwhal")
+    telemetry_subscribers::TelemetryConfig::new()
         // load env variables
         .with_env()
         // load special log filter

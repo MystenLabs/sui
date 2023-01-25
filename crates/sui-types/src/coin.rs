@@ -127,7 +127,7 @@ impl Coin {
     }
 
     // Shift balance of coins_to_merge to this coin.
-    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // Related coin objects need to be updated in temporary_store to persist the changes,
     // including deleting the coin objects that have been merged.
     pub fn merge_coins(&mut self, coins_to_merge: &mut [Coin]) {
         let total_coins = coins_to_merge.iter().fold(0, |acc, c| acc + c.value());
@@ -139,7 +139,7 @@ impl Coin {
     }
 
     // Split amount out of this coin to a new coin.
-    // Related coin objects need to be updated in temporary_store to presist the changes,
+    // Related coin objects need to be updated in temporary_store to persist the changes,
     // including creating the coin object related to the newly created coin.
     pub fn split_coin(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
         self.balance.withdraw(amount)?;

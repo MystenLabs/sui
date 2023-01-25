@@ -89,7 +89,7 @@ module games::sea_hero {
 
     // --- Object and coin creation ---
 
-    /// Game admin can reate a monster wrapping a coin worth `reward` and send
+    /// Game admin can create a monster wrapping a coin worth `reward` and send
     /// it to `recipient`
     public entry fun create_monster(
         admin: &mut SeaHeroAdmin,

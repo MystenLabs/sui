@@ -15,7 +15,7 @@ use std::{
 use sui_config::builder::{CommitteeConfig, ConfigBuilder};
 use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
 use sui_config::NetworkConfig;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::AuthorityName;
 use tempfile::TempDir;
 
 pub struct SwarmBuilder<R = OsRng> {
@@ -132,7 +132,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let validators = network_config
             .validator_configs()
             .iter()
-            .map(|config| (config.sui_address(), Node::new(config.to_owned())))
+            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
             .collect();
 
         let mut fullnodes = HashMap::new();
@@ -148,7 +148,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }
-                fullnodes.insert(config.sui_address(), Node::new(config));
+                fullnodes.insert(config.protocol_public_key(), Node::new(config));
             });
         }
         Swarm {
@@ -170,7 +170,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let validators = network_config
             .validator_configs()
             .iter()
-            .map(|config| (config.sui_address(), Node::new(config.to_owned())))
+            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
@@ -181,7 +181,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 .build()
                 .unwrap();
             config.json_rpc_address = fullnode_rpc_addr;
-            HashMap::from([(config.sui_address(), Node::new(config))])
+            HashMap::from([(config.protocol_public_key(), Node::new(config))])
         } else {
             Default::default()
         };
@@ -200,8 +200,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 pub struct Swarm {
     dir: SwarmDirectory,
     network_config: NetworkConfig,
-    validators: HashMap<SuiAddress, Node>,
-    fullnodes: HashMap<SuiAddress, Node>,
+    validators: HashMap<AuthorityName, Node>,
+    fullnodes: HashMap<AuthorityName, Node>,
 }
 
 impl Drop for Swarm {
@@ -224,12 +224,7 @@ impl Swarm {
 
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
-        let start_handles = self
-            .nodes_iter_mut()
-            .map(|node| node.spawn())
-            .collect::<Result<Vec<_>>>()?;
-
-        try_join_all(start_handles).await?;
+        try_join_all(self.nodes_iter_mut().map(|node| node.start())).await?;
 
         Ok(())
     }
@@ -256,13 +251,8 @@ impl Swarm {
     }
 
     /// Attempt to lookup and return a shared reference to the Validator with the provided `name`.
-    pub fn validator(&self, name: SuiAddress) -> Option<&Node> {
+    pub fn validator(&self, name: AuthorityName) -> Option<&Node> {
         self.validators.get(&name)
-    }
-
-    /// Attempt to lookup and return a mutable reference to the Validator with the provided `name`.
-    pub fn validator_mut(&mut self, name: SuiAddress) -> Option<&mut Node> {
-        self.validators.get_mut(&name)
     }
 
     /// Return an iterator over shared references of all Validators.
@@ -270,29 +260,14 @@ impl Swarm {
         self.validators.values()
     }
 
-    /// Return an iterator over mutable references of all Validators.
-    pub fn validators_mut(&mut self) -> impl Iterator<Item = &mut Node> {
-        self.validators.values_mut()
-    }
-
     /// Attempt to lookup and return a shared reference to the Fullnode with the provided `name`.
-    pub fn fullnode(&self, name: SuiAddress) -> Option<&Node> {
+    pub fn fullnode(&self, name: AuthorityName) -> Option<&Node> {
         self.fullnodes.get(&name)
-    }
-
-    /// Attempt to lookup and return a mutable reference to the Fullnode with the provided `name`.
-    pub fn fullnode_mut(&mut self, name: SuiAddress) -> Option<&mut Node> {
-        self.fullnodes.get_mut(&name)
     }
 
     /// Return an iterator over shared references of all Fullnodes.
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
         self.fullnodes.values()
-    }
-
-    /// Return an iterator over mutable references of all Fullnodes.
-    pub fn fullnodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
-        self.fullnodes.values_mut()
     }
 }
 

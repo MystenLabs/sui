@@ -13,9 +13,9 @@ use anyhow::Result;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
+use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use futures::{future::OptionFuture, stream::FuturesUnordered};
-use mysten_metrics::{spawn_logged_monitored_task, spawn_monitored_task};
+use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
 use network::{anemo_ext::NetworkExt, CancelOnDropHandler, ReliableNetwork};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc, time::Instant};
@@ -88,8 +88,11 @@ pub struct Core {
     /// Used to cancel vote requests for a previously-proposed header that is being replaced
     /// before a certificate could be formed.
     cancel_proposed_header: Option<oneshot::Sender<()>>,
-    /// Handle to propose_header task.
-    propose_header_future: OptionFuture<JoinHandle<DagResult<Certificate>>>,
+    /// Handle to propose_header task. Our target is to have only one task running always, thus
+    /// we cancel the previously running before we spawn the next one. However, we don't wait for
+    /// the previous to finish to spawn the new one, so we might temporarily have more that one
+    /// parallel running, which should be fine though.
+    propose_header_tasks: JoinSet<DagResult<Certificate>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
     /// A network sender to send the batches to the other workers.
@@ -146,22 +149,31 @@ impl Core {
                     pending_certificates: HashMap::new(),
                     background_tasks: JoinSet::new(),
                     cancel_proposed_header: None,
-                    propose_header_future: None.into(),
+                    propose_header_tasks: JoinSet::new(),
                     certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
                     network: primary_network,
                     metrics,
                 }
-                .recover()
+                .run_inner()
                 .await
-                .run()
-                .await;
             },
             "CoreTask"
         )
     }
 
     #[instrument(level = "info", skip_all)]
-    pub async fn recover(mut self) -> Self {
+    async fn run_inner(self) {
+        let core = async move { self.recover().await?.run().await };
+
+        match core.await {
+            Err(err @ DagError::ShuttingDown) => debug!("{:?}", err),
+            Err(err) => panic!("{:?}", err),
+            Ok(_) => {}
+        }
+    }
+
+    #[instrument(level = "info", skip_all)]
+    pub async fn recover(mut self) -> DagResult<Self> {
         info!("Starting certificate recovery. Message processing will begin after completion.");
 
         let last_round_certificates = self
@@ -175,15 +187,13 @@ impl Core {
             .unwrap_or(0);
 
         for certificate in last_round_certificates {
-            self.append_certificate_in_aggregator(certificate)
-                .await
-                .expect("Failed appending recovered certificates to aggregator in primary core");
+            self.append_certificate_in_aggregator(certificate).await?;
         }
 
         self.highest_received_round = last_round_number;
         self.highest_processed_round = last_round_number;
 
-        self
+        Ok(self)
     }
 
     // Requests a vote for a Header from the given peer. Retries indefinitely until either a
@@ -320,14 +330,8 @@ impl Core {
         header_store
             .async_write(header.digest(), header.clone())
             .await;
-        metrics
-            .headers_proposed
-            .with_label_values(&[&header.epoch.to_string()])
-            .inc();
-        metrics
-            .proposed_header_round
-            .with_label_values(&[&header.epoch.to_string()])
-            .set(header.round as i64);
+        metrics.headers_proposed.inc();
+        metrics.proposed_header_round.set(header.round as i64);
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
@@ -450,7 +454,6 @@ impl Core {
         }?;
 
         // Broadcast the certificate.
-        let epoch = certificate.epoch();
         let round = certificate.header.round;
         let header_to_certificate_duration =
             Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
@@ -473,17 +476,10 @@ impl Core {
             ));
 
         // Update metrics.
-        self.metrics
-            .certificate_created_round
-            .with_label_values(&[&epoch.to_string()])
-            .set(round as i64);
-        self.metrics
-            .certificates_created
-            .with_label_values(&[&epoch.to_string()])
-            .inc();
+        self.metrics.certificate_created_round.set(round as i64);
+        self.metrics.certificates_created.inc();
         self.metrics
             .header_to_certificate_latency
-            .with_label_values(&[&epoch.to_string()])
             .observe(header_to_certificate_duration);
 
         // NOTE: This log entry is used to compute performance.
@@ -506,10 +502,7 @@ impl Core {
         let digest = certificate.digest();
         if self.certificate_store.read(digest)?.is_some() {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.metrics
-                .duplicate_certificates_processed
-                .with_label_values(&[&certificate.epoch().to_string()])
-                .inc();
+            self.metrics.duplicate_certificates_processed.inc();
             if let Some(notify) = notify {
                 let _ = notify.send(Ok(())); // no problem if remote side isn't listening
             }
@@ -563,7 +556,7 @@ impl Core {
         self.highest_received_round = self.highest_received_round.max(certificate.round());
         self.metrics
             .highest_received_round
-            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .with_label_values(&[certificate_source])
             .set(self.highest_received_round as i64);
 
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
@@ -600,37 +593,50 @@ impl Core {
             );
             self.metrics
                 .certificates_suspended
-                .with_label_values(&[&certificate.epoch().to_string(), "missing_parents"])
+                .with_label_values(&["missing_parents"])
                 .inc();
             return Err(DagError::Suspended);
         }
 
-        // Store the certificate.
+        // Store the certificate. Afterwards, the certificate must be sent to consensus
+        // or Narwhal needs to shutdown, to avoid insistencies certificate store and
+        // consensus dag.
         self.certificate_store.write(certificate.clone())?;
 
         // Update metrics for processed certificates.
         self.highest_processed_round = self.highest_processed_round.max(certificate.round());
         self.metrics
             .highest_processed_round
-            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .with_label_values(&[certificate_source])
             .set(self.highest_processed_round as i64);
         self.metrics
             .certificates_processed
-            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .with_label_values(&[certificate_source])
             .inc();
+
         // Append the certificate to the aggregator of the
         // corresponding round.
-        self.append_certificate_in_aggregator(certificate.clone())
-            .await?;
+        let digest = certificate.digest();
+        if let Err(e) = self
+            .append_certificate_in_aggregator(certificate.clone())
+            .await
+        {
+            warn!(
+                "Failed to aggregate certificate {} for header: {}",
+                digest, e
+            );
+            return Err(DagError::ShuttingDown);
+        }
 
         // Send it to the consensus layer.
-        let digest = certificate.header.digest();
         if let Err(e) = self.tx_new_certificates.send(certificate).await {
             warn!(
                 "Failed to deliver certificate {} to the consensus: {}",
                 digest, e
             );
+            return Err(DagError::ShuttingDown);
         }
+
         Ok(())
     }
 
@@ -682,7 +688,6 @@ impl Core {
     fn process_result(result: &DagResult<()>) {
         match result {
             Ok(()) => (),
-            Err(e @ DagError::ShuttingDown) => debug!("{e}"),
             Err(DagError::StoreError(e)) => {
                 error!("{e}");
                 panic!("Storage failure: killing node.");
@@ -697,7 +702,7 @@ impl Core {
     }
 
     // Main loop listening to incoming messages.
-    pub async fn run(mut self) {
+    pub async fn run(mut self) -> DagResult<Self> {
         info!("Core on node {} has started successfully.", self.name);
         loop {
             let result = tokio::select! {
@@ -720,7 +725,11 @@ impl Core {
                             break;
                         }
                     };
-                    message.done.send(()).expect("Failed to signal back to CertificateFetcher");
+
+                    if message.done.send(()).is_err() {
+                        result = Err(DagError::ShuttingDown);
+                    }
+
                     result
                 },
 
@@ -739,7 +748,7 @@ impl Core {
                     let signature_service = self.signature_service.clone();
                     let metrics = self.metrics.clone();
                     let network = self.network.clone();
-                    self.propose_header_future = Some(spawn_monitored_task!(Self::propose_header(
+                    self.propose_header_tasks.spawn(monitored_future!(Self::propose_header(
                         name,
                         committee,
                         header_store,
@@ -749,15 +758,12 @@ impl Core {
                         network,
                         header,
                         rx_cancel,
-                    ))).into();
+                    )));
                     Ok(())
                 },
 
                 // Process certificates formed after receiving enough votes.
-                Some(result) = &mut self.propose_header_future => {
-                    // Clear the future so we only process it once.
-                    self.propose_header_future = None.into();
-
+                Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
                             self.process_own_certificate(certificate).await
@@ -773,7 +779,7 @@ impl Core {
                 },
 
                 _ = self.rx_shutdown.receiver.recv() => {
-                    return
+                    return Ok(self);
                 }
 
                 // Check whether the consensus round has changed, to clean up structures
@@ -788,7 +794,6 @@ impl Core {
 
                         self.metrics
                             .gc_core_latency
-                            .with_label_values(&[&self.committee.epoch.to_string()])
                             .observe(now.elapsed().as_secs_f64());
                     }
 

@@ -24,9 +24,11 @@ use move_package::BuildConfig as MoveBuildConfig;
 use prettytable::Table;
 use prettytable::{row, table};
 use serde::Serialize;
-use serde_json::json;
-use sui_adapter::execution_mode;
+use serde_json::{json, Value};
 use sui_framework::build_move_package;
+use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
+use sui_types::error::SuiError;
+
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -36,9 +38,7 @@ use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::TransactionExecutionResult;
-use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::error::SuiError;
 use sui_types::intent::Intent;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -134,10 +134,18 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: u64,
 
-        /// Confirms that compiling dependencies from source results in bytecode matching the
-        /// dependency found on-chain.
+        /// (Deprecated) This flag is deprecated, dependency verification is on by default.
         #[clap(long)]
         verify_dependencies: bool,
+
+        /// Publish the package without checking whether compiling dependencies from source results
+        /// in bytecode matching the dependencies found on-chain.
+        #[clap(long)]
+        skip_dependency_verification: bool,
+
+        /// Also publish transitive dependencies that have not already been published.
+        #[clap(long)]
+        with_unpublished_dependencies: bool,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
@@ -460,6 +468,8 @@ impl SuiClientCommands {
                 build_config,
                 gas_budget,
                 verify_dependencies,
+                skip_dependency_verification,
+                with_unpublished_dependencies,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -486,14 +496,32 @@ impl SuiClientCommands {
                     }
                 }
 
-                let compiled_modules = compiled_package.get_package_bytes();
-
                 let client = context.get_client().await?;
+                let compiled_modules =
+                    compiled_package.get_package_bytes(with_unpublished_dependencies);
+
                 if verify_dependencies {
+                    eprintln!(
+                        "{}",
+                        "Dependency verification is on by default. --verify-dependencies is \
+                         deprecated and will be removed in the next release."
+                            .bold()
+                            .yellow(),
+                    );
+                }
+
+                if !skip_dependency_verification {
                     BytecodeSourceVerifier::new(client.read_api(), false)
                         .verify_package_deps(&compiled_package.package)
                         .await?;
-                    println!("Successfully verified dependencies on-chain against source.");
+                    eprintln!(
+                        "{}",
+                        "Successfully verified dependencies on-chain against source."
+                            .bold()
+                            .green(),
+                    );
+                } else {
+                    eprintln!("{}", "Skipping dependency verification".bold().yellow());
                 }
 
                 let data = client
@@ -1306,13 +1334,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
+            // Do not use writer for new address output, which may get sent to logs.
+            #[allow(clippy::print_in_format_impl)]
             SuiClientCommandResult::NewAddress((address, recovery_phrase, scheme)) => {
-                writeln!(
-                    writer,
+                println!(
                     "Created new keypair for address with scheme {:?}: [{address}]",
                     scheme
-                )?;
-                writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
+                );
+                println!("Secret Recovery Phrase : [{recovery_phrase}]");
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
@@ -1407,13 +1436,19 @@ pub async fn call_move(
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
 ) -> Result<(SuiCertifiedTransaction, SuiTransactionEffects), anyhow::Error> {
+    // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
+    let args = args
+        .into_iter()
+        .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
+        .collect::<Result<_, _>>()?;
+
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 
     let client = context.get_client().await?;
     let data = client
         .transaction_builder()
-        .move_call::<execution_mode::Normal>(
+        .move_call(
             sender,
             package,
             module,
@@ -1441,6 +1476,19 @@ pub async fn call_move(
         return Err(anyhow!("Error calling module: {:#?}", effects.status));
     }
     Ok((cert, effects))
+}
+
+fn convert_number_to_string(value: Value) -> Value {
+    match value {
+        Value::Number(n) => Value::String(n.to_string()),
+        Value::Array(a) => Value::Array(a.into_iter().map(convert_number_to_string).collect()),
+        Value::Object(o) => Value::Object(
+            o.into_iter()
+                .map(|(k, v)| (k, convert_number_to_string(v)))
+                .collect(),
+        ),
+        _ => value,
+    }
 }
 
 fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {

@@ -7,8 +7,8 @@
 module sui::publisher {
     use sui::object::{Self, UID};
     use sui::tx_context::{TxContext, sender};
-    use std::type_name::{Self, TypeName};
     use std::ascii::String;
+    use std::type_name;
     use sui::types;
 
     /// Tried to claim ownership using a type that isn't a one-time witness.
@@ -20,7 +20,6 @@ module sui::publisher {
     /// a type originated from.
     struct Publisher has key, store {
         id: UID,
-        type: TypeName,
         package: String,
         module_name: String,
     }
@@ -37,7 +36,6 @@ module sui::publisher {
             id: object::new(ctx),
             package: type_name::get_address(&type),
             module_name: type_name::get_module(&type),
-            type,
         }
     }
 
@@ -50,24 +48,34 @@ module sui::publisher {
 
     /// Destroy a Publisher object effectively removing all privileges
     /// associated with it.
-    public fun burn(publisher: Publisher) {
-        let Publisher { id, type: _, package: _, module_name: _ } = publisher;
+    public fun burn(self: Publisher) {
+        let Publisher { id, package: _, module_name: _ } = self;
         object::delete(id);
     }
 
     /// Check whether type belongs to the same package as the publisher object.
-    public fun is_package<T>(publisher: &Publisher): bool {
+    public fun is_package<T>(self: &Publisher): bool {
         let type = type_name::get<T>();
 
-        (type_name::get_address(&type) == publisher.package)
+        (type_name::get_address(&type) == self.package)
     }
 
-    /// Check whether a type belogs to the same module as the publisher object.
-    public fun is_module<T>(publisher: &Publisher): bool {
+    /// Check whether a type belongs to the same module as the publisher object.
+    public fun is_module<T>(self: &Publisher): bool {
         let type = type_name::get<T>();
 
-        (type_name::get_address(&type) == publisher.package)
-            && (type_name::get_module(&type) == publisher.module_name)
+        (type_name::get_address(&type) == self.package)
+            && (type_name::get_module(&type) == self.module_name)
+    }
+
+    /// Read the name of the module.
+    public fun module_name(self: &Publisher): &String {
+        &self.module_name
+    }
+
+    /// Read the package address string.
+    public fun package(self: &Publisher): &String {
+        &self.package
     }
 
     #[test_only]
@@ -79,13 +87,13 @@ module sui::publisher {
             id: object::new(ctx),
             package: type_name::get_address(&type),
             module_name: type_name::get_module(&type),
-            type,
         }
     }
 }
 
 #[test_only]
 module sui::test_publisher {
+    use std::ascii;
     use sui::publisher;
     use sui::test_scenario::{Self as test, Scenario, ctx};
 
@@ -103,6 +111,8 @@ module sui::test_publisher {
         assert!(publisher::is_package<CustomType>(&pub), 0);
         assert!(publisher::is_package<Scenario>(&pub), 0);
 
+        assert!(&ascii::string(b"0000000000000000000000000000000000000002") == publisher::package(&pub), 0);
+
         publisher::burn(pub);
         test::end(test);
     }
@@ -114,6 +124,8 @@ module sui::test_publisher {
 
         assert!(publisher::is_module<CustomType>(&pub), 0);
         assert!(publisher::is_module<Scenario>(&pub) == false, 0);
+
+        assert!(&ascii::string(b"test_publisher") == publisher::module_name(&pub), 0);
 
         publisher::burn(pub);
         test::end(test);

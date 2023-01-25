@@ -70,6 +70,21 @@ function Footer() {
                         </li>
                     </ul>
                 </div>
+                <div>
+                    <h6>Legal</h6>
+                    <ul>
+                        <li>
+                            <Link href="https://mystenlabs.com/legal?content=terms">
+                                Terms & Conditions
+                            </Link>
+                        </li>
+                        <li>
+                            <Link href="https://mystenlabs.com/legal?content=privacy">
+                                Privacy Policy
+                            </Link>
+                        </li>
+                    </ul>
+                </div>
             </nav>
             <div className={styles.logomobile}>
                 <SuiLogoIcon />

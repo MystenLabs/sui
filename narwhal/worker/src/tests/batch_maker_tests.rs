@@ -6,18 +6,25 @@ use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use store::rocks;
-use test_utils::{temp_dir, transaction, CommitteeFixture};
+use store::rocks::MetricConf;
+use store::rocks::ReadWriteOptions;
+use test_utils::{temp_dir, transaction};
 use types::PreSubscribedBroadcastSender;
 
 fn create_batches_store() -> Store<BatchDigest, Batch> {
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+        temp_dir(),
+        MetricConf::default(),
+        None,
+        Some("batches"),
+        &ReadWriteOptions::default(),
+    )
+    .unwrap();
     Store::new(db)
 }
 
 #[tokio::test]
 async fn make_batch() {
-    let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
     let store = create_batches_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
@@ -29,7 +36,6 @@ async fn make_batch() {
     let id = 0;
     let _batch_maker_handle = BatchMaker::spawn(
         id,
-        committee,
         /* max_batch_size */ 200,
         /* max_batch_delay */
         Duration::from_millis(1_000_000), // Ensure the timer is not triggered.
@@ -76,8 +82,6 @@ async fn make_batch() {
 
 #[tokio::test]
 async fn batch_timeout() {
-    let fixture = CommitteeFixture::builder().build();
-    let committee = fixture.committee();
     let store = create_batches_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
@@ -89,7 +93,6 @@ async fn batch_timeout() {
     let id = 0;
     let _batch_maker_handle = BatchMaker::spawn(
         id,
-        committee,
         /* max_batch_size */ 200,
         /* max_batch_delay */
         Duration::from_millis(50), // Ensure the timer is triggered.

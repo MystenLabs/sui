@@ -86,7 +86,7 @@ pub const OBJ_ACCESS_COST_DELETE_PER_BYTE: u64 = 40;
 /// Meant to approximate the cost of checking locks for each object
 // TODO: I'm not sure that this cost makes sense. Checking locks is "free"
 // in the sense that an invalid tx that can never be committed/pay gas can
-// force validators to check an abitrary number of locks. If those checks are
+// force validators to check an arbitrary number of locks. If those checks are
 // "free" for invalid transactions, why charge for them in valid transactions
 // TODO: if we keep this, I think we probably want it to be a fixed cost rather
 // than a per-byte cost. checking an object lock should not require loading an
@@ -105,7 +105,21 @@ pub const OBJ_METADATA_COST_NON_REFUNDABLE: u64 = 50;
 
 /// === Tokenomics ===
 
-// TODO: placeholder value here
-pub const STORAGE_REBATE_RATE: f64 = 1.0;
+// TODO: this should be changed to u64.
+/// Sender of a txn that touches an object will get 99% of the storage rebate back.
+pub const STORAGE_REBATE_RATE: f64 = 0.99;
 
-pub const STORAGE_FUND_REINVEST_RATE: u64 = 0;
+/// 5% of the storage fund's share of rewards are reinvested into the storage fund.
+/// In basis point.
+pub const STORAGE_FUND_REINVEST_RATE: u64 = 500;
+
+/// The share of rewards that will be slashed and redistributed is 50%.
+/// In basis point.
+pub const REWARD_SLASHING_RATE: u64 = 5000;
+
+/// The stake subsidy we mint each epoch is 0.01% of the total stake.
+/// In basis point.
+pub const STAKE_SUBSIDY_RATE: u64 = 1;
+
+/// Unit gas price, Mist per internal gas unit.
+pub const STORAGE_GAS_PRICE: u64 = 1;

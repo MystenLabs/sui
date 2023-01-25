@@ -39,14 +39,6 @@ transfer(10){
           "value":{{sender_amount}},
           "currency":{{currency}}
         }
-      },
-      {
-        "operation_identifier":{"index":2},
-        "type":"GasBudget",
-        "account":{{sender.account_identifier}},
-        "metadata":{
-          "budget": "1000"
-        }
       }];
   }
 }

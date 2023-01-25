@@ -20,7 +20,6 @@ import { Fragment } from 'react';
 
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import { getAmount } from '../../utils/getAmount';
-import { deduplicate } from '../../utils/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
@@ -142,87 +141,85 @@ export const genTableDataFromTxData = (
         })),
         columns: [
             {
-                headerLabel: 'Time',
+                header: 'Time',
                 accessorKey: 'date',
             },
             {
-                headerLabel: 'Type',
+                header: 'Type',
                 accessorKey: 'txTypes',
             },
             {
-                headerLabel: () => (
+                header: () => (
                     <div className={styles.addresses}>Transaction ID</div>
                 ),
                 accessorKey: 'transactionId',
             },
             {
-                headerLabel: () => (
-                    <div className={styles.addresses}>Addresses</div>
-                ),
+                header: () => <div className={styles.addresses}>Addresses</div>,
                 accessorKey: 'addresses',
             },
             {
-                headerLabel: 'Amount',
+                header: 'Amount',
                 accessorKey: 'amounts',
             },
             {
-                headerLabel: 'Gas',
+                header: 'Gas',
                 accessorKey: 'gas',
             },
         ],
     };
 };
 
+const dedupe = (arr: string[]) => Array.from(new Set(arr));
+
 export const getDataOnTxDigests = (
     rpc: JsonRpcProvider,
     transactions: GetTxnDigestsResponse
 ) =>
-    rpc
-        .getTransactionWithEffectsBatch(deduplicate(transactions))
-        .then((txEffs) => {
-            return (
-                txEffs
-                    .map((txEff) => {
-                        const digest = transactions.filter(
-                            (transactionId) =>
-                                transactionId ===
-                                getTransactionDigest(txEff.certificate)
-                        )[0];
-                        const res: CertifiedTransaction = txEff.certificate;
-                        // TODO: handle multiple transactions
-                        const txns = getTransactions(res);
-                        if (txns.length > 1) {
-                            console.error(
-                                'Handling multiple transactions is not yet supported',
-                                txEff
-                            );
-                            return null;
-                        }
-                        const txn = txns[0];
-                        const txKind = getTransactionKindName(txn);
-                        const recipient =
-                            getTransferObjectTransaction(txn)?.recipient ||
-                            getTransferSuiTransaction(txn)?.recipient;
+    rpc.getTransactionWithEffectsBatch(dedupe(transactions)).then((txEffs) => {
+        return (
+            txEffs
+                .map((txEff) => {
+                    const digest = transactions.filter(
+                        (transactionId) =>
+                            transactionId ===
+                            getTransactionDigest(txEff.certificate)
+                    )[0];
+                    const res: CertifiedTransaction = txEff.certificate;
+                    // TODO: handle multiple transactions
+                    const txns = getTransactions(res);
+                    if (txns.length > 1) {
+                        console.error(
+                            'Handling multiple transactions is not yet supported',
+                            txEff
+                        );
+                        return null;
+                    }
+                    const txn = txns[0];
+                    const txKind = getTransactionKindName(txn);
+                    const recipient =
+                        getTransferObjectTransaction(txn)?.recipient ||
+                        getTransferSuiTransaction(txn)?.recipient;
 
-                        const txnTransfer = getAmount(txn, txEff.effects)?.[0];
+                    const txnTransfer = getAmount(txn, txEff.effects)?.[0];
 
-                        return {
-                            txId: digest,
-                            status: getExecutionStatusType(txEff)!,
-                            txGas: getTotalGasUsed(txEff),
-                            suiAmount: txnTransfer?.amount || null,
-                            coinType: txnTransfer?.coinType || null,
-                            kind: txKind,
-                            From: res.data.sender,
-                            timestamp_ms: txEff.timestamp_ms,
-                            ...(recipient
-                                ? {
-                                      To: recipient,
-                                  }
-                                : {}),
-                        };
-                    })
-                    // Remove failed transactions
-                    .filter((itm) => itm)
-            );
-        });
+                    return {
+                        txId: digest,
+                        status: getExecutionStatusType(txEff)!,
+                        txGas: getTotalGasUsed(txEff),
+                        suiAmount: txnTransfer?.amount || null,
+                        coinType: txnTransfer?.coinType || null,
+                        kind: txKind,
+                        From: res.data.sender,
+                        timestamp_ms: txEff.timestamp_ms,
+                        ...(recipient
+                            ? {
+                                  To: recipient,
+                              }
+                            : {}),
+                    };
+                })
+                // Remove failed transactions
+                .filter((itm) => itm)
+        );
+    });

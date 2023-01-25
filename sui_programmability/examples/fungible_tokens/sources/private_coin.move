@@ -189,7 +189,7 @@ module fungible_tokens::private_coin {
         transfer::transfer(mint(c, amount, ctx), recipient)
     }
 
-    /// Split coin from `self`, the splitted coin will be a private coin worth the value committed by `new_commitment`,
+    /// Split coin from `self`, the split coin will be a private coin worth the value committed by `new_commitment`,
     /// the remaining balance is left in `self`. Note that performing split on a public coin turns it into a private coin.
     public entry fun split_and_transfer<T>(
         c: &mut PrivateCoin<T>, new_commitment: vector<u8>, proof: vector<u8>, recipient: address, ctx: &mut TxContext
@@ -198,7 +198,7 @@ module fungible_tokens::private_coin {
         transfer::transfer(take(&mut c.balance, ristretto_point, proof, ctx), recipient)
     }
 
-    /// Split coin from `self`, the splitted coin will be a public coin worth `value`.
+    /// Split coin from `self`, the split coin will be a public coin worth `value`.
     /// the remaining balance is left in `self`. `self` should retain it's privacy option after this call.
     public entry fun split_public_and_transfer<T>(self: &mut PrivateCoin<T>, value: u64, proof: vector<u8>, recipient: address, ctx: &mut TxContext) {
         transfer::transfer(

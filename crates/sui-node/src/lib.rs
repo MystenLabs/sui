@@ -49,11 +49,11 @@ use sui_storage::{
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::messages::QuorumDriverResponse;
-use tokio::sync::mpsc::channel;
+use tokio::sync::broadcast;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::info;
+use tracing::{error_span, info, warn, Instrument};
 use typed_store::DBMetrics;
 pub mod admin;
 mod handle;
@@ -68,25 +68,26 @@ use sui_core::checkpoints::{
 };
 use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_handler::ConsensusHandler;
-use sui_core::consensus_validator::SuiTxValidator;
+use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::narwhal_manager::{
-    run_narwhal_manager, NarwhalConfiguration, NarwhalManager, NarwhalStartMessage,
-};
+use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_types::base_types::{EpochId, TransactionDigest};
+use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::error::{SuiError, SuiResult};
 
 pub struct ValidatorComponents {
     validator_server_handle: tokio::task::JoinHandle<Result<()>>,
-    narwhal_manager: NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>,
+    narwhal_manager: NarwhalManager,
+    narwhal_epoch_data_remover: EpochDataRemover,
     consensus_adapter: Arc<ConsensusAdapter>,
     // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
     // is copied into each checkpoint service task, and they are listening to any change to this
     // channel. When the sender is dropped, a change is triggered and those tasks will exit.
     checkpoint_service_exit: watch::Sender<()>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
+    sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
 }
 use sui_json_rpc::governance_api::GovernanceReadApi;
 
@@ -102,9 +103,8 @@ pub struct SuiNode {
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    checkpoint_executor_handle: checkpoint_executor::Handle,
 
-    reconfig_channel: Mutex<tokio::sync::broadcast::Receiver<Committee>>,
+    end_of_epoch_channel: tokio::sync::broadcast::Sender<Committee>,
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
@@ -152,6 +152,7 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_store = AuthorityPerEpochStore::new(
+            config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
             None,
@@ -159,8 +160,11 @@ impl SuiNode {
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
-        checkpoint_store
-            .insert_genesis_checkpoint(genesis.checkpoint(), genesis.checkpoint_contents().clone());
+        checkpoint_store.insert_genesis_checkpoint(
+            genesis.checkpoint(),
+            genesis.checkpoint_contents().clone(),
+            &epoch_store,
+        );
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),
@@ -209,11 +213,14 @@ impl SuiNode {
             transaction_streamer,
             checkpoint_store.clone(),
             &prometheus_registry,
+            &config.authority_store_pruning_config,
         )
         .await;
 
         // ensure genesis txn was executed
         if epoch_store.epoch() == 0 {
+            let txn = &genesis.transaction();
+            let span = error_span!("genesis_txn", tx_digest = ?txn.digest());
             state
                 .execute_certificate(
                     &genesis
@@ -223,28 +230,23 @@ impl SuiNode {
                         .unwrap(),
                     &epoch_store,
                 )
+                .instrument(span)
                 .await
                 .unwrap();
         }
 
-        let (checkpoint_executor_handle, reconfig_channel) = CheckpointExecutor::new(
-            state_sync_handle.subscribe_to_synced_checkpoints(),
-            checkpoint_store.clone(),
-            state.clone(),
-            config.checkpoint_executor_config.clone(),
-            &prometheus_registry,
-        )
-        .start()?;
+        let (end_of_epoch_channel, _receiver) =
+            broadcast::channel::<Committee>(config.end_of_epoch_broadcast_channel_capacity);
 
         let transaction_orchestrator = if is_full_node {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
-                    // TODO: use an indirection layer for subscription but not checkpoint executor
-                    checkpoint_executor_handle.subscribe_to_end_of_epoch(),
+                    end_of_epoch_channel.subscribe(),
                     config.db_path(),
                     &prometheus_registry,
-                )?,
+                )
+                .await?,
             ))
         } else {
             None
@@ -263,6 +265,7 @@ impl SuiNode {
                 Self::construct_validator_components(
                     config,
                     state.clone(),
+                    epoch_store.clone(),
                     checkpoint_store.clone(),
                     state_sync_handle.clone(),
                     &registry_service,
@@ -285,8 +288,7 @@ impl SuiNode {
             _discovery: discovery_handle,
             state_sync: state_sync_handle,
             checkpoint_store,
-            checkpoint_executor_handle,
-            reconfig_channel: Mutex::new(reconfig_channel),
+            end_of_epoch_channel,
 
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
@@ -300,14 +302,15 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub async fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
-        self.checkpoint_executor_handle.subscribe_to_end_of_epoch()
+    pub fn subscribe_to_epoch_change(&self) -> tokio::sync::broadcast::Receiver<Committee> {
+        self.end_of_epoch_channel.subscribe()
     }
 
     pub fn current_epoch(&self) -> EpochId {
         self.state.epoch()
     }
 
+    // Init reconfig process by starting to reject user certs
     pub async fn close_epoch(&self) -> SuiResult {
         info!("close_epoch (current epoch = {})", self.state.epoch());
         self.validator_components
@@ -318,7 +321,8 @@ impl SuiNode {
             .consensus_adapter
             // TODO: If this function is ever called in non-testing code, we need to make sure this
             // function has no race with the passive reconfiguration.
-            .close_epoch(&self.state.epoch_store())
+            .close_epoch(&self.state.epoch_store());
+        Ok(())
     }
 
     pub fn is_transaction_executed_in_checkpoint(
@@ -393,10 +397,19 @@ impl SuiNode {
                 )))
                 .into_inner();
 
+            let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
+            if anemo_config.max_frame_size.is_none() {
+                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
+                // catch bugs where size limits are missing from other parts of our code.
+                // TODO: remove this and revert to default anemo max_frame_size once size
+                // limits are fully implemented on sui data structures.
+                anemo_config.max_frame_size = Some(8 << 20);
+            }
+
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
                 .private_key(config.network_key_pair().copy().private().0.to_bytes())
-                .config(config.p2p_config.anemo_config.clone().unwrap_or_default())
+                .config(anemo_config)
                 .outbound_request_layer(outbound_layer)
                 .start(service)?;
             info!("P2p network started on {}", network.local_addr());
@@ -419,6 +432,7 @@ impl SuiNode {
     async fn construct_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         registry_service: &RegistryService,
@@ -429,7 +443,8 @@ impl SuiNode {
 
         let consensus_adapter = Self::construct_consensus_adapter(
             consensus_config,
-            state.clone(),
+            state.name,
+            &epoch_store,
             &registry_service.default_registry(),
         );
 
@@ -441,24 +456,30 @@ impl SuiNode {
         )
         .await?;
 
-        let narwhal_manager = Self::construct_and_run_narwhal_manager(
-            config,
-            consensus_config,
-            state.clone(),
-            registry_service,
-        )?;
+        let narwhal_manager =
+            Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
+
+        let mut narwhal_epoch_data_remover =
+            EpochDataRemover::new(narwhal_manager.get_storage_base_path());
+
+        // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
+        narwhal_epoch_data_remover.run().await;
 
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
+        let sui_tx_validator_metrics =
+            SuiTxValidatorMetrics::new(&registry_service.default_registry());
         Self::start_epoch_specific_validator_components(
             config,
             state.clone(),
             consensus_adapter,
             checkpoint_store,
-            state.epoch_store().clone(),
+            epoch_store,
             state_sync_handle,
             narwhal_manager,
+            narwhal_epoch_data_remover,
             validator_server_handle,
             checkpoint_metrics,
+            sui_tx_validator_metrics,
         )
         .await
     }
@@ -470,9 +491,11 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
-        narwhal_manager: NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>,
+        narwhal_manager: NarwhalManager,
+        narwhal_epoch_data_remover: EpochDataRemover,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
+        sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
         let (checkpoint_service, checkpoint_service_exit) = Self::start_checkpoint_service(
             config,
@@ -485,13 +508,16 @@ impl SuiNode {
         );
 
         let consensus_handler = Arc::new(ConsensusHandler::new(
-            epoch_store,
+            epoch_store.clone(),
             checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
             state.metrics.clone(),
         ));
 
+        // TODO: The following is a bug and could potentially lead to data races.
+        // We need to put the narwhal committee in the epoch store, so that we could read it here,
+        // instead of reading from the system state.
         let system_state = state
             .get_sui_system_state_object()
             .expect("Reading Sui system state object cannot fail");
@@ -504,21 +530,29 @@ impl SuiNode {
             .address;
         let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
 
-        let msg = NarwhalStartMessage {
-            committee: committee.clone(),
-            shared_worker_cache: SharedWorkerCache::from(worker_cache),
-            execution_state: consensus_handler,
-        };
-        info!("Sending start signal to Narwhal");
-        narwhal_manager.tx_start.send(msg).await?;
-        // TODO: (Laura) wait for start complete signal
+        if committee.epoch == epoch_store.epoch() {
+            narwhal_manager
+                .start(
+                    committee.clone(),
+                    SharedWorkerCache::from(worker_cache),
+                    consensus_handler,
+                    SuiTxValidator::new(epoch_store, sui_tx_validator_metrics.clone()),
+                )
+                .await;
+        } else {
+            warn!(
+                "Current Sui epoch doesn't match the system state epoch. Not starting Narwhal yet"
+            );
+        }
 
         Ok(ValidatorComponents {
             validator_server_handle,
             narwhal_manager,
+            narwhal_epoch_data_remover,
             consensus_adapter,
             checkpoint_service_exit,
             checkpoint_metrics,
+            sui_tx_validator_metrics,
         })
     }
 
@@ -558,39 +592,27 @@ impl SuiNode {
         )
     }
 
-    fn construct_and_run_narwhal_manager(
+    fn construct_narwhal_manager(
         config: &NodeConfig,
         consensus_config: &ConsensusConfig,
-        state: Arc<AuthorityState>,
         registry_service: &RegistryService,
-    ) -> Result<NarwhalManager<ConsensusHandler<Arc<AuthorityStore>>>> {
+    ) -> Result<NarwhalManager> {
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair().copy(),
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
-            tx_validator: SuiTxValidator::new(state, &registry_service.default_registry()),
             registry_service: registry_service.clone(),
         };
 
-        let (tx_start, tr_start) = channel(1);
-        let (tx_stop, tr_stop) = channel(1);
-        let join_handle =
-            spawn_monitored_task!(run_narwhal_manager(narwhal_config, tr_start, tr_stop));
-
-        let narwhal_manager = NarwhalManager {
-            join_handle,
-            tx_start,
-            tx_stop,
-        };
-
-        Ok(narwhal_manager)
+        Ok(NarwhalManager::new(narwhal_config))
     }
 
     fn construct_consensus_adapter(
         consensus_config: &ConsensusConfig,
-        state: Arc<AuthorityState>,
+        authority: AuthorityName,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
         let consensus_address = consensus_config.address().to_owned();
@@ -602,7 +624,12 @@ impl SuiNode {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
-        ConsensusAdapter::new(Box::new(consensus_client), state, ca_metrics)
+        ConsensusAdapter::new(
+            Box::new(consensus_client),
+            authority,
+            epoch_store,
+            ca_metrics,
+        )
     }
 
     async fn start_grpc_validator_service(
@@ -676,20 +703,30 @@ impl SuiNode {
     /// This function waits for a signal from the checkpoint executor to indicate that on-chain
     /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
     pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
+        let mut checkpoint_executor = CheckpointExecutor::new(
+            self.state_sync.subscribe_to_synced_checkpoints(),
+            self.checkpoint_store.clone(),
+            self.state.database.clone(),
+            self.state.transaction_manager().clone(),
+            self.config.checkpoint_executor_config.clone(),
+            &self.registry_service.default_registry(),
+        );
+
         loop {
-            let Committee {
-                epoch: next_epoch, ..
-            } = self
-                .reconfig_channel
-                .lock()
-                .await
-                .recv()
-                .await
-                .expect("Reconfiguration channel was closed unexpectedly.");
+            let committee = checkpoint_executor
+                .run_epoch(self.state.epoch_store().clone())
+                .await;
+            let next_epoch = committee.epoch();
+
             info!(
-                ?next_epoch,
-                "Received reconfiguration signal. About to reconfigure the system."
+                next_epoch,
+                "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
+
+            self.state
+                .epoch_store()
+                .record_epoch_reconfig_start_time_metric();
+            let _ = self.end_of_epoch_channel.send(committee);
 
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
@@ -697,20 +734,24 @@ impl SuiNode {
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
                 narwhal_manager,
+                narwhal_epoch_data_remover,
                 consensus_adapter,
                 checkpoint_service_exit,
                 checkpoint_metrics,
+                sui_tx_validator_metrics,
             }) = self.validator_components.lock().await.take()
             {
                 info!("Reconfiguring the validator.");
                 // Stop the old checkpoint service.
                 drop(checkpoint_service_exit);
 
-                info!("Sending shutdown signal to Narwhal");
-                narwhal_manager.tx_stop.send(()).await?;
-                // TODO: (Laura) wait for stop complete signal
+                narwhal_manager.shutdown().await;
 
                 self.reconfigure_state(next_epoch).await;
+
+                narwhal_epoch_data_remover
+                    .remove_old_data(next_epoch - 1)
+                    .await;
 
                 if self.state.is_validator() {
                     // Only restart Narwhal if this node is still a validator in the new epoch.
@@ -723,8 +764,10 @@ impl SuiNode {
                             self.state.epoch_store().clone(),
                             self.state_sync.clone(),
                             narwhal_manager,
+                            narwhal_epoch_data_remover,
                             validator_server_handle,
                             checkpoint_metrics,
+                            sui_tx_validator_metrics,
                         )
                         .await?,
                     )
@@ -742,6 +785,7 @@ impl SuiNode {
                         Self::construct_validator_components(
                             &self.config,
                             self.state.clone(),
+                            self.state.epoch_store().clone(),
                             self.checkpoint_store.clone(),
                             self.state_sync.clone(),
                             &self.registry_service,

@@ -1,26 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::{iter, vec};
+use std::vec;
 
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::{json, Value};
 use sui_sdk::rpc_types::{
-    SuiEvent, SuiTransactionData, SuiTransactionKind, SuiTransactionResponse,
+    SuiEvent, SuiMoveCall, SuiPaySui, SuiTransactionData, SuiTransactionKind,
+    SuiTransactionResponse,
 };
 
-use sui_types::base_types::{ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{SequenceNumber, SuiAddress};
+use sui_types::committee::EpochId;
 use sui_types::event::BalanceChangeType;
 use sui_types::gas_coin::{GasCoin, GAS};
+use sui_types::governance::{
+    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
+};
 use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 use crate::types::{
-    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier,
-    ConstructionMetadata, OperationIdentifier, OperationStatus, OperationType,
+    AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
+    OperationIdentifier, OperationStatus, OperationType, PreprocessMetadata,
 };
 use crate::Error;
 
@@ -66,105 +73,181 @@ impl Operations {
         self
     }
 
+    pub fn type_(&self) -> Option<OperationType> {
+        self.0.first().map(|op| op.type_)
+    }
+
     /// Parse operation input from rosetta to Sui transaction
-    pub fn into_transaction_data(
+    pub fn into_internal(
         self,
-        metadata: ConstructionMetadata,
-    ) -> Result<TransactionData, Error> {
-        let mut type_ = None;
+        metadata: Option<PreprocessMetadata>,
+    ) -> Result<InternalOperation, Error> {
+        match (
+            self.type_()
+                .ok_or_else(|| Error::MissingInput("Operation type".into()))?,
+            metadata,
+        ) {
+            (OperationType::PaySui, _) => self.pay_sui_ops_to_internal(),
+            (
+                OperationType::Delegation,
+                Some(PreprocessMetadata::Delegation { locked_until_epoch }),
+            ) => self.delegation_ops_to_internal(locked_until_epoch),
+            (OperationType::Delegation, _) => self.delegation_ops_to_internal(None),
+            (op, _) => Err(Error::UnsupportedOperation(op)),
+        }
+    }
+
+    fn pay_sui_ops_to_internal(self) -> Result<InternalOperation, Error> {
         let mut recipients = vec![];
         let mut amounts = vec![];
         let mut sender = None;
-        let mut budget = None;
         for op in self {
-            // Currently only PaySui is support,
-            if op.type_ != OperationType::PaySui && op.type_ != OperationType::GasBudget {
-                return Err(Error::UnsupportedOperation(op.type_));
-            }
-            if type_.is_none() && op.type_ != OperationType::GasBudget {
-                type_ = Some(op.type_)
-            }
-            if op.type_ == OperationType::GasBudget {
-                let budget_value = op
-                    .metadata
-                    .clone()
-                    .and_then(|v| v.pointer("/budget").cloned())
-                    .ok_or_else(|| Error::MissingInput("gas budget".to_string()))?;
-                budget = Some(
-                    budget_value
-                        .as_u64()
-                        .or_else(|| budget_value.as_str().and_then(|s| u64::from_str(s).ok()))
-                        .ok_or_else(|| Error::InvalidInput(format!("{budget_value}")))?,
-                );
-            } else if op.type_ == OperationType::PaySui {
-                if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
-                    if amount.value.is_negative() {
-                        sender = Some(account.address)
-                    } else {
-                        recipients.push(account.address);
-                        let amount = amount.value.abs();
-                        if amount > u64::MAX as i128 {
-                            return Err(Error::InvalidInput(
-                                "Input amount exceed u64::MAX".to_string(),
-                            ));
-                        }
-                        amounts.push(amount as u64)
+            if let (Some(amount), Some(account)) = (op.amount.clone(), op.account.clone()) {
+                if amount.value.is_negative() {
+                    sender = Some(account.address)
+                } else {
+                    recipients.push(account.address);
+                    let amount = amount.value.abs();
+                    if amount > u64::MAX as i128 {
+                        return Err(Error::InvalidInput(
+                            "Input amount exceed u64::MAX".to_string(),
+                        ));
                     }
+                    amounts.push(amount as u64)
                 }
             }
         }
-
-        let address = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
-        let gas = metadata.sender_coins[0];
-        let budget = budget.ok_or_else(|| Error::MissingInput("gas budget".to_string()))?;
-
-        Ok(TransactionData::new_pay_sui(
-            address,
-            metadata.sender_coins,
+        let sender = sender.ok_or_else(|| Error::MissingInput("Sender address".to_string()))?;
+        Ok(InternalOperation::PaySui {
+            sender,
             recipients,
             amounts,
-            gas,
-            budget,
-        ))
+        })
+    }
+
+    fn delegation_ops_to_internal(
+        self,
+        locked_until_epoch: Option<EpochId>,
+    ) -> Result<InternalOperation, Error> {
+        if self.0.len() != 1 {
+            return Err(Error::MalformedOperationError(
+                "Delegation should only have one operation.".into(),
+            ));
+        }
+        // Checked above, safe to unwrap.
+        let op = self.into_iter().next().unwrap();
+        let sender = op
+            .account
+            .ok_or_else(|| Error::MissingInput("Sender address".to_string()))?
+            .address;
+        let metadata = op
+            .metadata
+            .ok_or_else(|| Error::MissingInput("Delegation metadata".to_string()))?;
+
+        let amount = op
+            .amount
+            .ok_or_else(|| Error::MissingInput("Amount".to_string()))?
+            .value
+            .unsigned_abs();
+
+        let OperationMetadata::Delegation {  validator } = metadata else {
+            return Err(Error::InvalidInput("Cannot find delegation info from metadata.".into()))
+        };
+
+        Ok(InternalOperation::Delegation {
+            sender,
+            validator,
+            amount,
+            locked_until_epoch,
+        })
     }
 
     fn from_transaction(
-        tx: &SuiTransactionKind,
+        tx: SuiTransactionKind,
         sender: SuiAddress,
         status: Option<OperationStatus>,
     ) -> Result<Vec<Operation>, Error> {
-        let operations = if let SuiTransactionKind::PaySui(tx) = tx {
-            let recipients = tx.recipients.iter().zip(&tx.amounts);
-            let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
+        Ok(match tx {
+            SuiTransactionKind::PaySui(tx) => Self::parse_pay_sui_operations(sender, tx, status),
+            SuiTransactionKind::Call(tx) => Self::parse_call_operations(sender, status, tx)?,
+            _ => vec![Operation::generic_op(status, sender, tx)],
+        })
+    }
 
-            for (recipient, amount) in recipients {
-                *aggregated_recipients.entry(*recipient).or_default() += *amount
-            }
-
-            let mut pay_operations = aggregated_recipients
-                .into_iter()
-                .map(|(recipient, amount)| Operation::pay_sui(status, recipient, amount.into()))
-                .collect::<Vec<_>>();
-            let total_paid = tx.amounts.iter().sum::<u64>();
-            pay_operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
-            pay_operations
-        } else {
-            let (type_, metadata) = match tx {
-                SuiTransactionKind::TransferObject(tx) => {
-                    (OperationType::TransferObject, json!(tx))
-                }
-                SuiTransactionKind::Publish(tx) => (OperationType::Publish, json!(tx.disassembled)),
-                SuiTransactionKind::Call(tx) => (OperationType::MoveCall, json!(tx)),
-                SuiTransactionKind::TransferSui(tx) => (OperationType::TransferSUI, json!(tx)),
-                SuiTransactionKind::Pay(tx) => (OperationType::Pay, json!(tx)),
-                SuiTransactionKind::PayAllSui(tx) => (OperationType::PayAllSui, json!(tx)),
-                SuiTransactionKind::ChangeEpoch(tx) => (OperationType::EpochChange, json!(tx)),
-                SuiTransactionKind::Genesis(tx) => (OperationType::Genesis, json!(tx)),
-                SuiTransactionKind::PaySui(_) => unreachable!(),
+    fn parse_call_operations(
+        sender: SuiAddress,
+        status: Option<OperationStatus>,
+        tx: SuiMoveCall,
+    ) -> Result<Vec<Operation>, Error> {
+        if Self::is_delegation_call(&tx) {
+            let (amount, validator) = match &tx.arguments[..] {
+                [_, _, amount, validator] => {
+                    let amount = amount.to_json_value().as_array().map(|v| {
+                        // value is a byte array
+                        let bytes = v.iter().flat_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>();
+                        let option: Vec<u64> = bcs::from_bytes(&bytes)?;
+                        if let Some(amount) = option.first() {
+                            Ok(*amount as u128)
+                        } else {
+                            Err(Error::InternalError(anyhow!("Cannot extract delegation amount from move call.")))
+                        }
+                    }).transpose()?;
+                    let validator = validator
+                        .to_json_value()
+                        .as_str()
+                        .map(SuiAddress::from_str)
+                        .transpose()?
+                        .ok_or_else(|| Error::InternalError(anyhow!("Error parsing Validator address from call arg.")))?;
+                    (amount, validator)
+                },
+                _ => return Err(Error::InternalError(anyhow!("Error encountered when extracting arguments from move call, expecting 4 elements, got {}", tx.arguments.len()))),
             };
-            vec![Operation::generic_op(type_, status, sender, metadata)]
-        };
-        Ok(operations)
+
+            let amount = amount.map(|amount| Amount::new(-(amount as i128)));
+
+            return Ok(vec![Operation {
+                operation_identifier: Default::default(),
+                type_: OperationType::Delegation,
+                status,
+                account: Some(sender.into()),
+                amount,
+                coin_change: None,
+                metadata: Some(OperationMetadata::Delegation { validator }),
+            }]);
+        }
+        Ok(vec![Operation::generic_op(
+            status,
+            sender,
+            SuiTransactionKind::Call(tx),
+        )])
+    }
+
+    fn is_delegation_call(tx: &SuiMoveCall) -> bool {
+        tx.package.object_id == SUI_FRAMEWORK_OBJECT_ID
+            && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
+            && (tx.function == ADD_DELEGATION_LOCKED_COIN_FUN_NAME.as_str()
+                || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())
+    }
+
+    fn parse_pay_sui_operations(
+        sender: SuiAddress,
+        tx: SuiPaySui,
+        status: Option<OperationStatus>,
+    ) -> Vec<Operation> {
+        let recipients = tx.recipients.iter().zip(&tx.amounts);
+        let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
+
+        for (recipient, amount) in recipients {
+            *aggregated_recipients.entry(*recipient).or_default() += *amount
+        }
+
+        let mut pay_operations = aggregated_recipients
+            .into_iter()
+            .map(|(recipient, amount)| Operation::pay_sui(status, recipient, amount.into()))
+            .collect::<Vec<_>>();
+        let total_paid = tx.amounts.iter().sum::<u64>();
+        pay_operations.push(Operation::pay_sui(status, sender, -(total_paid as i128)));
+        pay_operations
     }
 
     fn get_balance_operation_from_events(
@@ -220,19 +303,11 @@ impl Operations {
 
 impl TryFrom<SuiTransactionData> for Operations {
     type Error = Error;
-
     fn try_from(data: SuiTransactionData) -> Result<Self, Self::Error> {
         let sender = data.sender;
-        let gas = Operation::gas_budget(
-            None,
-            data.gas_payment.to_object_ref(),
-            data.gas_budget,
-            sender,
-        );
         data.transactions
-            .iter()
+            .into_iter()
             .map(|tx| Self::from_transaction(tx, sender, None))
-            .chain(iter::once(Ok(vec![gas])))
             .collect()
     }
 }
@@ -244,31 +319,26 @@ impl TryFrom<SuiTransactionResponse> for Operations {
         let ops: Operations = response.certificate.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 
-        // We will need to subtract the PaySui operation amounts from the actual balance
+        // We will need to subtract the operation amounts from the actual balance
         // change amount extracted from event to prevent double counting.
-        let mut pay_sui_balances = HashMap::new();
-
-        let pay_sui_ops =
-            ops.as_ref()
-                .iter()
-                .filter_map(|op| match (op.type_, &op.account, &op.amount) {
-                    (OperationType::PaySui, Some(acc), Some(amount)) => {
-                        Some((acc.address, -amount.value))
-                    }
-                    _ => None,
-                });
-
-        for (addr, amount) in pay_sui_ops {
-            *pay_sui_balances.entry(addr).or_default() += amount
-        }
+        let accounted_balances = ops
+            .as_ref()
+            .iter()
+            .filter_map(|op| match (&op.account, &op.amount) {
+                (Some(acc), Some(amount)) => Some((acc.address, -amount.value)),
+                _ => None,
+            })
+            .fold(HashMap::new(), |mut balances, (addr, amount)| {
+                *balances.entry(addr).or_default() += amount;
+                balances
+            });
 
         // Extract coin change operations from events
         let coin_change_operations = Self::get_balance_operation_from_events(
             &response.effects.events,
             status,
-            pay_sui_balances,
+            accounted_balances,
         );
-
         Ok(ops.into_iter().chain(coin_change_operations).collect())
     }
 }
@@ -294,24 +364,29 @@ pub struct Operation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coin_change: Option<CoinChange>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+    pub metadata: Option<OperationMetadata>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum OperationMetadata {
+    GenericTransaction(SuiTransactionKind),
+    Delegation { validator: SuiAddress },
 }
 
 impl Operation {
     fn generic_op(
-        type_: OperationType,
         status: Option<OperationStatus>,
         sender: SuiAddress,
-        metadata: Value,
+        tx: SuiTransactionKind,
     ) -> Self {
         Operation {
             operation_identifier: Default::default(),
-            type_,
+            type_: (&tx).into(),
             status,
             account: Some(sender.into()),
             amount: None,
             coin_change: None,
-            metadata: Some(metadata),
+            metadata: Some(OperationMetadata::GenericTransaction(tx)),
         }
     }
 
@@ -344,28 +419,6 @@ impl Operation {
             amount: Some(Amount::new(amount)),
             coin_change: None,
             metadata: None,
-        }
-    }
-
-    fn gas_budget(
-        status: Option<OperationStatus>,
-        gas: ObjectRef,
-        budget: u64,
-        sender: SuiAddress,
-    ) -> Self {
-        Self {
-            operation_identifier: Default::default(),
-            type_: OperationType::GasBudget,
-            status,
-            account: Some(sender.into()),
-            amount: None,
-            coin_change: Some(CoinChange {
-                coin_identifier: CoinIdentifier {
-                    identifier: gas.into(),
-                },
-                coin_action: CoinAction::CoinSpent,
-            }),
-            metadata: Some(json!({ "budget": budget })),
         }
     }
 

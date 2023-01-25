@@ -42,7 +42,7 @@ fn test_signed_values() {
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
+        TransactionData::new_transfer_with_dummy_gas_price(
             _a2,
             random_object_ref(),
             a_sender,
@@ -56,7 +56,7 @@ fn test_signed_values() {
     .unwrap();
 
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
+        TransactionData::new_transfer_with_dummy_gas_price(
             _a2,
             random_object_ref(),
             a_sender,
@@ -119,7 +119,7 @@ fn test_certificates() {
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(
+        TransactionData::new_transfer_with_dummy_gas_price(
             a2,
             random_object_ref(),
             a_sender,
@@ -432,7 +432,13 @@ fn test_digest_caching() {
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data_and_signer(
-        TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
+        TransactionData::new_transfer_with_dummy_gas_price(
+            sa1,
+            random_object_ref(),
+            sa2,
+            random_object_ref(),
+            10000,
+        ),
         Intent::default(),
         &ssec2,
     )
@@ -502,7 +508,7 @@ fn test_user_signature_committed_in_transactions() {
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
     let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let tx_data = TransactionData::new_transfer(
+    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
         a_sender2,
         random_object_ref(),
         a_sender,
@@ -550,7 +556,7 @@ fn test_user_signature_committed_in_signed_transactions() {
     let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
     let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let tx_data = TransactionData::new_transfer(
+    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
         a_sender2,
         random_object_ref(),
         a_sender,
@@ -629,7 +635,7 @@ fn verify_sender_signature_correctly_with_flag() {
     // create a sender keypair with Secp256k1
     let sender_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
     // and creates a corresponding transaction
-    let tx_data = TransactionData::new_transfer(
+    let tx_data = TransactionData::new_transfer_with_dummy_gas_price(
         receiver_address,
         random_object_ref(),
         (&sender_kp.public()).into(),
@@ -723,7 +729,7 @@ fn verify_sender_signature_correctly_with_flag() {
 
 #[test]
 fn test_change_epoch_transaction() {
-    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
+    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0, 0);
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),

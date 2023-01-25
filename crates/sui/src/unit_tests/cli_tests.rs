@@ -161,38 +161,26 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         .await? else{
         panic!()
     };
-
-    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
 
-    // test cluster will not response if this call is in the same thread
-    let out = thread::spawn(move || {
-        cmd.args([
-            "client",
-            "--client.config",
-            config_path.to_str().unwrap(),
-            "call",
-            "--package",
-            "0x2",
-            "--module",
-            "sui",
-            "--function",
-            "transfer",
-            "--args",
-            &coins.first().unwrap().object_id.to_string(),
-            &test_cluster.get_address_1().to_string(),
-            "--gas-budget",
-            "10000",
-        ])
-        .assert()
-    });
-
-    while !out.is_finished() {
-        sleep(Duration::from_millis(100)).await;
-    }
-
-    out.join().unwrap().success();
-    Ok(())
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui",
+        "--function",
+        "transfer",
+        "--args",
+        &coins.first().unwrap().object_id.to_string(),
+        &test_cluster.get_address_1().to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await
 }
 
 #[sim_test]
@@ -344,7 +332,6 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -368,7 +355,9 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
-        verify_dependencies: true,
+        verify_dependencies: false,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
     }
     .execute(context)
     .await?;
@@ -430,10 +419,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     {
         new_objs.first().unwrap().reference.object_id
     } else {
-        // User assert since panic causes test issues
-        assert!(false);
-        // Use this to satisfy type checker
-        ObjectID::random()
+        panic!();
     };
 
     // Try a bad argument: decimal
@@ -511,7 +497,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -536,7 +521,9 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: 20_000,
-        verify_dependencies: true,
+        verify_dependencies: false,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
     }
     .execute(context)
     .await?;
@@ -563,7 +550,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -602,7 +588,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 mutated.get(1).unwrap().reference.object_id,
             )
         } else {
-            assert!(false);
             panic!()
         };
 
@@ -620,8 +605,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
         panic!()
     };
 
@@ -638,8 +621,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     {
         object
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
         panic!()
     };
 
@@ -681,7 +662,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 mutated.get(1).unwrap().reference.object_id,
             )
         } else {
-            assert!(false);
             panic!()
         };
 
@@ -699,7 +679,6 @@ fn test_bug_1078() {
     write!(writer, "{:?}", read).unwrap();
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await?;
@@ -828,7 +807,6 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let mut cluster = TestClusterBuilder::new().build().await?;
@@ -890,7 +868,6 @@ async fn get_parsed_object_assert_existence(
         .expect("Object {object_id} does not exist.")
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -981,7 +958,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(clippy::assertions_on_constants)]
 #[sim_test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
@@ -1198,5 +1174,116 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_none_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addrs = client.governance_api().get_validators().await?;
+    let validator_addr = validator_addrs.first().unwrap().sui_address;
+
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_add_delegation_mul_coin",
+        "--args",
+        "0x5",
+        &format!("[{}]", coins.first().unwrap().coin_object_id),
+        "[]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await?;
+
+    let stake = client
+        .governance_api()
+        .get_delegated_stakes(address)
+        .await?;
+
+    assert_eq!(1, stake.len());
+    assert_eq!(
+        coins.first().unwrap().balance,
+        stake.first().unwrap().staked_sui.principal()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delegation_with_u64_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addrs = client.governance_api().get_validators().await?;
+    let validator_addr = validator_addrs.first().unwrap().sui_address;
+
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x2",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_add_delegation_mul_coin",
+        "--args",
+        "0x5",
+        &format!("[{}]", coins.first().unwrap().coin_object_id),
+        "[10000]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "10000",
+    ])
+    .await?;
+
+    let stake = client
+        .governance_api()
+        .get_delegated_stakes(address)
+        .await?;
+
+    assert_eq!(1, stake.len());
+    assert_eq!(10000, stake.first().unwrap().staked_sui.principal());
+    Ok(())
+}
+
+async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // test cluster will not response if this call is in the same thread
+    let out = thread::spawn(move || cmd.args(args).assert());
+    while !out.is_finished() {
+        sleep(Duration::from_millis(100)).await;
+    }
+    out.join().unwrap().success();
     Ok(())
 }

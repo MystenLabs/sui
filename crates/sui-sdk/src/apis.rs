@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::{RpcError, SuiRpcResult};
+use crate::error::{Error, SuiRpcResult};
 use crate::{RpcClient, TransactionExecutionResult, WAIT_FOR_TX_TIMEOUT_SEC};
+use fastcrypto::encoding::Base64;
 use futures::stream;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
+use std::future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc::api::GovernanceReadApiClient;
@@ -14,7 +16,7 @@ use sui_json_rpc_types::{
     Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionResponse, TransactionsPage,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -24,7 +26,11 @@ use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{
-    CommitteeInfoResponse, ExecuteTransactionRequestType, VerifiedTransaction,
+    CommitteeInfoResponse, ExecuteTransactionRequestType, TransactionData, VerifiedTransaction,
+};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSummary,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
@@ -136,6 +142,83 @@ impl ReadApi {
             .await?)
     }
 
+    /// Return a checkpoint summary based on a checkpoint sequence number
+    pub async fn get_checkpoint(
+        &self,
+        seq_number: CheckpointSequenceNumber,
+    ) -> SuiRpcResult<Checkpoint> {
+        let summary = self.get_checkpoint_summary(seq_number).await?;
+        let content = self.get_checkpoint_contents(seq_number).await?;
+        Ok(Checkpoint { summary, content })
+    }
+
+    /// Return a checkpoint summary based on a checkpoint digest
+    pub async fn get_checkpoint_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> SuiRpcResult<Checkpoint> {
+        let summary = self.get_checkpoint_summary_by_digest(digest).await?;
+        let content = self
+            .get_checkpoint_contents_by_digest(summary.content_digest)
+            .await?;
+        Ok(Checkpoint { summary, content })
+    }
+
+    /// Return a checkpoint summary based on checkpoint digest
+    pub async fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> SuiRpcResult<CheckpointSummary> {
+        Ok(self
+            .api
+            .http
+            .get_checkpoint_summary_by_digest(digest)
+            .await?)
+    }
+
+    /// Return a checkpoint summary based on a checkpoint sequence number
+    pub async fn get_checkpoint_summary(
+        &self,
+        seq_number: CheckpointSequenceNumber,
+    ) -> SuiRpcResult<CheckpointSummary> {
+        Ok(self.api.http.get_checkpoint_summary(seq_number).await?)
+    }
+
+    /// Return the sequence number of the latest checkpoint that has been executed
+    pub async fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> SuiRpcResult<CheckpointSequenceNumber> {
+        Ok(self
+            .api
+            .http
+            .get_latest_checkpoint_sequence_number()
+            .await?)
+    }
+
+    /// Return contents of a checkpoint, namely a list of execution digests
+    pub async fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: CheckpointContentsDigest,
+    ) -> SuiRpcResult<CheckpointContents> {
+        Ok(self
+            .api
+            .http
+            .get_checkpoint_contents_by_digest(digest)
+            .await?)
+    }
+
+    /// Return contents of a checkpoint based on its sequence number
+    pub async fn get_checkpoint_contents(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> SuiRpcResult<CheckpointContents> {
+        Ok(self
+            .api
+            .http
+            .get_checkpoint_contents(sequence_number)
+            .await?)
+    }
+
     pub fn get_transactions_stream(
         &self,
         query: TransactionQuery,
@@ -176,6 +259,21 @@ impl ReadApi {
 
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
+    }
+
+    pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_reference_gas_price().await?)
+    }
+
+    pub async fn dry_run_transaction(
+        &self,
+        tx: TransactionData,
+    ) -> SuiRpcResult<SuiTransactionEffects> {
+        Ok(self
+            .api
+            .http
+            .dry_run_transaction(Base64::from_bytes(&bcs::to_bytes(&tx)?))
+            .await?)
     }
 }
 
@@ -238,6 +336,37 @@ impl CoinReadApi {
         )
     }
 
+    pub async fn select_coins(
+        &self,
+        address: SuiAddress,
+        coin_type: Option<String>,
+        amount: u128,
+        locked_until_epoch: Option<EpochId>,
+        exclude: Vec<ObjectID>,
+    ) -> SuiRpcResult<Vec<Coin>> {
+        let mut total = 0u128;
+        let coins = self
+            .get_coins_stream(address, coin_type)
+            .filter(|coin: &Coin| {
+                future::ready(
+                    locked_until_epoch == coin.locked_until_epoch
+                        && !exclude.contains(&coin.coin_object_id),
+                )
+            })
+            .take_while(|coin: &Coin| {
+                let ready = future::ready(total < amount);
+                total += coin.balance as u128;
+                ready
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        if total < amount {
+            return Err(Error::InsufficientFund { address, amount });
+        }
+        Ok(coins)
+    }
+
     pub async fn get_balance(
         &self,
         owner: SuiAddress,
@@ -279,7 +408,7 @@ impl EventApi {
                     c.subscribe_event(filter).await?;
                 Ok(subscription.map(|item| Ok(item?)))
             }
-            _ => Err(RpcError::Subscription(
+            _ => Err(Error::Subscription(
                 "Subscription only supported by WebSocket client.".to_string(),
             )),
         }
@@ -341,7 +470,7 @@ impl QuorumDriver {
     /// defaults to `ExecuteTransactionRequestType::WaitForLocalExecution`.
     /// When `ExecuteTransactionRequestType::WaitForLocalExecution` is used,
     /// but returned `confirmed_local_execution` is false, the client polls
-    /// the fullnode untils the fullnode recognizes this transaction, or
+    /// the fullnode until the fullnode recognizes this transaction, or
     /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
     /// error is returned from this call.
     pub async fn execute_transaction(
@@ -412,13 +541,13 @@ impl QuorumDriver {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                 } else {
                     // immediately return on other types of errors
-                    return Err(RpcError::TransactionConfirmationError(tx_digest, err));
+                    return Err(Error::TransactionConfirmationError(tx_digest, err));
                 }
             } else {
                 return Ok(());
             }
             if start.elapsed().as_secs() >= WAIT_FOR_TX_TIMEOUT_SEC {
-                return Err(RpcError::FailToConfirmTransactionStatus(
+                return Err(Error::FailToConfirmTransactionStatus(
                     tx_digest,
                     WAIT_FOR_TX_TIMEOUT_SEC,
                 ));
@@ -463,4 +592,10 @@ impl GovernanceApi {
     pub async fn get_sui_system_state(&self) -> SuiRpcResult<SuiSystemState> {
         Ok(self.api.http.get_sui_system_state().await?)
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Checkpoint {
+    pub summary: CheckpointSummary,
+    pub content: CheckpointContents,
 }

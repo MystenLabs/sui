@@ -502,6 +502,20 @@ export function getTotalGasUsed(
     : undefined;
 }
 
+export function getTotalGasUsedUpperBound(
+  data:
+    | SuiTransactionResponse
+    | SuiExecuteTransactionResponse
+    | TransactionEffects
+): number | undefined {
+  const gasSummary = getExecutionStatusGasSummary(data);
+  return gasSummary
+    ? gasSummary.computationCost +
+        gasSummary.storageCost
+    : undefined;
+}
+
+
 export function getTransactionEffects(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse
 ): TransactionEffects | undefined {

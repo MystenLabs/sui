@@ -14,24 +14,28 @@ use crate::{
     BlockRemover,
 };
 
-use anemo::types::Address;
+use anemo::{codegen::InboundRequestLayer, types::Address};
 use anemo::{types::PeerInfo, Network, PeerId};
+use anemo_tower::auth::RequireAuthorizationLayer;
+use anemo_tower::set_header::SetResponseHeaderLayer;
 use anemo_tower::{
-    auth::{AllowedPeers, RequireAuthorizationLayer},
+    auth::AllowedPeers,
     callback::CallbackLayer,
+    inflight_limit, rate_limit,
+    set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
-use dashmap::DashSet;
 use fastcrypto::{
     hash::Hash,
     signature_service::SignatureService,
     traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
 };
 use multiaddr::{Multiaddr, Protocol};
+use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use prometheus::Registry;
 use std::collections::HashMap;
@@ -218,7 +222,7 @@ impl Primary {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
+        let mut primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             name: name.clone(),
             committee: committee.clone(),
             worker_cache: worker_cache.clone(),
@@ -231,8 +235,44 @@ impl Primary {
             vote_digest_store,
             rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
             metrics: node_metrics.clone(),
-            request_vote_inflight: Arc::new(DashSet::new()),
-        });
+        })
+        // Allow only one inflight RequestVote RPC at a time per peer.
+        // This is required for correctness.
+        .add_layer_for_request_vote(InboundRequestLayer::new(
+            inflight_limit::InflightLimitLayer::new(1, inflight_limit::WaitMode::ReturnError),
+        ))
+        // Allow only one inflight FetchCertificates RPC at a time per peer.
+        // These are already a batch request; an individual peer should never need more than one.
+        .add_layer_for_fetch_certificates(InboundRequestLayer::new(
+            inflight_limit::InflightLimitLayer::new(1, inflight_limit::WaitMode::ReturnError),
+        ));
+
+        // Apply other rate limits from configuration as needed.
+        if let Some(limit) = parameters.anemo.send_message_rate_limit {
+            primary_service = primary_service.add_layer_for_send_message(InboundRequestLayer::new(
+                rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                ),
+            ));
+        }
+        if let Some(limit) = parameters.anemo.get_payload_availability_rate_limit {
+            primary_service = primary_service.add_layer_for_get_payload_availability(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+        if let Some(limit) = parameters.anemo.get_certificates_rate_limit {
+            primary_service = primary_service.add_layer_for_get_certificates(
+                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                )),
+            );
+        }
+
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
             payload_store: payload_store.clone(),
@@ -240,6 +280,8 @@ impl Primary {
         });
 
         let addr = network::multiaddr_to_address(&address).unwrap();
+
+        let epoch_string: String = committee.load().epoch.to_string();
 
         let our_worker_peer_ids = worker_cache
             .load()
@@ -252,10 +294,16 @@ impl Primary {
             // Add an Authorization Layer to ensure that we only service requests from our workers
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
                 our_worker_peer_ids,
+            )))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
             )));
 
         let routes = anemo::Router::new()
             .add_rpc_service(primary_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )))
             .merge(worker_to_primary_router);
 
         let service = ServiceBuilder::new()
@@ -268,6 +316,10 @@ impl Primary {
                 inbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetResponseHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string.clone(),
+            ))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
@@ -280,6 +332,10 @@ impl Primary {
                 outbound_network_metrics,
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string,
+            ))
             .into_inner();
 
         let anemo_config = {
@@ -288,9 +344,14 @@ impl Primary {
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
+            // Set a default size limit of 8 MiB for all RPCs
+            // TODO: remove this and revert to default anemo max_frame_size once size
+            // limits are fully implemented on narwhal data structures.
+            config.max_frame_size = Some(8 << 20);
             // Set a default timeout of 300s for all RPC requests
             config.inbound_request_timeout_ms = Some(300_000);
             config.outbound_request_timeout_ms = Some(300_000);
+            config.shutdown_idle_timeout_ms = Some(1_000);
             config
         };
 
@@ -587,8 +648,6 @@ struct PrimaryReceiverHandler {
     /// Get a signal when the round changes.
     rx_narwhal_round_updates: watch::Receiver<Round>,
     metrics: Arc<PrimaryMetrics>,
-    /// Used to ensure a maximum of one inflight vote request per header.
-    request_vote_inflight: Arc<DashSet<PublicKey>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -807,10 +866,7 @@ impl PrimaryReceiverHandler {
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
                         header.author, header.epoch, header.round
                     );
-                    self.metrics
-                        .votes_dropped_equivocation_protection
-                        .with_label_values(&[&header.epoch.to_string()])
-                        .inc();
+                    self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(vote_info.vote_digest, header.round));
                 }
             }
@@ -843,17 +899,6 @@ impl PrimaryReceiverHandler {
     }
 }
 
-// Deletes the tracked inflight request when the RequestVote RPC finishes or is dropped.
-struct RequestVoteInflightGuard {
-    request_vote_inflight: Arc<DashSet<PublicKey>>,
-    author: PublicKey,
-}
-impl Drop for RequestVoteInflightGuard {
-    fn drop(&mut self) {
-        assert!(self.request_vote_inflight.remove(&self.author).is_some());
-    }
-}
-
 #[async_trait]
 impl PrimaryToPrimary for PrimaryReceiverHandler {
     async fn send_message(
@@ -877,21 +922,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         &self,
         request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
-        // TODO: Remove manual code for tracking inflight requests once Anemo issue #9 is resolved.
-        let author = request.body().header.author.to_owned();
-        let _inflight_guard = if self.request_vote_inflight.insert(author.clone()) {
-            RequestVoteInflightGuard {
-                request_vote_inflight: self.request_vote_inflight.clone(),
-                author,
-            }
-        } else {
-            return Err(anemo::rpc::Status::new_with_message(
-                // TODO: This should be 429 Too Many Requests, if/when Anemo adds that status code.
-                anemo::types::response::StatusCode::Unknown,
-                format!("vote request for author {author:?} already inflight"),
-            ));
-        };
-
         self.process_request_vote(request)
             .await
             .map(anemo::Response::new)

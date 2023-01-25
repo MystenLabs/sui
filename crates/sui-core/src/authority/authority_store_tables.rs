@@ -8,7 +8,8 @@ use std::path::Path;
 use sui_storage::default_db_options;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
-use typed_store::rocks::{DBMap, DBOptions};
+use typed_store::metrics::SamplingInterval;
+use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
@@ -66,7 +67,7 @@ pub struct AuthorityPerpetualTables {
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
+    pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
 
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
@@ -88,14 +89,19 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_read_write(Self::path(parent_path), db_options, None)
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            db_options,
+            None,
+        )
     }
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
-        Self::get_read_only_handle(Self::path(parent_path), None, None)
+        Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
     }
 
-    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
+    /// Read an object and return it, or Ok(None) if the object was not found.
     pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects
@@ -208,7 +214,13 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
     default_db_options(None, None).1
 }
 fn objects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    let db_options = default_db_options(None, None).1;
+    DBOptions {
+        options: db_options.options,
+        rw_options: ReadWriteOptions {
+            ignore_range_deletions: true,
+        },
+    }
 }
 fn certificates_table_default_config() -> DBOptions {
     default_db_options(None, None).1

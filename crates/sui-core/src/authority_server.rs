@@ -20,10 +20,10 @@ use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::{error::*, messages::*};
 use tap::TapFallible;
 use tokio::task::JoinHandle;
-use tracing::{info, Instrument};
+use tracing::{error_span, info, Instrument};
 
 use crate::{
-    authority::AuthorityState,
+    authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
 
@@ -84,7 +84,8 @@ impl AuthorityServer {
         ));
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
-            state.clone(),
+            state.name,
+            &state.epoch_store_for_testing(),
             ConsensusAdapterMetrics::new_test(),
         );
 
@@ -133,8 +134,7 @@ pub struct ValidatorServiceMetrics {
     pub tx_verification_latency: Histogram,
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
-    pub handle_transaction_consensus_latency: Histogram,
-    pub handle_transaction_non_consensus_latency: Histogram,
+    pub handle_transaction_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
 
@@ -176,16 +176,9 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            handle_transaction_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_transaction_consensus_latency",
-                "Latency of handling a consensus transaction",
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_transaction_non_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_transaction_non_consensus_latency",
-                "Latency of handling a non-consensus transaction",
+            handle_transaction_latency: register_histogram_with_registry!(
+                "validator_service_handle_transaction_latency",
+                "Latency of handling a transaction",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -251,15 +244,7 @@ impl ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let transaction = request.into_inner();
 
-        let is_consensus_tx = transaction.contains_shared_object();
-
-        let _metrics_guard = if is_consensus_tx {
-            metrics.handle_transaction_consensus_latency.start_timer()
-        } else {
-            metrics
-                .handle_transaction_non_consensus_latency
-                .start_timer()
-        };
+        let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
         let transaction = transaction.verify().tap_err(|_| {
@@ -270,7 +255,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::debug_span!("validator_state_process_tx", ?tx_digest);
+        let span = tracing::error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)
@@ -311,7 +296,7 @@ impl ValidatorService {
             state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
         {
             return Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects,
+                signed_effects: signed_effects.into_inner(),
             }));
         }
 
@@ -326,6 +311,27 @@ impl ValidatorService {
             return Err(tonic::Status::invalid_argument(format!(
                 "Cannot execute system certificate via RPC interface! {certificate:?}"
             )));
+        }
+        for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
+            certificate
+                .data()
+                .intent_message
+                .value
+                .kind
+                .input_objects()?
+                .into_iter()
+                .map(|r| r.object_id())
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+                return Err(SuiError::TooManyTransactionsPendingOnObject {
+                    object_id,
+                    queue_len,
+                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+                }
+                .into());
+            }
         }
         // code block within reconfiguration lock
         let certificate = {
@@ -381,7 +387,7 @@ impl ValidatorService {
         };
         match res {
             Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects,
+                signed_effects: signed_effects.into_inner(),
             })),
             Err(e) => Err(tonic::Status::from(e)),
         }
@@ -414,12 +420,12 @@ impl Validator for ValidatorService {
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(Self::handle_certificate(
-            state,
-            consensus_adapter,
-            request,
-            metrics
-        ))
+        spawn_monitored_task!(async move {
+            let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
+            Self::handle_certificate(state, consensus_adapter, request, metrics)
+                .instrument(span)
+                .await
+        })
         .await
         .unwrap()
     }

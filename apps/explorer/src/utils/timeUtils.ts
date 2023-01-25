@@ -3,8 +3,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { IS_STATIC_ENV } from './envUtil';
-
 const stdToN = (original: number, length: number) =>
     String(original).padStart(length, '0');
 
@@ -94,7 +92,7 @@ export function useTimeAgo(
     return formattedTime;
 }
 
-// TODO - this need a bit of modification to account for multiple display formate types
+// TODO - this need a bit of modification to account for multiple display format types
 export const timeAgo = (
     epochMilliSecs: number | null | undefined,
     timeNow?: number | null,
@@ -102,8 +100,7 @@ export const timeAgo = (
 ): string => {
     if (!epochMilliSecs) return '';
 
-    //In static mode the time is fixed at 1 Jan 2025 01:13:10 UTC for testing purposes
-    timeNow = timeNow ? timeNow : IS_STATIC_ENV ? 1735693990000 : Date.now();
+    timeNow = timeNow ? timeNow : Date.now();
 
     const dateKeyType = shortenTimeLabel ? 'short' : 'full';
 

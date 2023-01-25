@@ -67,3 +67,8 @@ textarea {
 textarea {
     font-family: InterVariable, sans-serif;
 }
+
+// remove default password reveal button edge
+::-ms-reveal {
+    display: none;
+}

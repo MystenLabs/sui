@@ -15,6 +15,7 @@ import {
 
 export interface WalletKitCoreOptions {
   adapters: WalletAdapterList;
+  preferredWallets?: string[];
 }
 
 export enum WalletKitCoreConnectionStatus {
@@ -43,7 +44,7 @@ export interface WalletKitCore {
   getState(): WalletKitCoreState;
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
-  disconnect(): void;
+  disconnect(): Promise<void>;
   signAndExecuteTransaction(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
@@ -52,19 +53,35 @@ export interface WalletKitCore {
 export type SubscribeHandler = (state: WalletKitCoreState) => void;
 export type Unsubscribe = () => void;
 
+const SUI_WALLET_NAME = "Sui Wallet";
+
+function sortWallets(wallets: WalletAdapter[], preferredWallets: string[]) {
+  return [
+    // Preferred wallets, in order:
+    ...(preferredWallets
+      .map((name) => wallets.find((wallet) => wallet.name === name))
+      .filter(Boolean) as WalletAdapter[]),
+
+    // Wallets in default order:
+    ...wallets.filter((wallet) => !preferredWallets.includes(wallet.name)),
+  ];
+}
+
 // TODO: Support autoconnect.
 // TODO: Support lazy loaded adapters, where we'll resolve the adapters only once we attempt to use them.
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
 export function createWalletKitCore({
   adapters,
+  preferredWallets = [SUI_WALLET_NAME],
 }: WalletKitCoreOptions): WalletKitCore {
   const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
+  let walletEventUnsubscribe: (() => void) | null = null;
 
   let internalState: InternalWalletKitCoreState = {
     accounts: [],
     currentAccount: null,
-    wallets: resolveAdapters(adapters),
+    wallets: sortWallets(resolveAdapters(adapters), preferredWallets),
     currentWallet: null,
     status: WalletKitCoreConnectionStatus.DISCONNECTED,
   };
@@ -93,12 +110,27 @@ export function createWalletKitCore({
     });
   }
 
+  function disconnected() {
+    if (walletEventUnsubscribe) {
+      walletEventUnsubscribe();
+      walletEventUnsubscribe = null;
+    }
+    setState({
+      status: WalletKitCoreConnectionStatus.DISCONNECTED,
+      accounts: [],
+      currentAccount: null,
+      currentWallet: null,
+    });
+  }
+
   // TODO: Defer this somehow, probably alongside the work above for lazy wallet adapters:
   const providers = adapters.filter(isWalletProvider);
   if (providers.length) {
     providers.map((provider) =>
       provider.on("changed", () => {
-        setState({ wallets: resolveAdapters(adapters) });
+        setState({
+          wallets: sortWallets(resolveAdapters(adapters), preferredWallets),
+        });
       })
     );
   }
@@ -125,11 +157,19 @@ export function createWalletKitCore({
       const currentWallet =
         internalState.wallets.find((wallet) => wallet.name === walletName) ??
         null;
-
       // TODO: Should the current wallet actually be set before we successfully connect to it?
       setState({ currentWallet });
 
       if (currentWallet && !currentWallet.connecting) {
+        if (walletEventUnsubscribe) {
+          walletEventUnsubscribe();
+        }
+        walletEventUnsubscribe = currentWallet.on("change", ({ connected }) => {
+          // when undefined connected hasn't changed
+          if (connected === false) {
+            disconnected();
+          }
+        });
         try {
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();
@@ -149,19 +189,13 @@ export function createWalletKitCore({
       }
     },
 
-    disconnect() {
+    async disconnect() {
       if (!internalState.currentWallet) {
         console.warn("Attempted to `disconnect` but no wallet was connected.");
         return;
       }
-
-      internalState.currentWallet.disconnect();
-      setState({
-        status: WalletKitCoreConnectionStatus.DISCONNECTED,
-        accounts: [],
-        currentAccount: null,
-        currentWallet: null,
-      });
+      await internalState.currentWallet.disconnect();
+      disconnected();
     },
 
     signAndExecuteTransaction(transaction) {

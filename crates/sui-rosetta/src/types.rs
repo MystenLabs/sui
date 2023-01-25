@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use axum::Json;
 use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::errors::{Error, ErrorType};
-use crate::operations::{Operation, Operations};
+use crate::operations::Operations;
 use crate::SUI;
 use axum::response::{IntoResponse, Response};
 use fastcrypto::encoding::Hex;
@@ -16,10 +17,20 @@ use serde::{Deserializer, Serialize};
 use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
-use sui_sdk::rpc_types::SuiExecutionStatus;
+use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionKind};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
+use sui_types::committee::EpochId;
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
+use sui_types::governance::{
+    ADD_DELEGATION_LOCKED_COIN_FUN_NAME, ADD_DELEGATION_MUL_COIN_FUN_NAME,
+};
+use sui_types::messages::{
+    CallArg, MoveCall, ObjectArg, PaySui, SingleTransactionKind, TransactionData, TransactionKind,
+};
+use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 
 pub type BlockHeight = u64;
 
@@ -61,11 +72,29 @@ impl SuiEnv {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AccountIdentifier {
     pub address: SuiAddress,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_account: Option<SubAccount>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SubAccount {
+    #[serde(rename = "address")]
+    pub account_type: SubAccountType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum SubAccountType {
+    DelegatedSui,
+    PendingDelegation,
+    LockedSui,
 }
 
 impl From<SuiAddress> for AccountIdentifier {
     fn from(address: SuiAddress) -> Self {
-        AccountIdentifier { address }
+        AccountIdentifier {
+            address,
+            sub_account: None,
+        }
     }
 }
 
@@ -74,7 +103,7 @@ pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
     pub account_identifier: AccountIdentifier,
@@ -83,7 +112,7 @@ pub struct AccountBalanceRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub currencies: Vec<Currency>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AccountBalanceResponse {
     pub block_identifier: BlockIdentifier,
     pub balances: Vec<Amount>,
@@ -101,13 +130,20 @@ pub struct BlockIdentifier {
     pub hash: BlockHash,
 }
 
-pub type BlockHash = TransactionDigest;
+pub type BlockHash = CheckpointDigest;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {
     #[serde(with = "str_format")]
     pub value: i128,
     pub currency: Currency,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<AmountMetadata>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AmountMetadata {
+    pub lock_until_epoch: EpochId,
 }
 
 impl Amount {
@@ -115,6 +151,16 @@ impl Amount {
         Self {
             value,
             currency: SUI.clone(),
+            metadata: None,
+        }
+    }
+    pub fn new_locked(epoch: EpochId, value: i128) -> Self {
+        Self {
+            value,
+            currency: SUI.clone(),
+            metadata: Some(AmountMetadata {
+                lock_until_epoch: epoch,
+            }),
         }
     }
 }
@@ -174,6 +220,9 @@ impl From<sui_sdk::rpc_types::Coin> for Coin {
             amount: Amount {
                 value: coin.balance as i128,
                 currency: SUI.clone(),
+                metadata: coin.locked_until_epoch.map(|epoch| AmountMetadata {
+                    lock_until_epoch: epoch,
+                }),
             },
         }
     }
@@ -325,7 +374,9 @@ pub enum OperationType {
     SuiBalanceChange,
     // sui-rosetta supported operation type
     PaySui,
-    GasBudget,
+    Delegation,
+    WithdrawDelegation,
+    SwitchDelegation,
     // All other Sui transaction types, readonly
     TransferSUI,
     Pay,
@@ -334,8 +385,23 @@ pub enum OperationType {
     Publish,
     MoveCall,
     EpochChange,
-    // Rosetta only transaction type, for fabricated genesis transactions.
     Genesis,
+}
+
+impl From<&SuiTransactionKind> for OperationType {
+    fn from(tx: &SuiTransactionKind) -> Self {
+        match tx {
+            SuiTransactionKind::TransferObject(_) => OperationType::TransferObject,
+            SuiTransactionKind::Pay(_) => OperationType::Pay,
+            SuiTransactionKind::PaySui(_) => OperationType::PaySui,
+            SuiTransactionKind::PayAllSui(_) => OperationType::PayAllSui,
+            SuiTransactionKind::Publish(_) => OperationType::Publish,
+            SuiTransactionKind::Call(_) => OperationType::MoveCall,
+            SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
+            SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
+            SuiTransactionKind::Genesis(_) => OperationType::Genesis,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default)]
@@ -446,13 +512,26 @@ pub struct TransactionIdentifier {
 #[derive(Deserialize)]
 pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
-    pub operations: Vec<Operation>,
+    pub operations: Operations,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub max_fee: Vec<Amount>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub suggested_fee_multiplier: Option<u64>,
+    pub metadata: Option<PreprocessMetadata>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum PreprocessMetadata {
+    PaySui,
+    Delegation { locked_until_epoch: Option<EpochId> },
+}
+
+impl From<TransactionMetadata> for PreprocessMetadata {
+    fn from(tx_metadata: TransactionMetadata) -> Self {
+        match tx_metadata {
+            TransactionMetadata::PaySui(_) => Self::PaySui,
+            TransactionMetadata::Delegation {
+                locked_until_epoch, ..
+            } => Self::Delegation { locked_until_epoch },
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -465,8 +544,7 @@ pub struct ConstructionPreprocessResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct MetadataOptions {
-    pub sender: SuiAddress,
-    pub amount: u128,
+    pub internal_operation: InternalOperation,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -496,15 +574,27 @@ pub struct ConstructionMetadataResponse {
     pub suggested_fee: Vec<Amount>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ConstructionMetadata {
-    pub sender_coins: Vec<ObjectRef>,
+    pub tx_metadata: TransactionMetadata,
+    pub sender: SuiAddress,
+    pub gas: ObjectRef,
+    pub budget: u64,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
     }
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum TransactionMetadata {
+    PaySui(Vec<ObjectRef>),
+    Delegation {
+        sui_framework: ObjectRef,
+        coins: Vec<ObjectRef>,
+        locked_until_epoch: Option<EpochId>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -655,7 +745,7 @@ pub enum Case {
     Null,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Block {
     pub block_identifier: BlockIdentifier,
     pub parent_block_identifier: BlockIdentifier,
@@ -665,7 +755,7 @@ pub struct Block {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Transaction {
     pub transaction_identifier: TransactionIdentifier,
     pub operations: Operations,
@@ -675,14 +765,14 @@ pub struct Transaction {
     pub metadata: Option<Value>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RelatedTransaction {
     network_identifier: NetworkIdentifier,
     transaction_identifier: TransactionIdentifier,
     direction: Direction,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 #[allow(dead_code)]
 pub enum Direction {
@@ -690,7 +780,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockResponse {
     pub block: Block,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -702,7 +792,7 @@ impl IntoResponse for BlockResponse {
         Json(self).into_response()
     }
 }
-#[derive(Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct PartialBlockIdentifier {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index: Option<u64>,
@@ -740,4 +830,95 @@ pub struct PrefundedAccount {
     pub account_identifier: AccountIdentifier,
     pub curve_type: CurveType,
     pub currency: Currency,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum InternalOperation {
+    PaySui {
+        sender: SuiAddress,
+        recipients: Vec<SuiAddress>,
+        amounts: Vec<u64>,
+    },
+    Delegation {
+        sender: SuiAddress,
+        validator: SuiAddress,
+        amount: u128,
+        locked_until_epoch: Option<EpochId>,
+    },
+}
+
+impl InternalOperation {
+    pub fn sender(&self) -> SuiAddress {
+        match self {
+            InternalOperation::PaySui { sender, .. }
+            | InternalOperation::Delegation { sender, .. } => *sender,
+        }
+    }
+    /// Combine with ConstructionMetadata to form the TransactionData
+    pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
+        let single_tx = match (self, metadata.tx_metadata) {
+            (
+                Self::PaySui {
+                    recipients,
+                    amounts,
+                    ..
+                },
+                TransactionMetadata::PaySui(coins),
+            ) => SingleTransactionKind::PaySui(PaySui {
+                coins,
+                recipients,
+                amounts,
+            }),
+            (
+                InternalOperation::Delegation {
+                    validator,
+                    amount,
+                    locked_until_epoch,
+                    ..
+                },
+                TransactionMetadata::Delegation {
+                    sui_framework,
+                    coins,
+                    ..
+                },
+            ) => {
+                let function = if locked_until_epoch.is_some() {
+                    ADD_DELEGATION_LOCKED_COIN_FUN_NAME.to_owned()
+                } else {
+                    ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
+                };
+                SingleTransactionKind::Call(MoveCall {
+                    package: sui_framework,
+                    module: SUI_SYSTEM_MODULE_NAME.to_owned(),
+                    function,
+                    type_arguments: vec![],
+                    arguments: vec![
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_SYSTEM_STATE_OBJECT_ID,
+                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                        }),
+                        CallArg::ObjVec(
+                            coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
+                        ),
+                        CallArg::Pure(bcs::to_bytes(&amount)?),
+                        CallArg::Pure(bcs::to_bytes(&validator)?),
+                    ],
+                })
+            }
+            (op, metadata) => {
+                return Err(Error::InternalError(anyhow!(
+                "Cannot construct TransactionData from provided operation and metadata, {:?}, {:?}",
+                op,
+                metadata
+            )))
+            }
+        };
+
+        Ok(TransactionData::new_with_dummy_gas_price(
+            TransactionKind::Single(single_tx),
+            metadata.sender,
+            metadata.gas,
+            metadata.budget,
+        ))
+    }
 }

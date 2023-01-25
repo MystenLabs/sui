@@ -3,18 +3,15 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useCallback } from 'react';
+import { useEffect, useRef, memo, useCallback, useMemo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { useFormatCoin } from '_hooks';
-import {
-    GAS_SYMBOL,
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-} from '_redux/slices/sui-objects/Coin';
+import { useCoinDecimals, useFormatCoin } from '_hooks';
+import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
@@ -38,15 +35,11 @@ function StakeForm({
     const {
         setFieldValue,
         values: { amount },
+        setTouched,
     } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-    useEffect(() => {
-        onClearRef.current();
-    }, [amount]);
-
-    const [formatted] = useFormatCoin(coinBalance, coinType);
 
     const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
@@ -62,10 +55,26 @@ function StakeForm({
         coinType
     );
 
+    const [coinDecimals] = useCoinDecimals(coinType);
+    const [tokenBalance] = useFormatCoin(coinBalance, coinType);
+
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
+
+    useEffect(() => {
+        onClearRef.current();
+        if (unstake) {
+            setFieldValue('amount', tokenBalance);
+            setTouched({ amount: true });
+        }
+    }, [setFieldValue, setTouched, unstake, tokenBalance]);
+
+    const calculateRemaining = useMemo(() => {
+        if (!amount || !maxToken) return 0;
+        return (+maxToken - +amount).toFixed(coinDecimals);
+    }, [amount, maxToken, coinDecimals]);
 
     return (
         <Form
@@ -76,23 +85,27 @@ function StakeForm({
             <Content>
                 <Card
                     variant="blue"
+                    titleDivider
                     header={
                         <div className="p-2.5 w-full flex bg-white">
                             <Field
                                 component={NumberInput}
                                 allowNegative={false}
                                 name="amount"
-                                className="w-full border-none text-hero-dark text-heading4 font-semibold placeholder:text-gray-70 placeholder:font-medium"
+                                className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
                                 decimals
+                                disabled={unstake}
                             />
-                            <button
-                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
-                                onClick={setMaxToken}
-                                disabled={queryResult.isLoading}
-                                type="button"
-                            >
-                                Max
-                            </button>
+                            {!unstake && (
+                                <button
+                                    className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
+                                    onClick={setMaxToken}
+                                    disabled={queryResult.isLoading}
+                                    type="button"
+                                >
+                                    Max
+                                </button>
+                            )}
                         </div>
                     }
                     footer={
@@ -102,33 +115,33 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Gas Fee
+                                Gas Fees
                             </Text>
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {gasBudgetEstimation} {GAS_SYMBOL}
+                                {gasBudgetEstimation} {symbol}
                             </Text>
                         </div>
                     }
                 >
-                    {!unstake && (
-                        <div className="flex justify-between w-full mb-3.5">
+                    {+amount > 0 && !unstake && (
+                        <div className="py-px flex justify-between w-full">
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                Available balance:
+                                Stake Remaining
                             </Text>
                             <Text
                                 variant="body"
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {formatted} {symbol}
+                                {unstake ? 0 : calculateRemaining} {symbol}
                             </Text>
                         </div>
                     )}

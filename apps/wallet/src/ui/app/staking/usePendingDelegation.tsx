@@ -1,16 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type SuiAddress } from '@mysten/sui.js';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+    is,
+    SuiObject,
+    type SuiAddress,
+    Base64DataBuffer,
+} from '@mysten/sui.js';
+import { type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { notEmpty } from '../helpers';
-import { useAppSelector } from '../hooks';
-import { api } from '../redux/store/thunk-extras';
+import { notEmpty } from '_helpers';
+import { useGetObject, useAppSelector } from '_hooks';
 
 export const STATE_OBJECT = '0x5';
 export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
+
+const textDecoder = new TextDecoder();
 
 // TODO: Generalize into SDK:
 interface SystemStateObject {
@@ -25,6 +31,7 @@ interface SystemStateObject {
                     };
                     delegation_staking_pool: {
                         fields: {
+                            validator_address: SuiAddress;
                             // TODO: Figure out why this is an empty string sometimes:
                             pending_delegations:
                                 | string
@@ -42,23 +49,24 @@ interface SystemStateObject {
     };
 }
 
-interface PendingDelegation {
-    name: string;
-    staked: bigint;
-}
-
 export function getName(rawName: string | number[]) {
     let name: string;
 
     if (Array.isArray(rawName)) {
         name = String.fromCharCode(...rawName);
     } else {
-        name = Buffer.from(rawName, 'base64').toString();
+        name = textDecoder.decode(new Base64DataBuffer(rawName).getData());
         if (!VALDIATOR_NAME.test(name)) {
             name = rawName;
         }
     }
     return name;
+}
+
+interface PendingDelegation {
+    name: string;
+    staked: bigint;
+    validatorAddress: SuiAddress;
 }
 
 /**
@@ -67,10 +75,7 @@ export function getName(rawName: string | number[]) {
 export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
     const address = useAppSelector(({ account: { address } }) => address);
 
-    // TODO: Use generlized `useGetObject` hook when it lands:
-    const objectQuery = useQuery(['object', STATE_OBJECT], async () => {
-        return api.instance.fullNode.getObject(STATE_OBJECT);
-    });
+    const objectQuery = useGetObject(STATE_OBJECT);
 
     const { data } = objectQuery;
 
@@ -103,6 +108,9 @@ export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
 
                     return {
                         name: getName(validator.fields.metadata.fields.name),
+                        validatorAddress:
+                            validator.fields.delegation_staking_pool.fields
+                                .validator_address,
                         staked: filteredDelegations.reduce(
                             (acc, delegation) =>
                                 acc + BigInt(delegation.fields.sui_amount),

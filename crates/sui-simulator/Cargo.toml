@@ -19,4 +19,4 @@ telemetry-subscribers.workspace = true
 tower = "0.4.13"
 
 [target.'cfg(msim)'.dependencies]
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "f591ab0b1e56435fe7b354f02131fe104bd825e7", package = "msim" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "2bd1f8d83eeb9be60e9570391b01b29bb90421f5", package = "msim" }

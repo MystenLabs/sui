@@ -11,7 +11,7 @@ use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
@@ -63,7 +63,8 @@ impl ConsensusProtocol for Bullshark {
         self.log_error_if_missing_parents(&certificate, state);
 
         // Add the new certificate to the local storage.
-        if state.try_insert(&certificate).is_err() {
+        if !state.try_insert(&certificate) {
+            // Certificate is not inserted. This operation is a no-op.
             return Ok(Vec::new());
         }
 
@@ -87,7 +88,8 @@ impl ConsensusProtocol for Bullshark {
         self.max_inserted_certificate_round = self.max_inserted_certificate_round.max(round);
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
-        // f+1 certificates. This is because we need them to reveal the common coin.
+        // f+1 certificates. This is because we need them to provide
+        // enough support to the leader.
         let r = round - 1;
 
         // We only elect leaders for even round numbers.
@@ -114,7 +116,7 @@ impl ConsensusProtocol for Bullshark {
             }
         };
 
-        // Check if the leader has f+1 support from its children (ie. round r-1).
+        // Check if the leader has f+1 support from its children (ie. round r+1).
         let stake: Stake = state
             .dag
             .get(&round)
@@ -211,11 +213,6 @@ impl ConsensusProtocol for Bullshark {
 
         Ok(committed_sub_dags)
     }
-
-    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {
-        self.committee = new_committee;
-        self.store.clear()
-    }
 }
 
 impl Bullshark {
@@ -266,12 +263,12 @@ impl Bullshark {
                 for parent_digest in parents {
                     if !store_parents.contains(&parent_digest) {
                         if round - 1 + self.gc_depth > state.last_committed_round {
-                            error!(
+                            trace!(
                                 "The store does not contain the parent of {:?}: Missing item digest={:?}",
                                 certificate, parent_digest
                             );
                         } else {
-                            debug!(
+                            trace!(
                                 "The store does not contain the parent of {:?}: Missing item digest={:?} (but below GC round)",
                                 certificate, parent_digest
                             );

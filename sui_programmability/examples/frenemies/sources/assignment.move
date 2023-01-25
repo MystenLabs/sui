@@ -32,16 +32,23 @@ module frenemies::assignment {
         let validators = validator_set::active_validators(sui_system::validators(state));
         let len = vector::length(validators);
 
-        // derive assignment from the stake of first validator, an address, and the epoch.
-        // this means that a given address will always get the same assignment within an epoch
-        let top_stake = validator::total_stake(vector::borrow(validators, 0));
+        // derive validator + goal from the user's address and the current epoch.
+        // a given address will always get the same assignment in the same epoch
+        // goal assignments "round-robin" in that once the initial assignment
+        // is known, the rest of the assignments are predictable
         let addr = address::to_u256(tx_context::sender(ctx));
         let epoch = tx_context::epoch(ctx);
-        let assignment_seed = addr ^ ((top_stake ^ epoch) as u256);
+        let assignment_seed = ((addr + (epoch as u256)) as u256);
         let validator_idx = assignment_seed % (len as u256);
         let validator = validator::sui_address(vector::borrow(validators, (validator_idx as u64)));
-        let goal = ((assignment_seed % 3) as u8);
+        let goal = get_goal(addr, epoch);
         Assignment { validator, goal, epoch }
+    }
+
+    fun get_goal(addr: u256, epoch: u64): u8 {
+        // goals are round-robin, but different addresses will start at different points in the round-robin cycle
+        let offset_epoch = addr + (epoch as u256);
+        ((offset_epoch % 3) as u8)
     }
 
     /// Return `FRIEND` if `rank_idx` is in the top third, `NEUTRAL` if `rank_idx` is in the middle third,
@@ -107,5 +114,26 @@ module frenemies::assignment {
         assert!(get_outcome(4, 7) == ENEMY, 0);
         assert!(get_outcome(5, 7) == ENEMY, 0);
         assert!(get_outcome(6, 7) == ENEMY, 0);
+    }
+
+    #[test]
+    fun round_robin_goal() {
+        // an address should see a cycle of FRIEND, NEUTRAL, ENEMY goals
+        let addr = address::to_u256(@0x0);
+        assert!(get_goal(addr, 0) == FRIEND, 0);
+        assert!(get_goal(addr, 1) == NEUTRAL, 0);
+        assert!(get_goal(addr, 2) == ENEMY, 0);
+        assert!(get_goal(addr, 3) == FRIEND, 0);
+        assert!(get_goal(addr, 4) == NEUTRAL, 0);
+        assert!(get_goal(addr, 5) == ENEMY, 0);
+
+        // different addresses may start in a different place in the cycle
+        let addr = address::to_u256(@0x1);
+        assert!(get_goal(addr, 0) == NEUTRAL, 0);
+        assert!(get_goal(addr, 1) == ENEMY, 0);
+        assert!(get_goal(addr, 2) == FRIEND, 0);
+        assert!(get_goal(addr, 3) == NEUTRAL, 0);
+        assert!(get_goal(addr, 4) == ENEMY, 0);
+        assert!(get_goal(addr, 5) == FRIEND, 0);
     }
 }

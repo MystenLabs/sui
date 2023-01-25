@@ -38,10 +38,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (_guard, _filter_handle) =
-        telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
-            .with_env()
-            .init();
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
 
     let args = Args::parse();
 
@@ -100,8 +99,8 @@ async fn health() -> &'static str {
 }
 
 async fn faucet_request(
-    Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     let result = match payload {
         FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {

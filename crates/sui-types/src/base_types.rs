@@ -8,7 +8,6 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
-use opentelemetry::{global, Context};
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -16,7 +15,6 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use std::borrow::Borrow;
 use std::cmp::max;
-use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
@@ -475,25 +473,17 @@ impl TransactionDigest {
     pub fn encode(&self) -> String {
         Base64::encode(self.0)
     }
+
+    // TODO: de-dup this
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
-}
-
-/// Returns a Context for OpenTelemetry tracing from a TransactionDigest
-// NOTE: See https://github.com/MystenLabs/sui/issues/852
-// The current code doesn't really work.  Maybe the traceparent needs to be a specific format,
-// prohably needs to be the propagated trace ID from the source.
-pub fn context_from_digest(digest: TransactionDigest) -> Context {
-    // TODO: don't create a HashMap, that wastes memory and costs an allocation!
-    let mut carrier = HashMap::new();
-    // TODO: figure out exactly what key to use.  I suspect it has to be the parent span ID in OpenTelemetry format.
-    carrier.insert("traceparent".to_string(), Hex::encode(digest.0));
-
-    global::get_text_map_propagator(|propagator| propagator.extract(&carrier))
 }
 
 impl Borrow<[u8]> for TransactionDigest {

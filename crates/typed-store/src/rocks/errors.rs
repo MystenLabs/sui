@@ -21,8 +21,8 @@ pub enum TypedStoreError {
     CrossDBBatch,
     #[error("Metric reporting thread failed with error")]
     MetricsReporting,
-    #[error("Conflicting write detected")]
-    TransactionWriteConflict,
+    #[error("Transaction should be retried")]
+    RetryableTransactionError,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Error)]

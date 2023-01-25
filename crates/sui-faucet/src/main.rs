@@ -11,13 +11,13 @@ use axum::{
 use clap::Parser;
 use http::Method;
 use mysten_metrics::spawn_monitored_task;
-use std::env;
 use std::{
     borrow::Cow,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
+use std::{env, path::PathBuf};
 use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet};
@@ -55,6 +55,9 @@ struct FaucetConfig {
 
     #[clap(long, default_value_t = 60)]
     wallet_client_timeout_secs: u64,
+
+    #[clap(long)]
+    write_ahead_log: PathBuf,
 }
 
 struct AppState<F = SimpleFaucet> {
@@ -68,7 +71,7 @@ const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
-    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
@@ -85,6 +88,7 @@ async fn main() -> Result<(), anyhow::Error> {
         request_buffer_size,
         max_request_per_second,
         wallet_client_timeout_secs,
+        ref write_ahead_log,
         ..
     } = config;
 
@@ -96,7 +100,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let prometheus_registry = registry_service.default_registry();
 
     let app_state = Arc::new(AppState {
-        faucet: SimpleFaucet::new(context, &prometheus_registry)
+        faucet: SimpleFaucet::new(context, &prometheus_registry, write_ahead_log)
             .await
             .unwrap(),
         config,
@@ -142,8 +146,8 @@ async fn health() -> &'static str {
 
 /// handler for all the request_gas requests
 async fn request_gas(
-    Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
 ) -> impl IntoResponse {
     // ID for traceability
     let id = Uuid::new_v4();

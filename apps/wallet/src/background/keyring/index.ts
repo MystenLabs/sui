@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '@mysten/sui.js';
+import { Base64DataBuffer, Ed25519Keypair } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
-import Browser from 'webextension-polyfill';
 
+import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
+import { Account } from './Account';
 import { VaultStorage } from './VaultStorage';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
@@ -17,25 +18,31 @@ import {
     AUTO_LOCK_TIMER_STORAGE_KEY,
 } from '_src/shared/constants';
 
-import type { Keypair } from '@mysten/sui.js';
+import type { SuiAddress, ExportedKeypair } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { ErrorPayload } from '_payloads';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { Connection } from '_src/background/connections/Connection';
 
+/** The key for the extension's storage, that holds the index of the last derived account (zero based) */
+const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';
+const STORAGE_ACTIVE_ACCOUNT = 'active_account';
+
 type KeyringEvents = {
     lockedStatusUpdate: boolean;
+    accountsChanged: Account[];
+    activeAccountChanged: string;
 };
 
-class Keyring {
+// exported to make testing easier the default export should be used
+export class Keyring {
     #events = mitt<KeyringEvents>();
     #locked = true;
-    #keypair: Keypair | null = null;
-    #vault: VaultStorage;
+    #mainDerivedAccount: SuiAddress | null = null;
+    #accountsMap: Map<SuiAddress, Account> = new Map();
     public readonly reviveDone: Promise<void>;
 
     constructor() {
-        this.#vault = new VaultStorage();
         this.reviveDone = this.revive().catch((e) => {
             // if for some reason decrypting the vault fails or anything else catch
             // the error to allow the user to login using the password
@@ -49,42 +56,129 @@ class Keyring {
      * @throws If the wallet exists or any other error during encrypting/saving to storage or if importedEntropy is invalid
      */
     public async createVault(password: string, importedEntropy?: string) {
-        await this.#vault.create(password, importedEntropy);
+        await VaultStorage.create(password, importedEntropy);
     }
 
     public async lock() {
-        this.#keypair = null;
+        this.#accountsMap.clear();
+        this.#mainDerivedAccount = null;
         this.#locked = true;
-        await this.#vault.lock();
+        await VaultStorage.lock();
         await Alarms.clearLockAlarm();
         this.notifyLockedStatusUpdate(this.#locked);
     }
 
     public async unlock(password: string) {
-        await this.#vault.unlock(password);
-        this.unlocked();
+        await VaultStorage.unlock(password);
+        await this.unlocked();
     }
 
     public async clearVault() {
         this.lock();
-        await this.#vault.clear();
+        await VaultStorage.clear();
     }
 
     public async isWalletInitialized() {
-        return await this.#vault.isWalletInitialized();
+        return await VaultStorage.isWalletInitialized();
     }
 
     public get isLocked() {
         return this.#locked;
     }
 
-    public get keypair() {
-        return this.#keypair;
-    }
-
     public on = this.#events.on;
 
     public off = this.#events.off;
+
+    public async getActiveAccount() {
+        if (this.isLocked) {
+            return null;
+        }
+        const address = await getFromLocalStorage(
+            STORAGE_ACTIVE_ACCOUNT,
+            this.#mainDerivedAccount
+        );
+        return (
+            (address && this.#accountsMap.get(address)) ||
+            (this.#mainDerivedAccount &&
+                this.#accountsMap.get(this.#mainDerivedAccount)) ||
+            null
+        );
+    }
+
+    public async deriveNextAccount() {
+        if (this.isLocked) {
+            return false;
+        }
+        const mnemonic = VaultStorage.getMnemonic();
+        if (!mnemonic) {
+            return false;
+        }
+        const nextIndex = (await this.getLastDerivedIndex()) + 1;
+        await this.storeLastDerivedIndex(nextIndex);
+        const account = this.deriveAccount(nextIndex, mnemonic);
+        this.#accountsMap.set(account.address, account);
+        this.notifyAccountsChanged();
+        return true;
+    }
+
+    public getAccounts() {
+        if (this.isLocked) {
+            return null;
+        }
+        return Array.from(this.#accountsMap.values());
+    }
+
+    public async changeActiveAccount(address: SuiAddress) {
+        if (!this.isLocked && this.#accountsMap.has(address)) {
+            await this.storeActiveAccount(address);
+            this.#events.emit('activeAccountChanged', address);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Exports the keypair for the specified address. Verifies that the password provided is the correct one and only then returns the keypair.
+     * This is useful to be used for exporting the to the UI for the user to backup etc. Getting accounts and keypairs is possible without using
+     * a password by using {@link Keypair.getAccounts} or {@link Keypair.getActiveAccount} or the change events
+     * @param address The sui address to export the keypair
+     * @param password The current password of the vault
+     * @returns null if locked or address not found or the exported keypair
+     * @throws if wrong password is provided
+     */
+    public async exportAccountKeypair(address: SuiAddress, password: string) {
+        if (this.isLocked) {
+            return null;
+        }
+        if (await VaultStorage.verifyPassword(password)) {
+            return this.#accountsMap.get(address)?.exportKeypair() || null;
+        } else {
+            throw new Error('Wrong password');
+        }
+    }
+
+    public async importAccountKeypair(
+        keypair: ExportedKeypair,
+        password: string
+    ) {
+        if (this.isLocked) {
+            // this function is expected to be called from UI when unlocked
+            // so this shouldn't happen
+            throw new Error('Wallet is locked');
+        }
+        const passwordCorrect = await VaultStorage.verifyPassword(password);
+        if (!passwordCorrect) {
+            // we need to make sure that the password is the same with the one of the current vault because we will
+            // update the vault and encrypt it to persist the new keypair in storage
+            throw new Error('Wrong password');
+        }
+        const added = await VaultStorage.importKeypair(keypair, password);
+        if (added) {
+            this.notifyAccountsChanged();
+        }
+        return added;
+    }
 
     public async handleUiMessage(msg: Message, uiConnection: Connection) {
         const { id, payload } = msg;
@@ -96,7 +190,8 @@ class Keyring {
                 const { password, importedEntropy } = payload.args;
                 await this.createVault(password, importedEntropy);
                 await this.unlock(password);
-                if (!this.#keypair) {
+                const activeAccount = await this.getActiveAccount();
+                if (!activeAccount) {
                     throw new Error('Error created vault is empty');
                 }
                 uiConnection.send(
@@ -105,7 +200,7 @@ class Keyring {
                             type: 'keyring',
                             method: 'create',
                             return: {
-                                keypair: this.#keypair.export(),
+                                keypair: activeAccount.exportKeypair(),
                             },
                         },
                         id
@@ -115,7 +210,7 @@ class Keyring {
                 if (this.#locked) {
                     throw new Error('Keyring is locked. Unlock it first.');
                 }
-                if (!this.#vault?.entropy) {
+                if (!VaultStorage.entropy) {
                     throw new Error('Error vault is empty');
                 }
                 uiConnection.send(
@@ -123,7 +218,7 @@ class Keyring {
                         {
                             type: 'keyring',
                             method: 'getEntropy',
-                            return: entropyToSerialized(this.#vault.entropy),
+                            return: entropyToSerialized(VaultStorage.entropy),
                         },
                         id
                     )
@@ -143,7 +238,9 @@ class Keyring {
                             return: {
                                 isLocked: this.isLocked,
                                 isInitialized: await this.isWalletInitialized(),
-                                activeAccount: this.#keypair?.export(),
+                                activeAccount: (
+                                    await this.getActiveAccount()
+                                )?.exportKeypair(),
                             },
                         },
                         id
@@ -165,6 +262,36 @@ class Keyring {
                     await this.setLockTimeout(payload.args.timeout);
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isKeyringPayload(payload, 'signData')) {
+                if (this.#locked) {
+                    throw new Error('Keyring is locked. Unlock it first.');
+                }
+                if (!payload.args) {
+                    throw new Error('Missing parameters.');
+                }
+                const { data, address } = payload.args;
+                const account = this.#accountsMap.get(address);
+                if (!account) {
+                    throw new Error(
+                        `Account for address ${address} not found in keyring`
+                    );
+                }
+                const { signature, signatureScheme, pubKey } =
+                    await account.sign(new Base64DataBuffer(data));
+                uiConnection.send(
+                    createMessage<KeyringPayload<'signData'>>(
+                        {
+                            type: 'keyring',
+                            method: 'signData',
+                            return: {
+                                signatureScheme,
+                                signature: signature.toString(),
+                                pubKey: pubKey.toBase64(),
+                            },
+                        },
+                        id
+                    )
+                );
             }
         } catch (e) {
             uiConnection.send(
@@ -197,31 +324,72 @@ class Keyring {
         ) {
             return;
         }
-        await Browser.storage.local.set({
-            [AUTO_LOCK_TIMER_STORAGE_KEY]: timeout,
-        });
+        await setToLocalStorage(AUTO_LOCK_TIMER_STORAGE_KEY, timeout);
         if (!this.isLocked) {
             await Alarms.setLockAlarm();
         }
     }
 
     private async revive() {
-        const unlocked = await this.#vault.revive();
+        const unlocked = await VaultStorage.revive();
         if (unlocked) {
-            this.unlocked();
+            await this.unlocked();
         }
     }
 
-    private unlocked() {
-        let mnemonic = this.#vault.getMnemonic();
+    private async unlocked() {
+        let mnemonic = VaultStorage.getMnemonic();
         if (!mnemonic) {
             return;
         }
         Alarms.setLockAlarm();
-        this.#keypair = Ed25519Keypair.deriveKeypair(mnemonic);
+        const lastAccountIndex = await this.getLastDerivedIndex();
+        for (let i = 0; i <= lastAccountIndex; i++) {
+            const account = this.deriveAccount(i, mnemonic);
+            this.#accountsMap.set(account.address, account);
+            if (i === 0) {
+                this.#mainDerivedAccount = account.address;
+            }
+        }
+        VaultStorage.getImportedKeys()?.forEach((anImportedKey) => {
+            const account = new Account({
+                type: 'imported',
+                keypair: anImportedKey,
+            });
+            this.#accountsMap.set(account.address, account);
+        });
         mnemonic = null;
         this.#locked = false;
         this.notifyLockedStatusUpdate(this.#locked);
+    }
+
+    private deriveAccount(accountIndex: number, mnemonic: string) {
+        const derivationPath = this.makeDerivationPath(accountIndex);
+        const keypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath);
+        return new Account({ type: 'derived', keypair, derivationPath });
+    }
+
+    private async getLastDerivedIndex() {
+        return (
+            (await getFromLocalStorage(STORAGE_LAST_ACCOUNT_INDEX_KEY, 0)) || 0
+        );
+    }
+
+    private storeLastDerivedIndex(index: number) {
+        return setToLocalStorage(STORAGE_LAST_ACCOUNT_INDEX_KEY, index);
+    }
+
+    private storeActiveAccount(address: SuiAddress) {
+        return setToLocalStorage(STORAGE_ACTIVE_ACCOUNT, address);
+    }
+
+    private makeDerivationPath(index: number) {
+        // currently returns only Ed25519 path
+        return `m/44'/784'/${index}'/0'/0'`;
+    }
+
+    private notifyAccountsChanged() {
+        this.#events.emit('accountsChanged', this.getAccounts() || []);
     }
 }
 

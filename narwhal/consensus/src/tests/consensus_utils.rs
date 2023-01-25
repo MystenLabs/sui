@@ -3,7 +3,8 @@
 use crypto::PublicKey;
 use std::sync::Arc;
 use storage::CertificateStore;
-use store::{reopen, rocks, rocks::DBMap};
+use store::rocks::MetricConf;
+use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions};
 use types::{
     Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore, Round, SequenceNumber,
 };
@@ -12,8 +13,13 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
 
-    let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
-        .expect("Failed to create database");
+    let rocksdb = rocks::open_cf(
+        store_path,
+        None,
+        MetricConf::default(),
+        &[LAST_COMMITTED_CF, SEQUENCE_CF],
+    )
+    .expect("Failed to create database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<PublicKey, Round>,
@@ -31,6 +37,7 @@ pub fn make_certificate_store(store_path: &std::path::Path) -> CertificateStore 
     let rocksdb = rocks::open_cf(
         store_path,
         None,
+        MetricConf::default(),
         &[
             CERTIFICATES_CF,
             CERTIFICATE_DIGEST_BY_ROUND_CF,

@@ -77,7 +77,7 @@ module frenemies::frenemies_tests {
     #[expected_failure(abort_code = frenemies::frenemies::EScoreNotYetAvailable)]
     #[test]
     fun score_in_start_epoch() {
-        // attemping to get a score during the start epoch should fail
+        // attempting to get a score during the start epoch should fail
         let validators = vector[@0x1];
         let scenario_val = init_test(copy validators, validators);
         let scenario = &mut scenario_val;
@@ -91,13 +91,15 @@ module frenemies::frenemies_tests {
             ts::return_shared(system_state);
             ts::return_shared(leaderboard)
         };
-        ts::end(scenario_val);
+        let effects = ts::end(scenario_val);
+        // should emit an event for each scorecard update
+        assert!(ts::num_user_events(&effects) == 1, 0)
     }
 
     #[expected_failure(abort_code = frenemies::frenemies::EScoreNotYetAvailable)]
     #[test]
     fun double_update() {
-        // attemping to update a scorecard twice should fail
+        // attempting to update a scorecard twice should fail
         let validators = vector[@0x1];
         let scenario_val = init_test(copy validators, validators);
         let scenario = &mut scenario_val;
@@ -271,12 +273,18 @@ module frenemies::frenemies_tests {
 
         let scenario_val = init_test(copy validators, validators);
         let scenario = &mut scenario_val;
+        // hardcode some assignments for convenience
+        let v2_scorecard = ts::take_from_address<Scorecard>(scenario, @0x2);
+        //let v4_scorecard = ts::take_from_address<Scorecard>(scenario, v4);
+        frenemies::set_assignment_for_testing(&mut v2_scorecard, @0x2, FRIEND, tx_context::epoch(ts::ctx(scenario)));
+        //frenemies::set_assignment_for_testing(&mut v4_scorecard, @0x4, FRIEND, tx_context::epoch(ts::ctx(scenario)));
+        ts::return_to_address(@0x2, v2_scorecard);
+        //ts::return_to_address(@0x4, v4_scorecard);
+
         ts::next_tx(scenario, v2);
         {
             let scorecard = ts::take_from_sender<Scorecard>(scenario);
             let system_state = ts::take_shared<SuiSystemState>(scenario);
-            // hardcode assignment for convenience
-            frenemies::set_assignment_for_testing(&mut scorecard, v2, FRIEND, tx_context::epoch(ts::ctx(scenario)));
             let coin = coin::mint_for_testing(10, ts::ctx(scenario));
             sui_system::request_add_delegation(
                 &mut system_state, coin, frenemies::validator(&scorecard), ts::ctx(scenario)
@@ -310,8 +318,8 @@ module frenemies::frenemies_tests {
             let scorecard = ts::take_from_sender<Scorecard>(scenario);
             let system_state = ts::take_shared<SuiSystemState>(scenario);
             let leaderboard = ts::take_shared<Leaderboard>(scenario);
-            assert!(frenemies::goal(&scorecard) == FRIEND, 0);
-            assert!(frenemies::validator(&scorecard) == @0x4, 0);
+            // hardcode assignment for convenience
+            frenemies::set_assignment_for_testing(&mut scorecard, @0x4, FRIEND, 0);
             frenemies::update(&mut scorecard, &mut system_state, &mut leaderboard, ts::ctx(scenario));
             // user 4 did not score because their assignment was not met
             assert!(frenemies::score(&scorecard) == 0, 0);
@@ -330,8 +338,7 @@ module frenemies::frenemies_tests {
             let scorecard = ts::take_from_sender<Scorecard>(scenario);
             let system_state = ts::take_shared<SuiSystemState>(scenario);
             let leaderboard = ts::take_shared<Leaderboard>(scenario);
-            assert!(frenemies::goal(&scorecard) == ENEMY, 0);
-            assert!(frenemies::validator(&scorecard) == @0x3, 0);
+            frenemies::set_assignment_for_testing(&mut scorecard, @0x3, ENEMY, 0);
             frenemies::update(&mut scorecard, &mut system_state, &mut leaderboard, ts::ctx(scenario));
             // user 3 scored
             assert!(frenemies::score(&scorecard) == GOAL_COMPLETION_POINTS, 0);

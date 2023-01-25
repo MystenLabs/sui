@@ -28,7 +28,8 @@ use sui_types::governance::DelegatedStake;
 use sui_types::messages::CommitteeInfoResponse;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
+    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
+    CheckpointSummary,
 };
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::sui_system_state::{SuiSystemState, ValidatorMetadata};
@@ -189,7 +190,12 @@ pub trait RpcFullNodeReadApi {
     /// Return dev-inpsect results of the transaction, including both the transaction
     /// effects and return values of the transaction.
     #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(&self, tx_bytes: Base64) -> RpcResult<DevInspectResults>;
+    async fn dev_inspect_transaction(
+        &self,
+        tx_bytes: Base64,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
+    ) -> RpcResult<DevInspectResults>;
 
     /// Similar to `dev_inspect_transaction` but do not require gas object and budget
     #[method(name = "devInspectMoveCall")]
@@ -207,6 +213,8 @@ pub trait RpcFullNodeReadApi {
         type_arguments: Vec<SuiTypeTag>,
         /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
         arguments: Vec<SuiJsonValue>,
+        /// The epoch to perform the call. Will be set from the system state object if not provided
+        epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
@@ -267,7 +275,7 @@ pub trait RpcFullNodeReadApi {
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionsPage>;
 
@@ -295,18 +303,25 @@ pub trait RpcFullNodeReadApi {
         sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointSummary>;
 
+    /// Return a checkpoint summary based on checkpoint digest
+    #[method(name = "getCheckpointSummaryByDigest")]
+    fn get_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> RpcResult<CheckpointSummary>;
+
     /// Return contents of a checkpoint, namely a list of execution digests
     #[method(name = "getCheckpointContents")]
     fn get_checkpoint_contents(
         &self,
-        digest: CheckpointContentsDigest,
+        sequence_number: CheckpointSequenceNumber,
     ) -> RpcResult<CheckpointContents>;
 
-    /// Return contents of a checkpoint based on its sequence number
-    #[method(name = "getCheckpointContentsBySequenceNumber")]
-    fn get_checkpoint_contents_by_sequence_number(
+    /// Return contents of a checkpoint based on checkpoint content digest
+    #[method(name = "getCheckpointContentsByDigest")]
+    fn get_checkpoint_contents_by_digest(
         &self,
-        sequence_number: CheckpointSequenceNumber,
+        digest: CheckpointContentsDigest,
     ) -> RpcResult<CheckpointContents>;
 }
 
@@ -332,6 +347,10 @@ pub trait GovernanceReadApi {
     /// Return [SuiSystemState]
     #[method(name = "getSuiSystemState")]
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState>;
+
+    /// Return the reference gas price for the network
+    #[method(name = "getReferenceGasPrice")]
+    async fn get_reference_gas_price(&self) -> RpcResult<u64>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
@@ -555,7 +574,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Withdraw some portion of a delegation from a validator's staking pool.
+    /// Withdraw a delegation from a validator's staking pool.
     #[method(name = "requestWithdrawDelegation")]
     async fn request_withdraw_delegation(
         &self,
@@ -565,8 +584,6 @@ pub trait RpcTransactionBuilder {
         delegation: ObjectID,
         /// StakedSui object ID
         staked_sui: ObjectID,
-        /// Principal amount to withdraw
-        principal_withdraw_amount: u64,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -585,8 +602,6 @@ pub trait RpcTransactionBuilder {
         staked_sui: ObjectID,
         /// Validator to switch to
         new_validator_address: SuiAddress,
-        /// Switching stake amount
-        switch_pool_token_amount: u64,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -643,7 +658,7 @@ pub trait EventReadApi {
         cursor: Option<EventID>,
         /// maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.  
+        /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage>;
 }

@@ -42,7 +42,7 @@ It has the following main components:
     - `mach_absolute_time()`, `clock_gettime()`: Intercepted to provide deterministic high-resolution timing behavior.
     - TODO: `gettimeofday()`: We would like to intercept this to provide deterministic wall-clock operations (e.g. on dates, etc). However, intercepting this currently breaks RocksDB.
 
-    This interception behavior is in effect only in threads that have explicity enabled it, which generally includes the main test thread only. In other threads, the interceptors delegate the call to the system library implementation via `dlsym()`. See implementation [here](https://github.com/MystenLabs/mysten-sim/blob/main/msim/src/sim/intercept.rs#L34-L48).
+    This interception behavior is in effect only in threads that have explicitly enabled it, which generally includes the main test thread only. In other threads, the interceptors delegate the call to the system library implementation via `dlsym()`. See implementation [here](https://github.com/MystenLabs/mysten-sim/blob/main/msim/src/sim/intercept.rs#L34-L48).
 
 1. Procedural macros that replace `#[tokio::test]` and run test code inside a testing environment. These are `#[sui_test]` and `#[sim_test]` and are documented below. The test harness created by these macros initializes the simulator runtime with a starting seed, generates the simulator configuration, and runs the test inside a newly created thread. The test must be run in its own thread in order to provide each test case with fresh thread local storage.
 
@@ -57,13 +57,13 @@ You can then run tests by doing:
 
      $ cargo simtest
 
-The simtest command calls `cargo nextest`, so you can add any valid `nextest` option to the commandline.
+The simtest command calls `cargo nextest`, so you can add any valid `nextest` option to the command line.
 
 `cargo simtest` also reads the following environment variables:
 
 - `MSIM_TEST_SEED` - the random seed for the global PRNG. Must be a positive decimal integer that fits into a `u64`. The default value is `1`.
 
-- `MSIM_TEST_NUM` - the number of times to repeat each test. Each reptition of a test is done with a different random seed, starting from the value of `MSIM_TEST_SEED` for the first repitition. The next seed is computed using the following function:
+- `MSIM_TEST_NUM` - the number of times to repeat each test. Each repetition of a test is done with a different random seed, starting from the value of `MSIM_TEST_SEED` for the first repetition. The next seed is computed using the following function:
 
         fn next_seed(seed: u64) -> u64 {
             use rand::Rng;
@@ -140,7 +140,7 @@ Or in the case of async code:
 
 `SuiNodeHandle` runs the provided callbacks/futures inside the context of the appropriate simulator node, so that network requests, spawned tasks, etc continue running in the correct context.
 
-Note that it is trival to exfiltrate state from the remote node, e.g.:
+Note that it is trivial to exfiltrate state from the remote node, e.g.:
 
         let node_state = handle.with(|node| {
             node.state()
@@ -159,7 +159,7 @@ Also, the world will not end if you break this rule. You just might see confusin
 
 - `config = "config_expr"` - This argument accepts a string which will be evaluated as an expression that returns the configuration for the test. Generally, you should make this a function call, and then define the function to return the config. The function must return a type that can implements `Into<TestConfig>` - the most common choice is `SimConfig`, but `Vec<SimConfig>` and `Vec<(usize /* repeat count */, SimConfig)>` are also supported by default. See https://github.com/MystenLabs/mysten-sim/blob/main/msim/src/sim/config.rs for the `TestConfig` implementation.
 
-- `check_determinism` - If set, the framework will run the test twice, and verify that it executes identically each time. (It does this by keeping a log which contains an entry for every call to the PRNG. Each entry contains a hash of the value yeilded by the PRNG at that point + the current time.). Tests with `check_determinism` are usually for testing the framework itself, so you probably won't need to use this.
+- `check_determinism` - If set, the framework will run the test twice, and verify that it executes identically each time. (It does this by keeping a log which contains an entry for every call to the PRNG. Each entry contains a hash of the value yielded by the PRNG at that point + the current time.). Tests with `check_determinism` are usually for testing the framework itself, so you probably won't need to use this.
 
 ### Configuring the network:
 

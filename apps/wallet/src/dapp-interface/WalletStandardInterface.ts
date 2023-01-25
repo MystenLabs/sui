@@ -27,10 +27,14 @@ import {
     type HasPermissionsResponse,
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
+import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
+import type { SuiAddress } from '@mysten/sui.js/src';
+import type { EventsChangeProperties } from '@mysten/wallet-standard';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
 import type {
+    StakeRequest,
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
 } from '_payloads/transactions';
@@ -41,6 +45,14 @@ type WalletEventsMap = {
 
 // NOTE: Because this runs in a content script, we can't fetch the manifest.
 const name = process.env.APP_NAME || 'Sui Wallet';
+
+type StakeInput = { validatorAddress: string };
+type SuiWalletStakeFeature = {
+    'suiWallet:stake': {
+        version: '0.0.1';
+        stake: (input: StakeInput) => Promise<void>;
+    };
+};
 
 export class SuiWallet implements Wallet {
     readonly #events: Emitter<WalletEventsMap>;
@@ -68,7 +80,8 @@ export class SuiWallet implements Wallet {
 
     get features(): ConnectFeature &
         EventsFeature &
-        SuiSignAndExecuteTransactionFeature {
+        SuiSignAndExecuteTransactionFeature &
+        SuiWalletStakeFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -82,11 +95,29 @@ export class SuiWallet implements Wallet {
                 version: '1.0.0',
                 signAndExecuteTransaction: this.#signAndExecuteTransaction,
             },
+            'suiWallet:stake': {
+                version: '0.0.1',
+                stake: this.#stake,
+            },
         };
     }
 
     get accounts() {
         return this.#account ? [this.#account] : [];
+    }
+
+    #setAccount(address: SuiAddress | null) {
+        if (!address) {
+            this.#account = null;
+            return;
+        }
+        this.#account = new ReadonlyWalletAccount({
+            address,
+            // TODO: Expose public key instead of address:
+            publicKey: new Uint8Array(),
+            chains: SUI_CHAINS,
+            features: ['sui:signAndExecuteTransaction'],
+        });
     }
 
     constructor() {
@@ -96,7 +127,20 @@ export class SuiWallet implements Wallet {
             'sui_in-page',
             'sui_content-script'
         );
-
+        this.#messagesStream.messages.subscribe(({ payload }) => {
+            if (isWalletStatusChangePayload(payload)) {
+                const { accounts } = payload;
+                let change: EventsChangeProperties = {};
+                if (accounts) {
+                    const [address = null] = accounts;
+                    if (address !== this.#account?.address) {
+                        this.#setAccount(address);
+                        change = { accounts: this.accounts };
+                    }
+                }
+                this.#events.emit('change', change);
+            }
+        });
         this.#connected();
     }
 
@@ -121,13 +165,7 @@ export class SuiWallet implements Wallet {
         if (address) {
             const account = this.#account;
             if (!account || account.address !== address) {
-                this.#account = new ReadonlyWalletAccount({
-                    address,
-                    // TODO: Expose public key instead of address:
-                    publicKey: new Uint8Array(),
-                    chains: SUI_CHAINS,
-                    features: ['sui:signAndExecuteTransaction'],
-                });
+                this.#setAccount(address);
                 this.#events.emit('change', { accounts: this.accounts });
             }
         }
@@ -165,6 +203,13 @@ export class SuiWallet implements Wallet {
             }),
             (response) => response.result
         );
+    };
+
+    #stake = async (input: StakeInput) => {
+        this.#send<StakeRequest, void>({
+            type: 'stake-request',
+            validatorAddress: input.validatorAddress,
+        });
     };
 
     #hasPermissions(permissions: HasPermissionsRequest['permissions']) {

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, num::NonZeroU32, time::Duration};
 
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
@@ -92,6 +92,30 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `100`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_download_concurrency: Option<usize>,
+
+    /// Per-peer rate-limit (in requests/sec) for the PushCheckpointSummary RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub push_checkpoint_summary_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetCheckpointSummary RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_summary_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetCheckpointContents RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_checkpoint_contents_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetTransactionAndEffects RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_transaction_and_effects_rate_limit: Option<NonZeroU32>,
 }
 
 impl StateSyncConfig {
@@ -145,7 +169,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interval_period_ms: Option<u64>,
 
-    /// Target number of conncurrent connections to establish.
+    /// Target number of concurrent connections to establish.
     ///
     /// If unspecified, this will default to `4`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -159,6 +183,18 @@ pub struct DiscoveryConfig {
     /// If unspecified, this will default to `1`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peers_to_query: Option<usize>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetExternalAddress RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_external_address_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limit (in requests/sec) for the GetKnownPeers RPC.
+    ///
+    /// If unspecified, this will default to no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub get_known_peers_rate_limit: Option<NonZeroU32>,
 }
 
 impl DiscoveryConfig {

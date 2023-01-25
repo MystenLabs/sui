@@ -19,6 +19,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
+    num::NonZeroU32,
     sync::Arc,
     time::Duration,
 };
@@ -96,6 +97,10 @@ pub trait Export: Serialize {
 
 impl<S: Serialize> Export for S {}
 
+// TODO: the stake and voting power of a validator can be different so
+// in some places when we are actually referring to the voting power, we
+// should use a different type alias, field name, etc.
+// Also, consider unify this with `StakeUnit` on Sui side.
 pub type Stake = u64;
 pub type WorkerId = u32;
 
@@ -143,6 +148,9 @@ pub struct Parameters {
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
     pub network_admin_server: NetworkAdminServerParameters,
+    /// Anemo network settings.
+    #[serde(default = "AnemoParameters::default")]
+    pub anemo: AnemoParameters,
 }
 
 impl Parameters {
@@ -182,6 +190,18 @@ impl NetworkAdminServerParameters {
             default.worker_network_admin_server_base_port;
         params
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct AnemoParameters {
+    /// Per-peer rate-limits (in requests/sec) for the PrimaryToPrimary service.
+    pub send_message_rate_limit: Option<NonZeroU32>,
+    pub get_payload_availability_rate_limit: Option<NonZeroU32>,
+    pub get_certificates_rate_limit: Option<NonZeroU32>,
+
+    /// Per-peer rate-limits (in requests/sec) for the WorkerToWorker service.
+    pub report_batch_rate_limit: Option<NonZeroU32>,
+    pub request_batch_rate_limit: Option<NonZeroU32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -337,6 +357,7 @@ impl Default for Parameters {
             max_concurrent_requests: 500_000,
             prometheus_metrics: PrometheusMetricsParameters::default(),
             network_admin_server: NetworkAdminServerParameters::default(),
+            anemo: AnemoParameters::default(),
         }
     }
 }

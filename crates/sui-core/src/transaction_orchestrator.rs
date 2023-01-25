@@ -10,6 +10,7 @@ use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use crate::histogram::Histogram;
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
@@ -35,7 +36,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
 
 use sui_types::messages::VerifiedTransaction;
 
@@ -55,7 +56,7 @@ pub struct TransactiondOrchestrator<A> {
 }
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
-    pub fn new_with_network_clients(
+    pub async fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
         reconfig_channel: broadcast::Receiver<Committee>,
         parent_path: &Path,
@@ -83,7 +84,8 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
+        .await)
     }
 }
 
@@ -92,7 +94,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
     OnsiteReconfigObserver: ReconfigObserver<A>,
 {
-    pub fn new(
+    pub async fn new(
         validators: Arc<AuthorityAggregator<A>>,
         validator_state: Arc<AuthorityState>,
         parent_path: &Path,
@@ -129,6 +131,7 @@ where
                 .await;
             })
         };
+        Self::schedule_txes_in_log(&pending_tx_log, &quorum_driver_handler).await;
         Self {
             quorum_driver_handler,
             validator_state,
@@ -139,7 +142,6 @@ where
         }
     }
 
-    // TODO: add latency histogram
     #[instrument(name = "tx_orchestrator_execute_transaction", level = "debug", skip_all, fields(request_type = ?request.request_type), err)]
     pub async fn execute_transaction(
         &self,
@@ -152,10 +154,19 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request.transaction.verify()?;
+        let transaction = request
+            .transaction
+            .verify()
+            .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *transaction.digest();
 
-        let ticket = self.submit(transaction).await?;
+        let _request_guard = self.metrics.request_latency.start_timer();
+        let _wait_for_finality_guard = self.metrics.wait_for_finality_latency.start_timer();
+
+        let ticket = self.submit(transaction).await.map_err(|e| {
+            warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+            QuorumDriverError::QuorumDriverInternalError(e)
+        })?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
@@ -167,7 +178,7 @@ where
             ticket,
         ).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
-            return Err(QuorumDriverError::TimeoutBeforeReachFinality);
+            return Err(QuorumDriverError::TimeoutBeforeFinality);
         };
         match result {
             Err(err) => Err(err),
@@ -247,15 +258,17 @@ where
             scopeguard::guard(metrics.local_execution_in_flight.clone(), |in_flight| {
                 in_flight.dec();
             });
+        let _guard = metrics.local_execution_latency.start_timer();
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            validator_state.execute_certificate_with_effects(
+            validator_state.fullnode_execute_certificate_with_effects(
                 tx_cert,
                 effects_cert,
                 // TODO: Check whether it's safe to call epoch_store here.
                 &validator_state.epoch_store(),
             ),
         )
+        .instrument(error_span!("transaction_orchestrator", ?tx_digest))
         .await
         {
             Err(_elapsed) => {
@@ -369,6 +382,25 @@ where
         )
     }
 
+    async fn schedule_txes_in_log(
+        pending_tx_log: &Arc<WritePathPendingTransactionLog>,
+        quorum_driver: &Arc<QuorumDriverHandler<A>>,
+    ) {
+        let pending_txes = pending_tx_log.load_all_pending_transactions();
+        for tx in pending_txes {
+            let tx_digest = *tx.digest();
+            // It's not impossible we fail to enqueue a task but that's not the end of world.
+            if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+                error!(
+                    ?tx_digest,
+                    "Failed to enqueue transaction in pending_tx_log, err: {err:?}"
+                );
+            } else {
+                info!(?tx_digest, "Enqueued transaction in pending_tx_log");
+            }
+        }
+    }
+
     pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
         self.pending_tx_log.load_all_pending_transactions()
     }
@@ -390,6 +422,10 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_success: GenericCounter<AtomicU64>,
     local_execution_timeout: GenericCounter<AtomicU64>,
     local_execution_failure: GenericCounter<AtomicU64>,
+
+    request_latency: Histogram,
+    wait_for_finality_latency: Histogram,
+    local_execution_latency: Histogram,
 }
 
 impl TransactionOrchestratorMetrics {
@@ -464,6 +500,21 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
+            request_latency: Histogram::new_in_registry(
+                "tx_orchestrator_request_latency",
+                "Time spent in processing one Transaction Orchestrator request",
+                registry,
+            ),
+            wait_for_finality_latency: Histogram::new_in_registry(
+                "tx_orchestrator_wait_for_finality_latency",
+                "Time spent in waiting for one Transaction Orchestrator request gets finalized",
+                registry,
+            ),
+            local_execution_latency: Histogram::new_in_registry(
+                "tx_orchestrator_local_execution_latency",
+                "Time spent in waiting for one Transaction Orchestrator gets locally executed",
+                registry,
+            ),
         }
     }
 

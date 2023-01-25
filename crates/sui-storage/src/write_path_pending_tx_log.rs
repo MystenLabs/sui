@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! WritePathPendingTransactionLog is used in the transaction write path (e.g. in
-//! TranasctionOrchestrator) for transaction submission processing. It helps to achieve:
+//! TransactionOrchestrator) for transaction submission processing. It helps to achieve:
 //! 1. At one time, a transaction is only processed once.
 //! 2. When Fullnode crashes and restarts, the pending transaction will be loaded and retried.
 
 use std::path::PathBuf;
 use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::EmptySignInfo;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{TrustedTransction, VerifiedTransaction};
+use sui_types::message_envelope::TrustedEnvelope;
+use sui_types::messages::{SenderSignedData, VerifiedTransaction};
+use typed_store::rocks::MetricConf;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::{rocks::DBMap, traits::Map};
 use typed_store_derive::DBMapUtils;
@@ -18,7 +21,7 @@ pub type IsFirstRecord = bool;
 
 #[derive(DBMapUtils)]
 struct WritePathPendingTransactionTable {
-    logs: DBMap<TransactionDigest, TrustedTransction>,
+    logs: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, EmptySignInfo>>,
 }
 
 pub struct WritePathPendingTransactionLog {
@@ -27,8 +30,12 @@ pub struct WritePathPendingTransactionLog {
 
 impl WritePathPendingTransactionLog {
     pub fn new(path: PathBuf) -> Self {
-        let pending_transactions =
-            WritePathPendingTransactionTable::open_tables_transactional(path, None, None);
+        let pending_transactions = WritePathPendingTransactionTable::open_tables_transactional(
+            path,
+            MetricConf::default(),
+            None,
+            None,
+        );
         Self {
             pending_transactions,
         }
@@ -36,7 +43,7 @@ impl WritePathPendingTransactionLog {
 
     // Returns whether the table currently has this transaction in record.
     // If not, write the transaction and return true; otherwise return false.
-    // Because the record will be cleanded up when the transaction finishes,
+    // Because the record will be cleaned up when the transaction finishes,
     // even when it returns true, the callsite of this function should check
     // the transaction status before doing anything, to avoid duplicates.
     pub async fn write_pending_transaction_maybe(
@@ -68,7 +75,7 @@ impl WritePathPendingTransactionLog {
     //    2.a. for one transaction, `finish_transaction` shouldn't predate
     //        `write_pending_transaction_maybe`.
     //    2.b  for concurrent requests of one transaction, a call to this
-    //        function may happen in bewteen hence making the second request
+    //        function may happen in between hence making the second request
     //        thinks it is the first record. It's preventable by checking this
     //        transaction again after the call of `write_pending_transaction_maybe`.
     pub fn finish_transaction(&self, tx: &TransactionDigest) -> SuiResult {

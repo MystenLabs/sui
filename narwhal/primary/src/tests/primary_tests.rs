@@ -12,7 +12,6 @@ use bincode::Options;
 use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
-use dashmap::DashSet;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -31,7 +30,7 @@ use std::{
 use storage::CertificateStore;
 use storage::NodeStorage;
 use storage::PayloadToken;
-use store::rocks::DBMap;
+use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
 use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
@@ -319,7 +318,6 @@ async fn test_request_vote_missing_parents() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     // Make some mock certificates that are parents of our new header.
@@ -486,7 +484,6 @@ async fn test_request_vote_missing_batches() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     // Make some mock certificates that are parents of our new header.
@@ -605,7 +602,6 @@ async fn test_request_vote_already_voted() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     // Make some mock certificates that are parents of our new header.
@@ -757,7 +753,6 @@ async fn test_fetch_certificates_handler() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     let mut current_round: Vec<_> = Certificate::genesis(&fixture.committee())
@@ -919,7 +914,6 @@ async fn test_process_payload_availability_success() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     // GIVEN some mock certificates
@@ -995,6 +989,7 @@ async fn test_process_payload_availability_when_failures() {
     let rocksdb = store::rocks::open_cf(
         temp_dir(),
         None,
+        MetricConf::default(),
         &[
             test_utils::CERTIFICATES_CF,
             test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF,
@@ -1063,7 +1058,6 @@ async fn test_process_payload_availability_when_failures() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     // AND some mock certificates
@@ -1097,6 +1091,7 @@ async fn test_process_payload_availability_when_failures() {
                     .expect("Couldn't find column family"),
                 serialised_key,
                 dummy_value,
+                &ReadWriteOptions::default().writeopts(),
             )
             .expect("Couldn't insert value");
 
@@ -1155,7 +1150,6 @@ async fn test_request_vote_created_at_in_future() {
         vote_digest_store: crate::common::create_test_vote_store(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
-        request_vote_inflight: Arc::new(DashSet::new()),
     };
 
     // Make some mock certificates that are parents of our new header.

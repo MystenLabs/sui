@@ -32,7 +32,6 @@ use tap::prelude::*;
 use tokio::task::JoinHandle;
 use tokio::time;
 
-use crate::authority::AuthorityState;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
@@ -143,7 +142,8 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         })?;
         r.map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
             .tap_err(|r| {
-                error!("Submit transaction failed with: {:?}", r);
+                // Will be logged by caller as well.
+                warn!("Submit transaction failed with: {:?}", r);
             })?;
         Ok(())
     }
@@ -153,18 +153,19 @@ impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
-        authority: Arc<AuthorityState>,
+        authority: AuthorityName,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
         let this = Arc::new(Self {
             consensus_client,
-            authority: authority.name,
+            authority,
             num_inflight_transactions,
             opt_metrics,
         });
         let recover = this.clone();
-        recover.submit_recovered(&authority.epoch_store());
+        recover.submit_recovered(epoch_store);
         this
     }
 
@@ -341,18 +342,23 @@ impl ConsensusAdapter {
                 .opt_metrics
                 .as_ref()
                 .map(|m| m.sequencing_acknowledge_latency.start_timer());
+            let mut retries = 0;
             while let Err(e) = self
                 .consensus_client
                 .submit_to_consensus(&transaction, epoch_store)
                 .await
             {
-                error!(
-                    "Error submitting transaction to own narwhal worker: {:?}",
-                    e
-                );
+                // This can happen during Narwhal reconfig, so wait for a few retries.
+                if retries > 3 {
+                    error!(
+                        "Error submitting transaction to own narwhal worker: {:?}",
+                        e
+                    );
+                }
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics.sequencing_certificate_failures.inc();
                 });
+                retries += 1;
                 time::sleep(Duration::from_secs(10)).await;
             }
             debug!("Submitted {transaction_key:?} to consensus");
@@ -402,7 +408,7 @@ pub fn position_submit_certificate(
     ourselves: &AuthorityName,
     tx_digest: &TransactionDigest,
 ) -> usize {
-    // the 32 is as requirement of the deault StdRng::from_seed choice
+    // the 32 is as requirement of the default StdRng::from_seed choice
     let digest_bytes = tx_digest.into_bytes();
 
     // permute the validators deterministically, based on the digest
@@ -418,8 +424,8 @@ pub fn position_submit_certificate(
 impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     /// This method is called externally to begin reconfiguration
     /// It transition reconfig state to reject new certificates from user
-    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained
-    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
+    /// ConsensusAdapter will send EndOfPublish message once pending certificate queue is drained.
+    fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
         let send_end_of_publish = {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
             let send_end_of_publish = epoch_store.pending_consensus_certificates_empty();
@@ -435,7 +441,6 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
         }
-        Ok(())
     }
 }
 

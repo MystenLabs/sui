@@ -58,6 +58,12 @@ pub enum CeremonyCommand {
         narwhal_primary_address: Multiaddr,
         #[clap(long)]
         narwhal_worker_address: Multiaddr,
+        #[clap(long)]
+        description: String,
+        #[clap(long)]
+        image_url: String,
+        #[clap(long)]
+        project_url: String,
     },
 
     AddGasObject {
@@ -69,12 +75,14 @@ pub enum CeremonyCommand {
         value: u64,
     },
 
+    BuildUnsignedCheckpoint,
+
     VerifyAndSign {
         #[clap(long)]
         key_file: PathBuf,
     },
 
-    Build,
+    Finalize,
 }
 
 pub fn run(cmd: Ceremony) -> Result<()> {
@@ -101,6 +109,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             p2p_address,
             narwhal_primary_address,
             narwhal_worker_address,
+            description,
+            image_url,
+            project_url,
         } => {
             let mut builder = Builder::load(&dir)?;
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
@@ -123,6 +134,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     p2p_address,
                     narwhal_primary_address,
                     narwhal_worker_address,
+                    description,
+                    image_url,
+                    project_url,
                 },
                 pop,
             );
@@ -143,18 +157,40 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
+        CeremonyCommand::BuildUnsignedCheckpoint => {
+            let mut builder = Builder::load(&dir)?;
+            let (unsigned_checkpoint, ..) = builder.build_unsigned_genesis_checkpoint();
+            println!(
+                "Successfully built unsigned checkpoint: {:?}",
+                unsigned_checkpoint.digest()
+            );
+
+            builder.save(dir)?;
+        }
+
         CeremonyCommand::VerifyAndSign { key_file } => {
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
 
             let mut builder = Builder::load(&dir)?;
 
+            // Don't sign unless the unsigned checkpoint has already been created
+            if builder.unsigned_genesis_checkpoint().is_none() {
+                return Err(anyhow::anyhow!(
+                    "Unable to verify and sign genesis checkpoint; it hasn't been built yet"
+                ));
+            }
+
             builder = builder.add_validator_signature(&keypair);
+            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().0;
             builder.save(dir)?;
 
-            println!("Successfully built and signed genesis");
+            println!(
+                "Successfully verified and signed genesis checkpoint: {:?}",
+                checkpoint.digest()
+            );
         }
 
-        CeremonyCommand::Build => {
+        CeremonyCommand::Finalize => {
             let builder = Builder::load(&dir)?;
 
             let genesis = builder.build();
@@ -208,6 +244,9 @@ mod test {
                     p2p_address: utils::new_udp_network_address(),
                     narwhal_primary_address: utils::new_udp_network_address(),
                     narwhal_worker_address: utils::new_udp_network_address(),
+                    description: String::new(),
+                    image_url: String::new(),
+                    project_url: String::new(),
                 };
                 let key_file = dir.path().join(format!("{}-0.key", info.name));
                 write_authority_keypair_to_file(&keypair, &key_file).unwrap();
@@ -257,10 +296,20 @@ mod test {
                     p2p_address: validator.p2p_address().to_owned(),
                     narwhal_primary_address: validator.narwhal_primary_address.clone(),
                     narwhal_worker_address: validator.narwhal_worker_address.clone(),
+                    description: String::new(),
+                    image_url: String::new(),
+                    project_url: String::new(),
                 },
             };
             command.run()?;
         }
+
+        // Build the unsigned checkpoint
+        let command = Ceremony {
+            path: Some(dir.path().into()),
+            command: CeremonyCommand::BuildUnsignedCheckpoint,
+        };
+        command.run()?;
 
         // Have all the validators verify and sign genesis
         for (key, _worker_key, _network_key, _account_key, _validator) in &validators {
@@ -276,7 +325,7 @@ mod test {
         // Finalize the Ceremony and build the Genesis object
         let command = Ceremony {
             path: Some(dir.path().into()),
-            command: CeremonyCommand::Build,
+            command: CeremonyCommand::Finalize,
         };
         command.run()?;
 

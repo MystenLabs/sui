@@ -4,7 +4,7 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::{metrics::ConsensusMetrics, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
@@ -68,7 +68,6 @@ impl ConsensusState {
     }
 
     pub fn new_from_store(
-        genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
         latest_sub_dag_index: SequenceNumber,
@@ -80,18 +79,13 @@ impl ConsensusState {
             .max_by(|a, b| a.1.cmp(b.1))
             .map(|(_k, v)| v)
             .unwrap_or_else(|| &0);
-
-        if last_committed_round == 0 {
-            return Self::new(genesis, metrics);
-        }
-        metrics.recovered_consensus_state.inc();
-
         let dag = Self::construct_dag_from_cert_store(
             cert_store,
             last_committed_round,
             &recover_last_committed,
             gc_depth,
         );
+        metrics.recovered_consensus_state.inc();
 
         Self {
             last_committed_round,
@@ -122,13 +116,13 @@ impl ConsensusState {
 
         let mut num_certs = 0;
         for cert in &certificates {
-            if Self::try_insert_in_dag(&mut dag, last_committed, cert).is_ok() {
+            if Self::try_insert_in_dag(&mut dag, last_committed, cert) {
                 info!("Inserted certificate: {:?}", cert);
                 num_certs += 1;
             }
         }
         info!(
-            "Dag was restored and contains {} certs for {} rounds",
+            "Dag is restored and contains {} certs for {} rounds",
             num_certs,
             dag.len()
         );
@@ -136,27 +130,27 @@ impl ConsensusState {
         dag
     }
 
-    #[allow(clippy::result_unit_err)]
-    pub fn try_insert(&mut self, certificate: &Certificate) -> Result<(), ()> {
+    /// Returns true if certificate is inserted in the dag.
+    pub fn try_insert(&mut self, certificate: &Certificate) -> bool {
         Self::try_insert_in_dag(&mut self.dag, &self.last_committed, certificate)
     }
 
-    #[allow(clippy::result_unit_err)]
+    /// Returns true if certificate is inserted in the dag.
     fn try_insert_in_dag(
         dag: &mut Dag,
         last_committed: &HashMap<PublicKey, Round>,
         certificate: &Certificate,
-    ) -> Result<(), ()> {
+    ) -> bool {
         let last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
             .unwrap_or_default();
         if certificate.round() < last_committed_round {
             debug!(
-                "Ignoring certificate {:?} as it is past last committed round for this origin {}",
+                "Ignoring certificate {:?} as it is before last committed round for this origin {}",
                 certificate, last_committed_round
             );
-            return Err(());
+            return false;
         }
 
         dag.entry(certificate.round())
@@ -165,7 +159,7 @@ impl ConsensusState {
                 certificate.origin(),
                 (certificate.digest(), certificate.clone()),
             );
-        Ok(())
+        true
     }
 
     /// Update and clean up internal state base on committed certificates.
@@ -218,8 +212,6 @@ pub trait ConsensusProtocol {
         // The new certificate.
         certificate: Certificate,
     ) -> StoreResult<Vec<CommittedSubDag>>;
-
-    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()>;
 }
 
 pub struct Consensus<ConsensusProtocol> {
@@ -267,11 +259,9 @@ where
         gc_depth: Round,
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
-        let genesis = Certificate::genesis(&committee);
         let recovered_last_committed = store.read_last_committed();
         let latest_sub_dag_index = store.get_latest_sub_dag_index();
         let state = ConsensusState::new_from_store(
-            genesis,
             metrics.clone(),
             recovered_last_committed,
             latest_sub_dag_index,
@@ -298,10 +288,16 @@ where
     }
 
     async fn run(self) {
-        self.run_inner().await.expect("Failed to run consensus")
+        match self.run_inner().await {
+            Ok(_) => {}
+            Err(err @ ConsensusError::ShuttingDown) => {
+                debug!("{:?}", err)
+            }
+            Err(err) => panic!("Failed to run consensus: {:?}", err),
+        }
     }
 
-    async fn run_inner(mut self) -> StoreResult<()> {
+    async fn run_inner(mut self) -> Result<(), ConsensusError> {
         // Listen to incoming certificates.
         loop {
             tokio::select! {
@@ -311,10 +307,7 @@ where
                 }
 
                 Some(certificate) = self.rx_new_certificates.recv() => {
-                    // If the core already moved to the next epoch we should pull the next
-                    // committee as well.
                     match certificate.epoch().cmp(&self.committee.epoch()) {
-
                         Ordering::Equal => {
                             // we can proceed.
                         }
@@ -368,20 +361,21 @@ where
 
                         // NOTE: The size of the sub-dag can be arbitrarily large (depending on the network condition
                         // and Byzantine leaders).
-                        if let Err(e) = self.tx_sequence.send(committed_sub_dag).await {
-                            tracing::warn!("Failed to output sub dag: {e}");
-                        }
+                        self.tx_sequence.send(committed_sub_dag).await.map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 
                     if !commited_certificates.is_empty(){
                         // Highest committed certificate round is the leader round / commit round
                         // expected by primary.
                         let leader_commit_round = commited_certificates.iter().map(|c| c.round()).max().unwrap();
+
                         self.tx_committed_certificates
                         .send((leader_commit_round, commited_certificates))
                         .await
-                        .expect("Failed to send committed round and certificates to primary");
-                        self.tx_consensus_round_updates.send(leader_commit_round).expect("Failed to notify primary about committed round!");
+                        .map_err(|_|ConsensusError::ShuttingDown)?;
+
+                        self.tx_consensus_round_updates.send(leader_commit_round)
+                        .map_err(|_|ConsensusError::ShuttingDown)?;
                     }
 
                     self.metrics
