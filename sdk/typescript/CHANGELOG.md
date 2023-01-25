@@ -1,5 +1,18 @@
 # @mysten/sui.js
 
+## 0.24.0
+
+### Minor Changes
+
+- 88a687834: Add methods for the CoinRead endpoints
+
+### Patch Changes
+
+- 01458ffd5: Fix websocket default port for DevNet
+- a274ecfc7: Make previousTransaction optional for CoinStruct to support v0.22 network where it doesn't exist
+- 89091ddab: change estimator logic to use upper bound
+- 71bee7563: fix creating websocket url
+
 ## 0.23.0
 
 ### Minor Changes
