@@ -5,13 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
 
+import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
 import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
 import { Network } from '~/utils/api/rpcSetting';
-import { useNetwork } from '~/context';
 
 const numberFormatter = new Intl.NumberFormat(undefined);
 
@@ -22,8 +22,9 @@ interface CountsResponse {
     transactions: number;
 }
 
-interface TPSResponse {
+interface TPSCheckpointResponse {
     tps: number;
+    checkpoint: string;
 }
 
 function roundFloat(number: number, decimals: number) {
@@ -52,8 +53,8 @@ export function HomeMetrics() {
     );
 
     const { data: tpsData } = useQuery(
-        ['home', 'tps'],
-        () => request<TPSResponse>('tps', { network }),
+        ['home', 'tps-checkpoints'],
+        () => request<TPSCheckpointResponse>('tps-checkpoints', { network }),
         { enabled: indexerSupported }
     );
 
@@ -75,6 +76,9 @@ export function HomeMetrics() {
                     </Stats>
                     <Stats label="Epoch" tooltip="The current epoch">
                         {systemData?.epoch}
+                    </Stats>
+                    <Stats label="Checkpoint" tooltip="The current checkpoint">
+                        {tpsData?.checkpoint}
                     </Stats>
                 </MetricGroup>
 
