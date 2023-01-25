@@ -27,7 +27,7 @@ module sui::display {
     /// don't match in their lengths.
     const EVecLengthMismatch: u64 = 1;
 
-    /// The Display object. Defines the way an object should be
+    /// The Display<T> object. Defines the way a T instance should be
     /// displayed. Display object can only be created and modified with
     /// a PublisherCap, making sure that the rules are set by the owner
     /// of the type.
@@ -111,10 +111,11 @@ module sui::display {
         let len = vector::length(&fields);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
+        let i = 0;
         let display = empty<T>(pub, ctx);
-        while (len > 0) {
-            set_internal(&mut display, *vector::borrow(&fields, len), *vector::borrow(&values, len));
-            len = len - 1;
+        while (i < len) {
+            set_internal(&mut display, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            i = i + 1;
         };
 
         share(display)
@@ -134,9 +135,10 @@ module sui::display {
         assert!(is_package<T>(pub), ENotOwner);
         assert!(len == vector::length(&values), EVecLengthMismatch);
 
-        while (len > 0) {
-            set_internal(d, *vector::borrow(&fields, len), *vector::borrow(&values, len));
-            len = len - 1;
+        let i = 0;
+        while (i < 0) {
+            set_internal(d, *vector::borrow(&fields, i), *vector::borrow(&values, i));
+            i = i + 1;
         };
     }
 
