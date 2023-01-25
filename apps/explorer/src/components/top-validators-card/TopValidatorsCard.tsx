@@ -33,7 +33,10 @@ export function processValidators(set: ActiveValidator[], totalStake: bigint) {
             address: av.fields.metadata.fields.sui_address,
             stake: av.fields.stake_amount,
             stakePercent: getStakedPercent(av.fields.stake_amount, totalStake),
-            logo: null,
+            logo:
+                typeof av.fields.metadata.fields.image_url === 'string'
+                    ? av.fields.metadata.fields.image_url
+                    : null,
         };
     });
 }

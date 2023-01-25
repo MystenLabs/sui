@@ -47,6 +47,7 @@ export function useNetwork(): [string, (network: Network | string) => void] {
     useLayoutEffect(() => {
         growthbook.setAttributes({
             network,
+            environment: import.meta.env.VITE_VERCEL_ENV,
         });
 
         Sentry.setContext('network', {

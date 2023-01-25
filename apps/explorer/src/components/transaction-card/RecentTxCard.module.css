@@ -19,7 +19,7 @@ div.txcardgrid > div:first-child {
 }
 
 .txlatestresults {
-    @apply m-auto mx-auto mb-[2rem];
+    @apply mx-auto mb-[2rem] w-full;
 }
 
 div.txadd {

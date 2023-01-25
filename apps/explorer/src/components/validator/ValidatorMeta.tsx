@@ -53,7 +53,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 
     return (
         <>
-            <div className="flex basis-full gap-5 border-r border-solid border-transparent border-r-gray-45 capitalize md:mr-7.5 md:basis-1/4">
+            <div className="flex basis-full gap-5 border-r border-solid border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
                 <ImageIcon
                     src={logo}
                     label={validatorName}
@@ -80,7 +80,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </div>
                 </div>
             </div>
-            <div className="basis-full break-all md:basis-2/3">
+            <div className="min-w-0 basis-full break-words md:basis-2/3">
                 <DescriptionList>
                     <DescriptionItem title="Description">
                         <Text variant="p1/medium" color="gray-90">
