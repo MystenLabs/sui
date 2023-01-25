@@ -104,7 +104,7 @@ export class CallArgSerializer {
    */
   async deserializeCallArgs(txn: MoveCallTx): Promise<SuiJsonValue[]> {
     const userParams = await this.extractNormalizedFunctionParams(
-      txn.Call.package.objectId,
+      txn.Call.package,
       txn.Call.module,
       txn.Call.function
     );

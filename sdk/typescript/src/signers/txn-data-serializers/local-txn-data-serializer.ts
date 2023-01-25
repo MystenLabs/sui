@@ -14,10 +14,11 @@ import {
   SUI_TYPE_ARG,
   Transaction,
   TransactionData,
+  TransactionKind,
   TypeTag,
   SuiObjectRef,
   deserializeTransactionBytesToTransactionData,
-  TransactionKind,
+  normalizeSuiObjectId,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -172,10 +173,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'moveCall':
         const moveCall = unserializedTxn.data as MoveCallTransaction;
-        const pkg = await this.provider.getObjectRef(moveCall.packageObjectId);
         tx = {
           Call: {
-            package: pkg!,
+            package: normalizeSuiObjectId(moveCall.packageObjectId),
             module: moveCall.module,
             function: moveCall.function,
             typeArguments: moveCall.typeArguments.map((a) =>
@@ -437,7 +437,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       return {
         kind: 'moveCall',
         data: {
-          packageObjectId: tx.Call.package.objectId,
+          packageObjectId: tx.Call.package,
           module: tx.Call.module,
           function: tx.Call.function,
           typeArguments: tx.Call.typeArguments,

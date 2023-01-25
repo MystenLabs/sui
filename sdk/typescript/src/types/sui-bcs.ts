@@ -261,7 +261,7 @@ bcs
  */
 export type MoveCallTx = {
   Call: {
-    package: SuiObjectRef;
+    package: string;
     module: string;
     function: string;
     typeArguments: TypeTag[];
@@ -270,7 +270,7 @@ export type MoveCallTx = {
 };
 
 bcs.registerStructType('MoveCallTx', {
-  package: 'SuiObjectRef',
+  package: 'address',
   module: 'string',
   function: 'string',
   typeArguments: 'vector<TypeTag>',
