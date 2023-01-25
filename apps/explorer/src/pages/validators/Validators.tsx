@@ -50,7 +50,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
                 stake:  totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.fields.commission_rate * 100,
+                commission: +validator.fields.commission_rate / 100,
                 address: validator.fields.metadata.fields.sui_address,
                 lastEpochReward:
                     validator.fields.delegation_staking_pool.fields
