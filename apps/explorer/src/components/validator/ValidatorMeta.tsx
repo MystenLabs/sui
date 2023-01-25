@@ -80,7 +80,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </div>
                 </div>
             </div>
-            <div className="basis-full break-words md:basis-2/3 min-w-0">
+            <div className="min-w-0 basis-full break-words md:basis-2/3">
                 <DescriptionList>
                     <DescriptionItem title="Description">
                         <Text variant="p1/medium" color="gray-90">
