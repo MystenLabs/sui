@@ -143,7 +143,7 @@ function StakeForm({
                             >
                                 {calculateRemaining <= 0
                                     ? 0
-                                    : calculateRemaining}
+                                    : calculateRemaining}{' '}
                                 {symbol}
                             </Text>
                         </div>
