@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
+import type { ActiveValidator } from '@mysten/sui.js';
 
 const APY_DECIMALS = 4;
 

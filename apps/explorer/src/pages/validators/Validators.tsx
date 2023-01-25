@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ActiveValidator } from '@mysten/sui.js';
+import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -11,7 +11,7 @@ import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
 import {
     VALIDATORS_OBJECT_ID,
-    type ValidatorsFields,
+    type ActiveValidator,
 } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -36,19 +36,27 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
             const validatorName = getName(
                 validator.fields.metadata.fields.name
             );
+            const delegatedStake =
+                +validator.fields.delegation_staking_pool.fields.sui_balance;
+            const selfStake = +validator.fields.stake_amount;
+            const totalStake = selfStake + delegatedStake;
+            const img =
+                validator.fields.metadata.fields.image_url &&
+                typeof validator.fields.metadata.fields.image_url === 'string'
+                    ? validator.fields.metadata.fields.image_url
+                    : null;
             return {
                 number: index + 1,
                 name: {
                     name: validatorName,
                     logo: validator.fields.metadata.fields.image_url,
                 },
-                stake:
-                    +validator.fields.delegation_staking_pool.fields
-                        .sui_balance + +validator.fields.stake_amount,
+                stake: totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.fields.commission_rate,
+                commission: +validator.fields.commission_rate / 100,
+                img: img,
                 address: validator.fields.metadata.fields.sui_address,
-                lastEpoch:
+                lastEpochReward:
                     validator.fields.delegation_staking_pool.fields
                         .rewards_pool,
             };
@@ -125,8 +133,8 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
             },
             {
-                header: 'Last Epoch Rewards',
-                accessorKey: 'lastEpoch',
+                header: 'Last Epoch Rewards Pool',
+                accessorKey: 'lastEpochReward',
                 cell: (props: any) => {
                     const lastEpochReward = props.getValue();
                     return lastEpochReward > 0 ? (
@@ -235,8 +243,8 @@ function ValidatorPageResult() {
                                 />
 
                                 <Stats
-                                    label="Last Epoch Reward"
-                                    tooltip="Coming soon"
+                                    label="Last Epoch SUI Rewards"
+                                    tooltip="The stake rewards collected during the last epoch."
                                     unavailable={
                                         lastEpochRewardOnAllValidators <= 0
                                     }
@@ -250,7 +258,11 @@ function ValidatorPageResult() {
                                 </Stats>
                             </div>
                             <div className="flex flex-col gap-8">
-                                <Stats label="Total Staked">
+                                <Stats
+                                    label="Total SUI Staked"
+                                    tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards."
+                                    unavailable={totalStaked <= 0}
+                                >
                                     <DelegationAmount
                                         amount={totalStaked || 0n}
                                         isStats
@@ -258,7 +270,7 @@ function ValidatorPageResult() {
                                 </Stats>
                                 <Stats
                                     label="AVG APY"
-                                    tooltip="Average APY"
+                                    tooltip="The global average of annualized percentage yield of all participating validators."
                                     unavailable={averageAPY <= 0}
                                 >
                                     {averageAPY}%

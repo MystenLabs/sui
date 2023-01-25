@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type ActiveValidator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
 import { calculateAPY } from './calculateAPY';
-
-import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -26,9 +25,6 @@ export function ValidatorStats({
 }: StatsCardProps) {
     // TODO: add missing fields
     // const numberOfDelegators = 0;
-    //  const selfStake = 0;
-    //  const lastEpoch = 0;
-    //  const totalRewards =  0;
     //  const networkStakingParticipation = 0;
     //  const votedLastRound =  0;
     //  const tallyingScore =  0;
@@ -38,15 +34,22 @@ export function ValidatorStats({
         () => calculateAPY(validatorData, +epoch),
         [validatorData, epoch]
     );
+    const delegatedStake =
+        +validatorData.fields.delegation_staking_pool.fields.sui_balance;
+    const selfStake = +validatorData.fields.stake_amount;
+    const totalStake = selfStake + delegatedStake;
+    const commission = +validatorData.fields.commission_rate / 100;
+    const rewardsPoolBalance =
+        +validatorData.fields.delegation_staking_pool.fields.rewards_pool;
 
-    const totalStake = validatorData.fields.stake_amount;
     const delegatedStakePercentage = useMemo(
-        () =>
-            getStakedPercent(
-                BigInt(validatorData.fields.stake_amount),
-                BigInt(totalValidatorStake)
-            ),
-        [validatorData, totalValidatorStake]
+        () => getStakedPercent(BigInt(delegatedStake), BigInt(totalStake)),
+        [delegatedStake, totalStake]
+    );
+
+    const selfStakePercentage = useMemo(
+        () => getStakedPercent(BigInt(selfStake), BigInt(totalStake)),
+        [selfStake, totalStake]
     );
 
     return (
@@ -63,30 +66,53 @@ export function ValidatorStats({
                     <div className="flex flex-col gap-8 lg:flex-row">
                         <Stats
                             label="Staking APY"
-                            tooltip="Coming soon"
+                            tooltip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
                             unavailable={apy <= 0}
                         >
                             {apy}%
                         </Stats>
-                        <Stats label="Total Staked" tooltip="Coming soon">
+                        <Stats
+                            label="Commission"
+                            tooltip="Coming soon"
+                            unavailable={commission <= 0}
+                        >
+                            <Heading
+                                as="h3"
+                                variant="heading2/semibold"
+                                color="steel-darker"
+                            >
+                                {commission}%
+                            </Heading>
+                        </Stats>
+                        <Stats
+                            label="Total SUI Staked"
+                            tooltip="The total SUI staked on the network by validators and delegators to validate the network and earn rewards."
+                            unavailable={totalStake <= 0}
+                        >
                             <DelegationAmount amount={totalStake} isStats />
                         </Stats>
                     </div>
                     <div className="flex flex-col gap-8 lg:flex-row">
                         <Stats
                             label="Delegators"
-                            tooltip="Coming soon"
+                            tooltip="The number of active delegators"
                             unavailable
                         />
 
-                        <Stats label="Delegated Staked" tooltip="Coming soon">
+                        <Stats
+                            label="Delegated Staked"
+                            tooltip="The total SUI staked by delegators."
+                            unavailable={delegatedStakePercentage <= 0}
+                        >
                             {delegatedStakePercentage}%
                         </Stats>
                         <Stats
                             label="Self Staked"
-                            tooltip="Coming soon"
-                            unavailable
-                        />
+                            tooltip="The total SUI staked by this validator."
+                            unavailable={selfStakePercentage <= 0}
+                        >
+                            {selfStakePercentage}%
+                        </Stats>
                     </div>
                 </div>
             </Card>
@@ -102,16 +128,21 @@ export function ValidatorStats({
                     </Heading>
                     <div className="flex flex-col gap-8">
                         <Stats
-                            label="Last Epoch"
-                            tooltip="Coming soon"
+                            label="Last Epoch SUI Rewards"
+                            tooltip="The stake rewards collected during the last epoch."
                             unavailable
                         />
 
                         <Stats
-                            label="Total Reward"
-                            tooltip="Coming soon"
-                            unavailable
-                        />
+                            label="Reward Pool"
+                            tooltip="Amount currently in this validator’s reward pool"
+                            unavailable={+rewardsPoolBalance <= 0}
+                        >
+                            <DelegationAmount
+                                amount={rewardsPoolBalance}
+                                isStats
+                            />
+                        </Stats>
                     </div>
                 </div>
             </Card>
@@ -128,26 +159,26 @@ export function ValidatorStats({
                     <div className="flex flex-col gap-8">
                         <div className="flex flex-col gap-8 lg:flex-row">
                             <Stats
-                                label="Staking Participation"
-                                tooltip="Coming soon"
+                                label="Checkpoint Participation"
+                                tooltip="The percentage of checkpoints certified thus far by this validator."
                                 unavailable
                             />
 
                             <Stats
-                                label="voted Last Round"
-                                tooltip="Coming soon"
+                                label="Voted Last Round"
+                                tooltip="Did this validator vote in the latest round."
                                 unavailable
                             />
                         </div>
                         <div className="flex flex-col gap-8 lg:flex-row">
                             <Stats
                                 label="Tallying Score"
-                                tooltip="Coming soon"
+                                tooltip="A score generated by validators to evaluate each other’s performance throughout Sui’s regular operations."
                                 unavailable
                             />
                             <Stats
                                 label="Last Narwhal Round"
-                                tooltip="Coming soon"
+                                tooltip="Latest Narwhal round for this epoch."
                                 unavailable
                             />
                         </div>
