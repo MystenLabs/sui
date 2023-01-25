@@ -12,6 +12,8 @@ import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats } from '~/ui/Stats';
 import { Network } from '~/utils/api/rpcSetting';
+import { useFeature } from '@growthbook/growthbook-react';
+import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 const numberFormatter = new Intl.NumberFormat(undefined);
 
@@ -41,7 +43,7 @@ const SUPPORTED_NETWORKS: string[] = [Network.LOCAL, Network.TESTNET];
 
 export function HomeMetrics() {
     const [network] = useNetwork();
-    const indexerSupported = SUPPORTED_NETWORKS.includes(network);
+    const enabled = useFeature(GROWTHBOOK_FEATURES.EXPLORER_METRICS).on;
 
     const request = useAppsBackend();
     const { data: systemData } = useGetSystemObject();
@@ -49,16 +51,16 @@ export function HomeMetrics() {
     const { data: countsData } = useQuery(
         ['home', 'counts'],
         () => request<CountsResponse>('counts', { network }),
-        { enabled: indexerSupported }
+        { enabled }
     );
 
     const { data: tpsData } = useQuery(
         ['home', 'tps-checkpoints'],
         () => request<TPSCheckpointResponse>('tps-checkpoints', { network }),
-        { enabled: indexerSupported }
+        { enabled }
     );
 
-    if (!indexerSupported) return null;
+    if (!enabled) return null;
 
     return (
         <Card spacing="lg">
