@@ -34,8 +34,9 @@ export function processValidators(set: ActiveValidator[], totalStake: bigint) {
             stake: av.fields.stake_amount,
             stakePercent: getStakedPercent(av.fields.stake_amount, totalStake),
             logo:
-                typeof av.fields.metadata.fields.image_url === 'string' &&
-                av.fields.metadata.fields.image_url,
+                typeof av.fields.metadata.fields.image_url === 'string'
+                    ? av.fields.metadata.fields.image_url
+                    : null,
         };
     });
 }
