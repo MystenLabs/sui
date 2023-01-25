@@ -15,6 +15,7 @@ pub struct QuorumDriverMetrics {
     pub(crate) total_enqueued: IntCounter,
     pub(crate) total_ok_responses: IntCounter,
     pub(crate) total_err_responses_by_err: IntCounterVec,
+    pub(crate) total_validator_returned_err_by_err: IntCounterVec,
     pub(crate) attempt_times_ok_response: Histogram,
 
     // TODO: add histogram of attempt that tx succeeds
@@ -51,7 +52,14 @@ impl QuorumDriverMetrics {
             .unwrap(),
             total_err_responses_by_err: register_int_counter_vec_with_registry!(
                 "quorum_driver_total_err_responses_by_err",
-                "Total number of requests processed with Err responses group by error",
+                "Total number of requests returned with Err responses, grouped by error type",
+                &["error"],
+                registry,
+            )
+            .unwrap(),
+            total_validator_returned_err_by_err: register_int_counter_vec_with_registry!(
+                "quorum_driver_total_validator_returned_err_by_err",
+                "Total number of errors return from validators, grouped by error type",
                 &["error"],
                 registry,
             )
