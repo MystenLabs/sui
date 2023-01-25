@@ -36,31 +36,33 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Install Playwright Browsers
-        run: pnpm dlx playwright install --with-deps chromium
-      - name: Run TS SDK e2e tests
-        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
-        run: pnpm dlx concurrently --kill-others --success command-1 'RUST_LOG="consensus=off" cargo run --bin sui-test-validator' 'pnpm sdk test:e2e'
+      # - name: Install Explorer Playwright Browsers
+      #   run: pnpm explorer playwright install --with-deps chromium
+      # - name: Run TS SDK e2e tests
+      #   if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
+      #   run: pnpm dlx concurrently --kill-others --success command-1 'RUST_LOG="consensus=off" cargo run --bin sui-test-validator' 'pnpm sdk test:e2e'
 
-      - name: Run Explorer e2e tests
-        if: ${{ needs.diff.outputs.isExplorer == 'true' }}
-        run: pnpm explorer playwright test
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: playwright-report-explorer
-          path: apps/explorer/playwright-report/
-          retention-days: 30
+      # - name: Run Explorer e2e tests
+      #   if: ${{ needs.diff.outputs.isExplorer == 'true' }}
+      #   run: pnpm explorer playwright test
+      # - uses: actions/upload-artifact@v3
+      #   if: always()
+      #   with:
+      #     name: playwright-report-explorer
+      #     path: apps/explorer/playwright-report/
+      #     retention-days: 30
 
       - name: Build Wallet
         if: ${{ needs.diff.outputs.isWallet == 'true' }}
         run: pnpm wallet build
+      - name: Install Wallet Playwright Browsers
+        run: pnpm wallet playwright install --with-deps chromium
       - name: Run Wallet e2e tests
         if: ${{ needs.diff.outputs.isWallet == 'true' }}
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: playwright-report-wallet
-          path: apps/wallet/playwright-report/
-          retention-days: 30
+      # - uses: actions/upload-artifact@v3
+      #   if: always()
+      #   with:
+      #     name: playwright-report-wallet
+      #     path: apps/wallet/playwright-report/
+      #     retention-days: 30

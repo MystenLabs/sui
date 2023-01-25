@@ -32,7 +32,7 @@ async function init() {
     await thunkExtras.background.init(store.dispatch);
     await store.dispatch(initNetworkFromStorage()).unwrap();
 }
-
+//TEST
 function renderApp() {
     const rootDom = document.getElementById('root');
     if (!rootDom) {
