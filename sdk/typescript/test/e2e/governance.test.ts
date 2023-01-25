@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, expectTypeOf } from 'vitest';
-import { LocalTxnDataSerializer, RawSigner, DelegatedStake } from '../../src';
+import {
+  LocalTxnDataSerializer,
+  RawSigner,
+  DelegatedStake,
+  ObjectId,
+  normalizeSuiObjectId,
+} from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Governance API', () => {
@@ -20,6 +26,25 @@ describe('Governance API', () => {
     );
   });
 
+  it('test requestAddDelegation', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    let delcoins: ObjectId[] = [];
+
+    delcoins.push(normalizeSuiObjectId(coins[0].objectId));
+
+    console.log(delcoins);
+
+    const tx = {
+      coins: delcoins,
+      amount: '0.1',
+      validator: normalizeSuiObjectId('0x1'),
+      gasBudget: 10000,
+    };
+
+    const radd = await signer.requestAddDelegation(tx);
+  });
   it('test getDelegatedStakes', async () => {
     const stakes = await toolbox.provider.getDelegatedStakes(toolbox.address());
     expectTypeOf(stakes).toBeArray(DelegatedStake);
@@ -38,6 +63,6 @@ describe('Governance API', () => {
   });
   it('test getSuiSystemState', async () => {
     const systemState = await toolbox.provider.getSuiSystemState();
-    expect(systemState.chain_id).greaterThan(0);
+    expect(systemState.epoch).greaterThan(0);
   });
 });

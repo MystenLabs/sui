@@ -38,7 +38,7 @@ import {
   SuiSystemState,
   CommitteeInfoResponse,
   DelegatedStake,
-  ValidatorMetaData
+  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,

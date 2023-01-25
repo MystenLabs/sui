@@ -22,7 +22,8 @@ import {
   deserializeTransactionBytesToTransactionData,
   ADD_DELEGATION_MUL_COIN_FUN_NAME,
   ADD_DELEGATION_LOCKED_COIN_FUN_NAME,
-  SharedObjectRef,
+  normalizeSuiObjectId,
+  // CallArg,
   // SUI_SYSTEM_STATE_OBJECT_ID,
   normalizeSuiObjectId,
   bcsForVersion,
@@ -48,7 +49,6 @@ import {
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
 import { TypeTagSerializer } from './type-tag-serializer';
-import { object } from 'superstruct';
 
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
@@ -254,6 +254,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         } else {
           fun = ADD_DELEGATION_LOCKED_COIN_FUN_NAME;
         }
+        const suiSystemState = normalizeSuiObjectId('0x5');
+        console.log(fun);
         return this.constructTransactionData(signerAddress, {
           kind: 'moveCall',
           data: {
@@ -262,8 +264,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
             function: fun,
             typeArguments: [],
             arguments: [
+              suiSystemState,
               requestAddDelegation.coins,
-              requestAddDelegation.amount!,
+              requestAddDelegation.amount,
               requestAddDelegation.validator,
             ],
             gasPayment: requestAddDelegation.gasPayment,
