@@ -37,7 +37,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Playwright Browsers
-        run: pnpm dlx playwright install --with-deps chromium
+        run: pnpm explorer playwright install --with-deps chromium
+
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
         run: pnpm dlx concurrently --kill-others --success command-1 'RUST_LOG="consensus=off" cargo run --bin sui-test-validator' 'pnpm sdk test:e2e'
