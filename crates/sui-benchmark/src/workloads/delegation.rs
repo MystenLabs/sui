@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::{Workload, WorkloadType, MAX_GAS_FOR_TESTING};
 use crate::workloads::{GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
@@ -20,6 +21,7 @@ pub struct DelegationTestPayload {
     validator: SuiAddress,
     sender: SuiAddress,
     keypair: Arc<AccountKeyPair>,
+    system_state_observer: Arc<SystemStateObserver>,
 }
 
 impl Payload for DelegationTestPayload {
@@ -34,6 +36,7 @@ impl Payload for DelegationTestPayload {
                 self.validator,
                 self.sender,
                 &self.keypair,
+                Some(*self.system_state_observer.reference_gas_price.borrow()),
             ),
             None => make_transfer_sui_transaction(
                 self.gas,
@@ -41,6 +44,7 @@ impl Payload for DelegationTestPayload {
                 Some(1),
                 self.sender,
                 &self.keypair,
+                Some(*self.system_state_observer.reference_gas_price.borrow()),
             ),
         }
     }
@@ -61,6 +65,7 @@ impl Payload for DelegationTestPayload {
             validator: self.validator,
             sender: self.sender,
             keypair: self.keypair,
+            system_state_observer: self.system_state_observer,
         })
     }
 
@@ -96,13 +101,20 @@ impl DelegationWorkload {
 
 #[async_trait]
 impl Workload<dyn Payload> for DelegationWorkload {
-    async fn init(&mut self, _: WorkloadInitGas, _: Arc<dyn ValidatorProxy + Sync + Send>) {}
+    async fn init(
+        &mut self,
+        _: WorkloadInitGas,
+        _: Arc<dyn ValidatorProxy + Sync + Send>,
+        _system_state_observer: Arc<SystemStateObserver>,
+    ) {
+    }
 
     async fn make_test_payloads(
         &self,
         _num_payloads: u64,
         gas_config: WorkloadPayloadGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let validators = proxy
             .get_validators()
@@ -120,6 +132,7 @@ impl Workload<dyn Payload> for DelegationWorkload {
                     validator,
                     sender: owner.get_owner_address().unwrap(),
                     keypair,
+                    system_state_observer: system_state_observer.clone(),
                 })
             })
             .map(|b| Box::<dyn Payload>::from(b))

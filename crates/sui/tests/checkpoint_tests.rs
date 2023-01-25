@@ -31,6 +31,7 @@ async fn basic_checkpoints_integration_test() {
         None,
         sender,
         &keypair,
+        None,
     );
     let net = AuthorityAggregator::new_from_local_system_state(
         &authorities[0].with(|node| node.state().db()),

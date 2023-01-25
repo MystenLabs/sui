@@ -43,7 +43,7 @@ use strum::IntoStaticStr;
 use tap::Pipe;
 use tracing::debug;
 
-const DUMMY_GAS_PRICE: u64 = 1;
+pub const DUMMY_GAS_PRICE: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 3] = [
     (

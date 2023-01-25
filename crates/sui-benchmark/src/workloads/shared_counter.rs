@@ -4,6 +4,7 @@
 use super::workload::{Workload, WorkloadType};
 use crate::workloads::Gas;
 
+use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::MAX_GAS_FOR_TESTING;
 use crate::workloads::{GasCoinConfig, WorkloadInitGas, WorkloadPayloadGas};
@@ -29,6 +30,7 @@ pub struct SharedCounterTestPayload {
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     gas: Gas,
+    system_state_observer: Arc<SystemStateObserver>,
 }
 
 impl Payload for SharedCounterTestPayload {
@@ -43,6 +45,7 @@ impl Payload for SharedCounterTestPayload {
             counter_id: self.counter_id,
             counter_initial_shared_version: self.counter_initial_shared_version,
             gas: (new_gas, self.gas.1, self.gas.2),
+            system_state_observer: self.system_state_observer,
         })
     }
     fn make_transaction(&self) -> VerifiedTransaction {
@@ -56,6 +59,7 @@ impl Payload for SharedCounterTestPayload {
                 .get_owner_address()
                 .expect("Cannot convert owner to address"),
             &self.gas.2,
+            Some(*self.system_state_observer.reference_gas_price.borrow()),
         )
     }
     fn get_object_id(&self) -> ObjectID {
@@ -123,10 +127,12 @@ pub async fn publish_basics_package(
     proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: u64,
 ) -> ObjectRef {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    let transaction = create_publish_move_package_transaction(gas, path, sender, keypair);
+    let transaction =
+        create_publish_move_package_transaction(gas, path, sender, keypair, Some(gas_price));
     let (_, effects) = proxy.execute_transaction(transaction.into()).await.unwrap();
     parse_package_ref(&effects.created()).unwrap()
 }
@@ -137,10 +143,12 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         &mut self,
         init_config: WorkloadInitGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) {
         if self.basics_package_id.is_some() {
             return;
         }
+        let gas_price = *system_state_observer.reference_gas_price.borrow();
         let (head, tail) = init_config
             .shared_counter_init_gas
             .split_first()
@@ -156,6 +164,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     .get_owner_address()
                     .expect("Could not get sui address from owner"),
                 &head.2,
+                gas_price,
             )
             .await
             .0,
@@ -173,6 +182,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     .get_owner_address()
                     .expect("Could not get sui address from owner"),
                 keypair,
+                Some(gas_price),
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
@@ -190,6 +200,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         _num_payloads: u64,
         payload_config: WorkloadPayloadGas,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         // create counters using gas objects we created above
         info!("Creating shared txn payloads, hang tight..");
@@ -205,6 +216,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 counter_id: counter_ref.0,
                 counter_initial_shared_version: counter_ref.1,
                 gas: g,
+                system_state_observer: system_state_observer.clone(),
             }));
         }
         let payloads: Vec<Box<dyn Payload>> = shared_payloads
