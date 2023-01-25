@@ -76,7 +76,7 @@ export function HomeMetrics() {
                     <Stats label="Epoch" tooltip="The current epoch">
                         {systemData?.epoch}
                     </Stats>
-                    <Stats label="Checkpoint" tooltip="The current checkpoint">
+                    <Stats label="Checkpoint" tooltip="The current checkpoint (updates every one min)">
                         {tpsData?.checkpoint}
                     </Stats>
                 </MetricGroup>
