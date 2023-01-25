@@ -1,7 +1,7 @@
 module cw::policy {
     // Part 1: imports
     use sui::object::{Self, ID, UID};
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::{TxContext};
     use std::vector::{length, push_back, borrow, pop_back, destroy_empty};
 
     /// A module for defining Clack-Wilson Security policies and access control rules on-chain
@@ -98,44 +98,6 @@ module cw::policy {
         }
     }
 
-    // This is a leaf of an Authorization policy that requires a signature from a sender
-
-    struct AuthSignerApproval<phantom T> has key, store {
-        id : UID,
-        addr: address,
-    }
-
-
-    public fun drop_signer_approval<T>(auth: AuthSignerApproval<T>) {
-        let AuthSignerApproval { id, addr: _ } = auth;
-        object::delete(id);
-    }
-
-    public fun setup_signer_approval<T> (addr: address, ctx: &mut TxContext) : (AuthSignerApproval<T>, AuthSetupOutput<T>) {
-        let id = object::new(ctx);
-        let auth_object = AuthSignerApproval<T> { id, addr, };
-        let for_auth_id = object::id(&auth_object);
-        let auth_output = AuthSetupOutput<T> { for_auth_id, };
-        
-        (auth_object, auth_output)
-    }
-
-    public fun authorize_signer_approval<T>(auth: &AuthSignerApproval<T>, for_operation_id: ID, ctx: &mut TxContext) :  AuthOutput<T>{
-        let sender = &tx_context::sender(ctx);
-        inner_authorize_signer_approval(sender, auth, for_operation_id, ctx)
-    }
-
-    fun inner_authorize_signer_approval<T>(sender: &address, auth: &AuthSignerApproval<T>, for_operation_id: ID, ctx: &mut TxContext) :  AuthOutput<T> {
-        assert!(sender ==  &auth.addr, 0);
-
-        let id = object::new(ctx);
-        let valid_id = object::id(auth);
-        
-        AuthOutput {
-            id, valid_id, for_operation_id,
-        }
-    }
-
     // A K out of N authorization policy that requires a threshold k to activate.
     // An AND policy has a threshold of N out of N.
     // An OR policy has a threshold of 1 out of N.
@@ -150,6 +112,20 @@ module cw::policy {
         object::delete(id);
     }
 
+    /// Specialize the threshold policy to represent the OR of policies
+    public fun setup_or<T>(inputs : vector<AuthSetupOutput<T>>, ctx: &mut TxContext) : (AuthThreshold<T>, AuthSetupOutput<T>)
+    {
+        setup_threshold(inputs, 1, ctx)
+    }
+
+    /// Specialize the threshold policy to represent the AND of policies. 
+    public fun setup_and<T>(inputs : vector<AuthSetupOutput<T>>, ctx: &mut TxContext) : (AuthThreshold<T>, AuthSetupOutput<T>)
+    {
+        let k = length(&inputs);
+        setup_threshold(inputs, k, ctx)
+    }
+
+    /// Setup a threshold policy with a number of inputs and a threshold k that need to be satisfied for the policy to be satisfied
     public fun setup_threshold<T>(inputs : vector<AuthSetupOutput<T>>, k:u64, ctx: &mut TxContext) : (AuthThreshold<T>, AuthSetupOutput<T>)
     {
         // Check bounds: 1 <= k <= N
@@ -351,8 +327,6 @@ module cw::policy {
         assert!(cap.controlled_object_id == object::id(obj), 0);
         &mut obj.object
     }
-
-
 
     struct AuthorizedOperation<phantom O, CH : copy+drop, P: drop> {
         op: PolicyOperation<CH, P>,
