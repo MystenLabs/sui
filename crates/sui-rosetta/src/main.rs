@@ -20,7 +20,7 @@ use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KE
 use sui_node::{metrics, SuiNode};
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
 
@@ -175,7 +175,11 @@ impl RosettaServerCommand {
 
 async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
     loop {
-        match SuiClient::new(&rpc_address, None, None).await {
+        match SuiClientBuilder::default()
+            .max_concurrent_requests(usize::MAX)
+            .build(&rpc_address)
+            .await
+        {
             Ok(client) => return client,
             Err(e) => {
                 warn!("Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
