@@ -1,7 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress } from "@mysten/sui.js"
+import { SuiAddress, SUI_TYPE_ARG } from "@mysten/sui.js"
+import { config } from "../config";
+
+export const PKG = config.VITE_PKG;
+
+/**
+ * Generic Coin type.
+ * The T can be anything, including the SUI Coin.
+ */
+export const GENERIC_COIN = '0x2::coin::Coin<T>';
+
+/**
+ * Just a Coin.
+ */
+export type Coin = {
+    id: SuiAddress;
+    value: bigint;
+};
+
+/**
+ * Generic Coin with a `0x2::sui::SUI` type parameter.
+ */
+export const SUI_COIN = `0x2::coin::Coin<${SUI_TYPE_ARG}>`
 
 /**
  * Goal enum defined in the Assignment
@@ -28,6 +50,8 @@ export type Assignment = {
     epoch: bigint;
 };
 
+export const ASSIGNMENT = `${PKG}::frenemies::Assignment`;
+
 /**
  * Scorecard object.
  * Follows the Move definition.
@@ -47,6 +71,8 @@ export type Scorecard = {
     epoch: number;
 };
 
+export const SCORECARD = `${PKG}::frenemies::Scorecard`;
+
 /**
  * An event emitted when Scorecard was updated.
  * Contains all necessary information to build a table.
@@ -61,6 +87,8 @@ export type ScorecardUpdatedEvent = {
     /** Score for the epoch. 0 if the player was not successful */
     epochScore: number;
 };
+
+export const SCORECARD_UPDATED = `${PKG}::frenemies::ScorecardUpdatedEvent`;
 
 /**
  * Leaderboard object holding information about top X (1000) participants.
@@ -77,6 +105,8 @@ export type Leaderboard = {
     /** Epoch where the competition began; */
     startEpoch: bigint;
 };
+
+export const LEADERBOARD = `${PKG}::leaderboard::Leaderboard`;
 
 /**
  * A single Score record in the Leaderboard.
@@ -101,6 +131,8 @@ export type SuiSystem = {
     /** Contains information about current validators */
     validators: ValidatorSet;
 };
+
+export const SUI_SYSTEM = "0x2::sui_system::SuiSystem";
 
 export type ValidatorSet = {
     /** Total amount of stake from all active validators (not including delegation), at the beginning of the epoch. */
@@ -223,3 +255,28 @@ export type StakedSui = {
      */
     suiTokenLock: { some: bigint } | { none: true }
 }
+
+export const STAKED_SUI = `0x2::staking_pool::StakedSui`;
+
+/**
+ * A self-custodial delegation object, serving as evidence that the
+ * delegator has delegated to a staking pool.
+ *
+ * Matches a StakedSui object via `stakedSuiId`.
+ */
+export type Delegation = {
+    id: SuiAddress,
+    /** ID of the StakedSui object */
+    stakedSuiId: SuiAddress,
+    /**
+     * The pool tokens representing the amount of rewards the delegator
+     * can get back when they withdraw from the pool.
+     *
+     * Move type is: `Balance<DelegationToken>`
+     */
+    poolTokens: bigint,
+    /** Number of SUI tokens staked originally */
+    principalSuiAmount: bigint
+}
+
+export const DELEGATION = `0x2::staking_pool::Delegation`;

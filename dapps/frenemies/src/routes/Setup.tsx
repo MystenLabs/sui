@@ -3,11 +3,12 @@
 
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
-import { FormEvent, useEffect, useId, useState } from "react";
+import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
 import { useScorecard } from "../network/queries/scorecard";
+import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 
 export function Setup() {
   const id = useId();
@@ -24,7 +25,7 @@ export function Setup() {
           packageObjectId: config.VITE_PKG,
           module: "frenemies",
           function: "register",
-          arguments: [username, config.VITE_REGISTRY, "0x5"],
+          arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
           typeArguments: [],
           gasBudget: 10000,
         },

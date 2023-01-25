@@ -37,11 +37,8 @@ export function Table({ data, scorecard, leaderboard }: Props) {
       </thead>
       <tbody>
         {data.map((evt) => {
-
           const round = evt.assignment.epoch - leaderboard.startEpoch;
           const goal = evt.assignment.goal;
-
-
           return (
             <tr className="border-t border-white/20">
               <Cell>{round.toString()}</Cell>

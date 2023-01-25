@@ -4,14 +4,8 @@
 // import {  }
 import provider from "../provider";
 import { useQuery } from "@tanstack/react-query";
-import { config } from "../../config";
 import { bcs } from "@mysten/sui.js";
-import { ScorecardUpdatedEvent } from "../types";
-
-/**
- * Event signature that we're looking for.
- */
-const EVT_TYPE = `${config.VITE_PKG}::frenemies::ScorecardUpdateEvent`;
+import { ScorecardUpdatedEvent, SCORECARD_UPDATED } from "../types";
 
 /**
  * Get Scorecard activity by fetching all txs involving a Scorecard object.
@@ -21,7 +15,7 @@ const EVT_TYPE = `${config.VITE_PKG}::frenemies::ScorecardUpdateEvent`;
  * @param scorecardId
  * @returns
  */
-export function useScorecardHistory(scorecardId: string | null | undefined) {
+export function useScorecardHistory(scorecardId?: string | null) {
   return useQuery(["scorecard-history", scorecardId], async () => {
     if (!scorecardId) {
       return null;
@@ -32,9 +26,12 @@ export function useScorecardHistory(scorecardId: string | null | undefined) {
 
     return txs
       .reduce((acc: any[], tx) => acc.concat(tx.effects.events || []), [])
-      .filter((evt) => "moveEvent" in evt && evt.moveEvent.type == EVT_TYPE)
+      .filter((evt) => "moveEvent" in evt && evt.moveEvent.type == SCORECARD_UPDATED)
       .map<ScorecardUpdatedEvent>(({ moveEvent }) =>
         bcs.de("frenemies::ScorecardUpdateEvent", moveEvent.bcs, "base64")
       );
+  },
+  {
+    enabled: !!scorecardId
   });
 }
