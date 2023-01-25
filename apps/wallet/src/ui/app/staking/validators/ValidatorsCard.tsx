@@ -119,13 +119,13 @@ export function ValidatorsCard() {
                                 <CardItem title="Your Stake">
                                     <StakeAmount
                                         balance={totalActivePendingStake}
-                                        variant="heading4"
+                                        variant="heading5"
                                     />
                                 </CardItem>
                                 <CardItem title="Earned">
                                     <StakeAmount
                                         balance={totalEarnToken}
-                                        variant="heading4"
+                                        variant="heading5"
                                         isEarnedRewards
                                     />
                                 </CardItem>

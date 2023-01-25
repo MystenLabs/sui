@@ -9,9 +9,10 @@ import {
 } from '@mysten/sui.js';
 
 export function validatorsFields(
-    data: GetObjectDataResponse
+    data?: GetObjectDataResponse
 ): ValidatorsFields | null {
-    return is(data.details, SuiObject) &&
+    return data &&
+        is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
         ? (data.details.data.fields as ValidatorsFields)
         : null;

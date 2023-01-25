@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
+import { validatorsFields } from '../validatorsFields';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -44,12 +45,7 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData =
-        validators &&
-        is(validators.details, SuiObject) &&
-        validators.details.data.dataType === 'moveObject'
-            ? (validators.details.data.fields as ValidatorsFields)
-            : null;
+    const validatorsData = validatorsFields(validators);
 
     const delegationData = useMemo(() => {
         if (!allDelegation) return null;

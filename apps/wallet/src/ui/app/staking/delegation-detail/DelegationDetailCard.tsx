@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
@@ -10,6 +9,7 @@ import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
+import { validatorsFields } from '../validatorsFields';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
@@ -45,12 +45,7 @@ export function DelegationDetailCard({
         isError,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData =
-        validators &&
-        is(validators.details, SuiObject) &&
-        validators.details.data.dataType === 'moveObject'
-            ? (validators.details.data.fields as ValidatorsFields)
-            : null;
+    const validatorsData = validatorsFields(validators);
 
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
@@ -133,14 +128,14 @@ export function DelegationDetailCard({
                                         <CardItem title="Your Stake">
                                             <StakeAmount
                                                 balance={totalStake}
-                                                variant="heading4"
+                                                variant="heading5"
                                             />
                                         </CardItem>
 
                                         <CardItem title="Earned">
                                             <StakeAmount
                                                 balance={suiEarned}
-                                                variant="heading4"
+                                                variant="heading5"
                                                 isEarnedRewards
                                             />
                                         </CardItem>
