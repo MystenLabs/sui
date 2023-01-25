@@ -43,6 +43,7 @@ pub mod object;
 pub mod query;
 pub mod quorum_driver_types;
 pub mod signature_seed;
+pub mod stake_accumulator;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
