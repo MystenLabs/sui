@@ -38,7 +38,7 @@ export function ValidatorStats({
         +validatorData.fields.delegation_staking_pool.fields.sui_balance;
     const selfStake = +validatorData.fields.stake_amount;
     const totalStake = selfStake + delegatedStake;
-    const commission = +validatorData.fields.commission_rate * 100;
+    const commission = +validatorData.fields.commission_rate / 100;
     const rewardsPoolBalance =
         +validatorData.fields.delegation_staking_pool.fields.rewards_pool;
 
