@@ -11,7 +11,8 @@ export const CoinStruct = object({
     digest: TransactionDigest,
     balance: number(),
     lockedUntilEpoch: nullable(number()),
-    previousTransaction: TransactionDigest,
+    // TODO: remove optional when it is supported from all deployed networks
+    previousTransaction: optional(TransactionDigest),
 });
 
   
