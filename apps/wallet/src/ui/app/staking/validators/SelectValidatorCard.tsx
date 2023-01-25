@@ -46,6 +46,12 @@ export function SelectValidatorCard() {
                 name: getName(validator.fields.metadata.fields.name),
                 address: validator.fields.metadata.fields.sui_address,
                 apy: calculateAPY(validator, +validatorsData.epoch),
+                logo:
+                    validator.fields.metadata.fields.image_url &&
+                    typeof validator.fields.metadata.fields.image_url ===
+                        'string'
+                        ? validator.fields.metadata.fields.image_url
+                        : null,
             }))
             .sort((a, b) => {
                 if (sortKey === 'name') {
@@ -162,7 +168,7 @@ export function SelectValidatorCard() {
                 </div>
                 <div className="flex items-start flex-col w-full mt-1 flex-1">
                     {validatorsData &&
-                        validatorList.map(({ name, address, apy }) => (
+                        validatorList.map(({ name, address, apy, logo }) => (
                             <div
                                 className="cursor-pointer w-full relative"
                                 key={address}
@@ -172,6 +178,7 @@ export function SelectValidatorCard() {
                                     selected={selectedValidator === address}
                                     validatorAddress={address}
                                     validatorName={name}
+                                    logo={logo}
                                     apy={apy}
                                 />
                             </div>

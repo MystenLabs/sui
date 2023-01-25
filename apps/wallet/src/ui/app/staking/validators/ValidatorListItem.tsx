@@ -21,11 +21,13 @@ type ValidatorListItemProp = {
     apy: number;
     validatorName: string;
     validatorAddress: string;
+    logo: string | null;
 };
 export function ValidatorListItem({
     selected,
     validatorName,
     apy,
+    logo,
     validatorAddress,
 }: ValidatorListItemProp) {
     const truncatedAddress = useMiddleEllipsis(
@@ -33,8 +35,6 @@ export function ValidatorListItem({
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
-
-    const logo = null;
 
     return (
         <AnimatePresence>
