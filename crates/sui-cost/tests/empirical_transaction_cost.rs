@@ -225,6 +225,7 @@ async fn create_txes(
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
+        mutable: true,
     };
 
     ret.insert(CommonTransactionCosts::SharedCounterCreate, transaction);

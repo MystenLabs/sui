@@ -85,6 +85,7 @@ impl TestCallArg {
             } => ObjectArg::SharedObject {
                 id: object_id,
                 initial_shared_version: *initial_shared_version,
+                mutable: true,
             },
         }
     }
@@ -198,6 +199,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
             CallArg::Object(ObjectArg::SharedObject {
                 id: shared_object_id,
                 initial_shared_version,
+                mutable: true,
             }),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
         ],
@@ -3837,6 +3839,7 @@ async fn make_test_transaction(
             CallArg::Object(ObjectArg::SharedObject {
                 id: shared_object_id,
                 initial_shared_version: shared_object_initial_shared_version,
+                mutable: true,
             }),
             CallArg::Pure(arg_value.to_le_bytes().to_vec()),
         ],
@@ -4091,6 +4094,7 @@ async fn test_blocked_move_calls() {
             vec![CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
             })],
             MAX_GAS,
         ),

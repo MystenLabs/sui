@@ -119,6 +119,7 @@ impl SuiValue {
             } => Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
+                mutable: true,
             }),
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 let obj_ref = obj.compute_object_reference();

@@ -19,7 +19,6 @@ use serde_with::Bytes;
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
-use crate::messages::InputObjectKind;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -480,21 +479,6 @@ impl Object {
 
     pub fn digest(&self) -> ObjectDigest {
         ObjectDigest::new(sha3_hash(self))
-    }
-
-    pub fn input_object_kind(&self) -> InputObjectKind {
-        match &self.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => InputObjectKind::SharedMoveObject {
-                id: self.id(),
-                initial_shared_version: *initial_shared_version,
-            },
-            Owner::ObjectOwner(_) | Owner::AddressOwner(_) | Owner::Immutable => {
-                InputObjectKind::ImmOrOwnedMoveObject(self.compute_object_reference())
-            }
-        }
     }
 
     /// Approximate size of the object in bytes. This is used for gas metering.

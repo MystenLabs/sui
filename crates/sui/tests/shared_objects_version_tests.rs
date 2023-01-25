@@ -245,6 +245,7 @@ impl TestEnvironment {
                 vec![CallArg::Object(ObjectArg::SharedObject {
                     id: counter,
                     initial_shared_version,
+                    mutable: true,
                 })],
             )
             .await?;

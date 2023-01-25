@@ -45,6 +45,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
     let shared_object_arg = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
+        mutable: true,
     };
     for gas_object in test_gas_objects() {
         // Make a sample transaction.

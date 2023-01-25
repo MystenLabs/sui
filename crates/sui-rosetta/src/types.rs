@@ -896,6 +896,7 @@ impl InternalOperation {
                         CallArg::Object(ObjectArg::SharedObject {
                             id: SUI_SYSTEM_STATE_OBJECT_ID,
                             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                            mutable: true,
                         }),
                         CallArg::ObjVec(
                             coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),

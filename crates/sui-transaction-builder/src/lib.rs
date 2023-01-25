@@ -331,6 +331,8 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
+                // todo(RWLocks) - do we want to parametrise this?
+                mutable: true, // using mutable reference by default here.
             },
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
@@ -628,6 +630,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }),
                 CallArg::ObjVec(obj_vec),
                 CallArg::Pure(bcs::to_bytes(&amount)?),
@@ -661,6 +664,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
@@ -694,6 +698,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(delegation)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
