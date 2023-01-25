@@ -202,7 +202,7 @@ function StakingCard() {
             if (!validatorAddress || !amount || !tokenTypeArg) {
                 throw new Error('Failed, missing required field');
             }
-            const response = Coin.stakeCoin(
+            const response = await Coin.stakeCoin(
                 signer,
                 allCoinsForStake,
                 allSuiCoins,
