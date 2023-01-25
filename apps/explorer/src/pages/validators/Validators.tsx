@@ -42,8 +42,10 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 number: index + 1,
                 name: validatorName,
                 stake:
-                    +validator.fields.delegation_staking_pool.fields.sui_balance + +validator.fields.delegation_staking_pool.fields
-                    .delegation_token_supply.fields.value,
+                    +validator.fields.delegation_staking_pool.fields
+                        .sui_balance +
+                    +validator.fields.delegation_staking_pool.fields
+                        .delegation_token_supply.fields.value,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate,
                 address: validator.fields.metadata.fields.sui_address,
@@ -159,8 +161,9 @@ function ValidatorPageResult() {
         return validators.reduce(
             (acc, cur) =>
                 acc +
-                +cur.fields.delegation_staking_pool.fields.sui_balance + +cur.fields.delegation_staking_pool.fields
-                .delegation_token_supply.fields.value,
+                +cur.fields.delegation_staking_pool.fields.sui_balance +
+                +cur.fields.delegation_staking_pool.fields
+                    .delegation_token_supply.fields.value,
             0
         );
     }, [validatorsData]);
