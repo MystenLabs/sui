@@ -733,10 +733,11 @@ fn test_change_epoch_transaction() {
     assert!(tx.contains_shared_object());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
-        (
-            &SUI_SYSTEM_STATE_OBJECT_ID,
-            &SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION
-        )
+        SharedInputObject {
+            id: SUI_SYSTEM_STATE_OBJECT_ID,
+            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            mutable: true,
+        }
     );
     assert!(tx.is_system_tx());
     assert_eq!(
