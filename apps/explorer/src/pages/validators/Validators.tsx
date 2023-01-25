@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    is,
-    SuiObject,
-    type ActiveValidator,
-    type ValidatorsFields,
-} from '@mysten/sui.js';
+import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -14,7 +9,10 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
-import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
+import {
+    VALIDATORS_OBJECT_ID,
+    type ActiveValidator,
+} from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -42,6 +40,11 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
             +validator.fields.delegation_staking_pool.fields.sui_balance;
             const selfStake = +validator.fields.stake_amount;
             const totalStake = selfStake + delegatedStake;
+            const img =
+                validator.fields.metadata.fields.image_url &&
+                typeof validator.fields.metadata.fields.image_url === 'string'
+                    ? validator.fields.metadata.fields.image_url
+                    : null;
             return {
                 number: index + 1,
                 name: {
@@ -51,6 +54,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 stake:  totalStake,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate / 100,
+                img: img,
                 address: validator.fields.metadata.fields.sui_address,
                 lastEpochReward:
                     validator.fields.delegation_staking_pool.fields
