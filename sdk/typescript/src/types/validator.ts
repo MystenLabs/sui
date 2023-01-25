@@ -122,6 +122,9 @@ export const ValidatorReportRecords = object({
 export const NextEpochValidatorFields = object({
   consensus_address: array(number()),
   name: union([string(), array(number())]),
+  description: optional(union([string(), array(number())])),
+  image_url: optional(union([string(), array(number())])),
+  project_url: optional(union([string(), array(number())])),
   net_address: array(number()),
   network_pubkey_bytes: array(number()),
   next_epoch_commission_rate: string(),

@@ -28,7 +28,7 @@ import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
 
-const ValidatorMap = lazy(() => import('../../components/node-map'));
+const NodeMap = lazy(() => import('../../components/node-map'));
 
 function validatorsTableData(validators: ActiveValidator[], epoch: number) {
     return {
@@ -38,7 +38,10 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
             );
             return {
                 number: index + 1,
-                name: validatorName,
+                name: {
+                    name: validatorName,
+                    logo: validator.fields.metadata.fields.image_url,
+                },
                 stake:
                     +validator.fields.delegation_staking_pool.fields
                         .sui_balance + +validator.fields.stake_amount,
@@ -65,7 +68,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 accessorKey: 'name',
                 enableSorting: true,
                 cell: (props: any) => {
-                    const name = props.getValue();
+                    const { name, logo } = props.getValue();
                     return (
                         <Link
                             to={`/validator/${encodeURIComponent(
@@ -74,7 +77,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                         >
                             <div className="flex items-center gap-2.5">
                                 <ImageIcon
-                                    src={null}
+                                    src={logo}
                                     size="sm"
                                     label={name}
                                     fallback={name}
@@ -258,13 +261,7 @@ function ValidatorPageResult() {
                                     tooltip="Average APY"
                                     unavailable={averageAPY <= 0}
                                 >
-                                    <Heading
-                                        as="h3"
-                                        variant="heading2/semibold"
-                                        color="steel-darker"
-                                    >
-                                        {averageAPY}%
-                                    </Heading>
+                                    {averageAPY}%
                                 </Stats>
                             </div>
                         </div>
@@ -273,7 +270,7 @@ function ValidatorPageResult() {
 
                 <ErrorBoundary>
                     <Suspense fallback={null}>
-                        <ValidatorMap />
+                        <NodeMap minHeight={230} />
                     </Suspense>
                 </ErrorBoundary>
             </div>

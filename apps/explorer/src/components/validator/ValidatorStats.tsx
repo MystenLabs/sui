@@ -66,13 +66,7 @@ export function ValidatorStats({
                             tooltip="Coming soon"
                             unavailable={apy <= 0}
                         >
-                            <Heading
-                                as="h3"
-                                variant="heading2/semibold"
-                                color="steel-darker"
-                            >
-                                {apy}%
-                            </Heading>
+                            {apy}%
                         </Stats>
                         <Stats label="Total Staked" tooltip="Coming soon">
                             <DelegationAmount amount={totalStake} isStats />
@@ -86,13 +80,7 @@ export function ValidatorStats({
                         />
 
                         <Stats label="Delegated Staked" tooltip="Coming soon">
-                            <Heading
-                                as="h3"
-                                variant="heading3/semibold"
-                                color="steel-darker"
-                            >
-                                {delegatedStakePercentage}%
-                            </Heading>
+                            {delegatedStakePercentage}%
                         </Stats>
                         <Stats
                             label="Self Staked"

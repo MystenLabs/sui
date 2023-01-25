@@ -42,8 +42,12 @@ function NodeStat({ title, children }: { title: string; children: ReactNode }) {
     );
 }
 
+interface Props {
+    minHeight: number;
+}
+
 // NOTE: This component is lazy imported, so it needs to be default exported:
-export default function NodeMap() {
+export default function NodeMap({ minHeight }: Props) {
     const [dateFilter, setDateFilter] = useDateFilterState('D');
 
     const { data, isLoading, isSuccess } = useQuery(
@@ -128,7 +132,8 @@ export default function NodeMap() {
         <Card spacing="none">
             <div
                 data-testid="node-map"
-                className="relative flex min-h-[320px] flex-col justify-end"
+                className="relative flex flex-col justify-end"
+                style={{ minHeight }}
             >
                 <div className="pointer-events-none relative z-10 flex flex-1 flex-col justify-between gap-8 p-6">
                     <Heading variant="heading4/semibold" color="steel-darker">
