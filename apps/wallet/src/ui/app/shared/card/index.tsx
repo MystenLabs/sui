@@ -8,8 +8,8 @@ import type { ReactNode } from 'react';
 const cardContentStyle = cva([], {
     variants: {
         variant: {
-            blue: 'bg-sui/10',
             white: 'bg-white',
+            gray: 'bg-gray-40',
         },
         padding: {
             none: 'p-0',
