@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import classnames from 'classnames/bind';
+import cl from 'classnames';
 
 import { API_ENV } from '../../ApiProvider';
 import { Text } from '../../shared/text';
 import Icon, { SuiIcons } from '_components/icon';
-
-import st from './Logo.module.scss';
-
-const cl = classnames.bind(st);
 
 const networkNames: Record<API_ENV, string> = {
     [API_ENV.local]: 'Local',
@@ -19,12 +15,11 @@ const networkNames: Record<API_ENV, string> = {
 };
 
 type LogoProps = {
-    size?: 'normal' | 'big' | 'bigger' | 'huge';
     networkName?: API_ENV;
     className?: string;
 };
 
-const Logo = ({ size = 'normal', networkName, className }: LogoProps) => {
+const Logo = ({ networkName, className }: LogoProps) => {
     return (
         <div
             className={cl(

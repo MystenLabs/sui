@@ -24,10 +24,7 @@ const WelcomePage = () => {
                     <div className="pt-6 rounded-20 bg-alice-blue shadow-wallet-content flex flex-col flex-nowrap items-center justify-center w-popup-width h-popup-height">
                         <BottomMenuLayout>
                             <Content className="flex flex-col flex-nowrap items-center p-7.5 pb-0">
-                                <Logo
-                                    size="normal"
-                                    className="text-hero mt-7.5"
-                                />
+                                <Logo className="text-hero mt-7.5" />
                                 <div className="mx-auto text-center mt-12">
                                     <Heading
                                         variant="heading2"
