@@ -16,6 +16,7 @@ import {
   SuiExecuteTransactionResponse,
   TransactionEffects,
   DevInspectResults,
+  bcsForVersion,
 } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
@@ -153,13 +154,15 @@ export abstract class SignerWithProvider implements Signer {
     intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
     const dataToSign = new Base64DataBuffer(intentMessage);
 
+    const bcs = bcsForVersion(version);
     const sig = await this.signData(dataToSign);
-    const data = deserializeTransactionBytesToTransactionData(txBytes);
+    const data = deserializeTransactionBytesToTransactionData(bcs, txBytes);
     return generateTransactionDigest(
       data,
       sig.signatureScheme,
       sig.signature,
       sig.pubKey,
+      bcs,
       version?.major == 0 && version?.minor < 18 ? 'base64' : 'base58',
       version?.major == 0 && version?.minor < 18 ? false : true
     );

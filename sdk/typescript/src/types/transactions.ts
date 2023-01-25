@@ -68,7 +68,8 @@ export const PayAllSui = object({
 export type PayAllSui = Infer<typeof PayAllSui>;
 
 export const MoveCall = object({
-  package: string(),
+  // TODO: Simplify once 0.24.0 lands
+  package: union([string(), SuiObjectRef]),
   module: string(),
   function: string(),
   typeArguments: optional(array(string())),

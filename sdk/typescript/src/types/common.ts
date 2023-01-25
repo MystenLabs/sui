@@ -11,7 +11,7 @@ import {
   unknown,
 } from 'superstruct';
 import { Base58DataBuffer } from '../serialization/base58';
-import { bcs, TransactionData } from './sui-bcs';
+import { TransactionData } from './sui-bcs';
 import {
   PublicKey,
   PublicKeyInitData,
@@ -22,6 +22,7 @@ import { sha256Hash } from '../cryptography/hash';
 import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
 import { Base64DataBuffer } from '../serialization/base64';
+import { BCS } from '@mysten/bcs';
 
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
@@ -134,6 +135,7 @@ export function generateTransactionDigest(
   signatureScheme: SignatureScheme,
   signature: string | Base64DataBuffer,
   publicKey: PublicKeyInitData | PublicKey,
+  bcs: BCS,
   serializationFmt: 'base64' | 'base58',
   excludeSig: boolean = false
 ): string {

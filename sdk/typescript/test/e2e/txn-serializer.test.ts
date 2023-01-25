@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
+    bcsForVersion,
   deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
@@ -57,7 +58,10 @@ describe('Transaction Serialization and deserialization', () => {
     expect(deserialized.kind).toEqual('moveCall');
 
     const deserializedTxnData =
-      deserializeTransactionBytesToTransactionData(localTxnBytes);
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+        localTxnBytes,
+      );
     const reserialized = await localSerializer.serializeTransactionData(
       deserializedTxnData
     );
