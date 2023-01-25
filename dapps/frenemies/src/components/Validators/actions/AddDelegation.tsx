@@ -59,10 +59,6 @@ export function AddDelegation({ validator, amount }: Props) {
         return null;
       }
 
-      console.log(BigInt(amount), max);
-      console.log(available.reduce((acc, c) => acc + c.data.value, 0n));
-      console.log('available amt sum is ^');
-
       if (gas == null) {
         return null;
       }

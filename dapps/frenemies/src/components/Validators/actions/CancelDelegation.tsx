@@ -4,10 +4,12 @@
 import { normalizeSuiAddress, SUI_FRAMEWORK_ADDRESS } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
+import provider from "../../../network/provider";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { ObjectData } from "../../../network/rawObject";
 import { Coin, StakedSui, SUI_COIN } from "../../../network/types";
+import { getGas } from "../../../utils/coins";
 
 interface Props {
   stake: ObjectData<StakedSui>;
@@ -23,6 +25,8 @@ interface CancelDelegationRequestTx {
   coins: ObjectData<Coin>[] | null | undefined;
 }
 
+const GAS_BUDGET = 10000n;
+
 /**
  * Request delegation withdrawal.
  * Can only be called if the Delegation and StakedSui objects are present.
@@ -34,7 +38,15 @@ export function CancelDelegation({ stake }: Props) {
   const withdrawDelegation = useMutation(
     ["unstake-validator"],
     async ({ stake, coins }: CancelDelegationRequestTx) => {
-      if (!coins || coins.length == 0) {
+      if (!coins || !coins.length) {
+        return null;
+      }
+
+      const gasPrice = await provider.getReferenceGasPrice();
+      const gasRequred = GAS_BUDGET * BigInt(gasPrice);
+      const { gas } = getGas(coins, gasRequred);
+
+      if (!gas) {
         return null;
       }
 
@@ -46,7 +58,7 @@ export function CancelDelegation({ stake }: Props) {
           function: "cancel_delegation_request",
           gasBudget: 10000,
           typeArguments: [],
-          gasPayment: normalizeSuiAddress(coins.pop()!.reference.objectId),
+          gasPayment: normalizeSuiAddress(gas.reference.objectId),
           arguments: [
             SUI_SYSTEM_ID,
             normalizeSuiAddress(stake.reference.objectId),
