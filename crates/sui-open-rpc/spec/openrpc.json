@@ -6776,28 +6776,13 @@
             }
           },
           "description": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "image_url": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "name": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "net_address": {
             "type": "array",
@@ -6836,12 +6821,7 @@
             "minimum": 0.0
           },
           "project_url": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+            "type": "string"
           },
           "proof_of_possession_bytes": {
             "type": "array",
