@@ -21,11 +21,11 @@ use sui_types::base_types::ObjectID;
 use sui_types::crypto::construct_tbls_randomness_object_message;
 use sui_types::object::{Object, ObjectRead};
 
-pub struct ThresholdBlsApiImpl {
+pub struct ThresholdBlsApi {
     state: Arc<AuthorityState>,
 }
 
-impl ThresholdBlsApiImpl {
+impl ThresholdBlsApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         Self { state }
     }
@@ -105,7 +105,7 @@ impl ThresholdBlsApiImpl {
 }
 
 #[async_trait]
-impl ThresholdBlsApiServer for ThresholdBlsApiImpl {
+impl ThresholdBlsApiServer for ThresholdBlsApi {
     /// Currently this is an insecure implementation since we do not have the DKG yet.
     /// All the checks below are done with the local view of the node. Later on those checks will be
     /// done by each of the validators (using their local view) when they are requested to sign
@@ -131,7 +131,7 @@ impl ThresholdBlsApiServer for ThresholdBlsApiImpl {
     }
 }
 
-impl SuiRpcModule for ThresholdBlsApiImpl {
+impl SuiRpcModule for ThresholdBlsApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

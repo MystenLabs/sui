@@ -2714,6 +2714,40 @@
       }
     },
     {
+      "name": "sui_tblsSignRandomnessObject",
+      "tags": [
+        {
+          "name": "Threshold BLS APIs"
+        }
+      ],
+      "description": "Sign an a Randomness object with threshold BLS.",
+      "params": [
+        {
+          "name": "object_id",
+          "description": "The object ID.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "commitment_type",
+          "description": "The way in which the commitment on the object creation should be verified.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiTBlsSignObjectCommitmentType"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiTBlsSignRandomnessObjectResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiTBlsSignRandomnessObjectResponse"
+        }
+      }
+    },
+    {
       "name": "sui_transferObject",
       "tags": [
         {
@@ -5890,6 +5924,41 @@
           },
           "validators": {
             "$ref": "#/components/schemas/ValidatorSet"
+          }
+        }
+      },
+      "SuiTBlsSignObjectCommitmentType": {
+        "oneOf": [
+          {
+            "description": "Check that the object is committed by the consensus.",
+            "type": "string",
+            "enum": [
+              "ConsensusCommitted"
+            ]
+          },
+          {
+            "description": "Check that the object is committed using the effects certificate.",
+            "type": "object",
+            "required": [
+              "FastPathCommitted"
+            ],
+            "properties": {
+              "FastPathCommitted": {
+                "$ref": "#/components/schemas/CertifiedTransactionEffects"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "SuiTBlsSignRandomnessObjectResponse": {
+        "type": "object",
+        "required": [
+          "signature"
+        ],
+        "properties": {
+          "signature": {
+            "$ref": "#/components/schemas/Base64"
           }
         }
       },

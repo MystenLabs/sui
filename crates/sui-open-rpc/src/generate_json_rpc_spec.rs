@@ -16,6 +16,7 @@ use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
+use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
 use sui_json_rpc::transaction_builder_api::FullNodeTransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::SuiRpcModule;
@@ -57,6 +58,7 @@ async fn main() {
     open_rpc.add_module(FullNodeTransactionExecutionApi::rpc_doc_module());
     open_rpc.add_module(FullNodeTransactionBuilderApi::rpc_doc_module());
     open_rpc.add_module(GovernanceReadApi::rpc_doc_module());
+    open_rpc.add_module(ThresholdBlsApi::rpc_doc_module());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
 
