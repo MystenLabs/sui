@@ -102,37 +102,69 @@ impl NarwhalManager {
         tracing::info!("Starting up Narwhal for epoch {}", committee.epoch());
 
         // start primary
-        self.primary_node
-            .start(
-                self.primary_keypair.copy(),
-                self.network_keypair.copy(),
-                Arc::new(ArcSwap::new(committee.clone())),
-                shared_worker_cache.clone(),
-                &store,
-                execution_state,
-            )
-            .await
-            .expect("Unable to start Narwhal Primary");
+        let mut retries_left = 2;
+        while retries_left > 0 {
+            match self
+                .primary_node
+                .start(
+                    self.primary_keypair.copy(),
+                    self.network_keypair.copy(),
+                    Arc::new(ArcSwap::new(committee.clone())),
+                    shared_worker_cache.clone(),
+                    &store,
+                    execution_state.clone(),
+                )
+                .await
+            {
+                Ok(_) => {
+                    break;
+                }
+                Err(e) => {
+                    if retries_left <= 0 {
+                        panic!("Unable to start Narwhal Primary: {:?}", e);
+                    }
+                    tracing::error!("Unable to start Narwhal Primary: {:?}, retrying", e);
+                    retries_left -= 1;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
 
         // Start Narwhal Workers with configuration
-        // Copy the config for this iteration of the loop
-        let id_keypair_copy = self
-            .worker_ids_and_keypairs
-            .iter()
-            .map(|(id, keypair)| (*id, keypair.copy()))
-            .collect();
+        let mut retries_left = 2;
+        while retries_left > 0 {
+            // Copy the config for this iteration of the loop
+            let id_keypair_copy = self
+                .worker_ids_and_keypairs
+                .iter()
+                .map(|(id, keypair)| (*id, keypair.copy()))
+                .collect();
 
-        self.worker_nodes
-            .start(
-                name,
-                id_keypair_copy,
-                Arc::new(ArcSwap::new(committee.clone())),
-                shared_worker_cache,
-                &store,
-                tx_validator.clone(),
-            )
-            .await
-            .expect("Unable to start Narwhal Worker");
+            match self
+                .worker_nodes
+                .start(
+                    name.clone(),
+                    id_keypair_copy,
+                    Arc::new(ArcSwap::new(committee.clone())),
+                    shared_worker_cache.clone(),
+                    &store,
+                    tx_validator.clone(),
+                )
+                .await
+            {
+                Ok(_) => {
+                    break;
+                }
+                Err(e) => {
+                    if retries_left <= 0 {
+                        panic!("Unable to start Narwhal Worker: {:?}", e);
+                    }
+                    tracing::error!("Unable to start Narwhal Worker: {:?}, retrying", e);
+                    retries_left -= 1;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
 
         tracing::info!(
             "Starting up Narwhal for epoch {} is complete - took {} seconds",
