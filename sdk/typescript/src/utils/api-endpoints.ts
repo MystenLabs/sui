@@ -17,7 +17,8 @@ export const NETWORK_TO_API: Record<Network, ApiEndpoints> = {
     faucet: 'http://127.0.0.1:9123/gas',
   },
   [Network.DEVNET]: {
-    fullNode: 'https://fullnode.devnet.sui.io/',
+    // A port number is required for Websocket connection
+    fullNode: 'https://fullnode.devnet.sui.io:443/',
     faucet: 'https://faucet.devnet.sui.io/gas',
   },
 };

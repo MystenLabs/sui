@@ -13,7 +13,14 @@ import { Client as WsRpcClient } from 'rpc-websockets';
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   const url = new URL(httpUrl);
   url.protocol = url.protocol.replace('http', 'ws');
-  url.port = (port ?? 9001).toString();
+  if (!url.port) {
+    if (!port) {
+      throw new Error(
+        'A port number needs to be specified for WebSocket client'
+      );
+    }
+    url.port = port.toString();
+  }
   return url.toString();
 };
 
@@ -253,7 +260,11 @@ export class WebsocketClient {
       return subId;
     } catch (err) {
       throw new Error(
-        `Error subscribing to event: ${err}, filter: ${JSON.stringify(filter)}`
+        `Error subscribing to event: ${JSON.stringify(
+          err,
+          null,
+          2
+        )}, filter: ${JSON.stringify(filter)}`
       );
     }
   }
