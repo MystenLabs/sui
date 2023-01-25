@@ -56,3 +56,11 @@ export function getAddressUrl(
 ) {
     return getExplorerUrl(`/address/${address}`, apiEnv, customRPC);
 }
+
+export function getValidatorUrl(
+    address: SuiAddress,
+    apiEnv: API_ENV,
+    customRPC: string
+) {
+    return getExplorerUrl(`/validator/${address}`, apiEnv, customRPC);
+}
