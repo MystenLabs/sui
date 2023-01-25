@@ -646,6 +646,8 @@ impl Certificate {
         (weight, pks)
     }
 
+    /// Verifies the validaity of the certificate.
+    /// TODO: Output a different type, similar to Sui VerifiedCertificate.
     pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
@@ -657,7 +659,7 @@ impl Certificate {
         );
 
         // Genesis certificates are always valid.
-        if Self::genesis(committee).contains(self) {
+        if self.round() == 0 && Self::genesis(committee).contains(self) {
             return Ok(());
         }
 
