@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { DelegationDetail } from '../delegation-detail';
 import StakePage from '../stake';
@@ -11,28 +10,9 @@ import { Validators } from '../validators';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function Staking() {
-    const navigate = useNavigate();
-    const { source, on } = useFeature(FEATURES.STAKING_ENABLED);
+    const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
-    // Handle the case where features take too long to load, and we'll just navigate home:
-    useEffect(() => {
-        if (source !== 'defaultValue') return;
-
-        const timeout = setTimeout(() => {
-            navigate('/', { replace: true });
-        }, 5000);
-
-        return () => {
-            clearTimeout(timeout);
-        };
-    }, [source, navigate]);
-
-    // Wait for features to load
-    if (source === 'defaultValue') {
-        return null;
-    }
-
-    if (!on) return <Navigate to="/" replace />;
+    if (!stakingEnabled) return <Navigate to="/" replace />;
 
     return (
         <Routes>
