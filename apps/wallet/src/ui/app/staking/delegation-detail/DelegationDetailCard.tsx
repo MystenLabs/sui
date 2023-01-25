@@ -90,7 +90,7 @@ export function DelegationDetailCard({
 
     const commission = useMemo(() => {
         if (!validatorData) return 0;
-        return +validatorData.fields.commission_rate * 100;
+        return +validatorData.fields.commission_rate / 100;
     }, [validatorData]);
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
