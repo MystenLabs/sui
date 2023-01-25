@@ -141,7 +141,10 @@ function StakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {unstake ? 0 : calculateRemaining} {symbol}
+                                {calculateRemaining <= 0
+                                    ? 0
+                                    : calculateRemaining}{' '}
+                                {symbol}
                             </Text>
                         </div>
                     )}

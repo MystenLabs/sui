@@ -3,6 +3,8 @@
 
 import { type ActiveValidator } from '@mysten/sui.js';
 
+import { roundFloat } from '_helpers';
+
 const APY_DECIMALS = 4;
 
 export function calculateAPY(validators: ActiveValidator, epoch: number) {
@@ -16,5 +18,5 @@ export function calculateAPY(validators: ActiveValidator, epoch: number) {
                 +delegation_token_supply.fields.value,
         365 / num_epochs_participated - 1
     );
-    return apy ? parseFloat(apy.toFixed(APY_DECIMALS)) : 0;
+    return apy ? roundFloat(apy, APY_DECIMALS) : 0;
 }

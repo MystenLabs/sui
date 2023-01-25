@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { calculateAPY } from '../calculateAPY';
+import { getStakingRewards } from '../getStakingRewards';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
+import { validatorsFields } from '../validatorsFields';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
@@ -31,7 +32,7 @@ export function DelegationDetailCard({
     stakedId,
 }: DelegationDetailCardProps) {
     const {
-        data: validatetors,
+        data: validators,
         isLoading: loadingValidators,
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
@@ -44,12 +45,7 @@ export function DelegationDetailCard({
         isError,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData =
-        validatetors &&
-        is(validatetors.details, SuiObject) &&
-        validatetors.details.data.dataType === 'moveObject'
-            ? (validatetors.details.data.fields as ValidatorsFields)
-            : null;
+    const validatorsData = validatorsFields(validators);
 
     const validatorData = useMemo(() => {
         if (!validatorsData) return null;
@@ -68,17 +64,14 @@ export function DelegationDetailCard({
 
     const totalStake = delegationData?.staked_sui.principal.value || 0n;
 
+    // Stake earned by ratio * pending_reward
     const suiEarned = useMemo(() => {
-        if (
-            !delegationData ||
-            typeof delegationData.delegation_status !== 'object'
-        )
-            return 0n;
-        return BigInt(
-            delegationData.delegation_status.Active.pool_tokens.value -
-                delegationData.delegation_status.Active.principal_sui_amount
+        if (!validatorsData || !delegationData) return 0n;
+        return getStakingRewards(
+            validatorsData.validators.fields.active_validators,
+            delegationData
         );
-    }, [delegationData]);
+    }, [delegationData, validatorsData]);
 
     const apy = useMemo(() => {
         if (!validatorData || !validatorsData) return 0;
@@ -95,6 +88,11 @@ export function DelegationDetailCard({
         address: validatorAddress,
         staked: stakedId,
     }).toString()}`;
+
+    const commission = useMemo(() => {
+        if (!validatorData) return 0;
+        return +validatorData.fields.commission_rate * 100;
+    }, [validatorData]);
 
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
@@ -130,14 +128,14 @@ export function DelegationDetailCard({
                                         <CardItem title="Your Stake">
                                             <StakeAmount
                                                 balance={totalStake}
-                                                variant="heading4"
+                                                variant="heading5"
                                             />
                                         </CardItem>
 
                                         <CardItem title="Earned">
                                             <StakeAmount
                                                 balance={suiEarned}
-                                                variant="heading4"
+                                                variant="heading5"
                                                 isEarnedRewards
                                             />
                                         </CardItem>
@@ -197,10 +195,7 @@ export function DelegationDetailCard({
                                                 weight="semibold"
                                                 color="gray-90"
                                             >
-                                                {
-                                                    validatorData?.fields
-                                                        .commission_rate
-                                                }
+                                                {commission}
                                             </Text>
 
                                             <Text
