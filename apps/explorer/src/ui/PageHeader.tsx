@@ -29,7 +29,7 @@ export interface PageHeaderProps {
     status?: 'success' | 'failure';
 }
 
-const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon> = {
+const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
     Call: CallIcon,
     ChangeEpoch: ChangeEpochIcon,
     Pay: PayIcon,
@@ -58,10 +58,11 @@ const STATUS_TO_TEXT = {
 
 export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     const Icon = TYPE_TO_ICON[type];
+
     return (
         <div data-testid="pageheader">
             <div className="mb-3 flex items-center gap-2">
-                <Icon className="text-steel" />
+                {Icon && <Icon className="text-steel" />}
                 <Heading variant="heading4/semibold" color="steel-darker">
                     {type}
                 </Heading>
