@@ -18,14 +18,13 @@ import Icon from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { txSelectors } from '_redux/slices/transactions';
 
-import type { TransactionKindName } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './TransactionDetailsPage.module.scss';
 
 const cl = clBind.bind(st);
 
-const txKindToTxt: Record<TransactionKindName, string> = {
+const txKindToTxt: Record<string, string> = {
     TransferObject: 'Object transfer',
     Call: 'Call',
     Publish: 'Publish',
