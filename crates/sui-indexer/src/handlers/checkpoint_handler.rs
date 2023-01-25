@@ -42,21 +42,27 @@ impl CheckpointHandler {
             self.checkpoint_handler_metrics
                 .total_checkpoint_requested
                 .inc();
-            let checkpoint = self
+            let mut checkpoint = self
                 .rpc_client
                 .read_api()
                 .get_checkpoint_summary(next_cursor_sequence_number as u64)
-                .await
-                .map_err(|e| {
-                    IndexerError::FullNodeReadingError(format!(
-                        "Failed to get checkpoint with sequence {} error: {:?}",
-                        next_cursor_sequence_number, e
-                    ))
-                })?;
+                .await;
+            // this happens very often b/c checkpoint indexing is faster than checkpoint
+            // generation. Ideally we will want to differentiate between a real error and
+            // a checkpoint not generated yet.
+            while checkpoint.is_err() {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                checkpoint = self
+                    .rpc_client
+                    .read_api()
+                    .get_checkpoint_summary(next_cursor_sequence_number as u64)
+                    .await;
+            }
             self.checkpoint_handler_metrics
                 .total_checkpoint_received
                 .inc();
-            commit_checkpoint(&mut pg_pool_conn, checkpoint)?;
+            // unwrap here is safe because we checked for error above
+            commit_checkpoint(&mut pg_pool_conn, checkpoint.unwrap())?;
             info!("Checkpoint {} committed", next_cursor_sequence_number);
             self.checkpoint_handler_metrics
                 .total_checkpoint_processed
