@@ -11,6 +11,7 @@ use std::task::{Context, Poll};
 use hyper::service::Service;
 use hyper::{body, http, Body, Request, Response};
 use jsonrpsee::core::__reexports::serde_json;
+use jsonrpsee::types::error::ErrorCode;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
     IntCounterVec,
@@ -164,7 +165,7 @@ where
                     }
                     #[derive(Deserialize)]
                     struct RPCError {
-                        code: i16,
+                        code: ErrorCode,
                     }
                     let (parts, body) = res.into_parts();
                     let bytes = body::to_bytes(body).await?;
@@ -176,7 +177,7 @@ where
                     if let Some(error_code) = error_code {
                         metrics
                             .errors_by_route
-                            .with_label_values(&[&name, &error_code_to_message(error_code)])
+                            .with_label_values(&[&name, error_code.message()])
                             .inc();
                     }
                     return Ok(Response::from_parts(parts, bytes.into()));
@@ -202,16 +203,4 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
                 || content.eq_ignore_ascii_case("application/json; charset=utf-8")
                 || content.eq_ignore_ascii_case("application/json;charset=utf-8")
         })
-}
-
-fn error_code_to_message(code: i16) -> String {
-    match code {
-        -32700 => "Parse error".into(),
-        -32600 => "Invalid Request".into(),
-        -32601 => "Method not found".into(),
-        -32602 => "Invalid params".into(),
-        -32603 => "Internal error".into(),
-        -32099..=-32000 => "Server error".into(),
-        code => format!("Unknown error code [{code}]"),
-    }
 }
