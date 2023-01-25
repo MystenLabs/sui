@@ -10,7 +10,7 @@ use crate::{
 };
 
 use anyhow::Result;
-use config::{Committee, Epoch, SharedWorkerCache};
+use config::{Committee, Epoch};
 use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{hash::Hash as _, signature_service::SignatureService};
 use futures::StreamExt;
@@ -43,8 +43,6 @@ pub struct Core {
     name: PublicKey,
     /// The committee information.
     committee: Committee,
-    /// The worker information cache.
-    worker_cache: SharedWorkerCache,
     /// The persistent storage keyed to headers.
     header_store: Store<HeaderDigest, Header>,
     /// The persistent storage keyed to certificates.
@@ -104,7 +102,6 @@ impl Core {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
         header_store: Store<HeaderDigest, Header>,
         certificate_store: CertificateStore,
         synchronizer: Arc<Synchronizer>,
@@ -126,7 +123,6 @@ impl Core {
                 Self {
                     name,
                     committee,
-                    worker_cache,
                     header_store,
                     certificate_store,
                     synchronizer,
@@ -489,6 +485,9 @@ impl Core {
         Ok(())
     }
 
+    /// Checks if all parents of the certificate exist, such that the certificate can be added to
+    /// header parents and inserted into the dag.
+    /// The certificate must have been verified.
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate(
         &mut self,
@@ -496,22 +495,6 @@ impl Core {
         notify: Option<oneshot::Sender<DagResult<()>>>,
     ) -> DagResult<()> {
         let digest = certificate.digest();
-        if self.certificate_store.read(digest)?.is_some() {
-            trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.metrics.duplicate_certificates_processed.inc();
-            if let Some(notify) = notify {
-                let _ = notify.send(Ok(())); // no problem if remote side isn't listening
-            }
-            return Ok(());
-        }
-
-        if let Err(e) = self.sanitize_certificate(&certificate).await {
-            if let Some(notify) = notify {
-                let _ = notify.send(Err(e.clone())); // no problem if remote side isn't listening
-            }
-            return Err(e);
-        }
-
         match self.process_certificate_internal(certificate).await {
             Err(DagError::Suspended) => {
                 if let Some(notify) = notify {
@@ -519,8 +502,10 @@ impl Core {
                         .entry(digest)
                         .or_insert_with(Vec::new)
                         .push(notify);
+                    Ok(())
+                } else {
+                    Err(DagError::Suspended)
                 }
-                Ok(())
             }
             result => {
                 if let Some(notify) = notify {
@@ -538,6 +523,22 @@ impl Core {
 
     #[instrument(level = "debug", skip_all, fields(certificate_digest = ?certificate.digest()))]
     async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
+        // Ok to ignore a certificate early than gc_round, because it will never be included into
+        // the consensus dag.
+        ensure!(
+            self.gc_round < certificate.round(),
+            DagError::TooOld(
+                certificate.digest().into(),
+                certificate.round(),
+                self.gc_round
+            )
+        );
+        let digest = certificate.digest();
+        if self.certificate_store.contains(&digest)? {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.metrics.duplicate_certificates_processed.inc();
+            return Ok(());
+        }
         debug!(
             "Processing certificate {:?} round:{:?}",
             certificate,
@@ -642,29 +643,6 @@ impl Core {
         }
 
         Ok(())
-    }
-
-    async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
-        ensure!(
-            self.committee.epoch() == certificate.epoch(),
-            DagError::InvalidEpoch {
-                expected: self.committee.epoch(),
-                received: certificate.epoch()
-            }
-        );
-        // Ok to drop old certificate, because it will never be included into the consensus dag.
-        ensure!(
-            self.gc_round < certificate.round(),
-            DagError::TooOld(
-                certificate.digest().into(),
-                certificate.round(),
-                self.gc_round
-            )
-        );
-        // Verify the certificate (and the embedded header).
-        certificate
-            .verify(&self.committee, self.worker_cache.clone())
-            .map_err(DagError::from)
     }
 
     // Logs Core errors as appropriate.

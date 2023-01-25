@@ -52,7 +52,7 @@ use store::Store;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 pub use types::PrimaryMessage;
 use types::{
@@ -426,7 +426,6 @@ impl Primary {
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
-            worker_cache.clone(),
             header_store.clone(),
             certificate_store.clone(),
             synchronizer,
@@ -449,6 +448,7 @@ impl Primary {
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             (**committee.load()).clone(),
+            worker_cache.clone(),
             network.clone(),
             certificate_store.clone(),
             rx_consensus_round_updates,
@@ -639,6 +639,17 @@ impl PrimaryReceiverHandler {
         Ok(None)
     }
 
+    fn deduplicate_and_verify(&self, certificate: &Certificate) -> DagResult<bool> {
+        let digest = certificate.digest();
+        if self.certificate_store.contains(&digest)? {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.metrics.duplicate_certificates_processed.inc();
+            return Ok(false);
+        }
+        certificate.verify(&self.committee.load(), self.worker_cache.clone())?;
+        Ok(true)
+    }
+
     #[allow(clippy::mutable_key_type)]
     async fn process_request_vote(
         &self,
@@ -698,6 +709,9 @@ impl PrimaryReceiverHandler {
         // before proceeding.
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
+            if !self.deduplicate_and_verify(&certificate)? {
+                continue;
+            }
             let (tx_notify, rx_notify) = oneshot::channel();
             notifies.push(rx_notify);
             self.tx_certificates
@@ -873,12 +887,18 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let PrimaryMessage::Certificate(certificate) = request.into_body();
-        let (tx_ack, rx_ack) = oneshot::channel();
+        if !self
+            .deduplicate_and_verify(&certificate)
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
+        {
+            return Ok(anemo::Response::new(()));
+        }
+        let (tx_notify, rx_notify) = oneshot::channel();
         self.tx_certificates
-            .send((certificate, Some(tx_ack)))
+            .send((certificate, Some(tx_notify)))
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-        rx_ack
+        rx_notify
             .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
