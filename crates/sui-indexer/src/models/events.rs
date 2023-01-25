@@ -10,8 +10,13 @@ use crate::PgPoolConnection;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::result::Error;
-use sui_json_rpc_types::{EventPage, SuiEvent, SuiEventEnvelope};
-use sui_types::event::EventID;
+use sui_json_rpc_types::SuiEvent;
+use sui_types::base_types::TransactionDigest;
+
+// NOTE: EVENT_BATCH_SIZE * number of columns in events table
+// should less than 65535, which is the max "parameters" Postgres
+// can take in one query.
+const EVENT_BATCH_SIZE: usize = 1000;
 
 #[derive(Queryable, Debug)]
 pub struct Event {
@@ -22,7 +27,6 @@ pub struct Event {
     pub event_type: String,
     pub event_content: String,
     pub next_cursor_transaction_digest: Option<String>,
-    pub next_cursor_event_sequence: Option<i64>,
 }
 
 #[derive(Debug, Insertable)]
@@ -34,7 +38,14 @@ pub struct NewEvent {
     pub event_type: String,
     pub event_content: String,
     pub next_cursor_transaction_digest: Option<String>,
-    pub next_cursor_event_sequence: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IndexerEventEnvelope {
+    pub transaction_digest: TransactionDigest,
+    pub timestamp: Option<u64>,
+    pub events: Vec<SuiEvent>,
+    pub next_cursor: Option<TransactionDigest>,
 }
 
 pub fn read_events(
@@ -77,96 +88,138 @@ pub fn read_last_event(pg_pool_conn: &mut PgPoolConnection) -> Result<Option<Eve
     })
 }
 
-// NOTE: no need to retry here b/c errors here are not transient,
-// instead we write them to PG tables for debugging purposes.
-pub fn event_to_new_event(e: SuiEventEnvelope) -> Result<NewEvent, IndexerError> {
-    let event_json = serde_json::to_string(&e.event).map_err(|err| {
+pub fn commit_events(
+    pg_pool_conn: &mut PgPoolConnection,
+    mut event_envelopes: Vec<IndexerEventEnvelope>,
+    txn_page_next_cursor: Option<TransactionDigest>,
+) -> Result<Option<(usize, TransactionDigest)>, IndexerError> {
+    // No op when there is no more than 1 event envelope,
+    // which could have  been left as next cursor from last iteration.
+    if event_envelopes.len() <= 1 {
+        return Ok(None);
+    }
+    let next_cursor: TransactionDigest;
+    if let Some(next_cursor_val) = txn_page_next_cursor {
+        // unwrap is safe because we already checked the length of new_events
+        let mut last_event_envelope = event_envelopes.pop().unwrap();
+        last_event_envelope.next_cursor = Some(next_cursor_val);
+        event_envelopes.push(last_event_envelope);
+        next_cursor = next_cursor_val;
+    } else {
+        // unwrap here are safe because we already checked the length of new_events
+        let next_cursor_event_envelope = event_envelopes.pop().unwrap();
+        let mut last_event_envelope = event_envelopes.pop().unwrap();
+        last_event_envelope.next_cursor = Some(next_cursor_event_envelope.transaction_digest);
+        event_envelopes.push(last_event_envelope);
+        next_cursor = next_cursor_event_envelope.transaction_digest;
+    }
+    let new_events: Vec<NewEvent> = event_envelopes
+        .into_iter()
+        .flat_map(|e| event_envelope_to_events(pg_pool_conn, e))
+        .collect();
+
+    // NOTE: Postgres can take at most 65535 parameters in a single query, one single txn on private testnet
+    // can have thousands of events, thus we will need to batch write here.
+    let event_batch_commit_result = commit_events_impl(pg_pool_conn, new_events);
+    Ok(Some((event_batch_commit_result, next_cursor)))
+}
+
+fn sui_event_to_new_event(
+    sui_event: SuiEvent,
+    sequence_number: i64,
+    transaction_digest: TransactionDigest,
+    timestamp_opt: Option<u64>,
+    next_cursor: Option<TransactionDigest>,
+) -> Result<NewEvent, IndexerError> {
+    let event_json = serde_json::to_string(&sui_event).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
             "Failed converting event to JSON with error: {:?}",
             err
         ))
     })?;
-    let timestamp = NaiveDateTime::from_timestamp_millis(e.timestamp as i64).ok_or_else(|| {
-        IndexerError::DateTimeParsingError(format!(
-            "Cannot convert timestamp {:?} to NaiveDateTime",
-            e.timestamp
-        ))
-    })?;
-
+    let mut naive_date_time_opt = None;
+    if let Some(timestamp) = timestamp_opt {
+        let naive_date_time =
+            NaiveDateTime::from_timestamp_millis(timestamp as i64).ok_or_else(|| {
+                IndexerError::DateTimeParsingError(format!(
+                    "Cannot convert timestamp {:?} to NaiveDateTime",
+                    timestamp
+                ))
+            })?;
+        naive_date_time_opt = Some(naive_date_time);
+    }
     Ok(NewEvent {
-        transaction_digest: format!("{:?}", e.tx_digest),
-        event_sequence: e.id.event_seq,
-        event_time: Some(timestamp),
-        event_type: e.event.get_event_type(),
+        transaction_digest: transaction_digest.base58_encode(),
+        event_sequence: sequence_number,
+        event_time: naive_date_time_opt,
+        event_type: sui_event.get_event_type(),
         event_content: event_json,
-        next_cursor_transaction_digest: None,
-        next_cursor_event_sequence: None,
+        next_cursor_transaction_digest: next_cursor.map(|d| d.base58_encode()),
     })
 }
 
-pub fn commit_events(
+fn event_envelope_to_events(
     pg_pool_conn: &mut PgPoolConnection,
-    event_page: EventPage,
-) -> Result<Option<(usize, EventID)>, IndexerError> {
-    let events = event_page.data;
+    event_envelope: IndexerEventEnvelope,
+) -> Vec<NewEvent> {
     let mut errors = vec![];
-    let mut new_events: Vec<NewEvent> = events
+    let new_events: Vec<NewEvent> = event_envelope
+        .events
         .into_iter()
-        .map(event_to_new_event)
+        .enumerate()
+        .map(|(i, e)| {
+            sui_event_to_new_event(
+                e,
+                i as i64,
+                event_envelope.transaction_digest,
+                event_envelope.timestamp,
+                event_envelope.next_cursor,
+            )
+        })
         .filter_map(|r| r.map_err(|e| errors.push(e)).ok())
         .collect();
     log_errors_to_pg(pg_pool_conn, errors);
+    new_events
+}
 
-    // No op when there is no more than 1 event, which has been left
-    // as next cursor from last iteration.
-    if new_events.len() <= 1 {
-        return Ok(None);
+fn commit_events_impl(pg_pool_conn: &mut PgPoolConnection, new_events: Vec<NewEvent>) -> usize {
+    let mut errors = vec![];
+    let mut new_events_to_process = new_events;
+    let mut total_event_committed = 0;
+    while !new_events_to_process.is_empty() {
+        let new_events_to_process_batch = new_events_to_process
+            .drain(..std::cmp::min(new_events_to_process.len(), EVENT_BATCH_SIZE))
+            .collect::<Vec<_>>();
+        let new_events_to_process_batch_len = new_events_to_process_batch.len();
+
+        let event_batch_commit_result: Result<usize, Error> = pg_pool_conn
+            .build_transaction()
+            .read_write()
+            .run::<_, Error, _>(|conn| {
+                diesel::insert_into(events::table)
+                    .values(&new_events_to_process_batch)
+                    .execute(conn)
+            });
+        match event_batch_commit_result {
+            Ok(inserted_count) => {
+                total_event_committed += inserted_count;
+                if inserted_count != new_events_to_process_batch_len {
+                    errors.push(IndexerError::PostgresWriteError(format!(
+                        "Inserted {} events, but expected to insert {}",
+                        inserted_count, new_events_to_process_batch_len
+                    )));
+                }
+            }
+            Err(e) => {
+                errors.push(IndexerError::PostgresWriteError(format!(
+                    "Failed inserting events with error: {:?}",
+                    e
+                )));
+            }
+        }
     }
-    let next_cursor: EventID;
-    if let Some(next_cursor_val) = event_page.next_cursor {
-        next_cursor = next_cursor_val.clone();
-        // unwrap is safe because we already checked the length of new_events
-        let mut last_event = new_events.pop().unwrap();
-        last_event.next_cursor_transaction_digest = Some(next_cursor_val.tx_digest.base58_encode());
-        last_event.next_cursor_event_sequence = Some(next_cursor_val.event_seq);
-        new_events.push(last_event);
-    } else {
-        // unwrap here are safe because we already checked the length of new_events
-        let next_cursor_event = new_events.pop().unwrap();
-        let mut last_event = new_events.pop().unwrap();
-        last_event.next_cursor_transaction_digest =
-            Some(next_cursor_event.transaction_digest.clone());
-        last_event.next_cursor_event_sequence = Some(next_cursor_event.event_sequence);
-        new_events.push(last_event);
-
-        let tx_digest = next_cursor_event.transaction_digest.parse().map_err(|e| {
-            IndexerError::TransactionDigestParsingError(format!(
-                "Failed parsing transaction digest {:?} with error: {:?}",
-                next_cursor_event.transaction_digest, e
-            ))
-        })?;
-        next_cursor = EventID {
-            tx_digest,
-            event_seq: next_cursor_event.event_sequence,
-        };
-    }
-
-    let event_commit_result: Result<usize, Error> = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-        diesel::insert_into(events::table)
-            .values(&new_events)
-            .execute(conn)
-    });
-    event_commit_result
-        .map(|commit_row_count| Some((commit_row_count, next_cursor)))
-        .map_err(|e| {
-            IndexerError::PostgresWriteError(format!(
-                "Failed writing events to PostgresDB with events {:?} and error: {:?}",
-                new_events, e
-            ))
-        })
+    log_errors_to_pg(pg_pool_conn, errors);
+    total_event_committed
 }
 
 pub fn events_to_sui_events(

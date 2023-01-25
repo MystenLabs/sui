@@ -57,7 +57,6 @@ diesel::table! {
         event_type -> Varchar,
         event_content -> Varchar,
         next_cursor_transaction_digest -> Nullable<Varchar>,
-        next_cursor_event_sequence -> Nullable<Int8>,
     }
 }
 
