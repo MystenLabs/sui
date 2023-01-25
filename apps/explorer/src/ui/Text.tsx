@@ -6,7 +6,7 @@ import { type ReactNode } from 'react';
 
 import { parseVariant, type SizeAndWeightVariant } from './utils/sizeAndWeight';
 
-const textStyles = cva([], {
+const textStyles = cva(['break-words'], {
     variants: {
         size: {
             body: 'text-body',
