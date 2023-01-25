@@ -282,7 +282,8 @@ pub fn create_publish_move_package_transaction(
     keypair: &AccountKeyPair,
     gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let build_config = BuildConfig::default();
+    let mut build_config = BuildConfig::default();
+    build_config.config.install_dir = Some(tempfile::TempDir::new().unwrap().into_path());
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
