@@ -2160,6 +2160,7 @@ pub enum SuiEvent {
     /// Move-specific event
     #[serde(rename_all = "camelCase")]
     MoveEvent {
+        // TODO: What's the best way to serialize this using `AccountAddress::short_str_lossless` ??
         package_id: ObjectID,
         transaction_module: String,
         sender: SuiAddress,

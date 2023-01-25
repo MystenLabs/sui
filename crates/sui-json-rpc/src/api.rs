@@ -49,7 +49,7 @@ pub trait CoinReadApi {
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
-        /// optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+        /// optional type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
         /// optional paging cursor
         cursor: Option<ObjectID>,
@@ -75,7 +75,7 @@ pub trait CoinReadApi {
         &self,
         /// the owner's Sui address
         owner: SuiAddress,
-        /// optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+        /// optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
     ) -> RpcResult<Balance>;
 
@@ -91,7 +91,7 @@ pub trait CoinReadApi {
     #[method(name = "getCoinMetadata")]
     async fn get_coin_metadata(
         &self,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
     ) -> RpcResult<SuiCoinMetadata>;
 
@@ -99,7 +99,7 @@ pub trait CoinReadApi {
     #[method(name = "getTotalSupply")]
     async fn get_total_supply(
         &self,
-        /// fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
     ) -> RpcResult<Supply>;
 }
