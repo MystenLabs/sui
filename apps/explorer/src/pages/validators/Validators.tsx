@@ -38,18 +38,18 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
             const validatorName = getName(
                 validator.fields.metadata.fields.name
             );
+            const delegatedStake =
+                +validator.fields.delegation_staking_pool.fields.sui_balance;
+            const selfStake = +validator.fields.stake_amount;
+            const totalStake = selfStake + delegatedStake;
             return {
                 number: index + 1,
                 name: validatorName,
-                stake:
-                    +validator.fields.delegation_staking_pool.fields
-                        .sui_balance +
-                    +validator.fields.delegation_staking_pool.fields
-                        .delegation_token_supply.fields.value,
+                stake: totalStake,
                 apy: calculateAPY(validator, epoch),
-                commission: +validator.fields.commission_rate,
+                commission: +validator.fields.commission_rate * 100,
                 address: validator.fields.metadata.fields.sui_address,
-                lastEpoch:
+                lastEpochReward:
                     validator.fields.delegation_staking_pool.fields
                         .rewards_pool,
             };
@@ -126,8 +126,8 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
             },
             {
-                header: 'Last Epoch Rewards',
-                accessorKey: 'lastEpoch',
+                header: 'Last Epoch Rewards Pool',
+                accessorKey: 'lastEpochReward',
                 cell: (props: any) => {
                     const lastEpochReward = props.getValue();
                     return lastEpochReward > 0 ? (
@@ -162,8 +162,7 @@ function ValidatorPageResult() {
             (acc, cur) =>
                 acc +
                 +cur.fields.delegation_staking_pool.fields.sui_balance +
-                +cur.fields.delegation_staking_pool.fields
-                    .delegation_token_supply.fields.value,
+                +cur.fields.stake_amount,
             0
         );
     }, [validatorsData]);
