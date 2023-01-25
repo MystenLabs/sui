@@ -170,6 +170,40 @@ const senderEvents = await provider.getEventsBySender(
 );
 ```
 
+Fetch coins of type `0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC` owned by an address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+// If coin type is not specified, it defaults to 0x2::sui::SUI
+const coins = await provider.getCoins(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  '0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC'
+);
+```
+
+Fetch all coin objects owned by an address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+const allCoins = await provider.getAllCoins(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
+```
+
+Fetch the total coin balance for one coin type, owned by an address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider();
+// If coin type is not specified, it defaults to 0x2::sui::SUI
+const coinBalance = await provider.getBalance(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
+  '0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC'
+);
+```
+
 For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
 
 To transfer a `0x2::coin::Coin<SUI>`:
