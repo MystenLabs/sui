@@ -183,11 +183,122 @@ module cw::tests {
 
         // create test addresses representing users
         let admin = @0xBABE;
-        let _initial_owner = @0xCAFE;
-        let _final_owner = @0xFACE;
+        let initiator = @0xCAFE;
+        let approver1 = @0xFACE1;
+        let approver2 = @0xFACE2;
+        let approver3 = @0xFACE3;
 
         // first transaction to emulate module initialization
         let scenario_val = test_scenario::begin(admin);
+
+        let scenario = &mut scenario_val;
+        {
+            // First the admin makes the controlled object and sets the policy associated with the operation
+
+            let ctx = test_scenario::ctx(scenario); 
+
+            // Define a controlled object
+            let (controlled, policy_cap) = policy::ControlObject(TestDummy { val: 0, admin_cap: option::none() }, ctx);
+            // Inject the admin capability (that allows to define policies) within the object
+            let mut_obj = policy::controlled_mut<TestDummy>(&mut controlled, policy_cap);
+            mut_obj.admin_cap = option::some(policy_cap);
+
+            // Initialize a policy for an object operation
+            let checks = policy::make_checks(TestDummyChecks {});
+            let (initcap, execcap) = policy::InitPolicy<TestDummy, TestDummyChecks, TestDummyParams>(&policy_cap, checks, ctx);
+
+            // Initialize a policy
+            
+            // Setup a 2-out-of-3 capabilities policy.
+            let (cap1, out1) = policy::setup_capability<TestDummy>(ctx);
+            let (cap2, out2) = policy::setup_capability<TestDummy>(ctx);
+            let (cap3, out3) = policy::setup_capability<TestDummy>(ctx);
+            let (kn1, out4) = policy::setup_threshold(vector[out1, out2, out3], 2,ctx);
+            let final1 = policy::setup_unlock_cap(out4, execcap, ctx);
+
+            // Send approver capabilities to their owners
+            transfer::transfer(cap1, approver1);
+            transfer::transfer(cap2, approver2);
+            transfer::transfer(cap3, approver3);
+
+            // Send auth flow logic and operation init capability to the operation initiator
+            transfer::transfer(initcap, initiator);
+            transfer::transfer(kn1, initiator);
+            transfer::transfer(final1, initiator);
+            
+            // Share the controlled object for all to access
+            transfer::share_object(controlled);
+            
+        };
+        test_scenario::next_tx(scenario, initiator);
+        let op_id = {
+            let initcap = test_scenario::take_from_sender<policy::PolicyOperationInitCap<TestDummyChecks, TestDummyParams>>(scenario);
+            let ctx = test_scenario::ctx(scenario); 
+
+            // Initialize an operation on the controlled object
+            let op = policy::InitOperation<TestDummy, TestDummyChecks, TestDummyParams>(&initcap, TestDummyParams {}, ctx);
+            let op_id = policy::op_id(&op);
+            transfer::transfer(op, initiator);
+
+            test_scenario::return_to_address(initiator, initcap);
+            op_id
+        };
+        test_scenario::next_tx(scenario, approver1);
+        {
+
+            // First approver takes the capability and authorizes the operation
+
+            let cap = test_scenario::take_from_sender<policy::AuthCapability<TestDummy>>(scenario);
+            let ctx = test_scenario::ctx(scenario); 
+
+            let sig = policy::authorize_capability(&cap, op_id, ctx);
+            transfer::transfer(sig, initiator);
+
+            test_scenario::return_to_address(approver1, cap);
+
+        };
+        test_scenario::next_tx(scenario, approver2);
+        {
+
+            // Second approver takes the capability and authorizes the operation
+
+            let cap = test_scenario::take_from_sender<policy::AuthCapability<TestDummy>>(scenario);
+            let ctx = test_scenario::ctx(scenario); 
+
+            let sig = policy::authorize_capability(&cap, op_id, ctx);
+            transfer::transfer(sig, initiator);
+
+            test_scenario::return_to_address(approver2, cap);
+
+        };
+        test_scenario::next_tx(scenario, initiator);
+        {
+            // Initiator gathers approvals + uses the auth logic to approve operation
+            // then performs the operation on the controlled object.
+
+            let sig2 = test_scenario::take_from_sender<policy::AuthOutput<TestDummy>>(scenario);
+            let sig1 = test_scenario::take_from_sender<policy::AuthOutput<TestDummy>>(scenario);
+            let kn1 =  test_scenario::take_from_sender<policy::AuthThreshold<TestDummy>>(scenario);
+            let final1 = test_scenario::take_from_sender<policy::AuthUnlockCap<TestDummy, policy::PolicyOperationAuthCap<TestDummyChecks, TestDummyParams>>>(scenario);
+            let op = test_scenario::take_from_sender<policy::PolicyOperation<TestDummyChecks, TestDummyParams>>(scenario);
+            let controlled = test_scenario::take_shared<policy::ControlledObject<TestDummy>>(scenario);
+
+            let ctx = test_scenario::ctx(scenario); 
+
+            // Initiator gathers approvals + uses the auth logic to approve operation ... 
+            let aggr1 = policy::authorize_threshold(&kn1, vector[0, 1], vector[sig1, sig2], ctx);
+            let granted = policy::authorize_unlock_op(&final1, aggr1, op);
+
+            // ... Invoke controlled operation on the object
+            controlled_inc(&mut controlled, granted);
+
+            test_scenario::return_to_address(initiator, kn1);
+            test_scenario::return_to_address(initiator, final1);
+            test_scenario::return_shared(controlled);
+
+
+        };
+
         test_scenario::end(scenario_val);
     }
 
