@@ -721,7 +721,11 @@ impl AuthorityDetails {
             panic!("External consensus is disabled, won't create a proposer client");
         }
 
-        let config = mysten_network::config::Config::new();
+        let config = mysten_network::config::Config {
+            connect_timeout: Some(Duration::from_secs(10)),
+            request_timeout: Some(Duration::from_secs(10)),
+            ..Default::default()
+        };
         let channel = config
             .connect_lazy(&internal.primary.parameters.consensus_api_grpc.socket_addr)
             .unwrap();

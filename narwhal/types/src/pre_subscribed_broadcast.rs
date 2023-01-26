@@ -15,6 +15,7 @@ pub struct PreSubscribedBroadcastSender {
     receivers: Vec<ConditionalBroadcastReceiver>,
 }
 
+#[derive(Debug)]
 pub struct ConditionalBroadcastReceiver {
     pub receiver: broadcast::Receiver<()>,
 }
