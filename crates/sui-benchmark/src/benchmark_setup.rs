@@ -3,7 +3,7 @@
 use anyhow::{anyhow, Context, Result};
 use move_core_types::language_storage::TypeTag;
 use prometheus::Registry;
-use rand::seq::SliceRandom;
+// use rand::seq::SliceRandom;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,7 +65,8 @@ impl Env {
                     barrier,
                     registry,
                     opts.primary_gas_id.as_str(),
-                    opts.primary_gas_objects,
+                    // opts.primary_gas_objects,
+                    opts.pay_coin_id.as_str(),
                     opts.keystore_path.as_str(),
                     opts.genesis_blob_path.as_str(),
                     opts.use_fullnode_for_reconfig,
@@ -173,7 +174,8 @@ impl Env {
         barrier: Arc<Barrier>,
         registry: &Registry,
         primary_gas_id: &str,
-        primary_gas_objects: u64,
+        pay_coin_id: &str,
+        // primary_gas_objects: u64,
         keystore_path: &str,
         genesis_blob_path: &str,
         use_fullnode_for_reconfig: bool,
@@ -225,17 +227,20 @@ impl Env {
             "Reconfiguration - Reconfiguration to epoch {} is done",
             proxy.get_current_epoch(),
         );
-
-        let offset = ObjectID::from_hex_literal(primary_gas_id)?;
-        let ids = ObjectID::in_range(offset, primary_gas_objects)?;
-        let primary_gas_id = ids
-            .choose(&mut rand::thread_rng())
-            .context("Failed to choose a random primary gas id")?;
-        let primary_gas = proxy.get_object(*primary_gas_id).await?;
-        let pay_coin_id = ids
-            .choose(&mut rand::thread_rng())
-            .context("Failed to choose a random pay coin")?;
-        let pay_coin = proxy.get_object(*pay_coin_id).await?;
+        let primary_gas_id = ObjectID::from_hex_literal(primary_gas_id)?;
+        let pay_coin_id = ObjectID::from_hex_literal(pay_coin_id)?;
+        let primary_gas = proxy.get_object(primary_gas_id).await?;
+        let pay_coin = proxy.get_object(pay_coin_id).await?;
+        // let offset = ObjectID::from_hex_literal(primary_gas_id)?;
+        // let ids = ObjectID::in_range(offset, primary_gas_objects)?;
+        // let primary_gas_id = ids
+        //     .choose(&mut rand::thread_rng())
+        //     .context("Failed to choose a random primary gas id")?;
+        // let primary_gas = proxy.get_object(*primary_gas_id).await?;
+        // let pay_coin_id = ids
+        //     .choose(&mut rand::thread_rng())
+        //     .context("Failed to choose a random pay coin")?;
+        // let pay_coin = proxy.get_object(*pay_coin_id).await?;
         let primary_gas_account = primary_gas.owner.get_owner_address()?;
         let keystore_path = Some(&keystore_path)
             .filter(|s| !s.is_empty())
