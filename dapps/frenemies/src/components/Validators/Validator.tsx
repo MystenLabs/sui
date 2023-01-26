@@ -74,8 +74,7 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
           </div>
         </div>
       </div>
-
-      {address == scorecard?.data.assignment.validator && (
+      {address.replace('0x', '') == scorecard?.data.assignment.validator && (
         <Target goal={scorecard.data.assignment.goal} />
       )}
     </GridItem>
