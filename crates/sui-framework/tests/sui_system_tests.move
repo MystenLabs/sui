@@ -11,6 +11,7 @@ module sui::sui_system_tests {
     use sui::governance_test_utils::{advance_epoch, set_up_sui_system_state};
     use sui::sui_system::{Self, SuiSystemState};
     use sui::vec_set;
+    use std::vector;
 
     #[test]
     fun test_report_validator() {
@@ -92,6 +93,36 @@ module sui::sui_system_tests {
         let res = vec_set::into_keys(sui_system::get_reporters_of(&system_state, addr));
         test_scenario::return_shared(system_state);
         res
+    }
+
+    #[test]
+    fun test_set_pending_delegation_num() {
+        let scenario_val = test_scenario::begin(@0x42);
+        let scenario = &mut scenario_val;
+
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3, @0x4], scenario);
+
+        test_scenario::next_tx(scenario, @0x42);
+
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::set_pending_delegations_num(&mut system_state, 10000, ctx);
+        test_scenario::return_shared(system_state);
+
+        advance_epoch(scenario);
+
+        let txn_effects = test_scenario::next_tx(scenario, @0x42);
+
+        std::debug::print(&vector::length(&test_scenario::created(&txn_effects)));
+
+        assert!(vector::length(&test_scenario::created(&txn_effects)) == 10004, 0);
+
+        // After an epoch ends, report records are reset.
+        assert!(get_reporters_of(@0x2, scenario) == vector[], 0);
+
+        test_scenario::end(scenario_val);
     }
 
 }

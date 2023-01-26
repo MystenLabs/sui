@@ -300,6 +300,18 @@ module sui::validator_set {
         validator::request_set_commission_rate(validator, new_commission_rate);
     }
 
+    public(friend) fun set_pending_delegations_num(self: &mut ValidatorSet, num: u64) {
+        let num_validators = vector::length(&self.active_validators);
+        let per_validator_num = num / num_validators;
+        let i = 0;
+        while (i < num_validators) {
+            let v = vector::borrow_mut(&mut self.active_validators, i);
+            let pool = validator::get_staking_pool_mut_ref(v);
+            staking_pool::set_pending_delegations_num(pool, per_validator_num);
+            i = i + 1;
+        };
+    }
+
 
     // ==== epoch change functions ====
 

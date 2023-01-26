@@ -139,7 +139,9 @@ pub fn run_move_unit_tests(
         path,
         build_config,
         UnitTestingConfig {
+            gas_limit: Some(1_000_000_000),
             report_stacktrace_on_abort: true,
+            ignore_compile_warnings: true,
             ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),

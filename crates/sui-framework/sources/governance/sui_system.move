@@ -559,6 +559,10 @@ module sui::sui_system {
         self.safe_mode = true;
     }
 
+    public entry fun set_pending_delegations_num(self: &mut SuiSystemState, num: u64, _ctx: &mut TxContext) {
+        validator_set::set_pending_delegations_num(&mut self.validators, num);
+    }
+
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
     public fun epoch(self: &SuiSystemState): u64 {
