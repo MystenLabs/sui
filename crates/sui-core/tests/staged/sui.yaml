@@ -248,10 +248,7 @@ ModuleId:
 MoveCall:
   STRUCT:
     - package:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
+        TYPENAME: ObjectID
     - module:
         TYPENAME: Identifier
     - function:

@@ -119,19 +119,12 @@ async fn test_publish_and_move_call() {
         })
         .unwrap();
 
-    // Get object ref from effect
-    let package = effect
-        .created
-        .iter()
-        .find(|obj| &obj.reference.object_id == package)
-        .unwrap();
-    let package = package.clone().reference.to_object_ref();
     // TODO: Improve tx response to make it easier to find objects.
     let treasury = find_module_object(&effect, "managed", "TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
     let recipient = *network.accounts.choose(&mut OsRng::default()).unwrap();
     let tx = SingleTransactionKind::Call(MoveCall {
-        package,
+        package: *package,
         module: Identifier::from_str("managed").unwrap(),
         function: Identifier::from_str("mint").unwrap(),
         type_arguments: vec![],

@@ -96,12 +96,7 @@ pub struct TransferObject {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
-    // Although `package` represents a read-only Move package,
-    // we still want to use a reference instead of just object ID.
-    // This allows a client to be able to validate the package object
-    // used in an order (through the object digest) without having to
-    // re-execute the order on a quorum of authorities.
-    pub package: ObjectRef,
+    pub package: ObjectID,
     pub module: Identifier,
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
@@ -282,7 +277,7 @@ impl MoveCall {
                 ),
             })
             .flatten()
-            .chain([InputObjectKind::MovePackage(package.0)])
+            .chain([InputObjectKind::MovePackage(*package)])
             .collect()
     }
 }
@@ -492,7 +487,7 @@ impl Display for SingleTransactionKind {
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
+                writeln!(writer, "Package ID : {}", c.package.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
@@ -601,9 +596,11 @@ impl TransactionKind {
     fn is_blocked_move_function(&self) -> bool {
         self.single_transactions().any(|tx| match tx {
             SingleTransactionKind::Call(call) => {
-                let (package, module, func) =
-                    (call.package.0, call.module.as_str(), call.function.as_str());
-                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+                BLOCKED_MOVE_FUNCTIONS.contains(&(
+                    call.package,
+                    call.module.as_str(),
+                    call.function.as_str(),
+                ))
             }
             _ => false,
         })
@@ -672,7 +669,7 @@ impl TransactionData {
 
     pub fn new_move_call_with_dummy_gas_price(
         sender: SuiAddress,
-        package: ObjectRef,
+        package: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
@@ -695,7 +692,7 @@ impl TransactionData {
 
     pub fn new_move_call(
         sender: SuiAddress,
-        package: ObjectRef,
+        package: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,

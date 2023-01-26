@@ -281,13 +281,12 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
 
     pub async fn single_move_call(
         &self,
-        package_object_id: ObjectID,
+        package: ObjectID,
         module: &str,
         function: &str,
         type_args: Vec<SuiTypeTag>,
         call_args: Vec<SuiJsonValue>,
     ) -> anyhow::Result<MoveCall> {
-        let package_ref = self.get_object_ref(package_object_id).await?;
         let module = Identifier::from_str(module)?;
         let function = Identifier::from_str(function)?;
 
@@ -297,17 +296,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .collect::<Result<Vec<_>, _>>()?;
 
         let call_args = self
-            .resolve_and_checks_json_args(
-                package_object_id,
-                &module,
-                &function,
-                &type_args,
-                call_args,
-            )
+            .resolve_and_checks_json_args(package, &module, &function, &type_args, call_args)
             .await?;
 
         Ok(MoveCall {
-            package: package_ref,
+            package,
             module,
             function,
             type_arguments: type_args,
@@ -431,7 +424,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
             coin::PAY_SPLIT_VEC_FUNC_NAME.to_owned(),
             type_args,
@@ -464,7 +457,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
             coin::PAY_SPLIT_N_FUNC_NAME.to_owned(),
             type_args,
@@ -498,7 +491,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             coin::PAY_MODULE_NAME.to_owned(),
             coin::PAY_JOIN_FUNC_NAME.to_owned(),
             type_args,
@@ -619,7 +612,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             function,
             vec![],
@@ -652,7 +645,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             WITHDRAW_DELEGATION_FUN_NAME.to_owned(),
             vec![],
@@ -685,7 +678,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let gas_price = self.0.get_reference_gas_price().await?;
         Ok(TransactionData::new_move_call(
             signer,
-            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            SUI_FRAMEWORK_OBJECT_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             SWITCH_DELEGATION_FUN_NAME.to_owned(),
             vec![],
