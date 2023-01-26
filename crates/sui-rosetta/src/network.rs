@@ -61,7 +61,7 @@ pub async fn status(
     let target = context
         .client
         .read_api()
-        .get_total_transaction_number()
+        .get_latest_checkpoint_sequence_number()
         .await?;
 
     Ok(NetworkStatusResponse {

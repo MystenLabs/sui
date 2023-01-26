@@ -182,16 +182,17 @@ impl Operations {
         if Self::is_delegation_call(&tx) {
             let (amount, validator) = match &tx.arguments[..] {
                 [_, _, amount, validator] => {
-                    let amount = amount.to_json_value().as_array().map(|v| {
+                    let amount = amount.to_json_value().as_array().and_then(|v| {
                         // value is a byte array
                         let bytes = v.iter().flat_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>();
-                        let option: Vec<u64> = bcs::from_bytes(&bytes)?;
-                        if let Some(amount) = option.first() {
-                            Ok(*amount as u128)
-                        } else {
-                            Err(Error::InternalError(anyhow!("Cannot extract delegation amount from move call.")))
+
+                        if let Ok(option) = bcs::from_bytes::<Vec<u64>>(&bytes){
+                            if let Some(amount) = option.first() {
+                                return Some(*amount as u128)
+                            }
                         }
-                    }).transpose()?;
+                        None
+                    });
                     let validator = validator
                         .to_json_value()
                         .as_str()
