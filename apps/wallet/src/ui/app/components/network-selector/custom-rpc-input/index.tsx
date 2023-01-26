@@ -12,8 +12,8 @@ import InputWithAction from '_app/shared/input-with-action';
 import Alert from '_components/alert';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
+import { API_ENV } from '_src/shared/api-env';
 import { isValidUrl } from '_src/shared/utils';
-import { API_ENV } from '_src/ui/app/ApiProvider';
 
 import st from '../NetworkSelector.module.scss';
 

@@ -7,14 +7,11 @@ import { useMemo, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { CustomRPCInput } from './custom-rpc-input';
-import {
-    API_ENV_TO_INFO,
-    API_ENV,
-    generateActiveNetworkList,
-} from '_app/ApiProvider';
+import { API_ENV_TO_INFO, generateActiveNetworkList } from '_app/ApiProvider';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
+import { API_ENV } from '_src/shared/api-env';
 
 import st from './NetworkSelector.module.scss';
 

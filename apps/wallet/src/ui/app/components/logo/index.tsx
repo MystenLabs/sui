@@ -3,9 +3,9 @@
 
 import cl from 'classnames';
 
-import { API_ENV } from '../../ApiProvider';
 import { Text } from '../../shared/text';
 import Icon, { SuiIcons } from '_components/icon';
+import { API_ENV } from '_src/shared/api-env';
 
 const networkNames: Record<API_ENV, string> = {
     [API_ENV.local]: 'Local',
