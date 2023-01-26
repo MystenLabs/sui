@@ -47,6 +47,7 @@ pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransa
         path,
         sender,
         &keypair,
+        None,
     )
 }
 

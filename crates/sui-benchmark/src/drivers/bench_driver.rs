@@ -22,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
+use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
 use crate::workloads::workload::WorkloadInfo;
 use crate::ValidatorProxy;
@@ -189,6 +190,7 @@ impl BenchDriver {
         &self,
         workload_info: &WorkloadInfo,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<BenchWorker> {
         let mut workers = vec![];
         let mut qps = workload_info.target_qps;
@@ -201,6 +203,7 @@ impl BenchDriver {
                 workload_info.max_in_flight_ops,
                 workload_info.payload_config.clone(),
                 proxy.clone(),
+                system_state_observer.clone(),
             )
             .await;
         let mut total_workers = workload_info.num_workers;
@@ -239,6 +242,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         &self,
         workloads: Vec<WorkloadInfo>,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,
@@ -250,7 +254,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
         for workload in workloads.iter() {
-            bench_workers.extend(self.make_workers(workload, proxy.clone()).await);
+            bench_workers.extend(
+                self.make_workers(workload, proxy.clone(), system_state_observer.clone())
+                    .await,
+            );
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
