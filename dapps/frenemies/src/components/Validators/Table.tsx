@@ -33,8 +33,9 @@ export function Table({ validators, stakes }: Props) {
   );
 
   // sort validators by their voting power in DESC order (not by stake - these are different)
+  // TODO: using `OR "0"` since voting power is an optional field;
   const sorted = [...validators].sort((a, b) =>
-    Number(BigInt(b.fields.voting_power) - BigInt(a.fields.voting_power))
+    Number(BigInt(b.fields.voting_power || "0") - BigInt(a.fields.voting_power || "0"))
   );
 
   const stakeByValidator: Record<string, ObjectData<StakedSui>> = stakes.reduce(
