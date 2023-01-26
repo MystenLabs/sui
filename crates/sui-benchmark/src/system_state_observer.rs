@@ -12,6 +12,7 @@ use tokio::time;
 use tokio::time::Instant;
 use tracing::info;
 
+#[derive(Debug)]
 pub struct SystemStateObserver {
     pub reference_gas_price: Receiver<u64>,
     pub _sender: Sender<()>,
