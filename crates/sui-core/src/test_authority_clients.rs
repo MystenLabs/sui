@@ -321,6 +321,10 @@ impl HandleTransactionTestAuthorityClient {
     pub fn reset_tx_info_response(&mut self) {
         self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
     }
+
+    pub fn set_tx_info_response_error(&mut self, resp: SuiError) {
+        self.tx_info_resp_to_return = Err(resp);
+    }
 }
 
 impl Default for HandleTransactionTestAuthorityClient {

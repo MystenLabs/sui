@@ -1177,6 +1177,82 @@ async fn test_handle_transaction_response() {
         |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 0 && *actual_epoch == 1)
     )
     .await;
+
+    // Case 8
+    // Ignore RPC Errors in collecting f+1 errors
+    // Here we let 3 validator return RpcError, and the remaining 1 return another error.
+    // We expect all errors will be collected because RpcError is not count when doing
+    // bad stake validity check.
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter().take(1),
+        SuiError::GasBudgetTooHigh {
+            gas_budget: 1,
+            max_budget: 1,
+        },
+    );
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter().skip(1),
+        SuiError::RpcError("".into(), "".into()),
+    );
+    let agg = get_agg(authorities.clone(), clients.clone(), 0);
+    match agg.process_transaction(tx.clone()).await {
+        Err(QuorumSignTransactionError {
+            total_stake,
+            good_stake,
+            errors,
+            conflicting_tx_digests,
+        }) => {
+            assert_eq!(total_stake, 4);
+            assert_eq!(good_stake, 0);
+            assert!(conflicting_tx_digests.is_empty());
+            let mut rpc_error_cnt = 0;
+            for (err, _, _) in &errors {
+                if let SuiError::RpcError(..) = err {
+                    rpc_error_cnt += 1;
+                }
+            }
+            assert_eq!(errors.len(), 4, "{:?}", errors);
+            assert_eq!(rpc_error_cnt, 3);
+        }
+        other => {
+            panic!(
+                "Expect QuorumFailedToProcessTransaction but got {:?}",
+                other
+            );
+        }
+    }
+    // However, if everyone returns non-RpcError, we exit after getting
+    // f+1 responses.
+    set_tx_info_response_with_error(
+        &mut clients,
+        authority_keys.iter(),
+        SuiError::GasBudgetTooHigh {
+            gas_budget: 1,
+            max_budget: 1,
+        },
+    );
+    let agg = get_agg(authorities.clone(), clients.clone(), 0);
+    match agg.process_transaction(tx).await {
+        Err(QuorumSignTransactionError {
+            total_stake,
+            good_stake,
+            errors,
+            conflicting_tx_digests,
+        }) => {
+            assert_eq!(total_stake, 4);
+            assert_eq!(good_stake, 0);
+            assert!(conflicting_tx_digests.is_empty());
+            assert_eq!(errors.len(), 3, "{:?}", errors);
+        }
+        other => {
+            panic!(
+                "Expect QuorumFailedToProcessTransaction but got {:?}",
+                other
+            );
+        }
+    }
 }
 
 async fn assert_resp_err<F>(
@@ -1204,6 +1280,19 @@ async fn assert_resp_err<F>(
                 other
             );
         }
+    }
+}
+
+fn set_tx_info_response_with_error<'a>(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: impl Iterator<Item = &'a (AuthorityName, AuthorityKeyPair)>,
+    error: SuiError,
+) {
+    for (name, _key) in authority_keys {
+        clients
+            .get_mut(name)
+            .unwrap()
+            .set_tx_info_response_error(error.clone());
     }
 }
 
