@@ -270,7 +270,7 @@ importers:
       react-error-boundary: ^3.1.4
       react-hot-toast: ^2.4.0
       react-intl: ^6.2.5
-      react-number-format: ^4.9.3
+      react-number-format: ^5.1.3
       react-redux: ^8.0.5
       react-router-dom: ^6.5.0
       react-textarea-autosize: ^8.4.0
@@ -332,7 +332,7 @@ importers:
       react-error-boundary: 3.1.4_react@18.2.0
       react-hot-toast: 2.4.0_biqbaboplfbrettd7655fr4n2y
       react-intl: 6.2.5_o77wnou4wwnegu5woljtklrzru
-      react-number-format: 4.9.3_biqbaboplfbrettd7655fr4n2y
+      react-number-format: 5.1.3_biqbaboplfbrettd7655fr4n2y
       react-redux: 8.0.5_ie75ejlwqy5zh3tldgt7pftwcu
       react-router-dom: 6.6.2_biqbaboplfbrettd7655fr4n2y
       react-textarea-autosize: 8.4.0_kzbn2opkn2327fwg5yzwzya5o4
@@ -15621,11 +15621,11 @@ packages:
   /react-is/18.2.0:
     resolution: {integrity: sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==}
 
-  /react-number-format/4.9.3_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-am1A1xYAbENuKJ+zpM7V+B1oRTSeOHYltqVKExznIVFweBzhLmOBmyb1DfIKjHo90E0bo1p3nzVJ2NgS5xh+sQ==}
+  /react-number-format/5.1.3_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-N4XVBXDEIu9qVZIIwKTfCwhPh1fWx/i50I6XnMLsckj7OHi7A85+AMCzUmMCpx05usVVee14Rr/P7MUY0Pp2Kg==}
     peerDependencies:
-      react: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0
-      react-dom: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0
+      react: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^18.0.0
+      react-dom: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^18.0.0
     dependencies:
       prop-types: 15.8.1
       react: 18.2.0
