@@ -481,6 +481,9 @@ impl<'a> SuiTestAdapter<'a> {
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let temporary_store =
             TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+        let transaction_data = transaction.into_inner().into_data().intent_message.value;
+        let signer = transaction_data.signer();
+        let gas = transaction_data.gas();
         let (
             inner,
             TransactionEffects {
@@ -500,7 +503,9 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
-            transaction.into_inner().into_data().intent_message.value,
+            transaction_data.kind,
+            signer,
+            gas,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

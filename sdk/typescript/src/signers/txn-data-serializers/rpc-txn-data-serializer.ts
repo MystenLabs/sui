@@ -54,6 +54,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     let endpoint: string;
     let args: Array<any>;
+    if (!unserializedTxn.data.gasBudget) {
+      throw new Error('serializeToBytes requires a valid gas budget');
+    }
     switch (unserializedTxn.kind) {
       case 'transferObject':
         const t = unserializedTxn.data as TransferObjectTransaction;

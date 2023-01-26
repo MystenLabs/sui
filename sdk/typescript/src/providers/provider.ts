@@ -4,7 +4,7 @@
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
 import { Base64DataBuffer } from '../serialization/base64';
-import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
+import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
@@ -67,7 +67,7 @@ export abstract class Provider {
 
   // RPC Endpoint
   /**
-   * Invoke any RPC endpoint 
+   * Invoke any RPC endpoint
    * @param endpoint the endpoint to be invoked
    * @param params the arguments to be passed to the RPC request
    */
@@ -75,10 +75,10 @@ export abstract class Provider {
     endpoint: string,
     params: Array<any>
   ) : Promise<any>;
-  
+
   // Coins
   /**
-   * Get all Coin<`coin_type`> objects owned by an address. 
+   * Get all Coin<`coin_type`> objects owned by an address.
    * @param coinType optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
    * @param cursor optional paging cursor
    * @param limit maximum number of items per page
@@ -314,18 +314,22 @@ export abstract class Provider {
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
 
   /**
-   * Similar to dryRunTransaction, but lets you call any Move function(including non-entry function)
-   * with arbitrary values.
+   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
+   * transaction (or Move call) with any arguments. Detailed results are
+   * provided, including both the transaction effects and any return values.
+   *
+   * @param sender the sender of the transaction
+   * @param txn transaction without gasPayment, gasBudget, and gasPrice specified.
+   * @param gas_price optional. Default to use the network reference gas price stored
+   * in the Sui System State object
+   * @param epoch optional. Default to use the current epoch number stored
+   * in the Sui System State object
    */
-  abstract devInspectTransaction(txBytes: string): Promise<DevInspectResults>;
-
-  /**
-   * Similar to devInspectTransaction, but lets you call any Move function without a gas object and
-   * budget
-   */
-  abstract devInspectMoveCall(
+  abstract devInspectTransaction(
     sender: SuiAddress,
-    moveCall: RawMoveCall
+    txn: UnserializedSignableTransaction | string | Base64DataBuffer,
+    gasPrice: number | null,
+    epoch: number | null
   ): Promise<DevInspectResults>;
 
   /**

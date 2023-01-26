@@ -6,11 +6,8 @@ import {
   getObjectId,
   getNewlyCreatedCoinRefsAfterSplit,
   LocalTxnDataSerializer,
-  SignableTransaction,
   RawSigner,
-  JsonRpcProvider,
-  SuiAddress,
-  RawMoveCall,
+  UnserializedSignableTransaction,
 } from '../../src';
 import {
   DEFAULT_GAS_BUDGET,
@@ -26,12 +23,10 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
     let toolbox: TestToolbox;
     let signer: RawSigner;
     let packageId: string;
-    let shouldSkip: boolean;
 
     beforeAll(async () => {
       toolbox = await setup();
-      const version = await toolbox.provider.getRpcApiVersion();
-      shouldSkip = version?.major == 0 && version?.minor < 20;
+      //const version = await toolbox.provider.getRpcApiVersion();
       signer = new RawSigner(
         toolbox.keypair,
         toolbox.provider,
@@ -43,10 +38,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
     });
 
-    it('Dev inspect transaction with PayAllSui', async () => {
-      if (shouldSkip) {
-        return;
-      }
+    it('Dev inspect transaction with Pay', async () => {
       const gasBudget = 1000;
       const coins =
         await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
@@ -64,20 +56,22 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         getObjectId(c)
       );
 
-      await validateDevInspectTransaction(signer, {
-        kind: 'payAllSui',
-        data: {
-          inputCoins: splitCoins,
-          recipient: DEFAULT_RECIPIENT,
-          gasBudget: gasBudget,
+      await validateDevInspectTransaction(
+        signer,
+        {
+          kind: 'pay',
+          data: {
+            inputCoins: splitCoins,
+            recipients: [DEFAULT_RECIPIENT],
+            amounts: [4000],
+            gasBudget: gasBudget,
+          },
         },
-      });
+        'success'
+      );
     });
 
     it('Move Call that returns struct', async () => {
-      if (shouldSkip) {
-        return;
-      }
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address()
       );
@@ -90,23 +84,17 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         gasBudget: DEFAULT_GAS_BUDGET,
       };
 
-      await validateDevInspectTransaction(signer, {
-        kind: 'moveCall',
-        data: moveCall,
-      });
-
-      await validateDevInspectMoveCall(
-        toolbox.provider,
-        await signer.getAddress(),
-        moveCall,
+      await validateDevInspectTransaction(
+        signer,
+        {
+          kind: 'moveCall',
+          data: moveCall,
+        },
         'success'
       );
     });
 
     it('Move Call that aborts', async () => {
-      if (shouldSkip) {
-        return;
-      }
       const moveCall = {
         packageObjectId: packageId,
         module: 'serializer_tests',
@@ -116,14 +104,12 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         gasBudget: DEFAULT_GAS_BUDGET,
       };
 
-      await validateDevInspectTransaction(signer, {
-        kind: 'moveCall',
-        data: moveCall,
-      });
-      await validateDevInspectMoveCall(
-        toolbox.provider,
-        await signer.getAddress(),
-        moveCall,
+      await validateDevInspectTransaction(
+        signer,
+        {
+          kind: 'moveCall',
+          data: moveCall,
+        },
         'failure'
       );
     });
@@ -132,19 +118,9 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
 
 async function validateDevInspectTransaction(
   signer: RawSigner,
-  txn: SignableTransaction
-) {
-  const localDigest = await signer.getTransactionDigest(txn);
-  const result = await signer.devInspectTransaction(txn);
-  expect(localDigest).toEqual(result.effects.transactionDigest);
-}
-
-async function validateDevInspectMoveCall(
-  provider: JsonRpcProvider,
-  address: SuiAddress,
-  moveCall: RawMoveCall,
+  txn: UnserializedSignableTransaction,
   status: 'success' | 'failure'
 ) {
-  const result = await provider.devInspectMoveCall(address, moveCall);
+  const result = await signer.devInspectTransaction(txn);
   expect(result.effects.status.status).toEqual(status);
 }

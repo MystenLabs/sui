@@ -53,7 +53,7 @@ import {
   CoinBalance,
   CoinSupply,
 } from '../types';
-import { DynamicFieldPage } from '../types/dynamic_fields'
+import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
   PublicKey,
   SignatureScheme,
@@ -69,7 +69,8 @@ import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { lt } from '@suchipi/femver';
 import { Base64DataBuffer } from '../serialization/base64';
 import { any, is, number, array } from 'superstruct';
-import { RawMoveCall } from '../signers/txn-data-serializers/txn-data-serializer';
+import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
+import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -300,23 +301,15 @@ export class JsonRpcProvider extends Provider {
   }
 
   // RPC endpoint
-  async call(
-    endpoint: string,
-    params: Array<any>
-  ) : Promise<any> {
+  async call(endpoint: string, params: Array<any>): Promise<any> {
     try {
-      const response = await this.client.request(
-        endpoint,
-        params
-      );
+      const response = await this.client.request(endpoint, params);
       if (is(response, ErrorResponse)) {
         throw new Error(`RPC Error: ${response.error.message}`);
       }
       return response.result;
     } catch (err) {
-      throw new Error(
-        `Error calling RPC endpoint ${endpoint}: ${err}`
-      );
+      throw new Error(`Error calling RPC endpoint ${endpoint}: ${err}`);
     }
   }
 
@@ -699,22 +692,22 @@ export class JsonRpcProvider extends Provider {
     try {
       let resp;
       // Serialize sigature field as: `flag || signature || pubkey`
-        const serialized_sig = new Uint8Array(
-          1 + signature.getLength() + pubkey.toBytes().length
-        );
-        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-        serialized_sig.set(signature.getData(), 1);
-        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
+      const serialized_sig = new Uint8Array(
+        1 + signature.getLength() + pubkey.toBytes().length
+      );
+      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+      serialized_sig.set(signature.getData(), 1);
+      serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
 
-        resp = await this.client.requestWithType(
-          'sui_executeTransactionSerializedSig',
-          [
-            txnBytes.toString(),
-            new Base64DataBuffer(serialized_sig).toString(),
-            requestType,
-          ],
-          SuiExecuteTransactionResponse,
-          this.options.skipDataValidation
+      resp = await this.client.requestWithType(
+        'sui_executeTransactionSerializedSig',
+        [
+          txnBytes.toString(),
+          new Base64DataBuffer(serialized_sig).toString(),
+          requestType,
+        ],
+        SuiExecuteTransactionResponse,
+        this.options.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -820,11 +813,36 @@ export class JsonRpcProvider extends Provider {
     return this.wsClient.unsubscribeEvent(id);
   }
 
-  async devInspectTransaction(txBytes: string): Promise<DevInspectResults> {
+  async devInspectTransaction(
+    sender: SuiAddress,
+    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    gasPrice: number | null = null,
+    epoch: number | null = null
+  ): Promise<DevInspectResults> {
     try {
+      const version = await this.getRpcApiVersion();
+      // TODO: remove after 0.24.0 is deployed in both DevNet and TestNet
+      if (version?.major == 0 && version?.minor < 24) {
+        return this.devInspectTransactionDeprecated(sender, tx, epoch);
+      }
+
+      let devInspectTxBytes;
+      if (typeof tx === 'string') {
+        devInspectTxBytes = tx;
+      } else if (tx instanceof Base64DataBuffer) {
+        devInspectTxBytes = tx.toString();
+      } else {
+        devInspectTxBytes = (
+          await new LocalTxnDataSerializer(this).serializeToBytesWithoutGasInfo(
+            sender,
+            tx
+          )
+        ).toString();
+      }
+
       const resp = await this.client.requestWithType(
         'sui_devInspectTransaction',
-        [txBytes],
+        [sender, devInspectTxBytes, gasPrice, epoch],
         DevInspectResults,
         this.options.skipDataValidation
       );
@@ -836,28 +854,46 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async devInspectMoveCall(
+  async devInspectTransactionDeprecated(
     sender: SuiAddress,
-    moveCall: RawMoveCall
+    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    epoch: number | null = null
   ): Promise<DevInspectResults> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_devInspectMoveCall',
-        [
-          sender,
-          moveCall.packageObjectId,
-          moveCall.module,
-          moveCall.function,
-          moveCall.typeArguments,
-          moveCall.arguments,
-        ],
-        DevInspectResults,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error dev inspect move call with request type: ${err}`);
+    let devInspectTxBytes;
+    if (typeof tx === 'string') {
+      devInspectTxBytes = tx;
+    } else if (tx instanceof Base64DataBuffer) {
+      devInspectTxBytes = tx.toString();
+    } else {
+      if (tx.kind === 'moveCall' && tx.data.gasBudget == null) {
+        const moveCall = tx.data;
+        const resp = await this.client.requestWithType(
+          'sui_devInspectMoveCall',
+          [
+            sender,
+            moveCall.packageObjectId,
+            moveCall.module,
+            moveCall.function,
+            moveCall.typeArguments,
+            moveCall.arguments,
+          ],
+          DevInspectResults,
+          this.options.skipDataValidation
+        );
+        return resp;
+      }
+      devInspectTxBytes = (
+        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx)
+      ).toString();
     }
+
+    const resp = await this.client.requestWithType(
+      'sui_devInspectTransaction',
+      [devInspectTxBytes, epoch],
+      DevInspectResults,
+      this.options.skipDataValidation
+    );
+    return resp;
   }
 
   async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
