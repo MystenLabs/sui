@@ -6,12 +6,10 @@ import Browser from 'webextension-polyfill';
 
 export const growthbook = new GrowthBook();
 
-const WALLET_VERSION = Browser.runtime.getManifest().version;
-
 export function setAttributes(network?: string | null) {
     growthbook.setAttributes({
         network,
-        version: WALLET_VERSION,
+        version: Browser.runtime.getManifest().version,
         beta: process.env.WALLET_BETA || false,
     });
 }
