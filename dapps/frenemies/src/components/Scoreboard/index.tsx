@@ -20,20 +20,22 @@ export function Scoreboard() {
 
   return (
     <Card variant={selectedIndex === 0 ? "score" : "leaderboard"}>
-      <Tab.Group selectedIndex={selectedIndex} onChange={setSelectedIndex}>
-        <Tab.List className="inline-flex space-x-1 rounded-full bg-white/[15%]">
-          <TabItem>You</TabItem>
-          <TabItem>Leaderboard</TabItem>
-        </Tab.List>
-        <Tab.Panels>
-          <Tab.Panel>
-            <YourScore />
-          </Tab.Panel>
-          <Tab.Panel>
-            <Leaderboard />
-          </Tab.Panel>
-        </Tab.Panels>
-      </Tab.Group>
+      <div className="relative">
+        <Tab.Group selectedIndex={selectedIndex} onChange={setSelectedIndex}>
+          <Tab.List className="inline-flex space-x-1 rounded-full bg-white/[15%]">
+            <TabItem>You</TabItem>
+            <TabItem>Leaderboard</TabItem>
+          </Tab.List>
+          <Tab.Panels>
+            <Tab.Panel>
+              <YourScore />
+            </Tab.Panel>
+            <Tab.Panel>
+              <Leaderboard />
+            </Tab.Panel>
+          </Tab.Panels>
+        </Tab.Group>
+      </div>
     </Card>
   );
 }

@@ -1,26 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { FormEvent, ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import { ObjectData } from "../../network/rawObject";
-import {
-  Assignment,
-  DELEGATION,
-  Delegation,
-  StakedSui,
-  Validator,
-} from "../../network/types";
-import { formatAddress, formatBalance } from "../../utils/format";
-import { WithdrawDelegation } from "./actions/WithdrawDelegation";
-import { AddDelegation } from "./actions/AddDelegation";
-import { Target } from "./Target";
+import { DELEGATION, Delegation, StakedSui, STAKED_SUI } from "../../network/types";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMyType } from "../../network/queries/use-raw";
-import { CancelDelegation } from "./actions/CancelDelegation";
 import { GridItem } from "./GridItem";
-
-/** Number of decimals for SUI */
-const DEC = 9;
+import { ValidatorItem } from "./Validator";
+import { ActiveValidator, normalizeSuiAddress } from "@mysten/sui.js";
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -32,32 +20,38 @@ function Header({ children }: { children: ReactNode }) {
 
 interface Props {
   /** Set of 40 currently active validators */
-  validators: Validator[];
-  /** My assignment */
-  assignment: Assignment;
-  /** Currently staked Sui */
-  stakes: ObjectData<StakedSui>[];
+  validators: ActiveValidator[];
 }
 
-export function Table({ validators, assignment, stakes }: Props) {
+export function Table({ validators }: Props) {
   const { currentAccount } = useWalletKit();
+  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI, currentAccount);
   const { data: delegations } = useMyType<Delegation>(
     DELEGATION,
     currentAccount
   );
 
   // sort validators by their voting power in DESC order (not by stake - these are different)
+  // TODO: using `OR "0"` since voting power is an optional field;
   const sorted = [...validators].sort((a, b) =>
-    Number(b.votingPower - a.votingPower)
+    Number(BigInt(b.fields.voting_power || "0") - BigInt(a.fields.voting_power || "0"))
   );
 
-  const stakeByValidator: Record<string, ObjectData<StakedSui>> = stakes.reduce(
+  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (stakes || []).reduce(
     (acc, stake) =>
       Object.assign(acc, {
-        [stake.data.validatorAddress]: stake,
+        [normalizeSuiAddress(stake.data.validatorAddress)]: stake,
       }),
     {}
   );
+
+  function getDelegation(address: string) {
+    const stake = stakeByValidator[address];
+    return (
+      stake &&
+      (delegations || []).find((d) => d.data.stakedSuiId == stake.data.id)
+    );
+  }
 
   return (
     <>
@@ -69,78 +63,21 @@ export function Table({ validators, assignment, stakes }: Props) {
 
       <div className="flex flex-col gap-1">
         {sorted.map((validator, index) => {
-          const address = validator.metadata.suiAddress;
-          const stake = stakeByValidator[address];
-          const delegation =
-            stake &&
-            (delegations || []).find(
-              (d) => d.data.stakedSuiId == stake.data.id
-            );
-
-          const [amount, setAmount] = useState("0");
-          const onInputAmount = (evt: FormEvent<HTMLInputElement>) => {
-            setAmount(fromUserInput(evt.currentTarget.value));
-          };
+          const address = normalizeSuiAddress(
+            validator.fields.metadata.fields.sui_address
+          );
 
           return (
-            <GridItem
+            <ValidatorItem
               key={address}
-              className="px-5 py-2 rounded-xl bg-[#F5FAFA] text-steel-dark items-center"
-            >
-              <div>{index + 1}</div>
-              <div>{formatAddress(address)}</div>
-              <div>
-                <div className="w-3/4">
-                  <div className="relative flex items-center">
-                    <input
-                      disabled={!!stake}
-                      type="text"
-                      onInput={onInputAmount}
-                      className="block w-full pr-12 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border"
-                      placeholder="0 SUI"
-                      defaultValue={
-                        stake &&
-                        formatBalance(stake?.data.staked.toString() || "0", DEC)
-                      }
-                    />
-
-                    {delegation ? (
-                      <WithdrawDelegation
-                        delegation={delegation!}
-                        stake={stakeByValidator[address]}
-                      />
-                    ) : stake ? (
-                      <CancelDelegation stake={stake} />
-                    ) : (
-                      <AddDelegation validator={address} amount={amount} />
-                    )}
-                  </div>
-                </div>
-              </div>
-              {address == assignment.validator && (
-                <Target goal={assignment.goal} />
-              )}
-            </GridItem>
+              index={index}
+              validator={validator}
+              stake={stakeByValidator[address]}
+              delegation={getDelegation(address)}
+            />
           );
         })}
       </div>
     </>
   );
-}
-
-/**
- * Helper function to parse user input (with decimals
- * separator) and turn it into a correctly-formed 9 decimals
- * SUI value.
- */
-function fromUserInput(num: string): string {
-  // todo: possibly move it as arg
-  const decimals = 9;
-
-  if (num.includes(".")) {
-    let [lhs, rhs] = num.split(".");
-    return lhs + rhs.padEnd(decimals, "0");
-  } else {
-    return num.padEnd(decimals + num.length, "0");
-  }
 }
