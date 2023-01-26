@@ -29,7 +29,7 @@ procedure {:inline 1} $2_address_from_bytes(bytes: Vec (int)) returns (res: int)
 {
     var len: int;
     len := LenVec(bytes);
-    if (len != 20) {
+    if (len != $ADRESS_LENGTH) {
         call $ExecFailureAbort();
         return;
     }
