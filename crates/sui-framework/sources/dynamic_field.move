@@ -59,14 +59,17 @@ public fun add<Name: copy + drop + store, Value: store>(
 spec add {
     pragma opaque;
     aborts_if [abstract] sui::prover::uid_has_field(object.id.bytes, name);
-    ensures [abstract] object.id == old(object.id);
-    ensures [abstract] global<sui::prover::DynamicFields<Name>>(object.id.bytes).names
-        == concat(
-            old(global<sui::prover::DynamicFields<Name>>(object.id.bytes)).names,
-            vec(name)
-        );
-    ensures [abstract] len(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names) == len(old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names)) + 1;
-}
+    modifies [abstract] global<sui::prover::DynamicFields<Name>>(object.id.bytes);
+    ensures [abstract] object == old(object);
+    ensures [abstract] exists<sui::prover::DynamicFields<Name>>(object.id.bytes);
+    ensures [abstract] (!old(exists<sui::prover::DynamicFields<Name>>(object.id.bytes)))
+        ==> global<sui::prover::DynamicFields<Name>>(object.id.bytes).names == vec(name);
+    ensures [abstract] old(exists<sui::prover::DynamicFields<Name>>(object.id.bytes))
+        ==> global<sui::prover::DynamicFields<Name>>(object.id.bytes).names == concat(
+                old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names),
+                vec(name)
+            );
+    }
 
 /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
@@ -125,12 +128,12 @@ public fun remove<Name: copy + drop + store, Value: store>(
 spec remove {
     pragma opaque;
     aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
+    modifies [abstract] global<sui::prover::DynamicFields<Name>>(object.id.bytes);
     ensures [abstract] object.id == old(object.id);
+    ensures [abstract] exists<sui::prover::DynamicFields<Name>>(object.id.bytes);
     ensures [abstract] sui::prover::vec_remove(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names,
-        index_of(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names, name),
-        0) ==
+        index_of(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names, name), 0) ==
           old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names);
-    ensures [abstract] len(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names) == len(old(global<sui::prover::DynamicFields<Name>>(object.id.bytes).names)) - 1;
 }
 
 

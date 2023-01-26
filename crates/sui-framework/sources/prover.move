@@ -3,8 +3,6 @@
 
 module sui::prover {
 
-    use std::option;
-    use std::vector;
     use sui::object;
 
     const OWNED: u64 = 1;
@@ -13,60 +11,64 @@ module sui::prover {
 
 
     #[verify_only]
+    /// Ownership information for a given object (stored at the object's address)
     struct Ownership has key {
-        owner: option::Option<address>,
+        owner: address, // only matters if status == OWNED
         status: u64,
     }
 
     #[verify_only]
+    /// List of fields with a given name type of an object containing fields (stored at the
+    /// containing object's address)
     struct DynamicFields<K: copy + drop + store> has key {
         names: vector<K>,
     }
 
+    #[verify_only]
+    /// Information about which object contains a given object field (stored at the field object's
+    /// address).
+    struct DynamicFieldContainment has key {
+        container: address,
+    }
+
     // "public" functions to be used in specs as an equivalent of core Prover's builtins
 
+    /// Verifies if a given object it owned.
     spec fun owned<T: key>(obj: T): bool {
         let addr = object::id(obj).bytes;
         exists<Ownership>(addr) &&
-        option::is_some(global<Ownership>(addr).owner) &&
         global<Ownership>(addr).status == OWNED
     }
 
+    /// Verifies if a given object is owned.
     spec fun owned_by<T: key>(obj: T, owner: address): bool {
         let addr = object::id(obj).bytes;
         exists<Ownership>(addr) &&
-        global<Ownership>(addr).owner == option::spec_some(owner) &&
-        global<Ownership>(addr).status == OWNED
+        global<Ownership>(addr).status == OWNED &&
+        global<Ownership>(addr).owner == owner
     }
 
-        /*
-    spec fun is_field_of<T: key>(obj: T, owner: sui::object::UID): bool {
-        let addr = object::id(obj).bytes;
-        exists<Ownership>(addr) &&
-        global<Ownership>(addr).owner == option::spec_some(owner) &&
-        global<Ownership>(addr).status == OWNED
-}
-        */
-
+    /// Verifies if a given object is shared.
     spec fun shared<T: key>(obj: T): bool {
         let addr = object::id(obj).bytes;
         exists<Ownership>(addr) &&
-        option::is_none(global<Ownership>(addr).owner) &&
         global<Ownership>(addr).status == SHARED
     }
 
+    /// Verifies if a given object is immutable.
     spec fun immutable<T: key>(obj: T): bool {
         let addr = object::id(obj).bytes;
         exists<Ownership>(addr) &&
-        option::is_none(global<Ownership>(addr).owner) &&
         global<Ownership>(addr).status == IMMUTABLE
     }
 
+    /// Verifies if a given object has field with a given name.
     spec fun has_field<T: key, K: copy + drop + store>(obj: T, name: K): bool {
         let addr = object::id(obj).bytes;
         uid_has_field<K>(addr, name)
     }
 
+    /// Returns number of K-type fields of a given object.
     spec fun num_fields<T: key, K: copy + drop + store>(obj: T): u64 {
         let addr = object::id(obj).bytes;
         if (!exists<DynamicFields<K>>(addr)) {
