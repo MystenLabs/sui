@@ -22,8 +22,8 @@ use sui_types::crypto::{
     AuthorityPublicKeyBytes, AuthoritySignInfo, KeypairTraits,
 };
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::CallArg;
 use sui_types::messages::SignedTransactionEffects;
+use sui_types::messages::{CallArg, DUMMY_GAS_PRICE};
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, TransactionData, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
@@ -281,16 +281,18 @@ pub fn create_publish_move_package_transaction(
     path: PathBuf,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
     let build_config = BuildConfig::default();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes();
-    let data = TransactionData::new_module_with_dummy_gas_price(
+    let data = TransactionData::new_module(
         sender,
         gas_object_ref,
         all_module_bytes,
         MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -345,8 +347,9 @@ pub fn make_counter_create_transaction(
     package_ref: ObjectRef,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let data = TransactionData::new_move_call(
         sender,
         package_ref,
         "counter".parse().unwrap(),
@@ -355,6 +358,7 @@ pub fn make_counter_create_transaction(
         gas_object,
         vec![],
         MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -366,8 +370,9 @@ pub fn make_counter_increment_transaction(
     counter_initial_shared_version: SequenceNumber,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let data = TransactionData::new_move_call(
         sender,
         package_ref,
         "counter".parse().unwrap(),
@@ -379,6 +384,7 @@ pub fn make_counter_increment_transaction(
             initial_shared_version: counter_initial_shared_version,
         })],
         MAX_GAS,
+        gas_price.unwrap_or(1),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -390,8 +396,9 @@ pub fn make_delegation_transaction(
     validator: SuiAddress,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
+    let data = TransactionData::new_move_call(
         sender,
         system_package_ref,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
@@ -407,6 +414,7 @@ pub fn make_delegation_transaction(
             CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
         ],
         MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }

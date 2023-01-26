@@ -19,6 +19,7 @@ use sui_benchmark::options::Opts;
 
 use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
 
+use sui_benchmark::system_state_observer::SystemStateObserver;
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;
 
@@ -67,6 +68,16 @@ async fn main() -> Result<()> {
     let cloned_barrier = barrier.clone();
     let env = if opts.local { Env::Local } else { Env::Remote };
     let benchmark_setup = env.setup(cloned_barrier, &registry, &opts).await?;
+    let system_state_observer = {
+        let mut system_state_observer =
+            SystemStateObserver::new(benchmark_setup.validator_proxy.clone());
+        system_state_observer.reference_gas_price.changed().await?;
+        eprintln!(
+            "Found reference gas price from system state object = {:?}",
+            *system_state_observer.reference_gas_price.borrow()
+        );
+        Arc::new(system_state_observer)
+    };
     barrier.wait().await;
     // create client runtime
     let client_runtime = Builder::new_multi_thread()
@@ -92,6 +103,7 @@ async fn main() -> Result<()> {
                     benchmark_setup.pay_coin_type_tag,
                     benchmark_setup.validator_proxy.clone(),
                     &opts,
+                    system_state_observer.clone(),
                 )
                 .await?;
             let interval = opts.run_duration;
@@ -105,6 +117,7 @@ async fn main() -> Result<()> {
                 .run(
                     workloads,
                     benchmark_setup.validator_proxy.clone(),
+                    system_state_observer,
                     &registry_clone,
                     show_progress,
                     interval,

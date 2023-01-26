@@ -320,7 +320,7 @@ async fn test_transaction_manager() {
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
-    let tx2 = make_counter_create_transaction(gas_ref, framework_obj_ref, *addr1, key1);
+    let tx2 = make_counter_create_transaction(gas_ref, framework_obj_ref, *addr1, key1, None);
     let (cert, effects2) =
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
@@ -381,6 +381,7 @@ async fn test_transaction_manager() {
             shared_counter_initial_version,
             *source_addr,
             source_key,
+            None,
         );
         let (cert, effects) = execute_shared_on_first_three_authorities(
             &authority_clients,
@@ -464,7 +465,7 @@ async fn test_per_object_overload() {
     // Create a shared counter.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0].id()).await;
     let create_counter_txn =
-        make_counter_create_transaction(gas_ref, framework_obj_ref, addr, &key);
+        make_counter_create_transaction(gas_ref, framework_obj_ref, addr, &key, None);
     let create_counter_cert = try_sign_on_first_three_authorities(
         &authority_clients,
         &aggregator.committee,
@@ -525,6 +526,7 @@ async fn test_per_object_overload() {
             shared_counter_initial_version,
             addr,
             &key,
+            None,
         );
         let shared_cert = try_sign_on_first_three_authorities(
             &authority_clients,
@@ -550,6 +552,7 @@ async fn test_per_object_overload() {
         shared_counter_initial_version,
         addr,
         &key,
+        None,
     );
     let sign_result = authority_clients[3]
         .handle_transaction(shared_txn.clone())

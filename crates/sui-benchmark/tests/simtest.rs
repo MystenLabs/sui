@@ -7,6 +7,7 @@ mod test {
     use std::str::FromStr;
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::util::generate_all_gas_for_test;
     use sui_benchmark::workloads::delegation::DelegationWorkload;
     use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
@@ -23,8 +24,8 @@ mod test {
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::object::Owner;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
-    use test_utils::network::TestClusterBuilder;
-    use tracing::log::error;
+    use test_utils::network::{TestCluster, TestClusterBuilder};
+    use tracing::info;
 
     fn test_config() -> SimConfig {
         env_config(
@@ -96,7 +97,14 @@ mod test {
             )
             .await,
         );
-
+        let system_state_observer = {
+            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            if let Ok(_) = system_state_observer.reference_gas_price.changed().await {
+                info!("Got the reference gas price from system state object");
+            }
+            Arc::new(system_state_observer)
+        };
+        let reference_gas_price = *system_state_observer.reference_gas_price.borrow();
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
 
@@ -125,6 +133,7 @@ mod test {
                 transfer_object_workload_payload_gas_config,
                 delegation_gas_configs,
             },
+            reference_gas_price,
         )
         .await
         .unwrap();
@@ -140,7 +149,11 @@ mod test {
         );
         combination_workload
             .workload
-            .init(workload_init_gas, proxy.clone())
+            .init(
+                workload_init_gas,
+                proxy.clone(),
+                system_state_observer.clone(),
+            )
             .await;
 
         let driver = BenchDriver::new(5);
@@ -159,6 +172,7 @@ mod test {
             .run(
                 vec![combination_workload],
                 proxy,
+                system_state_observer,
                 &registry,
                 show_progress,
                 interval,

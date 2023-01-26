@@ -7,6 +7,7 @@ use move_core_types::language_storage::TypeTag;
 use std::sync::Arc;
 
 use crate::options::{Opts, RunSpec};
+use crate::system_state_observer::SystemStateObserver;
 use crate::util::generate_all_gas_for_test;
 use crate::workloads::shared_counter::SharedCounterWorkload;
 use crate::workloads::transfer_object::TransferObjectWorkload;
@@ -34,6 +35,7 @@ impl WorkloadConfiguration {
         pay_coin_type_tag: TypeTag,
         proxy: Arc<dyn ValidatorProxy + Send + Sync>,
         opts: &Opts,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Result<Vec<WorkloadInfo>> {
         match opts.run_spec {
             RunSpec::Bench {
@@ -60,6 +62,7 @@ impl WorkloadConfiguration {
                         pay_coin,
                         pay_coin_type_tag,
                         proxy,
+                        system_state_observer,
                     )
                     .await
                 }
@@ -77,6 +80,7 @@ impl WorkloadConfiguration {
                         pay_coin,
                         pay_coin_type_tag,
                         proxy,
+                        system_state_observer,
                     )
                     .await
                 }
@@ -98,6 +102,7 @@ impl WorkloadConfiguration {
         coin: Gas,
         coin_type_tag: TypeTag,
         proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Result<Vec<WorkloadInfo>> {
         let shared_counter_ratio =
             1.0 - (std::cmp::min(shared_counter_hotness_factor as u32, 100) as f32 / 100.0);
@@ -145,6 +150,7 @@ impl WorkloadConfiguration {
                 transfer_object_workload_payload_gas_config,
                 delegation_gas_configs,
             },
+            *system_state_observer.reference_gas_price.borrow(),
         )
         .await?;
         let mut combination_workload = make_combination_workload(
@@ -159,7 +165,7 @@ impl WorkloadConfiguration {
         );
         combination_workload
             .workload
-            .init(workload_init_gas, proxy)
+            .init(workload_init_gas, proxy, system_state_observer.clone())
             .await;
         Ok(vec![combination_workload])
     }
@@ -178,6 +184,7 @@ impl WorkloadConfiguration {
         coin: Gas,
         coin_type_tag: TypeTag,
         proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Result<Vec<WorkloadInfo>> {
         let mut workloads = vec![];
         let shared_counter_weight_ratio =
@@ -242,6 +249,7 @@ impl WorkloadConfiguration {
                 transfer_object_workload_payload_gas_config,
                 delegation_gas_configs,
             },
+            *system_state_observer.reference_gas_price.borrow(),
         )
         .await?;
         if let Some(mut shared_counter_workload) = make_shared_counter_workload(
@@ -257,7 +265,11 @@ impl WorkloadConfiguration {
         ) {
             shared_counter_workload
                 .workload
-                .init(workload_init_gas, proxy.clone())
+                .init(
+                    workload_init_gas,
+                    proxy.clone(),
+                    system_state_observer.clone(),
+                )
                 .await;
             workloads.push(shared_counter_workload);
         }
@@ -280,6 +292,7 @@ impl WorkloadConfiguration {
                         shared_counter_init_gas: vec![],
                     },
                     proxy.clone(),
+                    system_state_observer.clone(),
                 )
                 .await;
             workloads.push(transfer_object_workload);

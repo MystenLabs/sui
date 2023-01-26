@@ -20,7 +20,7 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::messages::{TransactionData, VerifiedTransaction};
+use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -270,9 +270,15 @@ pub fn make_transfer_sui_transaction(
     amount: Option<u64>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_sui_with_dummy_gas_price(
-        recipient, sender, amount, gas_object, MAX_GAS,
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        amount,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }
@@ -283,9 +289,15 @@ pub fn make_transfer_object_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_with_dummy_gas_price(
-        recipient, object_ref, sender, gas_object, MAX_GAS,
+    let data = TransactionData::new_transfer(
+        recipient,
+        object_ref,
+        sender,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
 }

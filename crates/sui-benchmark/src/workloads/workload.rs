@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use std::{collections::HashMap, fmt};
 
+use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::{WorkloadInitGas, WorkloadPayloadGas};
 use rand::rngs::OsRng;
 use rand_distr::WeightedAliasIndex;
@@ -41,12 +42,14 @@ pub trait Workload<T: Payload + ?Sized>: Send + Sync {
         &mut self,
         init_config: WorkloadInitGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     );
     async fn make_test_payloads(
         &self,
         num_payloads: u64,
         payload_config: WorkloadPayloadGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<T>>;
     fn get_workload_type(&self) -> WorkloadType;
 }
@@ -62,9 +65,16 @@ impl Workload<dyn Payload> for CombinationWorkload {
         &mut self,
         init_config: WorkloadInitGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) {
         for (_, (_, workload)) in self.workloads.iter_mut() {
-            workload.init(init_config.clone(), proxy.clone()).await;
+            workload
+                .init(
+                    init_config.clone(),
+                    proxy.clone(),
+                    system_state_observer.clone(),
+                )
+                .await;
         }
     }
     async fn make_test_payloads(
@@ -72,11 +82,17 @@ impl Workload<dyn Payload> for CombinationWorkload {
         num_payloads: u64,
         payload_config: WorkloadPayloadGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let mut workloads: HashMap<WorkloadType, (u32, Vec<Box<dyn Payload>>)> = HashMap::new();
         for (workload_type, (weight, workload)) in self.workloads.iter() {
             let payloads: Vec<Box<dyn Payload>> = workload
-                .make_test_payloads(num_payloads, payload_config.clone(), proxy.clone())
+                .make_test_payloads(
+                    num_payloads,
+                    payload_config.clone(),
+                    proxy.clone(),
+                    system_state_observer.clone(),
+                )
                 .await;
             assert_eq!(payloads.len() as u64, num_payloads);
             workloads
