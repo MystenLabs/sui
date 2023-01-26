@@ -48,6 +48,7 @@ import {
     GAS_TYPE_ARG,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
 } from '_redux/slices/sui-objects/Coin';
+import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
 
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -202,6 +203,9 @@ function StakingCard() {
             if (!validatorAddress || !amount || !tokenTypeArg) {
                 throw new Error('Failed, missing required field');
             }
+            trackEvent('Stake', {
+                props: { validator: validatorAddress },
+            });
             const response = await Coin.stakeCoin(
                 signer,
                 allCoinsForStake,
@@ -225,6 +229,8 @@ function StakingCard() {
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
                 );
             }
+
+            trackEvent('Unstake');
 
             const response = await Coin.unStakeCoin(
                 signer,
