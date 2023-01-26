@@ -113,6 +113,20 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 Install CMake using the instructions at [Installing CMake](https://cmake.org/install/) on the CMake website.
 
+Or you can use the following command
+
+```shell
+sudo apt-get install cmake
+```
+
+### GCC
+
+Use the following command to install `gcc`:
+
+```shell
+sudo apt-get install gcc
+```
+
 ### libssl-dev
 
 Use the following command to install `libssl-dev`:
