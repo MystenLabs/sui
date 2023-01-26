@@ -11,12 +11,13 @@ use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc::api::GovernanceReadApiClient;
+use sui_json_rpc::api::{GovernanceReadApiClient, ThresholdBlsApiClient};
 use sui_json_rpc_types::{
     Balance, Coin, CoinPage, DynamicFieldPage, EventPage, GetObjectDataResponse,
     GetPastObjectDataResponse, GetRawObjectDataResponse, SuiCoinMetadata, SuiEventEnvelope,
     SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveNormalizedModule, SuiObjectInfo,
-    SuiTransactionEffects, SuiTransactionResponse, TransactionsPage,
+    SuiTBlsSignObjectCommitmentType, SuiTBlsSignRandomnessObjectResponse, SuiTransactionEffects,
+    SuiTransactionResponse, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -598,4 +599,27 @@ impl GovernanceApi {
 pub struct Checkpoint {
     pub summary: CheckpointSummary,
     pub content: CheckpointContents,
+}
+
+#[derive(Debug, Clone)]
+pub struct ThresholdBlsApi {
+    api: Arc<RpcClient>,
+}
+
+impl ThresholdBlsApi {
+    pub(crate) fn new(api: Arc<RpcClient>) -> Self {
+        Self { api }
+    }
+
+    pub async fn tbls_sign_randomness_object(
+        &self,
+        object_id: ObjectID,
+        commitment_type: SuiTBlsSignObjectCommitmentType,
+    ) -> SuiRpcResult<SuiTBlsSignRandomnessObjectResponse> {
+        Ok(self
+            .api
+            .http
+            .tbls_sign_randomness_object(object_id, commitment_type)
+            .await?)
+    }
 }

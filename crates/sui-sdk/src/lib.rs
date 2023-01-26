@@ -18,7 +18,7 @@ use serde_json::Value;
 use sui_adapter::execution_mode::Normal;
 pub use sui_json as json;
 
-use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
+use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi, ThresholdBlsApi};
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -109,6 +109,7 @@ impl SuiClientBuilder {
         let transaction_builder = TransactionBuilder::new(read_api.clone());
         let coin_read_api = CoinReadApi::new(api.clone());
         let governance_api = GovernanceApi::new(api.clone());
+        let threshold_bls_api = ThresholdBlsApi::new(api.clone());
 
         Ok(SuiClient {
             api,
@@ -118,6 +119,7 @@ impl SuiClientBuilder {
             event_api,
             quorum_driver,
             governance_api,
+            threshold_bls_api,
         })
     }
 
@@ -174,6 +176,7 @@ pub struct SuiClient {
     event_api: EventApi,
     quorum_driver: QuorumDriver,
     governance_api: GovernanceApi,
+    threshold_bls_api: ThresholdBlsApi,
 }
 
 pub(crate) struct RpcClient {
@@ -258,6 +261,9 @@ impl SuiClient {
     }
     pub fn governance_api(&self) -> &GovernanceApi {
         &self.governance_api
+    }
+    pub fn threshold_bls_api(&self) -> &ThresholdBlsApi {
+        &self.threshold_bls_api
     }
 }
 
