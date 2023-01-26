@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactNode } from "react";
-import { Leaderboard, Scorecard, ScorecardUpdatedEvent } from "../../network/types";
+import { useSuiSystem } from "../../network/queries/sui-system";
+import { Leaderboard, ScorecardUpdatedEvent } from "../../network/types";
 import { formatGoal, formatAddress } from "../../utils/format";
 
 interface Props {
   data: ScorecardUpdatedEvent[];
-  scorecard: Scorecard,
   leaderboard: Leaderboard,
 }
 
@@ -23,7 +23,12 @@ const Cell = ({
   </As>
 );
 
-export function Table({ data, scorecard, leaderboard }: Props) {
+export function Table({ data, leaderboard }: Props) {
+  const { data: system } = useSuiSystem();
+  if (!system) {
+    return null;
+  }
+
   return (
     <table className="table-fixed w-full">
       <thead>
@@ -37,15 +42,16 @@ export function Table({ data, scorecard, leaderboard }: Props) {
       </thead>
       <tbody>
         {data.map((evt) => {
-          const round = evt.assignment.epoch - leaderboard.startEpoch;
-          const goal = evt.assignment.goal;
+          const { epoch, goal, validator } = evt.assignment;
+          const round = epoch - leaderboard.startEpoch;
+
           return (
-            <tr className="border-t border-white/20">
+            <tr key={epoch.toString()} className="border-t border-white/20">
               <Cell>{round.toString()}</Cell>
               <Cell>{formatGoal(goal)}</Cell>
-              <Cell>{formatAddress(evt.assignment.validator)}</Cell>
+              <Cell>{formatAddress(validator)}</Cell>
               <Cell>{evt.epochScore !== 0 ? "Achieved" : "Failed"}</Cell>
-              <Cell>{`${evt.totalScore} (+${evt.epochScore})`}</Cell>
+              <Cell>{evt.epochScore !== 0 ? `${evt.totalScore} (+${evt.epochScore})` : `${evt.totalScore}`}</Cell>
             </tr>
           );
         })}

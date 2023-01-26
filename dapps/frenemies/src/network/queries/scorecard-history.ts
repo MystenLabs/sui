@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import {  }
+import { bcs } from "../bcs";
 import provider from "../provider";
 import { useQuery } from "@tanstack/react-query";
-import { bcs } from "@mysten/sui.js";
 import { ScorecardUpdatedEvent, SCORECARD_UPDATED } from "../types";
 
 /**
@@ -21,15 +20,15 @@ export function useScorecardHistory(scorecardId?: string | null) {
       return null;
     }
 
+    // It's very likely to have duplicates in the `txIds`; so we need to
+    // filter them out and pass a unique set.
     const txIds = await provider.getTransactionsForObject(scorecardId);
-    const txs = await provider.getTransactionWithEffectsBatch(txIds);
+    const txs = await provider.getTransactionWithEffectsBatch(Array.from(new Set(txIds)));
 
     return txs
       .reduce((acc: any[], tx) => acc.concat(tx.effects.events || []), [])
       .filter((evt) => "moveEvent" in evt && evt.moveEvent.type == SCORECARD_UPDATED)
-      .map<ScorecardUpdatedEvent>(({ moveEvent }) =>
-        bcs.de("frenemies::ScorecardUpdateEvent", moveEvent.bcs, "base64")
-      );
+      .map<ScorecardUpdatedEvent>(({ moveEvent }) => bcs.de(SCORECARD_UPDATED, moveEvent.bcs, "base64"));
   },
   {
     enabled: !!scorecardId
