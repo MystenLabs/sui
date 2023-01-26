@@ -797,7 +797,7 @@ impl AuthorityPerEpochStore {
                 write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
             self.end_of_publish.try_lock()
                 .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
-                .insert(authority, ()).is_quorum_reached()
+                .insert_generic(authority, ()).is_quorum_reached()
         } else {
             // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
             debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
