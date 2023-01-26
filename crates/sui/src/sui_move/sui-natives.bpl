@@ -132,7 +132,10 @@ procedure {:inline 1} $2_types_is_one_time_witness{{S}}(_: {{T}}) returns (res: 
 // ==================================================================================
 // Native dynamic_field
 
+procedure {:inline 1} $2_dynamic_field_has_child_object(parent: int, id: int) returns (res: bool);
+
 {%- for instance in dynamic_field_instances %}
+
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
 {%- set T = instance.name -%}
 
