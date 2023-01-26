@@ -54,12 +54,3 @@
     padding: 25px sizing.$main-sides-space;
     @include utils.main-extra-space-for-nav;
 }
-
-.logo {
-    color: v.use(v.$colors-text-on-background);
-}
-
-.logo-link {
-    text-decoration: none;
-    color: inherit;
-}
