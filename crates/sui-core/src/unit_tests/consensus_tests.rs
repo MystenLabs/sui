@@ -13,6 +13,7 @@ use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     base_types::ObjectID,
     messages::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
@@ -50,11 +51,10 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
-        let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
         let data = TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            package_object_ref,
+            SUI_FRAMEWORK_OBJECT_ID,
             ident_str!(module).to_owned(),
             ident_str!(function).to_owned(),
             /* type_args */ vec![],

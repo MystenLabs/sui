@@ -15,6 +15,7 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
@@ -157,7 +158,7 @@ async fn init_genesis(
 ) -> (
     Genesis,
     Vec<(AuthorityPublicKeyBytes, AuthorityKeyPair)>,
-    ObjectRef,
+    ObjectID,
 ) {
     // add object_basics package object to genesis
     let modules = compile_basics_package()
@@ -204,13 +205,7 @@ async fn init_genesis(
         builder = builder.add_validator_signature(key);
     }
     let genesis = builder.build();
-    let pkg_ref = genesis
-        .objects()
-        .iter()
-        .find(|o| o.id() == pkg_id)
-        .unwrap()
-        .compute_object_reference();
-    (genesis, key_pairs, pkg_ref)
+    (genesis, key_pairs, pkg_id)
 }
 
 pub async fn init_local_authorities(
@@ -220,11 +215,11 @@ pub async fn init_local_authorities(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
     Genesis,
-    ObjectRef,
+    ObjectID,
 ) {
-    let (genesis, key_pairs, pkg_ref) = init_genesis(committee_size, genesis_objects).await;
+    let (genesis, key_pairs, framework) = init_genesis(committee_size, genesis_objects).await;
     let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
-    (aggregator, authorities, genesis, pkg_ref)
+    (aggregator, authorities, genesis, framework)
 }
 
 pub async fn init_local_authorities_with_genesis(

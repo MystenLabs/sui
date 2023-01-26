@@ -1683,11 +1683,7 @@ impl Display for SuiTransactionKind {
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(
-                    writer,
-                    "Package ID : {}",
-                    c.package.object_id.to_hex_literal()
-                )?;
+                writeln!(writer, "Package ID : {}", c.package.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
@@ -1725,7 +1721,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
             SingleTransactionKind::PayAllSui(p) => Self::PayAllSui(p.into()),
             SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
-                package: c.package.into(),
+                package: c.package,
                 module: c.module.to_string(),
                 function: c.function.to_string(),
                 type_arguments: c.type_arguments.iter().map(|ty| ty.to_string()).collect(),
@@ -1766,7 +1762,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "MoveCall", rename_all = "camelCase")]
 pub struct SuiMoveCall {
-    pub package: SuiObjectRef,
+    pub package: ObjectID,
     pub module: String,
     pub function: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

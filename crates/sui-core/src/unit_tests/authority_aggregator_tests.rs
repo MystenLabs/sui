@@ -72,7 +72,7 @@ pub fn transfer_object_move_transaction(
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     let args = vec![
@@ -83,7 +83,7 @@ pub fn transfer_object_move_transaction(
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("transfer").to_owned(),
             Vec::new(),
@@ -100,7 +100,7 @@ pub fn create_object_move_transaction(
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
     value: u64,
-    framework_obj_ref: ObjectRef,
+    package_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     // When creating an object_basics object, we provide the value (u64) and address which will own the object
@@ -112,7 +112,7 @@ pub fn create_object_move_transaction(
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            package_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
@@ -128,13 +128,13 @@ pub fn delete_object_move_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("delete").to_owned(),
             Vec::new(),
@@ -151,7 +151,7 @@ pub fn set_object_move_transaction(
     secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
     value: u64,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> VerifiedTransaction {
     let args = vec![
@@ -162,7 +162,7 @@ pub fn set_object_move_transaction(
     to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             src,
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("object_basics").to_owned(),
             ident_str!("set_value").to_owned(),
             Vec::new(),
@@ -321,10 +321,9 @@ async fn test_quorum_map_and_reduce_timeout() {
     let genesis_objects = vec![pkg.clone(), gas_object1.clone()];
     let (mut authorities, _, genesis, _) = init_local_authorities(4, genesis_objects).await;
     let pkg = genesis.object(pkg.id()).unwrap();
-    let pkg_ref = pkg.compute_object_reference();
     let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();
-    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
+    let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap();

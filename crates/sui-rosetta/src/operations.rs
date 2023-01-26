@@ -223,7 +223,7 @@ impl Operations {
     }
 
     fn is_delegation_call(tx: &SuiMoveCall) -> bool {
-        tx.package.object_id == SUI_FRAMEWORK_OBJECT_ID
+        tx.package == SUI_FRAMEWORK_OBJECT_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
             && (tx.function == ADD_DELEGATION_LOCKED_COIN_FUN_NAME.as_str()
                 || tx.function == ADD_DELEGATION_MUL_COIN_FUN_NAME.as_str())

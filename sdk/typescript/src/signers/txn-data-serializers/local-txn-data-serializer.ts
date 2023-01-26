@@ -3,7 +3,6 @@
 
 import { Base64DataBuffer } from '../../serialization/base64';
 import {
-  bcs,
   Coin,
   PAY_JOIN_COIN_FUNC_NAME,
   PAY_MODULE_NAME,
@@ -14,10 +13,12 @@ import {
   SUI_TYPE_ARG,
   Transaction,
   TransactionData,
+  TransactionKind,
   TypeTag,
   SuiObjectRef,
   deserializeTransactionBytesToTransactionData,
-  TransactionKind,
+  normalizeSuiObjectId,
+  bcsForVersion,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -172,10 +173,16 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'moveCall':
         const moveCall = unserializedTxn.data as MoveCallTransaction;
-        const pkg = await this.provider.getObjectRef(moveCall.packageObjectId);
+        const api = await this.provider.getRpcApiVersion();
+
+        // TODO: remove after 0.24.0 is deployed for devnet and testnet
+        const pkg = api?.major === 0 && api?.minor < 24
+          ? (await this.provider.getObjectRef(moveCall.packageObjectId))!
+          : normalizeSuiObjectId(moveCall.packageObjectId);
+
         tx = {
           Call: {
-            package: pkg!,
+            package: pkg,
             module: moveCall.module,
             function: moveCall.function,
             typeArguments: moveCall.typeArguments.map((a) =>
@@ -362,6 +369,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     // TODO: derive the buffer size automatically
     size: number = 8192
   ): Promise<Base64DataBuffer> {
+    const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
     return new Base64DataBuffer(dataBytes);
   }
@@ -374,6 +382,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     // TODO: derive the buffer size automatically
     size: number = 8192
   ): Promise<Base64DataBuffer> {
+    const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     const dataBytes = bcs.ser('TransactionKind', tx, size).toBytes();
     return new Base64DataBuffer(dataBytes);
   }
@@ -386,8 +395,12 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {
+    let version = await this.provider.getRpcApiVersion();
     return this.transformTransactionDataToSignableTransaction(
-      deserializeTransactionBytesToTransactionData(bytes)
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(version),
+        bytes,
+      ),
     );
   }
 
@@ -434,10 +447,14 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         },
       };
     } else if ('Call' in tx) {
+      const packageObjectId = typeof tx.Call.package === "string"
+        ? tx.Call.package
+        : tx.Call.package.objectId;
+
       return {
         kind: 'moveCall',
         data: {
-          packageObjectId: tx.Call.package.objectId,
+          packageObjectId,
           module: tx.Call.module,
           function: tx.Call.function,
           typeArguments: tx.Call.typeArguments,

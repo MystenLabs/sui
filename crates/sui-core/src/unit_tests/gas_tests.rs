@@ -398,7 +398,7 @@ async fn test_move_call_gas() -> SuiResult {
     ];
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module.clone(),
         function.clone(),
         Vec::new(),
@@ -459,7 +459,7 @@ async fn test_move_call_gas() -> SuiResult {
     // Execute object deletion, and make sure we have storage rebate.
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module.clone(),
         ident_str!("delete").to_owned(),
         vec![],
@@ -487,7 +487,7 @@ async fn test_move_call_gas() -> SuiResult {
     let budget = gas_used_before_vm_exec + 1;
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module,
         function,
         Vec::new(),

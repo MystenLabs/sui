@@ -12,11 +12,9 @@ use sui_core::test_utils::make_transfer_sui_transaction;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use test_utils::messages::make_delegation_transaction;
 
 pub struct DelegationTestPayload {
-    system_package_ref: ObjectRef,
     coin: Option<ObjectRef>,
     gas: ObjectRef,
     validator: SuiAddress,
@@ -33,7 +31,6 @@ impl Payload for DelegationTestPayload {
             Some(coin) => make_delegation_transaction(
                 self.gas,
                 coin,
-                self.system_package_ref,
                 self.validator,
                 self.sender,
                 &self.keypair,
@@ -59,7 +56,6 @@ impl Payload for DelegationTestPayload {
             Some(_) => None,
         };
         Box::new(DelegationTestPayload {
-            system_package_ref: self.system_package_ref,
             coin,
             gas: new_gas,
             validator: self.validator,
@@ -108,8 +104,6 @@ impl Workload<dyn Payload> for DelegationWorkload {
         gas_config: WorkloadPayloadGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) -> Vec<Box<dyn Payload>> {
-        let system_package = proxy.get_object(SUI_FRAMEWORK_OBJECT_ID).await;
-        let system_package_ref = system_package.unwrap().compute_object_reference();
         let validators = proxy
             .get_validators()
             .await
@@ -121,7 +115,6 @@ impl Workload<dyn Payload> for DelegationWorkload {
             .map(|(gas, owner, keypair)| {
                 let validator = *validators.iter().choose(&mut rand::thread_rng()).unwrap();
                 Box::new(DelegationTestPayload {
-                    system_package_ref,
                     coin: None,
                     gas,
                     validator,

@@ -32,6 +32,7 @@ use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSumma
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
 };
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use std::{convert::TryInto, env};
@@ -149,7 +150,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
             &gas_object_id,
             &sender,
             &keypair,
-            &package,
+            &package.0,
             "object_basics",
             "share",
             vec![],
@@ -188,7 +189,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package,
+        package.0,
         ident_str!("object_basics").to_owned(),
         ident_str!("set_value").to_owned(),
         /* type_args */ vec![],
@@ -262,7 +263,7 @@ async fn test_dev_inspect_object_by_bytes() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "create",
         vec![],
@@ -297,7 +298,7 @@ async fn test_dev_inspect_object_by_bytes() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "create",
         vec![],
@@ -329,7 +330,7 @@ async fn test_dev_inspect_object_by_bytes() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "set_value",
         vec![],
@@ -366,7 +367,7 @@ async fn test_dev_inspect_object_by_bytes() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "set_value",
         vec![],
@@ -407,7 +408,7 @@ async fn test_dev_inspect_unowned_object() {
         &alice_gas_id,
         &alice,
         &alice_key,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "create",
         vec![],
@@ -432,7 +433,7 @@ async fn test_dev_inspect_unowned_object() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &alice,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "set_value",
         vec![],
@@ -477,7 +478,7 @@ async fn test_dev_inspect_dynamic_field() {
                     &gas_object_id,
                     &sender,
                     &sender_key,
-                    &object_basics,
+                    &object_basics.0,
                     "object_basics",
                     "create",
                     vec![],
@@ -515,7 +516,7 @@ async fn test_dev_inspect_dynamic_field() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "add_ofield",
         vec![],
@@ -533,7 +534,7 @@ async fn test_dev_inspect_dynamic_field() {
     let DevInspectResults { effects, results } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "add_ofield",
         vec![],
@@ -577,7 +578,7 @@ async fn test_dev_inspect_return_values() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "create",
         vec![],
@@ -606,7 +607,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "borrow_value_mut",
         vec![],
@@ -634,7 +635,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "borrow_value",
         vec![],
@@ -662,7 +663,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "get_value",
         vec![],
@@ -690,7 +691,7 @@ async fn test_dev_inspect_return_values() {
     let DevInspectResults { results, .. } = call_dev_inspect(
         &fullnode,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "get_contents",
         vec![],
@@ -723,7 +724,7 @@ async fn test_dev_inspect_uses_unbound_object() {
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
-        package: object_basics,
+        package: object_basics.0,
         module: Identifier::new("object_basics").unwrap(),
         function: Identifier::new("freeze").unwrap(),
         type_arguments: vec![],
@@ -752,7 +753,7 @@ async fn test_dev_inspect_on_validator() {
     let result = call_dev_inspect(
         &validator,
         &sender,
-        &object_basics,
+        &object_basics.0,
         "object_basics",
         "create",
         vec![],
@@ -1424,7 +1425,7 @@ async fn test_handle_move_transaction() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_payment_object_id)]).await;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_payment_object_id,
         &sender,
@@ -1992,7 +1993,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2005,7 +2006,7 @@ async fn test_move_call_mutable_object_not_mutated() {
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2031,7 +2032,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &pkg_ref,
+        &pkg_ref.0,
         "object_basics",
         "update",
         vec![],
@@ -2163,7 +2164,7 @@ async fn test_move_call_delete() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2176,7 +2177,7 @@ async fn test_move_call_delete() {
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2193,7 +2194,7 @@ async fn test_move_call_delete() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &pkg_ref,
+        &pkg_ref.0,
         "object_basics",
         "update",
         vec![],
@@ -2214,7 +2215,7 @@ async fn test_move_call_delete() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &pkg_ref,
+        &pkg_ref.0,
         "object_basics",
         "delete",
         vec![],
@@ -2245,7 +2246,7 @@ async fn test_get_latest_parent_entry() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2256,7 +2257,7 @@ async fn test_get_latest_parent_entry() {
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(
-        &pkg_ref,
+        &pkg_ref.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2273,7 +2274,7 @@ async fn test_get_latest_parent_entry() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &pkg_ref,
+        &pkg_ref.0,
         "object_basics",
         "update",
         vec![],
@@ -2302,7 +2303,7 @@ async fn test_get_latest_parent_entry() {
         &gas_object_id,
         &sender,
         &sender_key,
-        &pkg_ref,
+        &pkg_ref.0,
         "object_basics",
         "delete",
         vec![],
@@ -2691,7 +2692,7 @@ async fn test_store_revert_wrap_move_call() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2708,7 +2709,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrap_txn = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            object_basics,
+            object_basics.0,
             ident_str!("object_basics").to_owned(),
             ident_str!("wrap").to_owned(),
             vec![],
@@ -2758,7 +2759,7 @@ async fn test_store_revert_unwrap_move_call() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2773,7 +2774,7 @@ async fn test_store_revert_unwrap_move_call() {
     let object_v0 = create_effects.created[0].0;
 
     let wrap_effects = wrap_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &object_v0.0,
         &gas_object_id,
@@ -2793,7 +2794,7 @@ async fn test_store_revert_unwrap_move_call() {
     let unwrap_txn = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            object_basics,
+            object_basics.0,
             ident_str!("object_basics").to_owned(),
             ident_str!("unwrap").to_owned(),
             vec![],
@@ -2842,7 +2843,7 @@ async fn test_store_get_dynamic_object() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_outer_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2855,7 +2856,7 @@ async fn test_store_get_dynamic_object() {
     assert_eq!(create_outer_effects.created.len(), 1);
 
     let create_inner_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2873,7 +2874,7 @@ async fn test_store_get_dynamic_object() {
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            object_basics,
+            object_basics.0,
             ident_str!("object_basics").to_owned(),
             ident_str!("add_ofield").to_owned(),
             vec![],
@@ -2913,7 +2914,7 @@ async fn test_store_get_dynamic_field() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_outer_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2926,7 +2927,7 @@ async fn test_store_get_dynamic_field() {
     assert_eq!(create_outer_effects.created.len(), 1);
 
     let create_inner_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2944,7 +2945,7 @@ async fn test_store_get_dynamic_field() {
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            object_basics,
+            object_basics.0,
             ident_str!("object_basics").to_owned(),
             ident_str!("add_field").to_owned(),
             vec![],
@@ -2984,7 +2985,7 @@ async fn test_store_revert_add_ofield() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_outer_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2997,7 +2998,7 @@ async fn test_store_revert_add_ofield() {
     assert_eq!(create_outer_effects.created.len(), 1);
 
     let create_inner_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -3015,7 +3016,7 @@ async fn test_store_revert_add_ofield() {
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            object_basics,
+            object_basics.0,
             ident_str!("object_basics").to_owned(),
             ident_str!("add_ofield").to_owned(),
             vec![],
@@ -3078,7 +3079,7 @@ async fn test_store_revert_remove_ofield() {
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
     let create_outer_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -3091,7 +3092,7 @@ async fn test_store_revert_remove_ofield() {
     assert_eq!(create_outer_effects.created.len(), 1);
 
     let create_inner_effects = create_move_object(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &gas_object_id,
         &sender,
@@ -3107,7 +3108,7 @@ async fn test_store_revert_remove_ofield() {
     let inner_v0 = create_inner_effects.created[0].0;
 
     let add_effects = add_ofield(
-        &object_basics,
+        &object_basics.0,
         &authority_state,
         &outer_v0.0,
         &inner_v0.0,
@@ -3128,7 +3129,7 @@ async fn test_store_revert_remove_ofield() {
     let remove_ofield_txn = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            object_basics,
+            object_basics.0,
             ident_str!("object_basics").to_owned(),
             ident_str!("remove_ofield").to_owned(),
             vec![],
@@ -3457,7 +3458,7 @@ pub async fn call_move(
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
-    package: &ObjectRef,
+    package: &ObjectID,
     module: &'_ str,
     function: &'_ str,
     type_args: Vec<TypeTag>,
@@ -3485,7 +3486,7 @@ pub async fn call_move_(
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
-    package: &ObjectRef,
+    package: &ObjectID,
     module: &'_ str,
     function: &'_ str,
     type_args: Vec<TypeTag>,
@@ -3516,7 +3517,7 @@ pub async fn call_move_(
 }
 
 pub async fn create_move_object(
-    package_ref: &ObjectRef,
+    package_id: &ObjectID,
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
@@ -3527,7 +3528,7 @@ pub async fn create_move_object(
         gas_object_id,
         sender,
         sender_key,
-        package_ref,
+        package_id,
         "object_basics",
         "create",
         vec![],
@@ -3540,7 +3541,7 @@ pub async fn create_move_object(
 }
 
 pub async fn wrap_object(
-    package_ref: &ObjectRef,
+    package_id: &ObjectID,
     authority: &AuthorityState,
     object_id: &ObjectID,
     gas_object_id: &ObjectID,
@@ -3552,7 +3553,7 @@ pub async fn wrap_object(
         gas_object_id,
         sender,
         sender_key,
-        package_ref,
+        package_id,
         "object_basics",
         "wrap",
         vec![],
@@ -3562,7 +3563,7 @@ pub async fn wrap_object(
 }
 
 pub async fn add_ofield(
-    package_ref: &ObjectRef,
+    package_id: &ObjectID,
     authority: &AuthorityState,
     outer_object_id: &ObjectID,
     inner_object_id: &ObjectID,
@@ -3575,7 +3576,7 @@ pub async fn add_ofield(
         gas_object_id,
         sender,
         sender_key,
-        package_ref,
+        package_id,
         "object_basics",
         "add_ofield",
         vec![],
@@ -3590,7 +3591,7 @@ pub async fn add_ofield(
 pub async fn call_dev_inspect(
     authority: &AuthorityState,
     sender: &SuiAddress,
-    package: &ObjectRef,
+    package: &ObjectID,
     module: &str,
     function: &str,
     type_arguments: Vec<TypeTag>,
@@ -3626,11 +3627,10 @@ async fn make_test_transaction(
     // Make a sample transaction.
     let module = "object_basics";
     let function = "set_value";
-    let package_object_ref = authorities[0].get_framework_object_ref().await.unwrap();
 
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
-        package_object_ref,
+        SUI_FRAMEWORK_OBJECT_ID,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         /* type_args */ vec![],
@@ -3881,7 +3881,7 @@ async fn test_blocked_move_calls() {
     let tx = to_sender_signed_transaction(
         TransactionData::new_move_call_with_dummy_gas_price(
             sender,
-            authority_state.get_framework_object_ref().await.unwrap(),
+            SUI_FRAMEWORK_OBJECT_ID,
             ident_str!("sui_system").to_owned(),
             ident_str!("request_remove_validator").to_owned(),
             vec![],

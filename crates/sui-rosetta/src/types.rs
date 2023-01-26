@@ -30,7 +30,9 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use sui_types::{
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+};
 
 pub type BlockHeight = u64;
 
@@ -591,7 +593,6 @@ impl IntoResponse for ConstructionMetadataResponse {
 pub enum TransactionMetadata {
     PaySui(Vec<ObjectRef>),
     Delegation {
-        sui_framework: ObjectRef,
         coins: Vec<ObjectRef>,
         locked_until_epoch: Option<EpochId>,
     },
@@ -876,11 +877,7 @@ impl InternalOperation {
                     locked_until_epoch,
                     ..
                 },
-                TransactionMetadata::Delegation {
-                    sui_framework,
-                    coins,
-                    ..
-                },
+                TransactionMetadata::Delegation { coins, .. },
             ) => {
                 let function = if locked_until_epoch.is_some() {
                     ADD_DELEGATION_LOCKED_COIN_FUN_NAME.to_owned()
@@ -888,7 +885,7 @@ impl InternalOperation {
                     ADD_DELEGATION_MUL_COIN_FUN_NAME.to_owned()
                 };
                 SingleTransactionKind::Call(MoveCall {
-                    package: sui_framework,
+                    package: SUI_FRAMEWORK_OBJECT_ID,
                     module: SUI_SYSTEM_MODULE_NAME.to_owned(),
                     function,
                     type_arguments: vec![],
