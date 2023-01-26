@@ -62,7 +62,7 @@ export function Transaction({
     }, [amountByRecipient, eventsSummary]);
 
     const recipientAddress = useMemo(() => {
-        const tranferObjectRecipientAddress =
+        const transferObjectRecipientAddress =
             amountByRecipient &&
             amountByRecipient?.find(
                 ({ recipientAddress }) => recipientAddress !== address
@@ -75,7 +75,7 @@ export function Transaction({
 
         return (
             receiverAddr ??
-            tranferObjectRecipientAddress ??
+            transferObjectRecipientAddress ??
             certificate.data.sender
         );
     }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
