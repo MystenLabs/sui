@@ -267,7 +267,8 @@ fn try_from_bcs_bytes(bytes: &[u8]) -> Result<JsonValue, anyhow::Error> {
     if let Ok(v) = bcs::from_bytes::<String>(bytes) {
         Ok(JsonValue::String(v))
     } else if let Ok(v) = bcs::from_bytes::<AccountAddress>(bytes) {
-        Ok(JsonValue::String(v.to_hex_literal()))
+        // Converting address to string without trimming 0
+        Ok(JsonValue::String(format!("{v:#x}")))
     } else if let Ok(v) = bcs::from_bytes::<u8>(bytes) {
         Ok(JsonValue::Number(Number::from(v)))
     } else if let Ok(v) = bcs::from_bytes::<u16>(bytes) {

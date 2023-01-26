@@ -680,6 +680,19 @@ fn test_convert_number_from_bcs() {
 }
 
 #[test]
+fn test_no_address_zero_trimming() {
+    let bcs_bytes = bcs::to_bytes(
+        &AccountAddress::from_str("0x0000011111111111111111111111111111111111").unwrap(),
+    )
+    .unwrap();
+    let value = SuiJsonValue::from_bcs_bytes(&bcs_bytes).unwrap();
+    assert_eq!(
+        "0x0000011111111111111111111111111111111111",
+        value.0.as_str().unwrap()
+    );
+}
+
+#[test]
 fn test_convert_number_array_from_bcs() {
     let bcs_bytes = [
         5, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0, 80, 195, 0, 0,
