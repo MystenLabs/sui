@@ -12,7 +12,7 @@ export function getGas(
   coins: ObjectData<Coin>[],
   gasBudget: bigint
 ): { gas: ObjectData<Coin> | null; max: bigint; coins: ObjectData<Coin>[] } {
-  const sorted = coins.sort((a, b) => Number(b.data.value - a.data.value));
+  const sorted = coins.sort((a, b) => Number(a.data.value - b.data.value));
   const gas = sorted.find((coin) => coin.data.value >= gasBudget) || null;
 
   if (gas === null) {
