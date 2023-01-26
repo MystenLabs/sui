@@ -583,6 +583,7 @@ impl Primary {
                 dag,
                 committee.clone(),
                 endpoint_metrics,
+                tx_shutdown.subscribe(),
             );
 
             handles.extend(vec![block_synchronizer_handle, consensus_api_handle]);
