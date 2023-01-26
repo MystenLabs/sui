@@ -89,7 +89,7 @@ impl ConsensusAdapterMetrics {
             .unwrap(),
             sequencing_acknowledge_latency: register_histogram_with_registry!(
                 "sequencing_acknowledge_latency",
-                "The latency for acknowledgement from sequencing engine .",
+                "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
