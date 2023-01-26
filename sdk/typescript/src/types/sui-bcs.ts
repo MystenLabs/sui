@@ -168,6 +168,11 @@ export type CallArg =
   | { Object: ObjectArg }
   | { ObjVec: ArrayLike<ObjectArg> };
 
+export type PureArg = { Pure: ArrayLike<number> };
+export function isPureArg(arg: any): arg is PureArg {
+  return (arg as PureArg).Pure !== undefined;
+}  
+
 /**
  * Kind of a TypeTag which is represented by a Move type identifier.
  */

@@ -18,7 +18,7 @@ import {
   SuiObjectRef,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
-import { bcsForVersion, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
+import { bcsForVersion, CallArg, isPureArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
@@ -154,6 +154,9 @@ export class CallArgSerializer {
     expectedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue
   ): Promise<CallArg> {
+    if (isPureArg(argVal)) {
+      return argVal;
+    }
     const serType = this.getPureSerializationType(expectedType, argVal);
     const version = await this.provider.getRpcApiVersion();
     if (serType !== undefined) {
