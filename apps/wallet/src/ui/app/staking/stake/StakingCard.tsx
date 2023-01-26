@@ -332,7 +332,7 @@ function StakingCard() {
             >
                 <Formik
                     initialValues={initialValues}
-                    validateOnMount
+                    validateOnMount={!unstake}
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
@@ -346,17 +346,6 @@ function StakingCard() {
                                         stakedId={stakeIdParams}
                                     />
                                 </div>
-                                {!unstake && (
-                                    <div className="flex flex-col justify-between items-center mb-2 mt-7.5 w-full">
-                                        <Text
-                                            variant="caption"
-                                            color="gray-85"
-                                            weight="semibold"
-                                        >
-                                            Enter the amount of SUI to stake
-                                        </Text>
-                                    </div>
-                                )}
 
                                 {unstake ? (
                                     <UnStakeForm

@@ -42,5 +42,5 @@ export function getStakingRewards(
         .dividedBy(delegationTokenSupply);
 
     const earnToken = currentSuiWorth.decimalPlaces(0, 1).minus(pricipalAmout);
-    return earnToken.toNumber();
+    return Math.abs(earnToken.toNumber());
 }

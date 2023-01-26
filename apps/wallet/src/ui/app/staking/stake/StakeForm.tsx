@@ -3,19 +3,21 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useRef, memo, useCallback } from 'react';
+import { useRef, memo, useCallback, useMemo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
+import { roundFloat } from '_helpers';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
 const HIDE_MAX = true;
+const DECIMAL_PLACE = 9;
 
 export type StakeFromProps = {
     submitError: string | null;
@@ -32,7 +34,10 @@ function StakeForm({
     onClearSubmitError,
     epoch,
 }: StakeFromProps) {
-    const { setFieldValue } = useFormikContext<FormValues>();
+    const {
+        setFieldValue,
+        values: { amount },
+    } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
@@ -56,9 +61,28 @@ function StakeForm({
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
 
+    const calculateRemaining = useMemo(() => {
+        if (!maxToken) return 0;
+        return roundFloat(+maxToken - +amount, DECIMAL_PLACE);
+    }, [amount, maxToken]);
+
     return (
         <Form className="flex flex-1 flex-col flex-nowrap" autoComplete="off">
             <Content>
+                <div className="flex flex-col justify-between items-center mb-2 mt-3.5 w-full gap-1.5">
+                    <Text variant="caption" color="gray-85" weight="semibold">
+                        Enter the amount of SUI to stake
+                    </Text>
+                    <Text
+                        variant="bodySmall"
+                        color="steel-dark"
+                        weight="medium"
+                    >
+                        Available -{' '}
+                        {calculateRemaining > 0 ? calculateRemaining : 0}{' '}
+                        {symbol}
+                    </Text>
+                </div>
                 <Card
                     variant="gray"
                     titleDivider
