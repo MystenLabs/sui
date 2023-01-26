@@ -9,11 +9,11 @@ use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::RwLockReadGuard;
-use prometheus::register_int_gauge_with_registry;
-use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
+use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::future::Future;
@@ -54,7 +54,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
-    pub sequencing_acknowledge_latency: Histogram,
+    pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: Histogram,
 }
 
@@ -87,9 +87,10 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
-            sequencing_acknowledge_latency: register_histogram_with_registry!(
+            sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
+                &["retry"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -348,11 +349,8 @@ impl ConsensusAdapter {
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             {
-                let _timer = self
-                    .opt_metrics
-                    .as_ref()
-                    .map(|m| m.sequencing_acknowledge_latency.start_timer());
-                let mut retries = 0;
+                let ack_start = Instant::now();
+                let mut retries: u32 = 0;
                 while let Err(e) = self
                     .consensus_client
                     .submit_to_consensus(&transaction, epoch_store)
@@ -371,6 +369,24 @@ impl ConsensusAdapter {
                     retries += 1;
                     time::sleep(Duration::from_secs(10)).await;
                 }
+
+                // we want to record the num of retries when reporting latency but to avoid label
+                // cardinality we do some simple bucketing to give us a good enough idea of how
+                // many retries happened associated with the latency.
+                let bucket = match retries {
+                    0..=10 => retries.to_string(), // just report the retry count as is
+                    11..=20 => "between_10_and_20".to_string(),
+                    21..=50 => "between_20_and_50".to_string(),
+                    51..=100 => "between_50_and_100".to_string(),
+                    _ => "over_100".to_string(),
+                };
+
+                self.opt_metrics.as_ref().map(|metrics| {
+                    metrics
+                        .sequencing_acknowledge_latency
+                        .with_label_values(&[&bucket])
+                        .observe(ack_start.elapsed().as_secs_f64());
+                });
             }
             debug!("Submitted {transaction_key:?} to consensus");
             processed_waiter
