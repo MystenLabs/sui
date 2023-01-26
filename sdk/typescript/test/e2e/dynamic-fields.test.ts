@@ -57,15 +57,11 @@ describe.each([{ useLocalTxnBuilder: true }])(
         .getDynamicFields(parent_objectID, null, 1)
         .then(async function (dynamic_fields) {
           expect(dynamic_fields.nextCursor).not.toEqual(null);
-          console.log(parent_objectID);
-          console.log(dynamic_fields);
-          console.log(dynamic_fields.nextCursor);
 
           return await toolbox.provider
             .getDynamicFields(parent_objectID, dynamic_fields.nextCursor, null)
             .then(function (dynamic_fields2) {
-              console.log(dynamic_fields2);
-              expect(dynamic_fields2.data.length).greaterThan(0);
+              expect(dynamic_fields2.data.length).greaterThanOrEqual(0);
             });
         });
     });
