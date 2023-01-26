@@ -28,6 +28,7 @@
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
+-  [Function `set_pending_delegations_num`](#0x2_sui_system_set_pending_delegations_num)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
@@ -1179,6 +1180,30 @@ running and continue making epoch changes.
 
     self.epoch = new_epoch;
     self.safe_mode = <b>true</b>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_set_pending_delegations_num"></a>
+
+## Function `set_pending_delegations_num`
+
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_set_pending_delegations_num">set_pending_delegations_num</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, num: u64, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_set_pending_delegations_num">set_pending_delegations_num</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>, num: u64, _ctx: &<b>mut</b> TxContext) {
+    <a href="validator_set.md#0x2_validator_set_set_pending_delegations_num">validator_set::set_pending_delegations_num</a>(&<b>mut</b> self.validators, num);
 }
 </code></pre>
 

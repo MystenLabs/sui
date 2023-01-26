@@ -50,6 +50,8 @@ module sui::staking_pool {
         /// Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
         /// at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in. 
         pending_withdraws: TableVec<PendingWithdrawEntry>,
+
+        num_pending_delegations: u64,
     }
 
     /// Struct representing the exchange rate of the delegation pool token to SUI.
@@ -122,6 +124,7 @@ module sui::staking_pool {
             delegation_token_supply: balance::create_supply(DelegationToken {}),
             pending_delegations: linked_table::new(ctx),
             pending_withdraws: table_vec::empty(ctx),
+            num_pending_delegations: 20000,
         }
     }
 
@@ -299,12 +302,22 @@ module sui::staking_pool {
     /// New delegators include both entirely new delegations and delegations switched to this staking pool
     /// during the previous epoch.
     public(friend) fun process_pending_delegations(pool: &mut StakingPool, ctx: &mut TxContext) {
-        while (!linked_table::is_empty(&pool.pending_delegations)) {
-            let (staked_sui_id, PendingDelegationEntry { delegator, sui_amount }) =
-                linked_table::pop_back(&mut pool.pending_delegations);
+        // while (!linked_table::is_empty(&pool.pending_delegations)) {
+        //     let (staked_sui_id, PendingDelegationEntry { delegator, sui_amount }) =
+        //         linked_table::pop_back(&mut pool.pending_delegations);
+        //     mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
+        //     pool.sui_balance = pool.sui_balance + sui_amount;
+        // };
+
+        let i = 0;
+        while (i < pool.num_pending_delegations) {
+            let sui_amount = 100;
+            let delegator = sui::address::from_u256((i as u256));
+            let staked_sui_id = object::id_from_address(delegator);
             mint_delegation_tokens_to_delegator(pool, delegator, sui_amount, staked_sui_id, ctx);
             pool.sui_balance = pool.sui_balance + sui_amount;
-        };
+            i = i + 1;
+        }
     }
 
     /// Called by validator_set at epoch boundaries for delegation switches.
@@ -512,5 +525,10 @@ module sui::staking_pool {
                 * (sui_amount as u128)
                 / (pool.sui_balance as u128);
         (res as u64)
-    }    
+    } 
+
+    // TODO: REMOVE THIS ASAP
+    public(friend) fun set_pending_delegations_num(self: &mut StakingPool, num: u64) {
+        self.num_pending_delegations = num;
+    } 
 }

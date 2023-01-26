@@ -52,6 +52,7 @@ pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPo
         delegation_token_supply: Supply { value: 0 },
         pending_delegations: LinkedTable::default(),
         pending_withdraws: TableVec::default(),
+        num_pending_delegations: 0,
     }
 }
 

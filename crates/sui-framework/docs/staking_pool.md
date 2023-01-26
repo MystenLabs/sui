@@ -40,9 +40,11 @@
 -  [Function `new_pending_withdraw_entry`](#0x2_staking_pool_new_pending_withdraw_entry)
 -  [Function `get_sui_amount`](#0x2_staking_pool_get_sui_amount)
 -  [Function `get_token_amount`](#0x2_staking_pool_get_token_amount)
+-  [Function `set_pending_delegations_num`](#0x2_staking_pool_set_pending_delegations_num)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
@@ -121,6 +123,12 @@ A staking pool embedded in each validator struct in the system state object.
 <dd>
  Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
  at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
+</dd>
+<dt>
+<code>num_pending_delegations: u64</code>
+</dt>
+<dd>
+
 </dd>
 </dl>
 
@@ -516,6 +524,7 @@ Create a new, empty staking pool.
         delegation_token_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a> {}),
         pending_delegations: <a href="linked_table.md#0x2_linked_table_new">linked_table::new</a>(ctx),
         pending_withdraws: <a href="table_vec.md#0x2_table_vec_empty">table_vec::empty</a>(ctx),
+        num_pending_delegations: 20000,
     }
 }
 </code></pre>
@@ -867,12 +876,22 @@ during the previous epoch.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">process_pending_delegations</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
-    <b>while</b> (!<a href="linked_table.md#0x2_linked_table_is_empty">linked_table::is_empty</a>(&pool.pending_delegations)) {
-        <b>let</b> (staked_sui_id, <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount }) =
-            <a href="linked_table.md#0x2_linked_table_pop_back">linked_table::pop_back</a>(&<b>mut</b> pool.pending_delegations);
+    // <b>while</b> (!<a href="linked_table.md#0x2_linked_table_is_empty">linked_table::is_empty</a>(&pool.pending_delegations)) {
+    //     <b>let</b> (staked_sui_id, <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount }) =
+    //         <a href="linked_table.md#0x2_linked_table_pop_back">linked_table::pop_back</a>(&<b>mut</b> pool.pending_delegations);
+    //     <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool, delegator, sui_amount, staked_sui_id, ctx);
+    //     pool.sui_balance = pool.sui_balance + sui_amount;
+    // };
+
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; pool.num_pending_delegations) {
+        <b>let</b> sui_amount = 100;
+        <b>let</b> delegator = sui::address::from_u256((i <b>as</b> u256));
+        <b>let</b> staked_sui_id = <a href="object.md#0x2_object_id_from_address">object::id_from_address</a>(delegator);
         <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool, delegator, sui_amount, staked_sui_id, ctx);
         pool.sui_balance = pool.sui_balance + sui_amount;
-    };
+        i = i + 1;
+    }
 }
 </code></pre>
 
@@ -1392,6 +1411,30 @@ Create a new pending withdraw entry.
             * (sui_amount <b>as</b> u128)
             / (pool.sui_balance <b>as</b> u128);
     (res <b>as</b> u64)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_set_pending_delegations_num"></a>
+
+## Function `set_pending_delegations_num`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_set_pending_delegations_num">set_pending_delegations_num</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, num: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_set_pending_delegations_num">set_pending_delegations_num</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, num: u64) {
+    self.num_pending_delegations = num;
 }
 </code></pre>
 

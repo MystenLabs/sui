@@ -168,6 +168,7 @@ pub struct StakingPool {
     pub delegation_token_supply: Supply,
     pub pending_delegations: LinkedTable<ObjectID>,
     pub pending_withdraws: TableVec,
+    pub num_pending_delegations: u64,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorPair type

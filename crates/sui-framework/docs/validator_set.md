@@ -21,6 +21,7 @@
 -  [Function `request_switch_delegation`](#0x2_validator_set_request_switch_delegation)
 -  [Function `request_set_gas_price`](#0x2_validator_set_request_set_gas_price)
 -  [Function `request_set_commission_rate`](#0x2_validator_set_request_set_commission_rate)
+-  [Function `set_pending_delegations_num`](#0x2_validator_set_set_pending_delegations_num)
 -  [Function `advance_epoch`](#0x2_validator_set_advance_epoch)
 -  [Function `derive_reference_gas_price`](#0x2_validator_set_derive_reference_gas_price)
 -  [Function `total_validator_stake`](#0x2_validator_set_total_validator_stake)
@@ -751,6 +752,38 @@ process them in <code>advance_epoch</code> by calling <code>process_pending_dele
     <b>let</b> validator_address = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
     <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(&<b>mut</b> self.active_validators, validator_address);
     <a href="validator.md#0x2_validator_request_set_commission_rate">validator::request_set_commission_rate</a>(<a href="validator.md#0x2_validator">validator</a>, new_commission_rate);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_set_pending_delegations_num"></a>
+
+## Function `set_pending_delegations_num`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_set_pending_delegations_num">set_pending_delegations_num</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, num: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_set_pending_delegations_num">set_pending_delegations_num</a>(self: &<b>mut</b> <a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, num: u64) {
+    <b>let</b> num_validators = <a href="_length">vector::length</a>(&self.active_validators);
+    <b>let</b> per_validator_num = num / num_validators;
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; num_validators) {
+        <b>let</b> v = <a href="_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> self.active_validators, i);
+        <b>let</b> pool = <a href="validator.md#0x2_validator_get_staking_pool_mut_ref">validator::get_staking_pool_mut_ref</a>(v);
+        <a href="staking_pool.md#0x2_staking_pool_set_pending_delegations_num">staking_pool::set_pending_delegations_num</a>(pool, per_validator_num);
+        i = i + 1;
+    };
 }
 </code></pre>
 
