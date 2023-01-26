@@ -313,7 +313,10 @@ impl PrimaryChannelMetrics {
 #[derive(Clone)]
 pub struct PrimaryMetrics {
     /// count number of headers that the node proposed
-    pub headers_proposed: IntCounter,
+    pub headers_proposed: IntCounterVec,
+    // total number of parents in all proposed headers, for calculating average number of parents
+    // per header.
+    pub header_parents_total: IntCounter,
     /// the current proposed header round
     pub proposed_header_round: IntGauge,
     /// The number of received votes for the proposed last round
@@ -360,9 +363,16 @@ pub struct PrimaryMetrics {
 impl PrimaryMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            headers_proposed: register_int_counter_with_registry!(
+            headers_proposed: register_int_counter_vec_with_registry!(
                 "headers_proposed",
                 "Number of headers that node proposed",
+                &["leader_support"],
+                registry
+            )
+            .unwrap(),
+            header_parents_total: register_int_counter_with_registry!(
+                "header_parents_total",
+                "Number of parents included in proposed headers",
                 registry
             )
             .unwrap(),
