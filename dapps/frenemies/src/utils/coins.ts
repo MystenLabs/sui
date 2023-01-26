@@ -25,7 +25,7 @@ export function getCoins(coins: ObjectData<Coin>[], amount: bigint) {
  * Returns the rest of the Coins and their sum.
  */
 export function getGas(coins: ObjectData<Coin>[], gasBudget: bigint) {
-  const sorted = [...coins].sort((a, b) => Number(b.data.value - a.data.value));
+  const sorted = [...coins].sort((a, b) => Number(a.data.value - b.data.value));
   const gas = sorted.find((coin) => coin.data.value >= gasBudget) || null;
 
   if (gas === null) {
