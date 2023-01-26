@@ -151,11 +151,7 @@ export function Transaction({
                                 <div className="flex w-full justify-between ">
                                     <div className="flex gap-1 align-middle  items-baseline">
                                         <Text color="gray-90" weight="semibold">
-                                            {isSender
-                                                ? 'Sent'
-                                                : isSuiTransfer
-                                                ? 'Bought'
-                                                : 'Received'}
+                                            {isSender ? 'Sent' : 'Received'}
                                         </Text>
                                         {isSuiTransfer && (
                                             <Text
