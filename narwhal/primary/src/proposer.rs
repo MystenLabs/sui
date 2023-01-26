@@ -228,23 +228,26 @@ impl Proposer {
         )
         .await;
 
-        let leader_support = if this_round % 2 == 0 {
-            "even_round"
+        let leader_and_support = if this_round % 2 == 0 {
+            let leader_name = self.committee.leader(this_round);
+            if self.name == leader_name {
+                "even_round_is_leader"
+            } else {
+                "even_round_not_leader"
+            }
         } else {
             let leader_name = self.committee.leader(this_round - 1);
             if parents.iter().any(|c| c.origin() == leader_name) {
-                "has_support"
+                "odd_round_gives_support"
             } else {
-                "no_support"
+                "odd_round_no_support"
             }
         };
         self.metrics
             .headers_proposed
-            .with_label_values(&[leader_support])
+            .with_label_values(&[leader_and_support])
             .inc();
-        self.metrics
-            .header_parents_total
-            .inc_by(parents.len() as u64);
+        self.metrics.header_parents.observe(parents.len() as f64);
 
         if enabled!(tracing::Level::DEBUG) {
             let mut msg = format!("Created header {header:?} with parent certificates:\n");
