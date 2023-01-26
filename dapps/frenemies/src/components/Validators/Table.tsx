@@ -3,7 +3,7 @@
 
 import { ReactNode } from "react";
 import { ObjectData } from "../../network/rawObject";
-import { DELEGATION, Delegation, StakedSui } from "../../network/types";
+import { DELEGATION, Delegation, StakedSui, STAKED_SUI } from "../../network/types";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMyType } from "../../network/queries/use-raw";
 import { GridItem } from "./GridItem";
@@ -21,12 +21,11 @@ function Header({ children }: { children: ReactNode }) {
 interface Props {
   /** Set of 40 currently active validators */
   validators: ActiveValidator[];
-  /** Currently staked Sui */
-  stakes: ObjectData<StakedSui>[];
 }
 
-export function Table({ validators, stakes }: Props) {
+export function Table({ validators }: Props) {
   const { currentAccount } = useWalletKit();
+  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI, currentAccount);
   const { data: delegations } = useMyType<Delegation>(
     DELEGATION,
     currentAccount
@@ -38,7 +37,7 @@ export function Table({ validators, stakes }: Props) {
     Number(BigInt(b.fields.voting_power || "0") - BigInt(a.fields.voting_power || "0"))
   );
 
-  const stakeByValidator: Record<string, ObjectData<StakedSui>> = stakes.reduce(
+  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (stakes || []).reduce(
     (acc, stake) =>
       Object.assign(acc, {
         [normalizeSuiAddress(stake.data.validatorAddress)]: stake,
