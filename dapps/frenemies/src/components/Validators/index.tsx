@@ -22,7 +22,7 @@ export function Validators() {
     return null;
   }
 
-  const validators = system.data.validators.activeValidators;
+  const validators = system.validators.fields.active_validators;
   const assignment = scorecard.data.assignment;
 
   return (
@@ -36,7 +36,7 @@ export function Validators() {
 
         <Balance />
       </div>
-      <Table validators={validators} assignment={assignment} stakes={stakes} />
+      <Table validators={validators} stakes={stakes} />
     </Card>
   );
 }

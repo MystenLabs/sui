@@ -10,22 +10,11 @@ import { ObjectData } from "../../../network/rawObject";
 import { Coin, Delegation, StakedSui, SUI_COIN } from "../../../network/types";
 import { getGas } from "../../../utils/coins";
 import provider from "../../../network/provider";
+import { StakeButton } from "../../StakeButton";
 
 interface Props {
   stake: ObjectData<StakedSui>;
   delegation: ObjectData<Delegation>;
-}
-
-/**
- * Arguments required for WithdrawDelegation transaction.
- */
-interface WithdrawDelegationTx {
-  /** Current stake for the Validator */
-  stake: ObjectData<StakedSui>;
-  /** Delegation object which matches the `StakedSui` */
-  delegation: ObjectData<Delegation>;
-  /** Coins to get Gas from */
-  coins: ObjectData<Coin>[] | null | undefined;
 }
 
 const GAS_BUDGET = 10000n;
@@ -38,50 +27,43 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
 
-  const withdrawDelegation = useMutation(
-    ["unstake-validator"],
-    async ({ stake, delegation, coins }: WithdrawDelegationTx) => {
-      if (!coins || !coins.length) {
-        return null;
-      }
-
-      const gasPrice = await provider.getReferenceGasPrice();
-      const gasRequred = GAS_BUDGET * BigInt(gasPrice);
-      const { gas } = getGas(coins, gasRequred);
-
-      if (!gas) {
-        return null;
-      }
-
-      await signAndExecuteTransaction({
-        kind: "moveCall",
-        data: {
-          packageObjectId: SUI_FRAMEWORK_ADDRESS,
-          module: "sui_system",
-          function: "request_withdraw_delegation",
-          gasBudget: 10000,
-          typeArguments: [],
-          gasPayment: normalizeSuiAddress(gas.reference.objectId),
-          arguments: [
-            SUI_SYSTEM_ID,
-            normalizeSuiAddress(delegation.reference.objectId),
-            normalizeSuiAddress(stake.reference.objectId),
-          ],
-        },
-      });
+  const withdrawDelegation = useMutation(["unstake-validator"], async () => {
+    if (!coins || !coins.length) {
+      return null;
     }
-  );
 
-  const clickHandler = () =>
-    withdrawDelegation.mutate({ stake, delegation, coins });
+    const gasPrice = await provider.getReferenceGasPrice();
+    const gasRequred = GAS_BUDGET * BigInt(gasPrice);
+    const { gas } = getGas(coins, gasRequred);
+
+    if (!gas) {
+      return null;
+    }
+
+    await signAndExecuteTransaction({
+      kind: "moveCall",
+      data: {
+        packageObjectId: SUI_FRAMEWORK_ADDRESS,
+        module: "sui_system",
+        function: "request_withdraw_delegation",
+        gasBudget: 10000,
+        typeArguments: [],
+        gasPayment: normalizeSuiAddress(gas.reference.objectId),
+        arguments: [
+          SUI_SYSTEM_ID,
+          normalizeSuiAddress(delegation.reference.objectId),
+          normalizeSuiAddress(stake.reference.objectId),
+        ],
+      },
+    });
+  });
 
   return (
-    <button
+    <StakeButton
       disabled={!coins?.length}
-      onClick={clickHandler}
-      className="absolute right-0 flex py-1 px-4 text-sm leading-none bg-gradient-to-b from-[#D0E8EF] to-[#B9DAE4] opacity-60 hover:opacity-100 uppercase mr-2 rounded-[4px]"
+      onClick={() => withdrawDelegation.mutate()}
     >
       Unstake
-    </button>
+    </StakeButton>
   );
 }

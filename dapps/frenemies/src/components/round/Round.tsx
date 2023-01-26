@@ -23,7 +23,7 @@ export function Round() {
     return null;
   }
 
-  const round = system.data.epoch - leaderboard.data.startEpoch;
+  const round = BigInt(system.epoch) - leaderboard.data.startEpoch;
 
   return (
     <h2 className="uppercase text-steel-dark font-thin text-6xl sm:text-8xl md:text-9xl lg:text-9xl xl:text-[160px] leading-tight text-center tracking-widest">

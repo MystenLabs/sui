@@ -57,7 +57,7 @@ export function Setup() {
   };
 
   // TODO: Loading UI:
-  if (!isSuccess || !scorecard) {
+  if (!isSuccess || scorecard) {
     return null;
   }
 
@@ -95,7 +95,7 @@ export function Setup() {
             <button
               type="submit"
               className="shadow-notification bg-frenemies rounded-lg text-white disabled:text-white/50 px-5 py-3 w-56 leading-none"
-							disabled={!isSuccess || createScorecard.isLoading}
+              disabled={!isSuccess || createScorecard.isLoading}
             >
               Continue
             </button>

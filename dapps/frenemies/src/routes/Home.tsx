@@ -6,7 +6,11 @@ import { Card } from "../components/Card";
 import { Stat } from "../components/Stat";
 import { Validators } from "../components/Validators";
 import { useScorecard } from "../network/queries/scorecard";
-import { formatAddress, formatGoal, formatTime } from "../utils/format";
+import {
+  formatAddress,
+  formatGoal,
+  formatTimeRemaining,
+} from "../utils/format";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -15,12 +19,20 @@ import { useEpoch } from "../network/queries/epoch";
 import { Goal } from "../network/types";
 import { config } from "../config";
 
+const getTime = (timestamp?: number) => {
+  if (!timestamp) return null;
+
+  const timePassed = Date.now() - timestamp;
+  const timeLeft = +config.VITE_EPOCH_LEN * 60000 - timePassed;
+  return timeLeft <= 0 ? 0 : timeLeft;
+};
+
 /**
  * The Home page.
  */
 export function Home() {
   const navigate = useNavigate();
-  const { data: epoch, isFetched } = useEpoch();
+  const { data: epoch } = useEpoch();
   const { currentAccount } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
 
@@ -37,29 +49,25 @@ export function Home() {
 
   useEffect(() => {
     if (isSuccess && !scorecard) {
-      navigate("/connect", { replace: true });
+      navigate("/setup", { replace: true });
     }
   }, [scorecard, isSuccess]);
 
-  // Should never be triggered ever
+  const [timer, setTime] = useState(() => getTime(epoch?.timestamp));
+
+  useEffect(() => {
+    if (!epoch) return;
+
+    const interval = setInterval(
+      () => setTime(getTime(epoch?.timestamp)),
+      1000
+    );
+    return () => clearInterval(interval);
+  }, [epoch]);
+
   if (!epoch) {
     return null;
   }
-
-
-  const getTime = () => {
-    const timePassed = Date.now() - epoch.timestamp;
-    const timeLeft = (+config.VITE_EPOCH_LEN * 60000) - timePassed;
-    return timeLeft <= 0 ? 0 : timeLeft;
-  }
-
-  // don't kill me for this
-  const [timer, setTime] = useState(getTime());
-
-  useEffect(() => {
-    const interval = setInterval(() => setTime(getTime()), 1000);
-    return () => clearInterval(interval);
-  }, [epoch]);
 
   return (
     <>
@@ -74,7 +82,9 @@ export function Home() {
         </Card>
         <Card spacing="sm">
           <Stat label="Time Remaining">
-            <div className="text-steel-dark font-light">{formatTime(timer)}</div>
+            <div className="text-steel-dark font-light">
+              {timer && formatTimeRemaining(timer)}
+            </div>
           </Stat>
         </Card>
       </div>
