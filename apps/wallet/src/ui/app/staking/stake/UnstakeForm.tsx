@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { ErrorMessage, Form } from 'formik';
-import { useRef } from 'react';
+import { ErrorMessage, Form, useFormikContext } from 'formik';
+import { useEffect, useRef } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
@@ -11,6 +11,8 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
+
+import type { FormValues } from './StakingCard';
 
 export type StakeFromProps = {
     submitError: string | null;
@@ -27,6 +29,8 @@ export function UnStakeForm({
     onClearSubmitError,
     stakingReward,
 }: StakeFromProps) {
+    const { setFieldValue, setTouched } = useFormikContext<FormValues>();
+
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
 
@@ -38,6 +42,11 @@ export function UnStakeForm({
     const [rewards, rewardSymbol] = useFormatCoin(stakingReward, SUI_TYPE_ARG);
 
     const [tokenBalance] = useFormatCoin(coinBalance, coinType);
+
+    useEffect(() => {
+        onClearRef.current();
+        setFieldValue('amount', tokenBalance);
+    }, [setFieldValue, setTouched, tokenBalance]);
 
     return (
         <Form
