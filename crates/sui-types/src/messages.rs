@@ -595,13 +595,11 @@ impl TransactionKind {
 
     fn is_blocked_move_function(&self) -> bool {
         self.single_transactions().any(|tx| match tx {
-            SingleTransactionKind::Call(call) => {
-                BLOCKED_MOVE_FUNCTIONS.contains(&(
-                    call.package,
-                    call.module.as_str(),
-                    call.function.as_str(),
-                ))
-            }
+            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
+                call.package,
+                call.module.as_str(),
+                call.function.as_str(),
+            )),
             _ => false,
         })
     }
