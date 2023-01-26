@@ -19,16 +19,10 @@ type LogoProps = {
     className?: string;
 };
 
-const Logo = ({ networkName, className }: LogoProps) => {
+const Logo = ({ networkName }: LogoProps) => {
     return (
-        <div
-            className={cl(
-                'inline-flex flex-nowrap items-center text-2xl',
-                className
-            )}
-        >
+        <div className="inline-flex flex-nowrap items-center text-2xl">
             <Icon icon={SuiIcons.SuiLogoIcon} />
-
             <div className={cl('flex flex-col', { 'mb-2': !!networkName })}>
                 <Icon icon={SuiIcons.SuiLogoTxt} />
                 {networkName && (

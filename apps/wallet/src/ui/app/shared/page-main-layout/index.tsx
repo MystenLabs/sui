@@ -42,8 +42,8 @@ export default function PageMainLayout({
                         centerLogo && !topNavMenuEnabled && !dappStatusEnabled,
                 })}
             >
-                <Link to="/tokens" className={st.logoLink}>
-                    <Logo className={st.logo} networkName={networkName} />
+                <Link to="/tokens" className="no-underline text-gray-90">
+                    <Logo networkName={networkName} />
                 </Link>
                 {dappStatusEnabled ? <DappStatus /> : null}
                 {topNavMenuEnabled ? (
