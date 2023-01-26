@@ -39,7 +39,6 @@ pub fn get_ed25519_keypair_from_keystore(
 }
 
 pub fn make_split_coin_tx(
-    framework: ObjectRef,
     sender: SuiAddress,
     coin: ObjectRef,
     coin_type_tag: TypeTag,
@@ -49,7 +48,7 @@ pub fn make_split_coin_tx(
 ) -> Result<VerifiedTransaction> {
     let split_coin = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        framework,
+        SUI_FRAMEWORK_OBJECT_ID,
         coin::PAY_MODULE_NAME.to_owned(),
         coin::PAY_SPLIT_VEC_FUNC_NAME.to_owned(),
         vec![coin_type_tag],
@@ -92,16 +91,11 @@ pub async fn split_coin_and_pay(
     gas: Gas,
 ) -> Result<UpdatedAndNewlyMintedGasCoins> {
     // split one coin into smaller coins of different amounts and send them to recipients
-    let framework = proxy
-        .get_object(SUI_FRAMEWORK_OBJECT_ID)
-        .await?
-        .compute_object_reference();
     let split_amounts: Vec<u64> = coin_configs.iter().map(|c| c.amount).collect();
     // TODO: Instead of splitting the coin and then using pay tx to transfer it to recipients,
     // we can do both in one tx with pay_sui which will split the coin out for us before
     // transferring it to recipients
     let verified_tx = make_split_coin_tx(
-        framework,
         coin_sender,
         coin,
         coin_type_tag,

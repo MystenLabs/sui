@@ -39,7 +39,7 @@ use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
-use sui_types::object::{Owner, PACKAGE_VERSION};
+use sui_types::object::Owner;
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
 use sui_types::utils::to_sender_signed_transaction;
@@ -117,11 +117,7 @@ impl RpcExampleProvider {
         let data = TransactionData::new_with_dummy_gas_price(
             TransactionKind::Batch(vec![
                 SingleTransactionKind::Call(MoveCall {
-                    package: (
-                        SUI_FRAMEWORK_OBJECT_ID,
-                        PACKAGE_VERSION,
-                        ObjectDigest::new(self.rng.gen()),
-                    ),
+                    package: SUI_FRAMEWORK_OBJECT_ID,
                     module: Identifier::from_str("devnet_nft").unwrap(),
                     function: Identifier::from_str("mint").unwrap(),
                     type_arguments: vec![],

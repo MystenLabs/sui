@@ -260,7 +260,7 @@ fn execution_loop<
                 // Charge gas for this VM execution
                 gas_status.charge_vm_gas()?;
 
-                let module_id = ModuleId::new(package.0.into(), module);
+                let module_id = ModuleId::new(package.into(), module);
                 let result = adapter::execute::<Mode, _, _>(
                     move_vm,
                     temporary_store,

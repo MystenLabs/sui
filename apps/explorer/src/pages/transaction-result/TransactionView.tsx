@@ -111,7 +111,12 @@ function formatByTransactionKind(
                     category: 'address',
                 },
                 package: {
-                    value: getObjectId(moveCall.package),
+                    // TODO: Simplify after v0.24.0 launched everywhere, when
+                    // moveCall.package is always an ObjectID (a string)
+                    value:
+                        typeof moveCall.package === 'string'
+                            ? moveCall.package
+                            : getObjectId(moveCall.package),
                     link: true,
                     category: 'object',
                 },

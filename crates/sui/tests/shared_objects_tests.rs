@@ -71,16 +71,17 @@ async fn call_shared_object_contract() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get the new package ref.
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+    // Publish the move package to all authorities and get its package ID.
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+        .await
+        .0;
 
     // Make a transaction to create a counter.
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
         "create",
-        package_ref,
+        package_id,
         /* arguments */ Vec::default(),
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
@@ -96,7 +97,7 @@ async fn call_shared_object_contract() {
         gas_objects.pop().unwrap(),
         "counter",
         "assert_value",
-        package_ref,
+        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
@@ -112,7 +113,7 @@ async fn call_shared_object_contract() {
         gas_objects.pop().unwrap(),
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
@@ -125,7 +126,7 @@ async fn call_shared_object_contract() {
         gas_objects.pop().unwrap(),
         "counter",
         "assert_value",
-        package_ref,
+        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
@@ -149,16 +150,17 @@ async fn shared_object_flood() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get the new package ref.
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+    // Publish the move package to all authorities and get its package ID.
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+        .await
+        .0;
 
     // Make a transaction to create a counter.
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
         "create",
-        package_ref,
+        package_id,
         /* arguments */ Vec::default(),
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
@@ -174,7 +176,7 @@ async fn shared_object_flood() {
         gas_objects.pop().unwrap(),
         "counter",
         "assert_value",
-        package_ref,
+        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
@@ -190,7 +192,7 @@ async fn shared_object_flood() {
         gas_objects.pop().unwrap(),
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
@@ -203,7 +205,7 @@ async fn shared_object_flood() {
         gas_objects.pop().unwrap(),
         "counter",
         "assert_value",
-        package_ref,
+        package_id,
         vec![
             CallArg::Object(counter_object_arg),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
@@ -225,16 +227,17 @@ async fn shared_object_sync() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get the new package ref.
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+    // Publish the move package to all authorities and get its package ID.
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+        .await
+        .0;
 
     // Send a transaction to create a counter, to all but one authority.
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
         "create",
-        package_ref,
+        package_id,
         /* arguments */ Vec::default(),
     );
     let effects = submit_single_owner_transaction(
@@ -281,7 +284,7 @@ async fn shared_object_sync() {
         gas_objects.pop().unwrap(),
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
 
@@ -315,16 +318,17 @@ async fn replay_shared_object_transaction() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get the new package ref.
-    let package_ref =
-        publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+    // Publish the move package to all authorities and get its packge ID
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
+        .await
+        .0;
 
     // Send a transaction to create a counter (only to one authority) -- twice.
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
         "counter",
         "create",
-        package_ref,
+        package_id,
         /* arguments */ Vec::default(),
     );
 

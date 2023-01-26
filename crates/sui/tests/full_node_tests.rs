@@ -93,7 +93,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
 
     let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref, counter_ref.0).await;
+        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
     let digest = tx_cert.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -112,7 +112,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context, sender).await;
     let (tx_cert, _effects_cert) =
-        increment_counter(context, sender, None, package_ref, counter_ref.0).await;
+        increment_counter(context, sender, None, package_ref.0, counter_ref.0).await;
     let digest = tx_cert.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -491,7 +491,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                         context,
                         sender,
                         Some(gas_object_id),
-                        package_ref,
+                        package_ref.0,
                         counter_ref.0,
                     )
                     .await
@@ -1179,9 +1179,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let package_ref = node.state().get_framework_object_ref().await.unwrap();
-    let (_tx_cert, effects) =
-        delete_devnet_nft(context, &recipient, object_ref_v2, package_ref).await;
+    let (_tx_cert, effects) = delete_devnet_nft(context, &recipient, object_ref_v2).await;
     assert_eq!(effects.status, SuiExecutionStatus::Success);
     sleep(Duration::from_secs(1)).await;
 

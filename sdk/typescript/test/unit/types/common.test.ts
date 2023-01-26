@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { generateTransactionDigest } from '../../../src';
+import { bcs, generateTransactionDigest } from '../../../src';
 
 describe('Test common functions', () => {
   describe('Calculate transaction digest', () => {
@@ -36,6 +36,7 @@ describe('Test common functions', () => {
         'ED25519',
         signature,
         publicKey,
+        bcs,
         "base58",
         true
       );
@@ -48,6 +49,7 @@ describe('Test common functions', () => {
         'ED25519',
         signature,
         publicKey,
+        bcs,
         "base64",
         false
       );

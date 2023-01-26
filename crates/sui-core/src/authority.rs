@@ -1203,7 +1203,7 @@ impl AuthorityState {
                 .value
                 .move_calls()
                 .iter()
-                .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
+                .map(|mc| (mc.package, mc.module.clone(), mc.function.clone())),
             changes,
             digest,
             timestamp_ms,

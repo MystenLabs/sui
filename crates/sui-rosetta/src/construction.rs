@@ -6,10 +6,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto;
 use sui_types::crypto::{SignatureScheme, ToFromBytes};
-use sui_types::messages::{
-    ExecuteTransactionRequestType, SingleTransactionKind, Transaction, TransactionData,
-    TransactionKind,
-};
+use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
 use crate::errors::Error;
 use crate::types::{
@@ -238,19 +235,12 @@ pub async fn metadata(
                 )
                 .await?;
 
-            let gas = data.gas();
-            let TransactionKind::Single(SingleTransactionKind::Call(call)) = data.kind else{
-                // This will not happen because `request_add_delegation` call creates a move call transaction.
-                panic!("Malformed transaction received from TransactionBuilder.")
-            };
-
             (
                 TransactionMetadata::Delegation {
-                    sui_framework: call.package,
                     coins,
                     locked_until_epoch: *locked_until_epoch,
                 },
-                gas,
+                data.gas(),
             )
         }
     };

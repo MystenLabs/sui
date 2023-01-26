@@ -25,7 +25,7 @@ use test_utils::{
 use tracing::info;
 
 pub struct SharedCounterTestPayload {
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     counter_id: ObjectID,
     counter_initial_shared_version: SequenceNumber,
     gas: Gas,
@@ -39,7 +39,7 @@ impl Payload for SharedCounterTestPayload {
         _: &ExecutionEffects,
     ) -> Box<dyn Payload> {
         Box::new(SharedCounterTestPayload {
-            package_ref: self.package_ref,
+            package_id: self.package_id,
             counter_id: self.counter_id,
             counter_initial_shared_version: self.counter_initial_shared_version,
             gas: (new_gas, self.gas.1, self.gas.2),
@@ -48,7 +48,7 @@ impl Payload for SharedCounterTestPayload {
     fn make_transaction(&self) -> VerifiedTransaction {
         make_counter_increment_transaction(
             self.gas.0,
-            self.package_ref,
+            self.package_id,
             self.counter_id,
             self.counter_initial_shared_version,
             self.gas
@@ -67,17 +67,17 @@ impl Payload for SharedCounterTestPayload {
 }
 
 pub struct SharedCounterWorkload {
-    pub basics_package_ref: Option<ObjectRef>,
+    pub basics_package_id: Option<ObjectID>,
     pub counters: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
 }
 
 impl SharedCounterWorkload {
     pub fn new_boxed(
-        basics_package_ref: Option<ObjectRef>,
+        basics_package_id: Option<ObjectID>,
         counters: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) -> Box<dyn Workload<dyn Payload>> {
         Box::<dyn Workload<dyn Payload>>::from(Box::new(SharedCounterWorkload {
-            basics_package_ref,
+            basics_package_id,
             counters,
         }))
     }
@@ -138,7 +138,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         init_config: WorkloadInitGas,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
     ) {
-        if self.basics_package_ref.is_some() {
+        if self.basics_package_id.is_some() {
             return;
         }
         let (head, tail) = init_config
@@ -148,7 +148,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
 
         // Publish basics package
         info!("Publishing basics package");
-        self.basics_package_ref = Some(
+        self.basics_package_id = Some(
             publish_basics_package(
                 head.0,
                 proxy.clone(),
@@ -157,7 +157,8 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                     .expect("Could not get sui address from owner"),
                 &head.2,
             )
-            .await,
+            .await
+            .0,
         );
         if !self.counters.is_empty() {
             // We already initialized the workload with some counters
@@ -167,7 +168,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         for (gas, sender, keypair) in tail.iter() {
             let transaction = make_counter_create_transaction(
                 *gas,
-                self.basics_package_ref.unwrap(),
+                self.basics_package_id.unwrap(),
                 (*sender)
                     .get_owner_address()
                     .expect("Could not get sui address from owner"),
@@ -200,7 +201,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .choose(&mut rand::thread_rng())
                 .expect("Failed to get a random counter from the pool");
             shared_payloads.push(Box::new(SharedCounterTestPayload {
-                package_ref: self.basics_package_ref.unwrap(),
+                package_id: self.basics_package_id.unwrap(),
                 counter_id: counter_ref.0,
                 counter_initial_shared_version: counter_ref.1,
                 gas: g,

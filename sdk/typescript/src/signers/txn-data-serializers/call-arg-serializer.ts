@@ -15,9 +15,10 @@ import {
   OBJECT_MODULE_NAME,
   SuiJsonValue,
   SuiMoveNormalizedType,
+  SuiObjectRef,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
-import { bcs, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
+import { bcsForVersion, CallArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
@@ -104,7 +105,7 @@ export class CallArgSerializer {
    */
   async deserializeCallArgs(txn: MoveCallTx): Promise<SuiJsonValue[]> {
     const userParams = await this.extractNormalizedFunctionParams(
-      txn.Call.package.objectId,
+      txn.Call.package,
       txn.Call.module,
       txn.Call.function
     );
@@ -117,12 +118,17 @@ export class CallArgSerializer {
   }
 
   private async extractNormalizedFunctionParams(
-    packageId: ObjectId,
+    // TODO: Restrict to just `ObjectId` once 0.24.0 has deployed
+    packageId: ObjectId | SuiObjectRef,
     module: string,
     functionName: string
   ) {
     const normalized = await this.provider.getNormalizedMoveFunction(
-      normalizeSuiObjectId(packageId),
+      normalizeSuiObjectId(
+        typeof packageId === "string"
+          ? packageId
+          : packageId.objectId
+      ),
       module,
       functionName
     );
@@ -149,9 +155,10 @@ export class CallArgSerializer {
     argVal: SuiJsonValue
   ): Promise<CallArg> {
     const serType = this.getPureSerializationType(expectedType, argVal);
+    const version = await this.provider.getRpcApiVersion();
     if (serType !== undefined) {
       return {
-        Pure: bcs.ser(serType, argVal).toBytes(),
+        Pure: bcsForVersion(version).ser(serType, argVal).toBytes(),
       };
     }
 
@@ -216,7 +223,8 @@ export class CallArgSerializer {
     }
 
     const serType = this.getPureSerializationType(expectedType, undefined);
-    return bcs.de(serType!, Uint8Array.from(argVal.Pure));
+    const version = await this.provider.getRpcApiVersion();
+    return bcsForVersion(version).de(serType!, Uint8Array.from(argVal.Pure));
   }
 
   /**
