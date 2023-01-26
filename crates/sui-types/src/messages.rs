@@ -597,6 +597,17 @@ impl TransactionKind {
             TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
     }
+
+    fn is_blocked_move_function(&self) -> bool {
+        self.single_transactions().any(|tx| match tx {
+            SingleTransactionKind::Call(call) => {
+                let (package, module, func) =
+                    (call.package.0, call.module.as_str(), call.function.as_str());
+                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
+            }
+            _ => false,
+        })
+    }
 }
 
 impl Display for TransactionKind {
@@ -920,11 +931,15 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
+        Self::validity_check_impl(&self.kind, &self.gas_payment)
+    }
+
+    pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
         fp_ensure!(
-            !self.is_blocked_move_function(),
+            !kind.is_blocked_move_function(),
             SuiError::BlockedMoveFunction
         );
-        match &self.kind {
+        match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
                     !b.is_empty(),
@@ -947,7 +962,9 @@ impl TransactionData {
                 fp_ensure!(
                     valid,
                     SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                        error: "Batch transaction contains non-batchable transactions. Only Call \
+                        and TransferObject are allowed"
+                            .to_string()
                     }
                 );
             }
@@ -963,7 +980,7 @@ impl TransactionData {
                     fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
                     fp_ensure!(
                         // unwrap() is safe because coins are not empty.
-                        p.coins.first().unwrap() == &self.gas_payment,
+                        p.coins.first().unwrap() == gas_payment,
                         SuiError::UnexpectedGasPaymentObject
                     );
                 }
@@ -971,24 +988,13 @@ impl TransactionData {
                     fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
                     fp_ensure!(
                         // unwrap() is safe because coins are not empty.
-                        pa.coins.first().unwrap() == &self.gas_payment,
+                        pa.coins.first().unwrap() == gas_payment,
                         SuiError::UnexpectedGasPaymentObject
                     );
                 }
             },
         }
         Ok(())
-    }
-
-    fn is_blocked_move_function(&self) -> bool {
-        self.kind.single_transactions().any(|tx| match tx {
-            SingleTransactionKind::Call(call) => {
-                let (package, module, func) =
-                    (call.package.0, call.module.as_str(), call.function.as_str());
-                BLOCKED_MOVE_FUNCTIONS.contains(&(package, module, func))
-            }
-            _ => false,
-        })
     }
 }
 

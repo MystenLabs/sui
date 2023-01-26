@@ -154,100 +154,36 @@
       ]
     },
     {
-      "name": "sui_devInspectMoveCall",
-      "tags": [
-        {
-          "name": "Full Node API"
-        }
-      ],
-      "description": "Similar to `dev_inspect_transaction` but do not require gas object and budget",
-      "params": [
-        {
-          "name": "sender_address",
-          "description": "the caller's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "package_object_id",
-          "description": "the Move package ID, e.g. `0x2`",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "module",
-          "description": "the Move module name, e.g. `devnet_nft`",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "function",
-          "description": "the move function name, e.g. `mint`",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "type_arguments",
-          "description": "the type arguments of the Move function",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TypeTag"
-            }
-          }
-        },
-        {
-          "name": "arguments",
-          "description": "the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SuiJsonValue"
-            }
-          }
-        },
-        {
-          "name": "epoch",
-          "description": "The epoch to perform the call. Will be set from the system state object if not provided",
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "DevInspectResults",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/DevInspectResults"
-        }
-      }
-    },
-    {
       "name": "sui_devInspectTransaction",
       "tags": [
         {
           "name": "Full Node API"
         }
       ],
-      "description": "Return dev-inpsect results of the transaction, including both the transaction effects and return values of the transaction.",
+      "description": "Runs the transaction in dev-inpsect mode. Which allows for nearly any transaction (or Move call) with any arguments. Detailed results are provided, including both the transaction effects and any return values.",
       "params": [
         {
+          "name": "sender_address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
           "name": "tx_bytes",
+          "description": "BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
+          "name": "gas_price",
+          "description": "Gas is not charged, but gas usage is still calculated. Default to use reference gas price",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         },
         {

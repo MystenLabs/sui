@@ -58,16 +58,16 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, GasPrice, SuiGasStatus};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
     CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{Owner, PastObjectRead};
+use sui_types::object::{MoveObject, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
@@ -1022,11 +1022,16 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, *certificate.digest());
+        let transaction_data = certificate.data().intent_message.value.clone();
+        let signer = transaction_data.signer();
+        let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                certificate.data().intent_message.value.clone(),
+                transaction_data.kind,
+                signer,
+                gas,
                 *certificate.digest(),
                 transaction_dependencies,
                 &self.move_vm,
@@ -1068,11 +1073,15 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+        let signer = transaction.signer();
+        let gas = transaction.gas();
         let (_inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction,
+                transaction.kind,
+                signer,
+                gas,
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -1083,29 +1092,60 @@ impl AuthorityState {
         SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
     }
 
+    /// The object ID for gas can be any object ID, even for an uncreated object
     pub async fn dev_inspect_transaction(
         &self,
-        transaction: TransactionData,
-        transaction_digest: TransactionDigest,
+        sender: SuiAddress,
+        transaction_kind: TransactionKind,
+        gas_price: u64,
         epoch: EpochId,
     ) -> Result<DevInspectResults, anyhow::Error> {
         if !self.is_fullnode() {
             return Err(anyhow!("dev-inspect is only supported on fullnodes"));
         }
 
-        let (gas_status, input_objects) =
-            transaction_input_checker::check_dev_inspect_input(&self.database, &transaction)
-                .await?;
+        let gas_object_id = ObjectID::random();
+        let gas_object = Object::new_move(
+            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, MAX_TX_GAS),
+            Owner::AddressOwner(sender),
+            TransactionDigest::genesis(),
+        );
+        let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
+            &self.database,
+            &transaction_kind,
+            gas_object,
+        )
+        .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
+        // TODO should we error instead for 0?
+        let gas_price = std::cmp::max(gas_price, 1);
+        let gas_budget = MAX_TX_GAS;
+        let data = TransactionData::new(
+            transaction_kind,
+            sender,
+            gas_object_ref,
+            gas_price,
+            gas_budget,
+        );
+        let transaction_digest = TransactionDigest::new(sha3_hash(&data));
+        let transaction_kind = data.kind;
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+        let mut gas_status = SuiGasStatus::new_with_budget(
+            MAX_TX_GAS,
+            GasPrice::from(gas_price),
+            STORAGE_GAS_PRICE.into(),
+        );
+        gas_status.charge_min_tx_gas()?;
         let (_inner_temp_store, effects, execution_result) =
             execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
                 shared_object_refs,
                 temporary_store,
-                transaction,
+                transaction_kind,
+                sender,
+                gas_object_ref,
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -1113,50 +1153,6 @@ impl AuthorityState {
                 gas_status,
                 epoch,
             );
-        DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
-    }
-
-    pub async fn dev_inspect_move_call(
-        &self,
-        sender: SuiAddress,
-        move_call: MoveCall,
-        epoch: EpochId,
-    ) -> Result<DevInspectResults, anyhow::Error> {
-        if !self.is_fullnode() {
-            return Err(anyhow!("dev-inspect is only supported on fullnodes"));
-        }
-
-        let input_objects = move_call.input_objects();
-        let input_objects = transaction_input_checker::check_dev_inspect_input_objects(
-            &self.database,
-            input_objects,
-        )?;
-        let shared_object_refs = input_objects.filter_shared_objects();
-
-        let transaction_dependencies = input_objects.transaction_dependencies();
-        let transaction_digest =
-            execution_engine::manual_execute_move_call_fake_txn_digest(sender, move_call.clone());
-        let temporary_store =
-            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let gas_status = SuiGasStatus::new_with_budget(
-            MAX_TX_GAS,
-            // TODO: Use proper computation gas price.
-            STORAGE_GAS_PRICE.into(),
-            STORAGE_GAS_PRICE.into(),
-        );
-        let (effects, execution_result) =
-            execution_engine::manual_execute_move_call::<execution_mode::DevInspect, _>(
-                shared_object_refs,
-                temporary_store,
-                sender,
-                move_call,
-                transaction_digest,
-                transaction_dependencies,
-                &self.move_vm,
-                gas_status,
-                epoch,
-            );
-
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
     }
 

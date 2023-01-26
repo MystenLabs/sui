@@ -188,32 +188,17 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
-    /// Return dev-inpsect results of the transaction, including both the transaction
-    /// effects and return values of the transaction.
+    /// Runs the transaction in dev-inpsect mode. Which allows for nearly any
+    /// transaction (or Move call) with any arguments. Detailed results are
+    /// provided, including both the transaction effects and any return values.
     #[method(name = "devInspectTransaction")]
     async fn dev_inspect_transaction(
         &self,
-        tx_bytes: Base64,
-        /// The epoch to perform the call. Will be set from the system state object if not provided
-        epoch: Option<EpochId>,
-    ) -> RpcResult<DevInspectResults>;
-
-    /// Similar to `dev_inspect_transaction` but do not require gas object and budget
-    #[method(name = "devInspectMoveCall")]
-    async fn dev_inspect_move_call(
-        &self,
-        /// the caller's Sui address
         sender_address: SuiAddress,
-        /// the Move package ID, e.g. `0x2`
-        package_object_id: ObjectID,
-        /// the Move module name, e.g. `devnet_nft`
-        module: String,
-        /// the move function name, e.g. `mint`
-        function: String,
-        /// the type arguments of the Move function
-        type_arguments: Vec<SuiTypeTag>,
-        /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
-        arguments: Vec<SuiJsonValue>,
+        /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
+        tx_bytes: Base64,
+        /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
+        gas_price: Option<u64>,
         /// The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;

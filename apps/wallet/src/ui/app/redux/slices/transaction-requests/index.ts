@@ -82,14 +82,10 @@ export const deserializeTxn = createAsyncThunk<
         );
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
-        const version = await api.instance.fullNode.getRpcApiVersion();
 
         //TODO: Error handling - either show the error or use the serialized txn
-        const useIntentSigning =
-            version != null && version.major >= 0 && version.minor > 18;
         const deserializeTx =
             (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-                useIntentSigning,
                 txnBytes
             )) as UnserializedSignableTransaction;
 
@@ -97,7 +93,6 @@ export const deserializeTxn = createAsyncThunk<
 
         const normalized = {
             ...deserializeData,
-            gasBudget: Number(deserializeData.gasBudget.toString(10)),
             gasPayment: '0x' + deserializeData.gasPayment,
             arguments: deserializeData.arguments.map((d) => '0x' + d),
         };

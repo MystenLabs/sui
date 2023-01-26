@@ -199,6 +199,7 @@ fn to_internal(external_units: GasUnits) -> InternalGas {
     GasUnits::to_unit(external_units)
 }
 
+#[derive(Debug)]
 pub struct SuiGasStatus<'a> {
     gas_status: GasStatus<'a>,
     init_budget: GasUnits,

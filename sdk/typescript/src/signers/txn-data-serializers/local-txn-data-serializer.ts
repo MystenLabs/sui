@@ -16,8 +16,8 @@ import {
   TransactionData,
   TypeTag,
   SuiObjectRef,
-  TRANSACTION_DATA_TYPE_TAG,
   deserializeTransactionBytesToTransactionData,
+  TransactionKind,
 } from '../../types';
 import {
   MoveCallTransaction,
@@ -51,11 +51,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     _mode: TransactionBuilderMode = 'Commit'
   ): Promise<Base64DataBuffer> {
     try {
-      const version = await this.provider.getRpcApiVersion();
-      const useIntentSigning =
-        version != null && version.major >= 0 && version.minor > 18;
       return await this.serializeTransactionData(
-        useIntentSigning,
         await this.constructTransactionData(signerAddress, txn)
       );
     } catch (e) {
@@ -70,10 +66,36 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     }
   }
 
-  async constructTransactionData(
+  /**
+   * Serialize a signable transaction without gasPayment, gasPrice, and gasBudget
+   * This is useful for the DevInspect endpoint for simulating the transaction
+   */
+  async serializeToBytesWithoutGasInfo(
+    signerAddress: string,
+    txn: UnserializedSignableTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      return await this.serializeTransactionKind(
+        (
+          await this.constructTransactionKindAndPayment(signerAddress, txn)
+        )[0]
+      );
+    } catch (e) {
+      throw new Error(
+        `Encountered error when serializing a ${txn.kind} transaction without gas info for ` +
+          `address ${signerAddress} for transaction ${JSON.stringify(
+            txn,
+            null,
+            2
+          )}: ${e}`
+      );
+    }
+  }
+
+  async constructTransactionKindAndPayment(
     signerAddress: string,
     unserializedTxn: UnserializedSignableTransaction
-  ): Promise<TransactionData> {
+  ): Promise<[TransactionKind, ObjectId | undefined]> {
     let tx: Transaction;
     let gasPayment: ObjectId | undefined;
     switch (unserializedTxn.kind) {
@@ -170,7 +192,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'mergeCoin':
         const mergeCoin = unserializedTxn.data as MergeCoinTransaction;
-        return this.constructTransactionData(signerAddress, {
+        return this.constructTransactionKindAndPayment(signerAddress, {
           kind: 'moveCall',
           data: {
             packageObjectId: SUI_FRAMEWORK_ADDRESS,
@@ -184,7 +206,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         });
       case 'splitCoin':
         const splitCoin = unserializedTxn.data as SplitCoinTransaction;
-        return this.constructTransactionData(signerAddress, {
+        return this.constructTransactionKindAndPayment(signerAddress, {
           kind: 'moveCall',
           data: {
             packageObjectId: SUI_FRAMEWORK_ADDRESS,
@@ -208,6 +230,18 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         gasPayment = publish.gasPayment;
         break;
     }
+    // TODO: support batch transaction
+    return [{ Single: tx }, gasPayment];
+  }
+
+  async constructTransactionData(
+    signerAddress: string,
+    unserializedTxn: UnserializedSignableTransaction
+  ): Promise<TransactionData> {
+    const [tx, gasPayment] = await this.constructTransactionKindAndPayment(
+      signerAddress,
+      unserializedTxn
+    );
     return this.constructTransactionDataHelper(
       tx,
       unserializedTxn,
@@ -237,7 +271,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
     const coins = await this.provider.selectCoinsWithBalanceGreaterThanOrEqual(
       signerAddress,
-      BigInt(txn.data.gasBudget),
+      BigInt(txn.data.gasBudget!),
       SUI_TYPE_ARG,
       exclude.concat(await this.extractObjectIds(txn))
     );
@@ -288,7 +322,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   private async constructTransactionDataHelper(
-    tx: Transaction,
+    tx: TransactionKind,
     originalTx: UnserializedSignableTransaction,
     gasObjectId: ObjectId | undefined,
     signerAddress: SuiAddress
@@ -305,15 +339,17 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       }
     }
     const gasPayment = await this.provider.getObjectRef(gasObjectId);
+    if (!originalTx.data.gasBudget) {
+      throw new Error(
+        'Must provide a valid gas budget for contructing TransactionData'
+      );
+    }
     return {
-      kind: {
-        // TODO: support batch txns
-        Single: tx,
-      },
+      kind: tx,
       gasPayment: gasPayment!,
-      // TODO: Allow people to add tip to the reference gas price
+      // TODO: Allow people to add tip to the reference gas price by using originalTx.data.gasPrice
       gasPrice: await this.provider.getReferenceGasPrice(),
-      gasBudget: originalTx.data.gasBudget,
+      gasBudget: originalTx.data.gasBudget!,
       sender: signerAddress,
     };
   }
@@ -322,36 +358,36 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
    * Serialize `TransactionData` into BCS encoded bytes
    */
   public async serializeTransactionData(
-    useIntentSigning: boolean,
     tx: TransactionData,
     // TODO: derive the buffer size automatically
     size: number = 8192
   ): Promise<Base64DataBuffer> {
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
-    if (useIntentSigning) {
-      // If use intent signing, do not append type tag. This is mirrored in the rpc tx data serializer TransactionBytes::from_data.
-      return new Base64DataBuffer(dataBytes);
-    } else {
-      const serialized = new Uint8Array(
-        TRANSACTION_DATA_TYPE_TAG.length + dataBytes.length
-      );
-      serialized.set(TRANSACTION_DATA_TYPE_TAG);
-      serialized.set(dataBytes, TRANSACTION_DATA_TYPE_TAG.length);
-      return new Base64DataBuffer(serialized);
-    }
+    return new Base64DataBuffer(dataBytes);
+  }
+
+  /**
+   * Serialize `TransactionKind` into BCS encoded bytes
+   */
+  public async serializeTransactionKind(
+    tx: TransactionKind,
+    // TODO: derive the buffer size automatically
+    size: number = 8192
+  ): Promise<Base64DataBuffer> {
+    const dataBytes = bcs.ser('TransactionKind', tx, size).toBytes();
+    return new Base64DataBuffer(dataBytes);
   }
 
   /**
    * Deserialize BCS encoded bytes into `SignableTransaction`
    */
   public async deserializeTransactionBytesToSignableTransaction(
-    useIntentSigning: boolean,
     bytes: Base64DataBuffer
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {
     return this.transformTransactionDataToSignableTransaction(
-      deserializeTransactionBytesToTransactionData(useIntentSigning, bytes)
+      deserializeTransactionBytesToTransactionData(bytes)
     );
   }
 
