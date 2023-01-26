@@ -12,7 +12,9 @@ use move_core_types::language_storage::TypeTag;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_types::base_types::ObjectRef;
-use sui_types::messages::{CallArg, ObjectArg, TransactionData, VerifiedTransaction};
+use sui_types::messages::{
+    CallArg, ObjectArg, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
+};
 use sui_types::utils::to_sender_signed_transaction;
 use tracing::log::info;
 
@@ -45,8 +47,9 @@ pub fn make_split_coin_tx(
     split_amounts: Vec<u64>,
     gas: ObjectRef,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> Result<VerifiedTransaction> {
-    let split_coin = TransactionData::new_move_call_with_dummy_gas_price(
+    let split_coin = TransactionData::new_move_call(
         sender,
         SUI_FRAMEWORK_OBJECT_ID,
         coin::PAY_MODULE_NAME.to_owned(),
@@ -58,6 +61,7 @@ pub fn make_split_coin_tx(
             CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
         ],
         1000000,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     let verified_tx = to_sender_signed_transaction(split_coin, keypair);
     Ok(verified_tx)
@@ -70,14 +74,16 @@ pub fn make_pay_tx(
     split_amounts: Vec<u64>,
     gas: ObjectRef,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let pay = TransactionData::new_pay_with_dummy_gas_price(
+    let pay = TransactionData::new_pay(
         sender,
         input_coins,
         addresses,
         split_amounts,
         gas,
         1000000,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(pay, keypair)
 }
@@ -89,6 +95,7 @@ pub async fn split_coin_and_pay(
     coin_type_tag: TypeTag,
     coin_configs: Vec<GasCoinConfig>,
     gas: Gas,
+    gas_price: u64,
 ) -> Result<UpdatedAndNewlyMintedGasCoins> {
     // split one coin into smaller coins of different amounts and send them to recipients
     let split_amounts: Vec<u64> = coin_configs.iter().map(|c| c.amount).collect();
@@ -102,6 +109,7 @@ pub async fn split_coin_and_pay(
         split_amounts.clone(),
         gas.0,
         &gas.2,
+        Some(gas_price),
     )?;
     let (_, effects) = proxy.execute_transaction(verified_tx.into()).await?;
     let updated_gas = effects
@@ -120,6 +128,7 @@ pub async fn split_coin_and_pay(
         split_amounts,
         updated_gas.0,
         &gas.2,
+        Some(gas_price),
     );
     let (_, effects) = proxy.execute_transaction(verified_tx.into()).await?;
     let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
@@ -153,6 +162,7 @@ pub async fn generate_all_gas_for_test(
     coin: Gas,
     coin_type_tag: TypeTag,
     workload_gas_config: WorkloadGasConfig,
+    gas_price: u64,
 ) -> Result<(WorkloadInitGas, WorkloadPayloadGas)> {
     info!(
         "Generating gas with number of coins for shared counter init = {:?}, number of coins for \
@@ -203,6 +213,7 @@ pub async fn generate_all_gas_for_test(
         coin_type_tag,
         coin_configs,
         gas,
+        gas_price,
     )
     .await?;
 

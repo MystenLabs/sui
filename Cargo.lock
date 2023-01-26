@@ -8392,6 +8392,7 @@ dependencies = [
  "multiaddr",
  "narwhal-node",
  "num_cpus",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "rand_distr",
