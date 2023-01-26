@@ -188,12 +188,12 @@ export type ObjectArg =
  * to the type required by the called function. Pure accepts only serialized values
  */
 export class PureArg {
-  public data: Uint8Array;
+  public bcsBytes: Uint8Array;
   
   constructor(
-    data: number[],
+    bcsBytes: number[],
   ) {
-      this.data = new Uint8Array(data);
+      this.bcsBytes = new Uint8Array(bcsBytes);
   }
 }
 

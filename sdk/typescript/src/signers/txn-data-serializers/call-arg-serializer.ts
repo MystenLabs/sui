@@ -148,8 +148,10 @@ export class CallArgSerializer {
     expectedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue
   ): Promise<CallArg> {
-    if (argVal instanceof PureArg) {
-      return {Pure: argVal.data as ArrayLike<number>,};
+    if ((argVal instanceof PureArg) && (argVal.bcsBytes.length <=1024)) {
+      return {
+        Pure: argVal.bcsBytes as ArrayLike<number>,
+      };
     }
     const serType = this.getPureSerializationType(expectedType, argVal);
     if (serType !== undefined) {
