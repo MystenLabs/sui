@@ -11,7 +11,7 @@ import { useAppsBackend } from '~/hooks/useAppsBackend';
 import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
-import { Stats, StatsProps } from '~/ui/Stats';
+import { Stats, type StatsProps } from '~/ui/Stats';
 import { formatAmount } from '~/utils/formatAmount';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
