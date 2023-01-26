@@ -278,7 +278,7 @@ impl AuthorityAPI for MockAuthorityApi {
 
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
-    pub tx_info_resp_to_return: TransactionInfoResponse,
+    pub tx_info_resp_to_return: SuiResult<TransactionInfoResponse>,
 }
 
 #[async_trait]
@@ -287,7 +287,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(self.tx_info_resp_to_return.clone())
+        self.tx_info_resp_to_return.clone()
     }
 
     async fn handle_certificate(
@@ -336,16 +336,20 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
 impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
-            tx_info_resp_to_return: TransactionInfoResponse {
+            tx_info_resp_to_return: Ok(TransactionInfoResponse {
                 signed_transaction: None,
                 certified_transaction: None,
                 signed_effects: None,
-            },
+            }),
         }
     }
 
     pub fn set_tx_info_response(&mut self, resp: TransactionInfoResponse) {
-        self.tx_info_resp_to_return = resp;
+        self.tx_info_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_tx_info_response_error(&mut self, resp: SuiError) {
+        self.tx_info_resp_to_return = Err(resp);
     }
 }
 
