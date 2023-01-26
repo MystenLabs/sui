@@ -300,6 +300,8 @@ struct ProcessTransactionState {
     // Tally of stake for good vs bad responses.
     good_stake: StakeUnit,
     bad_stake: StakeUnit,
+    // bad stake from SuiError:RpcError
+    bad_stake_rpc_error: StakeUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -1339,8 +1341,8 @@ where
                         if state.good_stake >= threshold {
                             return Ok(ReduceOutput::End(state));
                         }
-
-                        if state.bad_stake > validity {
+                        // TODO: have a more generic handling of non-retryable errors
+                        if state.bad_stake - state.bad_stake_rpc_error > validity {
                             self.metrics
                                 .num_signatures
                                 .observe(state.signatures.len() as f64);
@@ -1363,13 +1365,13 @@ where
             .await
             // The reduction above shouldn't return error
             .unwrap();
-
         debug!(
             ?tx_digest,
             num_errors = state.errors.iter().map(|e| e.1.len()).sum::<usize>(),
             num_unique_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
+            bad_stake_rpc_error = state.bad_stake_rpc_error,
             num_signatures = state.signatures.len(),
             has_certificate = state.certificate.is_some(),
             "Received signatures response from validators handle_transaction"
@@ -1403,6 +1405,10 @@ where
             .process_tx_errors
             .with_label_values(&[&concise_name.to_string(), err.as_ref()])
             .inc();
+
+        if let SuiError::RpcError(..) = &err {
+            state.bad_stake_rpc_error += weight;
+        }
 
         if let SuiError::ObjectLockConflict {
             obj_ref,
@@ -1611,6 +1617,7 @@ where
             // The map here allows us to count the stake for each unique effect.
             effects_map: EffectsStakeMap,
             bad_stake: StakeUnit,
+            bad_stake_rpc_error: StakeUnit,
             errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
         }
 
@@ -1675,9 +1682,12 @@ where
                                 let concise_name = name.concise();
                                 debug!(?tx_digest, name=?name.concise(), weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
                                 self.metrics.process_cert_errors.with_label_values(&[&concise_name.to_string(), err.as_ref()]).inc();
+                                if let SuiError::RpcError(..) = &err {
+                                    state.bad_stake_rpc_error += weight;
+                                }
                                 state.errors.push((err, vec![name], weight));
                                 state.bad_stake += weight;
-                                if state.bad_stake > validity {
+                                if state.bad_stake - state.bad_stake_rpc_error > validity {
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
