@@ -4,10 +4,10 @@
 import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import ErrorResult from '../../components/error-result/ErrorResult';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transaction-card/TxForID';
 
+import { Banner } from '~/ui/Banner';
 import { PageHeader } from '~/ui/PageHeader';
 
 type DataType = {
@@ -50,7 +50,11 @@ function AddressResult() {
             </>
         );
     } else {
-        return <ErrorResult id={addressID} errorMsg="Something went wrong" />;
+        return (
+            <Banner variant="error" spacing="lg" fullWidth>
+                Something went wrong
+            </Banner>
+        );
     }
 }
 

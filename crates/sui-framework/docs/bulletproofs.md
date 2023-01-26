@@ -55,7 +55,7 @@ Only bit_length = 64, 32, 16, 8 will work.
 
 @param proof: The bulletproof
 @param commitment: The commitment which we are trying to verify the range proof for
-@param bit_length: The bit length that we prove the committed value is whithin. Note that bit_length must be either 64, 32, 16, or 8.
+@param bit_length: The bit length that we prove the committed value is within. Note that bit_length must be either 64, 32, 16, or 8.
 
 If the range proof is valid, execution succeeds, else panics.
 

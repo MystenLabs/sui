@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
-use parking_lot::Mutex;
-use sui_types::storage::ObjectKey;
+use parking_lot::RwLock;
+use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -25,24 +25,41 @@ pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
     tx_ready_certificates: UnboundedSender<VerifiedCertificate>,
     metrics: Arc<AuthorityMetrics>,
-    inner: Mutex<Inner>,
+    inner: RwLock<Inner>,
 }
 
 #[derive(Default)]
 struct Inner {
+    // Current epoch of TransactionManager.
+    epoch: EpochId,
+
     // Maps missing input objects to transactions in pending_certificates.
     // Note that except for immutable objects, a given key may only have one TransactionDigest in
     // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
     // cannot determine from TransactionData whether an input is mutable or immutable.
-    missing_inputs: BTreeMap<ObjectKey, BTreeSet<TransactionDigest>>,
+    missing_inputs: HashMap<ObjectKey, BTreeSet<TransactionDigest>>,
+
+    // Number of transactions that depend on each object ID. Should match exactly with total
+    // number of transactions per object ID prefix in the missing_inputs table.
+    // Used for throttling signing and submitting transactions depending on hot objects.
+    input_objects: HashMap<ObjectID, usize>,
 
     // A transaction enqueued to TransactionManager must be in either pending_certificates or
     // executing_certificates.
 
     // Maps transactions to their missing input objects.
-    pending_certificates: BTreeMap<TransactionDigest, BTreeSet<ObjectKey>>,
+    pending_certificates: HashMap<TransactionDigest, BTreeSet<ObjectKey>>,
     // Transactions that have all input objects available, but have not finished execution.
-    executing_certificates: BTreeSet<TransactionDigest>,
+    executing_certificates: HashSet<TransactionDigest>,
+}
+
+impl Inner {
+    fn new(epoch: EpochId) -> Inner {
+        Inner {
+            epoch,
+            ..Default::default()
+        }
+    }
 }
 
 impl TransactionManager {
@@ -57,7 +74,7 @@ impl TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
             metrics,
-            inner: Default::default(),
+            inner: RwLock::new(Inner::new(epoch_store.epoch())),
             tx_ready_certificates,
         };
         transaction_manager
@@ -80,8 +97,14 @@ impl TransactionManager {
         certs: Vec<VerifiedCertificate>,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<()> {
-        let inner = &mut self.inner.lock();
+        let inner = &mut self.inner.write();
         for cert in certs {
+            if inner.epoch != cert.epoch() {
+                warn!(
+                    "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                    inner.epoch, cert
+                );
+            }
             let digest = *cert.digest();
             // hold the tx lock until we have finished checking if objects are missing, so that we
             // don't race with a concurrent execution of this tx.
@@ -124,7 +147,7 @@ impl TransactionManager {
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
             if missing.is_empty() {
-                debug!(tx_digest = ?digest, "certificate ready");
+                debug!("certificate ready");
                 assert!(inner.executing_certificates.insert(digest));
                 self.certificate_ready(cert);
                 self.metrics
@@ -156,6 +179,8 @@ impl TransactionManager {
                     digest,
                     objkey
                 );
+                let input_count = inner.input_objects.entry(objkey.0).or_default();
+                *input_count += 1;
             }
 
             assert!(
@@ -191,25 +216,38 @@ impl TransactionManager {
         let mut ready_digests = Vec::new();
 
         {
-            let inner = &mut self.inner.lock();
+            let inner = &mut self.inner.write();
+            if inner.epoch != epoch_store.epoch() {
+                warn!("Ignoring objects committed from wrong epoch. Expected={} Actual={} Objects={:?}", inner.epoch, epoch_store.epoch(), object_keys);
+                return;
+            }
             for object_key in object_keys {
-                let Some(digests) = inner.missing_inputs.remove(&object_key) else {
+                if let Some(digests) = inner.missing_inputs.remove(&object_key) {
+                    // Clean up object ID count table.
+                    let input_count = inner.input_objects.get_mut(&object_key.0).unwrap();
+                    *input_count -= digests.len();
+                    if *input_count == 0 {
+                        inner.input_objects.remove(&object_key.0);
+                    }
+                    // Clean up pending certificates table.
+                    for digest in digests.iter() {
+                        // Pending certificate must exist.
+                        let set = inner.pending_certificates.get_mut(digest).unwrap();
+                        assert!(set.remove(&object_key));
+                        // When a certificate has no missing input, it is ready to execute.
+                        if set.is_empty() {
+                            debug!(tx_digest = ?digest, "certificate ready");
+                            inner.pending_certificates.remove(digest).unwrap();
+                            assert!(inner.executing_certificates.insert(*digest));
+                            ready_digests.push(*digest);
+                        } else {
+                            debug!(tx_digest = ?digest, missing = ?set, "Certificate waiting on missing inputs");
+                        }
+                    }
+                } else {
+                    // No pending transaction is using this object ref as input.
                     continue;
                 };
-
-                for digest in digests.iter() {
-                    let set = inner.pending_certificates.entry(*digest).or_default();
-                    set.remove(&object_key);
-                    // This certificate has no missing input. It is ready to execute.
-                    if set.is_empty() {
-                        debug!(tx_digest = ?digest, "certificate ready");
-                        inner.pending_certificates.remove(digest);
-                        assert!(inner.executing_certificates.insert(*digest));
-                        ready_digests.push(*digest);
-                    } else {
-                        debug!(tx_digest = ?digest, missing = ?set, "certificate waiting on missing");
-                    }
-                }
             }
 
             self.metrics
@@ -253,7 +291,11 @@ impl TransactionManager {
         epoch_store: &AuthorityPerEpochStore,
     ) {
         {
-            let inner = &mut self.inner.lock();
+            let inner = &mut self.inner.write();
+            if inner.epoch != epoch_store.epoch() {
+                warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
+                return;
+            }
             inner.executing_certificates.remove(digest);
             self.metrics
                 .transaction_manager_num_executing_certificates
@@ -266,5 +308,25 @@ impl TransactionManager {
     fn certificate_ready(&self, certificate: VerifiedCertificate) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);
+    }
+
+    // Returns the number of transactions waiting on each object ID.
+    pub(crate) fn objects_queue_len(&self, keys: Vec<ObjectID>) -> Vec<(ObjectID, usize)> {
+        let inner = self.inner.read();
+        keys.into_iter()
+            .map(|key| {
+                (
+                    key,
+                    inner.input_objects.get(&key).cloned().unwrap_or_default(),
+                )
+            })
+            .collect()
+    }
+
+    // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
+    // because they are no longer relevant and may be incorrect in the new epoch.
+    pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
+        let mut inner = self.inner.write();
+        *inner = Inner::new(new_epoch);
     }
 }

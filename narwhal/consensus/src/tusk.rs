@@ -124,11 +124,6 @@ impl ConsensusProtocol for Tusk {
 
         Ok(committed_sub_dags)
     }
-
-    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {
-        self.committee = new_committee;
-        self.store.clear()
-    }
 }
 
 impl Tusk {
@@ -150,7 +145,7 @@ impl Tusk {
     ) -> Option<&'a (CertificateDigest, Certificate)> {
         // TODO: We should elect the leader of round r-2 using the common coin revealed at round r.
         // At this stage, we are guaranteed to have 2f+1 certificates from round r (which is enough to
-        // compute the coin). We currently just use a stake-weighted choise seeded by the round.
+        // compute the coin). We currently just use a stake-weighted choice seeded by the round.
         //
         // Note: this function is often called with even rounds only. While we do not aim at random selection
         // yet (see issue #10), repeated calls to this function should still pick from the whole roster of leaders.

@@ -28,9 +28,14 @@
 
     &.outline {
         background: none;
-        color: colors.$cta-blue;
+        color: colors.$sui-steel-blue;
         border: 1px solid colors.$sui-steel-blue;
         border-radius: 12px;
+    }
+
+    &.outline:hover {
+        border-color: colors.$sui-blue-steel-dark;
+        color: colors.$sui-blue-steel-dark;
     }
 
     &.secondary {

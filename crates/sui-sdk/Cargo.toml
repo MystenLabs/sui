@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.64"
 async-trait = "0.1.61"
-jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["http-client"] }
+jsonrpsee = { version = "0.16.2", features = ["http-client"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
 futures-core = "0.3.21"
@@ -40,7 +40,6 @@ clap = { version = "3.2.17", features = ["derive"] }
 dirs = "4.0.0"
 async-recursion = "1.0.0"
 tempfile = "3.3.0"
-fastcrypto.workspace = true
 test-utils = { path = "../test-utils" }
 futures-core = "0.3.21"
 futures = "0.3.23"

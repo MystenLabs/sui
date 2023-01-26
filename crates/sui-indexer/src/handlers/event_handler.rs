@@ -1,23 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_json_rpc_types::EventPage;
+use sui_json_rpc_types::SuiTransactionResponse;
 use sui_sdk::SuiClient;
-use sui_types::event::EventID;
-use sui_types::query::EventQuery;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
 use sui_indexer::metrics::IndexerEventHandlerMetrics;
-use sui_indexer::models::event_logs::{commit_event_log, read_event_log};
-use sui_indexer::models::events::commit_events;
+use sui_indexer::models::events::{commit_events, read_last_event, IndexerEventEnvelope};
+use sui_indexer::utils::log_errors_to_pg;
 use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
 
-const EVENT_PAGE_SIZE: usize = 100;
+use crate::handlers::transaction_handler::{get_transaction_page, get_transaction_response};
 
 pub struct EventHandler {
     rpc_client: SuiClient,
@@ -44,72 +43,74 @@ impl EventHandler {
         let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
 
         let mut next_cursor = None;
-        let event_log = read_event_log(&mut pg_pool_conn)?;
-        let (tx_seq_opt, event_seq_opt) = (
-            event_log.next_cursor_tx_seq,
-            event_log.next_cursor_event_seq,
-        );
-        if let (Some(tx_seq), Some(event_seq)) = (tx_seq_opt, event_seq_opt) {
-            next_cursor = Some(EventID { tx_seq, event_seq });
+        let last_event_opt = read_last_event(&mut pg_pool_conn)?;
+        if let Some(last_event) = last_event_opt {
+            if let Some(next_cursor_tx_dig) = last_event.next_cursor_transaction_digest {
+                let next_cursor_tx_digest = next_cursor_tx_dig.parse().map_err(|e| {
+                    IndexerError::TransactionDigestParsingError(format!(
+                        "Failed parsing transaction digest {:?} with error: {:?}",
+                        next_cursor_tx_dig, e
+                    ))
+                })?;
+                next_cursor = Some(next_cursor_tx_digest);
+            } else {
+                error!("Last event was found but it has no next cursor tx digest, this should never happen!");
+            }
         }
 
         loop {
             self.event_handler_metrics
                 .total_event_page_fetch_attempt
                 .inc();
-            let event_page = fetch_event_page(self.rpc_client.clone(), next_cursor.clone()).await?;
+            let txn_page = get_transaction_page(self.rpc_client.clone(), next_cursor).await?;
+            let txn_digest_vec = txn_page.data;
+            let txn_response_res_vec = join_all(
+                txn_digest_vec
+                    .into_iter()
+                    .map(|tx_digest| get_transaction_response(self.rpc_client.clone(), tx_digest)),
+            )
+            .await;
             self.event_handler_metrics.total_event_page_received.inc();
-            let event_count = event_page.data.len();
             info!(
-                "Received event page with {} events, next cursor: {:?}",
-                event_count, event_page.next_cursor
+                "Received transaction page for events with {} txns, next cursor: {:?}",
+                txn_response_res_vec.len(),
+                txn_page.next_cursor.clone()
             );
-            self.event_handler_metrics
-                .total_events_received
-                .inc_by(event_count as u64);
-            commit_events(&mut pg_pool_conn, event_page.clone())?;
-            // Event page's next cursor can be None when latest event page is reached,
-            // if we use the None cursor to read events, it will start from genesis,
-            // thus here we do not commit / use the None cursor.
-            // This will cause duplicate run of the current batch, but will not cause
-            // duplicate rows b/c of the uniqueness restriction of the table.
-            if let Some(next_cursor_val) = event_page.next_cursor.clone() {
-                commit_event_log(
-                    &mut pg_pool_conn,
-                    Some(next_cursor_val.tx_seq),
-                    Some(next_cursor_val.event_seq),
-                )?;
+
+            let mut errors = vec![];
+            let txn_resp_vec: Vec<SuiTransactionResponse> = txn_response_res_vec
+                .into_iter()
+                .filter_map(|f| f.map_err(|e| errors.push(e)).ok())
+                .collect();
+            let event_nested_vec: Vec<IndexerEventEnvelope> = txn_resp_vec
+                .into_iter()
+                .map(|txn_resp| IndexerEventEnvelope {
+                    transaction_digest: txn_resp.effects.transaction_digest,
+                    timestamp: txn_resp.timestamp_ms,
+                    events: txn_resp.effects.events,
+                    next_cursor: None,
+                })
+                .collect();
+            log_errors_to_pg(&mut pg_pool_conn, errors);
+            let commit_result =
+                commit_events(&mut pg_pool_conn, event_nested_vec, txn_page.next_cursor)?;
+
+            if let Some((commit_count, next_cursor_val)) = commit_result {
+                next_cursor = Some(next_cursor_val);
+
+                self.event_handler_metrics.total_event_page_committed.inc();
                 self.event_handler_metrics
                     .total_events_processed
-                    .inc_by(event_count as u64);
-                next_cursor = Some(next_cursor_val);
+                    .inc_by(commit_count as u64);
+                info!(
+                    "Committed {} events, next cursor: {:?}",
+                    commit_count, next_cursor
+                );
             }
-            self.event_handler_metrics.total_event_page_committed.inc();
-            // sleep when the event page has been the latest page
-            if event_count < EVENT_PAGE_SIZE || event_page.next_cursor.is_none() {
+
+            if txn_page.next_cursor.is_none() {
                 sleep(Duration::from_secs_f32(0.1)).await;
             }
         }
     }
-}
-
-async fn fetch_event_page(
-    rpc_client: SuiClient,
-    next_cursor: Option<EventID>,
-) -> Result<EventPage, IndexerError> {
-    rpc_client
-        .event_api()
-        .get_events(
-            EventQuery::All,
-            next_cursor.clone(),
-            Some(EVENT_PAGE_SIZE),
-            false,
-        )
-        .await
-        .map_err(|e| {
-            IndexerError::FullNodeReadingError(format!(
-                "Failed reading event page with cursor {:?} and error: {:?}",
-                next_cursor, e
-            ))
-        })
 }

@@ -23,7 +23,7 @@ use tracing::{debug, error};
 macro_rules! check_error {
     ($address:expr, $cond:expr, $msg:expr) => {
         $cond.tap_err(|err| {
-            if err.indicates_epoch_change() {
+            if err.individual_error_indicates_epoch_change() {
                 debug!(?err, authority=?$address, "Not a real client error");
             } else {
                 error!(?err, authority=?$address, $msg);
@@ -190,9 +190,9 @@ impl<C> SafeClient<C> {
     fn check_signed_effects(
         &self,
         digest: &TransactionDigest,
-        signed_effects: &SignedTransactionEffects,
+        signed_effects: SignedTransactionEffects,
         expected_effects_digest: Option<&TransactionEffectsDigest>,
-    ) -> SuiResult {
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
         // Check it has the right signer
         fp_ensure!(
             signed_effects.auth_sig().authority == self.address,
@@ -223,7 +223,7 @@ impl<C> SafeClient<C> {
             );
         }
         let committee = self.get_committee(&signed_effects.epoch())?;
-        signed_effects.verify_signature(&committee)
+        signed_effects.verify(&committee)
     }
 
     // Here we centralize all checks for transaction info responses
@@ -289,9 +289,12 @@ impl<C> SafeClient<C> {
             None => None,
         };
 
-        if let Some(signed_effects) = &signed_effects {
-            self.check_signed_effects(digest, signed_effects, effects_digest)?;
-        }
+        let signed_effects = match signed_effects {
+            Some(signed_effects) => {
+                Some(self.check_signed_effects(digest, signed_effects, effects_digest)?)
+            }
+            None => None,
+        };
 
         Ok(VerifiedTransactionInfoResponse {
             signed_transaction,
@@ -458,9 +461,8 @@ where
         digest: &TransactionDigest,
         response: HandleCertificateResponse,
     ) -> SuiResult<VerifiedHandleCertificateResponse> {
-        self.check_signed_effects(digest, &response.signed_effects, None)?;
         Ok(VerifiedHandleCertificateResponse {
-            signed_effects: response.signed_effects,
+            signed_effects: self.check_signed_effects(digest, response.signed_effects, None)?,
         })
     }
 

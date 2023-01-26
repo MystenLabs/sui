@@ -4,7 +4,6 @@
 use bcs::to_bytes;
 use sui_types::balance::{Balance, Supply};
 use sui_types::base_types::SuiAddress;
-use sui_types::chain_id::ChainId;
 use sui_types::collection_types::VecMap;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -13,7 +12,8 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata, ValidatorSet,
+    LinkedTable, StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata,
+    ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
@@ -30,6 +30,9 @@ pub fn test_validatdor_metadata(
         worker_pubkey_bytes: vec![],
         proof_of_possession_bytes: vec![],
         name: to_bytes("zero_commission").unwrap(),
+        description: vec![],
+        image_url: vec![],
+        project_url: vec![],
         net_address,
         consensus_address: vec![],
         worker_address: vec![],
@@ -47,7 +50,7 @@ pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPo
         sui_balance,
         rewards_pool: Balance::new(0),
         delegation_token_supply: Supply { value: 0 },
-        pending_delegations: TableVec::default(),
+        pending_delegations: LinkedTable::default(),
         pending_withdraws: TableVec::default(),
     }
 }
@@ -61,6 +64,7 @@ pub fn test_validator(
     let sui_address = SuiAddress::from(&pubkey_bytes);
     Validator {
         metadata: test_validatdor_metadata(sui_address, pubkey_bytes, net_address),
+        voting_power: stake_amount,
         stake_amount,
         pending_stake: 1,
         pending_withdraw: 1,
@@ -74,7 +78,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
     let validator_set = ValidatorSet {
         validator_stake: 1,
         delegation_stake: 1,
-        quorum_stake_threshold: 1,
         active_validators: validators,
         pending_validators: vec![],
         pending_removals: vec![],
@@ -83,7 +86,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
     };
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
-        chain_id: ChainId::TESTING,
         epoch,
         validators: validator_set,
         treasury_cap: Supply { value: 0 },
@@ -91,7 +93,6 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         parameters: SystemParameters {
             min_validator_stake: 1,
             max_validator_candidate_count: 100,
-            storage_gas_price: 1,
         },
         reference_gas_price: 1,
         validator_report_records: VecMap { contents: vec![] },
@@ -100,5 +101,7 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
             balance: Balance::new(0),
             current_epoch_amount: 0,
         },
+        safe_mode: false,
+        epoch_start_timestamp_ms: 0,
     }
 }

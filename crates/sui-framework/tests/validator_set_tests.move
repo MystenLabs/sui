@@ -11,7 +11,9 @@ module sui::validator_set_tests {
     use sui::test_scenario;
     use sui::stake::Stake;
     use sui::vec_map;
+    use std::ascii;
     use std::option;
+    use sui::test_utils::assert_eq;
 
     #[test]
     fun test_validator_set_flow() {
@@ -115,7 +117,7 @@ module sui::validator_set_tests {
         // Create a validator set with only the first validator in it.
         let validator_set = validator_set::new(vector[v1]);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 0);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 45);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -123,7 +125,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 45, 1);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 45);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -131,7 +133,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 42, 2);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 42);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -139,7 +141,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 41, 3);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 42);
 
         validator_set::request_add_validator(
             &mut validator_set,
@@ -147,7 +149,7 @@ module sui::validator_set_tests {
         );
         advance_epoch_with_dummy_rewards(&mut validator_set, ctx1);
 
-        assert!(validator_set::derive_reference_gas_price(&validator_set) == 43, 4);
+        assert_eq(validator_set::derive_reference_gas_price(&validator_set), 43);
 
         validator_set::destroy_for_testing(validator_set);
         test_scenario::end(scenario);
@@ -157,13 +159,17 @@ module sui::validator_set_tests {
         let stake_value = (hint as u64) * 100;
         let init_stake = coin::mint_for_testing(stake_value, ctx);
         let init_stake = coin::into_balance(init_stake);
+        let name = hint_to_ascii(hint);
         validator::new_for_testing(
             addr,
             vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],
-            vector[hint],
+            copy name,
+            copy name,
+            copy name,
+            name,
             vector[hint],
             vector[hint],
             vector[hint],
@@ -179,13 +185,17 @@ module sui::validator_set_tests {
         let stake_value = (hint as u64) * 100;
         let init_stake = coin::mint_for_testing(stake_value, ctx);
         let init_stake = coin::into_balance(init_stake);
+        let name = hint_to_ascii(hint);
         validator::new_for_testing(
             addr,
             vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],
-            vector[hint],
+            copy name,
+            copy name,
+            copy name,
+            name,
             vector[hint],
             vector[hint],
             vector[hint],
@@ -197,23 +207,26 @@ module sui::validator_set_tests {
         )
     }
 
+    fun hint_to_ascii(hint: u8): vector<u8> {
+        let ascii_bytes = vector[hint / 100 + 65, hint % 100 / 10 + 65, hint % 10 + 65];
+        ascii::into_bytes(ascii::string(ascii_bytes))
+    }
+
     fun advance_epoch_with_dummy_rewards(validator_set: &mut ValidatorSet, ctx: &mut TxContext) {
-        let dummy_validator_reward = balance::zero();
-        let dummy_delegator_reward = balance::zero();
+        let dummy_computation_reward = balance::zero();
         let dummy_storage_fund_reward = balance::zero();
 
         validator_set::advance_epoch(
             1, // dummy new epoch number
-            validator_set, 
-            &mut dummy_validator_reward, 
-            &mut dummy_delegator_reward, 
-            &mut dummy_storage_fund_reward, 
-            &vec_map::empty(), 
+            validator_set,
+            &mut dummy_computation_reward,
+            &mut dummy_storage_fund_reward,
+            vec_map::empty(),
+            0,
             ctx
         );
 
-        balance::destroy_zero(dummy_validator_reward);
-        balance::destroy_zero(dummy_delegator_reward);
+        balance::destroy_zero(dummy_computation_reward);
         balance::destroy_zero(dummy_storage_fund_reward);
     }
 }

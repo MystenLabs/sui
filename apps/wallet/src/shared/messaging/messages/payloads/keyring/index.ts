@@ -3,7 +3,11 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { ExportedKeypair } from '@mysten/sui.js';
+import type {
+    ExportedKeypair,
+    SignatureScheme,
+    SuiAddress,
+} from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 type MethodToPayloads = {
@@ -43,6 +47,14 @@ type MethodToPayloads = {
     setLockTimeout: {
         args: { timeout: number };
         return: never;
+    };
+    signData: {
+        args: { data: string; address: SuiAddress };
+        return: {
+            signatureScheme: SignatureScheme;
+            signature: string;
+            pubKey: string;
+        };
     };
 };
 

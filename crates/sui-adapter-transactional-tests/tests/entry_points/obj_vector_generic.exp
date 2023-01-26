@@ -60,11 +60,11 @@ created: object(126)
 written: object(125)
 
 task 15 'run'. lines 160-163:
-Error: The transaction inputs contain duplicates ObjectRef's
+Error: Error checking transaction input objects: [DuplicateObjectRefInput]
 
 task 16 'run'. lines 165-165:
 created: object(129)
 written: object(128)
 
 task 17 'run'. lines 167-167:
-Error: The transaction inputs contain duplicates ObjectRef's
+Error: Error checking transaction input objects: [DuplicateObjectRefInput]

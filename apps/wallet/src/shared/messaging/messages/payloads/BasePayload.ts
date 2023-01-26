@@ -22,7 +22,10 @@ export type PayloadType =
     | 'disconnect-app'
     | 'done'
     | 'keyring'
-    | 'stake-request';
+    | 'stake-request'
+    | 'wallet-status-changed'
+    | 'get-features'
+    | 'features-response';
 
 export interface BasePayload {
     type: PayloadType;

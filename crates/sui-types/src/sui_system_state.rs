@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
-use crate::chain_id::ChainId;
 use crate::collection_types::{VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
@@ -22,18 +21,18 @@ use std::collections::BTreeMap;
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
+pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
-    pub storage_gas_price: u64,
 }
 
 /// Rust version of the Move std::option::Option type.
 /// Putting it in this file because it's only used here.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct MoveOption<T> {
     pub vec: Vec<T>,
 }
@@ -46,6 +45,9 @@ pub struct ValidatorMetadata {
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: Vec<u8>,
+    pub description: Vec<u8>,
+    pub image_url: Vec<u8>,
+    pub project_url: Vec<u8>,
     pub net_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,
@@ -70,6 +72,7 @@ impl ValidatorMetadata {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
+    pub voting_power: u64,
     pub stake_amount: u64,
     pub pending_stake: u64,
     pub pending_withdraw: u64,
@@ -86,7 +89,7 @@ impl Validator {
             // TODO: Make sure we are actually verifying this on-chain.
             AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
                 .expect("Validity of public key bytes should be verified on-chain"),
-            self.stake_amount + self.delegation_staking_pool.sui_balance,
+            self.voting_power,
             self.metadata.net_address.clone(),
         )
     }
@@ -134,6 +137,27 @@ pub struct Table {
     pub size: u64,
 }
 
+/// Rust version of the Move sui::linked_table::LinkedTable type. Putting it here since
+/// we only use it in sui_system in the framework.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+pub struct LinkedTable<K> {
+    pub id: ObjectID,
+    pub size: u64,
+    pub head: MoveOption<K>,
+    pub tail: MoveOption<K>,
+}
+
+impl<K> Default for LinkedTable<K> {
+    fn default() -> Self {
+        LinkedTable {
+            id: ObjectID::from(SuiAddress::ZERO),
+            size: 0,
+            head: MoveOption { vec: vec![] },
+            tail: MoveOption { vec: vec![] },
+        }
+    }
+}
+
 /// Rust version of the Move sui::staking_pool::StakingPool type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakingPool {
@@ -142,7 +166,7 @@ pub struct StakingPool {
     pub sui_balance: u64,
     pub rewards_pool: Balance,
     pub delegation_token_supply: Supply,
-    pub pending_delegations: TableVec,
+    pub pending_delegations: LinkedTable<ObjectID>,
     pub pending_withdraws: TableVec,
 }
 
@@ -158,7 +182,6 @@ pub struct ValidatorPair {
 pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
-    pub quorum_stake_threshold: u64,
     pub active_validators: Vec<Validator>,
     pub pending_validators: Vec<Validator>,
     pub pending_removals: Vec<u64>,
@@ -170,7 +193,6 @@ pub struct ValidatorSet {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SuiSystemState {
     pub info: UID,
-    pub chain_id: ChainId,
     pub epoch: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,
@@ -179,6 +201,8 @@ pub struct SuiSystemState {
     pub reference_gas_price: u64,
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
     pub stake_subsidy: StakeSubsidy,
+    pub safe_mode: bool,
+    pub epoch_start_timestamp_ms: u64,
     // TODO: Use getters instead of all pub.
 }
 
@@ -234,7 +258,7 @@ impl SuiSystemState {
                     Multiaddr::try_from(validator.metadata.consensus_address.clone())
                         .expect("Can't get narwhal primary address");
                 let authority = narwhal_config::Authority {
-                    stake: validator.stake_amount as narwhal_config::Stake,
+                    stake: validator.voting_power as narwhal_config::Stake,
                     primary_address,
                     network_key,
                 };

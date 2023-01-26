@@ -4,7 +4,7 @@
 //! # Telemetry-subscribers
 //!
 //! This is a library for common telemetry functionality, especially subscribers for [Tokio tracing](https://github.com/tokio-rs/tracing)
-//! libraries.  Here we simply package many common subscribers, such as writing trace data to Jaeger, distributed tracing,
+//! libraries.  Here we simply package many common subscribers,
 //! common logs and metrics destinations, etc.  into a easy to configure common package.  There are also
 //! some unique layers such as one to automatically create Prometheus latency histograms for spans.
 //!
@@ -16,7 +16,7 @@
 //!
 //! ```rust
 //!   use telemetry_subscribers::TelemetryConfig;
-//!   let (_guard, _handle) = TelemetryConfig::new("my_app").init();
+//!   let (_guard, _handle) = TelemetryConfig::new().init();
 //! ```
 //!
 //! It is important to retain the guard until the end of the program.  Assign it in the main fn and keep it,
@@ -32,7 +32,6 @@
 //! ```
 //!
 //! ## Features
-//! - `jaeger` - this feature is enabled by default as it enables jaeger tracing
 //! - `json` - Bunyan formatter - JSON log output, optional
 //! - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 //!
@@ -50,24 +49,6 @@
 //!
 //! NOTE: JSON output requires the `json` crate feature to be enabled.
 //!
-//! ### Jaeger (seeing distributed traces)
-//!
-//! To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
-//!
-//! 1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`
-//! 2. Set `enable_jaeger` config setting to true or set `TOKIO_JAEGER` env var
-//! 3. Run your app
-//! 4. Browse to `http://localhost:16686/` and select the service you configured using `service_name`
-//!
-//! NOTE: separate spans (which are not nested) are not connected as a single trace for now.
-//!
-//! Jaeger subscriber is enabled by default but is protected by the jaeger feature flag.  If you'd like to leave
-//! out the Jaeger dependencies, you can turn off the default-features in your dependency:
-//!
-//! ```toml
-//!     telemetry = { url = "...", default-features = false }
-//! ```
-//!
 //! ### Automatic Prometheus span latencies
 //!
 //! Included in this library is a tracing-subscriber layer named `PrometheusSpanLatencyLayer`.  It will create
@@ -78,7 +59,7 @@
 //!
 //! ### Span levels vs log levels
 //!
-//! What spans are included for Jaeger output, automatic span latencies, etc.?  These are controlled by
+//! What spans are included for automatic span latencies, etc.?  These are controlled by
 //! the `span_level` config attribute, or the `TS_SPAN_LEVEL` environment variable.  Note that this is
 //! separate from `RUST_LOG`, so that you can separately control the logging verbosity from the level of
 //! spans that are to be recorded and traced.
@@ -113,7 +94,6 @@ use std::{
 use tracing::metadata::LevelFilter;
 use tracing::Level;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_subscriber::{
     filter, fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter, Layer, Registry,
 };
@@ -130,19 +110,12 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 /// - json_log_output: Output JSON logs to stdout only.
 /// - log_file: If defined, write output to a file starting with this name, ex app.log
 /// - log_level: error/warn/info/debug/trace, defaults to info
-/// - service_name:
 #[derive(Default, Clone, Debug)]
 pub struct TelemetryConfig {
-    /// The name of the service for Jaeger and Bunyan
-    pub service_name: String,
-
-    pub enable_jaeger: bool,
     /// Enables Tokio Console debugging on port 6669
     pub tokio_console: bool,
     /// Output JSON logs.
     pub json_log_output: bool,
-    /// Write chrome trace output, which can be loaded from chrome://tracing
-    pub chrome_trace_output: bool,
     /// If defined, write output to a file starting with this name, ex app.log
     pub log_file: Option<String>,
     /// Log level to set, defaults to info
@@ -162,9 +135,6 @@ pub struct TelemetryConfig {
 #[allow(dead_code)]
 pub struct TelemetryGuards {
     worker_guard: WorkerGuard,
-
-    #[cfg(feature = "chrome")]
-    chrome_guard: Option<tracing_chrome::FlushGuard>,
 }
 
 #[derive(Clone, Debug)]
@@ -234,13 +204,10 @@ fn set_panic_hook(crash_on_panic: bool) {
 }
 
 impl TelemetryConfig {
-    pub fn new(service_name: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            service_name: service_name.to_owned(),
-            enable_jaeger: false,
             tokio_console: false,
             json_log_output: false,
-            chrome_trace_output: false,
             log_file: None,
             log_string: None,
             span_level: None,
@@ -248,6 +215,11 @@ impl TelemetryConfig {
             crash_on_panic: false,
             prom_registry: None,
         }
+    }
+
+    pub fn with_json(mut self) -> Self {
+        self.json_log_output = true;
+        self
     }
 
     pub fn with_log_level(mut self, log_string: &str) -> Self {
@@ -275,15 +247,7 @@ impl TelemetryConfig {
             self.crash_on_panic = true
         }
 
-        if env::var("TOKIO_JAEGER").is_ok() {
-            self.enable_jaeger = true
-        }
-
-        if env::var("TOKIO_CHROME").is_ok() {
-            self.chrome_trace_output = true;
-        }
-
-        if env::var("ENABLE_JSON_LOGS").is_ok() {
+        if env::var("RUST_LOG_JSON").is_ok() {
             self.json_log_output = true;
         }
 
@@ -334,51 +298,21 @@ impl TelemetryConfig {
             layers.push(console_subscriber::spawn().boxed());
         }
 
-        #[cfg(feature = "chrome")]
-        let chrome_guard = if config.chrome_trace_output {
-            let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new().build();
-            layers.push(chrome_layer.boxed());
-            Some(guard)
-        } else {
-            None
-        };
-
         if let Some(registry) = config.prom_registry {
             let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
                 .expect("Could not initialize span latency layer");
             layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
         }
 
-        #[cfg(feature = "jaeger")]
-        if config.enable_jaeger {
-            // Install a tracer to send traces to Jaeger.  Batching for better performance.
-            let tracer = opentelemetry_jaeger::new_agent_pipeline()
-                .with_service_name(&config.service_name)
-                .with_max_packet_size(9216) // Default max UDP packet size on OSX
-                .with_auto_split_batch(true) // Auto split batches so they fit under packet size
-                .install_batch(opentelemetry::runtime::Tokio)
-                .expect("Could not create async Tracer");
-
-            // Create a tracing subscriber with the configured tracer
-            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-            // Enable Trace Contexts for tying spans together
-            opentelemetry::global::set_text_map_propagator(
-                opentelemetry::sdk::propagation::TraceContextPropagator::new(),
-            );
-
-            layers.push(telemetry.with_filter(span_filter.clone()).boxed());
-        }
-
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
         if config.json_log_output {
-            // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
-            // Also Bunyan layer addes JSON logging for tracing spans with duration information
-            let json_layer = JsonStorageLayer
-                .and_then(
-                    BunyanFormattingLayer::new(config.service_name, nb_output)
-                        .with_filter(log_filter),
-                )
+            // Output to file or to stderr in a newline-delimited JSON format
+            let json_layer = fmt::layer()
+                .with_file(true)
+                .with_line_number(true)
+                .json()
+                .with_writer(nb_output)
+                .with_filter(log_filter)
                 .boxed();
             layers.push(json_layer);
         } else {
@@ -399,11 +333,7 @@ impl TelemetryConfig {
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
         // gets flushed and closed. If this is dropped too early then no output will appear!
-        let guards = TelemetryGuards {
-            worker_guard,
-            #[cfg(feature = "chrome")]
-            chrome_guard,
-        };
+        let guards = TelemetryGuards { worker_guard };
 
         (guards, filter_handle)
     }
@@ -443,7 +373,7 @@ mod tests {
     fn test_telemetry_init() {
         let registry = prometheus::Registry::new();
         // Default logging level is INFO, but here we set the span level to DEBUG.  TRACE spans should be ignored.
-        let config = TelemetryConfig::new("my_app")
+        let config = TelemetryConfig::new()
             .with_span_level(Level::DEBUG)
             .with_prom_registry(&registry);
         let _guard = config.init();
@@ -479,10 +409,8 @@ mod tests {
         panic!("This should cause error logs to be printed out!");
     }
 
-    /*
-    Both the following tests should be able to "race" to initialize logging without causing a
-    panic
-    */
+    // Both the following tests should be able to "race" to initialize logging without causing a
+    // panic
     #[test]
     fn testing_logger_1() {
         init_for_testing();

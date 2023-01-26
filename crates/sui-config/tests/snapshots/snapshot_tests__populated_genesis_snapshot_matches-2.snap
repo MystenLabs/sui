@@ -4,12 +4,10 @@ expression: genesis.sui_system_object()
 ---
 info:
   id: "0x0000000000000000000000000000000000000005"
-chain_id: 127
 epoch: 0
 validators:
   validator_stake: 1
   delegation_stake: 0
-  quorum_stake_threshold: 1
   active_validators:
     - metadata:
         sui_address: "0x21b60aa9a8cb189ccbe20461dbfad2202fdef55b"
@@ -227,6 +225,9 @@ validators:
           - 137
         name:
           - 48
+        description: []
+        image_url: []
+        project_url: []
         net_address: []
         consensus_address: []
         worker_address: []
@@ -234,6 +235,7 @@ validators:
         next_epoch_delegation: 0
         next_epoch_gas_price: 1
         next_epoch_commission_rate: 0
+      voting_power: 10000
       stake_amount: 1
       pending_stake: 0
       pending_withdraw: 0
@@ -247,9 +249,12 @@ validators:
         delegation_token_supply:
           value: 0
         pending_delegations:
-          contents:
-            id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
-            size: 0
+          id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+          size: 0
+          head:
+            vec: []
+          tail:
+            vec: []
         pending_withdraws:
           contents:
             id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
@@ -473,6 +478,9 @@ validators:
         - 137
       name:
         - 48
+      description: []
+      image_url: []
+      project_url: []
       net_address: []
       consensus_address: []
       worker_address: []
@@ -483,14 +491,13 @@ validators:
   pending_delegation_switches:
     contents: []
 treasury_cap:
-  value: 100000000000001
+  value: 2
 storage_fund:
-  value: 100000000000000
+  value: 1
 parameters:
-  min_validator_stake: 100000000000000
+  min_validator_stake: 1
   max_validator_candidate_count: 100
-  storage_gas_price: 1
-reference_gas_price: 0
+reference_gas_price: 1
 validator_report_records:
   contents: []
 stake_subsidy:
@@ -498,4 +505,5 @@ stake_subsidy:
   balance:
     value: 0
   current_epoch_amount: 1000000
-
+safe_mode: false
+epoch_start_timestamp_ms: 10

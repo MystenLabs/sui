@@ -1,74 +1,72 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight12 } from '@mysten/icons';
 import {
     flexRender,
     getCoreRowModel,
+    getSortedRowModel,
     useReactTable,
+    type ColumnDef,
+    type SortingState,
 } from '@tanstack/react-table';
 import clsx from 'clsx';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
-import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
-
-type Category = 'object' | 'transaction' | 'address' | 'unknown';
-
-export type LinkObj = {
-    url: string;
-    name?: string;
-    copy?: boolean;
-    category?: Category;
-    isLink?: boolean;
-};
-
-type TableColumn = {
-    headerLabel: string | (() => JSX.Element);
-    accessorKey: string;
-};
-// TODO: update Link to use Tuple type
-// type Links = [Link, Link?];
-type Links = LinkObj[];
-
-type TxStatus = {
-    txTypeName: TransactionKindName | undefined;
-    status: ExecutionStatusType;
-};
-
-// support multiple types with special handling for 'addresses'/links and status
-// TODO: Not sure to allow HTML elements in the table
-type DataType = {
-    [key: string]:
-        | string
-        | number
-        | boolean
-        | Links
-        | React.ReactElement
-        | TxStatus;
-};
-
-function columnsContent(columns: TableColumn[]) {
-    return columns.map((column) => ({
-        accessorKey: column.accessorKey,
-        id: column.accessorKey,
-        header: column.headerLabel,
-        // cell renderer for each column from react-table
-        cell: (info: any) => info.getValue(),
-    }));
-}
-
-export interface TableCardProps {
+export interface TableCardProps<DataType extends object> {
     refetching?: boolean;
     data: DataType[];
-    columns: TableColumn[];
+    columns: ColumnDef<DataType>[];
+    sortTable?: boolean;
+    defaultSorting?: SortingState;
 }
 
-export function TableCard({ refetching, data, columns }: TableCardProps) {
+function AscDescIcon({ sorting }: { sorting: 'asc' | 'desc' }) {
+    return (
+        <ArrowRight12
+            fill="currentColor"
+            className={clsx(
+                sorting === 'asc' ? '-rotate-90' : 'rotate-90',
+                ' text-steel-darker'
+            )}
+        />
+    );
+}
+
+export function TableCard<DataType extends object>({
+    refetching,
+    data,
+    columns,
+    sortTable,
+    defaultSorting,
+}: TableCardProps<DataType>) {
+    const [sorting, setSorting] = useState<SortingState>(defaultSorting || []);
+
     // Use Columns to create a table
-    const processedcol = useMemo(() => columnsContent(columns), [columns]);
+    const processedcol = useMemo<ColumnDef<DataType>[]>(() => {
+        return columns.map((column) => ({
+            ...column,
+            // cell renderer for each column from react-table
+            // cell should be in the column definition
+            //TODO: move cell to column definition
+            ...(!sortTable && { cell: ({ getValue }) => getValue() }),
+        }));
+    }, [columns, sortTable]);
+
     const table = useReactTable({
         data,
         columns: processedcol,
         getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+        onSortingChange: setSorting,
+        enableSorting: !!sortTable,
+        enableSortingRemoval: false,
+        initialState: {
+            sorting,
+        },
+        state: {
+            sorting,
+        },
     });
 
     return (
@@ -80,40 +78,74 @@ export function TableCard({ refetching, data, columns }: TableCardProps) {
         >
             <table className="w-full min-w-max border-collapse border-0 text-left">
                 <thead>
-                    {table.getHeaderGroups().map((headerGroup: any) => (
+                    {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>
-                            {headerGroup.headers.map((header: any) => (
-                                <th
-                                    key={header.id}
-                                    colSpan={header.colSpan}
-                                    scope="col"
-                                    className="h-[30px] px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
-                                >
-                                    {header.isPlaceholder
-                                        ? null
-                                        : flexRender(
-                                              header.column.columnDef.header,
-                                              header.getContext()
-                                          )}
-                                </th>
-                            ))}
+                            {headerGroup.headers.map(
+                                ({
+                                    id,
+                                    colSpan,
+                                    column,
+                                    isPlaceholder,
+                                    getContext,
+                                }) => (
+                                    <th
+                                        key={id}
+                                        colSpan={colSpan}
+                                        scope="col"
+                                        className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                        onClick={
+                                            column.columnDef.enableSorting
+                                                ? column.getToggleSortingHandler()
+                                                : undefined
+                                        }
+                                    >
+                                        <div
+                                            className={clsx(
+                                                'flex items-center gap-1',
+                                                column.columnDef
+                                                    .enableSorting &&
+                                                    'cursor-pointer text-steel-darker'
+                                            )}
+                                        >
+                                            {isPlaceholder
+                                                ? null
+                                                : flexRender(
+                                                      column.columnDef.header,
+                                                      getContext()
+                                                  )}
+
+                                            {column.getIsSorted() && (
+                                                <AscDescIcon
+                                                    sorting={
+                                                        column.getIsSorted() as
+                                                            | 'asc'
+                                                            | 'desc'
+                                                    }
+                                                />
+                                            )}
+                                        </div>
+                                    </th>
+                                )
+                            )}
                         </tr>
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map((row: any) => (
+                    {table.getRowModel().rows.map((row) => (
                         <tr key={row.id} className="group">
-                            {row.getVisibleCells().map((cell: any) => (
-                                <td
-                                    key={cell.id}
-                                    className="h-[30px] px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
-                                >
-                                    {flexRender(
-                                        cell.column.columnDef.cell,
-                                        cell.getContext()
-                                    )}
-                                </td>
-                            ))}
+                            {row
+                                .getVisibleCells()
+                                .map(({ column, id, getContext }) => (
+                                    <td
+                                        key={id}
+                                        className="h-7.5 px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
+                                    >
+                                        {flexRender(
+                                            column.columnDef.cell,
+                                            getContext()
+                                        )}
+                                    </td>
+                                ))}
                         </tr>
                     ))}
                 </tbody>

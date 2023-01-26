@@ -68,7 +68,8 @@ export const PayAllSui = object({
 export type PayAllSui = Infer<typeof PayAllSui>;
 
 export const MoveCall = object({
-  package: SuiObjectRef,
+  // TODO: Simplify once 0.24.0 lands
+  package: union([string(), SuiObjectRef]),
   module: string(),
   function: string(),
   typeArguments: optional(array(string())),
@@ -88,7 +89,8 @@ export type TransactionKindName =
   | 'ChangeEpoch'
   | 'Pay'
   | 'PaySui'
-  | 'PayAllSui';
+  | 'PayAllSui'
+  | 'Genesis';
 
 export const SuiTransactionKind = union([
   object({ TransferObject: TransferObject }),
@@ -501,6 +503,20 @@ export function getTotalGasUsed(
         gasSummary.storageRebate
     : undefined;
 }
+
+export function getTotalGasUsedUpperBound(
+  data:
+    | SuiTransactionResponse
+    | SuiExecuteTransactionResponse
+    | TransactionEffects
+): number | undefined {
+  const gasSummary = getExecutionStatusGasSummary(data);
+  return gasSummary
+    ? gasSummary.computationCost +
+        gasSummary.storageCost
+    : undefined;
+}
+
 
 export function getTransactionEffects(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse

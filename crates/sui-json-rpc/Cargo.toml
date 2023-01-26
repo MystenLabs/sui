@@ -7,9 +7,10 @@ publish = false
 edition = "2021"
 
 [dependencies]
-fastcrypto = { workspace = true }
-jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["full"] }
-jsonrpsee-proc-macros = {git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177"}
+fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
+jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee-proc-macros = "0.16.2"
 hyper = "0.14"
 tower = "0.4.12"
 tower-http = { version = "0.3.4", features = ["full"] }
@@ -36,8 +37,8 @@ sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-sui-cost = { path = "../sui-cost" }
 sui-transaction-builder = { path = "../sui-transaction-builder" }
+sui-protocol-constants = { path = "../sui-protocol-constants" }
 mysten-metrics = { path = "../mysten-metrics" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

@@ -139,7 +139,7 @@ impl EventHandler {
 
         Ok(EventEnvelope::new(
             timestamp_ms,
-            Some(digest),
+            digest,
             seq_num,
             event_num,
             event.clone(),

@@ -15,12 +15,13 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::messages::{TransactionData, VerifiedTransaction};
+use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -38,7 +39,7 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(10);
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
 
@@ -157,7 +158,7 @@ async fn init_genesis(
 ) -> (
     Genesis,
     Vec<(AuthorityPublicKeyBytes, AuthorityKeyPair)>,
-    ObjectRef,
+    ObjectID,
 ) {
     // add object_basics package object to genesis
     let modules = compile_basics_package()
@@ -192,6 +193,9 @@ async fn init_genesis(
             p2p_address: sui_config::utils::new_udp_network_address(),
             narwhal_primary_address: sui_config::utils::new_udp_network_address(),
             narwhal_worker_address: sui_config::utils::new_udp_network_address(),
+            description: String::new(),
+            image_url: String::new(),
+            project_url: String::new(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
         builder = builder.add_validator(validator_info, pop);
@@ -201,13 +205,7 @@ async fn init_genesis(
         builder = builder.add_validator_signature(key);
     }
     let genesis = builder.build();
-    let pkg_ref = genesis
-        .objects()
-        .iter()
-        .find(|o| o.id() == pkg_id)
-        .unwrap()
-        .compute_object_reference();
-    (genesis, key_pairs, pkg_ref)
+    (genesis, key_pairs, pkg_id)
 }
 
 pub async fn init_local_authorities(
@@ -217,11 +215,11 @@ pub async fn init_local_authorities(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
     Genesis,
-    ObjectRef,
+    ObjectID,
 ) {
-    let (genesis, key_pairs, pkg_ref) = init_genesis(committee_size, genesis_objects).await;
+    let (genesis, key_pairs, framework) = init_genesis(committee_size, genesis_objects).await;
     let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
-    (aggregator, authorities, genesis, pkg_ref)
+    (aggregator, authorities, genesis, framework)
 }
 
 pub async fn init_local_authorities_with_genesis(
@@ -267,8 +265,16 @@ pub fn make_transfer_sui_transaction(
     amount: Option<u64>,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        amount,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+    );
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -278,7 +284,15 @@ pub fn make_transfer_object_transaction(
     sender: SuiAddress,
     keypair: &AccountKeyPair,
     recipient: SuiAddress,
+    gas_price: Option<u64>,
 ) -> VerifiedTransaction {
-    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    let data = TransactionData::new_transfer(
+        recipient,
+        object_ref,
+        sender,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+    );
     to_sender_signed_transaction(data, keypair)
 }

@@ -11,8 +11,7 @@ use std::sync::Arc;
 pub struct CheckpointExecutorMetrics {
     pub last_executed_checkpoint: IntGauge,
     pub checkpoint_exec_errors: IntCounter,
-    pub checkpoint_exec_recv_channel_overflow: IntCounter,
-    pub current_local_epoch: IntGauge,
+    pub checkpoint_exec_epoch: IntGauge,
     pub checkpoint_transaction_count: Histogram,
 }
 
@@ -31,23 +30,17 @@ impl CheckpointExecutorMetrics {
                 registry
             )
             .unwrap(),
-            checkpoint_exec_recv_channel_overflow: register_int_counter_with_registry!(
-                "checkpoint_exec_recv_channel_overflow",
-                "Count of the number of times the recv channel from StateSync to CheckpointExecutor has been overflowed",
-                registry
-            )
-            .unwrap(),
-            current_local_epoch: register_int_gauge_with_registry!(
+            checkpoint_exec_epoch: register_int_gauge_with_registry!(
                 "current_local_epoch",
-                "Current local epoch sequence number",
+                "Current epoch number in the checkpoint executor",
                 registry
             )
             .unwrap(),
             checkpoint_transaction_count: Histogram::new_in_registry(
                 "checkpoint_transaction_count",
                 "Number of transactions in the checkpoint",
-                registry
-            )
+                registry,
+            ),
         };
         Arc::new(this)
     }

@@ -33,7 +33,8 @@ pub struct SamplingInterval {
 
 impl Default for SamplingInterval {
     fn default() -> Self {
-        SamplingInterval::new(Duration::from_secs(60), 0)
+        // Disabled by default
+        SamplingInterval::new(Duration::ZERO, u64::MAX - 1)
     }
 }
 
@@ -177,7 +178,7 @@ impl ColumnFamilyMetrics {
                 If this number is 1, it means some part of the column family requires
                 compaction in order to maintain shape of LSM tree, but the compaction
                 is pending because the desired compaction job is either waiting for
-                other dependnent compactions to be finished or waiting for an available
+                other dependent compactions to be finished or waiting for an available
                 compaction thread.",
                 &["cf_name"],
                 registry,
@@ -199,7 +200,7 @@ impl ColumnFamilyMetrics {
             .unwrap(),
             rocksdb_estimate_oldest_key_time: register_int_gauge_vec_with_registry!(
                 "rocksdb_estimate_oldest_key_time",
-                "Estimation of the oldest key timestamp in the DB. Only vailable
+                "Estimation of the oldest key timestamp in the DB. Only available
                 for FIFO compaction with compaction_options_fifo.allow_compaction = false.",
                 &["cf_name"],
                 registry,

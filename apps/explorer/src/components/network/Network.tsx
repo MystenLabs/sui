@@ -6,7 +6,6 @@ import { useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { GROWTHBOOK_FEATURES } from '../../utils/growthbook';
 
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
@@ -22,7 +21,6 @@ export default function WrappedNetworkSelect() {
         { id: Network.DEVNET, label: 'Devnet' },
         showTestNet && { id: Network.TESTNET, label: 'Testnet' },
         { id: Network.LOCAL, label: 'Local' },
-        IS_STATIC_ENV && { id: Network.STATIC, label: 'Static' },
     ].filter(Boolean) as NetworkOption[];
 
     return (

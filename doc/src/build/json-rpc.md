@@ -2,7 +2,7 @@
 title: JSON-RPC API Quick Start
 ---
 
-Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and how to the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through how to connect and interact with the Sui network using the Sui JSON-RPC API. Use the RPC layer to send your dApp transactions to [Sui validators](../learn/architecture/validators.md) for verification.
 
 This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
 
@@ -165,7 +165,7 @@ sure the package is valid. If some modules have [initializers](move/debug-publis
 To publish a Move module, you also need to include `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui move` command. The `sui move` command supports printing the bytecode as base64:
 
 ```
-sui move <move-module-path> build --dump-bytecode-as-base64
+sui move <move-module-path> build --dump-bytecode-as-base64 
 ```
 
 Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command resembles the following:
@@ -181,3 +181,5 @@ Copy the output base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 The command generates a package object that represents the published Move code. You can use the package ID as an argument for subsequent Move calls to functions defined in this package.
+
+**Note:** If your package has dependencies that are unpublished, include the `--with-unpublished-dependencies` flag to have the modules in those packages added to the bytecode.

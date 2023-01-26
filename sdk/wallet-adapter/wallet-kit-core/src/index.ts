@@ -44,7 +44,7 @@ export interface WalletKitCore {
   getState(): WalletKitCoreState;
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
-  disconnect(): void;
+  disconnect(): Promise<void>;
   signAndExecuteTransaction(
     transaction: SignableTransaction
   ): Promise<SuiTransactionResponse>;
@@ -76,6 +76,7 @@ export function createWalletKitCore({
   preferredWallets = [SUI_WALLET_NAME],
 }: WalletKitCoreOptions): WalletKitCore {
   const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
+  let walletEventUnsubscribe: (() => void) | null = null;
 
   let internalState: InternalWalletKitCoreState = {
     accounts: [],
@@ -106,6 +107,19 @@ export function createWalletKitCore({
       try {
         handler(state);
       } catch {}
+    });
+  }
+
+  function disconnected() {
+    if (walletEventUnsubscribe) {
+      walletEventUnsubscribe();
+      walletEventUnsubscribe = null;
+    }
+    setState({
+      status: WalletKitCoreConnectionStatus.DISCONNECTED,
+      accounts: [],
+      currentAccount: null,
+      currentWallet: null,
     });
   }
 
@@ -143,11 +157,19 @@ export function createWalletKitCore({
       const currentWallet =
         internalState.wallets.find((wallet) => wallet.name === walletName) ??
         null;
-
       // TODO: Should the current wallet actually be set before we successfully connect to it?
       setState({ currentWallet });
 
       if (currentWallet && !currentWallet.connecting) {
+        if (walletEventUnsubscribe) {
+          walletEventUnsubscribe();
+        }
+        walletEventUnsubscribe = currentWallet.on("change", ({ connected }) => {
+          // when undefined connected hasn't changed
+          if (connected === false) {
+            disconnected();
+          }
+        });
         try {
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();
@@ -167,19 +189,13 @@ export function createWalletKitCore({
       }
     },
 
-    disconnect() {
+    async disconnect() {
       if (!internalState.currentWallet) {
         console.warn("Attempted to `disconnect` but no wallet was connected.");
         return;
       }
-
-      internalState.currentWallet.disconnect();
-      setState({
-        status: WalletKitCoreConnectionStatus.DISCONNECTED,
-        accounts: [],
-        currentAccount: null,
-        currentWallet: null,
-      });
+      await internalState.currentWallet.disconnect();
+      disconnected();
     },
 
     signAndExecuteTransaction(transaction) {

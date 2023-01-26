@@ -18,6 +18,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
 use sui_types::object::Data;
 use sui_types::temporary_store::InnerTemporaryStore;
+use typed_store::rocks::MetricConf;
 use typed_store::traits::{Map, TableSummary};
 
 #[derive(EnumString, Parser, Debug)]
@@ -71,15 +72,19 @@ pub fn table_summary(
             }
         }
         StoreName::Index => {
-            IndexStoreTables::get_read_only_handle(db_path, None, None).table_summary(table_name)
+            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .table_summary(table_name)
         }
-        StoreName::Wal => DBWriteAheadLogTables::<
-            TrustedCertificate,
-            (InnerTemporaryStore, SignedTransactionEffects),
-        >::get_read_only_handle(db_path, None, None)
-        .table_summary(table_name),
+        StoreName::Wal => {
+            DBWriteAheadLogTables::<
+                TrustedCertificate,
+                (InnerTemporaryStore, SignedTransactionEffects),
+            >::get_read_only_handle(db_path, None, None, MetricConf::default())
+            .table_summary(table_name)
+        }
         StoreName::Epoch => {
-            CommitteeStore::get_read_only_handle(db_path, None, None).table_summary(table_name)
+            CommitteeStore::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .table_summary(table_name)
         }
     }
     .map_err(|err| anyhow!(err.to_string()))
@@ -141,19 +146,23 @@ pub fn dump_table(
                 )
             }
         }
-        StoreName::Index => IndexStoreTables::get_read_only_handle(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
+        StoreName::Index => {
+            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default()).dump(
+                table_name,
+                page_size,
+                page_number,
+            )
+        }
         StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
-        StoreName::Epoch => CommitteeStore::get_read_only_handle(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
+        StoreName::Epoch => {
+            CommitteeStore::get_read_only_handle(db_path, None, None, MetricConf::default()).dump(
+                table_name,
+                page_size,
+                page_number,
+            )
+        }
     }
     .map_err(|err| anyhow!(err.to_string()))
 }

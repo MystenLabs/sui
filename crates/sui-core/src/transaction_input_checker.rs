@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
+use sui_protocol_constants::STORAGE_GAS_PRICE;
 use sui_types::base_types::ObjectRef;
 use sui_types::messages::TransactionKind;
 use sui_types::{
@@ -40,14 +41,19 @@ async fn get_gas_status(
         extra_gas_object_refs,
     )
     .await
+    .map_err(SuiError::into_transaction_input_error)
 }
 
+// Note: Transaction Input related errors returned from this function
+// should be aggregated into Sui::TransactionInputObjectsErrors
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input(
     store: &AuthorityStore,
     transaction: &TransactionData,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction.validity_check()?;
+    transaction
+        .validity_check()
+        .map_err(SuiError::into_transaction_input_error)?;
     let gas_status = get_gas_status(store, transaction).await?;
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
@@ -55,28 +61,32 @@ pub async fn check_transaction_input(
     Ok((gas_status, input_objects))
 }
 
-#[instrument(level = "trace", skip_all)]
 /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
 /// bypasses many of the normal object checks
 pub(crate) async fn check_dev_inspect_input(
     store: &AuthorityStore,
-    transaction: &TransactionData,
-) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
-    transaction.validity_check()?;
-    let gas_status = get_gas_status(store, transaction).await?;
-    let input_objects = transaction.input_objects()?;
-    let input_objects = check_dev_inspect_input_objects(store, input_objects)?;
-    Ok((gas_status, input_objects))
-}
-
-#[instrument(level = "trace", skip_all)]
-/// WARNING! This should only be used for the dev-inspect transaction. This transaction type
-/// bypasses many of the normal object checks
-pub(crate) fn check_dev_inspect_input_objects(
-    store: &AuthorityStore,
-    input_objects: Vec<InputObjectKind>,
-) -> SuiResult<InputObjects> {
-    let objects = store.check_input_objects(&input_objects)?;
+    kind: &TransactionKind,
+    gas_object: Object,
+) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
+    let gas_object_ref = gas_object.compute_object_reference();
+    TransactionData::validity_check_impl(kind, &gas_object_ref)?;
+    for k in kind.single_transactions() {
+        match k {
+            SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::Call(_)
+            | SingleTransactionKind::TransferSui(_)
+            | SingleTransactionKind::Pay(_)
+            | SingleTransactionKind::PaySui(_)
+            | SingleTransactionKind::PayAllSui(_) => (),
+            SingleTransactionKind::Publish(_)
+            | SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_) => {
+                anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
+            }
+        }
+    }
+    let mut input_objects = kind.input_objects()?;
+    let mut objects = store.check_input_objects(&input_objects)?;
     let mut used_objects: HashSet<SuiAddress> = HashSet::new();
     for object in &objects {
         if !object.is_immutable() {
@@ -89,12 +99,14 @@ pub(crate) fn check_dev_inspect_input_objects(
                         object.id()
                     ),
                 }
+                .into()
             );
         }
     }
-    Ok(InputObjects::new(
-        input_objects.into_iter().zip(objects).collect(),
-    ))
+    input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
+    objects.push(gas_object);
+    let input_objects = InputObjects::new(input_objects.into_iter().zip(objects).collect());
+    Ok((gas_object_ref, input_objects))
 }
 
 pub async fn check_certificate_input(
@@ -138,18 +150,10 @@ async fn check_gas(
         Ok(SuiGasStatus::new_unmetered())
     } else {
         let gas_object = store.get_object_by_key(&gas_payment.0, gas_payment.1)?;
-        let gas_object = gas_object.ok_or(SuiError::TransactionInputObjectsErrors {
-            errors: vec![SuiError::ObjectNotFound {
-                object_id: gas_payment.0,
-                version: Some(gas_payment.1),
-            }],
+        let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
+            object_id: gas_payment.0,
+            version: Some(gas_payment.1),
         })?;
-
-        // TODO: cache this storage_gas_price in memory
-        let storage_gas_price = store
-            .get_sui_system_state_object()?
-            .parameters
-            .storage_gas_price;
 
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
         // both gas budget and the transfer amount.
@@ -161,17 +165,15 @@ async fn check_gas(
             _ => 0,
         };
         // TODO: We should revisit how we compute gas price and compare to gas budget.
-        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
+        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
 
         if tx_kind.is_pay_sui_tx() {
             let mut additional_objs = vec![];
             for obj_ref in additional_objects_for_gas_payment.iter() {
                 let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
-                let obj = obj.ok_or(SuiError::TransactionInputObjectsErrors {
-                    errors: vec![SuiError::ObjectNotFound {
-                        object_id: gas_payment.0,
-                        version: None,
-                    }],
+                let obj = obj.ok_or(SuiError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: Some(obj_ref.1),
                 })?;
                 additional_objs.push(obj);
             }
@@ -186,14 +188,13 @@ async fn check_gas(
             gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, vec![])?;
         }
 
-        let gas_status =
-            gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
-        Ok(gas_status)
+        gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)
     }
 }
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
+// Transaction input errors should be aggregated in TransactionInputObjectsErrors
 #[instrument(level = "trace", skip_all)]
 async fn check_objects(
     transaction: &TransactionData,
@@ -213,8 +214,10 @@ async fn check_objects(
         if !object.is_immutable() {
             fp_ensure!(
                 used_objects.insert(object.id().into()),
-                SuiError::InvalidBatchTransaction {
-                    error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
+                SuiError::TransactionInputObjectsErrors { errors: vec![
+                    SuiError::InvalidBatchTransaction {
+                        error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
+                    }]
                 }
             );
         }
@@ -254,7 +257,9 @@ async fn check_objects(
         return Err(SuiError::TransactionInputObjectsErrors { errors });
     }
     if !transaction.kind.is_genesis_tx() && all_objects.is_empty() {
-        return Err(SuiError::ObjectInputArityViolation);
+        return Err(SuiError::TransactionInputObjectsErrors {
+            errors: vec![SuiError::ObjectInputArityViolation],
+        });
     }
 
     Ok(InputObjects::new(all_objects))

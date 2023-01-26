@@ -4,11 +4,15 @@
 use futures::future::join_all;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
+use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use tokio::{task::JoinHandle, time::sleep};
+use tracing::info;
 
 use mysten_metrics::RegistryService;
 use sui::config::SuiEnv;
@@ -19,9 +23,9 @@ use sui_config::{FullnodeConfigBuilder, NodeConfig, PersistedConfig, SUI_KEYSTOR
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNode;
 use sui_node::SuiNodeHandle;
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
@@ -89,20 +93,77 @@ impl TestCluster {
         start_fullnode_from_config(config).await
     }
 
-    pub fn get_validator_addresses(&self) -> Vec<SuiAddress> {
+    pub fn get_validator_addresses(&self) -> Vec<AuthorityName> {
         self.swarm.validators().map(|v| v.name()).collect()
     }
 
-    pub fn stop_validator(&mut self, name: SuiAddress) {
-        self.swarm.validator_mut(name).unwrap().stop();
+    pub fn stop_validator(&self, name: AuthorityName) {
+        self.swarm.validator(name).unwrap().stop();
     }
 
-    pub async fn start_validator(&mut self, name: SuiAddress) {
-        let node = self.swarm.validator_mut(name).unwrap();
+    pub async fn start_validator(&self, name: AuthorityName) {
+        let node = self.swarm.validator(name).unwrap();
         if node.is_running() {
             return;
         }
         node.start().await.unwrap();
+    }
+
+    pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
+        RandomNodeRestarter::new(self.clone())
+    }
+}
+
+pub struct RandomNodeRestarter {
+    test_cluster: Arc<TestCluster>,
+
+    // How frequently should we kill nodes
+    kill_interval: Uniform<Duration>,
+    // How long should we wait before restarting them.
+    restart_delay: Uniform<Duration>,
+}
+
+impl RandomNodeRestarter {
+    fn new(test_cluster: Arc<TestCluster>) -> Self {
+        Self {
+            test_cluster,
+            kill_interval: Uniform::new(Duration::from_secs(10), Duration::from_secs(11)),
+            restart_delay: Uniform::new(Duration::from_secs(1), Duration::from_secs(2)),
+        }
+    }
+
+    pub fn with_kill_interval_secs(mut self, a: u64, b: u64) -> Self {
+        self.kill_interval = Uniform::new(Duration::from_secs(a), Duration::from_secs(b));
+        self
+    }
+
+    pub fn with_restart_delay_secs(mut self, a: u64, b: u64) -> Self {
+        self.restart_delay = Uniform::new(Duration::from_secs(a), Duration::from_secs(b));
+        self
+    }
+
+    pub fn run(&self) -> JoinHandle<()> {
+        let test_cluster = self.test_cluster.clone();
+        let kill_interval = self.kill_interval;
+        let restart_delay = self.restart_delay;
+        let validators = self.test_cluster.get_validator_addresses();
+        tokio::task::spawn(async move {
+            loop {
+                let delay = kill_interval.sample(&mut OsRng);
+                info!("Sleeping {delay:?} before killing a validator");
+                sleep(delay).await;
+
+                let validator = validators.choose(&mut OsRng).unwrap();
+                info!("Killing validator {:?}", validator.concise());
+                test_cluster.stop_validator(*validator);
+
+                let delay = restart_delay.sample(&mut OsRng);
+                info!("Sleeping {delay:?} before restarting");
+                sleep(delay).await;
+                info!("Starting validator {:?}", validator.concise());
+                test_cluster.start_validator(*validator).await;
+            }
+        })
     }
 }
 
@@ -260,7 +321,10 @@ pub async fn start_fullnode_from_config(
 
     let ws_url = format!("ws://{}", config.json_rpc_address);
     let ws_client = WsClientBuilder::default().build(&ws_url).await?;
-    let sui_client = SuiClient::new(&rpc_url, Some(&ws_url), None).await?;
+    let sui_client = SuiClientBuilder::default()
+        .ws_url(&ws_url)
+        .build(&rpc_url)
+        .await?;
 
     Ok(FullNodeHandle {
         sui_node,
@@ -279,7 +343,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
     let handles: Vec<_> = nodes
         .map(|handle| {
             handle.with_async(|node| async move {
-                let mut rx = node.subscribe_to_epoch_change().await;
+                let mut rx = node.subscribe_to_epoch_change();
                 let epoch = node.current_epoch();
                 if epoch != expected_epoch {
                     let committee = rx.recv().await.unwrap();

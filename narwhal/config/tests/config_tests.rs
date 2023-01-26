@@ -198,6 +198,8 @@ fn parameters_import_snapshot_matches() {
          "network_admin_server": {
            "primary_network_admin_server_port": 0,
            "worker_network_admin_server_base_port": 0
+         },
+         "anemo": {
          }
       }"#;
 

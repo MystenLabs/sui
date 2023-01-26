@@ -18,6 +18,10 @@ const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 pub struct Build {
     #[clap(flatten)]
     pub build: build::Build,
+    /// Include the contents of packages in dependencies that haven't been published (only relevant
+    /// when dumping bytecode as base64)
+    #[clap(long, global = true)]
+    pub with_unpublished_dependencies: bool,
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
@@ -40,6 +44,7 @@ impl Build {
         Self::execute_internal(
             &rerooted_path,
             build_config,
+            self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
         )
@@ -48,6 +53,7 @@ impl Build {
     pub fn execute_internal(
         rerooted_path: &Path,
         config: MoveBuildConfig,
+        with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
     ) -> anyhow::Result<()> {
@@ -60,7 +66,7 @@ impl Build {
             },
         )?;
         if dump_bytecode_as_base64 {
-            println!("{}", json!(pkg.get_package_base64()))
+            println!("{}", json!(pkg.get_package_base64(with_unpublished_deps)))
         }
 
         if generate_struct_layouts {

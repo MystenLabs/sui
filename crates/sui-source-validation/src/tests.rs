@@ -87,6 +87,34 @@ async fn successful_verification() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await?;
+    let sender = cluster.get_address_0();
+    let context = &mut cluster.wallet;
+    let fixtures = tempfile::tempdir()?;
+
+    let a_src = {
+        let zero = SuiAddress::ZERO;
+        copy_package(&fixtures, "b", [("b", zero)]).await?;
+        copy_package(&fixtures, "a", [("a", zero), ("b", zero)]).await?
+    };
+
+    let a_pkg = compile_package(a_src.clone());
+    let a_ref = publish_package_and_deps(context, sender, a_src).await;
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+
+    // Verify the root package which now includes dependency modules
+    verifier
+        .verify_package_root(&a_pkg.package, a_ref.0.into())
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await?;
     let sender = cluster.get_address_0();
@@ -117,6 +145,36 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
             .await,
         Err(SourceVerificationError::ZeroOnChainAddresSpecifiedFailure),
     ),);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await?;
+    let context = &mut cluster.wallet;
+
+    let b_pkg = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        compile_package(&b_src)
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+
+    // Trying to verify the root package, which hasn't been published -- this is going to fail
+    // because there is no on-chain package to verify against.
+    assert!(matches!(
+        verifier
+            .verify_package(
+                &b_pkg.package,
+                /* verify_deps */ false,
+                SourceMode::Verify
+            )
+            .await,
+        Err(SourceVerificationError::InvalidModuleFailure { .. }),
+    ));
 
     Ok(())
 }
@@ -309,12 +367,12 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
         panic!("Expected verification to fail");
     };
 
-    let SourceVerificationError::LocalDependencyNotFound { package, module } = err else {
+    let SourceVerificationError::LocalDependencyNotFound { address, module } = err else {
         panic!("Expected LocalDependencyNotFound, got: {:?}", err);
     };
 
-    assert_eq!(package, "b".into());
-    assert_eq!(module, "d");
+    assert_eq!(address, b_ref.0.into());
+    assert_eq!(module.as_ref(), "d");
 
     Ok(())
 }
@@ -398,7 +456,20 @@ async fn publish_package(
     sender: SuiAddress,
     package: impl AsRef<Path>,
 ) -> ObjectRef {
-    let package_bytes = compile_package(package).get_package_bytes();
+    let package_bytes =
+        compile_package(package).get_package_bytes(/* with_unpublished_deps */ false);
+    publish_package_with_wallet(context, sender, package_bytes).await
+}
+
+/// Compile and publish package at absolute path `package` to chain, along with its unpublished
+/// dependencies.
+async fn publish_package_and_deps(
+    context: &WalletContext,
+    sender: SuiAddress,
+    package: impl AsRef<Path>,
+) -> ObjectRef {
+    let package_bytes =
+        compile_package(package).get_package_bytes(/* with_unpublished_deps */ true);
     publish_package_with_wallet(context, sender, package_bytes).await
 }
 

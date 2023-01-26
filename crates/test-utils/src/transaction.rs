@@ -47,6 +47,7 @@ pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransa
         path,
         sender,
         &keypair,
+        None,
     )
 }
 
@@ -79,7 +80,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
     publish_package_with_wallet(
         context,
         sender,
-        compile_basics_package().get_package_bytes(),
+        compile_basics_package().get_package_bytes(/* with_unpublished_deps */ false),
     )
     .await
 }
@@ -133,18 +134,18 @@ pub async fn submit_move_transaction(
     context: &WalletContext,
     module: &'static str,
     function: &'static str,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
 ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
-    debug!(?package_ref, ?arguments, "move_transaction");
+    debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
             sender,
-            package_ref.0,
+            package_id,
             module,
             function,
             vec![], // type_args
@@ -192,7 +193,7 @@ pub async fn publish_basics_package_and_make_counter(
         context,
         "counter",
         "create",
-        package_ref,
+        package_ref.0,
         vec![],
         sender,
         None,
@@ -214,14 +215,14 @@ pub async fn increment_counter(
     context: &WalletContext,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-    package_ref: ObjectRef,
+    package_id: ObjectID,
     counter_id: ObjectID,
 ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
     submit_move_transaction(
         context,
         "counter",
         "increment",
-        package_ref,
+        package_id,
         vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
         sender,
         gas_object,
@@ -366,14 +367,13 @@ pub async fn delete_devnet_nft(
     context: &mut WalletContext,
     sender: &SuiAddress,
     nft_to_delete: ObjectRef,
-    package_ref: ObjectRef,
 ) -> (SuiCertifiedTransaction, SuiTransactionEffects) {
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
-        package_ref,
+        SUI_FRAMEWORK_OBJECT_ID,
         "devnet_nft".parse().unwrap(),
         "burn".parse().unwrap(),
         Vec::new(),

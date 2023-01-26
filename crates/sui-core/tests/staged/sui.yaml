@@ -41,6 +41,7 @@ ChangeEpoch:
     - storage_charge: U64
     - computation_charge: U64
     - storage_rebate: U64
+    - epoch_start_timestamp_ms: U64
 CircularObjectOwnership:
   STRUCT:
     - object:
@@ -247,10 +248,7 @@ ModuleId:
 MoveCall:
   STRUCT:
     - package:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
+        TYPENAME: ObjectID
     - module:
         TYPENAME: Identifier
     - function:

@@ -3,7 +3,6 @@
 
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
-use fastcrypto::encoding::Base64;
 use jsonrpsee::rpc_params;
 use sui_core::test_utils::compile_basics_package;
 use sui_types::{base_types::ObjectID, object::Owner};
@@ -21,11 +20,9 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let all_module_bytes = compile_basics_package()
-            .get_package_bytes()
-            .iter()
-            .map(|bytes| Base64::from_bytes(bytes))
-            .collect::<Vec<_>>();
+        let all_module_bytes =
+            compile_basics_package().get_package_base64(/* with_unpublished_deps */ false);
+
         let params = rpc_params![
             ctx.get_wallet_address(),
             all_module_bytes,

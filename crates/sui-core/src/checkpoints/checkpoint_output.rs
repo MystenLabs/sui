@@ -63,7 +63,10 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let checkpoint_seq = summary.sequence_number;
-        debug!("Sending checkpoint signature at sequence {checkpoint_seq} to consensus");
+        debug!(
+            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {}",
+            summary.timestamp_ms
+        );
         LogCheckpointOutput
             .checkpoint_created(summary, contents, epoch_store)
             .await?;
@@ -79,7 +82,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             .await?;
         if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
             if checkpoint_seq != 0 && checkpoint_seq % checkpoints_per_epoch == 0 {
-                self.sender.close_epoch(epoch_store)?;
+                self.sender.close_epoch(epoch_store);
             }
         }
         Ok(())
@@ -99,13 +102,14 @@ impl CheckpointOutput for LogCheckpointOutput {
             summary.sequence_number, contents
         );
         info!(
-            "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}",
+            "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, next_epoch_committee {:?}",
             Hex::encode(summary.digest()),
             summary.epoch,
             summary.sequence_number,
             summary.previous_digest.map(Hex::encode),
             contents.size(),
             Hex::encode(summary.content_digest),
+            summary.next_epoch_committee,
         );
 
         Ok(())

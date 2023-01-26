@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
-use sui_types::messages::SignedTransactionEffects;
+use sui_types::messages::VerifiedSignedTransactionEffects;
 use tokio::sync::oneshot;
 
 #[async_trait]
@@ -34,12 +34,12 @@ pub trait EffectsNotifyRead: Send + Sync + 'static {
     async fn notify_read_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<SignedTransactionEffects>>;
+    ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>>;
 
     fn get_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>>;
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>>;
 }
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
@@ -181,7 +181,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
     async fn notify_read_effects(
         &self,
         digests: Vec<TransactionDigest>,
-    ) -> SuiResult<Vec<SignedTransactionEffects>> {
+    ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registrations = self.effects_notify_read.register_all(digests.clone());
         let effects = EffectsStore::get_effects(self, digests.iter())?;
@@ -201,7 +201,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
     fn get_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<SignedTransactionEffects>>> {
+    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
         EffectsStore::get_effects(self, digests.iter())
     }
 }

@@ -22,6 +22,7 @@ module sui::sui_system {
     use sui::epoch_time_lock;
     use sui::pay;
     use sui::event;
+    use sui::staking_pool;
 
     friend sui::genesis;
 
@@ -40,15 +41,11 @@ module sui::sui_system {
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
-        /// Storage gas price denominated in SUI
-        storage_gas_price: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
         id: UID,
-        /// Id of the chain, value in the range [1, 127].
-        chain_id: u8,
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// Contains all information about the validators.
@@ -69,6 +66,15 @@ module sui::sui_system {
         validator_report_records: VecMap<address, VecSet<address>>,
         /// Schedule of stake subsidies given out each epoch.
         stake_subsidy: StakeSubsidy,
+
+        /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
+        /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
+        /// It can be reset once we are able to successfully execute advance_epoch.
+        /// TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
+        /// redistribute them.
+        safe_mode: bool,
+        /// Unix timestamp of the current epoch start
+        epoch_start_timestamp_ms: u64,
     }
 
     /// Event containing system-level epoch information, emitted during
@@ -91,6 +97,8 @@ module sui::sui_system {
     const EEPOCH_NUMBER_MISMATCH: u64 = 2;
     const ECANNOT_REPORT_ONESELF: u64 = 3;
     const EREPORT_RECORD_NOT_FOUND: u64 = 4;
+    const EBPS_TOO_LARGE: u64 = 5;
+    const ESTAKED_SUI_FROM_WRONG_EPOCH: u64 = 6;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -99,22 +107,19 @@ module sui::sui_system {
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in genesis.
     public(friend) fun create(
-        chain_id: u8,
         validators: vector<Validator>,
         sui_supply: Supply<SUI>,
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
-        storage_gas_price: u64,
         initial_stake_subsidy_amount: u64,
+        epoch_start_timestamp_ms: u64,
     ) {
-        assert!(chain_id >= 1 && chain_id <= 127, 1);
         let validators = validator_set::new(validators);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let state = SuiSystemState {
             // Use a hardcoded ID.
             id: object::sui_system_state(),
-            chain_id,
             epoch: 0,
             validators,
             sui_supply,
@@ -122,11 +127,12 @@ module sui::sui_system {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_candidate_count,
-                storage_gas_price
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
             stake_subsidy: stake_subsidy::create(initial_stake_subsidy_amount),
+            safe_mode: false,
+            epoch_start_timestamp_ms,
         };
         transfer::share_object(state);
     }
@@ -145,6 +151,9 @@ module sui::sui_system {
         worker_pubkey_bytes: vector<u8>,
         proof_of_possession: vector<u8>,
         name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        project_url: vector<u8>,
         net_address: vector<u8>,
         consensus_address: vector<u8>,
         worker_address: vector<u8>,
@@ -169,6 +178,9 @@ module sui::sui_system {
             worker_pubkey_bytes,
             proof_of_possession,
             name,
+            description,
+            image_url,
+            project_url,
             net_address,
             consensus_address,
             worker_address,
@@ -336,16 +348,14 @@ module sui::sui_system {
     /// Withdraw some portion of a delegation from a validator's staking pool.
     public entry fun request_withdraw_delegation(
         self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
-        principal_withdraw_amount: u64,
+        delegation: Delegation,
+        staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
         validator_set::request_withdraw_delegation(
             &mut self.validators,
             delegation,
             staked_sui,
-            principal_withdraw_amount,
             ctx,
         );
     }
@@ -353,16 +363,29 @@ module sui::sui_system {
     // Switch delegation from the current validator to a new one.
     public entry fun request_switch_delegation(
         self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
+        delegation: Delegation,
+        staked_sui: StakedSui,
         new_validator_address: address,
-        switch_pool_token_amount: u64,
         ctx: &mut TxContext,
     ) {
         validator_set::request_switch_delegation(
-            &mut self.validators, delegation, staked_sui, new_validator_address, switch_pool_token_amount, ctx
+            &mut self.validators, delegation, staked_sui, new_validator_address, ctx
         );
     }
+
+    /// Cancel a delegation requests sent during the current epoch.
+    public entry fun cancel_delegation_request(
+        self: &mut SuiSystemState,
+        staked_sui: StakedSui,
+        ctx: &mut TxContext,
+    ) {
+        // The delegation request has to have happened within the current epoch.
+        assert!(staking_pool::delegation_request_epoch(&staked_sui) == self.epoch, ESTAKED_SUI_FROM_WRONG_EPOCH);
+        validator_set::cancel_delegation_request(
+            &mut self.validators, staked_sui, ctx
+        );
+    }
+
 
     /// Report a validator as a bad or non-performant actor in the system.
     /// Succeeds iff both the sender and the input `validator_addr` are active validators
@@ -418,29 +441,42 @@ module sui::sui_system {
         storage_rebate: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
+        reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
+        stake_subsidy_rate: u64, // what percentage of the total stake do we mint as stake subsidy.
+        epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
 
-        let storage_reward = balance::create_staking_rewards(storage_charge);
-        let computation_reward = balance::create_staking_rewards(computation_charge);
+        self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
-        // Include stake subsidy in the rewards given out to validators and delegators.
-        stake_subsidy::advance_epoch(&mut self.stake_subsidy, &mut self.sui_supply);
-        let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
-        let stake_subsidy_amount = balance::value(&stake_subsidy);
-        balance::join(&mut computation_reward, stake_subsidy);
+        let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
+        // Rates can't be higher than 100%.
+        assert!(
+            storage_fund_reinvest_rate <= bps_denominator_u64
+            && reward_slashing_rate <= bps_denominator_u64,
+            EBPS_TOO_LARGE,
+        );
 
         let delegation_stake = validator_set::total_delegation_stake(&self.validators);
         let validator_stake = validator_set::total_validator_stake(&self.validators);
         let storage_fund_balance = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund_balance;
+
+        let storage_reward = balance::create_staking_rewards(storage_charge);
+        let computation_reward = balance::create_staking_rewards(computation_charge);
+
+        // Include stake subsidy in the rewards given out to validators and delegators.
+        stake_subsidy::mint_stake_subsidy_proportional_to_total_stake_testnet(
+            &mut self.stake_subsidy, &mut self.sui_supply, stake_subsidy_rate, delegation_stake + validator_stake);
+        let stake_subsidy = stake_subsidy::withdraw_all(&mut self.stake_subsidy);
+        let stake_subsidy_amount = balance::value(&stake_subsidy);
+        balance::join(&mut computation_reward, stake_subsidy);
+
         let total_stake_u128 = (total_stake as u128);
         let computation_charge_u128 = (computation_charge as u128);
 
-        let delegator_reward_amount = (delegation_stake as u128) * computation_charge_u128 / total_stake_u128;
-        let delegator_reward = balance::split(&mut computation_reward, (delegator_reward_amount as u64));
         balance::join(&mut self.storage_fund, storage_reward);
 
         let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
@@ -457,25 +493,22 @@ module sui::sui_system {
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
         let total_rewards_amount =
-            balance::value(&computation_reward)
-            + balance::value(&delegator_reward)
-            + balance::value(&storage_fund_reward);
+            balance::value(&computation_reward)+ balance::value(&storage_fund_reward);
 
         validator_set::advance_epoch(
             new_epoch,
             &mut self.validators,
             &mut computation_reward,
-            &mut delegator_reward,
             &mut storage_fund_reward,
-            &self.validator_report_records,
+            self.validator_report_records,
+            reward_slashing_rate,
             ctx,
         );
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `delegator_reward`, `storage_fund_reward` and `computation_reward`.
+        // remaining balance in `storage_fund_reward` and `computation_reward`.
         // All of these go to the storage fund.
-        balance::join(&mut self.storage_fund, delegator_reward);
         balance::join(&mut self.storage_fund, storage_fund_reward);
         balance::join(&mut self.storage_fund, computation_reward);
 
@@ -487,11 +520,15 @@ module sui::sui_system {
         // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
         self.validator_report_records = vec_map::empty();
 
+        let new_total_stake =
+            validator_set::total_delegation_stake(&self.validators)
+            + validator_set::total_validator_stake(&self.validators);
+
         event::emit(
             SystemEpochInfo {
                 epoch: self.epoch,
                 reference_gas_price: self.reference_gas_price,
-                total_stake: delegation_stake + validator_stake,
+                total_stake: new_total_stake,
                 storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
                 storage_fund_outflows: storage_rebate,
                 storage_fund_balance: balance::value(&self.storage_fund),
@@ -500,6 +537,8 @@ module sui::sui_system {
                 total_stake_rewards: total_rewards_amount,
             }
         );
+
+        self.safe_mode = false;
     }
 
     spec advance_epoch {
@@ -508,10 +547,30 @@ module sui::sui_system {
             == old(balance::supply_value(self.sui_supply)) + old(stake_subsidy::current_epoch_subsidy_amount(self.stake_subsidy));
     }
 
+    /// An extremely simple version of advance_epoch.
+    /// This is only called when the call to advance_epoch failed due to a bug, and we want to be able to keep the system
+    /// running and continue making epoch changes.
+    public entry fun advance_epoch_safe_mode(
+        self: &mut SuiSystemState,
+        new_epoch: u64,
+        ctx: &mut TxContext,
+    ) {
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(tx_context::sender(ctx) == @0x0, 0);
+
+        self.epoch = new_epoch;
+        self.safe_mode = true;
+    }
+
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
     public fun epoch(self: &SuiSystemState): u64 {
         self.epoch
+    }
+
+    /// Returns unix timestamp of the start of current epoch
+    public fun epoch_start_timestamp_ms(self: &SuiSystemState): u64 {
+        self.epoch_start_timestamp_ms
     }
 
     /// Returns the amount of stake delegated to `validator_addr`.

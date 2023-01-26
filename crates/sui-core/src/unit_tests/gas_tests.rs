@@ -27,10 +27,14 @@ async fn test_tx_less_than_minimum_gas_budget() {
     // handling phase.
     let budget = *MIN_GAS_BUDGET - 1;
     let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
-    let err = result.response.unwrap_err();
+
     assert_eq!(
-        err,
-        SuiError::GasBudgetTooLow {
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBudgetTooLow {
             gas_budget: budget,
             min_budget: *MIN_GAS_BUDGET
         }
@@ -44,10 +48,14 @@ async fn test_tx_more_than_maximum_gas_budget() {
     // handling phase.
     let budget = *MAX_GAS_BUDGET + 1;
     let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
-    let err = result.response.unwrap_err();
+
     assert_eq!(
-        err,
-        SuiError::GasBudgetTooHigh {
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBudgetTooHigh {
             gas_budget: budget,
             max_budget: *MAX_GAS_BUDGET
         }
@@ -63,10 +71,13 @@ async fn test_tx_gas_balance_less_than_budget() {
     let budget = *MIN_GAS_BUDGET;
     let gas_price = 1;
     let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
-    let err = result.response.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: gas_balance as u128,
             gas_budget: (gas_price * budget) as u128,
             gas_price
@@ -140,10 +151,13 @@ async fn test_native_transfer_gas_price_is_used() {
     let gas_budget = *MAX_GAS_BUDGET;
     let gas_price = u64::MAX;
     let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
-    let err = result.response.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        result
+            .response
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: (gas_balance as u128),
             gas_budget: (gas_budget as u128) * (gas_price as u128),
             gas_price
@@ -165,7 +179,7 @@ async fn test_transfer_sui_insufficient_gas() {
         recipient,
         amount: None,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 110, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, 110, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
@@ -250,6 +264,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         GAS_VALUE_FOR_TESTING,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -323,6 +338,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         budget,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -354,6 +370,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         &gas_object_id,
         "object_wrapping",
         budget,
+        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -379,9 +396,9 @@ async fn test_move_call_gas() -> SuiResult {
         CallArg::Pure(16u64.to_le_bytes().to_vec()),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
     ];
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module.clone(),
         function.clone(),
         Vec::new(),
@@ -440,9 +457,9 @@ async fn test_move_call_gas() -> SuiResult {
     let prev_storage_cost = gas_cost.storage_cost;
 
     // Execute object deletion, and make sure we have storage rebate.
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module.clone(),
         ident_str!("delete").to_owned(),
         vec![],
@@ -468,9 +485,9 @@ async fn test_move_call_gas() -> SuiResult {
     // Create a transaction with gas budget that should run out during Move VM execution.
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let budget = gas_used_before_vm_exec + 1;
-    let data = TransactionData::new_move_call(
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        package_object_ref,
+        package_object_ref.0,
         module,
         function,
         Vec::new(),
@@ -547,8 +564,7 @@ async fn execute_transfer_with_price(
         recipient,
         object_ref: object.compute_object_reference(),
     }));
-    let data =
-        TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, gas_price);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, gas_price);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let response = if run_confirm {

@@ -48,6 +48,7 @@ static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
 /// Provide all the proper guarantees about gas metering in the Move VM.
 ///
 /// Every client must use an instance of this type to interact with the Move VM.
+#[derive(Debug)]
 pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
@@ -212,7 +213,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         self.charge_instr_with_size(Opcodes::CALL, (args.len() as u64 + 1).into())
     }
 
@@ -224,7 +225,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         self.charge_instr_with_size(
             Opcodes::CALL_GENERIC,
             ((ty_args.len() + args.len() + 1) as u64).into(),
@@ -292,7 +293,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         val: impl ValueView,
         _old_val: impl ValueView,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         self.charge_instr_with_size(Opcodes::WRITE_REF, val.legacy_abstract_memory_size())
     }
 
@@ -411,7 +412,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         expect_num_elements: NumArgs,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         self.charge_instr_with_size(
             Opcodes::VEC_PUSH_BACK,
             u64::from(expect_num_elements).into(),
@@ -426,7 +427,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         &mut self,
         _loaded: Option<(NumBytes, impl ValueView)>,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         Ok(())
     }
 
@@ -435,12 +436,12 @@ impl<'b> GasMeter for GasStatus<'b> {
         amount: InternalGas,
         _ret_vals: Option<impl ExactSizeIterator<Item = impl ValueView>>,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         self.deduct_gas(amount)
     }
 
     fn charge_pop(&mut self, _popped_val: impl ValueView) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         Ok(())
     }
 
@@ -448,7 +449,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         &mut self,
         _val: impl ValueView,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         Ok(())
     }
 
@@ -457,7 +458,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         _args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         Ok(())
     }
 
@@ -465,7 +466,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         &mut self,
         _locals: impl Iterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        // TODO (Gas Maintainance)
+        // TODO (Gas Maintenance)
         Ok(())
     }
 }

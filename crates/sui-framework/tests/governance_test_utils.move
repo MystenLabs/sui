@@ -3,6 +3,7 @@
 
 #[test_only]
 module sui::governance_test_utils {
+    use sui::address;
     use sui::balance;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
@@ -25,6 +26,9 @@ module sui::governance_test_utils {
             x"FF",
             x"FF",
             b"ValidatorName",
+            b"description",
+            b"image_url",
+            b"project_url",
             x"FFFF",
             x"FFFF",
             x"FFFF",
@@ -36,18 +40,29 @@ module sui::governance_test_utils {
         )
     }
 
+    /// Create a validator set with the given stake amounts
+    public fun create_validators_with_stakes(stakes: vector<u64>, ctx: &mut TxContext): vector<Validator> {
+        let i = 0;
+        let validators = vector[];
+        while (i < vector::length(&stakes)) {
+            let validator = create_validator_for_testing(address::from_u256((i as u256)), *vector::borrow(&stakes, i), ctx);
+            vector::push_back(&mut validators, validator);
+            i = i + 1
+        };
+        validators
+    }
+
     public fun create_sui_system_state_for_testing(
         validators: vector<Validator>, sui_supply_amount: u64, storage_fund_amount: u64
     ) {
         sui_system::create(
-            127,
             validators,
             balance::create_supply_for_testing(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
             1024, // max_validator_candidate_count
             0, // min_validator_stake
-            1, // storage_gas_price
             0, // stake subsidy
+            0, // epoch_start_timestamp_ms
         )
     }
 
@@ -57,7 +72,7 @@ module sui::governance_test_utils {
 
         while (!vector::is_empty(&addrs)) {
             vector::push_back(
-                &mut validators, 
+                &mut validators,
                 create_validator_for_testing(vector::pop_back(&mut addrs), 100, ctx)
             );
         };
@@ -78,7 +93,38 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, 0, 0, 0, ctx);
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun advance_epoch_with_reward_amounts_and_subsidy_rate(
+        storage_charge: u64, computation_charge: u64, stake_subsidy_rate: u64, scenario: &mut Scenario
+    ) {
+        test_scenario::next_epoch(scenario, @0x0);
+        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, 0, stake_subsidy_rate, 0, ctx);
+        test_scenario::return_shared(system_state);
+    }
+
+    public fun advance_epoch_with_reward_amounts_and_slashing_rates(
+        storage_charge: u64,
+        computation_charge: u64,
+        reward_slashing_rate: u64,
+        scenario: &mut Scenario
+    ) {
+        test_scenario::next_epoch(scenario, @0x0);
+        let new_epoch = tx_context::epoch(test_scenario::ctx(scenario));
+        let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
+
+        let ctx = test_scenario::ctx(scenario);
+
+        sui_system::advance_epoch(
+            &mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 0, ctx
+        );
         test_scenario::return_shared(system_state);
     }
 
@@ -95,7 +141,7 @@ module sui::governance_test_utils {
     }
 
     public fun undelegate(
-        delegator: address, staked_sui_idx: u64, delegation_obj_idx: u64, pool_token_amount: u64, scenario: &mut Scenario
+        delegator: address, staked_sui_idx: u64, delegation_obj_idx: u64, scenario: &mut Scenario
     ) {
         test_scenario::next_tx(scenario, delegator);
         let stake_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
@@ -105,10 +151,7 @@ module sui::governance_test_utils {
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
-        sui_system::request_withdraw_delegation(&mut system_state, &mut delegation, &mut staked_sui, pool_token_amount, ctx);
-
-        test_scenario::return_to_sender(scenario, staked_sui);
-        test_scenario::return_to_sender(scenario, delegation);
+        sui_system::request_withdraw_delegation(&mut system_state, delegation, staked_sui, ctx);
         test_scenario::return_shared(system_state);
     }
 

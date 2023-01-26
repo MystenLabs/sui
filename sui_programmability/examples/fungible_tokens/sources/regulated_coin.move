@@ -163,7 +163,7 @@ module abc::abc {
     // === Admin actions: creating balances, minting coins and banning addresses ===
 
     /// Create an empty `RCoin<Abc>` instance for account `for`. AbcTreasuryCap is passed for
-    /// authentification purposes - only admin can create new accounts.
+    /// authentication purposes - only admin can create new accounts.
     public entry fun create(_: &AbcTreasuryCap, for: address, ctx: &mut TxContext) {
         transfer::transfer(zero(for, ctx), for)
     }

@@ -9,10 +9,33 @@ diesel::table! {
 }
 
 diesel::table! {
-    addresses (account_address) {
+    addresses (id) {
+        id -> Int8,
         account_address -> Varchar,
         first_appearance_tx -> Varchar,
         first_appearance_time -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    checkpoint_logs (next_cursor_sequence_number) {
+        next_cursor_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    checkpoints (sequence_number) {
+        sequence_number -> Int8,
+        content_digest -> Varchar,
+        epoch -> Int8,
+        total_gas_cost -> Int8,
+        total_computation_cost -> Int8,
+        total_storage_cost -> Int8,
+        total_storage_rebate -> Int8,
+        total_transactions -> Int8,
+        previous_digest -> Nullable<Varchar>,
+        next_epoch_committee -> Nullable<Text>,
+        timestamp_ms -> Int8,
     }
 }
 
@@ -26,18 +49,48 @@ diesel::table! {
 }
 
 diesel::table! {
-    event_logs (id) {
+    events (id) {
+        id -> Int8,
+        transaction_digest -> Varchar,
+        event_sequence -> Int8,
+        event_time -> Nullable<Timestamp>,
+        event_type -> Varchar,
+        event_content -> Varchar,
+        next_cursor_transaction_digest -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
+    move_event_logs (id) {
         id -> Int4,
-        next_cursor_tx_seq -> Nullable<Int8>,
+        next_cursor_tx_dig -> Nullable<Text>,
         next_cursor_event_seq -> Nullable<Int8>,
     }
 }
 
 diesel::table! {
-    events (id) {
+    move_events (id) {
         id -> Int8,
         transaction_digest -> Nullable<Varchar>,
-        transaction_sequence -> Int8,
+        event_sequence -> Int8,
+        event_time -> Nullable<Timestamp>,
+        event_type -> Varchar,
+        event_content -> Varchar,
+    }
+}
+
+diesel::table! {
+    object_event_logs (id) {
+        id -> Int4,
+        next_cursor_tx_dig -> Nullable<Text>,
+        next_cursor_event_seq -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
+    object_events (id) {
+        id -> Int8,
+        transaction_digest -> Nullable<Varchar>,
         event_sequence -> Int8,
         event_time -> Nullable<Timestamp>,
         event_type -> Varchar,
@@ -52,7 +105,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects (object_id) {
+    objects (id) {
+        id -> Int8,
         object_id -> Varchar,
         version -> Int8,
         owner_type -> Varchar,
@@ -72,11 +126,31 @@ diesel::table! {
 }
 
 diesel::table! {
-    packages (package_id) {
+    packages (id) {
+        id -> Int8,
         package_id -> Text,
         author -> Text,
         module_names -> Array<Nullable<Text>>,
         package_content -> Text,
+    }
+}
+
+diesel::table! {
+    publish_event_logs (id) {
+        id -> Int4,
+        next_cursor_tx_dig -> Nullable<Text>,
+        next_cursor_event_seq -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
+    publish_events (id) {
+        id -> Int8,
+        transaction_digest -> Nullable<Varchar>,
+        event_sequence -> Int8,
+        event_time -> Nullable<Timestamp>,
+        event_type -> Varchar,
+        event_content -> Varchar,
     }
 }
 
@@ -107,6 +181,7 @@ diesel::table! {
         computation_cost -> Int8,
         storage_cost -> Int8,
         storage_rebate -> Int8,
+        gas_price -> Int8,
         transaction_content -> Text,
     }
 }
@@ -114,13 +189,20 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     address_logs,
     addresses,
+    checkpoint_logs,
+    checkpoints,
     error_logs,
-    event_logs,
     events,
+    move_event_logs,
+    move_events,
+    object_event_logs,
+    object_events,
     object_logs,
     objects,
     package_logs,
     packages,
+    publish_event_logs,
+    publish_events,
     transaction_logs,
     transactions,
 );

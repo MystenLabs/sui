@@ -3,6 +3,7 @@
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
+import FeatureGating from '../FeatureGating';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { isBasePayload } from '_payloads';
@@ -20,6 +21,7 @@ import Keyring from '_src/background/keyring';
 
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
+import type { LoadedFeaturesPayload } from '_payloads/feature-gating';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { Permission, PermissionRequests } from '_payloads/permissions';
 import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
@@ -59,7 +61,9 @@ export class UiConnection extends Connection {
                 method: 'walletStatusUpdate',
                 return: {
                     isLocked,
-                    activeAccount: Keyring.keypair?.export(),
+                    activeAccount: (
+                        await Keyring.getActiveAccount()
+                    )?.exportKeypair(),
                     isInitialized: await Keyring.isWalletInitialized(),
                 },
             })
@@ -92,6 +96,19 @@ export class UiConnection extends Connection {
                 this.send(createMessage({ type: 'done' }, id));
             } else if (isBasePayload(payload) && payload.type === 'keyring') {
                 await Keyring.handleUiMessage(msg, this);
+            } else if (
+                isBasePayload(payload) &&
+                payload.type === 'get-features'
+            ) {
+                this.send(
+                    createMessage<LoadedFeaturesPayload>(
+                        {
+                            type: 'features-response',
+                            features: await FeatureGating.getLoadedFeatures(),
+                        },
+                        id
+                    )
+                );
             }
         } catch (e) {
             // just in case

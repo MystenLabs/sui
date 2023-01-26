@@ -8,7 +8,7 @@ import {
     useDismiss,
     offset,
     arrow,
-} from '@floating-ui/react-dom-interactions';
+} from '@floating-ui/react';
 import cn from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';

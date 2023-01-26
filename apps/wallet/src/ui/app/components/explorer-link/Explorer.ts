@@ -12,30 +12,55 @@ const API_ENV_TO_EXPLORER_ENV: Record<API_ENV, string | undefined> = {
     [API_ENV.customRPC]: '',
 };
 
-function getExplorerUrl(path: string, apiEnv: API_ENV = DEFAULT_API_ENV) {
+//TODO - this is a temporary solution, we should have a better way to get the explorer url
+function getExplorerUrl(
+    path: string,
+    apiEnv: API_ENV = DEFAULT_API_ENV,
+    customRPC: string
+) {
     const base =
         apiEnv === API_ENV.local
             ? 'http://localhost:3000/'
             : 'https://explorer.sui.io/';
 
-    return new URL(`${path}/?network=${API_ENV_TO_EXPLORER_ENV[apiEnv]}`, base)
-        .href;
+    const explorerEnv =
+        apiEnv === 'customRPC' ? customRPC : API_ENV_TO_EXPLORER_ENV[apiEnv];
+
+    return new URL(`${path}/?network=${explorerEnv}`, base).href;
 }
 
-export function getObjectUrl(objectID: ObjectId, apiEnv: API_ENV) {
-    return getExplorerUrl(`/object/${objectID}`, apiEnv);
+export function getObjectUrl(
+    objectID: ObjectId,
+    apiEnv: API_ENV,
+    customRPC: string
+) {
+    return getExplorerUrl(`/object/${objectID}`, apiEnv, customRPC);
 }
 
 export function getTransactionUrl(
     txDigest: TransactionDigest,
-    apiEnv: API_ENV
+    apiEnv: API_ENV,
+    customRPC: string
 ) {
     return getExplorerUrl(
         `/transaction/${encodeURIComponent(txDigest)}`,
-        apiEnv
+        apiEnv,
+        customRPC
     );
 }
 
-export function getAddressUrl(address: SuiAddress, apiEnv: API_ENV) {
-    return getExplorerUrl(`/address/${address}`, apiEnv);
+export function getAddressUrl(
+    address: SuiAddress,
+    apiEnv: API_ENV,
+    customRPC: string
+) {
+    return getExplorerUrl(`/address/${address}`, apiEnv, customRPC);
+}
+
+export function getValidatorUrl(
+    address: SuiAddress,
+    apiEnv: API_ENV,
+    customRPC: string
+) {
+    return getExplorerUrl(`/validator/${address}`, apiEnv, customRPC);
 }

@@ -63,6 +63,36 @@ impl<'de> serde::Deserialize<'de> for HistogramWrapper {
     }
 }
 
+// Stores the final stress statisicts of the test run.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StressStats {
+    pub cpu_usage: HistogramWrapper,
+}
+
+impl StressStats {
+    pub fn update(&mut self, sample_stat: &StressStats) {
+        self.cpu_usage
+            .histogram
+            .add(&sample_stat.cpu_usage.histogram)
+            .unwrap();
+    }
+
+    pub fn to_table(&self) -> Table {
+        let mut table = Table::new();
+        table
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_width(200)
+            .set_header(vec!["metric", "p50", "p99"]);
+
+        let mut row = Row::new();
+        row.add_cell(Cell::new("cpu usage"));
+        row.add_cell(Cell::new(self.cpu_usage.histogram.value_at_quantile(0.5)));
+        row.add_cell(Cell::new(self.cpu_usage.histogram.value_at_quantile(0.99)));
+        table.add_row(row);
+        table
+    }
+}
+
 /// Stores the final statistics of the test run.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkStats {
@@ -91,14 +121,9 @@ impl BenchmarkStats {
                 "duration(s)",
                 "tps",
                 "error%",
-                "min",
-                "p25",
-                "p50",
-                "p75",
-                "p90",
-                "p99",
-                "p99.9",
-                "max",
+                "latency (min)",
+                "latency (p50)",
+                "latency (p99)",
             ]);
         let mut row = Row::new();
         row.add_cell(Cell::new(self.duration.as_secs()));
@@ -107,15 +132,8 @@ impl BenchmarkStats {
             (100 * self.num_error) as f32 / (self.num_error + self.num_success) as f32,
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
-        row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.25)));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.5)));
-        row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.75)));
-        row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.9)));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.99)));
-        row.add_cell(Cell::new(
-            self.latency_ms.histogram.value_at_quantile(0.999),
-        ));
-        row.add_cell(Cell::new(self.latency_ms.histogram.max()));
         table.add_row(row);
         table
     }

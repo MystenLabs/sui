@@ -4,6 +4,7 @@
 import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
+import { Toaster } from '../toaster';
 import DappStatus from '_app/shared/dapp-status';
 import { ErrorBoundary } from '_components/error-boundary';
 import Logo from '_components/logo';
@@ -59,6 +60,7 @@ export default function PageMainLayout({
                 </main>
                 {bottomNavEnabled ? <Navigation /> : null}
                 {topNavMenuEnabled ? <MenuContent /> : null}
+                <Toaster bottomNavEnabled={bottomNavEnabled} />
             </div>
         </div>
     );

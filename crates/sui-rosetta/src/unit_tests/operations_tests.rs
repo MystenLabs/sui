@@ -17,7 +17,7 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
 
     let sender = SuiAddress::random_for_testing_only();
 
-    let data = TransactionData::new_pay_sui(
+    let data = TransactionData::new_pay_sui_with_dummy_gas_price(
         sender,
         vec![gas],
         vec![SuiAddress::random_for_testing_only()],
@@ -33,7 +33,9 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
         gas,
         budget: 1000,
     };
-    let parsed_data = ops.into_internal()?.into_data(metadata);
+    let parsed_data = ops
+        .into_internal(Some(metadata.tx_metadata.clone().into()))?
+        .try_into_data(metadata)?;
     assert_eq!(data, parsed_data);
 
     Ok(())

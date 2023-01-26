@@ -94,7 +94,7 @@ impl<YUnit, XUnit> LinearEquation<YUnit, XUnit> {
 
         if y < self.min {
             Err(anyhow!(
-                "Value {} is below minumum allowed {}",
+                "Value {} is below minimum allowed {}",
                 u64::from(y),
                 u64::from(self.min)
             ))

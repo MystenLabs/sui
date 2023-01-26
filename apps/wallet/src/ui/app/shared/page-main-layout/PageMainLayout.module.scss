@@ -39,6 +39,7 @@
     box-shadow: v.use(v.$shadows-main-content);
     overflow: hidden;
     position: relative;
+    z-index: 1;
 }
 
 .main {

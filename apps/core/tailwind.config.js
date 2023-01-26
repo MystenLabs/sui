@@ -27,8 +27,8 @@ module.exports = {
         60: "#C3C5C8",
         55: "#D7D8DA",
         50: "#E9EAEB",
-        45: "#F0F1F2",
-        40: "#F7F8F8",
+        45: "#E3E6E8",
+        40: "#F3F6F8",
         35: "#FEFEFE",
       },
 
@@ -42,7 +42,7 @@ module.exports = {
       steel: {
         DEFAULT: "#A0B6C3",
         dark: "#758F9E",
-        darker: "#5C6F7A",
+        darker: "#566873",
       },
 
       issue: {
@@ -53,6 +53,7 @@ module.exports = {
       hero: {
         DEFAULT: "#0284AD",
         dark: "#007195",
+        darkest: "#15527B",
       },
       success: {
         DEFAULT: "#2DD7A7",
@@ -74,6 +75,10 @@ module.exports = {
     },
 
     extend: {
+      colors: {
+        "gradient-blue-start": "#589AEA",
+        "gradient-blue-end": "#4C75A6",
+      },
       // Line-heights that are found in the design:
       lineHeight: {
         80: "0.8",
@@ -94,6 +99,7 @@ module.exports = {
         subtitleSmallExtra: ["10px", "1"],
         caption: ["12px", "1"],
         captionSmall: ["11px", "1"],
+        iconTextLarge: ["48px", "1"],
 
         // Heading sizes:
         heading1: ["28px", "0.8"],
@@ -127,12 +133,17 @@ module.exports = {
         1.25: "0.3125rem",
         3.75: "0.9375rem",
         4.5: "1.125rem",
-        50: '12.5rem',
+        7.5: "1.875rem",
+        50: "12.5rem",
         verticalListShort: "13.0625rem",
         verticalListLong: "35.6875rem",
       },
       height: {
         header: "68px",
+        31.5: "7.5rem",
+      },
+      width: {
+        31.5: "7.5rem",
       },
       transitionTimingFunction: {
         "ease-in-out-cubic": "cubic-bezier(0.65, 0, 0.35, 1)",
@@ -144,6 +155,8 @@ module.exports = {
       backgroundImage: {
         placeholderGradient01:
           "linear-gradient(165.96deg, #e6f5ff 10%, #ebecff 95%)",
+        placeholderShimmer:
+          "linear-gradient(90deg, #ecf1f4 -24.18%, rgba(237 242 245 / 40%) 73.61%, #f3f7f9 114.81%, #ecf1f4 114.82%)",
       },
       rotate: {
         135: "135deg",

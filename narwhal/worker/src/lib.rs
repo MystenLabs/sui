@@ -13,6 +13,7 @@ mod handlers;
 pub mod metrics;
 mod primary_connector;
 mod quorum_waiter;
+mod transactions_server;
 mod tx_validator;
 mod worker;
 

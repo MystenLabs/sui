@@ -20,6 +20,9 @@ use std::hash::{Hash, Hasher};
 
 pub type EpochId = u64;
 
+// TODO: the stake and voting power of a validator can be different so
+// in some places when we are actually referring to the voting power, we
+// should use a different type alias, field name, etc.
 pub type StakeUnit = u64;
 
 pub type CommitteeDigest = [u8; 32];
@@ -217,7 +220,7 @@ impl Committee {
     pub fn validity_threshold(&self) -> StakeUnit {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        (self.total_votes + 2) / 3
+        validity_threshold(self.total_votes)
     }
 
     #[inline]
@@ -348,6 +351,12 @@ impl Display for Committee {
             self.epoch, voting_rights
         )
     }
+}
+
+pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
+    // If N = 3f + 1 + k (0 <= k < 3)
+    // then (N + 2) / 3 = f + 1 + k/3 = f + 1
+    (total_stake + 2) / 3
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

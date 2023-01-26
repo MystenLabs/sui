@@ -2,15 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionSender } from '@mysten/sui.js';
-import * as Sentry from '@sentry/react';
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import ErrorResult from '../../components/error-result/ErrorResult';
-import theme from '../../styles/theme.module.css';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { findDataFromID } from '../../utils/static/searchUtil';
 import {
     instanceOfDataType,
     translate,
@@ -19,6 +14,7 @@ import {
 import ObjectView from './views/ObjectView';
 
 import { useRpc } from '~/hooks/useRpc';
+import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 const DATATYPE_DEFAULT: DataType = {
@@ -37,10 +33,10 @@ const DATATYPE_DEFAULT: DataType = {
 
 function Fail({ objID }: { objID: string | undefined }) {
     return (
-        <ErrorResult
-            id={objID}
-            errorMsg="Data could not be extracted on the following specified object ID"
-        />
+        <Banner variant="error" spacing="lg" fullWidth>
+            Data could not be extracted on the following specified object ID:{' '}
+            {objID}
+        </Banner>
     );
 }
 
@@ -98,33 +94,13 @@ function ObjectResultAPI({ objID }: { objID: string }) {
         return <ObjectView data={showObjectState as DataType} />;
     }
     if (showObjectState.loadState === 'pending') {
-        return (
-            <div className={theme.pending}>
-                <LoadingSpinner text="Loading data" />
-            </div>
-        );
+        return <LoadingSpinner text="Loading data" />;
     }
     if (showObjectState.loadState === 'fail') {
         return <Fail objID={objID} />;
     }
 
     return <div>Something went wrong</div>;
-}
-
-function ObjectResultStatic({ objID }: { objID: string }) {
-    const data = findDataFromID(objID, undefined);
-
-    if (instanceOfDataType(data)) {
-        return <ObjectView data={data} />;
-    } else {
-        try {
-            return <ObjectView data={translate(data)} />;
-        } catch (err) {
-            console.error("Couldn't parse data", err);
-            Sentry.captureException(err);
-            return <Fail objID={objID} />;
-        }
-    }
 }
 
 function ObjectResult() {
@@ -140,9 +116,7 @@ function ObjectResult() {
     }
 
     if (objID !== undefined) {
-        return IS_STATIC_ENV ? (
-            <ObjectResultStatic objID={objID} />
-        ) : (
+        return (
             <ErrorBoundary>
                 <ObjectResultAPI objID={objID} />
             </ErrorBoundary>

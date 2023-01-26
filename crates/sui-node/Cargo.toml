@@ -10,7 +10,7 @@ edition = "2021"
 anemo.workspace = true
 anemo-tower.workspace = true
 arc-swap = "1.5.1"
-axum = "0.5.16"
+axum = "0.6.2"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 clap = { version = "3.2.17", features = ["derive"] }
 multiaddr = "0.17.0"

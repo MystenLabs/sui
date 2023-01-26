@@ -130,35 +130,50 @@ impl CompiledPackage {
         })
     }
 
-    /// Return the bytecode modules in this package, topologically sorted in dependency order
-    /// This is the function to call if you would like to publish or statically analyze the modules
-    pub fn get_dependency_sorted_modules(&self) -> Vec<CompiledModule> {
-        let compiled_modules = self.package.root_modules_map();
-        // Collect all module IDs from the current package to be
-        // published (module names are not sufficient as we may
-        // have modules with the same names in user code and in
-        // Sui framework which would result in the latter being
-        // pulled into a set of modules to be published).
-        // For each transitive dependent module, if they are not to be published,
-        // they must have a non-zero address (meaning they are already published on-chain).
-        let self_modules: HashSet<ModuleId> = compiled_modules
-            .iter_modules()
-            .iter()
-            .map(|m| m.self_id())
-            .collect();
-        self.package
-            .all_modules_map()
-            .compute_dependency_graph()
-            .compute_topological_order()
-            .unwrap() // safe because package built successfully
-            .filter(|m| self_modules.contains(&m.self_id()))
-            .cloned()
-            .collect()
+    /// Return the bytecode modules in this package, topologically sorted in dependency order.
+    /// Optionally include dependencies that have not been published (are at address 0x0), if
+    /// `with_unpublished_deps` is true. This is the function to call if you would like to publish
+    /// or statically analyze the modules.
+    pub fn get_dependency_sorted_modules(
+        &self,
+        with_unpublished_deps: bool,
+    ) -> Vec<CompiledModule> {
+        let all_modules = self.package.all_modules_map();
+        let graph = all_modules.compute_dependency_graph();
+
+        // SAFETY: package built successfully
+        let modules = graph.compute_topological_order().unwrap();
+
+        if with_unpublished_deps {
+            // For each transitive dependent module, if they are not to be published, they must have
+            // a non-zero address (meaning they are already published on-chain).
+            modules
+                .filter(|module| module.address() == &AccountAddress::ZERO)
+                .cloned()
+                .collect()
+        } else {
+            // Collect all module IDs from the current package to be published (module names are not
+            // sufficient as we may have modules with the same names in user code and in Sui
+            // framework which would result in the latter being pulled into a set of modules to be
+            // published).
+            let self_modules: HashSet<_> = self
+                .package
+                .root_modules_map()
+                .iter_modules()
+                .iter()
+                .map(|m| m.self_id())
+                .collect();
+
+            modules
+                .filter(|module| self_modules.contains(&module.self_id()))
+                .cloned()
+                .collect()
+        }
     }
 
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
-    pub fn get_package_bytes(&self) -> Vec<Vec<u8>> {
-        self.get_dependency_sorted_modules()
+    pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
+        self.get_dependency_sorted_modules(with_unpublished_deps)
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
@@ -169,8 +184,8 @@ impl CompiledPackage {
     }
 
     /// Return the base64-encoded representation of the bytecode modules in this package, topologically sorted in dependency order
-    pub fn get_package_base64(&self) -> Vec<Base64> {
-        self.get_package_bytes()
+    pub fn get_package_base64(&self, with_unpublished_deps: bool) -> Vec<Base64> {
+        self.get_package_bytes(with_unpublished_deps)
             .iter()
             .map(|b| Base64::from_bytes(b))
             .collect()

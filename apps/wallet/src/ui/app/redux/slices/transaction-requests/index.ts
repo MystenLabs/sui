@@ -74,19 +74,18 @@ export const deserializeTxn = createAsyncThunk<
     AppThunkConfig
 >(
     'deserialize-transaction',
-    async (data, { dispatch, extra: { api, keypairVault } }) => {
+    async (data, { dispatch, extra: { api, keypairVault, background } }) => {
         const { id, serializedTxn } = data;
-        const signer = api.getSignerInstance(keypairVault.getKeypair());
+        const signer = api.getSignerInstance(
+            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+            background
+        );
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
-        const version = await api.instance.fullNode.getRpcApiVersion();
 
         //TODO: Error handling - either show the error or use the serialized txn
-        const useIntentSigning =
-            version != null && version.major >= 0 && version.minor > 18;
         const deserializeTx =
             (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-                useIntentSigning,
                 txnBytes
             )) as UnserializedSignableTransaction;
 
@@ -94,7 +93,6 @@ export const deserializeTxn = createAsyncThunk<
 
         const normalized = {
             ...deserializeData,
-            gasBudget: Number(deserializeData.gasBudget.toString(10)),
             gasPayment: '0x' + deserializeData.gasPayment,
             arguments: deserializeData.arguments.map((d) => '0x' + d),
         };
@@ -143,7 +141,10 @@ export const respondToTransactionRequest = createAsyncThunk<
         let txResult: SuiTransactionResponse | undefined = undefined;
         let tsResultError: string | undefined;
         if (approved) {
-            const signer = api.getSignerInstance(keypairVault.getKeypair());
+            const signer = api.getSignerInstance(
+                keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+                background
+            );
             try {
                 let response: SuiExecuteTransactionResponse;
                 if (

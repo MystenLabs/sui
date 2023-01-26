@@ -18,7 +18,6 @@ chrono = { version = "0.4.23", features = [
 clap = { version = "3.2.17", features = ["derive"] }
 diesel = { version = "2.0.0", features = ["chrono", "postgres", "r2d2", "serde_json"] }
 futures = "0.3.23"
-jsonrpsee = { git="https://github.com/patrickkuo/jsonrpsee.git", rev= "adc19a124ed7045744442ca67f084ddfba4ba177", features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
 prometheus = "0.13.3"
 serde_json = "1.0.83"

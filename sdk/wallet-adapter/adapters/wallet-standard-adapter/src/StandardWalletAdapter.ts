@@ -2,18 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignableTransaction } from "@mysten/sui.js";
-import { WalletAdapter } from "@mysten/wallet-adapter-base";
+import {
+  WalletAdapter,
+  WalletAdapterEvents,
+} from "@mysten/wallet-adapter-base";
 import { StandardWalletAdapterWallet } from "@mysten/wallet-standard";
+import mitt from "mitt";
 
 export interface StandardWalletAdapterConfig {
   wallet: StandardWalletAdapterWallet;
 }
 
+type WalletAdapterEventsMap = {
+  [E in keyof WalletAdapterEvents]: Parameters<WalletAdapterEvents[E]>[0];
+};
+
 export class StandardWalletAdapter implements WalletAdapter {
   connected = false;
   connecting = false;
 
+  readonly #events = mitt<WalletAdapterEventsMap>();
   #wallet: StandardWalletAdapterWallet;
+  #walletEventUnsubscribe: (() => void) | null = null;
 
   constructor({ wallet }: StandardWalletAdapterConfig) {
     this.#wallet = wallet;
@@ -40,6 +50,15 @@ export class StandardWalletAdapter implements WalletAdapter {
       if (this.connected || this.connecting) return;
       this.connecting = true;
 
+      this.#walletEventUnsubscribe = this.#wallet.features[
+        "standard:events"
+      ].on("change", async ({ accounts }) => {
+        if (accounts) {
+          this.connected = accounts.length > 0;
+          await this.#notifyChanged();
+        }
+      });
+
       if (!this.#wallet.accounts.length) {
         await this.#wallet.features["standard:connect"].connect();
       }
@@ -49,16 +68,21 @@ export class StandardWalletAdapter implements WalletAdapter {
       }
 
       this.connected = true;
+      await this.#notifyChanged();
     } finally {
       this.connecting = false;
     }
   }
 
   async disconnect() {
-    this.connected = false;
-    this.connecting = false;
     if (this.#wallet.features["standard:disconnect"]) {
       await this.#wallet.features["standard:disconnect"].disconnect();
+    }
+    this.connected = false;
+    this.connecting = false;
+    if (this.#walletEventUnsubscribe) {
+      this.#walletEventUnsubscribe();
+      this.#walletEventUnsubscribe = null;
     }
   }
 
@@ -67,6 +91,23 @@ export class StandardWalletAdapter implements WalletAdapter {
       "sui:signAndExecuteTransaction"
     ].signAndExecuteTransaction({
       transaction,
+    });
+  }
+
+  on: <E extends keyof WalletAdapterEvents>(
+    event: E,
+    callback: WalletAdapterEvents[E]
+  ) => () => void = (event, callback) => {
+    this.#events.on(event, callback);
+    return () => {
+      this.#events.off(event, callback);
+    };
+  };
+
+  async #notifyChanged() {
+    this.#events.emit("change", {
+      connected: this.connected,
+      accounts: await this.getAccounts(),
     });
   }
 }

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::{new_pg_connection_pool, new_rpc_client};
 use sui_node::metrics::start_prometheus_server;
@@ -21,7 +20,7 @@ use processors::processor_orchestrator::ProcessorOrchestrator;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
-    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
     info!("Sui indexer started...");

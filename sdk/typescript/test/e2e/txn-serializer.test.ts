@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
+    bcsForVersion,
   deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
@@ -50,25 +51,25 @@ describe('Transaction Serialization and deserialization', () => {
 
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
-    const version = await toolbox.provider.getRpcApiVersion();
-    const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
     const deserialized =
       (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-        useIntentSigning,
         localTxnBytes
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
 
     const deserializedTxnData =
-      deserializeTransactionBytesToTransactionData(useIntentSigning, localTxnBytes);
-    const reserialized = await localSerializer.serializeTransactionData(useIntentSigning,
+      deserializeTransactionBytesToTransactionData(
+        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+        localTxnBytes,
+      );
+    const reserialized = await localSerializer.serializeTransactionData(
       deserializedTxnData
     );
     expect(reserialized).toEqual(localTxnBytes);
     if ('moveCall' === deserialized.kind) {
       const normalized = {
         ...deserialized.data,
-        gasBudget: Number(deserialized.data.gasBudget.toString(10)),
+        gasBudget: Number(deserialized.data.gasBudget!.toString(10)),
         gasPayment: '0x' + deserialized.data.gasPayment,
       };
       return normalized;

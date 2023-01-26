@@ -76,10 +76,12 @@ async fn test_pay_sui_failure_insufficient_gas_balance_one_input_coin() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 1200,
             gas_price: 1
@@ -104,10 +106,12 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 100 + 100 + 900,
             gas_price: 1
@@ -133,10 +137,12 @@ async fn test_pay_sui_failure_insufficient_gas_balance_multiple_input_coins() {
     )
     .await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400,
             gas_budget: 801,
             gas_price: 1
@@ -161,11 +167,12 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         201,
     )
     .await;
-
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 400 + 600,
             gas_budget: 400 + 400 + 201,
             gas_price: 1
@@ -327,10 +334,12 @@ async fn test_pay_all_sui_failure_insufficient_gas_one_input_coin() {
 
     let res = execute_pay_all_sui(vec![&coin1], recipient, sender, sender_key, 2000).await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2000,
             gas_price: 1
@@ -346,10 +355,12 @@ async fn test_pay_all_sui_failure_insufficient_gas_budget_multiple_input_coins()
     let recipient = dbg_addr(2);
     let res = execute_pay_all_sui(vec![&coin1, &coin2], recipient, sender, sender_key, 2500).await;
 
-    let err = res.txn_result.unwrap_err();
     assert_eq!(
-        err,
-        SuiError::GasBalanceTooLowToCoverGasBudget {
+        res.txn_result
+            .unwrap_err()
+            .collapse_if_single_transaction_input_error()
+            .unwrap(),
+        &SuiError::GasBalanceTooLowToCoverGasBudget {
             gas_balance: 1000,
             gas_budget: 2500,
             gas_price: 1
@@ -443,7 +454,7 @@ async fn execute_pay_sui(
         recipients,
         amounts,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
 
@@ -491,7 +502,7 @@ async fn execute_pay_all_sui(
         coins: input_coins,
         recipient,
     }));
-    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
     let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
     PaySuiTransactionExecutionResult {

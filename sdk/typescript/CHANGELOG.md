@@ -1,5 +1,35 @@
 # @mysten/sui.js
 
+## 0.24.0
+
+### Minor Changes
+
+- 88a687834: Add methods for the CoinRead endpoints
+
+### Patch Changes
+
+- 01458ffd5: Fix websocket default port for DevNet
+- a274ecfc7: Make previousTransaction optional for CoinStruct to support v0.22 network where it doesn't exist
+- 89091ddab: change estimator logic to use upper bound
+- 71bee7563: fix creating websocket url
+
+## 0.23.0
+
+### Minor Changes
+
+- e26f47cbf: added getDelegatedStake and getValidators and validator type
+- b745cde24: Add a call(endpoint, params) method to invoke any RPC endpoint
+- 35e0df780: EventID should use TransactionDigest instead of TxSequence
+- 5cd51dd38: Deprecate sui_executeTransaction in favor of sui_executeTransactionSerializedSig
+- 8474242af: Add methods for getDynamicFields and getDynamicFieldObject
+- f74181212: Add method to deserialize a public key, using it's schema and base64 data
+
+### Patch Changes
+
+- f3444bdf2: fix faucet response type
+- 01efa8bc6: Add getReferenceGasPrice
+- 01efa8bc6: Use reference gas price instead of a hardcoded "1" for transaction construction
+
 ## 0.22.0
 
 ### Minor Changes

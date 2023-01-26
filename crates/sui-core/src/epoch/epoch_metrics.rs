@@ -1,12 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use prometheus::{
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntGauge, IntGaugeVec,
+    Registry,
+};
 use std::sync::Arc;
 
 pub struct EpochMetrics {
     /// The current epoch ID. This is updated only when the AuthorityState finishes reconfiguration.
     pub current_epoch: IntGauge,
+
+    /// Current voting right of the validator in the protocol. Updated at the start of epochs.
+    pub current_voting_right: IntGauge,
 
     /// Total duration of the epoch. This is measured from when the current epoch store is opened,
     /// until the current epoch store is replaced with the next epoch store.
@@ -20,6 +26,9 @@ pub struct EpochMetrics {
 
     /// Total amount of gas rewards (i.e. computation gas cost) in the epoch.
     pub epoch_total_gas_reward: IntGauge,
+
+    /// Total amount of stakes in the epoch.
+    pub epoch_total_votes: IntGauge,
 
     // An active validator reconfigures through the following steps:
     // 1. Halt validator (a.k.a. close epoch) and stop accepting user transaction certs.
@@ -68,6 +77,12 @@ pub struct EpochMetrics {
     /// to become useful in the network after reconfiguration.
     // TODO: This needs to be reported properly.
     pub epoch_first_checkpoint_ready_time_since_epoch_begin_ms: IntGauge,
+
+    /// Tallying rule scores for all validators this epoch.
+    pub tallying_rule_scores: IntGaugeVec,
+
+    /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
+    pub is_safe_mode: IntGauge,
 }
 
 impl EpochMetrics {
@@ -76,6 +91,12 @@ impl EpochMetrics {
             current_epoch: register_int_gauge_with_registry!(
                 "current_epoch",
                 "Current epoch ID",
+                registry
+            )
+            .unwrap(),
+            current_voting_right: register_int_gauge_with_registry!(
+                "current_voting_right",
+                "Current voting right of the validator",
                 registry
             )
             .unwrap(),
@@ -97,6 +118,11 @@ impl EpochMetrics {
             epoch_total_gas_reward: register_int_gauge_with_registry!(
                 "epoch_total_gas_reward",
                 "Total amount of gas rewards (i.e. computation gas cost) in the epoch",
+                registry
+            ).unwrap(),
+            epoch_total_votes: register_int_gauge_with_registry!(
+                "epoch_total_votes",
+                "Total amount of votes among validators in the epoch.",
                 registry
             ).unwrap(),
             epoch_pending_certs_processed_time_since_epoch_close_ms: register_int_gauge_with_registry!(
@@ -133,6 +159,17 @@ impl EpochMetrics {
                 "epoch_first_checkpoint_created_time_since_epoch_begin_ms",
                 "Time interval from when the epoch opens at new epoch to the first checkpoint is created locally",
                 registry
+            ).unwrap(),
+            tallying_rule_scores: register_int_gauge_vec_with_registry!(
+                "tallying_rule_scores",
+                "Tallying rule scores for validators each epoch",
+                &["validator", "epoch"],
+                registry
+            ).unwrap(),
+            is_safe_mode: register_int_gauge_with_registry!(
+                "is_safe_mode",
+                "Whether we are running in safe mode",
+                registry,
             ).unwrap(),
         };
         Arc::new(this)

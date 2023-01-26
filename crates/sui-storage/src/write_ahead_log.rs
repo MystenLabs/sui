@@ -23,6 +23,7 @@ use typed_store::{rocks::DBMap, traits::Map};
 use tracing::{debug, error, instrument, trace, warn};
 
 use tap::TapFallible;
+use typed_store::rocks::MetricConf;
 
 /// TxGuard is a handle on an in-progress transaction.
 ///
@@ -176,6 +177,9 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     fn drop(&mut self) {
+        // do not run drop handler if current node was killed in simulator.
+        sui_simulator::return_if_killed!();
+
         if !self.dead {
             let tx = self.tx;
             error!(digest = ?tx, "DBTxGuard dropped without explicit commit");
@@ -221,7 +225,8 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     pub fn new(path: PathBuf) -> Self {
-        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
+        let tables =
+            DBWriteAheadLogTables::open_tables_read_write(path, MetricConf::default(), None, None);
 
         // Read in any digests that were left in the log, e.g. due to a crash.
         //
@@ -282,7 +287,7 @@ where
 
     fn commit_tx(&self, tx: &TransactionDigest, is_commit: bool) -> SuiResult {
         if is_commit {
-            debug!(digest = ?tx, "committing tx");
+            debug!("committing tx");
         }
         let write_batch = self.tables.log.batch();
         let write_batch = write_batch.delete_batch(&self.tables.log, std::iter::once(tx))?;

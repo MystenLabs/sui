@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::faucet::write_ahead_log;
 use crate::metrics::FaucetMetrics;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -9,6 +10,7 @@ use tap::tap::TapFallible;
 
 #[cfg(test)]
 use std::collections::HashSet;
+use std::path::Path;
 
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
@@ -32,12 +34,15 @@ use uuid::Uuid;
 
 use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
 
+use super::write_ahead_log::WriteAheadLog;
+
 pub struct SimpleFaucet {
     wallet: WalletContext,
     active_address: SuiAddress,
     producer: Mutex<Sender<ObjectID>>,
     consumer: Mutex<Receiver<ObjectID>>,
     metrics: FaucetMetrics,
+    wal: Mutex<WriteAheadLog>,
 }
 
 enum GasCoinResponse {
@@ -57,6 +62,7 @@ impl SimpleFaucet {
     pub async fn new(
         mut wallet: WalletContext,
         prometheus_registry: &Registry,
+        wal_path: &Path,
     ) -> Result<Self, FaucetError> {
         let active_address = wallet
             .active_address()
@@ -73,27 +79,53 @@ impl SimpleFaucet {
             .collect::<Vec<GasCoin>>();
 
         let metrics = FaucetMetrics::new(prometheus_registry);
+
+        let wal = WriteAheadLog::open(wal_path);
+        let mut pending = vec![];
+
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
             let coin_id = *coin.id();
-            producer
-                .send(coin_id)
-                .await
-                .tap_ok(|_| {
-                    info!("Adding coin {:?} to gas pool", coin_id);
-                    metrics.total_available_coins.inc();
-                })
-                .tap_err(|e| error!("Failed to add gas coin {} to pools: {:?}", coin_id, e))
-                .unwrap();
+            if let Some(write_ahead_log::Entry {
+                uuid,
+                recipient,
+                tx,
+            }) = wal.reclaim(coin_id).map_err(FaucetError::internal)?
+            {
+                let uuid = Uuid::from_bytes(uuid);
+                info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
+                pending.push((uuid, recipient, coin_id, tx));
+            } else {
+                producer
+                    .send(coin_id)
+                    .await
+                    .tap_ok(|_| {
+                        info!(?coin_id, "Adding coin to gas pool");
+                        metrics.total_available_coins.inc();
+                    })
+                    .tap_err(|e| error!(?coin_id, "Failed to add coin to gas pools: {e:?}"))
+                    .unwrap();
+            }
         }
 
-        Ok(Self {
+        let faucet = Self {
             wallet,
             active_address,
             producer: Mutex::new(producer),
             consumer: Mutex::new(consumer),
             metrics,
-        })
+            wal: Mutex::new(wal),
+        };
+
+        // Retrying all the pending transactions from the WAL, before continuing.  Ignore return
+        // values -- if the executions failed, the pending coins will simply remain in the WAL, and
+        // not recycled.
+        futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
+            faucet.sign_and_execute_txn(uuid, recipient, coin_id, tx)
+        }))
+        .await;
+
+        Ok(faucet)
     }
 
     /// Take the consumer lock and pull a Coin ID from the queue, without checking whether it is
@@ -167,6 +199,73 @@ impl SimpleFaucet {
         })
     }
 
+    /// Sign an already created transaction (in `tx_data`) and keep trying to execute it until
+    /// fullnode returns a definite response or a timeout is hit.
+    async fn sign_and_execute_txn(
+        &self,
+        uuid: Uuid,
+        recipient: SuiAddress,
+        coin_id: ObjectID,
+        tx_data: TransactionData,
+    ) -> Result<SuiTransactionResponse, FaucetError> {
+        let signature = self
+            .wallet
+            .config
+            .keystore
+            .sign_secure(&self.active_address, &tx_data, Intent::default())
+            .map_err(FaucetError::internal)?;
+        let tx = Transaction::from_data(tx_data, Intent::default(), signature)
+            .verify()
+            .unwrap();
+        let tx_digest = *tx.digest();
+        info!(
+            ?tx_digest,
+            ?recipient,
+            ?coin_id,
+            ?uuid,
+            "PaySui transaction in faucet."
+        );
+
+        match timeout(
+            Duration::from_secs(300),
+            self.execute_pay_sui_txn_with_retries(&tx, coin_id, recipient, uuid),
+        )
+        .await
+        {
+            Err(elapsed) => {
+                warn!(
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "Failed to execute PaySui transactions in faucet after {elapsed}. Coin will \
+                     not be reused."
+                );
+                Err(FaucetError::Transfer(
+                    "could not complete transfer within timeout".into(),
+                ))
+            }
+
+            Ok(result) => {
+                // Note: we do not recycle gas unless the transaction was successful - the faucet
+                // may run out of available coins due to errors, but this allows a human to
+                // intervene and attempt to fix things. If we re-use coins that had errors, we may
+                // lock them permanently.
+
+                // It's important to remove the coin from the WAL before recycling it, to avoid a
+                // race with the next request served with this coin.  If this operation fails, log
+                // it and continue so we don't lose access to the coin -- the worst that can happen
+                // is that the WAL contains a stale entry.
+                if self.wal.lock().await.commit(coin_id).is_err() {
+                    error!(?coin_id, "Failed to remove coin from WAL");
+                }
+
+                self.recycle_gas_coin(coin_id, uuid).await;
+
+                Ok(result)
+            }
+        }
+    }
+
     async fn transfer_gases(
         &self,
         amounts: &[u64],
@@ -180,7 +279,6 @@ impl SimpleFaucet {
 
         match gas_coin_response {
             GasCoinResponse::ValidGasCoin(coin_id) => {
-                let context = &self.wallet;
                 let tx_data = self
                     .build_pay_sui_txn(
                         coin_id,
@@ -190,50 +288,21 @@ impl SimpleFaucet {
                         DEFAULT_GAS_BUDGET,
                     )
                     .await
-                    .map_err(|e| FaucetError::Internal(format!("{}", e)))?;
-                let signature = context
-                    .config
-                    .keystore
-                    .sign_secure(&self.active_address, &tx_data, Intent::default())
-                    .map_err(|e| FaucetError::Internal(format!("{}", e)))?;
-                let tx = Transaction::from_data(tx_data, Intent::default(), signature)
-                    .verify()
-                    .unwrap();
-                let tx_digest = *tx.digest();
-                info!(
-                    ?tx_digest,
-                    ?recipient,
-                    ?coin_id,
-                    ?uuid,
-                    "PaySui transaction in faucet."
-                );
+                    .map_err(FaucetError::internal)?;
 
-                let response = match timeout(
-                    Duration::from_secs(300),
-                    self.execute_pay_sui_txn_with_retries(&tx, coin_id, recipient, uuid),
-                )
-                .await
                 {
-                    Err(elapsed) => {
-                        warn!(
-                            ?recipient,
-                            ?coin_id,
-                            ?uuid,
-                            "Failed to execute PaySui transactions in faucet after {}. Coin will not be reused.",
-                            elapsed,
-                        );
-                        return Err(FaucetError::Transfer(
-                            "could not complete transfer within timeout".into(),
-                        ));
-                    }
-                    Ok(result) => result,
-                };
+                    // Register the intention to send this transaction before we send it, so that if
+                    // faucet fails or we give up before we get a definite response, we have a
+                    // chance to retry later.
+                    let mut wal = self.wal.lock().await;
+                    wal.reserve(uuid, coin_id, recipient, tx_data.clone())
+                        .map_err(FaucetError::internal)?;
+                }
 
-                // Note: we do not recycle gas unless the transaction was successful - the faucet
-                // may run out of available coins due to errors, but this allows a human to
-                // intervene and attempt to fix things. If we re-use coins that had errors, we may
-                // lock them permanently.
-                self.recycle_gas_coin(coin_id, uuid).await;
+                let response = self
+                    .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
+                    .await?;
+
                 self.check_and_map_transfer_gas_result(response, number_of_coins, &recipient)
                     .await
             }
@@ -496,10 +565,15 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let test_cluster = TestClusterBuilder::new().build().await.unwrap();
 
-        let prom_registry = prometheus::Registry::new();
-        let faucet = SimpleFaucet::new(test_cluster.wallet, &prom_registry)
-            .await
-            .unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let faucet = SimpleFaucet::new(
+            test_cluster.wallet,
+            &prom_registry,
+            &tmp.path().join("faucet.wal"),
+        )
+        .await
+        .unwrap();
 
         let available = faucet.metrics.total_available_coins.get();
         let discarded = faucet.metrics.total_discarded_coins.get();
@@ -517,8 +591,12 @@ mod tests {
         let mut context = test_cluster.wallet;
         let gases = get_current_gases(address, &mut context).await;
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
+
+        let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
-        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry, &tmp.path().join("faucet.wal"))
+            .await
+            .unwrap();
 
         let available = faucet.metrics.total_available_coins.get();
         let candidates = faucet.drain_gas_queue(gases.len()).await;
@@ -540,8 +618,11 @@ mod tests {
 
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-        let prom_registry = prometheus::Registry::new();
-        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry, &tmp.path().join("faucet.wal"))
+            .await
+            .unwrap();
 
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];
@@ -578,8 +659,11 @@ mod tests {
         let bad_gas = gases.swap_remove(0);
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-        let prom_registry = prometheus::Registry::new();
-        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry, &tmp.path().join("faucet.wal"))
+            .await
+            .unwrap();
 
         // Now we transfer one gas out
         let res = SuiClientCommands::PayAllSui {
@@ -664,8 +748,11 @@ mod tests {
 
         let gases: HashSet<ObjectID> = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
+        let tmp = tempfile::tempdir().unwrap();
         let prom_registry = Registry::new();
-        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry, &tmp.path().join("faucet.wal"))
+            .await
+            .unwrap();
 
         // Ask for a value higher than tiny coin + PAY_SUI_GAS
         let number_of_coins = gases.len();

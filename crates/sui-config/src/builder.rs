@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::{default_checkpoints_per_epoch, AuthorityKeyPairWithPath, KeyPairWithPath};
+use crate::node::{
+    default_checkpoints_per_epoch, default_end_of_epoch_broadcast_channel_capacity,
+    AuthorityKeyPairWithPath, KeyPairWithPath,
+};
 use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorConfigInfo, ValidatorGenesisInfo},
@@ -261,6 +264,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                             .genesis_info
                             .narwhal_worker_address
                             .clone(),
+                        description: String::new(),
+                        image_url: String::new(),
+                        project_url: String::new(),
                     },
                     pop,
                 )
@@ -367,6 +373,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                     p2p_config,
                     authority_store_pruning_config: AuthorityStorePruningConfig::validator_config(),
+                    end_of_epoch_broadcast_channel_capacity:
+                        default_end_of_epoch_broadcast_channel_capacity(),
                     checkpoint_executor_config: Default::default(),
                 }
             })

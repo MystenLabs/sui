@@ -1,5 +1,40 @@
 # @mysten/wallet-kit-core
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [01458ffd5]
+- Updated dependencies [a274ecfc7]
+- Updated dependencies [88a687834]
+- Updated dependencies [89091ddab]
+- Updated dependencies [71bee7563]
+  - @mysten/sui.js@0.24.0
+  - @mysten/wallet-adapter-base@0.4.1
+
+## 0.2.0
+
+### Minor Changes
+
+- 65fd8ac17: - Disconnect wallet kit when selected wallet disconnects
+  - Make disconnect async
+
+### Patch Changes
+
+- 538e977cf: Add support for preferred wallets.
+- Updated dependencies [f3444bdf2]
+- Updated dependencies [e26f47cbf]
+- Updated dependencies [b745cde24]
+- Updated dependencies [01efa8bc6]
+- Updated dependencies [35e0df780]
+- Updated dependencies [65fd8ac17]
+- Updated dependencies [5cd51dd38]
+- Updated dependencies [8474242af]
+- Updated dependencies [01efa8bc6]
+- Updated dependencies [f74181212]
+  - @mysten/sui.js@0.23.0
+  - @mysten/wallet-adapter-base@0.4.0
+
 ## 0.1.1
 
 ### Patch Changes

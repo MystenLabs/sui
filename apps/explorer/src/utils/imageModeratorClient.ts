@@ -18,7 +18,7 @@ export class ImageModClient implements IImageModClient {
     }
 
     async checkImage(url: string): Promise<ImageCheckResponse> {
-        // static and local environments always allow images without checking
+        // local environments always allow images without checking
         if (ENV_STUBS_IMG_CHECK || url === FALLBACK_IMAGE) return { ok: true };
 
         let resp: Promise<boolean> = (

@@ -39,7 +39,7 @@ use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, MoveCall, SingleTransactionKind, TransactionData,
     TransactionKind, TransferObject,
 };
-use sui_types::object::{Owner, PACKAGE_VERSION};
+use sui_types::object::Owner;
 use sui_types::query::EventQuery;
 use sui_types::query::TransactionQuery;
 use sui_types::utils::to_sender_signed_transaction;
@@ -114,14 +114,10 @@ impl RpcExampleProvider {
             }),
         ];
 
-        let data = TransactionData::new(
+        let data = TransactionData::new_with_dummy_gas_price(
             TransactionKind::Batch(vec![
                 SingleTransactionKind::Call(MoveCall {
-                    package: (
-                        SUI_FRAMEWORK_OBJECT_ID,
-                        PACKAGE_VERSION,
-                        ObjectDigest::new(self.rng.gen()),
-                    ),
+                    package: SUI_FRAMEWORK_OBJECT_ID,
                     module: Identifier::from_str("devnet_nft").unwrap(),
                     function: Identifier::from_str("mint").unwrap(),
                     type_arguments: vec![],
@@ -433,7 +429,9 @@ impl RpcExampleProvider {
             ObjectDigest::new(self.rng.gen()),
         );
 
-        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_ref, 1000);
+        let data = TransactionData::new_transfer_with_dummy_gas_price(
+            recipient, object_ref, signer, gas_ref, 1000,
+        );
         let data1 = data.clone();
         let data2 = data.clone();
 
@@ -453,8 +451,8 @@ impl RpcExampleProvider {
         };
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),
-            tx_digest: Some(*tx_digest),
-            id: EventID::from((0, 0)),
+            tx_digest: *tx_digest,
+            id: EventID::from((*tx_digest, 0)),
             event: sui_event.clone(),
         }];
         let result = SuiTransactionResponse {
@@ -512,9 +510,11 @@ impl RpcExampleProvider {
 
     fn get_events(&mut self) -> Examples {
         let (_, _, _, _, result, events) = self.get_transfer_data_response();
+        let tx_dig =
+            TransactionDigest::from_str("11a72GCQ5hGNpWGh2QhQkkusTEGS6EDqifJqxr7nSYX").unwrap();
         let page = EventPage {
             data: events.clone(),
-            next_cursor: Some((1000, 5).into()),
+            next_cursor: Some((tx_dig, 5).into()),
         };
         Examples::new(
             "sui_getEvents",
@@ -531,7 +531,7 @@ impl RpcExampleProvider {
                         "cursor",
                         json!(EventID {
                             event_seq: 10,
-                            tx_seq: 500
+                            tx_digest: result.certificate.transaction_digest
                         }),
                     ),
                     ("limit", json!(events.len())),

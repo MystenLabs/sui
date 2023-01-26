@@ -12,17 +12,14 @@ module sui::genesis {
     use std::option;
 
     /// The initial amount of SUI locked in the storage fund.
-    /// 10^14, an arbitrary number.
-    const INIT_STORAGE_FUND: u64 = 100000000000000;
+    const INIT_STORAGE_FUND: u64 = 1;
 
     /// Initial value of the lower-bound on the amount of stake required to become a validator.
-    const INIT_MIN_VALIDATOR_STAKE: u64 = 100000000000000;
+    /// TODO: testnet only. Needs to be changed.
+    const INIT_MIN_VALIDATOR_STAKE: u64 = 1;
 
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
-
-    /// Initial storage gas price
-    const INIT_STORAGE_GAS_PRICE: u64 = 1;
 
     /// Stake subisidy to be given out in the very first epoch. Placeholder value.
     const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1000000;
@@ -31,19 +28,22 @@ module sui::genesis {
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
     fun create(
-        chain_id: u8,
         validator_pubkeys: vector<vector<u8>>,
         validator_network_pubkeys: vector<vector<u8>>,
         validator_worker_pubkeys: vector<vector<u8>>,
         validator_proof_of_possessions: vector<vector<u8>>,
         validator_sui_addresses: vector<address>,
         validator_names: vector<vector<u8>>,
+        validator_descriptions: vector<vector<u8>>,
+        validator_image_urls: vector<vector<u8>>,
+        validator_project_urls: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
         validator_consensus_addresses: vector<vector<u8>>,
-        validator_worker_addressess: vector<vector<u8>>,
+        validator_worker_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
         validator_gas_prices: vector<u64>,
         validator_commission_rates: vector<u64>,
+        epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new(ctx);
@@ -54,9 +54,12 @@ module sui::genesis {
             vector::length(&validator_sui_addresses) == count
                 && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
+                && vector::length(&validator_descriptions) == count
+                && vector::length(&validator_image_urls) == count
+                && vector::length(&validator_project_urls) == count
                 && vector::length(&validator_net_addresses) == count
                 && vector::length(&validator_consensus_addresses) == count
-                && vector::length(&validator_worker_addressess) == count
+                && vector::length(&validator_worker_addresses) == count
                 && vector::length(&validator_gas_prices) == count
                 && vector::length(&validator_commission_rates) == count,
             1
@@ -69,9 +72,12 @@ module sui::genesis {
             let worker_pubkey = *vector::borrow(&validator_worker_pubkeys, i);
             let proof_of_possession = *vector::borrow(&validator_proof_of_possessions, i);
             let name = *vector::borrow(&validator_names, i);
+            let description = *vector::borrow(&validator_descriptions, i);
+            let image_url = *vector::borrow(&validator_image_urls, i);
+            let project_url = *vector::borrow(&validator_project_urls, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let consensus_address = *vector::borrow(&validator_consensus_addresses, i);
-            let worker_address = *vector::borrow(&validator_worker_addressess, i);
+            let worker_address = *vector::borrow(&validator_worker_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
             let gas_price = *vector::borrow(&validator_gas_prices, i);
             let commission_rate = *vector::borrow(&validator_commission_rates, i);
@@ -82,6 +88,9 @@ module sui::genesis {
                 worker_pubkey,
                 proof_of_possession,
                 name,
+                description,
+                image_url,
+                project_url,
                 net_address,
                 consensus_address,
                 worker_address,
@@ -94,33 +103,30 @@ module sui::genesis {
             i = i + 1;
         };
         sui_system::create(
-            chain_id,
             validators,
             sui_supply,
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            INIT_STORAGE_GAS_PRICE,
             INIT_STAKE_SUBSIDY_AMOUNT,
+            epoch_start_timestamp_ms,
         );
     }
 
     #[test_only]
     public fun create_for_testing(ctx: &mut TxContext) {
-        let chain_id = 1;
         let validators = vector[];
         let sui_supply = sui::new(ctx);
         let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
 
         sui_system::create(
-            chain_id,
             validators,
             sui_supply,
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            INIT_STORAGE_GAS_PRICE,
-            INIT_STAKE_SUBSIDY_AMOUNT
+            INIT_STAKE_SUBSIDY_AMOUNT,
+            0,
         )
     }
 }

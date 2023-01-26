@@ -40,7 +40,7 @@ pub(crate) mod test_utils;
 
 pub mod ed25519_certgen;
 
-// Re-export our version of rustls to stave off compatiblity issues
+// Re-export our version of rustls to stave off compatibility issues
 pub use rustls;
 
 type SignatureAlgorithms = &'static [&'static webpki::SignatureAlgorithm];
@@ -292,7 +292,7 @@ impl ClientCertVerifier for Psk {
     }
 
     fn client_auth_root_subjects(&self) -> Option<rustls::DistinguishedNames> {
-        // We can't guarantee subjects before having seen the cert. This should not be None for compatiblity reasons
+        // We can't guarantee subjects before having seen the cert. This should not be None for compatibility reasons
         Some(rustls::DistinguishedNames::new())
     }
 
@@ -368,14 +368,14 @@ impl ServerCertVerifier for Psk {
             .map_err(pki_error)
             .map(|_| cert)?;
 
-        // log additional certificate transaparency info (which is pointless in our self-signed context) and return
+        // log additional certificate transparency info (which is pointless in our self-signed context) and return
         let mut peekable = scts.peekable();
         if peekable.peek().is_none() {
-            tracing::trace!("Met unvalidated certificate transparency data");
+            tracing::trace!("Met invalidated certificate transparency data");
         }
 
         if !ocsp_response.is_empty() {
-            tracing::trace!("Unvalidated OCSP response: {:?}", ocsp_response.to_vec());
+            tracing::trace!("Invalidated OCSP response: {:?}", ocsp_response.to_vec());
         }
 
         cert.verify_is_valid_for_dns_name(dns_nameref)

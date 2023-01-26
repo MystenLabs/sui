@@ -16,12 +16,14 @@ use prometheus::GaugeVec;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
 use prometheus::Registry;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 
 use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
-use crate::workloads::workload::Payload;
+use crate::system_state_observer::SystemStateObserver;
+use crate::workloads::payload::Payload;
 use crate::workloads::workload::WorkloadInfo;
 use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
@@ -29,13 +31,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::messages::VerifiedTransaction;
+use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
-use tokio::time;
-use tokio::time::Instant;
+use tokio::{time, time::Instant};
 use tracing::{debug, error, info};
 
-use super::BenchmarkStats;
 use super::Interval;
+use super::{BenchmarkStats, StressStats};
 pub struct BenchMetrics {
     pub num_success: IntCounterVec,
     pub num_error: IntCounterVec,
@@ -44,6 +46,7 @@ pub struct BenchMetrics {
     pub latency_s: HistogramVec,
     pub validators_in_tx_cert: IntCounterVec,
     pub validators_in_effects_cert: IntCounterVec,
+    pub cpu_usage: GaugeVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -103,6 +106,13 @@ impl BenchMetrics {
                 registry,
             )
             .unwrap(),
+            cpu_usage: register_gauge_vec_with_registry!(
+                "cpu_usage",
+                "CPU usage per core",
+                &["cpu"],
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -131,21 +141,22 @@ async fn print_and_start_benchmark() -> &'static Instant {
 }
 
 pub struct BenchWorker {
-    pub num_requests: u64,
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
 }
 
 pub struct BenchDriver {
     pub stat_collection_interval: u64,
+    pub stress_stat_collection: bool,
     pub start_time: Instant,
     pub token: CancellationToken,
 }
 
 impl BenchDriver {
-    pub fn new(stat_collection_interval: u64) -> BenchDriver {
+    pub fn new(stat_collection_interval: u64, stress_stat_collection: bool) -> BenchDriver {
         BenchDriver {
             stat_collection_interval,
+            stress_stat_collection,
             start_time: Instant::now(),
             token: CancellationToken::new(),
         }
@@ -179,26 +190,36 @@ impl BenchDriver {
         &self,
         workload_info: &WorkloadInfo,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<BenchWorker> {
-        let mut num_requests = workload_info.max_in_flight_ops / workload_info.num_workers;
-        let mut target_qps = workload_info.target_qps / workload_info.num_workers;
         let mut workers = vec![];
-        for i in 0..workload_info.num_workers {
-            if i == workload_info.num_workers - 1 {
-                num_requests =
-                    workload_info.max_in_flight_ops - workers.len() as u64 * num_requests;
-                target_qps = workload_info.target_qps - workers.len() as u64 * target_qps;
-            }
-            if num_requests > 0 && target_qps > 0 {
+        let mut qps = workload_info.target_qps;
+        if qps == 0 {
+            return vec![];
+        }
+        let mut payloads = workload_info
+            .workload
+            .make_test_payloads(
+                workload_info.max_in_flight_ops,
+                workload_info.payload_config.clone(),
+                proxy.clone(),
+                system_state_observer.clone(),
+            )
+            .await;
+        let mut total_workers = workload_info.num_workers;
+        while total_workers > 0 {
+            let target_qps = qps / total_workers;
+            if target_qps > 0 {
+                let chunk_size = payloads.len() / total_workers as usize;
+                let remaining = payloads.split_off(chunk_size);
                 workers.push(BenchWorker {
-                    num_requests,
                     target_qps,
-                    payload: workload_info
-                        .workload
-                        .make_test_payloads(num_requests, proxy.clone())
-                        .await,
+                    payload: payloads,
                 });
+                payloads = remaining;
+                qps -= target_qps;
             }
+            total_workers -= 1;
         }
         workers
     }
@@ -216,21 +237,27 @@ async fn ctrl_c() -> std::io::Result<()> {
 }
 
 #[async_trait]
-impl Driver<BenchmarkStats> for BenchDriver {
+impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
         workloads: Vec<WorkloadInfo>,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
         run_duration: Interval,
-    ) -> Result<BenchmarkStats, anyhow::Error> {
+    ) -> Result<(BenchmarkStats, StressStats), anyhow::Error> {
         info!("Running BenchDriver");
+
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
         for workload in workloads.iter() {
-            bench_workers.extend(self.make_workers(workload, proxy.clone()).await);
+            bench_workers.extend(
+                self.make_workers(workload, proxy.clone(), system_state_observer.clone())
+                    .await,
+            );
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
@@ -239,7 +266,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
-        info!("Setting up workers...");
+        info!("Setting up {:?} workers...", num_workers);
         let progress = Arc::new(match run_duration {
             Interval::Count(count) => ProgressBar::new(count)
                 .with_prefix("Running benchmark(count):")
@@ -257,7 +284,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
             let cloned_token = self.token.clone();
             let request_delay_micros = 1_000_000 / worker.target_qps;
             let mut free_pool = worker.payload;
-            let progress = progress.clone();
+            let progress_cloned = progress.clone();
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
@@ -345,7 +372,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                                 }
                                                 NextOp::Response(Some((
                                                     latency,
-                                                    b.1.make_new_payload(new_version, effects.gas_object().0),
+                                                    b.1.make_new_payload(new_version, effects.gas_object().0, &effects),
                                                 ),
                                                 ))
                                             }
@@ -391,7 +418,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             NextOp::Response(Some((
                                                 latency,
-                                                payload.make_new_payload(new_version, effects.gas_object().0),
+                                                payload.make_new_payload(new_version, effects.gas_object().0, &effects),
                                             )))
                                         }
                                         Err(err) => {
@@ -408,8 +435,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                             match op {
                                 NextOp::Retry(b) => {
                                     retry_queue.push_back(b);
-                                    BenchDriver::update_progress(*start_time, run_duration, progress.clone());
-                                    if progress.is_finished() {
+                                    BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
+                                    if progress_cloned.is_finished() {
                                         break;
                                     }
                                 }
@@ -418,8 +445,8 @@ impl Driver<BenchmarkStats> for BenchDriver {
                                     num_in_flight -= 1;
                                     free_pool.push(new_payload);
                                     latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
-                                    BenchDriver::update_progress(*start_time, run_duration, progress.clone());
-                                    if progress.is_finished() {
+                                    BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
+                                    if progress_cloned.is_finished() {
                                         break;
                                     }
                                 }
@@ -455,7 +482,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
             tasks.push(runner);
         }
 
-        let stat_task = tokio::spawn(async move {
+        let benchmark_stat_task = tokio::spawn(async move {
             let mut benchmark_stat = BenchmarkStats {
                 duration: Duration::ZERO,
                 num_error: 0,
@@ -485,6 +512,7 @@ impl Driver<BenchmarkStats> for BenchDriver {
                 let mut num_error: u64 = 0;
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
+
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;
@@ -517,6 +545,49 @@ impl Driver<BenchmarkStats> for BenchDriver {
             benchmark_stat
         });
         drop(tx);
+
+        if self.stress_stat_collection {
+            tasks.push(stress_stats_collector(
+                progress.clone(),
+                metrics.clone(),
+                stress_stat_tx.clone(),
+            ));
+        }
+        drop(stress_stat_tx);
+
+        let stress_stat_task = tokio::spawn(async move {
+            let mut stress_stat = StressStats {
+                cpu_usage: HistogramWrapper {
+                    histogram: hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap(),
+                },
+            };
+            let mut stat_collection: Vec<StressStats> = Vec::new();
+            let mut counter = 0;
+            while let Some(sample_stat @ StressStats { cpu_usage: _ }) = stress_stat_rx.recv().await
+            {
+                stress_stat.update(&sample_stat);
+                stat_collection.push(sample_stat);
+
+                let mut cpu_usage_histogram =
+                    hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap();
+                for stat in stat_collection.iter() {
+                    cpu_usage_histogram.add(&stat.cpu_usage.histogram).unwrap();
+                }
+                counter += 1;
+                if counter % num_workers == 0 {
+                    let stat = format!(
+                        "cpu_usage p50 = {}, p99 = {}",
+                        cpu_usage_histogram.value_at_quantile(0.5),
+                        cpu_usage_histogram.value_at_quantile(0.99)
+                    );
+                    if show_progress {
+                        eprintln!("{}", stat);
+                    }
+                }
+            }
+            stress_stat
+        });
+
         let all_tasks = try_join_all(tasks);
         let _res = tokio::select! {
             _ = ctrl_c() => {
@@ -525,7 +596,52 @@ impl Driver<BenchmarkStats> for BenchDriver {
             }
             res = all_tasks => res.unwrap().into_iter().collect()
         };
-        let benchmark_stat = stat_task.await.unwrap();
-        Ok(benchmark_stat)
+        let benchmark_stat = benchmark_stat_task.await.unwrap();
+        let stress_stat = stress_stat_task.await.unwrap();
+        Ok((benchmark_stat, stress_stat))
     }
+}
+
+fn stress_stats_collector(
+    progress: Arc<ProgressBar>,
+    metrics: Arc<BenchMetrics>,
+    stress_stat_tx: Sender<StressStats>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut system = System::new_all();
+
+        system.refresh_cpu();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        while !progress.is_finished() {
+            let mut cpu_usage_histogram =
+                hdrhistogram::Histogram::<u64>::new_with_max(100, 3).unwrap();
+            system.refresh_cpu();
+            for (i, cpu) in system.cpus().iter().enumerate() {
+                cpu_usage_histogram.saturating_record(cpu.cpu_usage() as u64);
+                metrics
+                    .cpu_usage
+                    .with_label_values(&[&format!("cpu_{i}").to_string()])
+                    .set(cpu.cpu_usage().into());
+            }
+
+            if stress_stat_tx
+                .try_send(StressStats {
+                    cpu_usage: HistogramWrapper {
+                        histogram: cpu_usage_histogram,
+                    },
+                })
+                .is_err()
+            {
+                debug!("Failed to update stress stats!");
+            }
+
+            tokio::select! {
+                _ = ctrl_c() => {
+                    break;
+                },
+                _ = tokio::time::sleep(Duration::from_secs(1)) => (),
+            }
+        }
+    })
 }

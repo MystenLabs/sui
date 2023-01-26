@@ -45,6 +45,7 @@ fn make_tx(gas: &Object, sender: SuiAddress, keypair: &AccountKeyPair) -> Verifi
         None,
         sender,
         keypair,
+        None,
     )
 }
 
@@ -67,7 +68,12 @@ async fn test_quorum_driver_submit_transaction() {
         let QuorumDriverResponse {
             tx_cert,
             effects_cert,
-        } = qd_clone.subscribe_to_effects().recv().await.unwrap();
+        } = qd_clone
+            .subscribe_to_effects()
+            .recv()
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(*tx_cert.digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
@@ -95,7 +101,12 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
         let QuorumDriverResponse {
             tx_cert,
             effects_cert,
-        } = qd_clone.subscribe_to_effects().recv().await.unwrap();
+        } = qd_clone
+            .subscribe_to_effects()
+            .recv()
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(*tx_cert.digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
@@ -139,7 +150,12 @@ async fn test_quorum_driver_with_given_notify_read() {
         let QuorumDriverResponse {
             tx_cert,
             effects_cert,
-        } = qd_clone.subscribe_to_effects().recv().await.unwrap();
+        } = qd_clone
+            .subscribe_to_effects()
+            .recv()
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(*tx_cert.digest(), digest);
         assert_eq!(effects_cert.data().transaction_digest, digest);
     });
@@ -180,8 +196,8 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
         let ticket = quorum_driver.submit_transaction(tx).await.unwrap();
         // We have a timeout here to make the test fail fast if fails
         match tokio::time::timeout(Duration::from_secs(20), ticket).await {
-            Ok(Err(QuorumDriverError::FailedAfterMaximumAttempts { total_attempts })) => assert_eq!(total_attempts, 4),
-            _ => panic!("The transaction should err on SafeClient epoch check mismatch, be retried 3 times and raise QuorumDriverError::FailedAfterMaximumAttempts error"),
+            Ok(Err(QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { total_attempts })) => assert_eq!(total_attempts, 4),
+            _ => panic!("The transaction should err on SafeClient epoch check mismatch, be retried 3 times and raise QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts error"),
         };
     });
 

@@ -32,7 +32,7 @@ impl TestCaseImpl for SharedCounterTest {
         let (package_ref, (counter_id, initial_counter_version, _)) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
         let (tx_cert, effects) =
-            increment_counter(wallet_context, address, None, package_ref, counter_id).await;
+            increment_counter(wallet_context, address, None, package_ref.0, counter_id).await;
         assert_eq!(
             effects.status,
             SuiExecutionStatus::Success,

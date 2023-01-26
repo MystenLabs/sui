@@ -60,30 +60,32 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
     const StepForm = step < totalSteps ? allSteps[step] : null;
     return (
         <CardLayout
+            headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
             title={
                 mode === 'import'
                     ? 'Import an Existing Wallet'
                     : 'Reset Password for This Wallet'
             }
-            headerCaption={mode === 'import' ? 'Wallet Setup' : undefined}
             mode={mode === 'import' ? 'box' : 'plain'}
         >
             {StepForm ? (
-                <StepForm
-                    next={async (data, stepIncrement) => {
-                        const nextStep = step + stepIncrement;
-                        if (nextStep >= totalSteps) {
-                            await onHandleSubmit(data);
-                        }
-                        setData(data);
-                        if (nextStep < 0) {
-                            return;
-                        }
-                        setStep(nextStep);
-                    }}
-                    data={data}
-                    mode={mode}
-                />
+                <div className="mt-7.5 flex flex-col flex-nowrap items-stretch flex-1 flex-grow w-full">
+                    <StepForm
+                        next={async (data, stepIncrement) => {
+                            const nextStep = step + stepIncrement;
+                            if (nextStep >= totalSteps) {
+                                await onHandleSubmit(data);
+                            }
+                            setData(data);
+                            if (nextStep < 0) {
+                                return;
+                            }
+                            setStep(nextStep);
+                        }}
+                        data={data}
+                        mode={mode}
+                    />
+                </div>
             ) : null}
         </CardLayout>
     );

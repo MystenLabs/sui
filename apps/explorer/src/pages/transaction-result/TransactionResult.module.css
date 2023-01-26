@@ -32,7 +32,7 @@
 .txeventsright {
     @apply col-span-5 overflow-y-scroll md:col-span-4;
 
-    max-height: 100vh; /* enables scrolling list independtly of page */
+    max-height: 100vh; /* enables scrolling list independently of page */
 }
 
 .txcomponent {

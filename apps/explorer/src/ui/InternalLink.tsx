@@ -31,3 +31,4 @@ function createInternalLink<T extends string>(base: string, propName: T) {
 export const AddressLink = createInternalLink('address', 'address');
 export const ObjectLink = createInternalLink('object', 'objectId');
 export const TransactionLink = createInternalLink('transaction', 'digest');
+export const ValidatorLink = createInternalLink('validator', 'address');

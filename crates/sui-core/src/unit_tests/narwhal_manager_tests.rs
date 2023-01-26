@@ -115,7 +115,6 @@ async fn test_narwhal_manager() {
             worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
             storage_base_path: consensus_config.db_path().to_path_buf(),
             parameters: consensus_config.narwhal_config().to_owned(),
-            tx_validator: TrivialTransactionValidator::default(),
             registry_service,
         };
 
@@ -128,6 +127,7 @@ async fn test_narwhal_manager() {
                 Arc::new(narwhal_committee.clone()),
                 shared_worker_cache.clone(),
                 Arc::new(execution_state.clone()),
+                TrivialTransactionValidator::default(),
             )
             .await;
 
@@ -194,6 +194,7 @@ async fn test_narwhal_manager() {
                 Arc::new(narwhal_committee.clone()),
                 shared_worker_cache.clone(),
                 Arc::new(execution_state.clone()),
+                TrivialTransactionValidator::default(),
             )
             .await;
 

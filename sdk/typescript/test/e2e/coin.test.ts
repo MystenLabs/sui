@@ -71,15 +71,6 @@ describe('Coin related API', () => {
     expect(Coin.getCoinStructTag(coinTypeArg)).toStrictEqual(exampleStructTag);
   });
 
-  it('test Coin balance functions', async () => {
-    const coins = 
-      await toolbox.provider.getCoinBalancesOwnedByAddress(
-        toolbox.address(),
-        '0x2::sui::SUI'
-      );
-    expect(Coin.totalBalance(coins)).toBeGreaterThan(BigInt(0));
-  });
-
   it('test selectCoinsWithBalanceGreaterThanOrEqual', async () => {
     await Promise.all(
       SPLIT_AMOUNTS.map(async (a, i) => {

@@ -5,5 +5,5 @@
 * REGULATED_COIN: a coin managed by a central authority which can freeze accounts
 * PRIVATE_COIN: a coin which has the option of hiding the amount that you transact
 * PRIVATE_BALANCE: a balance which has the option of hiding the amount that it stores.
-* FIXED: a token with a fixed supply (coming soon).
-* ALGO: a token with an algorithmic issuance policy (coming soon).
+* FIXED: a token with a fixed supply (coming in future).
+* ALGO: a token with an algorithmic issuance policy (coming in future).

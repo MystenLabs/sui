@@ -422,7 +422,7 @@ fn init_modules<
         let mut args = vec![];
         // an init function can have one or two arguments, with the last one always being of type
         // &mut TxContext and the additional (first) one representing a characteristic type (see
-        // char_type verfier pass for additional explanation)
+        // char_type verifier pass for additional explanation)
         if parameters.len() == 2 {
             // characteristic type is a struct with a single bool filed which in bcs is encoded as
             // 0x01
@@ -536,7 +536,7 @@ pub fn generate_package_id(
 /// Update `state_view` with the effects of successfully executing a transaction:
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
-/// - Process creation of new objects and user-emittd events in `events`
+/// - Process creation of new objects and user-emitted events in `events`
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<S: Storage + ParentSync>(
     state_view: &mut S,

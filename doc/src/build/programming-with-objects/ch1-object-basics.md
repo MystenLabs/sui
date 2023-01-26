@@ -126,7 +126,7 @@ test_scenario::next_tx(scenario, not_owner);
 
 `test_scenario::next_tx` switches the transaction sender to `@0x2`, which is a new address different from the previous one.
 `test_scenario::has_most_recent_for_sender` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
-> :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
+> :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests it's usually unnecessary because there will be way too many assertions. The stack trace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` for assertions in unit tests.
 
 Finally we check that `@0x1` owns the object and the object value is consistent:
 ```rust
@@ -163,22 +163,28 @@ First, we need to publish the code on-chain. Assuming the path to the root of th
 ```
 $ sui client publish $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
+or from the root of the package folder:
+```
+$ sui client publish --gas-budget 10000
+```
+
 You can find the published package object ID in the **Transaction Effects** output:
 ```
+...
 Transaction Kind : Publish
- ----- Transaction Effects ----
- Status : Success
- Created Objects:
-   - ID: 0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69 , Owner: Immutable
- Mutated Objects:
-   - ID: 0x91dfb762ebd7acd718828d72898ab8977d75b0eb , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
+----- Transaction Effects ----
+Status : Success
+Created Objects:
+  - ID: 0x57258f32746fd1443f2a077c0c6ec03282087c19 , Owner: Immutable
+Mutated Objects:
+  - ID: 0x2bbd6aeabb1d1168566c3d973d62820701847ba9 , Owner: Account Address ( 0xf641397cc701092a193f7a2a6d320af39ca16ed3 )
 ```
- Note that the exact data you see will be different. One of the **Immutable** objects in **Created Objects** is the package object ID (`0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69` in this case). And the other object ID in **Mutated Objects** is your gas coin object ID (`0x91dfb762ebd7acd718828d72898ab8977d75b0eb` in this case) which is owned by your account address.
-
- For convenience, let's save it to an environment variable:
+Note that the exact data you see will be different. 
+The first hex string with the `Immutable` owner is the package object ID (`0x57258f32746fd1443f2a077c0c6ec03282087c19` in this case). For convenience, let's save it to an environment variable:
 ```
-$ export PACKAGE=0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69
+$ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
+The mutated object is the gas object used to pay for the transaction.
 Next we can call the function to create a color object:
 ```
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
@@ -186,12 +192,17 @@ $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" -
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
 ```
+...
+----- Transaction Effects ----
+Status : Success
 Created Objects:
-  - ID: 0xe00d82272758565829feade95023e9257f442c98 , Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
+  - ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb , Owner: Account Address ( 0xf641397cc701092a193f7a2a6d320af39ca16ed3 )
+Mutated Objects:
+  - ID: 0x2bbd6aeabb1d1168566c3d973d62820701847ba9 , Owner: Account Address ( 0xf641397cc701092a193f7a2a6d320af39ca16ed3 )
 ```
 Again, for convenience, let's save the object ID:
 ```
-$ export OBJECT=0xe00d82272758565829feade95023e9257f442c98
+$ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 ```
 We can inspect this object and see what kind of object it is:
 ```
@@ -199,24 +210,23 @@ $ sui client object $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
------ Move Object (0xe00d82272758565829feade95023e9257f442c98[1]) -----
-Owner: Account Address ( 0xb30c2df6a466bc130ea868e6ac62923b9e9e6b8c )
-Version: 1
+----- Move Object (0x28d511b9689871fd7d3303b5f9657b6287b48279[8]) -----
+Owner: Account Address ( 0xf641397cc701092a193f7a2a6d320af39ca16ed3 )
+Version: 8
 Storage Rebate: 14
-Previous Transaction: T8j4wil5wrDjFz2nqJCIZnZurD9vBKENo7zy32FYcdU=
+Previous Transaction: HRrB6qFxQZt7VEzagEjE4nhF9rbffK2wZRxqn9pPLhMk
 ----- Data -----
-type: 0x7a137f312bac54fbf47c5a65f89ca0d116b1ce69::color_object::ColorObject
+type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
 blue: 0
 green: 255
-id: 0xe00d82272758565829feade95023e9257f442c98
+id: 0x28d511b9689871fd7d3303b5f9657b6287b48279
 red: 0
 ```
 As we can see, it's owned by the current default client address that we saw earlier. And the type of this object is `ColorObject`!
 
-You can also look at the data content of the object by adding the `--json` parameter:
+You can also request the content of the object in json format by adding the `--json` parameter:
 ```
 $ sui client object $OBJECT --json
 ```
-This will print the values of all the fields in the Move object, such as the values of `red`, `green`, and `blue`.
 
 Congratulations! You have learned how to define, create, and transfer objects. You should also know how to write unit tests to mock transactions and interact with the objects. In the next chapter, we will learn how to use the objects that we own.

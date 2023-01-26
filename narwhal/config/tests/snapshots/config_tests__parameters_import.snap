@@ -30,5 +30,12 @@ expression: params
   "network_admin_server": {
     "primary_network_admin_server_port": 0,
     "worker_network_admin_server_base_port": 0
+  },
+  "anemo": {
+    "send_message_rate_limit": null,
+    "get_payload_availability_rate_limit": null,
+    "get_certificates_rate_limit": null,
+    "report_batch_rate_limit": null,
+    "request_batch_rate_limit": null
   }
 }

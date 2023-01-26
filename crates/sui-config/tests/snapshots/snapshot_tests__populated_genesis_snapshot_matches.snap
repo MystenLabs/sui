@@ -15,3 +15,7 @@ expression: genesis.validator_set()
   p2p-address: ""
   narwhal-primary-address: ""
   narwhal-worker-address: ""
+  description: ""
+  image-url: ""
+  project-url: ""
+

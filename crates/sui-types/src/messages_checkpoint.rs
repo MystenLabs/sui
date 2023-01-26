@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 
 pub type CheckpointSequenceNumber = u64;
+pub type CheckpointTimestamp = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
@@ -76,6 +77,12 @@ impl AsRef<[u8; 32]> for CheckpointDigest {
     }
 }
 
+impl CheckpointDigest {
+    pub fn encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+}
+
 #[serde_as]
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
@@ -98,6 +105,12 @@ impl AsRef<[u8; 32]> for CheckpointContentsDigest {
     }
 }
 
+impl CheckpointContentsDigest {
+    pub fn encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+}
+
 // The constituent parts of checkpoints, signed and certified
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -112,14 +125,18 @@ pub struct CheckpointSummary {
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     pub epoch_rolling_gas_cost_summary: GasCostSummary,
-    /// If this checkpoint is the last checkpoint of the epoch, we also include the committee
-    /// of the next epoch. This allows anyone receiving this checkpoint know that the epoch
-    /// will change after this checkpoint, as well as what the new committee is.
+    /// next_epoch_committee is `Some` if and only if the current checkpoint is
+    /// the last checkpoint of an epoch.
+    /// Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch,
+    /// which is often useful to get epoch level summary stats like total gas cost of an epoch,
+    /// or the total number of transactions from genesis to the end of an epoch.
     /// The committee is stored as a vector of validator pub key and stake pairs. The vector
     /// should be sorted based on the Committee data structure.
-    /// TODO: If desired, we could also commit to the previous last checkpoint cert so that
-    /// they form a hash chain.
     pub next_epoch_committee: Option<Vec<(AuthorityName, StakeUnit)>>,
+    /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
+    /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
+    /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
+    pub timestamp_ms: CheckpointTimestamp,
 }
 
 impl CheckpointSummary {
@@ -131,6 +148,7 @@ impl CheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
+        timestamp_ms: CheckpointTimestamp,
     ) -> CheckpointSummary {
         let content_digest = transactions.digest();
 
@@ -142,6 +160,7 @@ impl CheckpointSummary {
             previous_digest,
             epoch_rolling_gas_cost_summary,
             next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
+            timestamp_ms,
         }
     }
 
@@ -226,6 +245,7 @@ impl SignedCheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
         next_epoch_committee: Option<Committee>,
+        timestamp_ms: CheckpointTimestamp,
     ) -> SignedCheckpointSummary {
         let checkpoint = CheckpointSummary::new(
             epoch,
@@ -235,6 +255,7 @@ impl SignedCheckpointSummary {
             previous_digest,
             epoch_rolling_gas_cost_summary,
             next_epoch_committee,
+            timestamp_ms,
         );
         SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
     }
@@ -389,6 +410,10 @@ impl VerifiedCheckpoint {
     pub fn into_inner(self) -> CertifiedCheckpointSummary {
         self.0
     }
+
+    pub fn into_summary_and_sequence(self) -> (CheckpointSequenceNumber, CheckpointSummary) {
+        (self.summary.sequence_number, self.0.summary)
+    }
 }
 
 impl std::ops::Deref for VerifiedCheckpoint {
@@ -409,7 +434,7 @@ pub struct CheckpointSignatureMessage {
 /// They must have already been causally ordered. Since the causal order algorithm
 /// is the same among validators, we expect all honest validators to come up with
 /// the same order for each checkpoint content.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CheckpointContents {
     transactions: Vec<ExecutionDigests>,
     /// This field 'pins' user signatures for the checkpoint:
@@ -524,6 +549,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    0,
                 )
             })
             .collect();
@@ -562,6 +588,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    0,
                 )
             })
             .collect();
@@ -591,6 +618,7 @@ mod tests {
                     None,
                     GasCostSummary::default(),
                     None,
+                    0,
                 )
             })
             .collect();

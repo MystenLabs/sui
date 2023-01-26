@@ -104,7 +104,7 @@ module defi::dev_pass {
 
 /// Rough outline of an AMM.
 /// For simplicity pool implementation details are omitted but marked as comments to
-/// show correllation with the `defi/pool.move` example.
+/// show correlation with the `defi/pool.move` example.
 module defi::some_amm {
     use defi::dev_pass::{Self, Subscription, SingleUse};
     use sui::tx_context::{Self, TxContext};

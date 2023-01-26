@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type JsonRpcProvider,
-    type ExecutionStatusType,
-    type TransactionKindName,
-} from '@mysten/sui.js';
+import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useState, useCallback, useMemo } from 'react';
@@ -13,8 +9,6 @@ import toast from 'react-hot-toast';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import Pagination from '../pagination/Pagination';
 import {
     type TxnData,
@@ -60,20 +54,6 @@ function generateStartEndRange(
     };
 }
 
-// Static data for development and testing
-const getRecentTransactionsStatic = (): Promise<TxnData[]> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const latestTx = getAllMockTransaction().map((tx) => ({
-                ...tx,
-                status: tx.status as ExecutionStatusType,
-                kind: tx.kind as TransactionKindName,
-            }));
-            resolve(latestTx as TxnData[]);
-        }, 500);
-    });
-};
-
 // TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
     rpc: JsonRpcProvider,
@@ -81,10 +61,6 @@ async function getRecentTransactions(
     txNum: number,
     pageNum?: number
 ): Promise<TxnData[]> {
-    // If static env, use static data
-    if (IS_STATIC_ENV) {
-        return getRecentTransactionsStatic();
-    }
     // Get the latest transactions
     // Instead of getRecentTransactions, use getTransactionCount
     // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number

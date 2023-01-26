@@ -52,18 +52,8 @@ const config: PlaywrightTestConfig = {
         {
             name: 'chromium',
             // Match anything except for legacy tests:
-            testMatch: /^.*(?!legacy\/).*(test|spec)\.(js|ts|mjs)/,
             use: {
                 ...devices['Desktop Chrome'],
-            },
-        },
-        {
-            name: 'legacy',
-            // Only match legacy tests:
-            testMatch: /^.*legacy\/.*(test|spec)\.(js|ts|mjs)/,
-            use: {
-                ...devices['Desktop Chrome'],
-                baseURL: 'http://localhost:8080/',
             },
         },
 
@@ -124,13 +114,6 @@ const config: PlaywrightTestConfig = {
         {
             command: 'pnpm dev',
             port: 3000,
-            timeout: 120 * 1000,
-            reuseExistingServer: !process.env.CI,
-        },
-        // Static-based dev server:
-        {
-            command: 'pnpm dev:static',
-            port: 8080,
             timeout: 120 * 1000,
             reuseExistingServer: !process.env.CI,
         },

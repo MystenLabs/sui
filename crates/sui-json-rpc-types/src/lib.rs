@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use colored::Colorize;
+use fastcrypto::encoding::{Base64, Encoding};
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
@@ -27,10 +28,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
-
-use fastcrypto::encoding::{Base64, Encoding};
-use tracing::warn;
-
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
@@ -58,6 +55,7 @@ use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
+use tracing::warn;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -87,6 +85,7 @@ pub struct Coin {
     pub digest: ObjectDigest,
     pub balance: u64,
     pub locked_until_epoch: Option<EpochId>,
+    pub previous_transaction: TransactionDigest,
 }
 
 impl Coin {
@@ -396,6 +395,19 @@ impl Display for SuiParsedTransactionResponse {
             SuiParsedTransactionResponse::SplitCoin(r) => r.fmt(f),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum SuiTBlsSignObjectCommitmentType {
+    /// Check that the object is committed by the consensus.
+    ConsensusCommitted,
+    /// Check that the object is committed using the effects certificate.
+    FastPathCommitted(SuiCertifiedTransactionEffects),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiTBlsSignRandomnessObjectResponse {
+    pub signature: fastcrypto_tbls::types::RawSignature,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1671,11 +1683,7 @@ impl Display for SuiTransactionKind {
             }
             Self::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(
-                    writer,
-                    "Package ID : {}",
-                    c.package.object_id.to_hex_literal()
-                )?;
+                writeln!(writer, "Package ID : {}", c.package.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
@@ -1713,7 +1721,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
             SingleTransactionKind::PayAllSui(p) => Self::PayAllSui(p.into()),
             SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
-                package: c.package.into(),
+                package: c.package,
                 module: c.module.to_string(),
                 function: c.function.to_string(),
                 type_arguments: c.type_arguments.iter().map(|ty| ty.to_string()).collect(),
@@ -1754,7 +1762,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "MoveCall", rename_all = "camelCase")]
 pub struct SuiMoveCall {
-    pub package: SuiObjectRef,
+    pub package: ObjectID,
     pub module: String,
     pub function: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -2140,8 +2148,8 @@ pub struct OwnedObjectRef {
 pub struct SuiEventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     pub timestamp: u64,
-    /// Transaction digest of associated transaction, if any
-    pub tx_digest: Option<TransactionDigest>,
+    /// Transaction digest of associated transaction
+    pub tx_digest: TransactionDigest,
     /// Sequential event ID, ie (transaction seq number, event seq number).
     /// 1) Serves as a unique event ID for each fullnode
     /// 2) Also serves to sequence events for the purposes of pagination and querying.
@@ -2159,6 +2167,7 @@ pub enum SuiEvent {
     /// Move-specific event
     #[serde(rename_all = "camelCase")]
     MoveEvent {
+        // TODO: What's the best way to serialize this using `AccountAddress::short_str_lossless` ??
         package_id: ObjectID,
         transaction_module: String,
         sender: SuiAddress,

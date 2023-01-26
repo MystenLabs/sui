@@ -56,8 +56,10 @@ pub struct StoredEvent {
     id: EventID,
     /// UTC timestamp in milliseconds
     timestamp: u64,
+    /// Seq_num
+    seq_num: i64,
     /// Not present for non-transaction System events (eg EpochChange)
-    tx_digest: Option<TransactionDigest>,
+    tx_digest: TransactionDigest,
     /// The variant name from SuiEvent, eg MoveEvent, Publish, etc.
     event_type: SharedStr,
     /// Package ID if available
@@ -430,7 +432,8 @@ pub trait EventStore {
     /// Returns at most `limit` events emitted by all transaction, ordered .
     async fn all_events(
         &self,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -439,7 +442,8 @@ pub trait EventStore {
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -450,7 +454,8 @@ pub trait EventStore {
     async fn events_by_type(
         &self,
         event_type: EventType,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -460,7 +465,8 @@ pub trait EventStore {
     async fn events_by_module_id(
         &self,
         module: &ModuleId,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -471,7 +477,8 @@ pub trait EventStore {
     async fn events_by_move_event_struct_name(
         &self,
         move_event_struct_name: &str,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -481,7 +488,8 @@ pub trait EventStore {
     async fn events_by_sender(
         &self,
         sender: &SuiAddress,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -491,7 +499,8 @@ pub trait EventStore {
     async fn events_by_recipient(
         &self,
         recipient: &Owner,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -501,7 +510,8 @@ pub trait EventStore {
     async fn events_by_object(
         &self,
         object: &ObjectID,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;
@@ -512,7 +522,8 @@ pub trait EventStore {
         &self,
         start_time: u64,
         end_time: u64,
-        cursor: EventID,
+        tx_seq: i64,
+        event_seq: i64,
         limit: usize,
         descending: bool,
     ) -> Result<Vec<StoredEvent>, SuiError>;

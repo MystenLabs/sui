@@ -10,8 +10,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::debug;
-use typed_store::rocks::DBMap;
 use typed_store::rocks::DBOptions;
+use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
@@ -130,7 +130,8 @@ fn dynamic_field_index_table_default_config() -> DBOptions {
 
 impl IndexStore {
     pub fn new(path: PathBuf) -> Self {
-        let tables = IndexStoreTables::open_tables_read_write(path, None, None);
+        let tables =
+            IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
         let next_sequence_number = tables
             .transaction_order
             .iter()

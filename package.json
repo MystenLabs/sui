@@ -4,6 +4,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "turbo": "turbo",
+    "icons": "pnpm --filter ./apps/icons",
     "explorer": "pnpm --filter ./apps/explorer",
     "wallet": "pnpm --filter ./apps/wallet",
     "wallet-adapter": "pnpm --filter ./sdk/wallet-adapter",

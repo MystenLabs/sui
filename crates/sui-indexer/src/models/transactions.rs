@@ -14,7 +14,7 @@ use crate::errors::IndexerError;
 use crate::schema::transactions::transaction_digest;
 use crate::PgPoolConnection;
 
-#[derive(Debug, Queryable)]
+#[derive(Clone, Debug, Queryable)]
 pub struct Transaction {
     pub id: i64,
     pub transaction_digest: String,
@@ -34,10 +34,11 @@ pub struct Transaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub gas_price: i64,
     pub transaction_content: String,
 }
 
-#[derive(Debug, Insertable)]
+#[derive(Clone, Debug, Insertable)]
 #[diesel(table_name = transactions)]
 pub struct NewTransaction {
     pub transaction_digest: String,
@@ -57,6 +58,7 @@ pub struct NewTransaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub gas_price: i64,
     pub transaction_content: String,
 }
 
@@ -127,9 +129,10 @@ pub fn transaction_response_to_new_transaction(
             err
         ))
     })?;
-    // canonical txn digest string is Base64 encoded
-    let tx_digest = cer.transaction_digest.encode();
+    // canonical txn digest string is Base58 encoded
+    let tx_digest = cer.transaction_digest.base58_encode();
     let gas_budget = cer.data.gas_budget;
+    let gas_price = cer.data.gas_price;
     let sender = cer.data.sender.to_string();
     let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());
 
@@ -202,6 +205,7 @@ pub fn transaction_response_to_new_transaction(
         // NOTE: cast u64 to i64 here is safe because
         // max value of i64 is 9223372036854775807 MISTs, which is 9223372036.85 SUI, which is way bigger than budget or cost constant already.
         gas_budget: gas_budget as i64,
+        gas_price: gas_price as i64,
         total_gas_cost: (computation_cost + storage_cost) as i64 - (storage_rebate as i64),
         computation_cost: computation_cost as i64,
         storage_cost: storage_cost as i64,

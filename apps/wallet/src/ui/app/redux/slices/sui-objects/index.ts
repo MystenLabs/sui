@@ -89,8 +89,11 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault }, dispatch }) => {
-        const signer = api.getSignerInstance(keypairVault.getKeypair());
+    async (_, { extra: { api, keypairVault, background }, dispatch }) => {
+        const signer = api.getSignerInstance(
+            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+            background
+        );
         await ExampleNFT.mintExampleNFT(signer);
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
@@ -107,18 +110,24 @@ export const transferNFT = createAsyncThunk<
     NFTTxResponse,
     { objectId: ObjectId; recipient: SuiAddress; gasBudget: number },
     AppThunkConfig
->('transferNFT', async (data, { extra: { api, keypairVault }, dispatch }) => {
-    const signer = api.getSignerInstance(keypairVault.getKeypair());
-    const txn = await signer.transferObject(data);
-    await dispatch(fetchAllOwnedAndRequiredObjects());
-    const txnResp = {
-        timestamp_ms: getTimestampFromTransactionResponse(txn),
-        status: getExecutionStatusType(txn),
-        gasFee: txn ? getTotalGasUsed(txn) : 0,
-        txId: getTransactionDigest(txn),
-    };
-    return txnResp as NFTTxResponse;
-});
+>(
+    'transferNFT',
+    async (data, { extra: { api, keypairVault, background }, dispatch }) => {
+        const signer = api.getSignerInstance(
+            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
+            background
+        );
+        const txn = await signer.transferObject(data);
+        await dispatch(fetchAllOwnedAndRequiredObjects());
+        const txnResp = {
+            timestamp_ms: getTimestampFromTransactionResponse(txn),
+            status: getExecutionStatusType(txn),
+            gasFee: txn ? getTotalGasUsed(txn) : 0,
+            txId: getTransactionDigest(txn),
+        };
+        return txnResp as NFTTxResponse;
+    }
+);
 interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };

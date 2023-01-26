@@ -31,12 +31,14 @@ use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse, VerifiedCertificate, VerifiedCertifiedTransactionEffects,
 };
-use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResult};
+use sui_types::quorum_driver_types::{
+    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
+};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
 
 use sui_types::messages::VerifiedTransaction;
 
@@ -56,7 +58,7 @@ pub struct TransactiondOrchestrator<A> {
 }
 
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
-    pub fn new_with_network_clients(
+    pub async fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
         reconfig_channel: broadcast::Receiver<Committee>,
         parent_path: &Path,
@@ -84,7 +86,8 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
-        ))
+        )
+        .await)
     }
 }
 
@@ -93,7 +96,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
     OnsiteReconfigObserver: ReconfigObserver<A>,
 {
-    pub fn new(
+    pub async fn new(
         validators: Arc<AuthorityAggregator<A>>,
         validator_state: Arc<AuthorityState>,
         parent_path: &Path,
@@ -130,6 +133,7 @@ where
                 .await;
             })
         };
+        Self::schedule_txes_in_log(&pending_tx_log, &quorum_driver_handler).await;
         Self {
             quorum_driver_handler,
             validator_state,
@@ -152,13 +156,19 @@ where
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
 
-        let transaction = request.transaction.verify()?;
+        let transaction = request
+            .transaction
+            .verify()
+            .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *transaction.digest();
 
         let _request_guard = self.metrics.request_latency.start_timer();
         let _wait_for_finality_guard = self.metrics.wait_for_finality_latency.start_timer();
 
-        let ticket = self.submit(transaction).await?;
+        let ticket = self.submit(transaction).await.map_err(|e| {
+            warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+            QuorumDriverError::QuorumDriverInternalError(e)
+        })?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
@@ -170,7 +180,7 @@ where
             ticket,
         ).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
-            return Err(QuorumDriverError::TimeoutBeforeReachFinality);
+            return Err(QuorumDriverError::TimeoutBeforeFinality);
         };
         match result {
             Err(err) => Err(err),
@@ -253,13 +263,14 @@ where
         let _guard = metrics.local_execution_latency.start_timer();
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
-            validator_state.execute_certificate_with_effects(
+            validator_state.fullnode_execute_certificate_with_effects(
                 tx_cert,
                 effects_cert,
                 // TODO: Check whether it's safe to call epoch_store here.
                 &validator_state.epoch_store(),
             ),
         )
+        .instrument(error_span!("transaction_orchestrator", ?tx_digest))
         .await
         {
             Err(_elapsed) => {
@@ -290,16 +301,16 @@ where
 
     async fn loop_execute_finalized_tx_locally(
         validator_state: Arc<AuthorityState>,
-        mut effects_receiver: Receiver<QuorumDriverResponse>,
+        mut effects_receiver: Receiver<QuorumDriverEffectsQueueResult>,
         pending_transaction_log: Arc<WritePathPendingTransactionLog>,
         metrics: Arc<TransactionOrchestratorMetrics>,
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(QuorumDriverResponse {
+                Ok(Ok(QuorumDriverResponse {
                     tx_cert,
                     effects_cert,
-                }) => {
+                })) => {
                     let tx_digest = tx_cert.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         error!(
@@ -314,6 +325,14 @@ where
                         &metrics,
                     )
                     .await;
+                }
+                Ok(Err((tx_digest, _err))) => {
+                    if let Err(err) = pending_transaction_log.finish_transaction(&tx_digest) {
+                        error!(
+                            ?tx_digest,
+                            "Failed to finish transaction in pending transaction log: {err}"
+                        );
+                    }
                 }
                 Err(RecvError::Closed) => {
                     error!("Sender of effects subscriber queue has been dropped!");
@@ -338,7 +357,7 @@ where
         self.quorum_driver().authority_aggregator().load_full()
     }
 
-    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumDriverResponse> {
+    pub fn subscribe_to_effects_queue(&self) -> Receiver<QuorumDriverEffectsQueueResult> {
         self.quorum_driver_handler.subscribe_to_effects()
     }
 
@@ -371,6 +390,25 @@ where
             }),
             good_response,
         )
+    }
+
+    async fn schedule_txes_in_log(
+        pending_tx_log: &Arc<WritePathPendingTransactionLog>,
+        quorum_driver: &Arc<QuorumDriverHandler<A>>,
+    ) {
+        let pending_txes = pending_tx_log.load_all_pending_transactions();
+        for tx in pending_txes {
+            let tx_digest = *tx.digest();
+            // It's not impossible we fail to enqueue a task but that's not the end of world.
+            if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+                error!(
+                    ?tx_digest,
+                    "Failed to enqueue transaction in pending_tx_log, err: {err:?}"
+                );
+            } else {
+                info!(?tx_digest, "Enqueued transaction in pending_tx_log");
+            }
+        }
     }
 
     pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {

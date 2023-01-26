@@ -21,6 +21,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(primary_key(package_id))]
 pub struct Package {
+    pub id: i64,
     pub package_id: String,
     pub author: String,
     pub module_names: Vec<Option<String>>,

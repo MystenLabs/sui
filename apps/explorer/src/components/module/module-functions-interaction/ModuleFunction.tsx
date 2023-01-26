@@ -49,6 +49,8 @@ export function ModuleFunction({
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
+    const { isValidating, isValid, isSubmitting } = formState;
+
     const typeArguments = useFunctionTypeArguments(
         functionDetails.type_parameters
     );
@@ -86,10 +88,8 @@ export function ModuleFunction({
         },
     });
     const isExecuteDisabled =
-        formState.isValidating ||
-        !formState.isValid ||
-        formState.isSubmitting ||
-        !isConnected;
+        isValidating || !isValid || isSubmitting || !isConnected;
+
     return (
         <DisclosureBox defaultOpen={defaultOpen} title={functionName}>
             <form
@@ -115,7 +115,7 @@ export function ModuleFunction({
                         label={`Arg${index}`}
                         {...register(`params.${index}` as const)}
                         placeholder={paramTypeText}
-                        disabled={formState.isSubmitting}
+                        disabled={isSubmitting}
                     />
                 ))}
                 <div className="flex items-stretch justify-end gap-1.5">

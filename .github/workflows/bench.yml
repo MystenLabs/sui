@@ -57,6 +57,7 @@ jobs:
         crate: huniq
     - name: Install python dependencies
       run: |
+        pip install pyopenssl --upgrade
         if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
     - name: Prepare artifact directory
       run: |

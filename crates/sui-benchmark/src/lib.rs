@@ -16,12 +16,15 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::SuiAddress;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
     messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
     object::{Object, ObjectRead},
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
@@ -29,9 +32,12 @@ use sui_types::{
 };
 use tracing::{error, info};
 
+pub mod benchmark_setup;
 pub mod drivers;
 pub mod embedded_reconfig_observer;
 pub mod fullnode_reconfig_observer;
+pub mod options;
+pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
 
@@ -108,6 +114,8 @@ pub trait ValidatorProxy {
     fn get_current_epoch(&self) -> EpochId;
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync>;
+
+    async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error>;
 }
 
 pub struct LocalValidatorAggregatorProxy {
@@ -239,6 +247,18 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             qd,
         })
     }
+
+    async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
+        let system_state = self.get_object(SUI_SYSTEM_STATE_OBJECT_ID).await?;
+        let move_obj = system_state.data.try_as_move().unwrap();
+        let result = bcs::from_bytes::<SuiSystemState>(move_obj.contents())?;
+        Ok(result
+            .validators
+            .active_validators
+            .into_iter()
+            .map(|v| v.metadata.sui_address)
+            .collect())
+    }
 }
 
 pub struct FullNodeProxy {
@@ -249,7 +269,7 @@ pub struct FullNodeProxy {
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
         // Each request times out after 60s (default value)
-        let sui_client = SuiClient::new(http_url, None, None).await?;
+        let sui_client = SuiClientBuilder::default().build(http_url).await?;
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
@@ -330,5 +350,10 @@ impl ValidatorProxy for FullNodeProxy {
             sui_client: self.sui_client.clone(),
             committee: self.clone_committee(),
         })
+    }
+
+    async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
+        let validators = self.sui_client.governance_api().get_validators().await?;
+        Ok(validators.into_iter().map(|v| v.sui_address).collect())
     }
 }

@@ -85,7 +85,7 @@ module Test::M1 {
 // create at size limit should succeed
 //# run Test::M1::transfer_object_with_size --args 256000
 
-// addding 1 byte to an object at the size limit should fail
+// adding 1 byte to an object at the size limit should fail
 //# run Test::M1::add_byte --args object(108)
 
 // create at size limit, wrap, increase to over size limit while wrapped, then unwrap. should fail

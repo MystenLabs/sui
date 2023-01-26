@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 thiserror = "1.0.34"
+futures = "0.3.25"
 
 sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../../crates/sui-sdk" }

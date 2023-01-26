@@ -11,13 +11,13 @@ use sui_core::{
     quorum_driver::{reconfig_observer::ReconfigObserver, QuorumDriver},
     safe_client::SafeClientMetricsBase,
 };
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::committee::Committee;
 use tracing::{debug, error, trace};
 
 /// A ReconfigObserver that polls FullNode periodically
 /// to get new epoch information.
-/// Caveat: it does not guarantee to insert every commitee
+/// Caveat: it does not guarantee to insert every committee
 /// into committee store. This is fine in scenarios such
 /// as stress, but may not be suitable in some other cases.
 #[derive(Clone)]
@@ -36,7 +36,8 @@ impl FullNodeReconfigObserver {
         auth_agg_metrics: AuthAggMetrics,
     ) -> Self {
         Self {
-            fullnode_client: SuiClient::new(fullnode_rpc_url, None, None)
+            fullnode_client: SuiClientBuilder::default()
+                .build(fullnode_rpc_url)
                 .await
                 .unwrap_or_else(|e| {
                     panic!(
@@ -64,11 +65,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                 Ok(sui_system_state) => {
                     let epoch_id = sui_system_state.epoch;
                     if epoch_id > quorum_driver.current_epoch() {
-                        debug!(
-                            chain_id=?sui_system_state.chain_id,
-                            epoch_id,
-                            "Got SuiSystemState in newer epoch"
-                        );
+                        debug!(epoch_id, "Got SuiSystemState in newer epoch");
                         let new_committee = match self
                             .fullnode_client
                             .read_api()
@@ -106,7 +103,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                         }
                     } else {
                         trace!(
-                            chain_id=?sui_system_state.chain_id,
                             epoch_id,
                             "Ignored SystemState from a previous or current epoch",
                         );

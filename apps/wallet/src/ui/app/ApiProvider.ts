@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    RawSigner,
-    JsonRpcProvider,
-    LocalTxnDataSerializer,
-} from '@mysten/sui.js';
+import { JsonRpcProvider, LocalTxnDataSerializer } from '@mysten/sui.js';
 
-import { growthbook } from './experimentation/feature-gating';
-import { FEATURES } from './experimentation/features';
+import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
+import { growthbook } from '_app/experimentation/feature-gating';
+import { FEATURES } from '_src/shared/experimentation/features';
 
-import type { Keypair } from '@mysten/sui.js';
+import type { BackgroundClient } from './background-client';
+import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
 
 export enum API_ENV {
     local = 'local',
@@ -26,7 +24,7 @@ type EnvInfo = {
 
 type ApiEndpoints = {
     fullNode: string;
-    faucet: string;
+    faucet?: string;
 } | null;
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local' },
@@ -47,7 +45,8 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.customRPC]: null,
     [API_ENV.testNet]: {
         fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-        faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
+        // NOTE: Faucet is currently disabled for testnet:
+        // faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
     },
 };
 
@@ -82,10 +81,6 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
         excludedNetworks.push(API_ENV.testNet);
     }
 
-    if (!growthbook.isOn(FEATURES.USE_CUSTOM_RPC_URL)) {
-        excludedNetworks.push(API_ENV.customRPC);
-    }
-
     return Object.values(API_ENV).filter(
         (env) => !excludedNetworks.includes(env as keyof typeof API_ENV)
     );
@@ -93,7 +88,7 @@ export const generateActiveNetworkList = (): NetworkTypes[] => {
 
 export default class ApiProvider {
     private _apiFullNodeProvider?: JsonRpcProvider;
-    private _signer: RawSigner | null = null;
+    private _signerByAddress: Map<SuiAddress, SignerWithProvider> = new Map();
 
     public setNewJsonRpcProvider(
         apiEnv: API_ENV = DEFAULT_API_ENV,
@@ -102,9 +97,10 @@ export default class ApiProvider {
         // We also clear the query client whenever set set a new API provider:
         queryClient.clear();
         this._apiFullNodeProvider = new JsonRpcProvider(
-            customRPC ?? getDefaultAPI(apiEnv).fullNode
+            customRPC ?? getDefaultAPI(apiEnv).fullNode,
+            { faucetURL: customRPC ? '' : getDefaultAPI(apiEnv).faucet }
         );
-        this._signer = null;
+        this._signerByAddress.clear();
     }
 
     public get instance() {
@@ -117,21 +113,28 @@ export default class ApiProvider {
         };
     }
 
-    public getSignerInstance(keypair: Keypair): RawSigner {
+    public getSignerInstance(
+        address: SuiAddress,
+        backgroundClient: BackgroundClient
+    ): SignerWithProvider {
         if (!this._apiFullNodeProvider) {
             this.setNewJsonRpcProvider();
         }
-        if (!this._signer) {
-            this._signer = new RawSigner(
-                keypair,
-                this._apiFullNodeProvider,
-
-                growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
-                    ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                      new LocalTxnDataSerializer(this._apiFullNodeProvider!)
-                    : undefined
+        if (!this._signerByAddress.has(address)) {
+            this._signerByAddress.set(
+                address,
+                new BackgroundServiceSigner(
+                    address,
+                    backgroundClient,
+                    this._apiFullNodeProvider,
+                    growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
+                        ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                          new LocalTxnDataSerializer(this._apiFullNodeProvider!)
+                        : undefined
+                )
             );
         }
-        return this._signer;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return this._signerByAddress.get(address)!;
     }
 }

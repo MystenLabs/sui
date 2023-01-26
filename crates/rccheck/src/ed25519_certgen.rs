@@ -133,7 +133,7 @@ impl Certifiable for Ed25519 {
                 // ed25519 OID
                 oid: ed25519::pkcs8::ALGORITHM_OID,
                 // some environments require a type ASN.1 NULL, use the commented alternative if so
-                // this instead matches our rcgen-produced certificates for compatibiltiy
+                // this instead matches our rcgen-produced certificates for compatibility
                 // use pkcs8::spki::der::asn1;
                 parameters: None, // Some(asn1::Any::from(asn1::Null)),
             },

@@ -60,7 +60,7 @@ module sui::publisher {
         (type_name::get_address(&type) == self.package)
     }
 
-    /// Check whether a type belogs to the same module as the publisher object.
+    /// Check whether a type belongs to the same module as the publisher object.
     public fun is_module<T>(self: &Publisher): bool {
         let type = type_name::get<T>();
 

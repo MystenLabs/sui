@@ -14,30 +14,31 @@ The Sui Client CLI supports the following commands:
 
 | Command | Description |
 | --- | --- |
-| `active-address` | Default address used for commands when none specified |
-| `active-env` | Default environment used for commands when none specified |
-| `addresses` | Obtain the Addresses managed by the client |
-| `call` | Call Move function |
-| `create-example-nft` | Create an example NFT |
-| `envs` | List all Sui environments |
-| `execute-signed-tx` | Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute
-| `gas` | Obtain all gas objects owned by the address |
-| `help` | Print this message or the help of the given subcommand(s) |
-| `merge-coin` | Merge two coin objects into one coin |
-| `new-address` | Generate new address and keypair with keypair scheme flag {ed25519 or secp256k1} with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 |
-| `new-env` | Add new Sui environment |
-| `object` | Get object info |
-| `objects` | Obtain all objects owned by the address |
-| `pay` | Pay SUI to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts |
-| `pay_all_sui` | Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required |
-| `pay_sui` | Pay SUI coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required |
-| `publish` | Publish Move modules|
-| `serialize-transfer-sui` | Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere
-| `split-coin` | Split a coin object into multiple coins |
-| `switch` | Switch active address and network(e.g., devnet, local rpc server) |
-| `sync` | Synchronize client state with authorities |
-| `transfer` | Transfer object |
+| `active-address` | Default address used for commands when none specified. |
+| `active-env` | Default environment used for commands when none specified. |
+| `addresses` | Obtain the Addresses managed by the client. |
+| `call` | Call Move function. |
+| `create-example-nft` | Create an example NFT. |
+| `envs` | List all Sui environments. |
+| `execute-signed-tx` | Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute. |
+| `gas` | Obtain all gas objects owned by the address. |
+| `help` | Print this message or the help of the given subcommand(s). |
+| `merge-coin` | Merge two coin objects into one coin. |
+| `new-address` | Generate new address and keypair with keypair scheme flag {ed25519 or secp256k1} with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1. |
+| `new-env` | Add new Sui environment. |
+| `object` | Get object information. |
+| `objects` | Obtain all objects owned by the address. |
+| `pay` | Pay SUI to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts. |
+| `pay_all_sui` | Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas coin is required. |
+| `pay_sui` | Pay SUI coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also include the coin for gas payment, so no extra gas coin is required. |
+| `publish` | Publish Move modules. |
+| `serialize-transfer-sui` | Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere. |
+| `split-coin` | Split a coin object into multiple coins. |
+| `switch` | Switch active address and network (e.g., devnet, local rpc server). |
+| `sync` | Synchronize client state with authorities. |
+| `transfer` | Transfer object. |
 | `transfer-sui` | Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object. |
+| `verify-source` | Verify local Move packages against on-chain packages, and optionally their dependencies. |
 
 **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
@@ -581,6 +582,8 @@ The `--verify-dependencies` flag can fail the publish for other reasons, as well
 * The address supplied for the dependency points to an object instead of a package.
 * The CLI fails to connect to the node to fetch the package.
 
+**Note:** If your package includes unpublished depenedencies, you can add the `--with-unpublished-dependencies` flag to the `sui client publish` command to include modules from those packages in the published build.
+
 If successful, your response resembles the following:
 
 ```shell
@@ -622,10 +625,24 @@ publishing was updated as well.
 
 **Important:** If the publishing attempt results in an error regarding verification failure, [build your package locally](../build/move/build-test.md#building-a-package) (using the `sui move build` command) to get a more verbose error message.
 
+## Verify source
+
+Supply a package path to `verify-source` (or run from package root) to have the CLI compile the package and check that all its modules match their on-chain counterparts. 
+
+`sui client verify-source ./code/MyPackage`
+
+The default behavior is for the command to verify only the direct source of the package, but you can supply the `--verify-deps` flag to have the command verify dependencies, as well. If you just want to verify dependencies, you can also add the `--skip-source` flag. Attempting to use the `--skip-source` flag without including the `--verify-deps` flag results in an error because there is essentially nothing to verify.  
+
+Running `sui client verify-source --skip-source --verify-deps` does not publish the package, but is otherwise the same as `sui client publish --verify-dependencies`, as described in the [previous section](#publish-packages). 
+
+The `sui client verify-source` command expects package on-chain addresses to be set in the package manifest. There should not be any unspecified or `0x0` addresses in the package. If you want to verify a seemingly unpublished package against an on-chain address, use the `--address-override` flag to supply the on-chain address to verify against. This flag only supports packages that are truly unpublished, with all modules at address `0x0`. You receive an error if you attempt to use this flag on a published (or somehow partially published) package. 
+
+If successful, the command returns a `0` exit code and prints `Source verification succeeded!` to the console. If it fails, it returns a non-zero exit code and prints an error message to the console.
+
+
 ## Customize genesis
 
-The genesis process can be customized by providing a genesis configuration
-file using the `--config` flag.
+You can provide a genesis configuration file using the `--config` flag to customize the genesis process.
 
 ```shell
 sui genesis --config <Path to genesis config file>

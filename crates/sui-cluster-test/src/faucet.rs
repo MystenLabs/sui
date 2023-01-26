@@ -31,9 +31,14 @@ impl FaucetClientFactory {
                     .await;
 
                 let prom_registry = prometheus::Registry::new();
-                let simple_faucet = SimpleFaucet::new(wallet_context, &prom_registry)
-                    .await
-                    .unwrap();
+                let simple_faucet = SimpleFaucet::new(
+                    wallet_context,
+                    &prom_registry,
+                    &cluster.config_directory().join("faucet.wal"),
+                )
+                .await
+                .unwrap();
+
                 Arc::new(LocalFaucetClient::new(simple_faucet))
             }
         }

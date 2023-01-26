@@ -5,13 +5,16 @@ import { useMemo } from 'react';
 
 import type { SuiData } from '@mysten/sui.js';
 
+export const parseIpfsUrl = (ipfsUrl: string) =>
+    ipfsUrl.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
+
 export default function useMediaUrl(objData: SuiData | null) {
     const { fields } = (objData?.dataType === 'moveObject' && objData) || {};
     return useMemo(() => {
         if (fields) {
             const mediaUrl = fields.url || fields.metadata?.fields.url;
             if (typeof mediaUrl === 'string') {
-                return mediaUrl.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
+                return parseIpfsUrl(mediaUrl);
             }
         }
         return null;

@@ -3,10 +3,10 @@
 
 //! Allow us to deserialize Duration values in a more human friendly format
 //! (e.x in json files). The deserialization supports to time units:
-//! * miliseconds
+//! * milliseconds
 //! * seconds
 //!
-//! To identify miliseconds then a string of the following format should be
+//! To identify milliseconds then a string of the following format should be
 //! provided: <number>ms , for example "20ms", or "2_000ms".
 //!
 //! To identify seconds, then the following format should be used:
@@ -35,7 +35,7 @@ where
     }
 
     Err(serde::de::Error::custom(format!(
-        "Wrong format detected: {s}. It should be number in miliseconds, e.x 10ms"
+        "Wrong format detected: {s}. It should be number in milliseconds, e.x 10ms"
     )))
 }
 
@@ -65,7 +65,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_miliseconds_and_seconds() {
+    fn parse_milliseconds_and_seconds() {
         // GIVEN
         let input = r#"{
              "property_1": "1_000ms",

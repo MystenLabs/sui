@@ -98,3 +98,9 @@ pub mod configs {
         }
     }
 }
+
+#[cfg(not(msim))]
+#[macro_export]
+macro_rules! return_if_killed {
+    () => {};
+}

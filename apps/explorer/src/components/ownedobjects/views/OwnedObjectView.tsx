@@ -41,7 +41,7 @@ export default function OwnedObjectView({ results }: { results: DataType }) {
                 </div>
             )}
             {other_results.length > 0 && (
-                <div id="NFTSection">
+                <div data-testid="owned-nfts">
                     <div className={styles.ownedobjectheader}>
                         <h2>NFTs</h2>
                     </div>

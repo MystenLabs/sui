@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::node::AuthorityStorePruningConfig;
-use crate::node::{default_checkpoints_per_epoch, AuthorityKeyPairWithPath, KeyPairWithPath};
+use crate::node::{
+    default_checkpoints_per_epoch, default_end_of_epoch_broadcast_channel_capacity,
+    AuthorityKeyPairWithPath, KeyPairWithPath,
+};
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
 use fastcrypto::traits::KeyPair;
@@ -235,6 +238,8 @@ impl<'a> FullnodeConfigBuilder<'a> {
             grpc_concurrency_limit: None,
             p2p_config,
             authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            end_of_epoch_broadcast_channel_capacity:
+                default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),
         })
     }

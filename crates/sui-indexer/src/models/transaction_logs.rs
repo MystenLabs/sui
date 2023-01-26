@@ -33,7 +33,7 @@ pub fn read_transaction_log(
     })
 }
 
-pub fn commit_transction_log(
+pub fn commit_transaction_log(
     pg_pool_conn: &mut PgPoolConnection,
     txn_digest: Option<String>,
 ) -> Result<usize, IndexerError> {

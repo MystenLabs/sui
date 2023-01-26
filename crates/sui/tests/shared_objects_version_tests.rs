@@ -120,7 +120,7 @@ struct TestEnvironment {
     configs: NetworkConfig,
     #[allow(dead_code)]
     node_handles: Vec<SuiNodeHandle>,
-    move_package: ObjectRef,
+    move_package: ObjectID,
 }
 
 impl TestEnvironment {
@@ -130,7 +130,9 @@ impl TestEnvironment {
         let node_handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
         let move_package =
-            publish_move_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
+            publish_move_package(gas_objects.pop().unwrap(), configs.validator_set())
+                .await
+                .0;
 
         Self {
             gas_objects,

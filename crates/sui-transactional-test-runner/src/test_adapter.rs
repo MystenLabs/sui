@@ -39,12 +39,11 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode, genesis};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH,
-    },
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     gas,
@@ -54,7 +53,6 @@ use sui_types::{
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{in_memory_storage::InMemoryStorage, object::PACKAGE_VERSION};
 pub(crate) type FakeID = u64;
 
 // initial value for fake object ID mapping
@@ -212,7 +210,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas_payment| {
-            TransactionData::new_module(sender, gas_payment, vec![module_bytes], gas_budget)
+            TransactionData::new_module_with_dummy_gas_price(
+                sender,
+                gas_payment,
+                vec![module_bytes],
+                gas_budget,
+            )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
@@ -280,17 +283,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .map(|arg| arg.into_call_args(self))
             .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
-        let package_ref = match self.storage.get_object(&package_id) {
-            Some(obj) => obj.compute_object_reference(),
-            // object not found
-            None => (package_id, PACKAGE_VERSION, ObjectDigest::new([0; 32])),
-        };
 
         let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
         let data = |sender, gas_payment| {
-            TransactionData::new_move_call(
+            TransactionData::new_move_call_with_dummy_gas_price(
                 sender,
-                package_ref,
+                package_id,
                 module_id.name().to_owned(),
                 function.to_owned(),
                 type_args,
@@ -410,7 +408,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 };
                 let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
                 let transaction = self.sign_txn(sender, |sender, gas| {
-                    TransactionData::new_transfer(recipient, obj_ref, sender, gas, gas_budget)
+                    TransactionData::new_transfer_with_dummy_gas_price(
+                        recipient, obj_ref, sender, gas, gas_budget,
+                    )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
                 let output = self.object_summary_output(&summary, false);
@@ -474,6 +474,9 @@ impl<'a> SuiTestAdapter<'a> {
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let temporary_store =
             TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+        let transaction_data = transaction.into_inner().into_data().intent_message.value;
+        let signer = transaction_data.signer();
+        let gas = transaction_data.gas();
         let (
             inner,
             TransactionEffects {
@@ -493,7 +496,9 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
-            transaction.into_inner().into_data().intent_message.value,
+            transaction_data.kind,
+            signer,
+            gas,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

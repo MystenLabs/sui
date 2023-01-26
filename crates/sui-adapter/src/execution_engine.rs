@@ -6,12 +6,13 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::execution_mode::{self, ExecutionMode};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use sui_types::base_types::{ObjectDigest, SequenceNumber};
-use sui_types::crypto::sha3_hash;
+use sui_types::base_types::SequenceNumber;
 use tracing::{debug, instrument};
 
 use crate::adapter;
-use sui_protocol_constants::{MAX_TX_GAS, STORAGE_FUND_REINVEST_RATE};
+use sui_protocol_constants::{
+    REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
+};
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
 use sui_types::committee::EpochId;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
@@ -26,6 +27,7 @@ use sui_types::messages::{GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui,
 use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
+use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -34,7 +36,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionData, TransactionEffects, TransferObject, TransferSui,
+        TransactionEffects, TransferObject, TransferSui,
     },
     object::Object,
     storage::BackingPackageStore,
@@ -54,7 +56,9 @@ pub fn execute_transaction_to_effects<
 >(
     shared_object_refs: Vec<ObjectRef>,
     mut temporary_store: TemporaryStore<S>,
-    transaction_data: TransactionData,
+    transaction_kind: TransactionKind,
+    transaction_signer: SuiAddress,
+    gas_object_ref: ObjectRef,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
     move_vm: &Arc<MoveVM>,
@@ -66,12 +70,11 @@ pub fn execute_transaction_to_effects<
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
+    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch);
 
-    let gas_object_ref = *transaction_data.gas_payment_object_ref();
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
-        transaction_data,
+        transaction_kind,
         gas_object_ref.0,
         &mut tx_ctx,
         move_vm,
@@ -131,7 +134,7 @@ fn execute_transaction<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_data: TransactionData,
+    transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -147,7 +150,7 @@ fn execute_transaction<
     let mut result = result.and_then(|()| {
         let execution_result = execution_loop::<Mode, _>(
             temporary_store,
-            transaction_data,
+            transaction_kind,
             gas_object_id,
             tx_ctx,
             move_vm,
@@ -179,7 +182,7 @@ fn execution_loop<
     S: BackingPackageStore + ParentSync + ChildObjectResolver,
 >(
     temporary_store: &mut TemporaryStore<S>,
-    transaction_data: TransactionData,
+    transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
@@ -189,7 +192,7 @@ fn execution_loop<
     let mut results = Mode::empty_results();
     // TODO: Since we require all mutable objects to not show up more than
     // once across single tx, we should be able to run them in parallel.
-    for (idx, single_tx) in transaction_data.kind.into_single_transactions().enumerate() {
+    for (idx, single_tx) in transaction_kind.into_single_transactions().enumerate() {
         match single_tx {
             SingleTransactionKind::TransferObject(TransferObject {
                 recipient,
@@ -257,7 +260,7 @@ fn execution_loop<
                 // Charge gas for this VM execution
                 gas_status.charge_vm_gas()?;
 
-                let module_id = ModuleId::new(package.0.into(), module);
+                let module_id = ModuleId::new(package.into(), module);
                 let result = adapter::execute::<Mode, _, _>(
                     move_vm,
                     temporary_store,
@@ -295,35 +298,8 @@ fn execution_loop<
                     .collect();
                 pay(temporary_store, coin_objects, recipients, amounts, tx_ctx)?;
             }
-            SingleTransactionKind::ChangeEpoch(ChangeEpoch {
-                epoch,
-                storage_charge,
-                computation_charge,
-                storage_rebate,
-            }) => {
-                let module_id =
-                    ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
-                let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
-                adapter::execute::<execution_mode::Normal, _, _>(
-                    move_vm,
-                    temporary_store,
-                    module_id,
-                    &function,
-                    vec![],
-                    vec![
-                        CallArg::Object(ObjectArg::SharedObject {
-                            id: SUI_SYSTEM_STATE_OBJECT_ID,
-                            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-                        }),
-                        CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&storage_rebate).unwrap()),
-                        CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
-                    ],
-                    gas_status.create_move_gas_status(),
-                    tx_ctx,
-                )?;
+            SingleTransactionKind::ChangeEpoch(change_epoch) => {
+                advance_epoch(change_epoch, temporary_store, tx_ctx, move_vm, gas_status)?;
             }
             SingleTransactionKind::Genesis(GenesisTransaction { objects }) => {
                 if tx_ctx.epoch() != 0 {
@@ -351,6 +327,65 @@ fn execution_loop<
         };
     }
     Ok(results)
+}
+
+fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+    change_epoch: ChangeEpoch,
+    temporary_store: &mut TemporaryStore<S>,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    gas_status: &mut SuiGasStatus,
+) -> Result<(), ExecutionError> {
+    let module_id = ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
+    let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
+    let system_object_arg = CallArg::Object(ObjectArg::SharedObject {
+        id: SUI_SYSTEM_STATE_OBJECT_ID,
+        initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    });
+    let result = adapter::execute::<execution_mode::Normal, _, _>(
+        move_vm,
+        temporary_store,
+        module_id.clone(),
+        &function,
+        vec![],
+        vec![
+            system_object_arg.clone(),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&STORAGE_FUND_REINVEST_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&REWARD_SLASHING_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&STAKE_SUBSIDY_RATE).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.epoch_start_timestamp_ms).unwrap()),
+        ],
+        gas_status.create_move_gas_status(),
+        tx_ctx,
+    );
+    if result.is_err() {
+        tracing::error!(
+            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. System state object: {:?}. Tx data: {:?}",
+            result.as_ref().err(),
+            temporary_store.read_object(&SUI_SYSTEM_STATE_OBJECT_ID),
+            change_epoch,
+        );
+        temporary_store.reset();
+        let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
+        adapter::execute::<execution_mode::Normal, _, _>(
+            move_vm,
+            temporary_store,
+            module_id,
+            &function,
+            vec![],
+            vec![
+                system_object_arg,
+                CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            ],
+            gas_status.create_move_gas_status(),
+            tx_ctx,
+        )?;
+    }
+    Ok(())
 }
 
 fn transfer_object<S>(
@@ -459,6 +494,9 @@ fn debit_coins_and_transfer<S>(
     for (recipient, amount) in recipients.iter().zip(amounts) {
         let mut remaining_amount = *amount;
         loop {
+            if remaining_amount == 0 {
+                break; // nothing to pay
+            }
             // while remaining_amount != 0
             // guaranteed to be in-bounds because of the total > total_coins check above
             let coin = &mut coins[cur_coin_idx];
@@ -658,84 +696,6 @@ fn transfer_sui<S>(
     temporary_store.write_object(&ctx, object, WriteKind::Mutate);
 
     Ok(())
-}
-
-const FAKE_GAS_OBJECT: ObjectRef = (
-    ObjectID::ZERO,
-    SequenceNumber::from_u64(0),
-    ObjectDigest::MIN,
-);
-
-pub fn manual_execute_move_call_fake_txn_digest(
-    sender: SuiAddress,
-    move_call: MoveCall,
-) -> TransactionDigest {
-    let txn_data = TransactionData::new(
-        TransactionKind::Single(SingleTransactionKind::Call(move_call)),
-        sender,
-        FAKE_GAS_OBJECT,
-        MAX_TX_GAS,
-    );
-    TransactionDigest::new(sha3_hash(&txn_data))
-}
-
-pub fn manual_execute_move_call<
-    Mode: ExecutionMode,
-    S: BackingPackageStore + ParentSync + ChildObjectResolver,
->(
-    shared_object_refs: Vec<ObjectRef>,
-    mut temporary_store: TemporaryStore<S>,
-    sender: SuiAddress,
-    move_call: MoveCall,
-    transaction_digest: TransactionDigest,
-    mut transaction_dependencies: BTreeSet<TransactionDigest>,
-    move_vm: &Arc<MoveVM>,
-    mut gas_status: SuiGasStatus,
-    epoch: EpochId,
-) -> (
-    TransactionEffects,
-    Result<Mode::ExecutionResults, ExecutionError>,
-) {
-    let mut tx_ctx = TxContext::new(&sender, &transaction_digest, epoch);
-
-    let MoveCall {
-        package,
-        module,
-        function,
-        type_arguments,
-        arguments,
-    } = move_call;
-    let module_id = ModuleId::new(package.0.into(), module);
-    let execution_result = adapter::execute::<Mode, _, _>(
-        move_vm,
-        &mut temporary_store,
-        module_id,
-        &function,
-        type_arguments,
-        arguments,
-        gas_status.create_move_gas_status(),
-        &mut tx_ctx,
-    )
-    .map(|result| {
-        let mut results = Mode::empty_results();
-        Mode::add_result(&mut results, 0, result);
-        results
-    });
-    let gas_cost_summary = gas_status.summary(execution_result.is_ok());
-    let status = match &execution_result {
-        Ok(_) => ExecutionStatus::Success,
-        Err(error) => ExecutionStatus::new_failure(error.to_execution_status()),
-    };
-    transaction_dependencies.remove(&TransactionDigest::genesis());
-    let (_inner, effects) = temporary_store.to_effects(
-        shared_object_refs,
-        &transaction_digest,
-        transaction_dependencies.into_iter().collect(),
-        gas_cost_summary,
-        status,
-        FAKE_GAS_OBJECT,
-    );
-    (effects, execution_result)
 }
 
 #[test]

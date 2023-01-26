@@ -53,7 +53,7 @@ Install the prerequisites and tools you need to work with Sui. Click a marker in
 
 ### Rust and Cargo
 
-Sui requires Rust and Cargo on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
+Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. Some operating systems require cURL to download Rust and Cargo, so check the relevant prerequisite section to install cURL first, if necessary.
 
 Use the following command to install Rust and Cargo on macOS or Linux:
 ```shell
@@ -113,6 +113,20 @@ For more information, see [Install Git on Linux](https://github.com/git-guides/i
 
 Install CMake using the instructions at [Installing CMake](https://cmake.org/install/) on the CMake website.
 
+Or you can use the following command
+
+```shell
+sudo apt-get install cmake
+```
+
+### GCC
+
+Use the following command to install `gcc`:
+
+```shell
+sudo apt-get install gcc
+```
+
 ### libssl-dev
 
 Use the following command to install `libssl-dev`:
@@ -129,7 +143,7 @@ Use the following command to install `libclang-dev`:
 sudo apt-get install libclang-dev
 ```
 
-Proceed to [Install Sui binaries](#binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 
 ## macOS prerequisites
@@ -200,9 +214,9 @@ If the progress appears to freeze, press **Enter** in the command prompt to fix 
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
-## Install Sui binaries
+## Install (or update) Sui binaries
 
-With Cargo installed, use the following command to install Sui binaries:
+With Cargo installed, use the following command to install or update the sui executable:
 
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
@@ -211,12 +225,19 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devn
 The command installs the following Sui components in `~/.cargo/bin`:
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 
-If the previous command fails, make sure you have the latest version of Rust installed:
+Install procedure to expect: (40min (depends on the RAM you have available for the build process))
+- update git repository
+- update crates.io index
+- compile (~1850) dependencies
+- (replace the previous version of the 'sui' package with the new one)
 
+Throubleshooting:
+* make sure you have the latest version of Rust installed:
 ```
 rustup update stable
 source "$HOME/.cargo/env"
 ```
+* reach out on [Discord](https://discord.com/invite/sui)
 
 ### macOS and Linux
 
@@ -278,11 +299,12 @@ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 The following primary directories offer a good starting point for exploring Sui's source code:
-* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui CLI binary
-* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
+* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui CLI binary
+* [sui_framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources) - Sui Move core smart contracts (e.g., coin.move, object.move, test_scenario.move, ...)
+* [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
 * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
-* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - object explorer for the Sui network
+* [explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer) - browser-based object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
 ## Rustdoc
