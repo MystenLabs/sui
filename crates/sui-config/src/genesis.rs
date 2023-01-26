@@ -471,12 +471,6 @@ impl Builder {
             }
         };
 
-        let validators = self
-            .validators
-            .into_iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>();
-
         // Ensure we have signatures from all validators
         // assert_eq!(checkpoint.auth_signature.len(), validators.len() as u64);
 
@@ -486,9 +480,10 @@ impl Builder {
             transaction,
             effects,
             objects,
-            validator_set: validators
+            validator_set: self
+                .validators
                 .into_iter()
-                .map(|genesis_info| genesis_info.info)
+                .map(|(_, genesis_info)| genesis_info.info)
                 .collect::<Vec<_>>(),
         };
 
