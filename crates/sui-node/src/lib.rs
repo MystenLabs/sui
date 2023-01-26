@@ -397,13 +397,9 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            if anemo_config.max_frame_size.is_none() {
-                // Temporarily set a default size limit of 8 MiB for all RPCs. This helps us
-                // catch bugs where size limits are missing from other parts of our code.
-                // TODO: remove this and revert to default anemo max_frame_size once size
-                // limits are fully implemented on sui data structures.
-                anemo_config.max_frame_size = Some(8 << 20);
-            }
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            anemo_config.max_frame_size = Some(2 << 30);
 
             let network = Network::bind(config.p2p_config.listen_address)
                 .server_name("sui")
