@@ -326,7 +326,6 @@ impl Core {
         header_store
             .async_write(header.digest(), header.clone())
             .await;
-        metrics.headers_proposed.inc();
         metrics.proposed_header_round.set(header.round as i64);
 
         // Reset the votes aggregator and sign our own header.
