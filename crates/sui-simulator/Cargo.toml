@@ -9,7 +9,9 @@ edition = "2021"
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-framework = { path = "../sui-framework" }
+sui-framework-build = { path = "../sui-framework-build" }
 sui-types = { path = "../sui-types" }
+tempfile = "3.3.0"
 tracing = "0.1"
 anemo.workspace = true
 anemo-tower.workspace = true
