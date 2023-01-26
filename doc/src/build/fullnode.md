@@ -44,7 +44,7 @@ Follow the instructions here to run your own Sui Full node.
 
 ### Hardware requirements
 
-Suggested hardware requirements for running a Sui Full node:
+Suggested minimum hardware to run a Sui Full node:
 
 * CPUs: 10 core
 * RAM: 32 GB
@@ -108,10 +108,16 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
    ```shell
    cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
-1. Download the [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet:
+1. Download the genesis blob for the network to use:
+   * [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
     ```shell
     curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
+   * [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob)
+    ```shell
+    curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+
+
 1. Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
    * Update the `db-path` field with the path to the Full node database.
        ```yaml
@@ -128,7 +134,7 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
     ```
 1. Optional: [Publish / subscribe](event_api.md#subscribe-to-sui-events) to notifications using JSON-RPC via websocket.
 
-Your Full node will now be serving the read endpoints of the [Sui JSON-RPC
+Your Full node serves the read endpoints of the [Sui JSON-RPC
 API](../build/json-rpc.md#sui-json-rpc-api) at:
 `http://127.0.0.1:9000`
 
@@ -139,7 +145,7 @@ transactions it syncs from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.sui.io/
 1. Click the **Devnet** button in the top right-hand corner of Sui Explorer and select
-   **Local** from the drop-down menu.
+   **Local** or **Testnet** from the drop-down menu.
 1. Close the **Choose a Network** menu to see the latest transactions.
 
 Sui Explorer now uses your local Full node to explore the state of the chain.
@@ -153,7 +159,7 @@ Note the default metrics port is 9184. To change the port, edit your `fullnode.y
 
 ## Update your Full node
 
-Whenever Sui releases a new version, Devnet restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
+Whenever Sui releases a new version, the network resets and restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
 
 ### Update with Docker Compose
 
@@ -185,7 +191,14 @@ Source](#building-from-source), update your Full node as follows:
     ```shell
     git checkout -B devnet --track upstream/devnet
     ```
-1. Download the latest [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) state for Devnet as described above.
+1. Download the latest Genesis blob:
+   * [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
+    ```shell
+    curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+    ```
+   * [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob)
+    ```shell
+    curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui Full node:
     ```shell
