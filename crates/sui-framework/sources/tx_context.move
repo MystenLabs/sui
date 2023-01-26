@@ -84,16 +84,11 @@ module sui::tx_context {
     }
 
     #[test_only]
-    /// Utility for creating 256 unique input hashes
+    /// Utility for creating 256 unique input hashes.
+    /// These hashes are guaranteed to be unique given a unique `hint: u64`
     fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
-        let tx_hash = vector[];
-        let i = 1;
-        let hash_length = TX_HASH_LENGTH;
-        while (i <= hash_length) {
-            let value = i ^ hint % 256;
-            vector::push_back(&mut tx_hash, (value as u8));
-            i = i + 1;
-        };
+        let tx_hash = std::bcs::to_bytes(&hint);
+        while (vector::length(&tx_hash) < TX_HASH_LENGTH) vector::push_back(&mut tx_hash, 0);
         tx_hash
     }
 
