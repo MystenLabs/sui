@@ -10,7 +10,10 @@ import { HashRouter } from 'react-router-dom';
 
 import App from './app';
 import { API_ENV } from './app/ApiProvider';
-import { growthbook } from './app/experimentation/feature-gating';
+import {
+    growthbook,
+    setAttributes,
+} from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType, initNetworkFromStorage } from '_redux/slices/app';
@@ -34,10 +37,9 @@ async function init() {
     await store.dispatch(initNetworkFromStorage()).unwrap();
     const { apiEnv, customRPC } = store.getState().app;
 
-    // NOTE: This duplicates the attribute set in `usePageView`, but is done so that we can initially render based on the selected network correctly.
     const network =
         apiEnv === API_ENV.customRPC ? customRPC : apiEnv.toUpperCase();
-    growthbook.setAttributes({ network });
+    setAttributes(network);
 }
 
 function renderApp() {
