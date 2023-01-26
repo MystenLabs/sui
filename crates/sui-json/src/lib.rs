@@ -23,7 +23,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
-    RESOLVED_UTF8_STR,
+    RESOLVED_UTF8_STR, RESOLVED_SUI_UID,
 };
 
 const HEX_PREFIX: &str = "0x";
@@ -392,6 +392,9 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
             if resolved_struct == RESOLVED_SUI_ID {
                 return true;
             }
+            else if resolved_struct == RESOLVED_SUI_UID {
+                return true;
+            }
             // is option of a primitive
             resolved_struct == RESOLVED_STD_OPTION
                 && type_args.len() == 1
@@ -446,6 +449,13 @@ pub fn primitive_type(
                     Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
                         MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
                     ]))),
+                )
+            } else if resolved_struct == RESOLVED_SUI_UID {
+                (
+                    true,
+                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
+                    ])))
                 )
             } else {
                 (false, None)
