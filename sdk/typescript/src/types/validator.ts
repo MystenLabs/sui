@@ -185,7 +185,7 @@ export const ActiveValidatorFields = object({
   pending_stake: string(),
   pending_withdraw: string(),
   stake_amount: string(),
-  voting_power: string(),
+  voting_power: optional(string()),
 });
 
 export const ActiveValidator = object({
