@@ -72,8 +72,8 @@ module games::randomness_based_lottery_tests {
         randomness_based_lottery::determine_winner(&mut lottery, &mut r, sig);
         assert!(option::is_some(randomness::value(&r)), 0);
 
-        // User 4 is the winner
-        test_scenario::next_tx(scenario, user4);
+        // User 3 is the winner
+        test_scenario::next_tx(scenario, user3);
         let ticket = test_scenario::take_from_sender<Ticket>(scenario);
         randomness_based_lottery::claim_prize(&mut lottery, ticket, test_scenario::ctx(scenario));
 
