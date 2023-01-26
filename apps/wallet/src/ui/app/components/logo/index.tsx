@@ -16,7 +16,6 @@ const networkNames: Record<API_ENV, string> = {
 
 type LogoProps = {
     networkName?: API_ENV;
-    className?: string;
 };
 
 const Logo = ({ networkName }: LogoProps) => {
