@@ -9,7 +9,7 @@ import { Layout } from "../components/Layout";
 
 export function Root() {
   return (
-    <WalletKitProvider enableUnsafeBurner={import.meta.env.DEV}>
+    <WalletKitProvider>
       <Layout>
         <Outlet />
       </Layout>

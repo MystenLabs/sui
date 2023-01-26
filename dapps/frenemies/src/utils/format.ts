@@ -32,10 +32,15 @@ export function formatBalance(
 }
 
 /** Print time in the format `hh:mm:ss` */
-export function formatTime(timer: number): string {
-  return `${new Date(timer).getUTCHours().toString().padStart(2, '0')}:${
-    new Date(timer).getUTCMinutes().toString().padStart(2, '0')
-  }:${
-    new Date(timer).getUTCSeconds().toString().padStart(2, '0')
-  }`;
+export function formatTimeRemaining(timer: number): string {
+  return `${new Date(timer)
+    .getUTCHours()
+    .toString()
+    .padStart(2, "0")}:${new Date(timer)
+    .getUTCMinutes()
+    .toString()
+    .padStart(2, "0")}:${new Date(timer)
+    .getUTCSeconds()
+    .toString()
+    .padStart(2, "0")}`;
 }
