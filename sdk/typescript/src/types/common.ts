@@ -11,7 +11,7 @@ import {
   unknown,
 } from 'superstruct';
 import { Base58DataBuffer } from '../serialization/base58';
-import { bcs, TransactionData } from './sui-bcs';
+import { bcs, PureArg, TransactionData } from './sui-bcs';
 import {
   PublicKey,
   PublicKeyInitData,
@@ -53,7 +53,7 @@ export type ObjectOwner = Infer<typeof ObjectOwner>;
 
 // TODO: Figure out if we actually should have validaton on this:
 export const SuiJsonValue = unknown();
-export type SuiJsonValue = boolean | number | string | Array<SuiJsonValue>;
+export type SuiJsonValue = boolean | number | string | PureArg | Array<SuiJsonValue>;
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
