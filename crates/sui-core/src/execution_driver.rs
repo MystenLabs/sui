@@ -71,11 +71,6 @@ pub async fn execution_process(
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");
 
-        // Process any tx that failed to commit.
-        if let Err(err) = authority.process_tx_recovery_log(None, &epoch_store).await {
-            error!("Error processing tx recovery log: {:?}", err);
-        }
-
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
         // the semaphore in this context.
