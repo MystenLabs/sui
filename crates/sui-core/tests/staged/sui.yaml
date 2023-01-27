@@ -357,7 +357,6 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
-          - mutable: BOOL
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
