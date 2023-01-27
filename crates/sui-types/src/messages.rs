@@ -86,8 +86,14 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
+        // Temporary fix until SDK will be aware of mutable flag
+        #[serde(skip, default = "bool_true")]
         mutable: bool,
     },
+}
+
+fn bool_true() -> bool {
+    true
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
