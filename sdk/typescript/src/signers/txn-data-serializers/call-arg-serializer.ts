@@ -143,8 +143,9 @@ export class CallArgSerializer {
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
     const initialSharedVersion = getSharedObjectInitialVersion(object);
+    const mutable = true;
     if (initialSharedVersion) {
-      return { Shared: { objectId, initialSharedVersion } };
+      return { Shared: { objectId, initialSharedVersion, mutable } };
     }
 
     return { ImmOrOwned: getObjectReference(object)! };

@@ -132,6 +132,9 @@ export type SharedObjectRef = {
 
   /** The version the object was shared at */
   initialSharedVersion: number;
+
+  /** Whether reference is mutable */
+  mutable: boolean,
 };
 
 /**
@@ -320,6 +323,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       initialSharedVersion: 'u64',
+      mutable: 'bool',
     },
   },
 
