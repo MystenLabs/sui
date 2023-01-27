@@ -36,7 +36,7 @@ function AvailableBalance({
     const [formatted, symbol] = useFormatCoin(amount, coinType);
     return (
         <Text variant="bodySmall" color="steel" weight="medium">
-            Available - {+formatted > 0 ? formatted : 0} {symbol}
+            Available - {formatted} {symbol}
         </Text>
     );
 }
