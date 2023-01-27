@@ -21,7 +21,6 @@ const METRICS_ROUTE: &str = "/metrics";
 // A RegistryService is returned that can be used to get access in prometheus Registries.
 pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
     let registry = Registry::new();
-    registry.register(uptime_metric()).unwrap();
 
     let registry_service = RegistryService::new(registry);
 
@@ -105,34 +104,9 @@ impl MetricsCallbackProvider for GrpcMetrics {
     }
 }
 
-/// Create a metric that measures the uptime from when this metric was constructed.
-/// The metric is labeled with the node version: semver-gitrevision
-fn uptime_metric() -> Box<dyn prometheus::core::Collector> {
-    let version: &str = version();
-
-    let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
-        .variable_label("version");
-
-    let start_time = std::time::Instant::now();
-    let uptime = move || start_time.elapsed().as_secs();
-    let metric = prometheus_closure_metric::ClosureMetric::new(
-        opts,
-        prometheus_closure_metric::ValueType::Counter,
-        uptime,
-        &[version],
-    )
-    .unwrap();
-
-    Box::new(metric)
-}
-
-fn version() -> &'static str {
-    concat!(env!("CARGO_PKG_VERSION"), "-", env!("GIT_REVISION"))
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::metrics::{start_prometheus_server, version};
+    use crate::metrics::start_prometheus_server;
     use prometheus::{IntCounter, Registry};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -171,14 +145,6 @@ sui_counter_2 0"
 # TYPE narwhal_counter_1 counter
 narwhal_counter_1 0"
         ));
-
-        let exp = format!(
-            "# HELP uptime uptime of the node service in seconds
-# TYPE uptime counter
-uptime{{version=\"{}\"}} 0",
-            version()
-        );
-        assert!(result.contains(&exp));
 
         // Now remove registry 1
         assert!(registry_service.remove(registry_1_id));

@@ -33,7 +33,6 @@ mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-config = { path = "../../narwhal/config" }
-prometheus-closure-metric = { path = "../prometheus-closure-metric" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
