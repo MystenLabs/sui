@@ -11,7 +11,9 @@ use broadcast::{Receiver, Sender};
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::{sync::broadcast, time::timeout};
 
-use crate::{authority::AuthorityState, checkpoints::CheckpointStore};
+use crate::{
+    authority::AuthorityState, checkpoints::CheckpointStore, state_accumulator::StateAccumulator,
+};
 
 use sui_network::state_sync::test_utils::{empty_contents, CommitteeFixture};
 
@@ -23,9 +25,10 @@ pub async fn test_checkpoint_executor_crash_recovery() {
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    let (state, mut executor, checkpoint_sender, committee): (
+    let (state, mut executor, accumulator, checkpoint_sender, committee): (
         Arc<AuthorityState>,
         CheckpointExecutor,
+        Arc<StateAccumulatorService>,
         Sender<VerifiedCheckpoint>,
         CommitteeFixture,
     ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
@@ -75,6 +78,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
         checkpoint_store.clone(),
         state.database.clone(),
         state.transaction_manager().clone(),
+        accumulator.clone(),
     );
 
     let epoch_store = state.epoch_store().clone();
@@ -101,12 +105,16 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    let (authority_state, mut executor, checkpoint_sender, first_committee): (
+    let (authority_state, mut executor, accumulator, checkpoint_sender, first_committee): (
         Arc<AuthorityState>,
         CheckpointExecutor,
+        Arc<StateAccumulatorService>,
         Sender<VerifiedCheckpoint>,
         CommitteeFixture,
     ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
+
+    let epoch = authority_state.epoch();
+    assert_eq!(epoch, 0);
 
     assert!(matches!(
         checkpoint_store
@@ -151,6 +159,14 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         &second_committee,
     );
 
+    // Ensure root state hash for epoch does not exist before we close epoch
+    assert!(!accumulator
+        .store
+        .tables
+        .root_state_hash_by_epoch
+        .contains_key(&0)
+        .unwrap());
+
     // Ensure executor reaches end of epoch in a timely manner
     timeout(Duration::from_secs(5), async {
         executor
@@ -167,6 +183,26 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             .unwrap()
             .unwrap(),
         num_to_sync_per_epoch as u64,
+    );
+
+    // Ensure root state hash for epoch exists at end of epoch
+    assert!(accumulator
+        .store
+        .tables
+        .root_state_hash_by_epoch
+        .contains_key(&epoch)
+        .unwrap());
+
+    // TODO(william)
+    println!(
+        "TESTING -- root state hash: {:?}",
+        accumulator
+            .store
+            .tables
+            .root_state_hash_by_epoch
+            .get(&epoch)
+            .unwrap()
+            .unwrap()
     );
 
     authority_state
@@ -201,9 +237,10 @@ pub async fn test_reconfig_crash_recovery() {
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
     // new Node (syncing from checkpoint 0)
-    let (authority_state, mut executor, checkpoint_sender, first_committee): (
+    let (authority_state, mut executor, accumulator, checkpoint_sender, first_committee): (
         Arc<AuthorityState>,
         CheckpointExecutor,
+        Arc<StateAccumulatorService>,
         Sender<VerifiedCheckpoint>,
         CommitteeFixture,
     ) = init_executor_test(
@@ -273,6 +310,7 @@ pub async fn test_reconfig_crash_recovery() {
         checkpoint_store.clone(),
         authority_state.database.clone(),
         authority_state.transaction_manager().clone(),
+        accumulator.clone(),
     );
 
     timeout(Duration::from_millis(200), async {
@@ -299,6 +337,7 @@ async fn init_executor_test(
 ) -> (
     Arc<AuthorityState>,
     CheckpointExecutor,
+    Arc<StateAccumulatorService>,
     Sender<VerifiedCheckpoint>,
     CommitteeFixture,
 ) {
@@ -315,13 +354,18 @@ async fn init_executor_test(
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
+
+    let (accumulator, _handle) = StateAccumulator::new_for_tests(100).start().await;
+    let accumulator = Arc::new(accumulator);
+
     let executor = CheckpointExecutor::new_for_tests(
         checkpoint_sender.subscribe(),
         store.clone(),
         state.database.clone(),
         state.transaction_manager().clone(),
+        accumulator.clone(),
     );
-    (state, executor, checkpoint_sender, committee)
+    (state, executor, accumulator, checkpoint_sender, committee)
 }
 
 /// Creates and simulates syncing of a new checkpoint by StateSync, i.e. new

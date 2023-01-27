@@ -14,7 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
-use crate::state_accumulator::{State, StateAccumulator, StateAccumulatorService};
+use crate::state_accumulator::{State, StateAccumulatorService};
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::MultisetHash;
 use futures::future::{select, Either};
@@ -67,22 +67,6 @@ pub struct PendingCheckpointInfo {
 pub struct PendingCheckpoint {
     pub roots: Vec<TransactionDigest>,
     pub details: PendingCheckpointInfo,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointWatermark {
-    // highest checkpoint available in the network with
-    // a quorum of signatures
-    HighestVerified,
-
-    // highest checkpoint downloaded and persisted locally
-    HighestSynced,
-
-    // highest checkpoint executed
-    HighestExecuted,
-
-    // highest checkpoint with accumulated state
-    HighestAccumulated,
 }
 
 #[derive(DBMapUtils)]
@@ -354,6 +338,13 @@ impl CheckpointStore {
                 .computation_cost,
         })
     }
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointWatermark {
+    HighestVerified,
+    HighestSynced,
+    HighestExecuted,
 }
 
 pub struct CheckpointBuilder {
@@ -1206,6 +1197,7 @@ impl PendingCheckpoint {
 mod tests {
     use super::*;
     use crate::authority_aggregator::NetworkTransactionCertifier;
+    use crate::state_accumulator::StateAccumulator;
     use async_trait::async_trait;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
@@ -1276,8 +1268,7 @@ mod tests {
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-        let accumulator = StateAccumulator::new_for_tests(100);
-        let (accumulator, _handle) = accumulator.start();
+        let (accumulator, _handle) = StateAccumulator::new_for_tests(100).start().await;
 
         let epoch_store = state.epoch_store_for_testing();
         let (checkpoint_service, _exit) = CheckpointService::spawn(

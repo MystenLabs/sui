@@ -8,14 +8,15 @@ use either::Either;
 use futures::future::join_all;
 use futures::stream::FuturesOrdered;
 
-use sui_types::base_types::ObjectDigest;
+use sui_macros::nondeterministic;
+use sui_types::base_types::{ObjectDigest, ObjectID};
 use tracing::debug;
 use typed_store::Map;
 
 use std::path::Path;
 use std::sync::Arc;
 
-use fastcrypto::hash::{Digest, MultisetHash};
+use fastcrypto::hash::MultisetHash;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::accumulator::Accumulator;
 use sui_types::committee::EpochId;
@@ -32,9 +33,6 @@ use typed_store::traits::TypedStoreDebug;
 use typed_store_derive::DBMapUtils;
 
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::checkpoints::CheckpointWatermark;
-
-const ROOT_STATE_HASH_KEY: u64 = 0;
 
 type AccumulatorTaskBuffer = FuturesOrdered<JoinHandle<SuiResult<(Accumulator, State)>>>;
 type EndOfEpochFlag = bool;
@@ -51,22 +49,21 @@ pub struct State {
 pub struct StateAccumulatorTables {
     // TODO: implement pruning policy as most of these tables can
     // be cleaned up at end of epoch
-    watermarks: DBMap<CheckpointWatermark, CheckpointSequenceNumber>,
 
+    // Maps checkpoint sequence number to an accumulator with accumulated state
+    // only for the checkpoint that the key references. Append-only, i.e.,
+    // the accumulator is complete wrt the checkpoint
     pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
 
-    // A live / hot object representing the running root state hash, computed from
-    // the running accumulation of checkpoint state hashes. As such, should NEVER be
-    // relied upon for snapshot verification or consensus.
-    //
-    // TODO: MUST BE THREAD SAFE
-    pub(self) root_state_hash: DBMap<u64, Accumulator>,
+    // A live, append-only table representing the running root state hash, computed at
+    // arbitrary checkpoints. As such, should NEVER be relied upon for snapshot
+    // verification or consensus.For key with Checkpoint C, the value is the accumulation
+    // of all state from checkpoint 0..C
+    pub(self) root_state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
 
-    // Finalized root state digest for epoch, to be included in CheckpointSummary
+    // Finalized root state accumulator for epoch, to be included in CheckpointSummary
     // of last checkpoint of epoch. These values should only ever be written once
     // and never changed
-    // TODO(william) change value type to Accumulator. First may need to figure out
-    // some serializability issues with Accumulator.
     pub root_state_hash_by_epoch: DBMap<EpochId, Accumulator>,
 }
 
@@ -78,60 +75,6 @@ impl StateAccumulatorTables {
             None,
             None,
         ))
-    }
-
-    pub fn get_state_hash_for_checkpoint(
-        &self,
-        checkpoint: &CheckpointSequenceNumber,
-    ) -> Result<Option<Accumulator>, TypedStoreError> {
-        self.state_hash_by_checkpoint.get(checkpoint)
-    }
-
-    pub fn get_most_recent_root_state_hash(&self) -> Result<Option<Accumulator>, TypedStoreError> {
-        self.root_state_hash.get(&ROOT_STATE_HASH_KEY)
-    }
-
-    /// Idempotent because checkpoints are final. Moreover, we will
-    /// often have the same checkpoint forwarded from different
-    /// components (CheckpointOutput/CheckpointExecutor) and do not
-    /// want to double count against the root state hash.
-    pub fn insert_state_hash_for_checkpoint(
-        &self,
-        state_hash: Accumulator,
-        checkpoint: CheckpointSequenceNumber,
-    ) -> Result<(), TypedStoreError> {
-        if self.state_hash_by_checkpoint.contains_key(&checkpoint)? {
-            Ok(())
-        } else {
-            self.state_hash_by_checkpoint
-                .insert(&checkpoint, &state_hash)
-        }
-    }
-
-    pub fn get_highest_accumulated_checkpoint_seq_number(
-        &self,
-    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
-        if let Some(highest_accumulated) = self
-            .watermarks
-            .get(&CheckpointWatermark::HighestAccumulated)?
-        {
-            Ok(Some(highest_accumulated))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn update_highest_accumulated_checkpoint_seq_number(
-        &self,
-        checkpoint_seq_num: CheckpointSequenceNumber,
-    ) -> Result<(), TypedStoreError> {
-        match self.get_highest_accumulated_checkpoint_seq_number()? {
-            Some(old_seq_number) if old_seq_number > checkpoint_seq_num => Ok(()),
-            _ => self.watermarks.insert(
-                &CheckpointWatermark::HighestAccumulated,
-                &checkpoint_seq_num,
-            ),
-        }
     }
 }
 
@@ -158,7 +101,8 @@ impl StateAccumulatorStore {
         &self,
         checkpoints: Vec<CheckpointSequenceNumber>,
     ) -> SuiResult<Vec<Accumulator>> {
-        // We need to register waiters _before_ reading from the database to avoid race conditions
+        // We need to register waiters _before_ reading from the database to avoid
+        // race conditions
         let registrations = self
             .checkpoint_state_notify_read
             .register_all(checkpoints.clone());
@@ -166,12 +110,14 @@ impl StateAccumulatorStore {
             .tables
             .state_hash_by_checkpoint
             .multi_get(checkpoints)?;
-        // Zipping together registrations and effects ensures returned order is the same as order of digests
+
+        // Zipping together registrations and accumulators ensures returned order is
+        // the same as order of digests
         let results =
             accumulators
                 .into_iter()
                 .zip(registrations.into_iter())
-                .map(|(e, r)| match e {
+                .map(|(a, r)| match a {
                     // Note that Some() clause also drops registration that is already fulfilled
                     Some(ready) => Either::Left(futures::future::ready(ready)),
                     None => Either::Right(r),
@@ -184,30 +130,17 @@ impl StateAccumulatorStore {
     /// once available
     pub async fn notify_read_root_state_hash(&self, epoch: EpochId) -> SuiResult<Accumulator> {
         // We need to register waiters _before_ reading from the database to avoid race conditions
-        let registrations = self
-            .root_state_notify_read
-            .register_all(vec![epoch.clone()]);
-        let hashes = self
-            .tables
-            .root_state_hash_by_epoch
-            .multi_get(vec![epoch.clone()])?;
-        // Zipping together registrations and effects ensures returned order is the same as order of digests
-        let results = hashes
-            .into_iter()
-            .zip(registrations.into_iter())
-            .map(|(e, r)| match e {
-                // Note that Some() clause also drops registration that is already fulfilled
-                Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
-            });
-        let mut results = join_all(results).await;
-        assert_eq!(
-            results.len(),
-            1,
-            "Expected exactly one root state digest from notify_read"
-        );
+        let registration = self.root_state_notify_read.register_one(&epoch);
+        let hash = self.tables.root_state_hash_by_epoch.get(&epoch)?;
 
-        Ok(results.pop().unwrap())
+        let result = match hash {
+            // Note that Some() clause also drops registration that is already fulfilled
+            Some(ready) => Either::Left(futures::future::ready(ready)),
+            None => Either::Right(registration),
+        }
+        .await;
+
+        Ok(result)
     }
 }
 
@@ -283,6 +216,7 @@ impl StateAccumulator {
                         self.store.tables.state_hash_by_checkpoint
                             .insert(&state.checkpoint_seq_num, &acc)
                             .expect("StateAccumulator: failed to insert state hash");
+                        self.store.checkpoint_state_notify_read.notify(&state.checkpoint_seq_num, &acc);
                     }
 
                     if state.end_of_epoch_flag {
@@ -296,7 +230,7 @@ impl StateAccumulator {
                         // be scheduled last. This is true for now, but we should not assume this.
                         // Can be fixed to spawn a separate process that does a best effort root digest
                         // accumulation, with retries in case there are missing checkpoint accumulators.
-                        self.accumulate(state.checkpoint_seq_num, state.epoch)
+                        self.accumulate(state)
                             .await
                             .expect("Accumulation failed");
                     }
@@ -327,11 +261,13 @@ impl StateAccumulator {
     /// root state hash and saves it. This function is guaranteed to be idempotent (despite the
     /// underlying data structure not being) as long as it is not called in a multi-threaded
     /// context.
-    async fn accumulate(
-        &self,
-        epoch: EpochId,
-        last_checkpoint: CheckpointSequenceNumber,
-    ) -> Result<(), TypedStoreError> {
+    async fn accumulate(&self, last_state_of_epoch: State) -> Result<(), TypedStoreError> {
+        let State {
+            epoch,
+            checkpoint_seq_num: last_checkpoint,
+            ..
+        } = last_state_of_epoch;
+
         if self
             .store
             .tables
@@ -341,19 +277,15 @@ impl StateAccumulator {
             return Ok(());
         }
 
-        let next_to_accumulate = self
+        let (next_to_accumulate, mut root_state_hash) = self
             .store
             .tables
-            .get_highest_accumulated_checkpoint_seq_number()?
-            .map(|num| num.saturating_add(1))
-            .unwrap_or(0);
-
-        let mut root_state_hash = self
-            .store
-            .tables
-            .root_state_hash
-            .get(&ROOT_STATE_HASH_KEY)?
-            .unwrap_or_default();
+            .root_state_hash_by_checkpoint
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(highest, hash)| (highest.saturating_add(1), hash))
+            .unwrap_or((0, Accumulator::default()));
 
         for i in next_to_accumulate..=last_checkpoint {
             let acc = self
@@ -367,31 +299,35 @@ impl StateAccumulator {
             root_state_hash.union(&acc);
         }
 
-        // Update watermark, root_state_hash, and digest atomically
-        let batch = self.store.tables.root_state_hash.batch();
+        // We want to enforce that this table is append only, otherwise we
+        // may end up re-accumulating the same state
+        assert!(
+            !self
+                .store
+                .tables
+                .root_state_hash_by_checkpoint
+                .contains_key(&last_checkpoint)?,
+            "StateAccumulator: root state hash already exists for checkpoint {last_checkpoint:?}"
+        );
+
+        // Update root_state_hash tables atomically
+        let batch = self.store.tables.root_state_hash_by_checkpoint.batch();
 
         let batch = batch.insert_batch(
-            &self.store.tables.root_state_hash,
-            std::iter::once((&ROOT_STATE_HASH_KEY, root_state_hash.clone())),
+            &self.store.tables.root_state_hash_by_checkpoint,
+            std::iter::once((&last_checkpoint, root_state_hash.clone())),
         )?;
         let batch = batch.insert_batch(
             &self.store.tables.root_state_hash_by_epoch,
-            std::iter::once((&epoch, root_state_hash)),
+            std::iter::once((&epoch, root_state_hash.clone())),
         )?;
 
-        let batch = match self
-            .store
-            .tables
-            .get_highest_accumulated_checkpoint_seq_number()?
-        {
-            Some(old_seq_number) if old_seq_number > last_checkpoint => batch,
-            _ => batch.insert_batch(
-                &self.store.tables.watermarks,
-                std::iter::once((&CheckpointWatermark::HighestAccumulated, last_checkpoint)),
-            )?,
-        };
+        batch.write()?;
+        self.store
+            .root_state_notify_read
+            .notify(&epoch, &root_state_hash);
 
-        batch.write()
+        Ok(())
     }
 }
 
