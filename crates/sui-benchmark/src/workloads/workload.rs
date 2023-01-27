@@ -17,7 +17,7 @@ use crate::ValidatorProxy;
 // for running the benchmark
 pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
-#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub enum WorkloadType {
     SharedCounter,
     TransferObject,
@@ -52,9 +52,19 @@ pub trait Workload<T: Payload + ?Sized>: Send + Sync {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<T>>;
     fn get_workload_type(&self) -> WorkloadType;
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+}
+
+impl std::fmt::Debug for dyn Workload<dyn Payload> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.debug(f)
+    }
 }
 
 type WeightAndPayload = (u32, Box<dyn Workload<dyn Payload>>);
+
+#[derive(Debug)]
 pub struct CombinationWorkload {
     workloads: HashMap<WorkloadType, WeightAndPayload>,
 }
@@ -121,6 +131,10 @@ impl Workload<dyn Payload> for CombinationWorkload {
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Combination
     }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &CombinationWorkload)
+    }
 }
 
 impl CombinationWorkload {
@@ -131,6 +145,7 @@ impl CombinationWorkload {
     }
 }
 
+#[derive(Debug)]
 pub struct WorkloadInfo {
     pub target_qps: u64,
     pub num_workers: u64,

@@ -13,7 +13,7 @@ import provider from "../../../network/provider";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { Coin, SUI_COIN } from "../../../network/types";
-import { getGas } from "../../../utils/coins";
+import { getCoins, getGas } from "../../../utils/coins";
 import { StakeButton } from "../../StakeButton";
 
 interface Props {
@@ -39,7 +39,7 @@ export function AddDelegation({ validator, amount }: Props) {
 
   const stakeFor = useMutation(["stake-for-validator"], async () => {
     if (!coins || !coins.length) {
-      return null;
+      throw new Error('Not enough coins');
     }
 
     const mistAmount = toMist(amount);
@@ -49,13 +49,16 @@ export function AddDelegation({ validator, amount }: Props) {
     const { gas, coins: available, max } = getGas(coins, gasRequred);
 
     if (mistAmount > max) {
-      console.log("Requested amt %d is bigger than max %d", mistAmount, max);
-      return null;
+      throw new Error(
+        `Requested amount ${mistAmount} is bigger than max ${max}`
+      );
     }
 
     if (!gas) {
-      return null;
+      throw new Error('No gas coin found')
     }
+
+    const stakeCoins = getCoins(available, mistAmount);
 
     await signAndExecuteTransaction({
       kind: "moveCall",
@@ -68,7 +71,7 @@ export function AddDelegation({ validator, amount }: Props) {
         gasBudget: 10000,
         arguments: [
           SUI_SYSTEM_ID,
-          available.map((c) => normalizeSuiAddress(c.reference.objectId)),
+          stakeCoins.map((c) => normalizeSuiAddress(c.reference.objectId)),
           [mistAmount.toString()], // Option<u64> // [amt] = Some(amt)
           normalizeSuiAddress(validator),
         ],
