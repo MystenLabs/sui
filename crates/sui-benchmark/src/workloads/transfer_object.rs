@@ -22,6 +22,7 @@ use sui_core::test_utils::make_transfer_object_transaction;
 
 use super::workload::{Workload, WorkloadType, MAX_GAS_FOR_TESTING};
 
+#[derive(Debug)]
 pub struct TransferObjectTestPayload {
     transfer_object: ObjectRef,
     transfer_from: SuiAddress,
@@ -83,8 +84,13 @@ impl Payload for TransferObjectTestPayload {
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::TransferObject
     }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &TransferObjectTestPayload)
+    }
 }
 
+#[derive(Debug)]
 pub struct TransferObjectWorkload {
     pub transfer_keypairs: Arc<HashMap<SuiAddress, AccountKeyPair>>,
 }
@@ -193,5 +199,9 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::TransferObject
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &TransferObjectWorkload)
     }
 }

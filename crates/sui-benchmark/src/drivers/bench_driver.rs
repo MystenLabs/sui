@@ -140,6 +140,7 @@ async fn print_and_start_benchmark() -> &'static Instant {
     .await
 }
 
+#[derive(Debug)]
 pub struct BenchWorker {
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,

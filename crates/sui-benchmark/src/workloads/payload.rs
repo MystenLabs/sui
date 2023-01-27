@@ -21,8 +21,17 @@ pub trait Payload: Send + Sync {
     fn make_transaction(&self) -> VerifiedTransaction;
     fn get_object_id(&self) -> ObjectID;
     fn get_workload_type(&self) -> WorkloadType;
+
+    fn debug(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result;
 }
 
+impl std::fmt::Debug for dyn Payload {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.debug(f)
+    }
+}
+
+#[derive(Debug)]
 pub struct CombinationPayload {
     pub payloads: Vec<Box<dyn Payload>>,
     pub dist: WeightedAliasIndex<u32>,
@@ -68,5 +77,9 @@ impl Payload for CombinationPayload {
             .get(self.curr_index)
             .unwrap()
             .get_workload_type()
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self as &CombinationPayload)
     }
 }
