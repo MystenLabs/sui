@@ -37,6 +37,9 @@ pub fn verify_module(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
 ) -> Result<(), ExecutionError> {
+    // When verifying test functions, a check preventing by-hand instantiation of one-time withess
+    // is disabled
+
     // In Sui's framework code there is an exception to the one-time witness type rule - we have a
     // SUI type in the sui module but it is instantiated outside of the module initializer (in fact,
     // the module has no initializer). The reason for it is that the SUI coin is only instantiated

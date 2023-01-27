@@ -44,6 +44,9 @@ pub fn verify_module(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
 ) -> Result<(), ExecutionError> {
+    // When verifying test functions, a check preventing explicit calls to init functions is
+    // disabled.
+
     for func_def in &module.function_defs {
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
