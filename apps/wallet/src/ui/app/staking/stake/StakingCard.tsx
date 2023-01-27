@@ -362,7 +362,6 @@ function StakingCard() {
                                         submitError={sendError}
                                         coinBalance={coinBalance}
                                         coinType={coinType}
-                                        coinDecimals={coinDecimals}
                                         epoch={validatorsData.epoch}
                                         onClearSubmitError={
                                             handleOnClearSubmitError
