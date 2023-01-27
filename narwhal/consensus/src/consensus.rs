@@ -46,23 +46,12 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(genesis: Vec<Certificate>, metrics: Arc<ConsensusMetrics>) -> Self {
-        let genesis = genesis
-            .into_iter()
-            .map(|x| (x.origin(), (x.digest(), x)))
-            .collect::<HashMap<_, _>>();
-
+    pub fn new(metrics: Arc<ConsensusMetrics>) -> Self {
         Self {
             last_committed_round: 0,
-            last_committed: genesis
-                .iter()
-                .map(|(x, (_, y))| (x.clone(), y.round()))
-                .collect(),
+            last_committed: Default::default(),
             latest_sub_dag_index: 0,
-            dag: [(0, genesis)]
-                .iter()
-                .cloned()
-                .collect::<BTreeMap<_, HashMap<_, _>>>(),
+            dag: Default::default(),
             metrics,
         }
     }
