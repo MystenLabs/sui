@@ -911,10 +911,7 @@ impl CheckpointSignatureAggregator {
                 );
                 Err(())
             }
-            InsertResult::QuorumReachedWithCert(cert) => Ok(cert),
-            InsertResult::QuorumReached => {
-                unreachable!("insert should only return QuorumReachedWithCert");
-            }
+            InsertResult::QuorumReached(cert) => Ok(cert),
             InsertResult::NotEnoughVotes => Err(()),
         }
     }

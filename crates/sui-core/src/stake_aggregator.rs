@@ -37,7 +37,7 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
     /// A generic version of inserting arbitrary type of V (e.g. void type).
     /// If V is AuthoritySignInfo, the `insert` function should be used instead since it does extra
     /// checks and aggregations in the end.
-    pub fn insert_generic(&mut self, authority: AuthorityName, v: V) -> InsertResult<V, STRENGTH> {
+    pub fn insert_generic(&mut self, authority: AuthorityName, v: V) -> InsertResult<V, ()> {
         match self.data.entry(authority) {
             Entry::Occupied(oc) => {
                 return InsertResult::RepeatingEntry {
@@ -53,7 +53,7 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
         if votes > 0 {
             self.total_votes += votes;
             if self.total_votes >= self.committee.threshold::<STRENGTH>() {
-                InsertResult::QuorumReached
+                InsertResult::QuorumReached(())
             } else {
                 InsertResult::NotEnoughVotes
             }
@@ -77,7 +77,10 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     /// Insert an authority signature. This is the primary way to use the aggregator and a few
     /// dedicated checks are performed to make sure things work.
     /// If quorum is reached, we return AuthorityQuorumSignInfo directly.
-    pub fn insert(&mut self, sig: AuthoritySignInfo) -> InsertResult<AuthoritySignInfo, STRENGTH> {
+    pub fn insert(
+        &mut self,
+        sig: AuthoritySignInfo,
+    ) -> InsertResult<AuthoritySignInfo, AuthorityQuorumSignInfo<STRENGTH>> {
         if self.committee.epoch != sig.epoch {
             return InsertResult::Failed {
                 error: SuiError::WrongEpoch {
@@ -86,31 +89,35 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                 },
             };
         }
-        let result = self.insert_generic(sig.authority, sig);
-        if result.is_quorum_reached() {
-            match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
-                self.data.values().cloned().collect(),
-                self.committee(),
-            ) {
-                Ok(aggregated) => InsertResult::QuorumReachedWithCert(aggregated),
-                Err(error) => InsertResult::Failed { error },
+        match self.insert_generic(sig.authority, sig) {
+            InsertResult::QuorumReached(_) => {
+                match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
+                    self.data.values().cloned().collect(),
+                    self.committee(),
+                ) {
+                    Ok(aggregated) => InsertResult::QuorumReached(aggregated),
+                    Err(error) => InsertResult::Failed { error },
+                }
             }
-        } else {
-            result
+            // The following is necessary to change the template type of InsertResult.
+            InsertResult::RepeatingEntry { previous, new } => {
+                InsertResult::RepeatingEntry { previous, new }
+            }
+            InsertResult::Failed { error } => InsertResult::Failed { error },
+            InsertResult::NotEnoughVotes => InsertResult::NotEnoughVotes,
         }
     }
 }
 
-pub enum InsertResult<V, const STRENGTH: bool> {
-    QuorumReached,
-    QuorumReachedWithCert(AuthorityQuorumSignInfo<STRENGTH>),
+pub enum InsertResult<V, CertT> {
+    QuorumReached(CertT),
     RepeatingEntry { previous: V, new: V },
     Failed { error: SuiError },
     NotEnoughVotes,
 }
 
-impl<V, const STRENGTH: bool> InsertResult<V, STRENGTH> {
+impl<V, CertT> InsertResult<V, CertT> {
     pub fn is_quorum_reached(&self) -> bool {
-        matches!(self, Self::QuorumReached | Self::QuorumReachedWithCert(_))
+        matches!(self, Self::QuorumReached(..))
     }
 }
