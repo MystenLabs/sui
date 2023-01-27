@@ -79,7 +79,6 @@ async fn test_consensus_recovery_with_bullshark() {
         tx_output,
         bullshark,
         metrics.clone(),
-        gc_depth,
     );
 
     // WHEN we feed all certificates to the consensus.
@@ -169,7 +168,6 @@ async fn test_consensus_recovery_with_bullshark() {
         tx_output,
         bullshark,
         metrics.clone(),
-        gc_depth,
     );
 
     // WHEN we send same certificates but up to round 3 (inclusive)
@@ -237,7 +235,6 @@ async fn test_consensus_recovery_with_bullshark() {
         tx_output,
         bullshark,
         metrics.clone(),
-        gc_depth,
     );
 
     // WHEN send the certificates of round >= 5 to trigger a leader election for round 4

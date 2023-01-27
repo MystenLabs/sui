@@ -75,7 +75,6 @@ async fn test_recovery() {
         tx_output,
         bullshark,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
