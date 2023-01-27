@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SYSTEM_EPOCH_INFO } from "../types";
+import { SystemEpochInfo, SYSTEM_EPOCH_INFO } from "../types";
 import { useQuery } from "@tanstack/react-query";
 import provider from "../provider";
 import { bcs } from "../bcs";
@@ -12,7 +12,7 @@ import { config } from "../../config";
  * data on the current epoch and timestamps.
  */
 export function useEpoch() {
-  return useQuery(["epoch"], async () => {
+  return useQuery(["epoch"], async (): Promise<{ timestamp: number; data: SystemEpochInfo } | null> => {
     const { data } = await provider.getEvents(
       { MoveEvent: SYSTEM_EPOCH_INFO },
       null,
