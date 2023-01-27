@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
+import { ErrorMessage, Form, useFormikContext } from 'formik';
 import { useEffect, useRef } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
-import NumberInput from '_components/number-input';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
@@ -40,32 +39,22 @@ export function UnStakeForm({
         SUI_TYPE_ARG
     );
 
-    const [rewards, rewardSymbal] = useFormatCoin(stakingReward, SUI_TYPE_ARG);
+    const [rewards, rewardSymbol] = useFormatCoin(stakingReward, SUI_TYPE_ARG);
 
     const [tokenBalance] = useFormatCoin(coinBalance, coinType);
 
     useEffect(() => {
         onClearRef.current();
         setFieldValue('amount', tokenBalance);
-        setTouched({ amount: true });
     }, [setFieldValue, setTouched, tokenBalance]);
 
     return (
         <Form
             className="flex flex-1 flex-col flex-nowrap"
             autoComplete="off"
-            noValidate={true}
+            noValidate
         >
             <Content>
-                <Field
-                    component={NumberInput}
-                    allowNegative={false}
-                    name="amount"
-                    hidden
-                    className="w-full hidden"
-                    decimals
-                    disabled
-                />
                 <Card
                     variant="gray"
                     titleDivider
@@ -129,7 +118,7 @@ export function UnStakeForm({
                                 weight="medium"
                                 color="steel-darker"
                             >
-                                {rewards} {rewardSymbal}
+                                {rewards} {rewardSymbol}
                             </Text>
                         </div>
                         <div className="w-2/3">
