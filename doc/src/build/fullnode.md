@@ -191,7 +191,7 @@ Source](#building-from-source), update your Full node as follows:
     ```shell
     git checkout -B devnet --track upstream/devnet
     ```
-1. Download the latest Genesis blob:
+1. Download the latest genesis blob:
    * [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
     ```shell
     curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
