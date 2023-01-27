@@ -3,13 +3,14 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useRef, memo, useCallback } from 'react';
+import { useRef, memo, useCallback, useMemo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
+import { parseAmount } from '_helpers';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
@@ -21,18 +22,38 @@ export type StakeFromProps = {
     submitError: string | null;
     coinBalance: bigint;
     coinType: string;
+    coinDecimals: number;
     epoch: string;
     onClearSubmitError: () => void;
 };
+
+function AvailableBalance({
+    amount,
+    coinType,
+}: {
+    amount: bigint;
+    coinType: string;
+}) {
+    const [formatted, symbol] = useFormatCoin(amount, coinType);
+    return (
+        <Text variant="bodySmall" color="steel" weight="medium">
+            Available - {+formatted > 0 ? formatted : 0} {symbol}
+        </Text>
+    );
+}
 
 function StakeForm({
     submitError,
     coinBalance,
     coinType,
     onClearSubmitError,
+    coinDecimals,
     epoch,
 }: StakeFromProps) {
-    const { setFieldValue } = useFormikContext<FormValues>();
+    const {
+        setFieldValue,
+        values: { amount },
+    } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
@@ -42,12 +63,12 @@ function StakeForm({
         SUI_TYPE_ARG
     );
 
-    const coinBalanceMinusGas =
+    const totalAvailableBalance =
         coinBalance -
         BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
     const [maxToken, symbol, queryResult] = useFormatCoin(
-        coinBalanceMinusGas,
+        totalAvailableBalance,
         coinType
     );
 
@@ -56,9 +77,24 @@ function StakeForm({
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
 
+    const calculateRemaining = useMemo(() => {
+        if (!coinBalance) return 0n;
+        const bigIntAmount = parseAmount(amount, coinDecimals);
+        return totalAvailableBalance - bigIntAmount;
+    }, [amount, coinBalance, coinDecimals, totalAvailableBalance]);
+
     return (
         <Form className="flex flex-1 flex-col flex-nowrap" autoComplete="off">
             <Content>
+                <div className="flex flex-col justify-between items-center mb-2 mt-3.5 w-full gap-1.5">
+                    <Text variant="caption" color="gray-85" weight="semibold">
+                        Enter the amount of SUI to stake
+                    </Text>
+                    <AvailableBalance
+                        amount={calculateRemaining}
+                        coinType={coinType}
+                    />
+                </div>
                 <Card
                     variant="gray"
                     titleDivider
@@ -115,7 +151,7 @@ function StakeForm({
                             weight="medium"
                             color="steel-darker"
                         >
-                            Epoch #{+epoch + 1}
+                            Epoch #{+epoch + 2}
                         </Text>
                     </div>
                 </Card>
