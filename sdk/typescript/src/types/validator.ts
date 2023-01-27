@@ -233,7 +233,9 @@ export const Validators = object({
   fields: ValidatorsFields,
 });
 
+export type StakeUnit = number;
+
 export const CommitteeInfo = object({
   epoch: number(),
-  committee_info: nullable(array(tuple([AuthorityName, number()]))),
+  committee_info: nullable(array(tuple([AuthorityName, StakeUnit]))),
 });
