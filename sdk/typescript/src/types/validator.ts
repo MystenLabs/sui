@@ -233,9 +233,8 @@ export const Validators = object({
   fields: ValidatorsFields,
 });
 
-export type StakeUnit = number;
-
 export const CommitteeInfo = object({
   epoch: number(),
+  /* array of (validator public key, stake unit) tuple */
   committee_info: nullable(array(tuple([AuthorityName, StakeUnit]))),
 });
