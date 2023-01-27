@@ -1,51 +1,97 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { Combobox } from '@headlessui/react';
-import { useState } from 'react';
-import { CheckmarkIcon } from 'react-hot-toast';
+import { Search16 } from '@mysten/icons';
+
 import { Text } from './Text';
 
-export interface SearchProps {}
+type SearchResult = {
+    id: number;
+    label: string;
+};
 
-const people = [
-    { id: 1, name: 'Durward Reynolds' },
-    { id: 2, name: 'Kenton Towne' },
-    { id: 3, name: 'Therese Wunsch' },
-    { id: 4, name: 'Benedict Kessler' },
-    { id: 5, name: 'Katelyn Rohan' },
-];
+export interface SearchProps {
+    onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+    onSelectResult: (result: SearchResult) => void;
+    placeholder?: string;
+    query: string;
+    options?: Record<string, SearchResult[]>;
+    value?: SearchResult;
+}
 
-export function Search() {
-    const [selectedPerson, setSelectedPerson] = useState(people[0]);
-    const [query, setQuery] = useState('');
+export interface SearchResultProps {
+    key: string;
+    value: any;
+    children: React.ReactNode;
+}
 
-    const filteredPeople =
-        query === ''
-            ? people
-            : people.filter((person) => {
-                  return person.name
-                      .toLowerCase()
-                      .includes(query.toLowerCase());
-              });
-
+function SearchResult({ value, children }: SearchResultProps) {
     return (
-        <Combobox value={selectedPerson} onChange={setSelectedPerson}>
+        <Combobox.Option
+            className="cursor-pointer rounded-md bg-opacity-10 py-1.5 pl-2 ui-active:bg-sui ui-active:bg-opacity-10 ui-active:shadow-sm"
+            value={value}
+            key={value.id}
+        >
+            <Text variant="body/medium" mono color="steel-darker">
+                {children}
+            </Text>
+        </Combobox.Option>
+    );
+}
+
+export function Search({
+    onChange,
+    onSelectResult,
+    placeholder,
+    options = {},
+    value,
+}: SearchProps) {
+    return (
+        <Combobox
+            value={value}
+            onChange={onSelectResult}
+            as="div"
+            className="relative flex flex-col"
+        >
             <Combobox.Input
-                className="text-white/0.4 h-[2rem] w-[500px] rounded-md border border-sui bg-search-fill pl-2 font-mono text-xs leading-8 text-white"
-                onChange={(event) => setQuery(event.target.value)}
-                displayValue={(person) => person.name}
+                displayValue={(value) => value?.label}
+                className="text-white/0.4 border-1 h-[2rem] w-full rounded-md border-transparent bg-search-fill pl-2 text-xs leading-8 text-white focus:border-solid focus:border-sui"
+                onChange={onChange}
+                placeholder={placeholder}
+                autoComplete="off"
             />
-            <Combobox.Options className="text-mono w-[500px] rounded-md pl-0 shadow-md">
-                {filteredPeople.map((person) => (
-                    <Combobox.Option
-                        key={person.id}
-                        value={person}
-                        className="w-[500px] list-none p-2 ui-active:bg-sui ui-active:text-white ui-not-active:text-black"
-                    >
-                        <CheckmarkIcon className="hidden ui-selected:block" />
-                        <Text variant="captionSmall/medium">{person.name}</Text>
-                    </Combobox.Option>
-                ))}
+
+            <button
+                type="button"
+                className="text-white/0.4 absolute inset-y-0 right-0 flex items-center rounded-r-md border-none bg-transparent  text-2xl focus:outline-none"
+            >
+                <Search16 className="text-white opacity-40" />
+            </button>
+
+            <Combobox.Options className="mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-md">
+                {Object.entries(options).map(([category, results]) => {
+                    return (
+                        <div className="mb-4" key={category}>
+                            {!!results?.length && (
+                                <div className="mb-2">
+                                    <Text
+                                        color="steel-dark"
+                                        variant="captionSmall/medium"
+                                    >
+                                        {category}
+                                    </Text>
+                                </div>
+                            )}
+                            {results?.map((item: any) => {
+                                return (
+                                    <SearchResult key={item.id} value={item}>
+                                        {item.label}
+                                    </SearchResult>
+                                );
+                            })}
+                        </div>
+                    );
+                })}
             </Combobox.Options>
         </Combobox>
     );

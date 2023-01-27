@@ -23,6 +23,7 @@ import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
 import { Base64DataBuffer } from '../serialization/base64';
 import { BCS } from '@mysten/bcs';
+import { RpcApiVersion } from './version';
 
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
@@ -167,7 +168,7 @@ export function generateTransactionDigest(
   const txBytes = bcs.ser('TransactionData', data).toBytes();
   const hash = sha256Hash('TransactionData', txBytes);
 
-  return new Base58DataBuffer(hash).toString()
+  return new Base58DataBuffer(hash).toString();
 }
 
 function isHex(value: string): boolean {
