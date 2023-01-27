@@ -71,8 +71,8 @@ jobs:
     - name: Run benchmarks
       run: |
         set -o pipefail
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 100 --run-duration 60s 2>&1 | huniq | tee -a artifacts/owned.txt
-        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --shared-counter 100 --run-duration 60s 2>&1 | huniq | tee -a artifacts/shared.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/owned.txt
+        cargo run --release --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --shared-counter 100 --run-duration 60s --stress-stat-collection 2>&1 | huniq | tee -a artifacts/shared.txt
         pushd narwhal/benchmark && fab local | tee -a ../../artifacts/narwhal.txt && popd
 
     - name: Retrieve benchmark results
