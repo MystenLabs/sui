@@ -59,7 +59,7 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
     }).then(console.log);
   });
 
-  if (!system || scorecard.data.epoch == BigInt(system.epoch)) {
+  if (!system || scorecard.data.epoch == BigInt(system.epoch) + 1n) {
     return null;
   }
 
