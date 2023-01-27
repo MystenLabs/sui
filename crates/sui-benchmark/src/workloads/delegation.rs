@@ -15,6 +15,7 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::VerifiedTransaction;
 use test_utils::messages::make_delegation_transaction;
 
+#[derive(Debug)]
 pub struct DelegationTestPayload {
     coin: Option<ObjectRef>,
     gas: ObjectRef,
@@ -75,6 +76,10 @@ impl Payload for DelegationTestPayload {
 
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Delegation
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &DelegationTestPayload)
     }
 }
 
@@ -141,5 +146,9 @@ impl Workload<dyn Payload> for DelegationWorkload {
 
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::Delegation
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DelegationWorkload")
     }
 }

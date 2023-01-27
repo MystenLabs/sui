@@ -25,6 +25,7 @@ use test_utils::{
 };
 use tracing::info;
 
+#[derive(Debug)]
 pub struct SharedCounterTestPayload {
     package_id: ObjectID,
     counter_id: ObjectID,
@@ -68,8 +69,13 @@ impl Payload for SharedCounterTestPayload {
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::SharedCounter
     }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &SharedCounterTestPayload)
+    }
 }
 
+#[derive(Debug)]
 pub struct SharedCounterWorkload {
     pub basics_package_id: Option<ObjectID>,
     pub counters: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
@@ -227,5 +233,9 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
     }
     fn get_workload_type(&self) -> WorkloadType {
         WorkloadType::SharedCounter
+    }
+
+    fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self as &SharedCounterWorkload)
     }
 }
