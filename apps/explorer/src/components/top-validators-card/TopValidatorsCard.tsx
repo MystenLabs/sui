@@ -27,11 +27,15 @@ const NUMBER_OF_VALIDATORS = 10;
 export function processValidators(set: ActiveValidator[], totalStake: bigint) {
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;
+        const delegatedStake =
+                +av.fields.delegation_staking_pool.fields.sui_balance;
+            const selfStake = +av.fields.stake_amount;
+        const totalValidatorStake = selfStake + delegatedStake;
         return {
             name: getName(rawName),
             address: av.fields.metadata.fields.sui_address,
-            stake: av.fields.stake_amount,
-            stakePercent: getStakedPercent(av.fields.stake_amount, totalStake),
+            stake: totalValidatorStake,
+            stakePercent: getStakedPercent(BigInt(totalValidatorStake), totalStake),
             logo:
                 typeof av.fields.metadata.fields.image_url === 'string'
                     ? av.fields.metadata.fields.image_url
@@ -47,7 +51,7 @@ const validatorsTable = (
 ) => {
     const totalStake = BigInt(
         validatorsData.validators.fields.total_validator_stake
-    );
+    ) + BigInt(validatorsData.validators.fields.total_delegation_stake);
 
     const validators = processValidators(
         validatorsData.validators.fields.active_validators,
