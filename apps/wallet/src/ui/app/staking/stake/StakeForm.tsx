@@ -3,14 +3,13 @@
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useRef, memo, useCallback, useMemo } from 'react';
+import { useRef, memo, useCallback } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { parseAmount } from '_helpers';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
@@ -50,10 +49,7 @@ function StakeForm({
     coinDecimals,
     epoch,
 }: StakeFromProps) {
-    const {
-        setFieldValue,
-        values: { amount },
-    } = useFormikContext<FormValues>();
+    const { setFieldValue } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
@@ -77,21 +73,15 @@ function StakeForm({
         setFieldValue('amount', maxToken);
     }, [maxToken, setFieldValue]);
 
-    const calculateRemaining = useMemo(() => {
-        if (!coinBalance) return 0n;
-        const bigIntAmount = parseAmount(amount, coinDecimals);
-        return totalAvailableBalance - bigIntAmount;
-    }, [amount, coinBalance, coinDecimals, totalAvailableBalance]);
-
     return (
         <Form className="flex flex-1 flex-col flex-nowrap" autoComplete="off">
             <Content>
-                <div className="flex flex-col justify-between items-center mb-2 mt-3.5 w-full gap-1.5">
+                <div className="flex flex-col justify-between items-center mb-3 mt-3.5 w-full gap-1.5">
                     <Text variant="caption" color="gray-85" weight="semibold">
                         Enter the amount of SUI to stake
                     </Text>
                     <AvailableBalance
-                        amount={calculateRemaining}
+                        amount={totalAvailableBalance}
                         coinType={coinType}
                     />
                 </div>
