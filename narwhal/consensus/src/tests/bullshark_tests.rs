@@ -66,7 +66,6 @@ async fn commit_one() {
         tx_output,
         bullshark,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -132,7 +131,6 @@ async fn dead_node() {
         tx_output,
         bullshark,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -253,7 +251,6 @@ async fn not_enough_support() {
         tx_output,
         bullshark,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -344,7 +341,6 @@ async fn missing_leader() {
         tx_output,
         bullshark,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -416,7 +412,6 @@ async fn committed_round_after_restart() {
             tx_output,
             bullshark,
             metrics.clone(),
-            gc_depth,
         );
 
         // When `input_round` is 2 * r + 1, r > 1, the previous commit round would be 2 * (r - 1),
@@ -497,7 +492,6 @@ async fn restart_with_new_committee() {
             tx_output,
             bullshark,
             metrics.clone(),
-            gc_depth,
         );
         tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
