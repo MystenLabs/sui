@@ -13,8 +13,11 @@ use tokio::task;
 use tokio::time::sleep;
 use tracing::info;
 
+const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-", env!("GIT_REVISION"));
+
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case", version)]
+#[clap(rename_all = "kebab-case")]
+#[clap(version = VERSION)]
 struct Args {
     #[clap(long)]
     pub config_path: PathBuf,
@@ -23,13 +26,6 @@ struct Args {
     listen_address: Option<Multiaddr>,
 }
 
-// Memory profiling is now done automatically by the Ying profiler.
-// use ying_profiler::utils::ProfilerRunner;
-// use ying_profiler::YingProfiler;
-
-// #[global_allocator]
-// static YING_ALLOC: YingProfiler = YingProfiler;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -37,6 +33,9 @@ async fn main() -> Result<()> {
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
+
+    info!("Sui Node version: {VERSION}");
+
     info!(
         "Started Prometheus HTTP endpoint at {}",
         config.metrics_address
@@ -52,11 +51,6 @@ async fn main() -> Result<()> {
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;
     }
-
-    // Spins up a thread to check memory usage every minute, and dump out stack traces/profiles
-    // if it has moved up or down more than 15%.  Also allow configuration of dump directory.
-    // let profile_dump_dir = std::env::var("SUI_MEM_PROFILE_DIR").unwrap_or_default();
-    // ProfilerRunner::new(60, 15, &profile_dump_dir).spawn();
 
     let is_validator = config.consensus_config().is_some();
     task::spawn(async move {
