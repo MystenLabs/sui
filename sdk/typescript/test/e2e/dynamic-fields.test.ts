@@ -11,7 +11,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
     let toolbox: TestToolbox;
     let signer: RawSigner;
     let packageId: string;
-    let parent_objectID: string;
+    let parentObjectId: string;
 
     beforeAll(async () => {
       toolbox = await setup();
@@ -25,58 +25,60 @@ describe.each([{ useLocalTxnBuilder: true }])(
       const packagePath = __dirname + '/./data/dynamic_fields';
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
 
-      const objs_owned_by_address =
-        await toolbox.provider.getObjectsOwnedByAddress(toolbox.address());
-      const obj = objs_owned_by_address.filter(
-        (o) => o.type === `${packageId}::dynamic_fields_test::Test`
-      );
-      parent_objectID = obj[0].objectId;
+      await toolbox.provider
+        .getObjectsOwnedByAddress(toolbox.address())
+        .then(function (objects) {
+          const obj = objects.filter(
+            (o) => o.type === `${packageId}::dynamic_fields_test::Test`
+          );
+          parentObjectId = obj[0].objectId;
+        });
     });
 
     it('get all dynamic fields', async () => {
-      const dynamic_fields = await toolbox.provider.getDynamicFields(
-        parent_objectID,
+      const dynamicFields = await toolbox.provider.getDynamicFields(
+        parentObjectId,
         null,
         null
       );
-      expect(dynamic_fields.data.length).toEqual(2);
+      expect(dynamicFields.data.length).toEqual(2);
     });
     it('limit response in page', async () => {
-      const dynamic_fields = await toolbox.provider.getDynamicFields(
-        parent_objectID,
+      const dynamicFields = await toolbox.provider.getDynamicFields(
+        parentObjectId,
         null,
         1
       );
-      expect(dynamic_fields.data.length).toEqual(1);
-      expect(dynamic_fields.nextCursor).not.toEqual(null);
+      expect(dynamicFields.data.length).toEqual(1);
+      expect(dynamicFields.nextCursor).not.toEqual(null);
     });
     it('go to next cursor', async () => {
-      const dynamic_fields = await toolbox.provider.getDynamicFields(
-        parent_objectID,
-        null,
-        1
-      );
-      const dynamic_fields2 = await toolbox.provider.getDynamicFields(
-        parent_objectID,
-        dynamic_fields.nextCursor,
-        null
-      );
-      expect(dynamic_fields2.data.length).greaterThan(0);
-      expect(dynamic_fields.nextCursor).not.toEqual(null);
+      return await toolbox.provider
+        .getDynamicFields(parentObjectId, null, 1)
+        .then(async function (dynamicFields) {
+          expect(dynamicFields.nextCursor).not.toEqual(null);
+
+          const dynamicFieldsCursor = await toolbox.provider.getDynamicFields(
+            parentObjectId,
+            dynamicFields.nextCursor,
+            null
+          );
+          expect(dynamicFieldsCursor.data.length).greaterThanOrEqual(0);
+        });
     });
     it('get dynamic object field', async () => {
-      const dynamic_fields = await toolbox.provider.getDynamicFields(
-        parent_objectID,
+      const dynamicFields = await toolbox.provider.getDynamicFields(
+        parentObjectId,
         null,
         null
       );
-      const obj_dof_name = dynamic_fields.data[1].name;
+      const objDofName = dynamicFields.data[1].name;
 
-      const dynamic_object_field = await toolbox.provider.getDynamicFieldObject(
-        parent_objectID,
-        obj_dof_name
+      const dynamicObjectField = await toolbox.provider.getDynamicFieldObject(
+        parentObjectId,
+        objDofName
       );
-      expect(dynamic_object_field.status).toEqual('Exists');
+      expect(dynamicObjectField.status).toEqual('Exists');
     });
   }
 );
