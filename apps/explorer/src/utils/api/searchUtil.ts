@@ -12,12 +12,7 @@ export const navigateWithUnknown = async (
 ) => {
     let searchPromises = [];
     const version = await rpc(network).getRpcApiVersion();
-    if (
-        isValidTransactionDigest(
-            input,
-            'base58'
-        )
-    ) {
+    if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
                 .getTransactionWithEffects(input)
