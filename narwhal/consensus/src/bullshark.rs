@@ -276,7 +276,7 @@ impl Bullshark {
                     }
                 }
             } else {
-                error!(
+                trace!(
                     "Round not present in Dag store: {:?} when looking for parents of {:?}",
                     round - 1,
                     certificate
