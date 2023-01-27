@@ -14,7 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
-use crate::state_accumulator::{State, StateAccumulator, StateAccumulatorService};
+use crate::state_accumulator::{State, StateAccumulatorService};
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::MultisetHash;
 use futures::future::{select, Either};

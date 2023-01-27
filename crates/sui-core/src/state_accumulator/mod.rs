@@ -8,14 +8,15 @@ use either::Either;
 use futures::future::join_all;
 use futures::stream::FuturesOrdered;
 
-use sui_types::base_types::ObjectDigest;
+use sui_macros::nondeterministic;
+use sui_types::base_types::{ObjectDigest, ObjectID};
 use tracing::debug;
 use typed_store::Map;
 
 use std::path::Path;
 use std::sync::Arc;
 
-use fastcrypto::hash::{Digest, MultisetHash};
+use fastcrypto::hash::MultisetHash;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::accumulator::Accumulator;
 use sui_types::committee::EpochId;

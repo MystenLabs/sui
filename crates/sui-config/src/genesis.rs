@@ -734,6 +734,8 @@ fn create_genesis_checkpoint(
         previous_digest: None,
         epoch_rolling_gas_cost_summary: Default::default(),
         next_epoch_committee: None,
+        // only Some(..) at epoch boundaries
+        root_state_digest: None,
         timestamp_ms: parameters.timestamp_ms,
     };
 
