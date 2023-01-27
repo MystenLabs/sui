@@ -617,7 +617,7 @@ impl SuiNode {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
     ) -> Arc<ConsensusAdapter> {
-        const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+        const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
         let consensus_address = consensus_config.address().to_owned();
         let client_config = mysten_network::config::Config {
