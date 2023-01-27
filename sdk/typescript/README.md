@@ -55,8 +55,17 @@ To run E2E tests against local network
 
 ```
 pnpm sdk prepare:e2e
+
+// This will run all e2e tests
 pnpm sdk test:e2e
+
+// Alternatively you can choose to run only one test file
+npx vitest txn-builder.test.ts
 ```
+
+Troubleshooting:
+
+If you see errors like `ECONNRESET or "socket hang up"`, run `node -v` to make sure your node version is `v18.x.x`. Refer to this [guide](https://blog.logrocket.com/how-switch-node-js-versions-nvm/) to switch node version.
 
 To run E2E tests against DevNet
 
