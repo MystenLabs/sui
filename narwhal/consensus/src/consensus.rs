@@ -325,15 +325,6 @@ where
                                 tracing::info!("Committed {} -> {:?}", certificate.header, digest);
                             }
 
-                            // Update DAG size metric periodically to limit computation cost.
-                            // TODO: this should be triggered on collection when library support for
-                            // closure metrics is available.
-                            if i % 1_000 == 0 {
-                                self.metrics
-                                    .dag_size_bytes
-                                    .set((mysten_util_mem::malloc_size(&self.state.dag) + std::mem::size_of::<Dag>()) as i64);
-                            }
-
                             commited_certificates.push(certificate.clone());
                         }
 
