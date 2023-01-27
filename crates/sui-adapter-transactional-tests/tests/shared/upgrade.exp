@@ -17,13 +17,13 @@ Version: 2
 Contents: t::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
 
 task 4 'run'. lines 46-46:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer in function definition 1 at offset 0, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 1, instruction: 0 }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object (function index 1) at offset 0, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 1, instruction: 0, function_name: Some("share_object") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
 
 task 5 'run'. lines 48-48:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer in function definition 1 at offset 0, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 1, instruction: 0 }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object (function index 1) at offset 0, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 1, instruction: 0, function_name: Some("share_object") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
 
 task 6 'run'. lines 50-50:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer in function definition 1 at offset 0, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 1, instruction: 0 }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object (function index 1) at offset 0, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 1, instruction: 0, function_name: Some("share_object") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }

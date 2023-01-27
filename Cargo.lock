@@ -9296,6 +9296,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
+ "move-vm-runtime",
  "move-vm-types",
  "multiaddr",
  "narwhal-config",
