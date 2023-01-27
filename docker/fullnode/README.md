@@ -1,6 +1,6 @@
 # Run a Sui Devnet Full Node Locally with Docker
 
-Run a Sui Devnet [full node](../../doc/src/build/fullnode.md) locally for testing/experimenting by following the instructions below. This has been tested and should work for:
+Run a Sui Devnet [Full node](../../doc/src/build/fullnode.md) locally for testing/experimenting by following the instructions below. This has been tested and should work for:
 
 - linux/amd64
 - darwin/amd64
