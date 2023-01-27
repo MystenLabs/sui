@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-    bcsForVersion,
+  bcsForVersion,
   deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
@@ -12,6 +12,7 @@ import {
   SuiMoveObject,
   UnserializedSignableTransaction,
 } from '../../src';
+import { CallArgSerializer } from '../../src/signers/txn-data-serializers/call-arg-serializer';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -147,4 +148,47 @@ describe('Transaction Serialization and deserialization', () => {
     };
     expect(normalized).toEqual(moveCall);
   });
+
+  it('Move Call with Pure Arg', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    const moveCallExpected = { 
+      packageObjectId: '0x2',
+      module: 'devnet_nft',
+      function: 'mint',
+      typeArguments: [],
+      arguments: [
+        'Example NFT',
+        'An NFT created by the wallet Command Line Tool',
+        'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+      ],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: coins[0].objectId,
+    } as MoveCallTransaction;
+    const serArgsExpected = await new CallArgSerializer(
+      toolbox.provider
+    ).serializeMoveCallArguments(moveCallExpected);
+    
+    const version = await toolbox.provider.getRpcApiVersion();
+    const pureArg = { Pure: bcsForVersion(version).ser('string', 'Example NFT').toBytes() };
+    const moveCall = { 
+      packageObjectId: '0x2',
+      module: 'devnet_nft',
+      function: 'mint',
+      typeArguments: [],
+      arguments: [
+        pureArg,
+        'An NFT created by the wallet Command Line Tool',
+        'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+      ],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: coins[0].objectId,
+    } as MoveCallTransaction;
+    const serArgs = await new CallArgSerializer(
+      toolbox.provider
+    ).serializeMoveCallArguments(moveCall);
+    expect(serArgs).toEqual(serArgsExpected);
+
+  })
 });
