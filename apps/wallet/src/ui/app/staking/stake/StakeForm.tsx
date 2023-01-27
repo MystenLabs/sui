@@ -10,28 +10,38 @@ import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
-import { roundFloat } from '_helpers';
+import { parseAmount } from '_helpers';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
 const HIDE_MAX = true;
-const DECIMAL_PLACE = 9;
 
 export type StakeFromProps = {
     submitError: string | null;
     coinBalance: bigint;
     coinType: string;
+    coinDecimals: number;
     epoch: string;
     onClearSubmitError: () => void;
 };
+
+function AvailableBalance({ amount }: { amount: bigint }) {
+    const [formatted, symbol] = useFormatCoin(amount, SUI_TYPE_ARG);
+    return (
+        <Text variant="bodySmall" color="steel" weight="medium">
+            Available - {+formatted > 0 ? formatted : 0} {symbol}
+        </Text>
+    );
+}
 
 function StakeForm({
     submitError,
     coinBalance,
     coinType,
     onClearSubmitError,
+    coinDecimals,
     epoch,
 }: StakeFromProps) {
     const {
@@ -41,15 +51,16 @@ function StakeForm({
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
+    const gasBudget = BigInt(
+        coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0
+    );
 
     const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
         SUI_TYPE_ARG
     );
 
-    const coinBalanceMinusGas =
-        coinBalance -
-        BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
+    const coinBalanceMinusGas = coinBalance - gasBudget;
 
     const [maxToken, symbol, queryResult] = useFormatCoin(
         coinBalanceMinusGas,
@@ -62,9 +73,10 @@ function StakeForm({
     }, [maxToken, setFieldValue]);
 
     const calculateRemaining = useMemo(() => {
-        if (!maxToken) return 0;
-        return roundFloat(+maxToken - +amount, DECIMAL_PLACE);
-    }, [amount, maxToken]);
+        if (!coinBalance) return 0n;
+        const bigIntAmount = parseAmount(amount, coinDecimals);
+        return coinBalance - bigIntAmount - gasBudget;
+    }, [amount, coinBalance, coinDecimals, gasBudget]);
 
     return (
         <Form className="flex flex-1 flex-col flex-nowrap" autoComplete="off">
@@ -73,15 +85,7 @@ function StakeForm({
                     <Text variant="caption" color="gray-85" weight="semibold">
                         Enter the amount of SUI to stake
                     </Text>
-                    <Text
-                        variant="bodySmall"
-                        color="steel-dark"
-                        weight="medium"
-                    >
-                        Available -{' '}
-                        {calculateRemaining > 0 ? calculateRemaining : 0}{' '}
-                        {symbol}
-                    </Text>
+                    <AvailableBalance amount={calculateRemaining} />
                 </div>
                 <Card
                     variant="gray"
@@ -139,7 +143,7 @@ function StakeForm({
                             weight="medium"
                             color="steel-darker"
                         >
-                            Epoch #{+epoch + 1}
+                            Epoch #{+epoch + 2}
                         </Text>
                     </div>
                 </Card>

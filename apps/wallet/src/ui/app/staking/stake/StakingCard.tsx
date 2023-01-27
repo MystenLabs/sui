@@ -87,7 +87,7 @@ function StakingCard() {
     );
 
     const totalTokenBalance = useMemo(() => {
-        if (!allDelegation) return BigInt(0);
+        if (!allDelegation) return 0n;
         // return only the total amount of tokens staked for a specific stakeId
         if (stakeIdParams) {
             const balance =
@@ -108,7 +108,7 @@ function StakingCard() {
         () =>
             unstake
                 ? totalTokenBalance
-                : (coinType && aggregateBalances[coinType]) || BigInt(0),
+                : (coinType && aggregateBalances[coinType]) || 0n,
         [unstake, totalTokenBalance, coinType, aggregateBalances]
     );
 
@@ -143,7 +143,7 @@ function StakingCard() {
         () =>
             unstake
                 ? coinBalance + BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
-                : aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
+                : aggregateBalances[GAS_TYPE_ARG] || 0n,
         [aggregateBalances, coinBalance, unstake]
     );
 
@@ -362,6 +362,7 @@ function StakingCard() {
                                         submitError={sendError}
                                         coinBalance={coinBalance}
                                         coinType={coinType}
+                                        coinDecimals={coinDecimals}
                                         epoch={validatorsData.epoch}
                                         onClearSubmitError={
                                             handleOnClearSubmitError
