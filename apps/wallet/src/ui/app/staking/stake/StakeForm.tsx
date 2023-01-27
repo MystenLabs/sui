@@ -27,8 +27,14 @@ export type StakeFromProps = {
     onClearSubmitError: () => void;
 };
 
-function AvailableBalance({ amount }: { amount: bigint }) {
-    const [formatted, symbol] = useFormatCoin(amount, SUI_TYPE_ARG);
+function AvailableBalance({
+    amount,
+    coinType,
+}: {
+    amount: bigint;
+    coinType: string;
+}) {
+    const [formatted, symbol] = useFormatCoin(amount, coinType);
     return (
         <Text variant="bodySmall" color="steel" weight="medium">
             Available - {+formatted > 0 ? formatted : 0} {symbol}
@@ -51,19 +57,18 @@ function StakeForm({
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-    const gasBudget = BigInt(
-        coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0
-    );
 
     const [gasBudgetEstimation] = useFormatCoin(
         DEFAULT_GAS_BUDGET_FOR_STAKE,
         SUI_TYPE_ARG
     );
 
-    const coinBalanceMinusGas = coinBalance - gasBudget;
+    const totalAvailableBalance =
+        coinBalance -
+        BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
 
     const [maxToken, symbol, queryResult] = useFormatCoin(
-        coinBalanceMinusGas,
+        totalAvailableBalance,
         coinType
     );
 
@@ -75,8 +80,8 @@ function StakeForm({
     const calculateRemaining = useMemo(() => {
         if (!coinBalance) return 0n;
         const bigIntAmount = parseAmount(amount, coinDecimals);
-        return coinBalance - bigIntAmount - gasBudget;
-    }, [amount, coinBalance, coinDecimals, gasBudget]);
+        return totalAvailableBalance - bigIntAmount;
+    }, [amount, coinBalance, coinDecimals, totalAvailableBalance]);
 
     return (
         <Form className="flex flex-1 flex-col flex-nowrap" autoComplete="off">
@@ -85,7 +90,10 @@ function StakeForm({
                     <Text variant="caption" color="gray-85" weight="semibold">
                         Enter the amount of SUI to stake
                     </Text>
-                    <AvailableBalance amount={calculateRemaining} />
+                    <AvailableBalance
+                        amount={calculateRemaining}
+                        coinType={coinType}
+                    />
                 </div>
                 <Card
                     variant="gray"
