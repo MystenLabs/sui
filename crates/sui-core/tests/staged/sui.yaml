@@ -273,6 +273,8 @@ MoveLocation:
         TYPENAME: ModuleId
     - function: U16
     - instruction: U16
+    - function_name:
+        OPTION: STR
 MoveModulePublish:
   STRUCT:
     - modules:

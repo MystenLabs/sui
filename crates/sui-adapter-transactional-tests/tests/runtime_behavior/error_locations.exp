@@ -5,17 +5,17 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 32-32:
-Error: Transaction Effects Status: Move Runtime Abort. Location: test::m in function definition 0 at offset 1, Abort Code: 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1 }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::abort_ at offset 1"), exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::abort_ (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("abort_") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::abort_ at offset 1"), exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }) } }
 
 task 3 'run'. lines 34-34:
 Error: Transaction Effects Status: Insufficient Gas.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some(VMError { major_status: OUT_OF_GAS, sub_status: None, message: None, exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 0)] }) } }
 
 task 4 'run'. lines 36-36:
-Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::m in function definition 2 at offset 2. Arithmetic error, stack overflow, max value depth, etc.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 2 })), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 2)] }) } }
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::m::math (function index 2) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 2, instruction: 2, function_name: Some("math") })), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 2)] }) } }
 
 task 5 'run'. lines 38-38:
-Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::m in function definition 3 at offset 4. Arithmetic error, stack overflow, max value depth, etc.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 4 })), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: None, exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 4)] }) } }
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::m::vector_ (function index 3) at offset 4. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 3, instruction: 4, function_name: Some("vector_") })), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: None, exec_state: Some(ExecutionState { stack_trace: [] }), location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 4)] }) } }

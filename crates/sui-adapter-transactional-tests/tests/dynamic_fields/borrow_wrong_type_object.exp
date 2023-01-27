@@ -12,9 +12,9 @@ created: object(106), object(107), object(108)
 written: object(105)
 
 task 3 'run'. lines 43-43:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field in function definition 3 at offset 0, Abort Code: 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 3, instruction: 0 }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 0)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 3) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 3, instruction: 0, function_name: Some("borrow_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 0)] }) } }
 
 task 4 'run'. lines 45-45:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field in function definition 4 at offset 0, Abort Code: 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 4, instruction: 0 }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 0)] }) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object_mut (function index 4) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 4, instruction: 0, function_name: Some("borrow_child_object_mut") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 0)] }) } }
