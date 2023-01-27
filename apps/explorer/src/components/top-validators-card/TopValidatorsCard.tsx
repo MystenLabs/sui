@@ -20,11 +20,10 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
-import { getStakedPercent } from '~/utils/getStakedPercent';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-export function processValidators(set: ActiveValidator[], totalStake: bigint) {
+export function processValidators(set: ActiveValidator[]) {
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;
         const delegatedStake =
@@ -35,10 +34,6 @@ export function processValidators(set: ActiveValidator[], totalStake: bigint) {
             name: getName(rawName),
             address: av.fields.metadata.fields.sui_address,
             stake: totalValidatorStake,
-            stakePercent: getStakedPercent(
-                BigInt(totalValidatorStake),
-                totalStake
-            ),
             logo:
                 typeof av.fields.metadata.fields.image_url === 'string'
                     ? av.fields.metadata.fields.image_url
@@ -52,13 +47,8 @@ const validatorsTable = (
     limit?: number,
     showIcon?: boolean
 ) => {
-    const totalStake =
-        BigInt(validatorsData.validators.fields.total_validator_stake) +
-        BigInt(validatorsData.validators.fields.total_delegation_stake);
-
     const validators = processValidators(
-        validatorsData.validators.fields.active_validators,
-        totalStake
+        validatorsData.validators.fields.active_validators
     ).sort((a, b) =>
         a.name.localeCompare(b.name, 'en', {
             sensitivity: 'base',
