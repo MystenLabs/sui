@@ -29,11 +29,7 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
       return null;
     }
 
-    let gasPrice = await provider.getReferenceGasPrice();
-    // this is really wild; for some reason resulting gas price in the epoch is 1
-    // while the actual gasPrice is in 100+ range
-    if (gasPrice < 100) { gasPrice = 100; }
-
+    const gasPrice = await provider.getReferenceGasPrice();
     const gasRequred = GAS_BUDGET * BigInt(gasPrice);
     const { gas } = getGas(coins, gasRequred);
 
