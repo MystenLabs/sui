@@ -133,7 +133,6 @@ export function generateTransactionDigest(
   signature: string | Base64DataBuffer,
   publicKey: PublicKeyInitData | PublicKey,
   bcs: BCS,
-  serializationFmt: 'base64' | 'base58',
   excludeSig: boolean = false
 ): string {
   const signatureBytes = (
@@ -182,9 +181,7 @@ export function generateTransactionDigest(
     hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
   }
 
-  return serializationFmt === 'base58'
-    ? new Base58DataBuffer(hash).toString()
-    : new Base64DataBuffer(hash).toString();
+  return new Base58DataBuffer(hash).toString()
 }
 
 function isHex(value: string): boolean {

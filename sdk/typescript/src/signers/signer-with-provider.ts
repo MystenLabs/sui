@@ -163,7 +163,6 @@ export abstract class SignerWithProvider implements Signer {
       sig.signature,
       sig.pubKey,
       bcs,
-      'base58',
       true
     );
   }
