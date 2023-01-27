@@ -895,29 +895,23 @@ impl CheckpointSignatureAggregator {
             );
             return Err(());
         }
-        match self.signatures.insert(author, signature) {
+        match self.signatures.insert(signature) {
             InsertResult::RepeatingEntry { previous, new } => {
                 if previous != new {
                     warn!("Validator {:?} submitted two different signatures for checkpoint {}: {:?}, {:?}", author.concise(), self.summary.sequence_number, previous, new);
                 }
                 Err(())
             }
-            InsertResult::QuorumReached(values) => {
-                let signatures = values.values().cloned().collect();
-                match AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
-                    signatures,
-                    self.signatures.committee(),
-                ) {
-                    Ok(aggregated) => Ok(aggregated),
-                    Err(err) => {
-                        error!(
-                            "Unexpected error when aggregating signatures for checkpoint {}: {:?}",
-                            self.summary.sequence_number, err
-                        );
-                        Err(())
-                    }
-                }
+            InsertResult::Failed { error } => {
+                warn!(
+                    "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",
+                    author.concise(),
+                    self.summary.sequence_number,
+                    error
+                );
+                Err(())
             }
+            InsertResult::QuorumReached(cert) => Ok(cert),
             InsertResult::NotEnoughVotes => Err(()),
         }
     }
