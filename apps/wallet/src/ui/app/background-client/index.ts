@@ -143,7 +143,7 @@ export class BackgroundClient {
                 createMessage<KeyringPayload<'unlock'>>({
                     type: 'keyring',
                     method: 'unlock',
-                    args: { password: password },
+                    args: { password },
                     return: undefined,
                 })
             ).pipe(take(1))

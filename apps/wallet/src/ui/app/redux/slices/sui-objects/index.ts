@@ -16,6 +16,7 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { activeAccountSelector } from '../account';
 import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
 
@@ -89,11 +90,12 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, keypairVault, background }, dispatch }) => {
-        const signer = api.getSignerInstance(
-            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
-            background
-        );
+    async (_, { extra: { api, background }, dispatch, getState }) => {
+        const activeAddress = activeAccountSelector(getState());
+        if (!activeAddress) {
+            throw new Error('Error, active address is not defined');
+        }
+        const signer = api.getSignerInstance(activeAddress, background);
         await ExampleNFT.mintExampleNFT(signer);
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
@@ -112,11 +114,12 @@ export const transferNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferNFT',
-    async (data, { extra: { api, keypairVault, background }, dispatch }) => {
-        const signer = api.getSignerInstance(
-            keypairVault.getKeypair().getPublicKey().toSuiAddress(),
-            background
-        );
+    async (data, { extra: { api, background }, dispatch, getState }) => {
+        const activeAddress = activeAccountSelector(getState());
+        if (!activeAddress) {
+            throw new Error('Error, active address is not defined');
+        }
+        const signer = api.getSignerInstance(activeAddress, background);
         const txn = await signer.transferObject(data);
         await dispatch(fetchAllOwnedAndRequiredObjects());
         const txnResp = {

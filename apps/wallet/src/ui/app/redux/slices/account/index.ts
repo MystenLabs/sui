@@ -4,28 +4,24 @@
 import { getObjectId } from '@mysten/sui.js';
 import {
     createAsyncThunk,
+    createEntityAdapter,
     createSelector,
     createSlice,
 } from '@reduxjs/toolkit';
 import Browser from 'webextension-polyfill';
 
-import { isKeyringPayload } from '_payloads/keyring';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 
-import type {
-    ObjectId,
-    SuiAddress,
-    SuiMoveObject,
-    ExportedKeypair,
-} from '@mysten/sui.js';
+import type { ObjectId, SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
+import type { AccountSerialized } from '_src/background/keyring/Account';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const createVault = createAsyncThunk<
-    ExportedKeypair,
+    void,
     {
         importedEntropy?: string;
         password: string;
@@ -34,18 +30,8 @@ export const createVault = createAsyncThunk<
 >(
     'account/createVault',
     async ({ importedEntropy, password }, { extra: { background } }) => {
-        const { payload } = await background.createVault(
-            password,
-            importedEntropy
-        );
+        await background.createVault(password, importedEntropy);
         await background.unlockWallet(password);
-        if (!isKeyringPayload(payload, 'create')) {
-            throw new Error('Unknown payload');
-        }
-        if (!payload.return?.keypair) {
-            throw new Error('Empty keypair in payload');
-        }
-        return payload.return.keypair;
     }
 );
 
@@ -67,6 +53,24 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
+const accountsAdapter = createEntityAdapter<AccountSerialized>({
+    selectId: ({ address }) => address,
+    sortComparer: (a, b) => {
+        if (a.type !== b.type) {
+            // first derived accounts
+            return a.type === 'derived' ? -1 : 1;
+        } else if (a.type === 'derived') {
+            // sort derived accounts by derivation path
+            return (a.derivationPath || '').localeCompare(
+                b.derivationPath || ''
+            );
+        } else {
+            // sort imported account by address
+            return a.address.localeCompare(b.address);
+        }
+    },
+});
+
 type AccountState = {
     creating: boolean;
     address: SuiAddress | null;
@@ -74,12 +78,12 @@ type AccountState = {
     isInitialized: boolean | null;
 };
 
-const initialState: AccountState = {
+const initialState = accountsAdapter.getInitialState<AccountState>({
     creating: false,
     address: null,
     isLocked: null,
     isInitialized: null,
-};
+});
 
 const accountSlice = createSlice({
     name: 'account',
@@ -92,14 +96,14 @@ const accountSlice = createSlice({
             state,
             {
                 payload,
-            }: PayloadAction<KeyringPayload<'walletStatusUpdate'>['return']>
+            }: PayloadAction<
+                Required<KeyringPayload<'walletStatusUpdate'>>['return']
+            >
         ) => {
-            if (typeof payload?.isLocked !== 'undefined') {
-                state.isLocked = payload.isLocked;
-            }
-            if (typeof payload?.isInitialized !== 'undefined') {
-                state.isInitialized = payload.isInitialized;
-            }
+            state.isLocked = payload.isLocked;
+            state.isInitialized = payload.isInitialized;
+            state.address = payload.activeAddress || null; // is already normalized
+            accountsAdapter.setAll(state, payload.accounts);
         },
     },
     extraReducers: (builder) =>
@@ -117,6 +121,10 @@ const accountSlice = createSlice({
 });
 
 export const { setAddress, setKeyringStatus } = accountSlice.actions;
+
+export const accountsAdapterSelectors = accountsAdapter.getSelectors(
+    (state: RootState) => state.account
+);
 
 const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
