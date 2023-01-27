@@ -13,10 +13,26 @@ use tokio::task;
 use tokio::time::sleep;
 use tracing::info;
 
-const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-", env!("GIT_REVISION"));
+const GIT_REVISION: &str = {
+    if let Some(revision) = option_env!("GIT_REVISION") {
+        revision
+    } else {
+        let version = git_version::git_version!(
+            args = ["--always", "--dirty", "--exclude", "*"],
+            fallback = ""
+        );
+
+        if version.is_empty() {
+            panic!("unable to query git revision");
+        }
+        version
+    }
+};
+const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
+#[clap(name = env!("CARGO_BIN_NAME"))]
 #[clap(version = VERSION)]
 struct Args {
     #[clap(long)]

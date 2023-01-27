@@ -127,6 +127,7 @@ console = { version = "0.15", default-features = false, features = ["ansi-parsin
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1" }
 const-oid = { version = "0.9", default-features = false }
+const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
@@ -231,6 +232,7 @@ getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-f
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 ghash = { version = "0.5", default-features = false }
 gimli = { version = "0.27", default-features = false, features = ["read"] }
+git-version = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
 globwalk = { version = "0.8", default-features = false }
@@ -777,6 +779,7 @@ console = { version = "0.15", default-features = false, features = ["ansi-parsin
 console-api = { version = "0.4", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1" }
 const-oid = { version = "0.9", default-features = false }
+const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
 convert_case-9fbad63c4bcf4a8f = { package = "convert_case", version = "0.4", default-features = false }
 convert_case-3b31131e45eafb45 = { package = "convert_case", version = "0.6", default-features = false }
@@ -897,6 +900,8 @@ getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-f
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 ghash = { version = "0.5", default-features = false }
 gimli = { version = "0.27", default-features = false, features = ["read"] }
+git-version = { version = "0.3", default-features = false }
+git-version-macro = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
 globwalk = { version = "0.8", default-features = false }
@@ -1126,6 +1131,7 @@ primitive-types = { version = "0.10", features = ["impl-serde"] }
 proc-macro-crate = { version = "1", default-features = false }
 proc-macro-error = { version = "1" }
 proc-macro-error-attr = { version = "1", default-features = false }
+proc-macro-hack = { version = "0.5", default-features = false }
 proc-macro2-9fbad63c4bcf4a8f = { package = "proc-macro2", version = "0.4" }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
