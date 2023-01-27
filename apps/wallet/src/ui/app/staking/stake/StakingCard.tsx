@@ -279,7 +279,7 @@ function StakingCard() {
                     txDigest = getTransactionDigest(response);
                 }
 
-                //  invalidate the react query for 0x5 and validator
+                // Invalidate the react query for 0x5 and validator
                 Promise.all([
                     queryClient.invalidateQueries({
                         queryKey: ['object', normalizeSuiAddress(STATE_OBJECT)],
