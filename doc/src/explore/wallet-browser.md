@@ -145,7 +145,7 @@ Your stake starts earning rewards at the start of the next epoch.
 
 ## View current stake
 
-To view details about your current stakes, click Currently Staked on the Coins tab of the Wallet. Details include: the amount you staked, the validator you chose, amount earned, and the validator commission.
+To view details about your current stakes, click **Currently Staked** on the **Coins** tab of the Wallet. Details include: the amount you staked, the validator you chose, amount earned, and the validator commission.
 
 ## View recent transaction details
 
