@@ -4296,6 +4296,10 @@
                   },
                   "initial_shared_version": {
                     "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "mutable": {
+                    "default": true,
+                    "type": "boolean"
                   }
                 }
               }

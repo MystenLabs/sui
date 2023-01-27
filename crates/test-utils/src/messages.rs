@@ -192,6 +192,7 @@ pub async fn make_counter_increment_transaction_with_wallet_context(
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: counter_id,
             initial_shared_version: counter_initial_shared_version,
+            mutable: true,
         })],
         MAX_GAS,
     );
@@ -263,6 +264,7 @@ pub fn test_shared_object_transactions() -> Vec<VerifiedTransaction> {
                 CallArg::Object(ObjectArg::SharedObject {
                     id: shared_object_id,
                     initial_shared_version,
+                    mutable: true,
                 }),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
@@ -381,6 +383,7 @@ pub fn make_counter_increment_transaction(
         vec![CallArg::Object(ObjectArg::SharedObject {
             id: counter_id,
             initial_shared_version: counter_initial_shared_version,
+            mutable: true,
         })],
         MAX_GAS,
         gas_price.unwrap_or(1),
@@ -407,6 +410,7 @@ pub fn make_delegation_transaction(
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
             }),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
             CallArg::Pure(bcs::to_bytes(&validator).unwrap()),

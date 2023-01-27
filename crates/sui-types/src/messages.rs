@@ -81,10 +81,12 @@ pub enum CallArg {
 pub enum ObjectArg {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedObject(ObjectRef),
-    // A Move object that's shared and mutable.
+    // A Move object that's shared.
+    // SharedObject::mutable controls whether caller asks for a mutable reference to shared object.
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
+        mutable: bool,
     },
 }
 
@@ -247,12 +249,15 @@ impl MoveCall {
                 CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
+                    mutable,
                 }) => {
                     let id = *id;
                     let initial_shared_version = *initial_shared_version;
+                    let mutable = *mutable;
                     Some(vec![InputObjectKind::SharedMoveObject {
                         id,
                         initial_shared_version,
+                        mutable,
                     }])
                 }
                 CallArg::ObjVec(vec) => Some(
@@ -264,12 +269,15 @@ impl MoveCall {
                             ObjectArg::SharedObject {
                                 id,
                                 initial_shared_version,
+                                mutable,
                             } => {
                                 let id = *id;
                                 let initial_shared_version = *initial_shared_version;
+                                let mutable = *mutable;
                                 InputObjectKind::SharedMoveObject {
                                     id,
                                     initial_shared_version,
+                                    mutable,
                                 }
                             }
                         })
@@ -314,6 +322,7 @@ impl SingleTransactionKind {
                         CallArg::Object(ObjectArg::SharedObject {
                             id,
                             initial_shared_version,
+                            .. // todo (RWLocks) - differentiate immutable shared refs
                         }) => Some(vec![(id, initial_shared_version)]),
                         CallArg::ObjVec(vec) => Some(
                             vec.iter()
@@ -321,6 +330,7 @@ impl SingleTransactionKind {
                                     if let ObjectArg::SharedObject {
                                         id,
                                         initial_shared_version,
+                                        .. // todo (RWLocks) - differentiate immutable shared refs
                                     } = obj_arg
                                     {
                                         Some((id, initial_shared_version))
@@ -395,6 +405,7 @@ impl SingleTransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_SYSTEM_STATE_OBJECT_ID,
                     initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
                 }]
             }
             Self::Genesis(_) => {
@@ -1503,6 +1514,7 @@ pub enum EntryArgumentErrorKind {
     ObjectKindMismatch,
     UnsupportedPureArg,
     ArityMismatch,
+    ObjectMutabilityMismatch,
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1758,6 +1770,12 @@ impl Display for EntryArgumentErrorKind {
                 write!(
                     f,
                     "Mismatch between the number of actual versus expected arguments."
+                )
+            }
+            EntryArgumentErrorKind::ObjectMutabilityMismatch => {
+                write!(
+                    f,
+                    "Mismatch between the mutability of actual versus expected arguments."
                 )
             }
         }
@@ -2091,6 +2109,7 @@ pub enum InputObjectKind {
     SharedMoveObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
+        mutable: bool,
     },
 }
 
@@ -2216,17 +2235,6 @@ impl InputObjects {
             .into_iter()
             .map(|(_, object)| (object.id(), object))
             .collect()
-    }
-}
-
-impl From<Vec<Object>> for InputObjects {
-    fn from(objects: Vec<Object>) -> Self {
-        Self::new(
-            objects
-                .into_iter()
-                .map(|o| (o.input_object_kind(), o))
-                .collect(),
-        )
     }
 }
 

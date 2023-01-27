@@ -83,6 +83,8 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+    6:
+      ObjectMutabilityMismatch: UNIT
 EntryTypeArgumentError:
   STRUCT:
     - argument_idx: U16
@@ -355,6 +357,7 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
+          - mutable: BOOL
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:

@@ -824,11 +824,13 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                 CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
+                    mutable,
                 }) => {
                     let (o, arg_type, param_type) = serialize_object(
                         InputObjectKind::SharedMoveObject {
                             id,
                             initial_shared_version,
+                            mutable,
                         },
                         idx,
                         param_type,
@@ -858,9 +860,11 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                             ObjectArg::SharedObject {
                                 id,
                                 initial_shared_version,
+                                mutable,
                             } => InputObjectKind::SharedMoveObject {
                                 id,
                                 initial_shared_version,
+                                mutable,
                             },
                         };
                         let (o, arg_type, param_type) = serialize_object(
@@ -1055,7 +1059,6 @@ fn serialize_object<'a>(
             return Err(ExecutionErrorKind::InvariantViolation.into());
         }
     };
-
     match object_kind {
         InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
             let error = format!(
@@ -1071,19 +1074,54 @@ fn serialize_object<'a>(
                 error,
             ));
         }
-        InputObjectKind::SharedMoveObject { .. } if !object.is_shared() => {
-            let error = format!(
-                "Argument at index {} populated with an immutable or owned object id {} \
-                        but an shared object was expected",
-                idx, object_id
-            );
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(
-                    idx,
-                    EntryArgumentErrorKind::ObjectKindMismatch,
-                ),
-                error,
-            ));
+        InputObjectKind::SharedMoveObject { mutable, .. } => {
+            if !object.is_shared() {
+                let error = format!(
+                    "Argument at index {} populated with an immutable or owned object id {} \
+                            but an shared object was expected",
+                    idx, object_id
+                );
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::entry_argument_error(
+                        idx,
+                        EntryArgumentErrorKind::ObjectKindMismatch,
+                    ),
+                    error,
+                ));
+            }
+            // Immutable shared object can only pass as immutable reference to move call
+            if !mutable {
+                match param_type {
+                    SignatureToken::Reference(_) => {} // ok
+                    SignatureToken::MutableReference(_) => {
+                        let error = format!(
+                            "Argument at index {} populated with an immutable shared object id {} \
+                            but move call takes mutable object reference",
+                            idx, object_id
+                        );
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::ObjectMutabilityMismatch,
+                            ),
+                            error,
+                        ));
+                    }
+                    _ => {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::InvalidObjectByValue,
+                            ),
+                            format!(
+                                "Shared objects cannot be passed by-value, \
+                                    violation found in argument {}",
+                                idx
+                            ),
+                        ));
+                    }
+                }
+            }
         }
         _ => (),
     }

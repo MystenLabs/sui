@@ -90,6 +90,7 @@ async fn call_shared_object_contract() {
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
+        mutable: true,
     };
 
     // Ensure the value of the counter is `0`.
@@ -169,6 +170,7 @@ async fn shared_object_flood() {
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
+        mutable: true,
     };
 
     // Ensure the value of the counter is `0`.
@@ -250,6 +252,7 @@ async fn shared_object_sync() {
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
         initial_shared_version: counter_initial_shared_version,
+        mutable: true,
     };
 
     // Check that the counter object exists in at least one of the validators the transaction was
