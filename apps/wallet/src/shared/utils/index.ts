@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGrowthBook } from '@growthbook/growthbook-react';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
 
 import { trackPageview, trackEvent } from '../plausible';
 import { useAppSelector } from '_hooks';
-import { setAttributes } from '_src/ui/app/experimentation/feature-gating';
+import { setAttributes } from '_src/shared/experimentation/features';
 
 export const MAIN_UI_URL = Browser.runtime.getURL('ui.html');
 
@@ -21,9 +22,11 @@ export function usePageView() {
     // Use customRPC url if apiEnv is customRPC
     const activeNetwork =
         customRPC && apiEnv === 'customRPC' ? customRPC : apiEnv.toUpperCase();
-
+    const growthBook = useGrowthBook();
     useEffect(() => {
-        setAttributes(activeNetwork);
+        if (growthBook) {
+            setAttributes(growthBook, { apiEnv, customRPC });
+        }
 
         trackPageview({
             url: location.pathname,
@@ -35,7 +38,7 @@ export function usePageView() {
                 source: `${location.pathname}${location.search}`,
             },
         });
-    }, [activeNetwork, location]);
+    }, [activeNetwork, location, growthBook, apiEnv, customRPC]);
 }
 
 export function isValidUrl(url: string | null) {

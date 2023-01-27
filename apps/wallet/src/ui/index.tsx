@@ -9,15 +9,12 @@ import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
 import App from './app';
-import { API_ENV } from './app/ApiProvider';
-import {
-    growthbook,
-    setAttributes,
-} from './app/experimentation/feature-gating';
+import { growthbook } from './app/experimentation/feature-gating';
 import { queryClient } from './app/helpers/queryClient';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
 import { getFromLocationSearch } from '_redux/slices/app/AppType';
+import { setAttributes } from '_src/shared/experimentation/features';
 import initSentry from '_src/shared/sentry';
 import store from '_store';
 import { thunkExtras } from '_store/thunk-extras';
@@ -35,10 +32,7 @@ async function init() {
     store.dispatch(initAppType(getFromLocationSearch(window.location.search)));
     await thunkExtras.background.init(store.dispatch);
     const { apiEnv, customRPC } = store.getState().app;
-
-    const network =
-        apiEnv === API_ENV.customRPC ? customRPC : apiEnv.toUpperCase();
-    setAttributes(network);
+    setAttributes(growthbook, { apiEnv, customRPC });
 }
 
 function renderApp() {

@@ -5,6 +5,7 @@ import { lte, coerce } from 'semver';
 import Browser from 'webextension-polyfill';
 
 import { LOCK_ALARM_NAME } from './Alarms';
+import FeatureGating from './FeatureGating';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import { Connections } from './connections';
@@ -12,6 +13,7 @@ import Keyring from './keyring';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
+import { setAttributes } from '_src/shared/experimentation/features';
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
     // Skip automatically opening the onboarding in end-to-end tests.
@@ -88,7 +90,17 @@ if (!isSessionStorageSupported()) {
         }
     });
 }
+NetworkEnv.getActiveNetwork().then(async ({ env, customRpcUrl }) => {
+    setAttributes(await FeatureGating.getGrowthBook(), {
+        apiEnv: env,
+        customRPC: customRpcUrl,
+    });
+});
 
-NetworkEnv.on('changed', (network) => {
+NetworkEnv.on('changed', async (network) => {
+    setAttributes(await FeatureGating.getGrowthBook(), {
+        apiEnv: network.env,
+        customRPC: network.customRpcUrl,
+    });
     connections.notifyUI({ event: 'networkChanged', network });
 });
