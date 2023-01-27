@@ -169,7 +169,7 @@ export type CallArg =
   | { ObjVec: ArrayLike<ObjectArg> };
 
 /**
- * An pure argument.
+ * A pure argument.
  */
 export type PureArg = { Pure: ArrayLike<number> };
 
