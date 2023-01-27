@@ -27,12 +27,16 @@ use move_core_types::{ident_str, language_storage::ModuleId};
 use sui_types::{
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::ExecutionError,
+    move_package::FnInfoMap,
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{verification_failure, INIT_FN_NAME};
+use crate::{is_test_fun, verification_failure, INIT_FN_NAME};
 
-pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
+pub fn verify_module(
+    module: &CompiledModule,
+    fn_info_map: &FnInfoMap,
+) -> Result<(), ExecutionError> {
     // In Sui's framework code there is an exception to the one-time witness type rule - we have a
     // SUI type in the sui module but it is instantiated outside of the module initializer (in fact,
     // the module has no initializer). The reason for it is that the SUI coin is only instantiated
@@ -88,9 +92,12 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
         }
         if let Some((candidate_name, _, def)) = one_time_witness_candidate {
             // only verify lack of one-time witness type instantiations if we have a one-time
-            // witness type candidate
-            verify_no_instantiations(module, fn_def, candidate_name, def)
-                .map_err(verification_failure)?;
+            // witness type candidate and if instantiation does not happen in test code
+
+            if !is_test_fun(fn_name, module, fn_info_map) {
+                verify_no_instantiations(module, fn_def, candidate_name, def)
+                    .map_err(verification_failure)?;
+            }
         }
     }
 

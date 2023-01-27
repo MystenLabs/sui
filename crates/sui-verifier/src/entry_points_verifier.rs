@@ -16,10 +16,13 @@ use sui_types::{
     },
     error::ExecutionError,
     id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
+    move_package::FnInfoMap,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{format_signature_token, resolve_struct, verification_failure, INIT_FN_NAME};
+use crate::{
+    format_signature_token, is_test_fun, resolve_struct, verification_failure, INIT_FN_NAME,
+};
 
 /// Checks valid rules rules for entry points, both for module initialization and transactions
 ///
@@ -37,12 +40,19 @@ use crate::{format_signature_token, resolve_struct, verification_failure, INIT_F
 /// - The function may have a &mut TxContext or &TxContext (see `is_tx_context`) parameter
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
-pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
+pub fn verify_module(
+    module: &CompiledModule,
+    fn_info_map: &FnInfoMap,
+) -> Result<(), ExecutionError> {
     for func_def in &module.function_defs {
-        verify_init_not_called(module, func_def).map_err(verification_failure)?;
-
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
+
+        // allow calling init function in the test code
+        if !is_test_fun(name, module, fn_info_map) {
+            verify_init_not_called(module, func_def).map_err(verification_failure)?;
+        }
+
         if name == INIT_FN_NAME {
             verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
