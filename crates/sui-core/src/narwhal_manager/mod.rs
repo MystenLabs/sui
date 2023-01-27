@@ -14,10 +14,7 @@ use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::NodeStorage;
 use narwhal_worker::TransactionValidator;
-use prometheus::{
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntGauge, IntGaugeVec,
-    Registry,
-};
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -41,17 +38,18 @@ pub struct NarwhalConfiguration {
 }
 
 pub struct NarwhalManagerMetrics {
-    start_latency: IntGaugeVec,
+    start_latency: IntGauge,
     shutdown_latency: IntGauge,
+    start_primary_retries: IntGauge,
+    start_worker_retries: IntGauge,
 }
 
 impl NarwhalManagerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            start_latency: register_int_gauge_vec_with_registry!(
+            start_latency: register_int_gauge_with_registry!(
                 "narwhal_manager_start_latency",
                 "The latency of starting up narwhal nodes",
-                &["primary_retries", "worker_retries"],
                 registry,
             )
             .unwrap(),
@@ -59,6 +57,18 @@ impl NarwhalManagerMetrics {
                 "narwhal_manager_shutdown_latency",
                 "The latency of shutting down narwhal nodes",
                 registry,
+            )
+            .unwrap(),
+            start_primary_retries: register_int_gauge_with_registry!(
+                "narwhal_manager_start_primary_retries",
+                "The number of retries took to start narwhal primary node",
+                registry
+            )
+            .unwrap(),
+            start_worker_retries: register_int_gauge_with_registry!(
+                "narwhal_manager_start_worker_retries",
+                "The number of retries took to start narwhal worker node",
+                registry
             )
             .unwrap(),
         }
@@ -206,8 +216,12 @@ impl NarwhalManager {
 
         self.metrics
             .start_latency
-            .with_label_values(&[&primary_retries.to_string(), &worker_retries.to_string()])
             .set(now.elapsed().as_secs_f64() as i64);
+
+        self.metrics
+            .start_primary_retries
+            .set(primary_retries as i64);
+        self.metrics.start_worker_retries.set(worker_retries as i64);
 
         *running = Running::True(committee.epoch());
     }
