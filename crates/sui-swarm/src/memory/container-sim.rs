@@ -3,9 +3,10 @@
 
 use prometheus::Registry;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use sui_config::NodeConfig;
-use sui_node::SuiNode;
+use sui_node::{SuiNode, SuiNodeHandle};
+use tokio::sync::watch;
 use tracing::{info, trace};
 
 use super::node::RuntimeType;
@@ -13,12 +14,13 @@ use super::node::RuntimeType;
 #[derive(Debug)]
 pub(crate) struct Container {
     handle: Option<ContainerHandle>,
-    cancel_sender: Option<tokio::sync::watch::Sender<bool>>,
+    cancel_sender: Option<watch::Sender<bool>>,
 }
 
 #[derive(Debug)]
 struct ContainerHandle {
     node_id: sui_simulator::task::NodeId,
+    node_handle: watch::Receiver<Weak<SuiNodeHandle>>,
 }
 
 /// When dropped, stop and wait for the node running in this Container to completely shutdown.
@@ -34,8 +36,8 @@ impl Drop for Container {
 impl Container {
     /// Spawn a new Node.
     pub async fn spawn(config: NodeConfig, _runtime: RuntimeType) -> Self {
-        let (startup_sender, mut startup_reciever) = tokio::sync::watch::channel(false);
-        let (cancel_sender, cancel_reciever) = tokio::sync::watch::channel(false);
+        let (startup_sender, mut node_handle) = watch::channel(Weak::new());
+        let (cancel_sender, cancel_reciever) = watch::channel(false);
 
         let handle = sui_simulator::runtime::Handle::current();
         let builder = handle.create_node();
@@ -59,9 +61,11 @@ impl Container {
                 let startup_sender = startup_sender.clone();
                 async move {
                     let registry_service = mysten_metrics::RegistryService::new(Registry::new());
-                    let _server = SuiNode::start(&config, registry_service).await.unwrap();
+                    let node = SuiNode::start(&config, registry_service).await.unwrap();
+                    let node_handle = Arc::new(SuiNodeHandle::new(node.clone()));
+                    let node_handle_weak = Arc::downgrade(&node_handle);
 
-                    startup_sender.send(true).ok();
+                    startup_sender.send(node_handle_weak.clone()).ok();
 
                     // run until canceled
                     loop {
@@ -70,15 +74,23 @@ impl Container {
                         }
                     }
                     trace!("cancellation received; shutting down thread");
+                    drop(node_handle);
+                    assert!(
+                        node_handle_weak.upgrade().is_none(),
+                        "strong reference to node_handle detected"
+                    );
                 }
             })
             .build();
 
-        startup_reciever.changed().await.unwrap();
-        assert!(*startup_reciever.borrow());
+        node_handle.changed().await.unwrap();
+        assert!(node_handle.borrow().upgrade().is_some());
 
         Self {
-            handle: Some(ContainerHandle { node_id: node.id() }),
+            handle: Some(ContainerHandle {
+                node_id: node.id(),
+                node_handle,
+            }),
             cancel_sender: Some(cancel_sender),
         }
     }
@@ -92,5 +104,12 @@ impl Container {
         } else {
             false
         }
+    }
+
+    /// Get a weak reference to the current NodeHandle. After upgrading the reference, the caller
+    /// must be careful not to hold onto the strong reference for any longer than necessary, as
+    /// this would prevent the node from being deallocated if it crashes / is stopped.
+    pub fn watch_node_handle(&self) -> watch::Receiver<Weak<SuiNodeHandle>> {
+        self.handle.as_ref().unwrap().node_handle.clone()
     }
 }

@@ -49,6 +49,12 @@ use std::sync::Arc;
 /// Wrap SuiNode to allow correct access to SuiNode in simulator tests.
 pub struct SuiNodeHandle(Arc<SuiNode>);
 
+impl std::fmt::Debug for SuiNodeHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SuiNodeHandle({:?})", self.0.state().name.concise())
+    }
+}
+
 impl SuiNodeHandle {
     pub fn new(node: Arc<SuiNode>) -> Self {
         Self(node)

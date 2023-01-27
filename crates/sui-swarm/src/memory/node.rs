@@ -3,10 +3,12 @@
 
 use anyhow::anyhow;
 use anyhow::Result;
-use std::sync::Mutex;
+use std::sync::{Mutex, Weak};
 use sui_config::NodeConfig;
+use sui_node::SuiNodeHandle;
 use sui_types::base_types::AuthorityName;
 use tap::TapFallible;
+use tokio::sync::watch;
 use tracing::{error, info};
 
 use super::container::Container;
@@ -70,6 +72,11 @@ impl Node {
     /// If this Node is currently running
     pub fn is_running(&self) -> bool {
         self.container.lock().unwrap().is_some()
+    }
+
+    pub fn subscribe_to_sui_node_handle(&self) -> watch::Receiver<Weak<SuiNodeHandle>> {
+        let cont = self.container.lock().unwrap();
+        cont.as_ref().unwrap().watch_node_handle()
     }
 
     /// Perform a health check on this Node by:

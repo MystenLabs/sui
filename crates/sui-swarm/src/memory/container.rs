@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::FutureExt;
+use std::sync::Arc;
 use std::thread;
 use sui_config::NodeConfig;
 use sui_node::{metrics, SuiNode};
@@ -110,5 +111,9 @@ impl Container {
         } else {
             false
         }
+    }
+
+    pub fn node_handle(&self) -> Weak<NodeHandle> {
+        todo!();
     }
 }
