@@ -85,6 +85,48 @@ pub fn read_transactions(
     })
 }
 
+pub fn read_last_transaction(
+    pg_pool_conn: &mut PgPoolConnection,
+) -> Result<Option<Transaction>, IndexerError> {
+    let txn_read_result: Result<Option<Transaction>, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            transactions_table
+                .order(id.desc())
+                .first::<Transaction>(conn)
+                .optional()
+        });
+
+    txn_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading last transaction with err: {:?}",
+            e
+        ))
+    })
+}
+
+pub fn read_transactions_since(
+    pg_pool_conn: &mut PgPoolConnection,
+    since: NaiveDateTime,
+) -> Result<Vec<Transaction>, IndexerError> {
+    let txn_read_result: Result<Vec<Transaction>, Error> = pg_pool_conn
+        .build_transaction()
+        .read_only()
+        .run::<_, Error, _>(|conn| {
+            transactions_table
+                .filter(transactions::transaction_time.gt(since))
+                .load::<Transaction>(conn)
+        });
+
+    txn_read_result.map_err(|e| {
+        IndexerError::PostgresReadError(format!(
+            "Failed reading transactions since {} with err: {:?}",
+            since, e
+        ))
+    })
+}
+
 pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
     tx_resps: Vec<SuiTransactionResponse>,

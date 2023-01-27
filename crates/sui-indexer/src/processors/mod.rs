@@ -5,3 +5,4 @@ pub mod address_processor;
 pub mod object_processor;
 pub mod package_processor;
 pub mod processor_orchestrator;
+pub mod transaction_stats_processor;

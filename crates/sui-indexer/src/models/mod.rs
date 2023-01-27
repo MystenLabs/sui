@@ -12,6 +12,7 @@ pub mod objects;
 pub mod package_logs;
 pub mod packages;
 pub mod transaction_logs;
+pub mod transaction_stats;
 pub mod transactions;
 // TODO: remove below after wave 2
 pub mod move_event_logs;

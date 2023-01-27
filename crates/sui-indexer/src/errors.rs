@@ -35,8 +35,14 @@ pub enum IndexerError {
     #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
     RpcClientInitError(String),
 
+    #[error("Indexer failed to convert timestamp to NaiveDateTime.")]
+    TimestampOverflow,
+
     #[error("Indexer failed to parse transaction digest read from DB with error: `{0}`")]
     TransactionDigestParsingError(String),
+
+    #[error("Indexer failed to find transaction time, which should not happen.")]
+    TransactionTimeNotAvailable,
 }
 
 impl IndexerError {
@@ -55,6 +61,8 @@ impl IndexerError {
             IndexerError::PgConnectionPoolInitError(_) => "PgConnectionPoolInitError".into(),
             IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
             IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
+            IndexerError::TransactionTimeNotAvailable => "TransactionTimeNotAvailable".into(),
+            IndexerError::TimestampOverflow => "TimestampOverflow".into(),
         }
     }
 }

@@ -325,3 +325,28 @@ impl IndexerPackageProcessorMetrics {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct IndexerTransactionStatsProcessorMetrics {
+    pub total_transaction_stats_processed: IntCounter,
+    pub total_transaction_stats_error: IntCounter,
+}
+
+impl IndexerTransactionStatsProcessorMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_transaction_stats_processed: register_int_counter_with_registry!(
+                "total_transaction_stats_processed",
+                "Total number of transaction stats processed",
+                registry,
+            )
+            .unwrap(),
+            total_transaction_stats_error: register_int_counter_with_registry!(
+                "total_transaction_stats_error",
+                "Total number of transaction stats error",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}

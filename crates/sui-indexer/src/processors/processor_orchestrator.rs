@@ -13,6 +13,7 @@ use tracing::{error, info, warn};
 use crate::processors::address_processor::AddressProcessor;
 use crate::processors::object_processor::ObjectProcessor;
 use crate::processors::package_processor::PackageProcessor;
+use crate::processors::transaction_stats_processor::TransactionStatsProcessor;
 
 pub struct ProcessorOrchestrator {
     rpc_client: SuiClient,
@@ -44,6 +45,8 @@ impl ProcessorOrchestrator {
             self.conn_pool.clone(),
             &self.prometheus_registry,
         );
+        let transaction_stats_processor =
+            TransactionStatsProcessor::new(self.conn_pool.clone(), &self.prometheus_registry);
 
         let addr_handle = tokio::task::spawn(async move {
             let addr_result = retry(ExponentialBackoff::default(), || async {
@@ -114,7 +117,30 @@ impl ProcessorOrchestrator {
                 );
             }
         });
-        try_join_all(vec![addr_handle, pkg_handle, obj_handle])
+        let txn_stats_handle = tokio::task::spawn(async move {
+            let txn_stats_result = retry(ExponentialBackoff::default(), || async {
+                let txn_stats_processor_exec_res = transaction_stats_processor.start().await;
+                if let Err(e) = txn_stats_processor_exec_res.clone() {
+                    transaction_stats_processor
+                        .transaction_stats_processor_metrics
+                        .total_transaction_stats_error
+                        .inc();
+                    warn!(
+                        "Indexer transaction stats processor failed with error: {:?}, retrying...",
+                        e
+                    );
+                }
+                Ok(txn_stats_processor_exec_res?)
+            })
+            .await;
+            if let Err(e) = txn_stats_result {
+                error!(
+                    "Indexer transaction stats processor failed after retrials with error {:?}",
+                    e
+                );
+            }
+        });
+        try_join_all(vec![addr_handle, pkg_handle, obj_handle, txn_stats_handle])
             .await
             .expect("Processor orchestrator should not run into errors.");
     }

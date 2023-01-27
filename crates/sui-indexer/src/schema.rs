@@ -162,6 +162,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    transaction_stats (id) {
+        id -> Int8,
+        computation_time -> Timestamp,
+        start_txn_time -> Timestamp,
+        end_txn_time -> Timestamp,
+        tps -> Float4,
+    }
+}
+
+diesel::table! {
     transactions (id) {
         id -> Int8,
         transaction_digest -> Varchar,
@@ -204,5 +214,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     publish_event_logs,
     publish_events,
     transaction_logs,
+    transaction_stats,
     transactions,
 );
