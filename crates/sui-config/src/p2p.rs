@@ -93,6 +93,12 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_download_concurrency: Option<usize>,
 
+    /// Set the timeout that should be used when sending state-sync RPC requests.
+    ///
+    /// If unspecified, this will default to `10,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+
     /// Per-peer rate-limit (in requests/sec) for the PushCheckpointSummary RPC.
     ///
     /// If unspecified, this will default to no limit.
@@ -157,6 +163,14 @@ impl StateSyncConfig {
 
         self.transaction_download_concurrency
             .unwrap_or(TRANSACTION_DOWNLOAD_CONCURRENCY)
+    }
+
+    pub fn timeout(&self) -> Duration {
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+        self.timeout_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_TIMEOUT)
     }
 }
 
