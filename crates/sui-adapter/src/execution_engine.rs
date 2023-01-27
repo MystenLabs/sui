@@ -280,6 +280,7 @@ fn execution_loop<
                 gas_status.charge_publish_package(modules.iter().map(|v| v.len()).sum())?;
                 adapter::publish(
                     temporary_store,
+                    move_vm,
                     native_functions.clone(),
                     modules,
                     tx_ctx,
