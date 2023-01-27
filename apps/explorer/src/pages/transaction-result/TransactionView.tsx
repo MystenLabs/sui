@@ -429,6 +429,8 @@ function TransactionView({
 
     const txError = getExecutionStatusError(transaction);
 
+    const gasPrice = transaction.certificate.data.gasPrice || 1;
+
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
@@ -546,7 +548,7 @@ function TransactionView({
                                     <GasAmount
                                         amount={
                                             transaction.certificate.data
-                                                .gasBudget
+                                                .gasBudget * gasPrice
                                         }
                                     />
                                 </DescriptionItem>
