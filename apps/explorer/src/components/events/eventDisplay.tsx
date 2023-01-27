@@ -116,9 +116,12 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
             title: 'New Object',
             content: [
                 contentLine('Module', packMod, true),
+                contentLine('Object Type', event.objectType),
+                objectContent('Object ID', event.objectId),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
+
                 ],
             ],
         },
