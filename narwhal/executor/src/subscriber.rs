@@ -239,7 +239,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 self.metrics
                     .subscriber_current_round
                     .set(cert.round() as i64);
-                self.metrics.subscriber_processed_certificates.inc();
+                self.metrics.subscriber_processed_batches.inc();
                 self.metrics
                     .subscriber_certificate_latency
                     .observe(cert.metadata.created_at.elapsed().as_secs_f64());

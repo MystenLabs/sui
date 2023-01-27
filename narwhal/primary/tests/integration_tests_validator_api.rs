@@ -126,7 +126,13 @@ async fn test_get_collections() {
         rx_consensus_round_updates,
         /* dag */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates,
+                consensus_metrics,
+                tx_shutdown.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown,
@@ -227,8 +233,7 @@ async fn test_get_collections() {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-// #[cfg_attr(windows, ignore)]
-#[ignore]
+#[cfg_attr(windows, ignore)]
 async fn test_remove_collections() {
     telemetry_subscribers::init_for_testing();
 
@@ -257,8 +262,18 @@ async fn test_remove_collections() {
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
+    let dag = Arc::new(
+        Dag::new(
+            &committee,
+            rx_new_certificates,
+            consensus_metrics,
+            tx_shutdown.subscribe(),
+        )
+        .1,
+    );
     // No need to populate genesis in the Dag
 
     // Generate headers
@@ -305,8 +320,6 @@ async fn test_remove_collections() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-
-    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     Primary::spawn(
         name.clone(),
@@ -482,7 +495,17 @@ async fn test_read_causal_signed_certificates() {
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
+    let dag = Arc::new(
+        Dag::new(
+            &committee,
+            rx_new_certificates,
+            consensus_metrics,
+            tx_shutdown.subscribe(),
+        )
+        .1,
+    );
 
     // No need to  genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -537,8 +560,6 @@ async fn test_read_causal_signed_certificates() {
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
-
-    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -605,7 +626,13 @@ async fn test_read_causal_signed_certificates() {
         rx_consensus_round_updates_2,
         /* external_consensus */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates_2,
+                consensus_metrics_2,
+                tx_shutdown_2.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
@@ -697,8 +724,18 @@ async fn test_read_causal_unsigned_certificates() {
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
+
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
+    let dag = Arc::new(
+        Dag::new(
+            &committee,
+            rx_new_certificates,
+            consensus_metrics,
+            tx_shutdown.subscribe(),
+        )
+        .1,
+    );
 
     // No need to genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -758,8 +795,6 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
 
-    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
-
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
@@ -811,7 +846,13 @@ async fn test_read_causal_unsigned_certificates() {
         rx_consensus_round_updates_2,
         /* external_consensus */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates_2,
+                consensus_metrics_2,
+                tx_shutdown_2.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown_2,
@@ -980,7 +1021,13 @@ async fn test_get_collections_with_missing_certificates() {
         rx_consensus_round_updates,
         /* external_consensus */
         Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
+            Dag::new(
+                &committee,
+                rx_new_certificates_1,
+                consensus_metrics,
+                tx_shutdown.subscribe(),
+            )
+            .1,
         )),
         NetworkModel::Asynchronous,
         &mut tx_shutdown,

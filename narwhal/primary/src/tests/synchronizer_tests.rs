@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{common::create_db_stores, synchronizer::Synchronizer};
+use crate::{common::create_db_stores, synchronizer::Synchronizer, NUM_SHUTDOWN_RECEIVERS};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use prometheus::Registry;
@@ -12,7 +12,7 @@ use std::{
 };
 use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
 use tokio::sync::watch;
-use types::{error::DagError, Certificate};
+use types::{error::DagError, Certificate, PreSubscribedBroadcastSender};
 
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
@@ -25,9 +25,18 @@ async fn deliver_certificate_using_dag() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
+    let dag = Arc::new(
+        Dag::new(
+            &committee,
+            rx_consensus,
+            consensus_metrics,
+            tx_shutdown.subscribe(),
+        )
+        .1,
+    );
 
     let synchronizer = Synchronizer::new(
         name,

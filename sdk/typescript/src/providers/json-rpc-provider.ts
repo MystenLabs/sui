@@ -52,6 +52,10 @@ import {
   ValidatorMetaData,
   CoinBalance,
   CoinSupply,
+  CheckpointSummary,
+  CheckpointContents,
+  CheckpointDigest,
+  CheckPointContentsDigest,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -982,4 +986,92 @@ export class JsonRpcProvider extends Provider {
       throw new Error(`Error in getValidators: ${err}`);
     }
   }
+
+  // Checkpoints
+  async getLatestCheckpointSequenceNumber(): Promise<number> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getLatestCheckpointSequenceNumber',
+        [],
+        number(),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error fetching latest checkpoint sequence number: ${err}`);
+    }
+  }
+
+  async getCheckpointSummary(
+    sequence_number: number,
+  ): Promise<CheckpointSummary> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCheckpointSummary',
+        [sequence_number],
+        CheckpointSummary,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting checkpoint summary with request type: ${err} for sequence number: ${sequence_number}.`
+      );
+    }
+  }
+
+  async getCheckpointSummaryByDigest(
+    digest: CheckpointDigest,
+  ): Promise<CheckpointSummary> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCheckpointSummaryByDigest',
+        [digest],
+        CheckpointSummary,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`
+      );
+    }
+  }
+
+  async getCheckpointContents(
+    sequence_number: number,
+  ): Promise<CheckpointContents> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCheckpointContents',
+        [sequence_number],
+        CheckpointContents,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting checkpoint contents with request type: ${err} for sequence number: ${sequence_number}.`
+      );
+    }
+  }
+
+  async getCheckpointContentsByDigest(
+    digest: CheckPointContentsDigest,
+  ): Promise<CheckpointContents> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCheckpointContentsByDigest',
+        [digest],
+        CheckpointContents,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(
+        `Error getting checkpoint summary with request type: ${err} for digest: ${digest}.`
+      );
+    }
+  }
+
 }

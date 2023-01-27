@@ -27,6 +27,9 @@ import { BCS } from '@mysten/bcs';
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
 
+export const TransactionEffectsDigest = string();
+export type TransactionEffectsDigest = Infer<typeof TransactionEffectsDigest>;
+
 export const ObjectId = string();
 export type ObjectId = Infer<typeof ObjectId>;
 
