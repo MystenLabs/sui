@@ -106,7 +106,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
             <div className={st.container} data-testid="coin-page">
                 {showError && error ? (
                     <Alert className={st.alert}>
-                        <strong>Sync error (data might be outdated).</strong>{' '}
+                        <div>
+                            <strong>Sync error (data might be outdated)</strong>
+                        </div>
                         <small>{error.message}</small>
                     </Alert>
                 ) : null}

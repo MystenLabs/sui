@@ -21,7 +21,9 @@ function NftsPage() {
                 <PageTitle title="NFTs" className="justify-center" />
                 {showError && error ? (
                     <Alert>
-                        <strong>Sync error (data might be outdated).</strong>{' '}
+                        <div>
+                            <strong>Sync error (data might be outdated)</strong>
+                        </div>
                         <small>{error.message}</small>
                     </Alert>
                 ) : null}
