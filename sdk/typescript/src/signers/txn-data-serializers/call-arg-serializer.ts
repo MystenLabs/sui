@@ -17,7 +17,7 @@ import {
   SuiMoveNormalizedType,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
-import { bcs, CallArg, MoveCallTx, ObjectArg, PureArg } from '../../types/sui-bcs';
+import { bcs, CallArg, isPureArg, MoveCallTx, ObjectArg } from '../../types/sui-bcs';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
@@ -148,10 +148,8 @@ export class CallArgSerializer {
     expectedType: SuiMoveNormalizedType,
     argVal: SuiJsonValue
   ): Promise<CallArg> {
-    if ((argVal instanceof PureArg) && (argVal.bcsBytes.length <=1024)) {
-      return {
-        Pure: argVal.bcsBytes as ArrayLike<number>,
-      };
+    if (isPureArg(argVal)) {
+      return argVal;
     }
     const serType = this.getPureSerializationType(expectedType, argVal);
     if (serType !== undefined) {

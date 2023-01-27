@@ -187,21 +187,16 @@ export type ObjectArg =
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
-export class PureArg {
-  public bcsBytes: Uint8Array;
-  
-  constructor(
-    bcsBytes: number[],
-  ) {
-      this.bcsBytes = new Uint8Array(bcsBytes);
-  }
-}
-
 
 export type CallArg =
   | { Pure: ArrayLike<number> }
   | { Object: ObjectArg }
   | { ObjVec: ArrayLike<ObjectArg> };
+
+export type PureArg = { Pure: ArrayLike<number> };
+export function isPureArg(arg: any): arg is PureArg {
+  return (arg as PureArg).Pure !== undefined;
+}
 
 bcs
   .registerStructType('SharedObjectRef', {
