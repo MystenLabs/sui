@@ -50,13 +50,13 @@ export function HomeMetrics() {
     const { data: countsData } = useQuery(
         ['home', 'counts'],
         () => request<CountsResponse>('counts', { network }),
-        { enabled }
+        { enabled, refetchInterval: 60 * 1000 }
     );
 
     const { data: tpsData } = useQuery(
         ['home', 'tps-checkpoints'],
         () => request<TPSCheckpointResponse>('tps-checkpoints', { network }),
-        { enabled }
+        { enabled, refetchInterval: 10 * 1000 }
     );
 
     if (!enabled) return null;
