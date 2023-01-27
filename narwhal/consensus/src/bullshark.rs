@@ -11,7 +11,7 @@ use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]

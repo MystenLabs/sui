@@ -11,7 +11,7 @@ use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
     cmp::{max, Ordering},
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 use storage::CertificateStore;
@@ -27,7 +27,7 @@ use types::{
 pub mod consensus_tests;
 
 /// The representation of the DAG in memory.
-pub type Dag = HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate)>>;
+pub type Dag = BTreeMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate)>>;
 
 /// The state that needs to be persisted for crash-recovery.
 pub struct ConsensusState {
@@ -62,7 +62,7 @@ impl ConsensusState {
             dag: [(0, genesis)]
                 .iter()
                 .cloned()
-                .collect::<HashMap<_, HashMap<_, _>>>(),
+                .collect::<BTreeMap<_, HashMap<_, _>>>(),
             metrics,
         }
     }
@@ -72,19 +72,13 @@ impl ConsensusState {
         recover_last_committed: HashMap<PublicKey, Round>,
         latest_sub_dag_index: SequenceNumber,
         cert_store: CertificateStore,
-        gc_depth: Round,
     ) -> Self {
         let last_committed_round = *recover_last_committed
             .iter()
             .max_by(|a, b| a.1.cmp(b.1))
             .map(|(_k, v)| v)
             .unwrap_or_else(|| &0);
-        let dag = Self::construct_dag_from_cert_store(
-            cert_store,
-            last_committed_round,
-            &recover_last_committed,
-            gc_depth,
-        );
+        let dag = Self::construct_dag_from_cert_store(cert_store, &recover_last_committed);
         metrics.recovered_consensus_state.inc();
 
         Self {
@@ -99,20 +93,18 @@ impl ConsensusState {
     #[instrument(level = "info", skip_all)]
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
-        last_committed_round: Round,
         last_committed: &HashMap<PublicKey, Round>,
-        gc_depth: Round,
     ) -> Dag {
-        let mut dag: Dag = HashMap::new();
-        let min_round = last_committed_round.saturating_sub(gc_depth);
+        let mut dag: Dag = BTreeMap::new();
+        let min_committed_round = last_committed.values().min().cloned().unwrap_or(0);
 
         info!(
-            "Recreating dag from last committed round: {}, min_round: {}",
-            last_committed_round, min_round
+            "Recreating dag from min committed round: {}",
+            min_committed_round,
         );
 
         // get all certificates at a round > min_round
-        let certificates = cert_store.after_round(min_round + 1).unwrap();
+        let certificates = cert_store.after_round(min_committed_round + 1).unwrap();
 
         let mut num_certs = 0;
         for cert in &certificates {
@@ -141,25 +133,25 @@ impl ConsensusState {
         last_committed: &HashMap<PublicKey, Round>,
         certificate: &Certificate,
     ) -> bool {
-        let last_committed_round = last_committed
+        let origin_last_committed_round = last_committed
             .get(&certificate.origin())
             .cloned()
             .unwrap_or_default();
-        if certificate.round() < last_committed_round {
+        if certificate.round() <= origin_last_committed_round {
             debug!(
-                "Ignoring certificate {:?} as it is before last committed round for this origin {}",
-                certificate, last_committed_round
+                "Ignoring certificate {:?} as it is at or before last committed round {} for this origin",
+                certificate, origin_last_committed_round
             );
             return false;
         }
 
         dag.entry(certificate.round())
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(
                 certificate.origin(),
                 (certificate.digest(), certificate.clone()),
-            );
-        true
+            )
+            .is_none()
     }
 
     /// Update and clean up internal state base on committed certificates.
@@ -168,21 +160,19 @@ impl ConsensusState {
             .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
-
-        let last_committed_round = *Iterator::max(self.last_committed.values()).unwrap();
-        self.last_committed_round = last_committed_round;
+        self.last_committed_round = max(self.last_committed_round, certificate.round());
 
         self.metrics
             .last_committed_round
             .with_label_values(&[])
-            .set(last_committed_round as i64);
+            .set(self.last_committed_round as i64);
 
         // NOTE: This log entry is used to compute performance.
         tracing::debug!(
             "Certificate {:?} took {} seconds to be committed at round {}",
             certificate.digest(),
             certificate.metadata.created_at.elapsed().as_secs_f64(),
-            last_committed_round
+            self.last_committed_round
         );
 
         self.metrics
@@ -190,16 +180,17 @@ impl ConsensusState {
             .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
 
         // We purge all certificates past the gc depth
-        self.dag.retain(|r, _| r + gc_depth >= last_committed_round);
-        for (name, round) in &self.last_committed {
-            self.dag.retain(|r, authorities| {
-                // We purge certificates for `name` prior to its latest commit
-                if r < round {
-                    authorities.remove(name);
-                }
+        self.dag
+            .retain(|r, _| r + gc_depth >= self.last_committed_round);
+        // Also purge all certificates at and below last committed round of the certificate origin
+        self.dag.retain(|r, authorities| {
+            if r <= &self.last_committed_round {
+                authorities.remove(&certificate.origin());
                 !authorities.is_empty()
-            });
-        }
+            } else {
+                true
+            }
+        });
     }
 }
 
@@ -256,7 +247,6 @@ where
         tx_sequence: metered_channel::Sender<CommittedSubDag>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
-        gc_depth: Round,
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
         let recovered_last_committed = store.read_last_committed();
@@ -266,7 +256,6 @@ where
             recovered_last_committed,
             latest_sub_dag_index,
             cert_store,
-            gc_depth,
         );
         tx_consensus_round_updates
             .send(state.last_committed_round)
