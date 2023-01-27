@@ -111,6 +111,7 @@ impl JsonRpcServerBuilder {
             .layer(metrics_layer);
 
         let server = ServerBuilder::default()
+            .max_response_body_size(2 << 30)
             .max_connections(max_connection)
             .set_host_filtering(AllowHosts::Any)
             .set_middleware(middleware)
