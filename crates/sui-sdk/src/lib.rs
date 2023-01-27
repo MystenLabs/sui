@@ -83,7 +83,7 @@ impl RpcClient {
         if let Some(request_timeout) = request_timeout {
             http_builder = http_builder.request_timeout(request_timeout);
         }
-        let http = http_builder.build(http)?;
+        let http = http_builder.max_request_body_size(2 << 30).build(http)?;
 
         let ws = if let Some(url) = ws {
             let mut ws_builder = WsClientBuilder::default();
