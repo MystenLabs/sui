@@ -34,7 +34,7 @@ const querySearchParams = async (input: string, network: Network | string) => {
     if (
         isValidTransactionDigest(
             input,
-            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
+            'base58'
         )
     ) {
         searchPromises.push(
