@@ -73,7 +73,7 @@ When you first open the wallet, you have no coins in it. You can add test SUI co
    It's near the top of the wallet and starts with 0x.
 1. Go to the Discord faucet channel for the network you use:
    * [devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel in Discord.
-   * [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966)
+   * [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966).
 1. Use the `!faucet` command with your wallet address to request tokens:
    `!faucet 0x6c04ed5110554acf59ff1b535129548dd9a0c741`
    Replace the address in the command with your wallet address.
