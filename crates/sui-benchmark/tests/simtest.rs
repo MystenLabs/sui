@@ -200,29 +200,26 @@ mod test {
         let reference_gas_price = *system_state_observer.reference_gas_price.borrow();
 
         for node in swarm.validators() {
-            let watch_node_handle = node.subscribe_to_sui_node_handle();
+            let mut watch_node_handle = node.subscribe_to_sui_node_handle();
 
             tokio::task::spawn(async move {
                 while let Ok(()) = watch_node_handle.changed().await {
-                    let (name, epoch_change_rx) =
-                        {
-                            let node_handle = watch_node_handle.borrow_and_update();
-                            if let Some(node_handle) = node_handle.upgrade() {
-                                Some(node_handle.with(|node| {
-                                    (node.name.clone(), node.subscribe_to_epoch_change())
-                                }))
-                            } else {
-                                None
-                            }
-                        };
-
-                    if let Some(mut epoch_change_rx) = epoch_change_rx {
-                        while let Ok(committee) = epoch_rx.recv().await {
-                            info!("received epoch {} from {}", committee.epoch, name.concise());
+                    let (name, mut epoch_change_rx) = {
+                        let node_handle = watch_node_handle.borrow_and_update();
+                        if let Some(node_handle) = node_handle.upgrade() {
+                            node_handle.with(|node| {
+                                (node.state().name.clone(), node.subscribe_to_epoch_change())
+                            })
+                        } else {
+                            continue;
                         }
+                    };
 
-                        info!("epoch sender was dropped (node has reset)");
+                    while let Ok(committee) = epoch_change_rx.recv().await {
+                        info!("received epoch {} from {}", committee.epoch, name.concise());
                     }
+
+                    info!("epoch sender was dropped (node has reset)");
                 }
 
                 info!("node handle sender was dropped (container has shut down)");
