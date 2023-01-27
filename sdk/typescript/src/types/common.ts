@@ -65,16 +65,10 @@ const TX_DIGEST_LENGTH = 32;
 
 /** Returns whether the tx digest is valid based on the serialization format */
 export function isValidTransactionDigest(
-  value: string,
-  serializationFmt: 'base64' | 'base58'
+  value: string
 ): value is TransactionDigest {
-  let buffer;
   try {
-    if (serializationFmt === 'base58') {
-      buffer = new Base58DataBuffer(value);
-    } else {
-      buffer = new Base64DataBuffer(value);
-    }
+    const buffer = new Base58DataBuffer(value);
     return buffer.getLength() === TX_DIGEST_LENGTH;
   } catch (e) {
     return false;
