@@ -23,8 +23,8 @@ use sui_types::crypto::{AuthoritySignInfo, Signature};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-    SenderSignedData, TransactionEffects, TrustedCertificate, TrustedSignedTransactionEffects,
-    VerifiedCertificate, VerifiedSignedTransaction,
+    SenderSignedData, SharedInputObject, TransactionEffects, TrustedCertificate,
+    TrustedSignedTransactionEffects, VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
@@ -550,7 +550,7 @@ impl AuthorityPerEpochStore {
             // from the cert.
             let initial_versions: HashMap<_, _> = certificate
                 .shared_input_objects()
-                .map(|(id, v)| (*id, *v))
+                .map(SharedInputObject::into_id_and_version)
                 .collect();
 
             let mut versions_to_write = Vec::new();
@@ -857,9 +857,10 @@ impl AuthorityPerEpochStore {
         let transaction_digest = *certificate.digest();
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let ids: Vec<_> = certificate
-            .shared_input_objects()
-            .map(|(id, _)| *id)
+        let shared_input_objects: Vec<_> = certificate.shared_input_objects().collect();
+        let ids: Vec<_> = shared_input_objects
+            .iter()
+            .map(SharedInputObject::id)
             .collect();
 
         let versions = self
@@ -867,17 +868,28 @@ impl AuthorityPerEpochStore {
             .await?;
 
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
-        let mut assigned_versions = Vec::new();
-        for ((id, _), version) in certificate.shared_input_objects().zip(versions.into_iter()) {
+        let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
+        let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        for (SharedInputObject { id, mutable, .. }, version) in
+            shared_input_objects.iter().zip(versions.into_iter())
+        {
             assigned_versions.push((*id, version));
             input_object_keys.push(ObjectKey(*id, version));
+            is_mutable_input.push(*mutable);
         }
 
         let next_version =
             SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
         let next_versions: Vec<_> = assigned_versions
             .iter()
-            .map(|(id, _)| (*id, next_version))
+            .zip(is_mutable_input.into_iter())
+            .filter_map(|((id, _), mutable)| {
+                if mutable {
+                    Some((*id, next_version))
+                } else {
+                    None
+                }
+            })
             .collect();
 
         trace!(tx_digest = ?transaction_digest,
