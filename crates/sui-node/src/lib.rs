@@ -72,7 +72,7 @@ use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
+use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -607,7 +607,9 @@ impl SuiNode {
             registry_service: registry_service.clone(),
         };
 
-        Ok(NarwhalManager::new(narwhal_config))
+        let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
+
+        Ok(NarwhalManager::new(narwhal_config, metrics))
     }
 
     fn construct_consensus_adapter(
