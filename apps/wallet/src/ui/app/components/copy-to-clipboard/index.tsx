@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo, useCallback, useEffect, useState } from 'react';
 
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import Icon, { SuiIcons } from '_components/icon';
 
-import type { ReactNode, MouseEventHandler } from 'react';
+import type { ReactNode } from 'react';
 
 import st from './CopyToClipboard.module.scss';
-
-const COPY_CHECKMARK_MILLIS = 600;
 
 export type CopyToClipboardProps = {
     txt: string;
@@ -18,6 +16,7 @@ export type CopyToClipboardProps = {
     copyOnlyOnIconClick?: boolean;
     className?: string;
     mode?: 'normal' | 'highlighted' | 'plain';
+    copySuccessMessage?: string;
 };
 
 function CopyToClipboard({
@@ -26,34 +25,9 @@ function CopyToClipboard({
     copyOnlyOnIconClick = false,
     className,
     mode = 'normal',
+    copySuccessMessage,
 }: CopyToClipboardProps) {
-    const [copied, setCopied] = useState(false);
-    const copyToClipboard = useCallback<MouseEventHandler<HTMLElement>>(
-        async (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            if (!txt) {
-                return;
-            }
-            await navigator.clipboard.writeText(txt);
-            setCopied(true);
-        },
-        [txt]
-    );
-    useEffect(() => {
-        let timeout: number;
-        if (copied) {
-            timeout = window.setTimeout(
-                () => setCopied(false),
-                COPY_CHECKMARK_MILLIS
-            );
-        }
-        return () => {
-            if (timeout) {
-                clearTimeout(timeout);
-            }
-        };
-    }, [copied]);
+    const copyToClipboard = useCopyToClipboard(txt, { copySuccessMessage });
     return (
         <span
             className={cl(st.container, className)}
@@ -61,7 +35,7 @@ function CopyToClipboard({
         >
             {children}
             <Icon
-                className={cl(st.copyIcon, st[mode], { [st.copied]: copied })}
+                className={cl(st.copyIcon, st[mode])}
                 icon={SuiIcons.Copy}
                 onClick={copyToClipboard}
                 title="Copy to clipboard"
@@ -70,4 +44,4 @@ function CopyToClipboard({
     );
 }
 
-export default memo(CopyToClipboard);
+export default CopyToClipboard;
