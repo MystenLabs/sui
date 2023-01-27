@@ -39,7 +39,7 @@ describe('Coin related API', () => {
       coinObjectId: coinToSplit,
       splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[1].objectId,
+      gasPayment: [coins[1].objectId],
     });
     coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address(),

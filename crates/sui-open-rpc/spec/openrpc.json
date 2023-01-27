@@ -6278,11 +6278,10 @@
         "properties": {
           "gas": {
             "description": "the gas object to be used",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ObjectRef"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
           },
           "inputObjects": {
             "description": "objects to be used in this transaction",
@@ -6309,8 +6308,21 @@
           "transactions"
         ],
         "properties": {
-          "gasData": {
-            "$ref": "#/components/schemas/GasData"
+          "gasBudget": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "gasPayment": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "gasPrice": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "sender": {
             "$ref": "#/components/schemas/SuiAddress"

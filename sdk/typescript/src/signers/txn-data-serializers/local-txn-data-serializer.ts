@@ -294,7 +294,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   public async extractObjectIds(txn: SignableTransaction): Promise<ObjectId[]> {
     const ret = await this.extractInputObjectIds(txn);
     if ('gasPayment' in txn.data && txn.data['gasPayment']) {
-      ret.push(txn.data['gasPayment']);
+      ret.concat(txn.data['gasPayment']);
     }
     return ret;
   }
@@ -349,7 +349,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         );
       }
     }
-    const gasPayment = await this.provider.getObjectRef(gasObjectId);
+    var gasPayment = await this.provider.getObjectRef(gasObjectId);
     if (!originalTx.data.gasBudget) {
       throw new Error(
         'Must provide a valid gas budget for contructing TransactionData',

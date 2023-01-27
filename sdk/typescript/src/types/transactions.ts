@@ -290,7 +290,7 @@ export const AuthorityName = string();
 
 export const TransactionBytes = object({
   txBytes: string(),
-  gas: SuiObjectRef,
+  gas: union([SuiObjectRef, array(SuiObjectRef)]),
   // TODO: Type input_objects field
   inputObjects: unknown(),
 });

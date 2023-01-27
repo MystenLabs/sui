@@ -338,6 +338,8 @@ pub enum SuiError {
         gas_price: u64,
         reference_gas_price: u64,
     },
+    #[error("Transaction gas payment missing.")]
+    MissingGasPayment,
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]

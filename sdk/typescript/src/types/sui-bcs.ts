@@ -368,7 +368,7 @@ const BCS_SPEC = {
       expiration: 'TransactionExpiration',
     },
     GasData: {
-      payment: 'SuiObjectRef',
+      payment: 'vector<SuiObjectRef>',
       owner: BCS.ADDRESS,
       price: BCS.U64,
       budget: BCS.U64,

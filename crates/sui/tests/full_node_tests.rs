@@ -117,7 +117,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     assert_eq!(sponsor, receiver);
     let context: &WalletContext = &test_cluster.wallet;
     let object_ref: ObjectRef = context
-        .get_object_ref(object_ref.0)
+        .get_object_ref(object_ref[0].0)
         .await
         .unwrap()
         .into_object()
@@ -144,7 +144,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
         kind,
         sender,
         GasData {
-            payment: gas_obj,
+            payment: vec![gas_obj],
             owner: sponsor,
             price: 100,
             budget: 10000,
@@ -341,8 +341,8 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         change_type: BalanceChangeType::Gas,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
+        version: gas[0].1,
+        coin_object_id: gas[0].0,
         amount: (gas_used as i128).neg(),
     };
 
@@ -764,8 +764,8 @@ async fn test_full_node_event_read_api_ok() {
         change_type: BalanceChangeType::Gas,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
+        version: gas[0].1,
+        coin_object_id: gas[0].0,
         amount: (gas_used as i128).neg(),
     };
 

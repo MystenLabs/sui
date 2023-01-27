@@ -81,7 +81,7 @@ describe('Transaction Serialization and deserialization', () => {
       const normalized = {
         ...deserialized.data,
         gasBudget: Number(deserialized.data.gasBudget!.toString(10)),
-        gasPayment: '0x' + deserialized.data.gasPayment,
+        gasPayment: ['0x' + deserialized.data.gasPayment],
         gasPrice: Number(deserialized.data.gasPrice!.toString(10)),
       };
       return normalized;
@@ -106,7 +106,7 @@ describe('Transaction Serialization and deserialization', () => {
       ],
       gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[0].objectId,
+      gasPayment: [coins[0].objectId],
     };
 
     const deserialized = await serializeAndDeserialize(moveCall);
@@ -150,7 +150,7 @@ describe('Transaction Serialization and deserialization', () => {
       ],
       gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[3].objectId,
+      gasPayment: [coins[3].objectId],
     };
 
     const deserialized = await serializeAndDeserialize(moveCall);
@@ -176,7 +176,7 @@ describe('Transaction Serialization and deserialization', () => {
         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
       ],
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[0].objectId,
+      gasPayment: [coins[0].objectId],
     } as MoveCallTransaction;
     const serArgsExpected = await new CallArgSerializer(
       toolbox.provider,
@@ -197,7 +197,7 @@ describe('Transaction Serialization and deserialization', () => {
         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
       ],
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[0].objectId,
+      gasPayment: [coins[0].objectId],
     } as MoveCallTransaction;
     const serArgs = await new CallArgSerializer(
       toolbox.provider,

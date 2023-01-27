@@ -6,7 +6,7 @@ use crate::authority::AuthorityStore;
 use std::collections::HashSet;
 use sui_types::base_types::ObjectRef;
 use sui_types::gas::SuiCostTable;
-use sui_types::messages::{TransactionKind, VerifiedExecutableTransaction};
+use sui_types::messages::{GasData, TransactionKind, VerifiedExecutableTransaction};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -18,28 +18,73 @@ use sui_types::{
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use tracing::instrument;
 
-async fn get_gas_status(
+// TODO: errors should be SuiError::into_transaction_input_error
+pub async fn check_gas_data(
+    epoch_store: &AuthorityPerEpochStore,
+    transaction: &TransactionData,
+) -> SuiResult<()> {
+    // gas price must be equal or bigger than reference gas price
+    let reference_gas_price = epoch_store.reference_gas_price();
+    let computation_gas_price = transaction.gas_data.price;
+    if computation_gas_price < reference_gas_price {
+        return Err(SuiError::GasPriceUnderRGP {
+            gas_price: computation_gas_price,
+            reference_gas_price,
+        });
+    }
+
+    let protocol_config = epoch_store.protocol_config();
+    let cost_table = SuiCostTable::new(protocol_config);
+    let gas_budget = transaction.gas_data.budget;
+    let max_gas_budget = cost_table.max_gas_budget;
+    let min_gas_budget = cost_table.min_gas_budget_external();
+
+    if gas_budget > max_gas_budget {
+        return Err(SuiError::GasBudgetTooHigh {
+            gas_budget,
+            max_budget: max_gas_budget,
+        });
+    }
+
+    if gas_budget < min_gas_budget {
+        return Err(SuiError::GasBudgetTooLow {
+            gas_budget,
+            min_budget: min_gas_budget,
+        });
+    }
+
+    Ok(())
+}
+
+pub async fn get_gas_status(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
     transaction: &TransactionData,
 ) -> SuiResult<SuiGasStatus<'static>> {
-    let tx_kind = &transaction.kind;
-    let gas_object_ref = transaction.gas_payment_object_ref();
-    let gas_object_refs = match tx_kind {
-        TransactionKind::Single(SingleTransactionKind::PaySui(p)) => p.coins.clone(),
-        TransactionKind::Single(SingleTransactionKind::PayAllSui(p)) => p.coins.clone(),
-        _ => vec![],
-    };
-    let extra_gas_object_refs = gas_object_refs.into_iter().skip(1).collect();
+    // Get the first coin (possibly the only one) and make it "the gas coin", then
+    // keep track of all others that can contribute to gas (gas smashing and special
+    // pay transactions).
+    let gas_coin_ref = transaction.gas_coins().get(0).unwrap();
+    // select all other coins, including the special transaction ones
+    let empty_coins = vec![]; // this is just to get an iterator over an empty vec
+    let gas_object_refs = transaction.gas_coins()[1..]
+        .iter()
+        .chain(match &transaction.kind {
+            // PaySui transaction can pay gas with all coins in the list
+            TransactionKind::Single(SingleTransactionKind::PaySui(p)) => p.coins.iter(),
+            TransactionKind::Single(SingleTransactionKind::PayAllSui(p)) => p.coins.iter(),
+            _ => empty_coins.iter(),
+        })
+        .copied()
+        .collect();
 
     check_gas(
         store,
         epoch_store,
-        gas_object_ref,
-        transaction.gas_budget(),
-        transaction.gas_price(),
+        gas_coin_ref,
+        gas_object_refs,
+        transaction.gas_data(),
         &transaction.kind,
-        extra_gas_object_refs,
     )
     .await
     .map_err(SuiError::into_transaction_input_error)
@@ -71,7 +116,8 @@ pub(crate) async fn check_dev_inspect_input(
     gas_object: Object,
 ) -> Result<(ObjectRef, InputObjects), anyhow::Error> {
     let gas_object_ref = gas_object.compute_object_reference();
-    TransactionData::validity_check_impl(kind, &gas_object_ref)?;
+    // TODO: review this whole story of dev inspect and dry run
+    TransactionData::validity_check_impl(kind, &[gas_object_ref])?;
     for k in kind.single_transactions() {
         match k {
             SingleTransactionKind::TransferObject(_)
@@ -117,7 +163,8 @@ pub async fn check_certificate_input(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
     cert: &VerifiedExecutableTransaction,
-) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+    _gas_status: &mut SuiGasStatus<'_>,
+) -> SuiResult<InputObjects> {
     let tx_data = &cert.data().intent_message.value;
     let gas_status = get_gas_status(store, epoch_store, tx_data).await?;
     let input_object_kinds = tx_data.input_objects()?;
@@ -128,32 +175,53 @@ pub async fn check_certificate_input(
     } else {
         store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
     };
-    let input_objects = check_objects(tx_data, input_object_kinds, input_object_data).await?;
-    Ok((gas_status, input_objects))
+    let input_objects = check_objects(
+        &cert.data().intent_message.value,
+        input_object_kinds,
+        input_object_data,
+    )
+    .await?;
+    Ok(input_objects)
 }
 
 /// Checking gas budget by fetching the gas object only from the store,
-/// and check whether the balance and budget satisfies the miminum requirement.
-/// Returns the gas object (to be able to reuse it latter) and a gas status
-/// that will be used in the entire lifecycle of the transaction execution.
+/// and check whether the balance and budget satisfies the minimum requirement.
+/// Return a gas status that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
 async fn check_gas(
     store: &AuthorityStore,
     epoch_store: &AuthorityPerEpochStore,
     gas_payment: &ObjectRef,
-    gas_budget: u64,
-    computation_gas_price: u64,
-    tx_kind: &TransactionKind,
     additional_objects_for_gas_payment: Vec<ObjectRef>,
+    gas_data: &GasData,
+    tx_kind: &TransactionKind,
 ) -> SuiResult<SuiGasStatus<'static>> {
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {
+        let reference_gas_price = epoch_store.reference_gas_price();
+        let computation_gas_price = gas_data.price;
+        if computation_gas_price < reference_gas_price {
+            return Err(SuiError::GasPriceUnderRGP {
+                gas_price: computation_gas_price,
+                reference_gas_price,
+            });
+        }
+
         let gas_object = store.get_object_by_key(&gas_payment.0, gas_payment.1)?;
         let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
             object_id: gas_payment.0,
             version: Some(gas_payment.1),
         })?;
+        let mut additional_objs = vec![];
+        for obj_ref in additional_objects_for_gas_payment.iter() {
+            let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
+            let obj = obj.ok_or(SuiError::ObjectNotFound {
+                object_id: obj_ref.0,
+                version: Some(obj_ref.1),
+            })?;
+            additional_objs.push(obj);
+        }
 
         // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
         // both gas budget and the transfer amount.
@@ -164,48 +232,22 @@ async fn check_gas(
             TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
             _ => 0,
         };
-        let reference_gas_price = epoch_store.reference_gas_price();
-        if computation_gas_price < reference_gas_price {
-            return Err(SuiError::GasPriceUnderRGP {
-                gas_price: computation_gas_price,
-                reference_gas_price,
-            });
-        }
-        let protocol_config = epoch_store.protocol_config();
-        let cost_table = SuiCostTable::new(protocol_config);
-        let storage_gas_price = protocol_config.storage_gas_price();
 
         // TODO: We should revisit how we compute gas price and compare to gas budget.
+        //       We should drop all of this in favor of pure sui payments (no unit, just "money")
+        let protocol_config = epoch_store.protocol_config();
+        let gas_budget = gas_data.budget;
+        let storage_gas_price = protocol_config.storage_gas_price();
         let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
-
-        if tx_kind.is_pay_sui_tx() {
-            let mut additional_objs = vec![];
-            for obj_ref in additional_objects_for_gas_payment.iter() {
-                let obj = store.get_object_by_key(&obj_ref.0, obj_ref.1)?;
-                let obj = obj.ok_or(SuiError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: Some(obj_ref.1),
-                })?;
-                additional_objs.push(obj);
-            }
-            gas::check_gas_balance(
-                &gas_object,
-                gas_budget,
-                gas_price,
-                extra_amount,
-                additional_objs,
-                &cost_table,
-            )?;
-        } else {
-            gas::check_gas_balance(
-                &gas_object,
-                gas_budget,
-                gas_price,
-                extra_amount,
-                vec![],
-                &cost_table,
-            )?;
-        }
+        let cost_table = SuiCostTable::new(protocol_config);
+        gas::check_gas_balance(
+            &gas_object,
+            gas_budget,
+            gas_price,
+            extra_amount,
+            additional_objs,
+            &cost_table,
+        )?;
 
         gas::start_gas_metering(
             gas_budget,
@@ -266,8 +308,9 @@ async fn check_objects(
         if transfer_object_ids.contains(&object.id()) {
             object.ensure_public_transfer_eligible()?;
         }
+        // TODO: review this chack in the face of gas smashing
         // For Gas Object, we check the object is owned by gas owner
-        let owner_address = if object.id() == transaction.gas_payment_object_ref().0 {
+        let owner_address = if object.id() == transaction.gas_coins()[0].0 {
             transaction.gas_owner()
         } else {
             transaction.sender()

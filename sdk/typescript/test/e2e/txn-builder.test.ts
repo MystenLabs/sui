@@ -83,7 +83,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
             'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
           ],
           gasBudget: DEFAULT_GAS_BUDGET,
-          gasPayment: coins[0].objectId,
+          gasPayment: [coins[0].objectId],
         },
       });
     });
@@ -112,7 +112,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
             validator_address,
           ],
           gasBudget: DEFAULT_GAS_BUDGET,
-          gasPayment: coins[3].objectId,
+          gasPayment: [coins[3].objectId],
         },
       });
     });
@@ -142,7 +142,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           objectId: coins[0].objectId,
           gasBudget: DEFAULT_GAS_BUDGET,
           recipient: DEFAULT_RECIPIENT,
-          gasPayment: coins[1].objectId,
+          gasPayment: [coins[1].objectId],
         },
       });
     });
@@ -159,7 +159,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [1, 2, 3],
         gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: [getObjectId(coins[1])],
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -173,7 +173,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           gasBudget: DEFAULT_GAS_BUDGET,
           recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
           amounts: [4, 2],
-          gasPayment: getObjectId(coins[2]),
+          gasPayment: [getObjectId(coins[2])],
         },
       });
     });
@@ -190,7 +190,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: [getObjectId(coins[1])],
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -219,7 +219,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         coinObjectId: getObjectId(coins[0]),
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: [getObjectId(coins[1])],
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
