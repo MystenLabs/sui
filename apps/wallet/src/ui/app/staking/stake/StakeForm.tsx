@@ -21,32 +21,15 @@ export type StakeFromProps = {
     submitError: string | null;
     coinBalance: bigint;
     coinType: string;
-    coinDecimals: number;
     epoch: string;
     onClearSubmitError: () => void;
 };
-
-function AvailableBalance({
-    amount,
-    coinType,
-}: {
-    amount: bigint;
-    coinType: string;
-}) {
-    const [formatted, symbol] = useFormatCoin(amount, coinType);
-    return (
-        <Text variant="bodySmall" color="steel" weight="medium">
-            Available - {formatted} {symbol}
-        </Text>
-    );
-}
 
 function StakeForm({
     submitError,
     coinBalance,
     coinType,
     onClearSubmitError,
-    coinDecimals,
     epoch,
 }: StakeFromProps) {
     const { setFieldValue } = useFormikContext<FormValues>();
@@ -80,10 +63,9 @@ function StakeForm({
                     <Text variant="caption" color="gray-85" weight="semibold">
                         Enter the amount of SUI to stake
                     </Text>
-                    <AvailableBalance
-                        amount={totalAvailableBalance}
-                        coinType={coinType}
-                    />
+                    <Text variant="bodySmall" color="steel" weight="medium">
+                        Available - {maxToken} {symbol}
+                    </Text>
                 </div>
                 <Card
                     variant="gray"
