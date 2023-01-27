@@ -125,6 +125,7 @@ impl WriteStore for RocksDbStore {
         if let Some(EndOfEpochData {
             next_epoch_committee,
             next_epoch_protocol_version,
+            ..
         }) = checkpoint.summary.end_of_epoch_data.as_ref()
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
