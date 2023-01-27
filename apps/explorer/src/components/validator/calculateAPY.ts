@@ -17,7 +17,7 @@ export function calculateAPY(validators: ActiveValidator, epoch: number) {
             1 +
                 (+sui_balance - +delegation_token_supply.fields.value) /
                     +delegation_token_supply.fields.value,
-            365 / num_epochs_participated - 1
+            365 / num_epochs_participated 
         ) - 1;
 
     //guard against NaN
