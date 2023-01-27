@@ -33,6 +33,9 @@ async fn main() -> Result<()> {
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
+    prometheus_registry
+        .register(mysten_metrics::uptime_metric(VERSION))
+        .unwrap();
 
     info!("Sui Node version: {VERSION}");
 
