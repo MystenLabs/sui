@@ -36,7 +36,7 @@ use tokio::time;
 use mysten_metrics::spawn_monitored_task;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
@@ -141,16 +141,11 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
         let serialized =
             bincode::serialize(transaction).expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
-        let r = timeout(
-            Duration::from_secs(10),
-            self.clone()
-                .submit_transaction(TransactionProto { transaction: bytes }),
-        )
-        .await;
-        let r = r.map_err(|_| {
-            SuiError::ConsensusConnectionBroken("Timeout when sending to narwhal".to_string())
-        })?;
-        r.map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+
+        self.clone()
+            .submit_transaction(TransactionProto { transaction: bytes })
+            .await
+            .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
             .tap_err(|r| {
                 // Will be logged by caller as well.
                 warn!("Submit transaction failed with: {:?}", r);
