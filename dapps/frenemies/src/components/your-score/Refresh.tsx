@@ -12,7 +12,7 @@ import { ObjectData } from "../../network/rawObject";
 import { Coin, Scorecard, SUI_COIN } from "../../network/types";
 import { getGas } from "../../utils/coins";
 
-const GAS_BUDGET = 10000n;
+const GAS_BUDGET = 100000n;
 
 interface Props {
   scorecard: ObjectData<Scorecard>;
@@ -29,9 +29,12 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
       return null;
     }
 
-    const gasPrice = await provider.getReferenceGasPrice();
-    const gasRequred = GAS_BUDGET * BigInt(gasPrice);
+    let gasPrice = await provider.getReferenceGasPrice();
+    // this is really wild; for some reason resulting gas price in the epoch is 1
+    // while the actual gasPrice is in 100+ range
+    if (gasPrice < 100) { gasPrice = 100; }
 
+    const gasRequred = GAS_BUDGET * BigInt(gasPrice);
     const { gas } = getGas(coins, gasRequred);
 
     if (!gas) {
@@ -53,10 +56,10 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
           normalizeSuiAddress(leaderboardID),
         ],
       },
-    });
+    }).then(console.log);
   });
 
-  if (!system || BigInt(system.epoch) <= scorecard.data.epoch) {
+  if (!system || scorecard.data.epoch == BigInt(system.epoch)) {
     return null;
   }
 
