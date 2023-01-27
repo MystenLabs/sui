@@ -301,7 +301,7 @@ pub async fn transfer_coin(
         SuiAddress,
         SuiAddress,
         TransactionDigest,
-        ObjectRef,
+        Vec<ObjectRef>,
         u64,
     ),
     anyhow::Error,
@@ -345,7 +345,9 @@ pub async fn transfer_coin(
         sender,
         receiver,
         digest,
-        gas.to_object_ref(),
+        gas.into_iter()
+            .map(|sui_ref| sui_ref.to_object_ref())
+            .collect(),
         gas_used,
     ))
 }

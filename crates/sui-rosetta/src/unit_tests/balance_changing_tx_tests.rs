@@ -374,7 +374,7 @@ async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
             locked_until_epoch: None,
         },
         sender,
-        gas,
+        gas: vec![gas],
         gas_price: client.read_api().get_reference_gas_price().await?,
         budget: 10000,
     };

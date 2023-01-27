@@ -123,12 +123,14 @@
           "result": {
             "name": "Result",
             "value": {
-              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMAC0V4YW1wbGUgTkZUACtBbiBORlQgY3JlYXRlZCBieSB0aGUgU3VpIENvbW1hbmQgTGluZSBUb29sAEJpcGZzOi8vYmFma3JlaWJuZ3FobDNnYWE3ZGFvYjRpMnZjY3ppYXkyampscDQzNWNmNjZ2aG9ubzducnZ3dzUzdHkAxhkVTEKhxhvpkCcXskuOwWj+SJbv75LL9EtYHyMiLBCRaxejabTaAwEAAAAAAAAAIJ0HWVK1gDbyp7VhRGWSQDxnLw2+Ep8eORE/n2Fk6ihnmweBXwRJfi4F0iysOqBhQQsghoz1twzLEPGnBeBh0P36GJYY0osNRAEAAAAAAAAAIPjezPPDxRjxRt6VVPA/J6g9WxGF855x7zV+K9nhOWJRAQAAAAAAAADoAwAAAAAAAA==",
-              "gas": {
-                "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
-                "version": 1,
-                "digest": "+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlE="
-              },
+              "txBytes": "AQICAAAAAAAAAAAAAAAAAAAAAAAAAAIKZGV2bmV0X25mdARtaW50AAMAC0V4YW1wbGUgTkZUACtBbiBORlQgY3JlYXRlZCBieSB0aGUgU3VpIENvbW1hbmQgTGluZSBUb29sAEJpcGZzOi8vYmFma3JlaWJuZ3FobDNnYWE3ZGFvYjRpMnZjY3ppYXkyampscDQzNWNmNjZ2aG9ubzducnZ3dzUzdHkAxhkVTEKhxhvpkCcXskuOwWj+SJbv75LL9EtYHyMiLBCRaxejabTaAwEAAAAAAAAAIJ0HWVK1gDbyp7VhRGWSQDxnLw2+Ep8eORE/n2Fk6ihnmweBXwRJfi4F0iysOqBhQQsghowB9bcMyxDxpwXgYdD9+hiWGNKLDUQBAAAAAAAAACD43szzw8UY8UbelVTwPyeoPVsRhfOece81fivZ4TliUQEAAAAAAAAA6AMAAAAAAAA=",
+              "gas": [
+                {
+                  "objectId": "0xf5b70ccb10f1a705e061d0fdfa189618d28b0d44",
+                  "version": 1,
+                  "digest": "+N7M88PFGPFG3pVU8D8nqD1bEYXznnHvNX4r2eE5YlE="
+                }
+              ],
               "inputObjects": [
                 {
                   "MovePackage": "0x0000000000000000000000000000000000000002"
@@ -6070,11 +6072,10 @@
         "properties": {
           "gas": {
             "description": "the gas object to be used",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ObjectRef"
-              }
-            ]
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
           },
           "inputObjects": {
             "description": "objects to be used in this transaction",
@@ -6109,7 +6110,10 @@
             "minimum": 0.0
           },
           "gasPayment": {
-            "$ref": "#/components/schemas/ObjectRef"
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
           },
           "gasPrice": {
             "type": "integer",

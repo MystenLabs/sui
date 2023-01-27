@@ -30,7 +30,7 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
     let metadata = ConstructionMetadata {
         tx_metadata: TransactionMetadata::PaySui(vec![gas]),
         sender,
-        gas,
+        gas: vec![gas],
         gas_price: 1,
         budget: 1000,
     };

@@ -444,6 +444,11 @@ function TransactionView({
 
     const gasPrice = transaction.certificate.data.gasPrice || 1;
 
+    const objectIds = Array.isArray(transaction.certificate.data.gasPayment)
+        ? transaction.certificate.data.gasPayment.map(
+        element => element.objectId
+        ) : transaction.certificate.data.gasPayment.objectId;
+
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
@@ -568,10 +573,7 @@ function TransactionView({
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
                                         noTruncate
-                                        objectId={
-                                            transaction.certificate.data
-                                                .gasPayment.objectId
-                                        }
+                                        objectId={objectIds[0]}
                                     />
                                 </DescriptionItem>
 

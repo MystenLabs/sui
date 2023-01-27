@@ -266,8 +266,8 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         change_type: BalanceChangeType::Gas,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
+        version: gas[0].1,
+        coin_object_id: gas[0].0,
         amount: (gas_used as i128).neg(),
     };
 
@@ -689,8 +689,8 @@ async fn test_full_node_event_read_api_ok() {
         change_type: BalanceChangeType::Gas,
         owner: Owner::AddressOwner(sender),
         coin_type: "0x2::sui::SUI".to_string(),
-        version: gas.1,
-        coin_object_id: gas.0,
+        version: gas[0].1,
+        coin_object_id: gas[0].0,
         amount: (gas_used as i128).neg(),
     };
 

@@ -1538,7 +1538,7 @@ impl From<PayAllSui> for SuiPayAllSui {
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
-    pub gas_payment: SuiObjectRef,
+    pub gas_payment: Vec<SuiObjectRef>,
     pub gas_price: u64,
     pub gas_budget: u64,
 }
@@ -1556,7 +1556,11 @@ impl Display for SuiTransactionData {
             }
         }
         writeln!(writer, "Sender: {}", self.sender)?;
-        writeln!(writer, "Gas Payment: {}", self.gas_payment)?;
+        write!(writer, "Gas Payment: ")?;
+        for payment in &self.gas_payment {
+            write!(writer, "{} ", payment)?;
+        }
+        writeln!(writer)?;
         writeln!(writer, "Gas Price: {}", self.gas_price)?;
         writeln!(writer, "Gas Budget: {}", self.gas_budget)?;
         write!(f, "{}", writer)
@@ -1579,7 +1583,11 @@ impl TryFrom<TransactionData> for SuiTransactionData {
         Ok(Self {
             transactions,
             sender: data.signer(),
-            gas_payment: data.gas().into(),
+            gas_payment: data
+                .gas_coins()
+                .iter()
+                .map(|obj_ref| SuiObjectRef::from(*obj_ref))
+                .collect(),
             gas_price: data.gas_price,
             gas_budget: data.gas_budget,
         })
@@ -2973,7 +2981,7 @@ pub struct TransactionBytes {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
     pub tx_bytes: Base64,
     /// the gas object to be used
-    pub gas: SuiObjectRef,
+    pub gas: Vec<SuiObjectRef>,
     /// objects to be used in this transaction
     pub input_objects: Vec<SuiInputObjectKind>,
 }
@@ -2982,7 +2990,11 @@ impl TransactionBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
         Ok(Self {
             tx_bytes: Base64::from_bytes(bcs::to_bytes(&data)?.as_slice()),
-            gas: data.gas().into(),
+            gas: data
+                .gas_coins()
+                .iter()
+                .map(|obj_ref| SuiObjectRef::from(*obj_ref))
+                .collect(),
             input_objects: data
                 .input_objects()?
                 .into_iter()

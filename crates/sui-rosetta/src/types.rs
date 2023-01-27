@@ -584,7 +584,7 @@ pub struct ConstructionMetadataResponse {
 pub struct ConstructionMetadata {
     pub tx_metadata: TransactionMetadata,
     pub sender: SuiAddress,
-    pub gas: ObjectRef,
+    pub gas: Vec<ObjectRef>,
     pub gas_price: u64,
     pub budget: u64,
 }
@@ -917,7 +917,7 @@ impl InternalOperation {
             }
         };
 
-        Ok(TransactionData::new(
+        Ok(TransactionData::new_with_dummy_gas_coins(
             TransactionKind::Single(single_tx),
             metadata.sender,
             metadata.gas,
