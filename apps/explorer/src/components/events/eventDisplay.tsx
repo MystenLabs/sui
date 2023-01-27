@@ -91,10 +91,12 @@ function contentLine(
 }
 
 export function moveEventDisplay(event: MoveEvent): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Move Event',
             content: [
+                contentLine('Module', packMod, true),
                 contentLine('Type', event.type, true),
                 addressContent('Sender', event.sender as string),
                 contentLine('BCS', event.bcs, true),
@@ -116,6 +118,9 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
             title: 'New Object',
             content: [
                 contentLine('Module', packMod, true),
+                contentLine('Object Type', event.objectType),
+                objectContent('Object ID', event.objectId),
+                contentLine('Version', event.version.toString()),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
@@ -128,10 +133,12 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
 export function transferObjectEventDisplay(
     event: TransferObjectEvent
 ): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Transfer Object',
             content: [
+                contentLine('Module', packMod, true),
                 contentLine('Object Type', event.objectType, true),
                 objectContent('Object ID', event.objectId),
                 contentLine('Version', event.version.toString()),
@@ -147,10 +154,12 @@ export function transferObjectEventDisplay(
 export function mutateObjectEventDisplay(
     event: MutateObjectEvent
 ): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Mutate Object',
             content: [
+                contentLine('Module', packMod, true),
                 contentLine('Object Type', event.objectType, true),
                 objectContent('Object ID', event.objectId),
                 contentLine('Version', event.version.toString()),
