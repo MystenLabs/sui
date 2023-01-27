@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 0.25.0
+
+### Minor Changes
+
+- 7b4bf43bc: Support for interacting with Devnet v0.24+ where Move Calls refer to their packages by ObjectID only (not ObjectRef).
+
+### Patch Changes
+
+- ebfdd5c56: Adding Checkpoint APIs for ts sdk
+- 72481e759: Updated to new dev inspect transaction layout
+- 969a88669: RPC requests errors now don't include the html response text (to keep message shorter)
+
 ## 0.24.0
 
 ### Minor Changes
