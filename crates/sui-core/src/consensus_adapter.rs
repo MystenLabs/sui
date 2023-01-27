@@ -9,11 +9,11 @@ use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::RwLockReadGuard;
-use prometheus::register_int_gauge_with_registry;
-use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
 use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
+use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::future::Future;
@@ -21,6 +21,7 @@ use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::{
@@ -53,7 +54,8 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
-    pub sequencing_acknowledge_latency: Histogram,
+    pub sequencing_acknowledge_latency: HistogramVec,
+    pub sequencing_certificate_latency: Histogram,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
@@ -85,9 +87,17 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
-            sequencing_acknowledge_latency: register_histogram_with_registry!(
+            sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
-                "The latency for acknowledgement from sequencing engine .",
+                "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
+                &["retry"],
+                SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            sequencing_certificate_latency: register_histogram_with_registry!(
+                "sequencing_certificate_latency",
+                "The latency for sequencing a certificate.",
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -338,28 +348,45 @@ impl ConsensusAdapter {
             debug!("Submitting {transaction_key:?} to consensus");
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
-            let _timer = self
-                .opt_metrics
-                .as_ref()
-                .map(|m| m.sequencing_acknowledge_latency.start_timer());
-            let mut retries = 0;
-            while let Err(e) = self
-                .consensus_client
-                .submit_to_consensus(&transaction, epoch_store)
-                .await
             {
-                // This can happen during Narwhal reconfig, so wait for a few retries.
-                if retries > 3 {
-                    error!(
-                        "Error submitting transaction to own narwhal worker: {:?}",
-                        e
-                    );
+                let ack_start = Instant::now();
+                let mut retries: u32 = 0;
+                while let Err(e) = self
+                    .consensus_client
+                    .submit_to_consensus(&transaction, epoch_store)
+                    .await
+                {
+                    // This can happen during Narwhal reconfig, so wait for a few retries.
+                    if retries > 3 {
+                        error!(
+                            "Error submitting transaction to own narwhal worker: {:?}",
+                            e
+                        );
+                    }
+                    self.opt_metrics.as_ref().map(|metrics| {
+                        metrics.sequencing_certificate_failures.inc();
+                    });
+                    retries += 1;
+                    time::sleep(Duration::from_secs(10)).await;
                 }
+
+                // we want to record the num of retries when reporting latency but to avoid label
+                // cardinality we do some simple bucketing to give us a good enough idea of how
+                // many retries happened associated with the latency.
+                let bucket = match retries {
+                    0..=10 => retries.to_string(), // just report the retry count as is
+                    11..=20 => "between_10_and_20".to_string(),
+                    21..=50 => "between_20_and_50".to_string(),
+                    51..=100 => "between_50_and_100".to_string(),
+                    _ => "over_100".to_string(),
+                };
+
                 self.opt_metrics.as_ref().map(|metrics| {
-                    metrics.sequencing_certificate_failures.inc();
+                    metrics
+                        .sequencing_acknowledge_latency
+                        .with_label_values(&[&bucket])
+                        .observe(ack_start.elapsed().as_secs_f64());
                 });
-                retries += 1;
-                time::sleep(Duration::from_secs(10)).await;
             }
             debug!("Submitted {transaction_key:?} to consensus");
             processed_waiter
@@ -463,6 +490,7 @@ impl<T> Drop for CancelOnDrop<T> {
 /// Tracks number of inflight consensus requests and relevant metrics
 struct InflightDropGuard<'a> {
     adapter: &'a ConsensusAdapter,
+    start: Instant,
 }
 
 impl<'a> InflightDropGuard<'a> {
@@ -474,7 +502,10 @@ impl<'a> InflightDropGuard<'a> {
             metrics.sequencing_certificate_attempt.inc();
             metrics.sequencing_certificate_inflight.set(inflight as i64);
         }
-        Self { adapter }
+        Self {
+            adapter,
+            start: Instant::now(),
+        }
     }
 }
 
@@ -487,6 +518,9 @@ impl<'a> Drop for InflightDropGuard<'a> {
         // Store the latest latency
         if let Some(metrics) = self.adapter.opt_metrics.as_ref() {
             metrics.sequencing_certificate_inflight.set(inflight as i64);
+            metrics
+                .sequencing_certificate_latency
+                .observe(self.start.elapsed().as_secs_f64());
         }
     }
 }
