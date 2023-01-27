@@ -42,6 +42,7 @@ import {
   CheckpointContents,
   CheckpointDigest,
   CheckPointContentsDigest,
+  CommitteeInfo,
 } from '../types';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
@@ -369,7 +370,6 @@ export abstract class Provider {
    * Getting the reference gas price for the network
    */
   abstract getReferenceGasPrice(): Promise<number>;
-  // TODO: add more interface methods
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed
@@ -408,4 +408,12 @@ export abstract class Provider {
     digest: CheckPointContentsDigest
   ): Promise<CheckpointContents>;
 
+  /**
+   * Return the committee information for the asked epoch
+   * @param epoch The epoch of interest. If null, default to the latest epoch
+   * @return {CommitteeInfo} the committee information
+   */
+  abstract getCommitteeInfo(epoch?: number): Promise<CommitteeInfo>;
+
+  // TODO: add more interface methods
 }
