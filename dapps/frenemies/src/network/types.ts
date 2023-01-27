@@ -68,7 +68,7 @@ export type Scorecard = {
     /** Number of epochs for which the player received a score (even 0) */
     participation: number;
     /** Latest epoch for which assignment was recorded; but a score has not yet been assigned */
-    epoch: number;
+    epoch: bigint;
 };
 
 export const SCORECARD = `${PKG}::frenemies::Scorecard`;
