@@ -200,7 +200,7 @@ function StakingCard() {
             amount: bigint;
             validatorAddress: SuiAddress;
         }) => {
-            if (!validatorAddress || !amount || !tokenTypeArg) {
+            if (!validatorAddress || !amount || !tokenTypeArg || !signer) {
                 throw new Error('Failed, missing required field');
             }
             trackEvent('Stake', {
@@ -224,7 +224,7 @@ function StakingCard() {
             delegationId: string;
             stakeSuId: string;
         }) => {
-            if (!delegationId || !stakeSuId) {
+            if (!delegationId || !stakeSuId || !signer) {
                 throw new Error(
                     'Failed, missing required field (!principalWithdrawAmount | delegationId | stakeSuId).'
                 );
