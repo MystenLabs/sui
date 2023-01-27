@@ -163,6 +163,7 @@ export type ObjectArg =
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
+
 export type CallArg =
   | { Pure: ArrayLike<number> }
   | { Object: ObjectArg }
