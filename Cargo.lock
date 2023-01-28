@@ -8677,6 +8677,7 @@ dependencies = [
  "serde 1.0.152",
  "smallvec",
  "sui-framework-build",
+ "sui-protocol-constants",
  "sui-types",
  "workspace-hack",
 ]

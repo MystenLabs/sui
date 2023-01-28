@@ -3,16 +3,17 @@
 
 use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, effects::Op, language_storage::StructTag,
-    value::MoveTypeLayout,
+    value::MoveTypeLayout, vm_status::StatusCode,
 };
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
 use std::collections::{BTreeMap, BTreeSet};
+use sui_protocol_constants::MAX_NUM_EVENT_EMIT;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind},
@@ -159,8 +160,13 @@ impl<'a> ObjectRuntime<'a> {
         Ok(transfer_result)
     }
 
-    pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) {
-        self.state.events.push((ty, tag, event))
+    pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
+        if self.state.events.len() == (MAX_NUM_EVENT_EMIT as usize) {
+            return Err(PartialVMError::new(StatusCode::UNKNOWN_STATUS /* TODO (Ade): should we add a new VM StatusCode for TOO_MANY_EVENTS? */)
+                .with_message(format!("Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed")));
+        }
+        self.state.events.push((ty, tag, event));
+        Ok(())
     }
 
     pub(crate) fn child_object_exists(
