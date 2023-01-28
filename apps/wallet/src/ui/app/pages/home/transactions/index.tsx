@@ -1,24 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useQuery } from '@tanstack/react-query';
 import { memo } from 'react';
 
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { Transaction } from '_components/transactions-card/Transaction';
-import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
+import { useAppSelector, useRpc } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
+
+import type { SuiTransactionResponse } from '@mysten/sui.js';
 
 function TransactionsPage() {
     const activeAddress = useAppSelector(({ account: { address } }) => address);
-
+    const rpc = useRpc();
     const {
         data: txns,
-        isError,
         isLoading,
+        isError,
         error,
-    } = useGetTransactionsByAddress(activeAddress);
+    } = useQuery<SuiTransactionResponse[], Error>(
+        ['transactions-by-address', activeAddress],
+        async () => {
+            if (!activeAddress) {
+                return [];
+            }
+            const txnsIds = await rpc.getTransactions({
+                ToAddress: activeAddress,
+            });
+            return rpc.getTransactionWithEffectsBatch(txnsIds.data);
+        },
+        {
+            enabled: !!activeAddress,
+        }
+    );
 
     if (isError) {
         return (
