@@ -15,8 +15,9 @@ import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
+import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { getEventsSummary, getAmount, formatDate } from '_helpers';
+import { getEventsSummary, getAmount } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
 
@@ -80,8 +81,6 @@ export function Transaction({
         );
     }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
 
-    // receiving transaction from move contract sometimes has the sender as the receiver
-    // so we need to check if the sender is the same as the address
     const isSender = address === certificate.data.sender;
 
     const receiverAddress = useMiddleEllipsis(
@@ -90,36 +89,50 @@ export function Transaction({
         TRUNCATE_PREFIX_LENGTH
     );
 
-    const txnLabel = useMemo(() => {
-        const moveCallTxn = getMoveCallTransaction(
-            certificate.data.transactions[0]
-        );
-        if (txnKind === 'Call')
-            return moveCallTxn?.function.replace(/_/g, ' ') || 'Call';
-        if (txnKind === 'ChangeEpoch') return txnKind;
-        return recipientAddress;
-    }, [certificate.data.transactions, recipientAddress, txnKind]);
-
-    const txnDate = useMemo(() => {
-        return txn?.timestamp_ms
-            ? formatDate(txn.timestamp_ms, ['month', 'day', 'hour', 'minute'])
-            : false;
-    }, [txn]);
+    const moveCallTxn = getMoveCallTransaction(
+        certificate.data.transactions[0]
+    );
 
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
+
     const isSuiTransfer =
         txnKind === 'PaySui' ||
         txnKind === 'TransferSui' ||
         txnKind === 'PayAllSui' ||
         txnKind === 'Pay';
 
-    const label = useMemo(() => {
-        return isSuiTransfer || txnKind === 'TransferObject'
-            ? isSender
-                ? 'To'
-                : 'From'
-            : 'Action';
-    }, [isSender, isSuiTransfer, txnKind]);
+    const isTransfer = isSuiTransfer || txnKind === 'TransferObject';
+
+    const moveCallLabel = useMemo(() => {
+        if (txnKind !== 'Call') return null;
+        if (
+            moveCallTxn?.module === 'sui_system' &&
+            moveCallTxn?.function === 'request_add_delegation_mul_coin'
+        )
+            return 'Staked';
+        if (
+            moveCallTxn?.module === 'sui_system' &&
+            moveCallTxn?.function === 'request_withdraw_delegation'
+        )
+            return 'UnStaked';
+        return 'Call';
+    }, [moveCallTxn, txnKind]);
+
+    const txnIcon = useMemo(() => {
+        if (txnKind === 'ChangeEpoch') return 'Rewards';
+        if (moveCallLabel && moveCallLabel !== 'Call') return moveCallLabel;
+        return isSender ? 'Send' : 'Received';
+    }, [isSender, moveCallLabel, txnKind]);
+
+    const txnLabel = useMemo(() => {
+        if (txnKind === 'ChangeEpoch') return 'Received Staking Rewards';
+        if (moveCallLabel) return moveCallLabel;
+        return isSender ? 'Sent' : 'Received';
+    }, [txnKind, moveCallLabel, isSender]);
+
+    // Show sui symbol only if it is a sui transfer or if or staking or unstaking
+    const showSuiSymbol =
+        isSuiTransfer || (moveCallLabel && moveCallLabel !== 'Call');
 
     return (
         <Link
@@ -132,7 +145,7 @@ export function Transaction({
                 <div className="w-7.5">
                     <TxnIcon
                         txnFailed={executionStatus !== 'success' || !!error}
-                        isSender={isSender}
+                        variant={txnIcon}
                     />
                 </div>
                 <div className="flex flex-col w-full gap-1.5">
@@ -146,48 +159,38 @@ export function Transaction({
                             </div>
                         </div>
                     ) : (
-                        <>
-                            <div className="flex w-full justify-between flex-col gap-1">
-                                <div className="flex w-full justify-between ">
-                                    <div className="flex gap-1 align-middle  items-baseline">
-                                        <Text color="gray-90" weight="semibold">
-                                            {isSender ? 'Sent' : 'Received'}
+                        <div className="flex w-full justify-between flex-col ">
+                            <div className="flex w-full justify-between">
+                                <div className="flex gap-1 align-middle items-baseline">
+                                    <Text color="gray-90" weight="semibold">
+                                        {txnLabel}
+                                    </Text>
+                                    {showSuiSymbol && (
+                                        <Text
+                                            color="gray-90"
+                                            weight="normal"
+                                            variant="subtitleSmall"
+                                        >
+                                            SUI
                                         </Text>
-                                        {isSuiTransfer && (
-                                            <Text
-                                                color="gray-90"
-                                                weight="normal"
-                                                variant="subtitleSmall"
-                                            >
-                                                SUI
-                                            </Text>
-                                        )}
-                                    </div>
-
-                                    <CoinBalance amount={amount} />
+                                    )}
                                 </div>
-                                <div className="flex flex-col w-full">
-                                    <div className="flex flex-col w-full gap-1.5">
-                                        <TxnTypeLabel
-                                            label={label}
-                                            address={receiverAddress}
-                                            actionLabel={txnLabel}
-                                        />
-                                        {objectId && <TxnImage id={objectId} />}
-                                    </div>
-                                </div>
+                                <CoinBalance amount={amount} />
                             </div>
-                        </>
+                            <div className="flex flex-col w-full gap-1.5">
+                                <TxnTypeLabel
+                                    address={receiverAddress}
+                                    moveCallFnName={moveCallTxn?.function}
+                                    isSender={isSender}
+                                    isTransfer={isTransfer}
+                                />
+                                {objectId && <TxnImage id={objectId} />}
+                            </div>
+                        </div>
                     )}
 
-                    {txnDate && (
-                        <Text
-                            color="steel-dark"
-                            weight="medium"
-                            variant="subtitleSmallExtra"
-                        >
-                            {txnDate}
-                        </Text>
+                    {txn.timestamp_ms && (
+                        <DateCard timestamp={txn.timestamp_ms} size="sm" />
                     )}
                 </div>
             </div>

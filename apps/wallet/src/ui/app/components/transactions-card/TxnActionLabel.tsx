@@ -4,15 +4,24 @@
 import { Text } from '_app/shared/text';
 
 type TxnTypeProps = {
-    label: 'Action' | 'From' | 'To';
     address: string;
-    actionLabel: string;
+    moveCallFnName?: string;
+    isTransfer: boolean;
+    isSender: boolean;
 };
 
-export function TxnTypeLabel({ label, address, actionLabel }: TxnTypeProps) {
-    const content = label !== 'Action' ? address : actionLabel;
-    return (
-        <div className="flex gap-1 break-all capitalize">
+export function TxnTypeLabel({
+    address,
+    moveCallFnName,
+    isTransfer,
+    isSender,
+}: TxnTypeProps) {
+    const transferLabel = isSender ? 'To' : 'From';
+    const label = isTransfer ? transferLabel : 'Action';
+    const content = isTransfer ? address : moveCallFnName?.replace(/_/g, ' ');
+
+    return content ? (
+        <div className="flex gap-1 break-all capitalize mt-1">
             <Text color="steel-darker" weight="semibold" variant="subtitle">
                 {label}:
             </Text>
@@ -21,11 +30,11 @@ export function TxnTypeLabel({ label, address, actionLabel }: TxnTypeProps) {
                     color="steel-darker"
                     weight="normal"
                     variant="subtitle"
-                    mono={label !== 'Action'}
+                    mono={isTransfer}
                 >
                     {content}
                 </Text>
             </div>
         </div>
-    );
+    ) : null;
 }
