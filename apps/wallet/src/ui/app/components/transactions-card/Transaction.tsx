@@ -120,7 +120,7 @@ export function Transaction({
         return isSender ? 'Sent' : 'Received';
     }, [txnKind, moveCallLabel, isSender]);
 
-    // Show sui symbol only if it is a sui transfer or if or staking or unstaking
+    // Show sui symbol only if it is a sui transfer, staking or unstaking
     const showSuiSymbol =
         isSuiTransfer || (moveCallLabel && moveCallLabel !== 'Call');
 
