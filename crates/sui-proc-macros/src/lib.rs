@@ -32,6 +32,25 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_framework::get_sui_framework();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
 
+                {
+                    // Initialize the static initializers here:
+                    // https://github.com/move-language/move/blob/f976503ec92e6942eac1c05dd8231918d07e0af6/language/tools/move-package/src/package_lock.rs#L12
+                    use std::path::PathBuf;
+                    use sui_simulator::sui_framework_build::compiled_package::BuildConfig;
+                    use sui_simulator::sui_framework::build_move_package;
+                    use sui_simulator::tempfile::TempDir;
+
+                    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                    path.push("../../sui_programmability/examples/basics");
+                    let mut build_config = BuildConfig::default();
+
+                    build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
+                    let _all_module_bytes = build_move_package(&path, build_config)
+                        .unwrap()
+                        .get_package_bytes(/* with_unpublished_deps */ false);
+                }
+
+
                 use ::sui_simulator::anemo_tower::callback::CallbackLayer;
                 use ::sui_simulator::anemo_tower::trace::DefaultMakeSpan;
                 use ::sui_simulator::anemo_tower::trace::DefaultOnFailure;
