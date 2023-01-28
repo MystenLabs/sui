@@ -21,6 +21,8 @@ parking_lot = "0.12.1"
 futures = "0.3.23"
 chrono = "0.4.23"
 tower = "0.4.13"
+git-version = "0.3.5"
+const-str = "0.5.3"
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
@@ -33,7 +35,6 @@ mysten-metrics = { path = "../mysten-metrics" }
 narwhal-network = { path = "../../narwhal/network" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-config = { path = "../../narwhal/config" }
-prometheus-closure-metric = { path = "../prometheus-closure-metric" }
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

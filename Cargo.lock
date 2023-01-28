@@ -1489,6 +1489,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cec318a675afcb6a1ea1d4340e2d377e56e47c266f28043ceccbf4412ddfdd3b"
 
 [[package]]
+name = "const-str"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5bc011a04793b8ce7bca0efd59e3697c2061760df6efbb8c895e8a81548db67"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2963,6 +2969,28 @@ name = "gimli"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
+
+[[package]]
+name = "git-version"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6b0decc02f4636b9ccad390dcbe77b722a77efedfa393caf8379a51d5c61899"
+dependencies = [
+ "git-version-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "git-version-macro"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe69f1cbdb6e28af2bac214e943b99ce8a0a06b447d15d3e61161b0423139f3f"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2 1.0.49",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
 
 [[package]]
 name = "glob"
@@ -4934,7 +4962,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=2bd1f8d83eeb9be60e9570391b01b29bb90421f5#2bd1f8d83eeb9be60e9570391b01b29bb90421f5"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=95269e60b8570411e0b09ffbd8ac95a506259bdb#95269e60b8570411e0b09ffbd8ac95a506259bdb"
 dependencies = [
  "ahash 0.7.6",
  "async-task",
@@ -4964,7 +4992,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=2bd1f8d83eeb9be60e9570391b01b29bb90421f5#2bd1f8d83eeb9be60e9570391b01b29bb90421f5"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=95269e60b8570411e0b09ffbd8ac95a506259bdb#95269e60b8570411e0b09ffbd8ac95a506259bdb"
 dependencies = [
  "darling",
  "proc-macro2 1.0.49",
@@ -5039,6 +5067,7 @@ dependencies = [
  "dashmap",
  "once_cell",
  "prometheus",
+ "prometheus-closure-metric",
  "scopeguard",
  "tap",
  "tokio",
@@ -6539,6 +6568,12 @@ dependencies = [
  "quote 1.0.23",
  "version_check",
 ]
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.5.20+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
@@ -8287,8 +8322,10 @@ dependencies = [
  "camino",
  "clap 3.2.23",
  "colored",
+ "const-str",
  "fastcrypto",
  "futures",
+ "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
  "move-cli",
@@ -8850,6 +8887,7 @@ dependencies = [
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
+ "once_cell",
  "sui-proc-macros",
  "workspace-hack",
 ]
@@ -8892,7 +8930,9 @@ dependencies = [
  "axum",
  "chrono",
  "clap 3.2.23",
+ "const-str",
  "futures",
+ "git-version",
  "multiaddr",
  "mysten-metrics",
  "mysten-network",
@@ -8901,7 +8941,6 @@ dependencies = [
  "narwhal-types",
  "parking_lot 0.12.1",
  "prometheus",
- "prometheus-closure-metric",
  "reqwest",
  "sui-config",
  "sui-core",
@@ -9069,8 +9108,10 @@ dependencies = [
  "msim",
  "narwhal-network",
  "sui-framework",
+ "sui-framework-build",
  "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "tower",
  "tracing",
  "workspace-hack",
@@ -10237,6 +10278,7 @@ dependencies = [
  "eyre",
  "fdlimit",
  "hdrhistogram",
+ "msim",
  "num_cpus",
  "once_cell",
  "ouroboros 0.15.5",
@@ -10964,6 +11006,7 @@ dependencies = [
  "console-api",
  "console-subscriber",
  "const-oid",
+ "const-str",
  "constant_time_eq",
  "convert_case 0.4.0",
  "convert_case 0.6.0",
@@ -11099,6 +11142,8 @@ dependencies = [
  "getrandom 0.2.8",
  "ghash",
  "gimli",
+ "git-version",
+ "git-version-macro",
  "glob",
  "globset",
  "globwalk",
@@ -11349,6 +11394,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro-error-attr",
+ "proc-macro-hack",
  "proc-macro2 0.4.30",
  "proc-macro2 1.0.49",
  "prometheus",

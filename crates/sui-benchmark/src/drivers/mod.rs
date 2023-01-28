@@ -39,6 +39,7 @@ impl FromStr for Interval {
 
 // wrapper which implements serde
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,
 }
@@ -94,7 +95,7 @@ impl StressStats {
 }
 
 /// Stores the final statistics of the test run.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct BenchmarkStats {
     pub duration: Duration,
     pub num_error: u64,

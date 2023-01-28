@@ -10,8 +10,10 @@ pub use anemo_tower;
 pub use fastcrypto;
 pub use narwhal_network;
 pub use sui_framework;
+pub use sui_framework_build;
 pub use sui_types;
 pub use telemetry_subscribers;
+pub use tempfile;
 pub use tower;
 
 #[cfg(msim)]
