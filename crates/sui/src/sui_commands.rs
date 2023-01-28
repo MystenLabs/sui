@@ -31,13 +31,7 @@ use crate::sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
-#[clap(
-    name = "sui",
-    about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
-    rename_all = "kebab-case",
-    author,
-    version
-)]
+#[clap(rename_all = "kebab-case")]
 pub enum SuiCommand {
     /// Start sui network.
     #[clap(name = "start")]
