@@ -2,15 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useMemo } from 'react';
 
 import Icon, { SuiIcons } from '_components/icon';
 
-interface TxnItemIconProps {
-    txnFailed?: boolean;
-    isSender: boolean;
-}
-
+// TODO: use update icons lib
 const icons = {
     Send: (
         <Icon
@@ -18,19 +13,37 @@ const icons = {
             className="text-gradient-blue-start rotate-135"
         />
     ),
-    Receive: (
+    Received: (
         <Icon
             icon={SuiIcons.ArrowLeft}
             className="text-gradient-blue-start -rotate-45"
         />
     ),
+    Staked: <Icon icon={SuiIcons.Union} className="text-gradient-blue-start" />,
+    UnStaked: (
+        <Icon icon={SuiIcons.Tokens} className="text-gradient-blue-start" />
+    ),
+    Rewards: (
+        <Icon
+            icon={SuiIcons.SuiLogoIcon}
+            className="text-gradient-blue-start text-body"
+        />
+    ),
+    Swapped: <Icon icon={SuiIcons.Swap} className="text-gradient-blue-start" />,
 };
 
-export function TxnIcon({ txnFailed, isSender }: TxnItemIconProps) {
-    const variant = useMemo(() => {
-        return isSender ? 'Send' : 'Receive';
-    }, [isSender]);
+interface TxnItemIconProps {
+    txnFailed?: boolean;
+    variant:
+        | 'Rewards'
+        | 'Staked'
+        | 'UnStaked'
+        | 'Swapped'
+        | 'Send'
+        | 'Received';
+}
 
+export function TxnIcon({ txnFailed, variant }: TxnItemIconProps) {
     return (
         <div
             className={cl([
