@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -11,7 +12,7 @@ use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use tokio::{task::JoinHandle, time::sleep};
+use tokio::{sync::broadcast, task::JoinHandle, time::sleep};
 use tracing::info;
 
 use mysten_metrics::RegistryService;
@@ -46,6 +47,8 @@ pub struct TestCluster {
     pub accounts: Vec<SuiAddress>,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
+
+    reconfig_observer: TestReconfigObserver,
 }
 
 impl TestCluster {
@@ -111,6 +114,77 @@ impl TestCluster {
 
     pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
         RandomNodeRestarter::new(self.clone())
+    }
+
+    pub fn subscribe_to_reconfig(&self) -> broadcast::Receiver<HashMap<AuthorityName, EpochId>> {
+        self.reconfig_observer.subscribe()
+    }
+}
+
+pub struct TestReconfigObserver {
+    tasks: Vec<JoinHandle<()>>,
+    sender: Arc<broadcast::Sender<HashMap<AuthorityName, EpochId>>>,
+}
+
+impl Drop for TestReconfigObserver {
+    fn drop(&mut self) {
+        for t in self.tasks.iter() {
+            t.abort();
+        }
+    }
+}
+
+impl TestReconfigObserver {
+    fn subscribe(&self) -> broadcast::Receiver<HashMap<AuthorityName, EpochId>> {
+        self.sender.subscribe()
+    }
+
+    fn start(swarm: &Swarm) -> Self {
+        let state = Arc::new(Mutex::new(HashMap::new()));
+        let (sender, _) = broadcast::channel(8);
+
+        let mut tasks = Vec::new();
+
+        for node in swarm.validators() {
+            let mut watch_node_handle = node.subscribe_to_sui_node_handle();
+            let state = state.clone();
+            let sender = sender.clone();
+            tasks.push(tokio::task::spawn(async move {
+                loop {
+                    let node_handle_strong = {
+                        let node_handle_weak = watch_node_handle.borrow_and_update();
+                        node_handle_weak.upgrade()
+                    };
+                    if let Some(node_handle) = node_handle_strong {
+                        let (name, mut epoch_change_rx) = node_handle.with(|node| {
+                            (node.state().name.clone(), node.subscribe_to_epoch_change())
+                        });
+                        drop(node_handle); // don't keep node alive
+
+                        while let Ok(committee) = epoch_change_rx.recv().await {
+                            info!("received epoch {} from {}", committee.epoch, name.concise());
+
+                            let mut state = state.lock().unwrap();
+                            state.insert(name, committee.epoch);
+                            sender.send(state.clone()).ok();
+                        }
+                        info!(
+                            "epoch sender was dropped (node {} has reset)",
+                            name.concise()
+                        );
+                    };
+
+                    if watch_node_handle.changed().await.is_err() {
+                        info!("node handle sender was dropped (container has shut down)");
+                    }
+                }
+            }));
+        }
+
+        Self {
+            tasks,
+            sender: Arc::new(sender),
+        }
     }
 }
 
@@ -251,11 +325,14 @@ impl TestClusterBuilder {
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
         let wallet = WalletContext::new(&wallet_conf, None).await?;
 
+        let reconfig_observer = TestReconfigObserver::start(&swarm);
+
         Ok(TestCluster {
             swarm,
             accounts,
             wallet,
             fullnode_handle,
+            reconfig_observer,
         })
     }
 
