@@ -73,8 +73,6 @@ use tokio::{
 };
 use tracing::{debug, info, trace, warn};
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(2);
-
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
 }
@@ -440,8 +438,12 @@ where
                 .expect("store operation should not fail")
                 .expect("store should contain genesis checkpoint")
                 .digest();
-            let task =
-                get_latest_from_peer(genesis_checkpoint_digest, peer, self.peer_heights.clone());
+            let task = get_latest_from_peer(
+                genesis_checkpoint_digest,
+                peer,
+                self.peer_heights.clone(),
+                self.config.timeout(),
+            );
             self.tasks.spawn(task);
         }
     }
@@ -451,6 +453,7 @@ where
             self.network.clone(),
             self.peer_heights.clone(),
             self.weak_sender.clone(),
+            self.config.timeout(),
         );
         self.tasks.spawn(task);
     }
@@ -485,6 +488,7 @@ where
                 self.peer_heights.clone(),
                 self.metrics.clone(),
                 self.config.checkpoint_header_download_concurrency(),
+                self.config.timeout(),
                 // The if condition should ensure that this is Some
                 highest_known_checkpoint.unwrap(),
             )
@@ -533,6 +537,7 @@ where
                 self.metrics.clone(),
                 self.config.transaction_download_concurrency(),
                 self.config.checkpoint_content_download_concurrency(),
+                self.config.timeout(),
                 highest_verified_checkpoint,
             );
 
@@ -542,8 +547,12 @@ where
     }
 
     fn spawn_notify_peers_of_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        let task =
-            notify_peers_of_checkpoint(self.network.clone(), self.peer_heights.clone(), checkpoint);
+        let task = notify_peers_of_checkpoint(
+            self.network.clone(),
+            self.peer_heights.clone(),
+            checkpoint,
+            self.config.timeout(),
+        );
         self.tasks.spawn(task);
     }
 }
@@ -552,6 +561,7 @@ async fn notify_peers_of_checkpoint(
     network: anemo::Network,
     peer_heights: Arc<RwLock<PeerHeights>>,
     checkpoint: VerifiedCheckpoint,
+    timeout: Duration,
 ) {
     let futs = peer_heights
         .read()
@@ -565,7 +575,7 @@ async fn notify_peers_of_checkpoint(
         .flat_map(|peer_id| network.peer(*peer_id))
         .map(StateSyncClient::new)
         .map(|mut client| {
-            let request = Request::new(checkpoint.inner().clone()).with_timeout(DEFAULT_TIMEOUT);
+            let request = Request::new(checkpoint.inner().clone()).with_timeout(timeout);
             async move { client.push_checkpoint_summary(request).await }
         })
         .collect::<Vec<_>>();
@@ -576,6 +586,7 @@ async fn get_latest_from_peer(
     our_genesis_checkpoint_digest: CheckpointDigest,
     peer: anemo::Peer,
     peer_heights: Arc<RwLock<PeerHeights>>,
+    timeout: Duration,
 ) {
     let peer_id = peer.peer_id();
     let mut client = StateSyncClient::new(peer);
@@ -591,7 +602,7 @@ async fn get_latest_from_peer(
             // We need to query this node's genesis checkpoint to see if they're on the same chain
             // as us
             let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(0))
-                .with_timeout(DEFAULT_TIMEOUT);
+                .with_timeout(timeout);
             let response = client
                 .get_checkpoint_summary(request)
                 .await
@@ -630,8 +641,7 @@ async fn get_latest_from_peer(
     }
 
     let checkpoint = {
-        let request =
-            Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(DEFAULT_TIMEOUT);
+        let request = Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(timeout);
         let response = client
             .get_checkpoint_summary(request)
             .await
@@ -656,6 +666,7 @@ async fn query_peers_for_their_latest_checkpoint(
     network: anemo::Network,
     peer_heights: Arc<RwLock<PeerHeights>>,
     sender: mpsc::WeakSender<StateSyncMessage>,
+    timeout: Duration,
 ) {
     let peer_heights = &peer_heights;
     let futs = peer_heights
@@ -670,7 +681,7 @@ async fn query_peers_for_their_latest_checkpoint(
 
             async move {
                 let request =
-                    Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(DEFAULT_TIMEOUT);
+                    Request::new(GetCheckpointSummaryRequest::Latest).with_timeout(timeout);
                 let response = client
                     .get_checkpoint_summary(request)
                     .await
@@ -718,6 +729,7 @@ async fn sync_to_checkpoint<S>(
     peer_heights: Arc<RwLock<PeerHeights>>,
     metrics: Metrics,
     checkpoint_header_download_concurrency: usize,
+    timeout: Duration,
     checkpoint: Checkpoint,
 ) -> Result<()>
 where
@@ -775,7 +787,7 @@ where
                 // successfully get the target checkpoint
                 for mut peer in peers {
                     let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(next))
-                        .with_timeout(DEFAULT_TIMEOUT);
+                        .with_timeout(timeout);
                     if let Some(checkpoint) = peer
                         .get_checkpoint_summary(request)
                         .await
@@ -869,6 +881,7 @@ async fn sync_checkpoint_contents<S>(
     metrics: Metrics,
     transaction_download_concurrency: usize,
     checkpoint_content_download_concurrency: usize,
+    timeout: Duration,
     target_checkpoint: VerifiedCheckpoint,
 ) where
     S: WriteStore + Clone,
@@ -895,6 +908,7 @@ async fn sync_checkpoint_contents<S>(
                 &store,
                 peer_heights.clone(),
                 transaction_download_concurrency,
+                timeout,
                 checkpoint,
             )
         })
@@ -938,6 +952,7 @@ async fn sync_one_checkpoint_contents<S>(
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     transaction_download_concurrency: usize,
+    timeout: Duration,
     checkpoint: VerifiedCheckpoint,
 ) -> Result<(VerifiedCheckpoint, u64)>
 where
@@ -958,7 +973,7 @@ where
         .collect::<Vec<_>>();
     rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
 
-    let Some(contents) = get_checkpoint_contents(&mut peers, &store, checkpoint.content_digest()).await else {
+    let Some(contents) = get_checkpoint_contents(&mut peers, &store, checkpoint.content_digest(), timeout).await else {
         return Err(anyhow!("unable to sync checkpoint contents for checkpoint {}", checkpoint.sequence_number()));
     };
 
@@ -968,7 +983,7 @@ where
     let mut stream = contents
         .into_inner()
         .into_iter()
-        .map(|digests| get_transaction_and_effects(peers.clone(), store.clone(), digests))
+        .map(|digests| get_transaction_and_effects(peers.clone(), store.clone(), digests, timeout))
         .pipe(futures::stream::iter)
         .buffer_unordered(transaction_download_concurrency);
 
@@ -983,6 +998,7 @@ async fn get_checkpoint_contents<S>(
     peers: &mut [StateSyncClient<anemo::Peer>],
     store: S,
     digest: CheckpointContentsDigest,
+    timeout: Duration,
 ) -> Option<CheckpointContents>
 where
     S: WriteStore,
@@ -998,7 +1014,7 @@ where
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
     for peer in peers.iter_mut() {
-        let request = Request::new(digest).with_timeout(DEFAULT_TIMEOUT);
+        let request = Request::new(digest).with_timeout(timeout);
         if let Some(contents) = peer
             .get_checkpoint_contents(request)
             .await
@@ -1023,6 +1039,7 @@ async fn get_transaction_and_effects<S>(
     peers: Vec<StateSyncClient<anemo::Peer>>,
     store: S,
     digests: ExecutionDigests,
+    timeout: Duration,
 ) -> Result<()>
 where
     S: WriteStore,
@@ -1042,7 +1059,7 @@ where
     // Iterate through our selected peers trying each one in turn until we're able to
     // successfully get the target checkpoint
     for mut peer in peers {
-        let request = Request::new(digests).with_timeout(DEFAULT_TIMEOUT);
+        let request = Request::new(digests).with_timeout(timeout);
         if let Some((transaction, effects)) = peer
             .get_transaction_and_effects(request)
             .await
