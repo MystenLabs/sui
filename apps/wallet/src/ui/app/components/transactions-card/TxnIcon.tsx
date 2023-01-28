@@ -30,6 +30,7 @@ const icons = {
         />
     ),
     Swapped: <Icon icon={SuiIcons.Swap} className="text-gradient-blue-start" />,
+    Failed: <Icon icon={SuiIcons.Info} className="text-issue-dark text-body" />,
 };
 
 interface TxnItemIconProps {
@@ -51,14 +52,7 @@ export function TxnIcon({ txnFailed, variant }: TxnItemIconProps) {
                 'w-7.5 h-7.5 flex justify-center items-center rounded-2lg',
             ])}
         >
-            {txnFailed ? (
-                <Icon
-                    icon={SuiIcons.Info}
-                    className="text-issue-dark text-body"
-                />
-            ) : (
-                icons[variant]
-            )}
+            {icons[txnFailed ? 'Failed' : variant]}
         </div>
     );
 }
