@@ -18,13 +18,9 @@ import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
 import { getEventsSummary, getAmount } from '_helpers';
-import { useMiddleEllipsis } from '_hooks';
 import { getTxnEffectsEventID } from '_redux/slices/txresults';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
-
-const TRUNCATE_MAX_LENGTH = 8;
-const TRUNCATE_PREFIX_LENGTH = 4;
 
 export function Transaction({
     txn,
@@ -82,12 +78,6 @@ export function Transaction({
     }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
 
     const isSender = address === certificate.data.sender;
-
-    const receiverAddress = useMiddleEllipsis(
-        recipientAddress,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
 
     const moveCallTxn = getMoveCallTransaction(
         certificate.data.transactions[0]
@@ -179,7 +169,7 @@ export function Transaction({
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel
-                                    address={receiverAddress}
+                                    address={recipientAddress}
                                     moveCallFnName={moveCallTxn?.function}
                                     isSender={isSender}
                                     isTransfer={isTransfer}
