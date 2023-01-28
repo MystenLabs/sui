@@ -764,7 +764,7 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.keystore.addresses())
+                SuiClientCommandResult::Addresses(context.config.keystore.addresses(), context.active_address().ok())
             }
 
             SuiClientCommands::Objects { address } => {
@@ -1255,10 +1255,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::PayAllSui(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            SuiClientCommandResult::Addresses(addresses) => {
+            SuiClientCommandResult::Addresses(addresses, active_address) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
-                    writeln!(writer, "{}", address)?;
+                    if active_address.is_some() && active_address.unwrap() == *address {
+                        writeln!(writer, "{} <=", address)?;
+                    } else {
+                        writeln!(writer, "{}", address)?;
+                    }
                 }
             }
             SuiClientCommandResult::Objects(object_refs) => {
@@ -1552,7 +1556,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiCertifiedTransaction, SuiTransactionEffects),
     PaySui(SuiCertifiedTransaction, SuiTransactionEffects),
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
-    Addresses(Vec<SuiAddress>),
+    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,
