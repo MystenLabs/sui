@@ -189,11 +189,10 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        let (cert, effects) = self
-            .state
-            .get_transaction(digest)
-            .await
-            .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
+        let (cert, effects) =
+            self.state.get_transaction(digest).await.tap_err(
+                |err| debug!(tx_digest=?digest, "Failed to get transaction:  {:?}", err),
+            )?;
         Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
