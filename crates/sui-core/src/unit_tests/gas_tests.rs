@@ -614,7 +614,13 @@ async fn execute_transfer_with_price(
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx)
             .await
-            .map(|(cert, effects)| TransactionStatus::Executed(Some(cert.into_sig()), effects))
+            .map(|(cert, effects)| {
+                TransactionStatus::Executed(
+                    Some(cert.into_sig()),
+                    effects,
+                    TransactionEvents::default(),
+                )
+            })
     } else {
         authority_state
             .handle_transaction(tx)

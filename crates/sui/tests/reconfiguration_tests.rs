@@ -113,7 +113,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .await
         .unwrap()
         .into_cert_for_testing();
-    let effects1 = net
+    let (effects1, _) = net
         .process_certificate(cert.clone().into_inner())
         .await
         .unwrap();
@@ -297,7 +297,7 @@ async fn test_validator_resign_effects() {
         .await
         .unwrap()
         .into_cert_for_testing();
-    let effects0 = net
+    let (effects0, _) = net
         .process_certificate(cert.clone().into_inner())
         .await
         .unwrap();
@@ -307,7 +307,7 @@ async fn test_validator_resign_effects() {
     trigger_reconfiguration(&authorities).await;
     // Manually reconfigure the aggregator.
     net.committee.epoch = 1;
-    let effects1 = net.process_certificate(cert.into_inner()).await.unwrap();
+    let (effects1, _) = net.process_certificate(cert.into_inner()).await.unwrap();
     // Ensure that we are able to form a new effects cert in the new epoch.
     assert_eq!(effects1.epoch(), 1);
     assert_eq!(effects0.into_message(), effects1.into_message());

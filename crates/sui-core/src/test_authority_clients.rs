@@ -11,6 +11,7 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
+use sui_types::messages::TransactionEvents;
 use sui_types::{
     committee::Committee,
     crypto::AuthorityKeyPair,
@@ -159,12 +160,22 @@ impl LocalAuthorityClient {
                 }
             }
             .into_inner();
+
+        let events = if let Some(digest) = signed_effects.events_digest {
+            state.get_transaction_events(digest).await?
+        } else {
+            TransactionEvents::default()
+        };
+
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        Ok(HandleCertificateResponse { signed_effects })
+        Ok(HandleCertificateResponse {
+            signed_effects,
+            events,
+        })
     }
 }
 

@@ -297,8 +297,15 @@ impl ValidatorService {
         if let Some(signed_effects) =
             state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
+            let events = if let Some(digest) = signed_effects.events_digest {
+                state.get_transaction_events(digest).await?
+            } else {
+                TransactionEvents::default()
+            };
+
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
+                events,
             }));
         }
 
@@ -383,9 +390,17 @@ impl ValidatorService {
         // the execution results if it contains shared objects.
         let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: effects.into_inner(),
-            })),
+            Ok(effects) => {
+                let events = if let Some(event_digest) = effects.events_digest {
+                    state.get_transaction_events(event_digest).await?
+                } else {
+                    TransactionEvents::default()
+                };
+                Ok(tonic::Response::new(HandleCertificateResponse {
+                    signed_effects: effects.into_inner(),
+                    events,
+                }))
+            }
             Err(e) => Err(tonic::Status::from(e)),
         }
     }

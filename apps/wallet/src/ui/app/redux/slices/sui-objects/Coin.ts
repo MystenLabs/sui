@@ -3,6 +3,7 @@
 
 import {
     Coin as CoinAPI,
+    getEvents,
     getTransactionEffects,
     SUI_SYSTEM_STATE_OBJECT_ID,
 } from '@mysten/sui.js';
@@ -187,12 +188,13 @@ export class Coin {
             });
 
             const effects = getTransactionEffects(result);
+            const events = getEvents(result);
 
-            if (!effects || !effects.events) {
+            if (!effects || !events) {
                 throw new Error('Missing effects or events');
             }
 
-            const changeEvent = effects.events.find((event) => {
+            const changeEvent = events.find((event) => {
                 if ('coinBalanceChange' in event) {
                     return event.coinBalanceChange.amount === Number(amount);
                 }

@@ -47,8 +47,8 @@ use narwhal_config::{
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, DevInspectResults, SuiEvent, SuiEventEnvelope, SuiMoveValue,
-    SuiTransactionEffects,
+    type_and_fields_from_move_struct, DevInspectResults, DryRunTransactionResponse, SuiEvent,
+    SuiEventEnvelope, SuiMoveValue, SuiTransactionEvents,
 };
 use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
@@ -102,6 +102,7 @@ use crate::{
     event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
 };
 use sui_adapter::execution_engine;
+use sui_types::digests::TransactionEventsDigest;
 
 use self::authority_store::InputKey;
 
@@ -841,6 +842,8 @@ impl AuthorityState {
             .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
             .collect();
 
+        let events = inner_temporary_store.events.clone();
+
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
 
@@ -861,7 +864,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(certificate, effects, epoch_store)
+            .post_process_one_tx(certificate, effects, &events, epoch_store)
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
 
@@ -958,7 +961,7 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
-    ) -> Result<SuiTransactionEffects, anyhow::Error> {
+    ) -> Result<DryRunTransactionResponse, anyhow::Error> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dry-exec is only support on fullnodes"));
@@ -988,7 +991,7 @@ impl AuthorityState {
             )
             .expect("We defined natives to not fail here"),
         );
-        let (_inner_temp_store, effects, _execution_error) =
+        let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
@@ -1002,7 +1005,13 @@ impl AuthorityState {
                 &epoch_store.epoch_start_configuration().epoch_data(),
                 epoch_store.protocol_config(),
             );
-        SuiTransactionEffects::try_from(effects, epoch_store.module_cache().as_ref())
+        Ok(DryRunTransactionResponse {
+            effects: effects.into(),
+            events: SuiTransactionEvents::try_from(
+                inner_temp_store.events,
+                epoch_store.module_cache().as_ref(),
+            )?,
+        })
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
@@ -1070,7 +1079,7 @@ impl AuthorityState {
             )
             .expect("We defined natives to not fail here"),
         );
-        let (_inner_temp_store, effects, execution_result) =
+        let (inner_temp_store, effects, execution_result) =
             execution_engine::execute_transaction_to_effects::<execution_mode::DevInspect, _>(
                 shared_object_refs,
                 temporary_store,
@@ -1086,6 +1095,7 @@ impl AuthorityState {
             );
         DevInspectResults::new(
             effects,
+            inner_temp_store.events,
             execution_result,
             epoch_store.module_cache().as_ref(),
         )
@@ -1298,6 +1308,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
+        events: &TransactionEvents,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         if self.indexes.is_none() && self.event_handler.is_none() {
@@ -1326,6 +1337,7 @@ impl AuthorityState {
                 event_handler
                     .process_events(
                         effects,
+                        events,
                         timestamp_ms,
                         seq,
                         epoch_store.module_cache().as_ref(),
@@ -1345,7 +1357,7 @@ impl AuthorityState {
 
                 self.metrics
                     .post_processing_total_events_emitted
-                    .inc_by(effects.events.len() as u64);
+                    .inc_by(events.data.len() as u64);
             }
         };
 
@@ -2100,6 +2112,13 @@ impl AuthorityState {
         }
     }
 
+    pub async fn get_transaction_events(
+        &self,
+        digest: TransactionEventsDigest,
+    ) -> SuiResult<TransactionEvents> {
+        self.database.get_events(&digest)
+    }
+
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
         match &self.indexes {
             Some(i) => Ok(i.clone()),
@@ -2206,7 +2225,7 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    pub async fn get_events(
+    pub async fn query_events(
         &self,
         query: EventQuery,
         cursor: Option<EventID>,
@@ -2341,9 +2360,14 @@ impl AuthorityState {
         {
             if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
+                let events = if let Some(digest) = effects.events_digest {
+                    self.database.get_events(&digest)?
+                } else {
+                    TransactionEvents::default()
+                };
                 return Ok(Some((
                     transaction.into_message(),
-                    TransactionStatus::Executed(cert_sig, effects.into_inner()),
+                    TransactionStatus::Executed(cert_sig, effects.into_inner(), events),
                 )));
             } else {
                 // The read of effects and read of transaction are not atomic. It's possible that we reverted

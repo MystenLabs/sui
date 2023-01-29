@@ -327,7 +327,7 @@ function TransactionView({
     );
 
     const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
-    const txEventData = transaction.effects.events?.map(eventToDisplay);
+    const txEventData = transaction.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
     const txEventDisplay = txEventData?.map((ed, index) => {

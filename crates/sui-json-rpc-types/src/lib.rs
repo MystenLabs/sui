@@ -23,7 +23,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
-use serde::ser::Error;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -37,6 +36,7 @@ use sui_types::base_types::{
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
 use sui_types::crypto::SuiAuthorityStrongQuorumSignInfo;
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError, UserInputError, UserInputResult};
 use sui_types::event::{BalanceChangeType, Event, EventID};
@@ -47,7 +47,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, EffectsFinalityInfo, ExecutionStatus, GenesisObject, InputObjectKind,
     MoveModulePublish, ObjectArg, Pay, PayAllSui, PaySui, SenderSignedData, SingleTransactionKind,
-    TransactionData, TransactionEffects, TransactionKind,
+    TransactionData, TransactionEffects, TransactionEvents, TransactionKind,
 };
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary,
@@ -353,6 +353,7 @@ pub enum MoveFunctionArgType {
 pub struct SuiTransactionResponse {
     pub transaction: SuiTransaction,
     pub effects: SuiTransactionEffects,
+    pub events: SuiTransactionEvents,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -362,46 +363,7 @@ pub struct SuiTransactionResponse {
     pub checkpoint: Option<CheckpointSequenceNumber>,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-pub enum SuiParsedTransactionResponse {
-    Publish(SuiParsedPublishResponse),
-    MergeCoin(SuiParsedMergeCoinResponse),
-    SplitCoin(SuiParsedSplitCoinResponse),
-}
-
-impl SuiParsedTransactionResponse {
-    pub fn to_publish_response(self) -> Result<SuiParsedPublishResponse, SuiError> {
-        match self {
-            SuiParsedTransactionResponse::Publish(resp) => Ok(resp),
-            _ => Err(SuiError::UnexpectedMessage),
-        }
-    }
-
-    pub fn to_merge_coin_response(self) -> Result<SuiParsedMergeCoinResponse, SuiError> {
-        match self {
-            SuiParsedTransactionResponse::MergeCoin(resp) => Ok(resp),
-            _ => Err(SuiError::UnexpectedMessage),
-        }
-    }
-
-    pub fn to_split_coin_response(self) -> Result<SuiParsedSplitCoinResponse, SuiError> {
-        match self {
-            SuiParsedTransactionResponse::SplitCoin(resp) => Ok(resp),
-            _ => Err(SuiError::UnexpectedMessage),
-        }
-    }
-}
-
-impl Display for SuiParsedTransactionResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            SuiParsedTransactionResponse::Publish(r) => r.fmt(f),
-            SuiParsedTransactionResponse::MergeCoin(r) => r.fmt(f),
-            SuiParsedTransactionResponse::SplitCoin(r) => r.fmt(f),
-        }
-    }
-}
-
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub enum SuiTBlsSignObjectCommitmentType {
     /// Check that the object is committed by the consensus.
@@ -452,62 +414,6 @@ impl TryFrom<Object> for SuiCoinMetadata {
             description,
             icon_url,
         })
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SuiParsedSplitCoinResponse {
-    /// The updated original coin object after split
-    pub updated_coin: SuiParsedObject,
-    /// All the newly created coin objects generated from the split
-    pub new_coins: Vec<SuiParsedObject>,
-    /// The updated gas payment object after deducting payment
-    pub updated_gas: SuiParsedObject,
-}
-
-impl Display for SuiParsedSplitCoinResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "{}", "----- Split Coin Results ----".bold())?;
-
-        let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
-        writeln!(writer, "Updated Coin : {}", coin)?;
-        let mut new_coin_text = Vec::new();
-        for coin in &self.new_coins {
-            let coin = GasCoin::try_from(coin).map_err(fmt::Error::custom)?;
-            new_coin_text.push(format!("{coin}"))
-        }
-        writeln!(
-            writer,
-            "New Coins : {}",
-            new_coin_text.join(",\n            ")
-        )?;
-        let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
-        writeln!(writer, "Updated Gas : {}", gas_coin)?;
-        write!(f, "{}", writer)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SuiParsedMergeCoinResponse {
-    /// The updated original coin object after merge
-    pub updated_coin: SuiParsedObject,
-    /// The updated gas payment object after deducting payment
-    pub updated_gas: SuiParsedObject,
-}
-
-impl Display for SuiParsedMergeCoinResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "{}", "----- Merge Coin Results ----".bold())?;
-
-        let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
-        writeln!(writer, "Updated Coin : {}", coin)?;
-        let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
-        writeln!(writer, "Updated Gas : {}", gas_coin)?;
-        write!(f, "{}", writer)
     }
 }
 
@@ -969,45 +875,6 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
         Err(SuiError::TypeError {
             error: format!("Struct is not a gas coin: {move_struct:?}"),
         })
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SuiParsedPublishResponse {
-    /// The newly published package object reference.
-    pub package: SuiObjectRef,
-    /// List of Move objects created as part of running the module initializers in the package
-    pub created_objects: Vec<SuiParsedObject>,
-    /// The updated gas payment object after deducting payment
-    pub updated_gas: SuiParsedObject,
-}
-
-impl Display for SuiParsedPublishResponse {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "{}", "----- Publish Results ----".bold())?;
-        writeln!(
-            writer,
-            "{}",
-            format!(
-                "The newly published package object ID: {:?}\n",
-                self.package.object_id
-            )
-            .bold()
-        )?;
-        if !self.created_objects.is_empty() {
-            writeln!(
-                writer,
-                "List of objects created by running module initializers:"
-            )?;
-            for obj in &self.created_objects {
-                writeln!(writer, "{}\n", obj)?;
-            }
-        }
-        let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
-        writeln!(writer, "Updated Gas : {}", gas_coin)?;
-        write!(f, "{}", writer)
     }
 }
 
@@ -1886,42 +1753,42 @@ impl Display for SuiFinalizedEffects {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionEffects", rename_all = "camelCase")]
 pub struct SuiTransactionEffects {
-    // The status of the execution
+    /// The status of the execution
     pub status: SuiExecutionStatus,
     /// The epoch when this transaction was executed.
     pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
-    // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
+    /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shared_objects: Vec<SuiObjectRef>,
-    // The transaction digest
+    /// The transaction digest
     pub transaction_digest: TransactionDigest,
-    // ObjectRef and owner of new objects created.
+    /// ObjectRef and owner of new objects created.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub created: Vec<OwnedObjectRef>,
-    // ObjectRef and owner of mutated objects, including gas object.
+    /// ObjectRef and owner of mutated objects, including gas object.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mutated: Vec<OwnedObjectRef>,
-    // ObjectRef and owner of objects that are unwrapped in this transaction.
-    // Unwrapped objects are objects that were wrapped into other objects in the past,
-    // and just got extracted out.
+    /// ObjectRef and owner of objects that are unwrapped in this transaction.
+    /// Unwrapped objects are objects that were wrapped into other objects in the past,
+    /// and just got extracted out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unwrapped: Vec<OwnedObjectRef>,
-    // Object Refs of objects now deleted (the old refs).
+    /// Object Refs of objects now deleted (the old refs).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted: Vec<SuiObjectRef>,
     /// Object refs of objects previously wrapped in other objects but now deleted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unwrapped_then_deleted: Vec<SuiObjectRef>,
-    // Object refs of objects now wrapped in other objects.
+    /// Object refs of objects now wrapped in other objects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wrapped: Vec<SuiObjectRef>,
-    // The updated gas object reference. Have a dedicated field for convenient access.
-    // It's also included in mutated.
+    /// The updated gas object reference. Have a dedicated field for convenient access.
+    /// It's also included in mutated.
     pub gas_object: OwnedObjectRef,
-    /// The events emitted during execution. Note that only successful transactions emit events
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub events: Vec<SuiEvent>,
+    /// The digest of the events emitted during execution,
+    /// can be None if the transaction does not emmit any event.
+    pub events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<TransactionDigest>,
@@ -1932,12 +1799,11 @@ impl SuiTransactionEffects {
     pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &OwnedObjectRef> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
     }
+}
 
-    pub fn try_from(
-        effect: TransactionEffects,
-        resolver: &impl GetModule,
-    ) -> Result<Self, anyhow::Error> {
-        Ok(Self {
+impl From<TransactionEffects> for SuiTransactionEffects {
+    fn from(effect: TransactionEffects) -> Self {
+        Self {
             status: effect.status.into(),
             executed_epoch: effect.executed_epoch,
             gas_used: effect.gas_used.into(),
@@ -1953,13 +1819,9 @@ impl SuiTransactionEffects {
                 owner: effect.gas_object.1,
                 reference: effect.gas_object.0.into(),
             },
-            events: effect
-                .events
-                .into_iter()
-                .map(|event| SuiEvent::try_from(event, resolver))
-                .collect::<Result<_, _>>()?,
+            events_digest: effect.events_digest,
             dependencies: effect.dependencies,
-        })
+        }
     }
 }
 
@@ -2013,6 +1875,33 @@ impl Display for SuiTransactionEffects {
     }
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DryRunTransactionResponse {
+    pub effects: SuiTransactionEffects,
+    pub events: SuiTransactionEvents,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TransactionEffects", transparent)]
+pub struct SuiTransactionEvents {
+    pub data: Vec<SuiEvent>,
+}
+
+impl SuiTransactionEvents {
+    pub fn try_from(
+        events: TransactionEvents,
+        resolver: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            data: events
+                .data
+                .into_iter()
+                .map(|event| SuiEvent::try_from(event, resolver))
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
 /// The response from processing a dev inspect transaction
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DevInspectResults", rename_all = "camelCase")]
@@ -2021,6 +1910,8 @@ pub struct DevInspectResults {
     /// Note however, that not all dev-inspect transactions are actually usable as transactions so
     /// it might not be possible actually generate these effects from a normal transaction.
     pub effects: SuiTransactionEffects,
+    /// Events that likely would be generated if the transaction is actually run.
+    pub events: SuiTransactionEvents,
     /// Execution results (including return values) from executing the transactions
     /// Currently contains only return values from Move calls
     pub results: Result<Vec<(usize, SuiExecutionResult)>, String>,
@@ -2046,10 +1937,10 @@ type ExecutionResult = (
 impl DevInspectResults {
     pub fn new(
         effects: TransactionEffects,
+        events: TransactionEvents,
         return_values: Result<Vec<(usize, ExecutionResult)>, ExecutionError>,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
-        let effects = SuiTransactionEffects::try_from(effects, resolver)?;
         let results = match return_values {
             Err(e) => Err(format!("{}", e)),
             Ok(srvs) => Ok(srvs
@@ -2072,7 +1963,11 @@ impl DevInspectResults {
                 })
                 .collect()),
         };
-        Ok(Self { effects, results })
+        Ok(Self {
+            effects: effects.into(),
+            events: SuiTransactionEvents::try_from(events, resolver)?,
+            results,
+        })
     }
 }
 

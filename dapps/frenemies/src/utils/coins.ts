@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  CoinStruct,
+  CoinStruct, getEvents,
   getTransactionEffects,
   SUI_TYPE_ARG,
 } from "@mysten/sui.js";
@@ -71,13 +71,13 @@ export function useManageCoin() {
       },
     });
 
-    const effects = getTransactionEffects(result);
+    const events = getEvents(result);
 
-    if (!effects || !effects.events) {
+    if (!events) {
       throw new Error("Missing effects or events");
     }
 
-    const changeEvent = effects.events.find((event) => {
+    const changeEvent = events.find((event) => {
       if ("coinBalanceChange" in event) {
         return event.coinBalanceChange.amount === Number(amount);
       }
