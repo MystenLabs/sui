@@ -33,13 +33,15 @@ function ReceiptPage() {
         ({ txresults }) => txresults.loading
     );
 
-    useEffect(() => {
-        dispatch(getTransactionsByAddress());
-    }, [dispatch]);
-
     const txnItem = useMemo(() => {
         return txResults.filter((txn) => txn.txId === txDigest)[0];
     }, [txResults, txDigest]);
+
+    useEffect(() => {
+        if (!txnItem) {
+            dispatch(getTransactionsByAddress());
+        }
+    }, [dispatch, txnItem]);
 
     //TODO: redo the CTA links
     const ctaLinks = transferType === 'nft' ? '/nfts' : '/';
