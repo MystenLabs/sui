@@ -27,7 +27,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::crypto::sha3_hash;
-use sui_types::messages::TransactionData;
+use sui_types::messages::{SingleTransactionKind, TransactionData, TransactionKind};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
 };
@@ -36,6 +36,7 @@ use sui_types::object::{Data, ObjectRead};
 use sui_types::query::TransactionQuery;
 
 use sui_adapter::execution_mode::DevInspect;
+use sui_types::event::EventType;
 use tracing::debug;
 
 use crate::api::RpcFullNodeReadApiServer;
@@ -189,11 +190,23 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionResponse> {
-        let (cert, effects) = self
+        let (cert, mut effects) = self
             .state
             .get_transaction(digest)
             .await
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
+
+        // Hotfix for testnet wave 2, remove all events except CoinBalanceChange for Epoch Change tx.
+        if let TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_)) =
+            cert.data().intent_message.value.kind
+        {
+            effects
+                .events
+                .retain(|event| event.event_type() == EventType::CoinBalanceChange);
+            effects.created.clear();
+            effects.deleted.clear();
+        };
+
         Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
