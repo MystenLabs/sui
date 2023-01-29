@@ -161,7 +161,7 @@ jobs:
 
       - name: Start local Sui network
         run: |
-          cargo run --bin sui start --no-full-node &
+          sui start --no-full-node &
         shell: bash
 
       - name: Start Rosetta servers
