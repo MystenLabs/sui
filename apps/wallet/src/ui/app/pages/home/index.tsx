@@ -13,7 +13,7 @@ import PageLayout from '_pages/layout';
 import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 import { usePageView } from '_shared/utils';
 
-const POLL_SUI_OBJECTS_INTERVAL = 4000;
+const POLL_SUI_OBJECTS_INTERVAL = 12000;
 
 interface Props {
     disableNavigation?: boolean;
