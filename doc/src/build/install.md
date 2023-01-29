@@ -143,6 +143,16 @@ Use the following command to install `libclang-dev`:
 sudo apt-get install libclang-dev
 ```
 
+### libpq-dev
+
+Fix [`/usr/bin/ld: cannot find -lpq`](https://github.com/MystenLabs/sui/issues/6578) issue.
+
+Use the following command to install `libpq-dev`:
+
+```shell
+sudo apt-get install libpq-dev
+```
+
 Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
 
 
