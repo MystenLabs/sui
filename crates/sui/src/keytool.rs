@@ -93,6 +93,14 @@ impl KeyToolCommand {
                 match res {
                     Ok(keypair) => {
                         println!("Public Key: {}", keypair.public().encode_base64());
+
+                        match keypair.public() {
+                            sui_types::crypto::PublicKey::Ed25519(pubkey) => {
+                                println!("anemo PeerId: {}", anemo::PeerId(pubkey.0.into()));
+                            }
+                            sui_types::crypto::PublicKey::Secp256k1(_) => {}
+                            sui_types::crypto::PublicKey::Secp256r1(_) => {}
+                        }
                         println!("Flag: {}", keypair.public().flag());
                     }
                     Err(e) => {

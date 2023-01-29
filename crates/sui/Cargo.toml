@@ -23,6 +23,7 @@ bip32 = "0.4.0"
 prettytable-rs = "0.10.0"
 git-version = "0.3.5"
 const-str = "0.5.3"
+anemo.workspace = true
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
