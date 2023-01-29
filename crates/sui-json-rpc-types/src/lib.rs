@@ -1427,13 +1427,12 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
-impl TryFrom<MoveModulePublish> for SuiMovePackage {
-    type Error = anyhow::Error;
-
-    fn try_from(m: MoveModulePublish) -> Result<Self, Self::Error> {
-        Ok(Self {
-            disassembled: disassemble_modules(m.modules.iter())?,
-        })
+impl From<MoveModulePublish> for SuiMovePackage {
+    fn from(m: MoveModulePublish) -> Self {
+        Self {
+            // In case of failed publish transaction, disassemble can fail, we can only return empty module map in that case.
+            disassembled: disassemble_modules(m.modules.iter()).unwrap_or_default(),
+        }
     }
 }
 
@@ -1711,7 +1710,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
             SingleTransactionKind::Pay(p) => Self::Pay(p.into()),
             SingleTransactionKind::PaySui(p) => Self::PaySui(p.into()),
             SingleTransactionKind::PayAllSui(p) => Self::PayAllSui(p.into()),
-            SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
+            SingleTransactionKind::Publish(p) => Self::Publish(p.into()),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
                 package: c.package.into(),
                 module: c.module.to_string(),
