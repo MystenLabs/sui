@@ -324,7 +324,7 @@ impl ConsensusAdapter {
             .boxed();
         let (await_submit, position) =
             Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
-        let _guard = InflightDropGuard::acquire(&self, position);
+        let mut guard = InflightDropGuard::acquire(&self);
 
         // We need to wait for some delay until we submit transaction to the consensus
         // However, if transaction is received by consensus while we wait, we don't need to wait
@@ -348,6 +348,11 @@ impl ConsensusAdapter {
         }));
         if let Some(processed_waiter) = processed_waiter {
             debug!("Submitting {transaction_key:?} to consensus");
+
+            // populate the position only when this authority submits the transaction
+            // to consensus
+            guard.position = Some(position);
+
             // We enter this branch when in select above await_submit completed and processed_waiter is pending
             // This means it is time for us to submit transaction to consensus
             {
@@ -493,11 +498,11 @@ impl<T> Drop for CancelOnDrop<T> {
 struct InflightDropGuard<'a> {
     adapter: &'a ConsensusAdapter,
     start: Instant,
-    position: usize,
+    position: Option<usize>,
 }
 
 impl<'a> InflightDropGuard<'a> {
-    pub fn acquire(adapter: &'a ConsensusAdapter, position: usize) -> Self {
+    pub fn acquire(adapter: &'a ConsensusAdapter) -> Self {
         let inflight = adapter
             .num_inflight_transactions
             .fetch_add(1, Ordering::SeqCst);
@@ -508,7 +513,7 @@ impl<'a> InflightDropGuard<'a> {
         Self {
             adapter,
             start: Instant::now(),
-            position,
+            position: None,
         }
     }
 }
@@ -522,9 +527,16 @@ impl<'a> Drop for InflightDropGuard<'a> {
         // Store the latest latency
         if let Some(metrics) = self.adapter.opt_metrics.as_ref() {
             metrics.sequencing_certificate_inflight.set(inflight as i64);
+
+            let position = if let Some(position) = self.position {
+                position.to_string()
+            } else {
+                "not_submitted".to_string()
+            };
+
             metrics
                 .sequencing_certificate_latency
-                .with_label_values(&[&self.position.to_string()])
+                .with_label_values(&[&position])
                 .observe(self.start.elapsed().as_secs_f64());
         }
     }
