@@ -1432,13 +1432,6 @@ impl AuthorityState {
             .await
     }
 
-    pub async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
-        self.make_account_info(request.account)
-    }
-
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
@@ -2398,15 +2391,6 @@ impl AuthorityState {
                 effects
             }
         }))
-    }
-
-    fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
-        self.database
-            .get_owner_objects(Owner::AddressOwner(account))
-            .map(|object_ids| AccountInfoResponse {
-                object_ids: object_ids.into_iter().map(|id| id.into()).collect(),
-                owner: account,
-            })
     }
 
     // Helper function to manage transaction_locks
