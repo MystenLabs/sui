@@ -7,6 +7,7 @@ import {
     getMoveCallTransaction,
     getExecutionStatusError,
     getTransferObjectTransaction,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,6 +19,7 @@ import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
 import { getEventsSummary, getAmount, notEmpty } from '_helpers';
+import { useGetTxnRecipientAddress } from '_hooks';
 
 import type {
     SuiTransactionResponse,
@@ -68,34 +70,21 @@ export function Transaction({
         txn.effects
     );
 
-    const amount = useMemo(() => {
-        const amount = amountByRecipient && amountByRecipient?.[0]?.amount;
-        const amountTransfers = eventsSummary.reduce(
-            (acc, { amount }) => acc + amount,
-            0
+    const transferAmount = useMemo(() => {
+        const amount = amountByRecipient && amountByRecipient?.[0];
+
+        const amountTransfers = eventsSummary.find(
+            ({ receiverAddress }) => receiverAddress === address
         );
 
-        return Math.abs(amount || amountTransfers);
-    }, [amountByRecipient, eventsSummary]);
+        return {
+            amount: Math.abs(amount?.amount || amountTransfers?.amount || 0),
+            coinType:
+                amount?.coinType || amountTransfers?.coinType || SUI_TYPE_ARG,
+        };
+    }, [address, amountByRecipient, eventsSummary]);
 
-    const recipientAddress = useMemo(() => {
-        const transferObjectRecipientAddress =
-            amountByRecipient &&
-            amountByRecipient?.find(
-                ({ recipientAddress }) => recipientAddress !== address
-            )?.recipientAddress;
-        const receiverAddr =
-            eventsSummary &&
-            eventsSummary.find(
-                ({ receiverAddress }) => receiverAddress !== address
-            )?.receiverAddress;
-
-        return (
-            receiverAddr ??
-            transferObjectRecipientAddress ??
-            certificate.data.sender
-        );
-    }, [address, amountByRecipient, certificate.data.sender, eventsSummary]);
+    const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
     const isSender = address === certificate.data.sender;
 
@@ -124,7 +113,7 @@ export function Transaction({
             moveCallTxn?.module === 'sui_system' &&
             moveCallTxn?.function === 'request_withdraw_delegation'
         )
-            return 'UnStaked';
+            return 'Unstaked';
         return 'Call';
     }, [moveCallTxn, txnKind]);
 
@@ -185,7 +174,7 @@ export function Transaction({
                                         </Text>
                                     )}
                                 </div>
-                                <CoinBalance amount={amount} />
+                                <CoinBalance amount={transferAmount.amount} />
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel
