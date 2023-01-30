@@ -211,6 +211,7 @@ export class Coin {
         gasFee: bigint
     ) {
         const totalAmount = amount + gasFee;
+
         // TODO: Validate behavior if the sum can't make it up:
         const inputCoins =
             CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -221,9 +222,11 @@ export class Coin {
         const address = await signer.getAddress();
 
         const result = await signer.paySui({
-            inputCoins: inputCoins.map((coin) =>
-                Coin.getID(coin as SuiMoveObject)
-            ),
+            // NOTE: We reverse the order here so that the highest coin is in the front
+            // so that it is used as the gas coin.
+            inputCoins: [...inputCoins]
+                .reverse()
+                .map((coin) => Coin.getID(coin as SuiMoveObject)),
             recipients: [address, address],
             // TODO: Update SDK to accept bigint
             amounts: [Number(amount), Number(gasFee)],
@@ -234,13 +237,24 @@ export class Coin {
             throw new Error('Missing effects cert');
         }
 
-        const { created } = result.EffectsCert.effects.effects;
+        const { events } = result.EffectsCert.effects.effects;
 
-        if (!created || created.length !== 2) {
-            throw new Error('Unexpected created objects');
+        if (!events) {
+            throw new Error('Missing events');
         }
 
-        // Return the first coin object, which is the amount coin:
-        return created[0].reference.objectId;
+        const changeEvent = events.find((event) => {
+            if ('coinBalanceChange' in event) {
+                return event.coinBalanceChange.amount === Number(amount);
+            }
+
+            return false;
+        });
+
+        if (!changeEvent || !('coinBalanceChange' in changeEvent)) {
+            throw new Error('Missing coin balance event');
+        }
+
+        return changeEvent.coinBalanceChange.coinObjectId;
     }
 }
