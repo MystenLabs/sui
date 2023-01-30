@@ -8,7 +8,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
-use parking_lot::RwLockReadGuard;
+use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
@@ -56,6 +56,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: Histogram,
+    pub close_epoch_wait_for_sequence_ms: IntCounter,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
@@ -102,6 +103,12 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
+            close_epoch_wait_for_sequence_ms: register_int_counter_with_registry!(
+                "close_epoch_wait_for_sequence_ms",
+                "Time validator waits to sequence pending certificates before closing the epoch.",
+                registry,
+            )
+                .unwrap(),
         }))
     }
 
@@ -120,6 +127,8 @@ pub struct ConsensusAdapter {
     num_inflight_transactions: AtomicU64,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
+    /// Record time of close_epoch call for metrics
+    close_epoch_started: Mutex<Option<Instant>>,
 }
 
 #[async_trait::async_trait]
@@ -168,6 +177,7 @@ impl ConsensusAdapter {
             authority,
             num_inflight_transactions,
             opt_metrics,
+            close_epoch_started: Mutex::new(None),
         });
         let recover = this.clone();
         recover.submit_recovered(epoch_store);
@@ -409,6 +419,14 @@ impl ConsensusAdapter {
                 false
             };
         if send_end_of_publish {
+            let close_epoch_started = self.close_epoch_started.lock().take();
+            if let Some(close_epoch_started) = close_epoch_started {
+                let close_epoch_time = close_epoch_started.elapsed().as_millis();
+                self.opt_metrics.as_ref().map(|m| {
+                    m.close_epoch_wait_for_sequence_ms
+                        .inc_by(close_epoch_time as u64)
+                });
+            }
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
@@ -462,6 +480,8 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             ) {
                 warn!("Error when sending end of publish message: {:?}", err);
             }
+        } else {
+            *self.close_epoch_started.lock() = Some(Instant::now());
         }
     }
 }
