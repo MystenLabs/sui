@@ -277,6 +277,20 @@ where
             subscriber
         };
 
+        // Initialize checkpoint watermark metrics
+        self.metrics.set_highest_verified_checkpoint(
+            self.store
+                .get_highest_verified_checkpoint()
+                .expect("store operation should not fail")
+                .sequence_number(),
+        );
+        self.metrics.set_highest_synced_checkpoint(
+            self.store
+                .get_highest_synced_checkpoint()
+                .expect("store operation should not fail")
+                .sequence_number(),
+        );
+
         loop {
             tokio::select! {
                 now = interval.tick() => {
