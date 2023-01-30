@@ -3,6 +3,7 @@
 import { Combobox } from '@headlessui/react';
 import { Search16 } from '@mysten/icons';
 
+import { LoadingSpinner } from './LoadingSpinner';
 import { Text } from './Text';
 
 type SearchResult = {
@@ -14,9 +15,10 @@ export interface SearchProps {
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onSelectResult: (result: SearchResult) => void;
     placeholder?: string;
-    query: string;
+    isLoading: boolean;
     options?: Record<string, SearchResult[]>;
     value?: SearchResult;
+    inputValue: string;
 }
 
 export interface SearchResultProps {
@@ -44,14 +46,20 @@ export function Search({
     onSelectResult,
     placeholder,
     options = {},
+    isLoading = false,
+    inputValue,
     value,
 }: SearchProps) {
+    const hasOptions = Object.entries(options).some(
+        ([k, v]) => !!v && Object.keys(v).length
+    );
+
     return (
         <Combobox
             value={value}
             onChange={onSelectResult}
             as="div"
-            className="relative flex flex-col"
+            className="relative flex w-full flex-col"
         >
             <Combobox.Input
                 displayValue={(value) => value?.label}
@@ -59,8 +67,8 @@ export function Search({
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
+                value={inputValue}
             />
-
             <button
                 type="button"
                 className="text-white/0.4 absolute inset-y-0 right-0 flex items-center rounded-r-md border-none bg-transparent  text-2xl focus:outline-none"
@@ -68,30 +76,54 @@ export function Search({
                 <Search16 className="text-white opacity-40" />
             </button>
 
-            <Combobox.Options className="mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-md">
-                {Object.entries(options).map(([category, results]) => {
-                    return (
-                        <div className="mb-4" key={category}>
-                            {!!results?.length && (
-                                <div className="mb-2">
-                                    <Text
-                                        color="steel-dark"
-                                        variant="captionSmall/medium"
-                                    >
-                                        {category}
-                                    </Text>
-                                </div>
-                            )}
-                            {results?.map((item: any) => {
-                                return (
-                                    <SearchResult key={item.id} value={item}>
-                                        {item.label}
-                                    </SearchResult>
-                                );
-                            })}
-                        </div>
-                    );
-                })}
+            <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-full list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                {isLoading ? (
+                    <div className="flex items-center justify-center">
+                        <LoadingSpinner />
+                    </div>
+                ) : hasOptions ? (
+                    Object.entries(options).map(([category, results], idx) => {
+                        if (!results.length) return null;
+
+                        return (
+                            <div
+                                className={
+                                    idx !== Object.entries(options).length - 1
+                                        ? 'mb-4'
+                                        : ''
+                                }
+                                key={category}
+                            >
+                                {!!results?.length && (
+                                    <div className="mb-2">
+                                        <Text
+                                            color="steel-dark"
+                                            variant="captionSmall/medium"
+                                        >
+                                            {category}
+                                        </Text>
+                                    </div>
+                                )}
+                                {results?.map((item: any) => {
+                                    return (
+                                        <SearchResult
+                                            key={item.id}
+                                            value={item}
+                                        >
+                                            {item.label}
+                                        </SearchResult>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="flex items-center justify-center p-5">
+                        <Text variant="body/medium" italic color="steel-darker">
+                            No Results
+                        </Text>
+                    </div>
+                )}
             </Combobox.Options>
         </Combobox>
     );
