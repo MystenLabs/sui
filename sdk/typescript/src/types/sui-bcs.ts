@@ -144,10 +144,10 @@ export type ObjectArg =
 /**
  * A pure argument.
  */
-export type PureArg = { Pure: ArrayLike<number> };
+export type PureArg = ArrayLike<number>;
 
 export function isPureArg(arg: any): arg is PureArg {
-  return (arg as PureArg).Pure !== undefined;
+  return (arg as PureArg) !== undefined;
 }  
 
 /**
