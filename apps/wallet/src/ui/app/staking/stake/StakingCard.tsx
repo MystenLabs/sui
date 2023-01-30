@@ -41,7 +41,6 @@ import {
 } from '_hooks';
 import {
     accountAggregateBalancesSelector,
-    accountItemizedBalancesSelector,
     createCoinsForTypeSelector,
 } from '_redux/slices/account';
 import {
@@ -65,7 +64,6 @@ function StakingCard() {
     const coinType = GAS_TYPE_ARG;
     const [sendError, setSendError] = useState<string | null>(null);
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
@@ -80,12 +78,6 @@ function StakingCard() {
         useGetObject(STATE_OBJECT);
 
     const validatorsData = validators && validatorsFields(validators);
-
-    // TODO: this is a hack to get the total amount of gas coins
-    const totalGasCoins = useMemo(
-        () => (unstake ? 2 : balances[GAS_TYPE_ARG]?.length || 0),
-        [balances, unstake]
-    );
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -155,7 +147,6 @@ function StakingCard() {
                 coinBalance,
                 coinSymbol,
                 gasAggregateBalance,
-                totalGasCoins,
                 coinDecimals,
                 gasDecimals,
                 gasBudget.gasBudget || 0,
@@ -166,7 +157,6 @@ function StakingCard() {
             coinBalance,
             coinSymbol,
             gasAggregateBalance,
-            totalGasCoins,
             coinDecimals,
             gasDecimals,
             maxSuiSingleCoinBalance,
@@ -183,11 +173,6 @@ function StakingCard() {
 
     const navigate = useNavigate();
     const signer = useSigner();
-    const allCoinsForStakeSelector = useMemo(
-        () => createCoinsForTypeSelector(coinType),
-        [coinType]
-    );
-    const allCoinsForStake = useAppSelector(allCoinsForStakeSelector);
     const allSuiCoinsSelector = useMemo(
         () => createCoinsForTypeSelector(SUI_TYPE_ARG),
         []
@@ -211,7 +196,6 @@ function StakingCard() {
             });
             const response = await Coin.stakeCoin(
                 signer,
-                allCoinsForStake,
                 allSuiCoins,
                 amount,
                 validatorAddress

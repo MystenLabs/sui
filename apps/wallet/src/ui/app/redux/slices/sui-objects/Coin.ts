@@ -81,63 +81,35 @@ export class Coin {
      *
      * @param signer A signer with connection to fullnode
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
-     * @param gasCoins A list of Sui coins owned by the signer
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
      */
     public static async stakeCoin(
         signer: SignerWithProvider,
         coins: SuiMoveObject[],
-        gasCoins: SuiMoveObject[],
         amount: bigint,
         validator: SuiAddress
     ): Promise<SuiExecuteTransactionResponse> {
-        // sort to get the smallest one for gas
-        const sortedGasCoins = CoinAPI.sortByBalance(gasCoins);
-        const gasCoin = CoinAPI.selectCoinWithBalanceGreaterThanOrEqual(
-            sortedGasCoins,
+        const stakeCoin = await this.coinManageForStake(
+            signer,
+            coins,
+            amount,
             BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
         );
-        if (!gasCoin) {
-            throw new Error(
-                'Insufficient funds, not enough funds to cover for gas fee.'
-            );
-        }
-        if (!coins.length) {
-            throw new Error('Insufficient funds, no coins found.');
-        }
-        const isSui = CoinAPI.getCoinTypeArg(coins[0]) === SUI_TYPE_ARG;
-        const stakeCoins =
-            CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-                coins,
-                amount,
-                isSui ? [CoinAPI.getID(gasCoin)] : undefined
-            ).map(CoinAPI.getID);
-        if (!stakeCoins.length) {
-            if (stakeCoins.length === 1 && isSui) {
-                throw new Error(
-                    'Not enough coin objects, at least 2 coin objects are required.'
-                );
-            } else {
-                throw new Error(
-                    'Insufficient funds, try reducing the stake amount.'
-                );
-            }
-        }
-        const txn = {
+
+        return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'sui_system',
             function: 'request_add_delegation_mul_coin',
             typeArguments: [],
             arguments: [
                 SUI_SYSTEM_STATE_OBJECT_ID,
-                stakeCoins,
+                [stakeCoin],
                 [String(amount)],
                 validator,
             ],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
-        };
-        return await signer.executeMoveCall(txn);
+        });
     }
 
     public static async unStakeCoin(
@@ -230,5 +202,45 @@ export class Coin {
         const active_validators = (validators as SuiMoveObject).fields
             .active_validators;
         return active_validators as Array<SuiMoveObject>;
+    }
+
+    private static async coinManageForStake(
+        signer: SignerWithProvider,
+        coins: SuiMoveObject[],
+        amount: bigint,
+        gasFee: bigint
+    ) {
+        const totalAmount = amount + gasFee;
+        // TODO: Validate behavior if the sum can't make it up:
+        const inputCoins =
+            CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+                coins,
+                totalAmount
+            );
+
+        const address = await signer.getAddress();
+
+        const result = await signer.paySui({
+            inputCoins: inputCoins.map((coin) =>
+                Coin.getID(coin as SuiMoveObject)
+            ),
+            recipients: [address, address],
+            // TODO: Update SDK to accept bigint
+            amounts: [Number(amount), Number(gasFee)],
+            gasBudget: Coin.computeGasBudgetForPay(coins, totalAmount),
+        });
+
+        if (!('EffectsCert' in result)) {
+            throw new Error('Missing effects cert');
+        }
+
+        const { created } = result.EffectsCert.effects.effects;
+
+        if (!created || created.length !== 2) {
+            throw new Error('Unexpected created objects');
+        }
+
+        // Return the first coin object, which is the amount coin:
+        return created[0].reference.objectId;
     }
 }
