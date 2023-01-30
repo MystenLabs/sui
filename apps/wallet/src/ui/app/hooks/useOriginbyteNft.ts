@@ -13,19 +13,18 @@ export function useOriginbyteNft(nftId: string | null) {
         ['originbyte-nft', nftId],
         async () => {
             const client = new NftClient(rpc);
-            if (nftId) {
-                const nfts = await client.getNftsById({ objectIds: [nftId] });
-                const nft = nfts[0];
-                if (nft) {
-                    return {
-                        ...nft,
-                        fields: {
-                            ...nft.fields,
-                            url: parseIpfsUrl(nft.fields?.url ?? ''),
-                        },
-                    };
-                }
+            const nfts = await client.getNftsById({ objectIds: [nftId!] });
+            const nft = nfts[0];
+            if (nft) {
+                return {
+                    ...nft,
+                    fields: {
+                        ...nft.fields,
+                        url: parseIpfsUrl(nft.fields?.url ?? ''),
+                    },
+                };
             }
+            return null;
         },
         {
             enabled: !!nftId,
