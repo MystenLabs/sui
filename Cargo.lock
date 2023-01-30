@@ -9395,6 +9395,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "symbolic-common"
+version = "11.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a446214493923a25931088b6b0d94a6e8ccc9896f0e992d10ff0000395322cf1"
+dependencies = [
+ "debugid",
+ "memmap2",
+ "stable_deref_trait",
+ "uuid",
+]
+
+[[package]]
 name = "symbolic-demangle"
 version = "10.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9402,7 +9414,7 @@ checksum = "79be897be8a483a81fff6a3a4e195b4ac838ef73ca42d348b3f722da9902e489"
 dependencies = [
  "cpp_demangle",
  "rustc-demangle",
- "symbolic-common",
+ "symbolic-common 10.2.1",
 ]
 
 [[package]]
@@ -11549,7 +11561,7 @@ dependencies = [
  "subprocess",
  "subtle",
  "subtle-ng",
- "symbolic-common",
+ "symbolic-common 11.0.0",
  "symbolic-demangle",
  "syn 0.15.44",
  "syn 1.0.107",

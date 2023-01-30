@@ -1432,7 +1432,7 @@ signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
+symbolic-common = { version = "11", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
@@ -1475,7 +1475,7 @@ signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
 signal-hook-registry = { version = "1", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
+symbolic-common = { version = "11", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
@@ -1518,7 +1518,7 @@ signal-hook-mio = { version = "0.2", default-features = false, features = ["supp
 signal-hook-registry = { version = "1", default-features = false }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
+symbolic-common = { version = "11", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
@@ -1564,7 +1564,7 @@ signal-hook-mio = { version = "0.2", default-features = false, features = ["supp
 signal-hook-registry = { version = "1", default-features = false }
 spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
 str_stack = { version = "0.1", default-features = false }
-symbolic-common = { version = "10", default-features = false }
+symbolic-common = { version = "11", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 tokio-native-tls = { version = "0.3", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
