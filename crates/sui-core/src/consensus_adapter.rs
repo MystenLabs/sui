@@ -9,10 +9,10 @@ use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::RwLockReadGuard;
+use prometheus::register_int_counter_with_registry;
 use prometheus::IntGauge;
 use prometheus::Registry;
 use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
-use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -55,7 +55,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_failures: IntCounter,
     pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_acknowledge_latency: HistogramVec,
-    pub sequencing_certificate_latency: Histogram,
+    pub sequencing_certificate_latency: HistogramVec,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
@@ -90,14 +90,15 @@ impl ConsensusAdapterMetrics {
             sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
-                &["retry"],
+                &["retry", "position"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            sequencing_certificate_latency: register_histogram_with_registry!(
+            sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
+                &["position"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -213,19 +214,20 @@ impl ConsensusAdapter {
         committee: &Committee,
         ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
-    ) -> impl Future<Output = ()> {
-        tokio::time::sleep(Self::submit_delay(committee, ourselves, transaction))
+    ) -> (impl Future<Output = ()>, usize) {
+        let (duration, position) = Self::submit_delay(committee, ourselves, transaction);
+        (tokio::time::sleep(duration), position)
     }
 
     fn submit_delay(
         committee: &Committee,
         ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
-    ) -> Duration {
+    ) -> (Duration, usize) {
         if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
             Self::submit_delay_certificate(committee, ourselves, certificate.digest())
         } else {
-            Duration::ZERO
+            (Duration::ZERO, 0)
         }
     }
 
@@ -234,18 +236,23 @@ impl ConsensusAdapter {
     /// Authorities higher in the list wait less time.
     ///
     /// The function targets having only 1 consensus transaction submitted per user transaction
-    /// when system operates normally
+    /// when system operates normally.
+    ///
+    /// The function returns the delay to wait and the position of authority in the list.
     fn submit_delay_certificate(
         committee: &Committee,
         ourselves: &AuthorityName,
         tx_digest: &TransactionDigest,
-    ) -> Duration {
+    ) -> (Duration, usize) {
         let position = position_submit_certificate(committee, ourselves, tx_digest);
         const MAX_DELAY_MUL: usize = 10;
         // DELAY_STEP is chosen as 1.5 * mean consensus delay
         // In the future we can actually use information about consensus rounds instead of this delay
         const DELAY_STEP: Duration = Duration::from_secs(7);
-        DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32
+        (
+            DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+            position,
+        )
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -312,16 +319,16 @@ impl ConsensusAdapter {
             epoch_store.record_epoch_pending_certs_process_time_metric();
         }
 
-        let _guard = InflightDropGuard::acquire(&self);
         let processed_waiter = epoch_store
             .consensus_message_processed_notify(transaction.key())
             .boxed();
-        let await_submit = {
-            Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction).boxed()
-        };
+        let (await_submit, position) =
+            Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
+        let _guard = InflightDropGuard::acquire(&self, position);
+
         // We need to wait for some delay until we submit transaction to the consensus
         // However, if transaction is received by consensus while we wait, we don't need to wait
-        let processed_waiter = match select(processed_waiter, await_submit).await {
+        let processed_waiter = match select(processed_waiter, await_submit.boxed()).await {
             Either::Left((processed, _await_submit)) => {
                 processed.expect("Storage error when waiting for consensus message processed");
                 None
@@ -379,7 +386,7 @@ impl ConsensusAdapter {
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics
                         .sequencing_acknowledge_latency
-                        .with_label_values(&[&bucket])
+                        .with_label_values(&[&bucket, &position.to_string()])
                         .observe(ack_start.elapsed().as_secs_f64());
                 });
             }
@@ -486,10 +493,11 @@ impl<T> Drop for CancelOnDrop<T> {
 struct InflightDropGuard<'a> {
     adapter: &'a ConsensusAdapter,
     start: Instant,
+    position: usize,
 }
 
 impl<'a> InflightDropGuard<'a> {
-    pub fn acquire(adapter: &'a ConsensusAdapter) -> Self {
+    pub fn acquire(adapter: &'a ConsensusAdapter, position: usize) -> Self {
         let inflight = adapter
             .num_inflight_transactions
             .fetch_add(1, Ordering::SeqCst);
@@ -500,6 +508,7 @@ impl<'a> InflightDropGuard<'a> {
         Self {
             adapter,
             start: Instant::now(),
+            position,
         }
     }
 }
@@ -515,6 +524,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
             metrics.sequencing_certificate_inflight.set(inflight as i64);
             metrics
                 .sequencing_certificate_latency
+                .with_label_values(&[&self.position.to_string()])
                 .observe(self.start.elapsed().as_secs_f64());
         }
     }
