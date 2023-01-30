@@ -17,10 +17,30 @@ import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { getEventsSummary, getAmount } from '_helpers';
-import { getTxnEffectsEventID } from '_redux/slices/txresults';
+import { getEventsSummary, getAmount, notEmpty } from '_helpers';
 
-import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
+import type {
+    SuiTransactionResponse,
+    SuiAddress,
+    TransactionEffects,
+    SuiEvent,
+} from '@mysten/sui.js';
+
+const getTxnEffectsEventID = (
+    txEffects: TransactionEffects,
+    address: string
+): string[] => {
+    const events = txEffects?.events || [];
+    const objectIDs = events
+        ?.map((event: SuiEvent) => {
+            const data = Object.values(event).find(
+                (itm) => itm?.recipient?.AddressOwner === address
+            );
+            return data?.objectId;
+        })
+        .filter(notEmpty);
+    return objectIDs;
+};
 
 export function Transaction({
     txn,
