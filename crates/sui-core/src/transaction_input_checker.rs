@@ -82,7 +82,8 @@ pub(crate) async fn check_dev_inspect_input(
             SingleTransactionKind::Publish(_)
             | SingleTransactionKind::ChangeEpoch(_)
             | SingleTransactionKind::Genesis(_)
-            | SingleTransactionKind::ConsensusCommitPrologue(_) => {
+            | SingleTransactionKind::ConsensusCommitPrologue(_)
+            | SingleTransactionKind::ProgrammableTransaction(_) => {
                 anyhow::bail!("Transaction kind {} is not supported in dev-inspect", k)
             }
         }

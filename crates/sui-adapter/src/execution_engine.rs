@@ -333,6 +333,9 @@ fn execution_loop<
             SingleTransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(prologue, temporary_store, tx_ctx, move_vm, gas_status)?
             }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                unreachable!("programmable transactions are not yet supported")
+            }
         };
     }
     Ok(results)

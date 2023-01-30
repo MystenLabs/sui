@@ -243,7 +243,56 @@ pub enum SingleTransactionKind {
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
+    /// A transaction that allows the interleaving of native commands and Move calls
+    ProgrammableTransaction(ProgrammableTransaction),
     // .. more transaction types go here
+}
+
+impl CallArg {
+    fn input_objects(&self) -> Vec<InputObjectKind> {
+        match self {
+            CallArg::Pure(_) => vec![],
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
+                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+            }
+            CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => {
+                let id = *id;
+                let initial_shared_version = *initial_shared_version;
+                let mutable = *mutable;
+                vec![InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                }]
+            }
+            CallArg::ObjVec(vec) => vec
+                .iter()
+                .map(|obj_arg| match obj_arg {
+                    ObjectArg::ImmOrOwnedObject(object_ref) => {
+                        InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
+                    }
+                    ObjectArg::SharedObject {
+                        id,
+                        initial_shared_version,
+                        mutable,
+                    } => {
+                        let id = *id;
+                        let initial_shared_version = *initial_shared_version;
+                        let mutable = *mutable;
+                        InputObjectKind::SharedMoveObject {
+                            id,
+                            initial_shared_version,
+                            mutable,
+                        }
+                    }
+                })
+                .collect(),
+        }
+    }
 }
 
 impl MoveCall {
@@ -261,49 +310,7 @@ impl MoveCall {
         }
         arguments
             .iter()
-            .filter_map(|arg| match arg {
-                CallArg::Pure(_) => None,
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                    Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
-                }
-                CallArg::Object(ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }) => {
-                    let id = *id;
-                    let initial_shared_version = *initial_shared_version;
-                    let mutable = *mutable;
-                    Some(vec![InputObjectKind::SharedMoveObject {
-                        id,
-                        initial_shared_version,
-                        mutable,
-                    }])
-                }
-                CallArg::ObjVec(vec) => Some(
-                    vec.iter()
-                        .map(|obj_arg| match obj_arg {
-                            ObjectArg::ImmOrOwnedObject(object_ref) => {
-                                InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
-                            }
-                            ObjectArg::SharedObject {
-                                id,
-                                initial_shared_version,
-                                mutable,
-                            } => {
-                                let id = *id;
-                                let initial_shared_version = *initial_shared_version;
-                                let mutable = *mutable;
-                                InputObjectKind::SharedMoveObject {
-                                    id,
-                                    initial_shared_version,
-                                    mutable,
-                                }
-                            }
-                        })
-                        .collect(),
-                ),
-            })
+            .map(|arg| arg.input_objects())
             .flatten()
             .chain(packages.into_iter().map(InputObjectKind::MovePackage))
             .collect()
@@ -330,6 +337,240 @@ fn add_type_tag_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &Type
                 stack.extend(struct_tag.type_params.iter())
             }
         }
+    }
+}
+
+/// A series of commands where the results of one command can be used in future
+/// commands
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ProgrammableTransaction {
+    /// Input objects or primitive values
+    pub inputs: Vec<CallArg>,
+    /// The commands to be executed sequentially. A failure in any command will
+    /// result in the failure of the entire transaction.
+    pub commands: Vec<Command>,
+}
+
+/// A single command in a programmable transaction.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Command {
+    /// A call to either an entry or a public Move function
+    MoveCall(Box<ProgrammableMoveCall>),
+    /// (Vec<forall T:key+store. T>, address)
+    /// It sends n-objects to the specified address. These objects must have store
+    /// (public transfer) and the previous owner must be an address.
+    TransferObjects(Vec<Argument>, Argument),
+    /// (&mut Coin<T>, u64) -> Coin<T>
+    /// It splits of some amount into a new coin
+    SplitCoin(Argument, Argument),
+    /// (&mut Coin<T>, Vec<Coin<T>>)
+    /// It merges n-coins into the first coin
+    MergeCoins(Argument, Vec<Argument>),
+    /// Publishes a Move package
+    Publish(Vec<Vec<u8>>),
+}
+
+/// An argument to a programmable transaction command
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Argument {
+    /// The gas coin. The gas coin can only be used by-ref, except for with
+    /// `TransferObjects`, which can use it by-value.
+    GasCoin,
+    /// One of the input objects or primitive values (from
+    /// `ProgrammableTransaction` inputs)
+    Input(u16),
+    /// The result of another command (from `ProgrammableTransaction` commands)
+    Result(u16),
+    /// Like a `Result` but it accesses a nested result. Currently, the only usage
+    /// of this is to access a value from a Move call with multiple return values.
+    NestedResult(u16, u16),
+}
+
+/// The command for calling a Move function, either an entry function or a public
+/// function (which cannot return references).
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ProgrammableMoveCall {
+    /// The package containing the module and function.
+    pub package: ObjectID,
+    /// The specific module in the package containing the function.
+    pub module: Identifier,
+    /// The function to be called.
+    pub function: Identifier,
+    /// The type arguments to the function.
+    pub type_arguments: Vec<TypeTag>,
+    /// The arguments to the function.
+    pub arguments: Vec<Argument>,
+}
+
+impl ProgrammableMoveCall {
+    fn input_objects(&self) -> Vec<InputObjectKind> {
+        vec![InputObjectKind::MovePackage(self.package)]
+    }
+}
+
+impl Command {
+    fn publish_command_input_objects(modules: &[Vec<u8>]) -> Vec<InputObjectKind> {
+        // For module publishing, all the dependent packages are implicit input objects
+        // because they must all be on-chain in order for the package to publish.
+        // All authorities must have the same view of those dependencies in order
+        // to achieve consistent publish results.
+        let compiled_modules = modules
+            .iter()
+            .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
+                Ok(m) => Some(m),
+                // We will ignore this error here and simply let latter execution
+                // to discover this error again and fail the transaction.
+                // It's preferable to let transaction fail and charge gas when
+                // malformed package is provided.
+                Err(_) => None,
+            })
+            .collect::<Vec<_>>();
+        Transaction::input_objects_in_compiled_modules(&compiled_modules)
+    }
+
+    fn input_objects(&self) -> Vec<InputObjectKind> {
+        match self {
+            Command::Publish(modules) => Self::publish_command_input_objects(modules),
+            Command::MoveCall(c) => c.input_objects(),
+            Command::TransferObjects(_, _)
+            | Command::SplitCoin(_, _)
+            | Command::MergeCoins(_, _) => vec![],
+        }
+    }
+
+    fn validity_check(&self) -> SuiResult {
+        match self {
+            Command::MoveCall(call) => {
+                let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
+                    call.package,
+                    call.module.as_str(),
+                    call.function.as_str(),
+                ));
+                fp_ensure!(!is_blocked, SuiError::BlockedMoveFunction);
+            }
+            Command::TransferObjects(_, _)
+            | Command::SplitCoin(_, _)
+            | Command::MergeCoins(_, _)
+            | Command::Publish(_) => (),
+        };
+        Ok(())
+    }
+}
+
+fn write_sep<T: Display>(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = T>,
+    sep: &str,
+) -> std::fmt::Result {
+    let mut xs = items.into_iter().peekable();
+    while let Some(x) = xs.next() {
+        if xs.peek().is_some() {
+            write!(f, "{sep}")?;
+        }
+        write!(f, "{x}")?;
+    }
+    Ok(())
+}
+
+impl ProgrammableTransaction {
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let ProgrammableTransaction { inputs, commands } = self;
+        let input_arg_objects = inputs
+            .iter()
+            .map(|arg| arg.input_objects())
+            .flatten()
+            .collect::<Vec<_>>();
+        let mut used = HashSet::new();
+        if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
+            return Err(SuiError::DuplicateObjectRefInput);
+        }
+        Ok(input_arg_objects
+            .into_iter()
+            .chain(
+                commands
+                    .iter()
+                    .map(|command| command.input_objects())
+                    .flatten(),
+            )
+            .collect())
+    }
+
+    fn validity_check(&self) -> SuiResult {
+        if !cfg!(test) {
+            return Err(SuiError::Unknown(
+                "Programmable transactions are not yet available".to_owned(),
+            ));
+        }
+        for c in &self.commands {
+            c.validity_check()?
+        }
+        Ok(())
+    }
+}
+
+impl Display for Argument {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Argument::GasCoin => write!(f, "GasCoin"),
+            Argument::Input(i) => write!(f, "Input({i})"),
+            Argument::Result(i) => write!(f, "Result({i})"),
+            Argument::NestedResult(i, j) => write!(f, "NestedResult({i},{j})"),
+        }
+    }
+}
+
+impl Display for ProgrammableMoveCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let ProgrammableMoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+        } = self;
+        write!(f, "{package}::{module}::{function}")?;
+        if !type_arguments.is_empty() {
+            write!(f, "<")?;
+            write_sep(f, type_arguments, ",")?;
+            write!(f, ">")?;
+        }
+        write!(f, "(")?;
+        write_sep(f, arguments, ",")?;
+        write!(f, ")")
+    }
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Command::MoveCall(p) => {
+                write!(f, "MoveCall({p})")
+            }
+            Command::TransferObjects(objs, addr) => {
+                write!(f, "TransferObjects([")?;
+                write_sep(f, objs, ",")?;
+                write!(f, "],{addr})")
+            }
+            Command::SplitCoin(coin, amount) => write!(f, "SplitCoin({coin},{amount})"),
+            Command::MergeCoins(target, coins) => {
+                write!(f, "MergeCoins({target},")?;
+                write_sep(f, coins, ",")?;
+                write!(f, ")")
+            }
+            Command::Publish(_bytes) => write!(f, "Publish(_)"),
+        }
+    }
+}
+
+impl Display for ProgrammableTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let ProgrammableTransaction { inputs, commands } = self;
+        writeln!(f, "Inputs: {inputs:?}")?;
+        writeln!(f, "Commands: [")?;
+        for c in commands {
+            writeln!(f, "  {c},")?;
+        }
+        writeln!(f, "]")
     }
 }
 
@@ -439,22 +680,7 @@ impl SingleTransactionKind {
             }
             Self::Call(move_call) => move_call.input_objects(),
             Self::Publish(MoveModulePublish { modules }) => {
-                // For module publishing, all the dependent packages are implicit input objects
-                // because they must all be on-chain in order for the package to publish.
-                // All authorities must have the same view of those dependencies in order
-                // to achieve consistent publish results.
-                let compiled_modules = modules
-                    .iter()
-                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
-                        Ok(m) => Some(m),
-                        // We will ignore this error here and simply let latter execution
-                        // to discover this error again and fail the transaction.
-                        // It's preferable to let transaction fail and charge gas when
-                        // malformed package is provided.
-                        Err(_) => None,
-                    })
-                    .collect::<Vec<_>>();
-                Transaction::input_objects_in_compiled_modules(&compiled_modules)
+                Command::publish_command_input_objects(modules)
             }
             Self::TransferSui(_) => {
                 vec![]
@@ -488,6 +714,7 @@ impl SingleTransactionKind {
                     mutable: true,
                 }]
             }
+            Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -504,13 +731,16 @@ impl SingleTransactionKind {
     }
 
     pub fn validity_check(&self, gas_payment: &ObjectRef) -> SuiResult {
-        fp_ensure!(
-            !self.is_blocked_move_function(),
-            SuiError::BlockedMoveFunction
-        );
         match self {
+            SingleTransactionKind::Call(call) => {
+                let is_blocked = BLOCKED_MOVE_FUNCTIONS.contains(&(
+                    call.package,
+                    call.module.as_str(),
+                    call.function.as_str(),
+                ));
+                fp_ensure!(!is_blocked, SuiError::BlockedMoveFunction);
+            }
             SingleTransactionKind::Pay(_)
-            | SingleTransactionKind::Call(_)
             | SingleTransactionKind::Publish(_)
             | SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
@@ -533,19 +763,9 @@ impl SingleTransactionKind {
                     SuiError::UnexpectedGasPaymentObject
                 );
             }
+            SingleTransactionKind::ProgrammableTransaction(p) => p.validity_check()?,
         };
         Ok(())
-    }
-
-    fn is_blocked_move_function(&self) -> bool {
-        match self {
-            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
-                call.package,
-                call.module.as_str(),
-                call.function.as_str(),
-            )),
-            _ => false,
-        }
     }
 }
 
@@ -640,6 +860,10 @@ impl Display for SingleTransactionKind {
             Self::ConsensusCommitPrologue(p) => {
                 writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
                 writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
+            }
+            Self::ProgrammableTransaction(p) => {
+                writeln!(writer, "Transaction Kind: Programmable")?;
+                write!(writer, "{p}")?;
             }
         }
         write!(f, "{}", writer)
@@ -1075,7 +1299,8 @@ impl TransactionData {
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Genesis(_)
                     | SingleTransactionKind::Publish(_)
-                    | SingleTransactionKind::ConsensusCommitPrologue(_) => false,
+                    | SingleTransactionKind::ConsensusCommitPrologue(_)
+                    | SingleTransactionKind::ProgrammableTransaction(_) => false,
                 });
                 fp_ensure!(
                     valid,
