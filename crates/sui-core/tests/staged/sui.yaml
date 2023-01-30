@@ -12,6 +12,21 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
+Argument:
+  ENUM:
+    0:
+      GasCoin: UNIT
+    1:
+      Input:
+        NEWTYPE: U16
+    2:
+      Result:
+        NEWTYPE: U16
+    3:
+      NestedResult:
+        TUPLE:
+          - U16
+          - U16
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 BLS12381Signature:
@@ -48,6 +63,34 @@ CircularObjectOwnership:
   STRUCT:
     - object:
         TYPENAME: ObjectID
+Command:
+  ENUM:
+    0:
+      MoveCall:
+        NEWTYPE:
+          TYPENAME: ProgrammableMoveCall
+    1:
+      TransferObjects:
+        TUPLE:
+          - SEQ:
+              TYPENAME: Argument
+          - TYPENAME: Argument
+    2:
+      SplitCoin:
+        TUPLE:
+          - TYPENAME: Argument
+          - TYPENAME: Argument
+    3:
+      MergeCoins:
+        TUPLE:
+          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: Argument
+    4:
+      Publish:
+        NEWTYPE:
+          SEQ:
+            SEQ: U8
 ConsensusCommitPrologue:
   STRUCT:
     - checkpoint_start_timestamp_ms: U64
@@ -427,6 +470,28 @@ PaySui:
           TYPENAME: SuiAddress
     - amounts:
         SEQ: U64
+ProgrammableMoveCall:
+  STRUCT:
+    - package:
+        TYPENAME: ObjectID
+    - module:
+        TYPENAME: Identifier
+    - function:
+        TYPENAME: Identifier
+    - type_arguments:
+        SEQ:
+          TYPENAME: TypeTag
+    - arguments:
+        SEQ:
+          TYPENAME: Argument
+ProgrammableTransaction:
+  STRUCT:
+    - inputs:
+        SEQ:
+          TYPENAME: CallArg
+    - commands:
+        SEQ:
+          TYPENAME: Command
 ProtocolVersion:
   NEWTYPESTRUCT: U64
 SequenceNumber:
@@ -475,6 +540,10 @@ SingleTransactionKind:
       ConsensusCommitPrologue:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologue
+    10:
+      ProgrammableTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
 StructTag:
   STRUCT:
     - address:

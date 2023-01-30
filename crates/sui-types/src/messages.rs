@@ -310,8 +310,7 @@ impl MoveCall {
         }
         arguments
             .iter()
-            .map(|arg| arg.input_objects())
-            .flatten()
+            .flat_map(|arg| arg.input_objects())
             .chain(packages.into_iter().map(InputObjectKind::MovePackage))
             .collect()
     }
@@ -358,10 +357,11 @@ pub enum Command {
     MoveCall(Box<ProgrammableMoveCall>),
     /// (Vec<forall T:key+store. T>, address)
     /// It sends n-objects to the specified address. These objects must have store
-    /// (public transfer) and the previous owner must be an address.
+    /// (public transfer) and either the previous owner must be an address or the object must
+    /// be newly created.
     TransferObjects(Vec<Argument>, Argument),
     /// (&mut Coin<T>, u64) -> Coin<T>
-    /// It splits of some amount into a new coin
+    /// It splits off some amount into a new coin
     SplitCoin(Argument, Argument),
     /// (&mut Coin<T>, Vec<Coin<T>>)
     /// It merges n-coins into the first coin
@@ -404,7 +404,19 @@ pub struct ProgrammableMoveCall {
 
 impl ProgrammableMoveCall {
     fn input_objects(&self) -> Vec<InputObjectKind> {
-        vec![InputObjectKind::MovePackage(self.package)]
+        let ProgrammableMoveCall {
+            package,
+            type_arguments,
+            ..
+        } = self;
+        let mut packages = BTreeSet::from([*package]);
+        for type_argument in type_arguments {
+            add_type_tag_packages(&mut packages, type_argument)
+        }
+        packages
+            .into_iter()
+            .map(InputObjectKind::MovePackage)
+            .collect()
     }
 }
 
@@ -477,8 +489,7 @@ impl ProgrammableTransaction {
         let ProgrammableTransaction { inputs, commands } = self;
         let input_arg_objects = inputs
             .iter()
-            .map(|arg| arg.input_objects())
-            .flatten()
+            .flat_map(|arg| arg.input_objects())
             .collect::<Vec<_>>();
         let mut used = HashSet::new();
         if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
@@ -486,12 +497,7 @@ impl ProgrammableTransaction {
         }
         Ok(input_arg_objects
             .into_iter()
-            .chain(
-                commands
-                    .iter()
-                    .map(|command| command.input_objects())
-                    .flatten(),
-            )
+            .chain(commands.iter().flat_map(|command| command.input_objects()))
             .collect())
     }
 
@@ -862,7 +868,7 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
             }
             Self::ProgrammableTransaction(p) => {
-                writeln!(writer, "Transaction Kind: Programmable")?;
+                writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
             }
         }
