@@ -12,6 +12,7 @@ import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -136,17 +137,17 @@ function StakingCard() {
     const [coinDecimals] = useCoinDecimals(coinType);
     const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
     const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
-
+    const gasBudget = useGasBudgetInMist(DEFAULT_GAS_BUDGET_FOR_STAKE);
     //TODO: this is a hack to get the total amount of gas coins
     // for unstake add gas
+    //NOTE: I think we should remove this. Validation expects just the total amount of SUI
     const gasAggregateBalance = useMemo(
         () =>
             unstake
-                ? coinBalance + BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
+                ? coinBalance + BigInt(gasBudget.gasBudget || 0)
                 : aggregateBalances[GAS_TYPE_ARG] || 0n,
-        [aggregateBalances, coinBalance, unstake]
+        [aggregateBalances, coinBalance, unstake, gasBudget.gasBudget]
     );
-
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
@@ -157,6 +158,7 @@ function StakingCard() {
                 totalGasCoins,
                 coinDecimals,
                 gasDecimals,
+                gasBudget.gasBudget || 0,
                 maxSuiSingleCoinBalance
             ),
         [
@@ -168,6 +170,7 @@ function StakingCard() {
             coinDecimals,
             gasDecimals,
             maxSuiSingleCoinBalance,
+            gasBudget.gasBudget,
         ]
     );
 
@@ -424,7 +427,8 @@ function StakingCard() {
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
-                                        (unstake && !delegationId)
+                                        (unstake && !delegationId) ||
+                                        gasBudget.isLoading
                                     }
                                 >
                                     {isSubmitting ? (
