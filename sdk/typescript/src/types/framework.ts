@@ -183,7 +183,7 @@ export class Coin {
    * Sort coin by balance in an ascending order
    */
   static sortByBalance(coins: ObjectDataFull[]): ObjectDataFull[] {
-    return coins.sort((a, b) =>
+    return [...coins].sort((a, b) =>
       Coin.getBalance(a)! < Coin.getBalance(b)!
         ? -1
         : Coin.getBalance(a)! > Coin.getBalance(b)!
