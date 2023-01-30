@@ -3,7 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
-import { API_ENV } from '_src/ui/app/ApiProvider';
+import { API_ENV } from '_src/shared/api-env';
 
 import type { GrowthBook } from '@growthbook/growthbook';
 

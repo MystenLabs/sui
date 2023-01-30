@@ -5,7 +5,8 @@ import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
 import FeatureGating from './FeatureGating';
-import { API_ENV, API_ENV_TO_INFO, DEFAULT_API_ENV } from '_app/ApiProvider';
+import { API_ENV_TO_INFO, DEFAULT_API_ENV } from '_app/ApiProvider';
+import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { isValidUrl } from '_src/shared/utils';
 
