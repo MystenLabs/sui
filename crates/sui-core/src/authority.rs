@@ -50,7 +50,7 @@ use sui_json_rpc_types::{
     SuiTransactionEffects,
 };
 use sui_macros::nondeterministic;
-use sui_storage::indexes::ObjectIndexChanges;
+use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
@@ -2030,7 +2030,7 @@ impl AuthorityState {
         owner: SuiAddress,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
         if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects_iterator(owner)
+            indexes.get_owner_objects_iterator(owner, ObjectID::ZERO, MAX_GET_OWNED_OBJECT_SIZE)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
