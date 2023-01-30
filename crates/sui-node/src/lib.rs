@@ -43,6 +43,12 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+
+#[cfg(not(test))]
+use sui_protocol_constants::MAX_TRANSACTIONS_PER_CHECKPOINT;
+#[cfg(test)]
+use sui_protocol_constants::MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING;
+
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     IndexStore,
@@ -575,11 +581,10 @@ impl SuiNode {
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
-        // Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
         #[cfg(test)]
-        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 2;
+        let max_tx_per_checkpoint = MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING;
         #[cfg(not(test))]
-        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
+        let max_tx_per_checkpoint = MAX_TRANSACTIONS_PER_CHECKPOINT;
 
         CheckpointService::spawn(
             state.clone(),
@@ -590,7 +595,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             Box::new(NetworkTransactionCertifier::default()),
             checkpoint_metrics,
-            MAX_TRANSACTIONS_PER_CHECKPOINT,
+            max_tx_per_checkpoint,
         )
     }
 
