@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useMemo, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
-import { useRecentTransactions } from '_src/ui/app/hooks/useRecentTransactions';
+import { useRecentTransaction } from '_src/ui/app/hooks/useRecentTransactions';
 
 import st from './ReceiptPage.module.scss';
 
@@ -21,11 +21,7 @@ function ReceiptPage() {
 
     const transferType = searchParams.get('transfer') as 'nft' | 'coin';
 
-    const { data, isLoading } = useRecentTransactions();
-
-    const txnItem = useMemo(() => {
-        return data?.find((txn) => txn.txId === txDigest);
-    }, [data, txDigest]);
+    const { data: txnItem, isLoading } = useRecentTransaction(txDigest);
 
     //TODO: redo the CTA links
     const ctaLinks = transferType === 'nft' ? '/nfts' : '/';
@@ -36,7 +32,7 @@ function ReceiptPage() {
         navigate(linkTo);
     }, [linkTo, navigate]);
 
-    if ((!txDigest && !txnItem) || (!isLoading && !data?.length)) {
+    if (!txDigest || (!isLoading && !txnItem)) {
         return <Navigate to={linkTo} replace={true} />;
     }
 
