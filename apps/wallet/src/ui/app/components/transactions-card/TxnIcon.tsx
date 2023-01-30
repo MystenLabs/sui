@@ -20,8 +20,11 @@ const icons = {
         />
     ),
     Staked: <Icon icon={SuiIcons.Union} className="text-gradient-blue-start" />,
-    UnStaked: (
-        <Icon icon={SuiIcons.Tokens} className="text-gradient-blue-start" />
+    Unstaked: (
+        <Icon
+            icon={SuiIcons.Tokens}
+            className="text-gradient-blue-start text-heading3"
+        />
     ),
     Rewards: (
         <Icon
@@ -38,7 +41,7 @@ interface TxnItemIconProps {
     variant:
         | 'Rewards'
         | 'Staked'
-        | 'UnStaked'
+        | 'Unstaked'
         | 'Swapped'
         | 'Send'
         | 'Received';
