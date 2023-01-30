@@ -90,8 +90,7 @@ const accountSlice = createSlice({
     initialState,
     reducers: {
         setAddress: (state, action: PayloadAction<string | null>) => {
-            state.address = '0x84b8f36b2d6bd941af2f7cc5af8861fa00a508da';
-            // state.address = action.payload;
+            state.address = action.payload;
         },
         setKeyringStatus: (
             state,
@@ -103,8 +102,7 @@ const accountSlice = createSlice({
         ) => {
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
-            // state.address = payload.activeAddress || null; // is already normalized
-            state.address = '0x84b8f36b2d6bd941af2f7cc5af8861fa00a508da';
+            state.address = payload.activeAddress || null; // is already normalized
             accountsAdapter.setAll(state, payload.accounts);
         },
     },
