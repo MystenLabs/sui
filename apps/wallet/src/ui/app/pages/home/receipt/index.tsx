@@ -1,16 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useMemo, useEffect, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
-import { useAppSelector, useAppDispatch } from '_hooks';
-import { getTransactionsByAddress } from '_redux/slices/txresults';
-
-import type { TxResultState } from '_redux/slices/txresults';
+import { useRecentTransactions } from '_src/ui/app/hooks/useRecentTransactions';
 
 import st from './ReceiptPage.module.scss';
 
@@ -19,27 +16,16 @@ import st from './ReceiptPage.module.scss';
 function ReceiptPage() {
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
-    const dispatch = useAppDispatch();
     // get tx results from url params
     const txDigest = searchParams.get('txdigest');
 
     const transferType = searchParams.get('transfer') as 'nft' | 'coin';
 
-    const txResults: TxResultState[] = useAppSelector(
-        ({ txresults }) => txresults.latestTx
-    );
-
-    const loading: boolean = useAppSelector(
-        ({ txresults }) => txresults.loading
-    );
-
-    useEffect(() => {
-        dispatch(getTransactionsByAddress());
-    }, [dispatch]);
+    const { data, isLoading } = useRecentTransactions();
 
     const txnItem = useMemo(() => {
-        return txResults.filter((txn) => txn.txId === txDigest)[0];
-    }, [txResults, txDigest]);
+        return data?.find((txn) => txn.txId === txDigest);
+    }, [data, txDigest]);
 
     //TODO: redo the CTA links
     const ctaLinks = transferType === 'nft' ? '/nfts' : '/';
@@ -50,7 +36,7 @@ function ReceiptPage() {
         navigate(linkTo);
     }, [linkTo, navigate]);
 
-    if ((!txDigest && !txnItem) || (!loading && !txResults.length)) {
+    if ((!txDigest && !txnItem) || (!isLoading && !data?.length)) {
         return <Navigate to={linkTo} replace={true} />;
     }
 
@@ -82,7 +68,7 @@ function ReceiptPage() {
             : '';
 
     return (
-        <Loading loading={loading} className={st.centerLoading}>
+        <Loading loading={isLoading} className={st.centerLoading}>
             <Overlay
                 showModal={showModal}
                 setShowModal={setShowModal}
