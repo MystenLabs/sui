@@ -26,19 +26,22 @@ use std::{
 
 use futures::stream::FuturesOrdered;
 use itertools::izip;
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_types::committee::{Committee, EpochId};
+use sui_types::error::SuiError;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    error::SuiResult,
     messages::{TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use tap::TapFallible;
 use tokio::{
-    sync::broadcast::{self, error::RecvError},
+    sync::{
+        broadcast::{self, error::RecvError},
+        mpsc, oneshot,
+    },
     task::JoinHandle,
     time::timeout,
 };
@@ -59,7 +62,15 @@ mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;
 
-type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
+#[derive(Debug, Clone)]
+pub struct CheckpointExecutionState {
+    pub effects: Vec<TransactionEffects>,
+    pub checkpoint_sequence_number: CheckpointSequenceNumber,
+}
+pub type CheckpointExecutionMessage = (CheckpointExecutionState, oneshot::Sender<()>);
+
+type CheckpointExecutionBuffer =
+    FuturesOrdered<JoinHandle<(VerifiedCheckpoint, CheckpointExecutionState)>>;
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
@@ -68,6 +79,7 @@ pub struct CheckpointExecutor {
     tx_manager: Arc<TransactionManager>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
+    pruner_subscriber: mpsc::Sender<CheckpointExecutionMessage>,
 }
 
 impl CheckpointExecutor {
@@ -78,6 +90,7 @@ impl CheckpointExecutor {
         tx_manager: Arc<TransactionManager>,
         config: CheckpointExecutorConfig,
         prometheus_registry: &Registry,
+        pruner_subscriber: mpsc::Sender<CheckpointExecutionMessage>,
     ) -> Self {
         Self {
             mailbox,
@@ -86,6 +99,7 @@ impl CheckpointExecutor {
             tx_manager,
             config,
             metrics: CheckpointExecutorMetrics::new(prometheus_registry),
+            pruner_subscriber,
         }
     }
 
@@ -102,6 +116,7 @@ impl CheckpointExecutor {
             tx_manager,
             config: Default::default(),
             metrics: CheckpointExecutorMetrics::new_for_tests(),
+            pruner_subscriber: mpsc::channel(2).0,
         }
     }
 
@@ -154,8 +169,8 @@ impl CheckpointExecutor {
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
-                Some(Ok(checkpoint)) = pending.next() => {
-                    self.process_executed_checkpoint(&checkpoint);
+                Some(Ok((checkpoint, checkpoint_execution_state))) = pending.next() => {
+                    self.process_executed_checkpoint(&checkpoint, checkpoint_execution_state).await;
                     highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
@@ -190,7 +205,12 @@ impl CheckpointExecutor {
 
     /// Post processing and plumbing after we executed a checkpoint. This function is guaranteed
     /// to be called in the order of checkpoint sequence number.
-    fn process_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
+    async fn process_executed_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+        execution_state: CheckpointExecutionState,
+    ) {
+        let _scope = monitored_scope("ProcessExecutedCheckpoint");
         // Ensure that we are not skipping checkpoints at any point
         let seq = checkpoint.sequence_number();
         if let Some(prev_highest) = self
@@ -203,6 +223,18 @@ impl CheckpointExecutor {
             assert_eq!(seq, 0);
         }
         debug!("Bumping highest_executed_checkpoint watermark to {:?}", seq,);
+
+        let (callback_sender, callback_receiver) = oneshot::channel();
+        match self
+            .pruner_subscriber
+            .send((execution_state, callback_sender))
+            .await
+        {
+            Ok(_) => callback_receiver
+                .await
+                .expect("failed to get callback from pruner"),
+            Err(err) => error!("no active receivers for checkpoint stream: {:?}", err),
+        }
 
         self.checkpoint_store
             .update_highest_executed_checkpoint(checkpoint)
@@ -276,26 +308,29 @@ impl CheckpointExecutor {
 
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
-            while let Err(err) = execute_checkpoint(
-                checkpoint.clone(),
-                authority_store.clone(),
-                checkpoint_store.clone(),
-                &epoch_store,
-                tx_manager.clone(),
-                local_execution_timeout_sec,
-                &metrics,
-            )
-            .await
-            {
-                error!(
-                    "Error while executing checkpoint, will retry in 1s: {:?}",
-                    err
-                );
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                metrics.checkpoint_exec_errors.inc();
+            loop {
+                match execute_checkpoint(
+                    checkpoint.clone(),
+                    authority_store.clone(),
+                    checkpoint_store.clone(),
+                    &epoch_store,
+                    tx_manager.clone(),
+                    local_execution_timeout_sec,
+                    &metrics,
+                )
+                .await
+                {
+                    Ok(execution_state) => return (checkpoint, execution_state),
+                    Err(err) => {
+                        error!(
+                            "Error while executing checkpoint, will retry in 1s: {:?}",
+                            err
+                        );
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        metrics.checkpoint_exec_errors.inc();
+                    }
+                }
             }
-
-            checkpoint
         }));
     }
 }
@@ -334,7 +369,7 @@ pub async fn execute_checkpoint(
     transaction_manager: Arc<TransactionManager>,
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
-) -> SuiResult {
+) -> Result<CheckpointExecutionState, SuiError> {
     debug!(
         "Scheduling checkpoint {:?} for execution",
         checkpoint.sequence_number(),
@@ -376,7 +411,7 @@ async fn execute_transactions(
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
     checkpoint_sequence: CheckpointSequenceNumber,
-) -> SuiResult {
+) -> Result<CheckpointExecutionState, SuiError> {
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
 
@@ -468,7 +503,12 @@ async fn execute_transactions(
                     epoch_store.epoch(),
                     checkpoint_sequence,
                 )?;
-                return Ok(());
+
+                let execution_state = CheckpointExecutionState {
+                    effects: effects.into_iter().map(|fx| fx.data().clone()).collect(),
+                    checkpoint_sequence_number: checkpoint_sequence,
+                };
+                return Ok(execution_state);
             }
         }
     }
