@@ -16,6 +16,7 @@ module risk_management::transaction {
     const ESpenderCannotSendMoneyToHimself : u64 = 4;
     const EFinalApproverMustSignLast : u64 = 5;
     const ENotSpendersFinalApprover : u64 = 6;
+    const EVelocityLimitExceeded : u64 = 7;
 
     /// A Transaction Request is created by a spender and hold all the required information
     /// for an approver to determine if its eligible to be approved or rejected 
@@ -57,6 +58,7 @@ module risk_management::transaction {
         assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 3);
         assert!(recipient != tx_context::sender(ctx), 4);
         assert!(amount <= policy_config::get_amount_limit(spender_cap), 0);
+        assert!(policy_config::get_spent(spender_cap) + amount <= policy_config::get_velocity_limit(spender_cap), 7);
         transfer::share_object(TransactionRequest {
             id: object::new(ctx),
             amount,
@@ -122,11 +124,14 @@ module risk_management::transaction {
     ) {
         assert!(policy_config::get_spender_original_owner(spender_cap) == tx_context::sender(ctx), 3);
         assert!(tx_approval.amount <= policy_config::get_amount_limit(spender_cap), 0);
+        assert!(policy_config::get_spent(spender_cap) <= policy_config::get_velocity_limit(spender_cap), 7);
         transfer::transfer(
             coin::take(policy_config::get_foundation_balance_mut(assets), tx_approval.amount, ctx) , 
             tx_approval.recipient
         );
         
+        policy_config::update_spent(spender_cap, tx_approval.amount);
+
         //Unpack and delete the TransactionApproval
         let TransactionApproval { 
             id,

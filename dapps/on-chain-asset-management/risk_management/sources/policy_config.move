@@ -29,6 +29,7 @@ module risk_management::policy_config {
         id: UID,
         original_owner: address,
         policy: Policy,
+        spent: SpentPerEpoch,
     }
 
     /// Approver capability holder has the right to approve transaction requests.
@@ -47,6 +48,7 @@ module risk_management::policy_config {
     struct Policy has store {
         amount_limit: u64,
         time_limit: u64,
+        velocity_limit: u64,
         final_approver: Option<address>,
     }
 
@@ -56,6 +58,11 @@ module risk_management::policy_config {
         administrators: vector<address>,
         spenders: vector<address>,
         approvers: vector<address>
+    }
+
+    struct SpentPerEpoch has store {
+        amount: u64,
+        epoch: u64,
     }
 
     // ======== Functions =========
@@ -97,6 +104,7 @@ module risk_management::policy_config {
         recipient: address,
         amount_limit: u64,
         time_limit: u64,
+        velocity_limit: u64,
         ctx: &mut TxContext,
     ) {
         assert!(admin_cap.original_owner == tx_context::sender(ctx), 1);
@@ -104,7 +112,8 @@ module risk_management::policy_config {
         transfer::transfer(SpenderCap{
                 id: object::new(ctx),
                 original_owner: recipient,
-                policy: Policy {amount_limit, time_limit, final_approver: option::none()},
+                policy: Policy {amount_limit, time_limit, velocity_limit, final_approver: option::none()},
+                spent: SpentPerEpoch { amount: 0, epoch: tx_context::epoch(ctx)},
             }, recipient
         );
         vec::push_back(&mut reg.spenders, recipient);
@@ -118,6 +127,7 @@ module risk_management::policy_config {
         recipient: address,
         amount_limit: u64,
         time_limit: u64,
+        velocity_limit: u64,
         final_approver: address,
         ctx: &mut TxContext,
     ) {
@@ -127,7 +137,8 @@ module risk_management::policy_config {
         transfer::transfer(SpenderCap{
                 id: object::new(ctx),
                 original_owner: recipient,
-                policy: Policy {amount_limit, time_limit, final_approver: option::some(final_approver)},
+                policy: Policy {amount_limit, time_limit, velocity_limit, final_approver: option::some(final_approver)},
+                spent: SpentPerEpoch { amount: 0, epoch: tx_context::epoch(ctx)},
             }, recipient
         );
         vec::push_back(&mut reg.spenders, recipient);
@@ -159,13 +170,17 @@ module risk_management::policy_config {
         coin::put(&mut assets.foundation_balance, coin)
     }
 
-    /// TODO
-    // entry fun create_policy(
-    //     _: &AdministratorCap,
-    //     amount_limit: u64,
-    //     time_limit: u64,
-    // ) {}
+    entry fun reset_spent(
+        spender_cap: &mut SpenderCap,
+        ctx: &mut TxContext,
+    ) {
+        if (tx_context::epoch(ctx) > spender_cap.spent.epoch) {
+            spender_cap.spent.amount = 0;
+            spender_cap.spent.epoch = tx_context::epoch(ctx);
+        }
+    }
 
+    /// TODO
     // entry fun delete_administrator(
     //     _: &AdministratorCap,
     //     reg: &mut RolesRegistry
@@ -217,6 +232,12 @@ module risk_management::policy_config {
         spender_cap.policy.time_limit
     }
 
+    public fun get_velocity_limit(
+        spender_cap: &SpenderCap
+    ) : u64 {
+        spender_cap.policy.velocity_limit
+    }
+
     public fun get_final_approver(
         spender_cap: &SpenderCap
     ) : Option<address> {
@@ -233,5 +254,18 @@ module risk_management::policy_config {
         approver_cap: &ApproverCap
     ) : address {
         approver_cap.original_owner
+    }
+
+    public fun get_spent(
+        spender_cap: &SpenderCap
+    ) : u64 {
+        spender_cap.spent.amount
+    }
+
+    public fun update_spent(
+        spender_cap: &mut SpenderCap,
+        amount: u64,
+    ) {
+        spender_cap.spent.amount = spender_cap.spent.amount + amount
     }
 }
