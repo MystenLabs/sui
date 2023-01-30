@@ -33,7 +33,8 @@ export function Setup() {
         throw new Error('No Coins found, please request some from faucet');
       }
 
-      let checkTx: { kind: 'moveCall', data: MoveCallTransaction } = {
+      const gasPrice = epoch.data.referenceGasPrice;
+      const checkTx: UnserializedSignableTransaction = {
         kind: 'moveCall',
         data: {
           packageObjectId: config.VITE_PKG,
@@ -44,16 +45,13 @@ export function Setup() {
         }
       };
 
-      const res = await provider.devInspectTransaction(
-        currentAccount, checkTx, await provider.getReferenceGasPrice()
-      );
+      const inspectRes = await provider.devInspectTransaction(currentAccount, checkTx, Number(gasPrice));
 
-      if ('Err' in res.results) {
-        console.log('Error: %s', res.results.Err);
-        return null;
+      if ('Err' in inspectRes.results) {
+        throw new Error(`Error happened while checking for uniqueness: ${inspectRes.results.Err}`);
       }
 
-      // @ts-ignore
+      // @ts-ignore // also not cool
       const { Ok: [ [, { returnValues: [ [ [ exists ] ] ] } ] ] } = res.results;
 
       // Add a warning saying that the name is already taken.
@@ -62,7 +60,6 @@ export function Setup() {
         throw new Error(`Name: '${username}' is already taken`);
       }
 
-      const gasPrice = epoch.data.referenceGasPrice;
       const gasSearch = GAS_BUDGET * gasPrice;
       const { gas } = getGas(coins, gasSearch);
       if (!gas) {
