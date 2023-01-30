@@ -2,7 +2,7 @@
 title: Learn about Sui
 ---
 
-Sui *(swē)* is the water element in Japanese philosophy. The power of the sui element lies in its fluidity---its ability to easily adapt to and transform any environment. Similarly, the Sui platform seeks to provide a flexible network that you can leverage to shape the web3 landscape. 
+Sui *(swē)* is the water element in Japanese philosophy. The power of the sui element lies in its fluidity&mdash;its ability to easily adapt to and transform any environment. Similarly, the Sui platform seeks to provide a flexible network that you can leverage to shape the web3 landscape. 
 
 The Sui platform is built on Sui Move, which is derived from the core [Move](https://github.com/MystenLabs/awesome-move) programming language. This documentation assumes that you have a basic working knowledge of Move. To learn more about the differences between core Move and Sui Move, see [How Sui Move differs from core Move](../learn/sui-move-diffs.md).
 
