@@ -33,16 +33,19 @@ export function getEventsSummary(
             event?.coinBalanceChange?.transactionModule !== 'gas'
         ) {
             const { coinBalanceChange } = event;
-            const { coinType, amount, owner } = coinBalanceChange;
+            const { coinType, amount, owner, sender } = coinBalanceChange;
             const { AddressOwner } = owner as { AddressOwner: string };
 
-            coinsMeta[`${AddressOwner}${coinType}`] = {
-                amount:
-                    (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
-                    amount,
-                coinType: coinType,
-                receiverAddress: AddressOwner,
-            };
+            // ChangeEpoch txn includes coinBalanceChange event for other addresses
+            if (AddressOwner === address || address === sender) {
+                coinsMeta[`${AddressOwner}${coinType}`] = {
+                    amount:
+                        (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
+                        amount,
+                    coinType: coinType,
+                    receiverAddress: AddressOwner,
+                };
+            }
         }
 
         // return objectIDs of the transfer objects
