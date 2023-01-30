@@ -89,13 +89,14 @@ export default class ApiProvider {
         apiEnv: API_ENV = DEFAULT_API_ENV,
         customRPC?: string | null
     ) {
-        // We also clear the query client whenever set set a new API provider:
-        queryClient.clear();
         this._apiFullNodeProvider = new JsonRpcProvider(
             customRPC ?? getDefaultAPI(apiEnv).fullNode,
             { faucetURL: customRPC ? '' : getDefaultAPI(apiEnv).faucet }
         );
         this._signerByAddress.clear();
+        // We also clear the query client whenever set set a new API provider:
+        queryClient.resetQueries();
+        queryClient.clear();
     }
 
     public get instance() {
