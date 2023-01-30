@@ -172,7 +172,7 @@ describe('Transaction Serialization and deserialization', () => {
     ).serializeMoveCallArguments(moveCallExpected);
     
     const version = await toolbox.provider.getRpcApiVersion();
-    const pureArg: PureArg = bcsForVersion(version).ser('string', 'Example NFT').toBytes();
+    const pureArg: PureArg = { Pure: bcsForVersion(version).ser('string', 'Example NFT').toBytes()};
     const moveCall = { 
       packageObjectId: '0x2',
       module: 'devnet_nft',

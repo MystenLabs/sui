@@ -155,7 +155,7 @@ export class CallArgSerializer {
     argVal: SuiJsonValue | PureArg
   ): Promise<CallArg> {
     if (isPureArg(argVal)) {
-      return {Pure: argVal};
+      return argVal;
     }
     const serType = this.getPureSerializationType(expectedType, argVal);
     const version = await this.provider.getRpcApiVersion();

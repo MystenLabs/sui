@@ -144,10 +144,10 @@ export type ObjectArg =
 /**
  * A pure argument.
  */
-export type PureArg = ArrayLike<number>;
+export type PureArg = { Pure: ArrayLike<number> };
 
 export function isPureArg(arg: any): arg is PureArg {
-  return (arg as PureArg) !== undefined;
+  return (arg as PureArg).Pure !== undefined;
 }  
 
 /**
@@ -173,7 +173,7 @@ export function isPureArg(arg: any): arg is PureArg {
  * to the type required by the called function. Pure accepts only serialized values
  */
 export type CallArg =
-  | { Pure: PureArg }
+  | PureArg
   | { Object: ObjectArg }
   | { ObjVec: ArrayLike<ObjectArg> };
 
