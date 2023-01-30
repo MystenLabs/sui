@@ -52,7 +52,7 @@ export function Setup() {
       }
 
       // @ts-ignore // also not cool
-      const { Ok: [ [, { returnValues: [ [ [ exists ] ] ] } ] ] } = res.results;
+      const { Ok: [ [, { returnValues: [ [ [ exists ] ] ] } ] ] } = inspectRes.results;
 
       // Add a warning saying that the name is already taken.
       // Depending on the the `exists` result: 0 or 1;
@@ -90,10 +90,7 @@ export function Setup() {
         throw new Error(`Transaction would've failed with a reason '${dryRunRes.status.error}'`);
       }
 
-      await signAndExecuteTransaction({
-        kind: 'bytes',
-        data: serializedTx.getData()
-      });
+      await signAndExecuteTransaction(submitTx);
     },
     {
       onSuccess() {
