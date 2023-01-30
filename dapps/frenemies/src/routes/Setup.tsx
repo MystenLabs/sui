@@ -1,25 +1,75 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { MoveCallTransaction, LocalTxnDataSerializer, UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
+import { useEpoch } from "../network/queries/epoch";
 import { useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
+import { useMyType } from "../network/queries/use-raw";
+import { Coin, SUI_COIN } from "../network/types";
+import { getGas } from "../utils/coins";
+import provider from "../network/provider";
+
+const GAS_BUDGET = 10000n;
 
 export function Setup() {
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
+  const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
+  const { data: epoch } = useEpoch();
 
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
-      await signAndExecuteTransaction({
+      if (!currentAccount || !epoch || !coins || !coins.length) {
+        throw new Error('No Coins found, please request some from faucet');
+      }
+
+      let checkTx: { kind: 'moveCall', data: MoveCallTransaction } = {
+        kind: 'moveCall',
+        data: {
+          packageObjectId: config.VITE_PKG,
+          module: "registry",
+          function: "is_registered",
+          typeArguments: [],
+          arguments: [config.VITE_REGISTRY, username],
+        }
+      };
+
+      const res = await provider.devInspectTransaction(
+        currentAccount, checkTx, await provider.getReferenceGasPrice()
+      );
+
+      if ('Err' in res.results) {
+        console.log('Error: %s', res.results.Err);
+        return null;
+      }
+
+      // @ts-ignore
+      const { Ok: [ [, { returnValues: [ [ [ exists ] ] ] } ] ] } = res.results;
+
+      // Add a warning saying that the name is already taken.
+      // Depending on the the `exists` result: 0 or 1;
+      if (exists == 1) {
+        throw new Error(`Name: '${username}' is already taken`);
+      }
+
+      const gasPrice = epoch.data.referenceGasPrice;
+      const gasSearch = GAS_BUDGET * gasPrice;
+      const { gas } = getGas(coins, gasSearch);
+      if (!gas) {
+        throw new Error(`Gas object with at least '${gasSearch}' MIST not found`);
+      }
+
+      const submitTx: UnserializedSignableTransaction = {
         kind: "moveCall",
         data: {
           packageObjectId: config.VITE_PKG,
@@ -27,8 +77,25 @@ export function Setup() {
           function: "register",
           arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
           typeArguments: [],
-          gasBudget: 10000,
+          gasPayment: gas.reference.objectId,
+
+          // TODO: Fix in sui.js - add option to use bigint...
+          gasBudget: Number(GAS_BUDGET),
+          gasPrice: Number(gasPrice),
         },
+      };
+
+      const serializer = new LocalTxnDataSerializer(provider);
+      const serializedTx = await serializer.serializeToBytes(currentAccount, submitTx);
+      const dryRunRes = await provider.dryRunTransaction(serializedTx.toString());
+
+      if (dryRunRes.status.status == 'failure') {
+        throw new Error(`Transaction would've failed with a reason '${dryRunRes.status.error}'`);
+      }
+
+      await signAndExecuteTransaction({
+        kind: 'bytes',
+        data: serializedTx.getData()
       });
     },
     {
