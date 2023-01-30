@@ -480,7 +480,10 @@ impl CheckpointBuilder {
             .await?;
         let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
-        let sorted = CasualOrder::casual_sort(unsorted);
+        let sorted = {
+            let _scope = monitored_scope("CheckpointBuilder::casual_sort");
+            CasualOrder::casual_sort(unsorted)
+        };
         let new_checkpoint = self.create_checkpoints(sorted, pending.details).await?;
         self.write_checkpoints(height, new_checkpoint).await?;
         Ok(())
@@ -491,6 +494,7 @@ impl CheckpointBuilder {
         height: CheckpointCommitHeight,
         new_checkpoint: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
+        let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
         let mut batch = self.tables.checkpoint_content.batch();
         for (summary, contents) in &new_checkpoint {
             debug!(
@@ -526,6 +530,7 @@ impl CheckpointBuilder {
         all_effects: Vec<TransactionEffects>,
         details: PendingCheckpointInfo,
     ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
+        let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
         let total = all_effects.len();
         let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
         if last_checkpoint.is_none() {
@@ -755,6 +760,7 @@ impl CheckpointBuilder {
         &self,
         mut roots: Vec<VerifiedSignedTransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
+        let _scope = monitored_scope("CheckpointBuilder::complete_checkpoint_effects");
         let mut results = vec![];
         let mut seen = HashSet::new();
         loop {
