@@ -11,16 +11,33 @@ pub mod private_generics;
 pub mod struct_with_key_verifier;
 
 use move_binary_format::{
+    access::ModuleAccess,
     binary_views::BinaryIndexedView,
     file_format::{SignatureToken, StructHandleIndex},
+    CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
-use sui_types::error::{ExecutionError, ExecutionErrorKind};
+use sui_types::{
+    error::{ExecutionError, ExecutionErrorKind},
+    move_package::{FnInfoKey, FnInfoMap},
+};
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
 fn verification_failure(error: String) -> ExecutionError {
     ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationError, error)
+}
+
+/// Checks if a function is annotated with one of the test-related annotations1
+fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInfoMap) -> bool {
+    let fn_name = name.to_string();
+    let mod_handle = module.self_handle();
+    let mod_addr = *module.address_identifier_at(mod_handle.address);
+    let fn_info_key = FnInfoKey { fn_name, mod_addr };
+    match fn_info_map.get(&fn_info_key) {
+        Some(fn_info) => fn_info.is_test,
+        None => false,
+    }
 }
 
 // TODO move these to move bytecode utils
