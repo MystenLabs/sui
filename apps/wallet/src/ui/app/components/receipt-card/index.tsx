@@ -3,13 +3,12 @@
 
 import cl from 'classnames';
 
+import { type TxResultState } from '../../hooks/useRecentTransactions';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis, useFormatCoin } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-
-import type { TxResultState } from '_redux/slices/txresults';
 
 import st from './ReceiptCard.module.scss';
 
