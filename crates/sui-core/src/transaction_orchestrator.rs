@@ -192,7 +192,6 @@ where
                 } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
                         effects_cert.into(),
                         false,
                     ))));
@@ -206,12 +205,10 @@ where
                 .await
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
                         effects_cert.into(),
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
                         effects_cert.into(),
                         false,
                     )))),

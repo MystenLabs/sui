@@ -953,8 +953,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         tx_cert: certified_txn,
         effects_cert: certified_txn_effects,
     } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.digest(), digest);
+    let (cte, is_executed_locally) = *res;
     assert_eq!(*certified_txn.digest(), digest);
     assert_eq!(*cte.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
@@ -978,8 +977,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         tx_cert: certified_txn,
         effects_cert: certified_txn_effects,
     } = rx.recv().await.unwrap().unwrap();
-    let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.digest(), digest);
+    let (cte, is_executed_locally) = *res;
     assert_eq!(*certified_txn.digest(), digest);
     assert_eq!(*cte.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
@@ -1036,11 +1034,10 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             .unwrap();
 
         let SuiExecuteTransactionResponse::EffectsCert {
-            certificate,
-            effects: _,
+            effects,
             confirmed_local_execution,
         } = response;
-        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert_eq!(&effects.effects.transaction_digest, tx_digest);
         assert!(confirmed_local_execution);
     }
     Ok(())
@@ -1076,11 +1073,10 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .unwrap();
 
     let SuiExecuteTransactionResponse::EffectsCert {
-        certificate,
-        effects: _,
+        effects,
         confirmed_local_execution,
     } = response;
-    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert_eq!(&effects.effects.transaction_digest, tx_digest);
     assert!(confirmed_local_execution);
 
     let _response: SuiTransactionResponse = jsonrpc_client
@@ -1101,11 +1097,10 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .unwrap();
 
     let SuiExecuteTransactionResponse::EffectsCert {
-        certificate,
-        effects: _,
+        effects,
         confirmed_local_execution,
     } = response;
-    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert_eq!(&effects.effects.transaction_digest, tx_digest);
     assert!(!confirmed_local_execution);
 
     Ok(())

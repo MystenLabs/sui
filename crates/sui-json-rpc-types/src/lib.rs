@@ -415,7 +415,6 @@ pub struct SuiTBlsSignRandomnessObjectResponse {
 pub enum SuiExecuteTransactionResponse {
     // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert {
-        certificate: SuiCertifiedTransaction,
         effects: SuiCertifiedTransactionEffects,
         // If the transaction is confirmed to be executed locally
         // before this response.
@@ -430,12 +429,10 @@ impl SuiExecuteTransactionResponse {
     ) -> Result<Self, anyhow::Error> {
         Ok(match resp {
             ExecuteTransactionResponse::EffectsCert(cert) => {
-                let (certificate, effects, is_executed_locally) = *cert;
-                let certificate: SuiCertifiedTransaction = certificate.try_into()?;
+                let (effects, is_executed_locally) = *cert;
                 let effects: SuiCertifiedTransactionEffects =
                     SuiCertifiedTransactionEffects::try_from(effects, resolver)?;
                 SuiExecuteTransactionResponse::EffectsCert {
-                    certificate,
                     effects,
                     confirmed_local_execution: is_executed_locally,
                 }

@@ -2409,13 +2409,7 @@ pub type IsTransactionExecutedLocally = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionResponse {
-    EffectsCert(
-        Box<(
-            CertifiedTransaction,
-            CertifiedTransactionEffects,
-            IsTransactionExecutedLocally,
-        )>,
-    ),
+    EffectsCert(Box<(CertifiedTransactionEffects, IsTransactionExecutedLocally)>),
 }
 
 #[derive(Clone, Debug)]
