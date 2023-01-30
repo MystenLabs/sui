@@ -132,8 +132,18 @@ pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 // is above the threshold.
 pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
 
-type CertTxGuard<'a> =
-    DBTxGuard<'a, TrustedCertificate, (InnerTemporaryStore, SignedTransactionEffects)>;
+// The epoch at which we start removing events from effects
+const REMOVE_EFFECTS_EPOCH: u64 = 0;
+
+type CertTxGuard<'a> = DBTxGuard<
+    'a,
+    TrustedCertificate,
+    (
+        InnerTemporaryStore,
+        SignedTransactionEffects,
+        TransactionEffects,
+    ),
+>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -839,7 +849,7 @@ impl AuthorityState {
 
         // first check to see if we have already executed and committed the tx
         // to the WAL
-        if let Some((inner_temporary_storage, signed_effects)) =
+        if let Some((inner_temporary_storage, signed_effects, effects_with_events)) =
             epoch_store.wal().get_execution_output(&digest)?
         {
             return self
@@ -847,6 +857,7 @@ impl AuthorityState {
                     certificate,
                     inner_temporary_storage,
                     signed_effects,
+                    effects_with_events,
                     tx_guard,
                     execution_guard,
                     epoch_store,
@@ -858,7 +869,7 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, signed_effects) =
+        let (inner_temporary_store, signed_effects, effects_with_events) =
             match self.prepare_certificate(certificate, epoch_store).await {
                 Err(e) => {
                     debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
@@ -876,7 +887,11 @@ impl AuthorityState {
         // would be more difficult in the alternative.
         epoch_store.wal().write_execution_output(
             &digest,
-            (inner_temporary_store.clone(), signed_effects.clone()),
+            (
+                inner_temporary_store.clone(),
+                signed_effects.clone(),
+                effects_with_events.clone(),
+            ),
         )?;
 
         // Insert an await in between write_execution_output and commit so that tests can observe
@@ -888,6 +903,7 @@ impl AuthorityState {
             certificate,
             inner_temporary_store,
             signed_effects,
+            effects_with_events,
             tx_guard,
             execution_guard,
             epoch_store,
@@ -900,6 +916,7 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         inner_temporary_store: InnerTemporaryStore,
         signed_effects: SignedTransactionEffects,
+        effects_with_events: TransactionEffects,
         tx_guard: CertTxGuard<'_>,
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -936,7 +953,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(&digest)
+            .post_process_one_tx(&digest, certificate, &signed_effects, &effects_with_events)
             .await
             .tap_err(|e| error!(tx_digest = ?digest, "tx post processing failed: {e}"));
 
@@ -975,7 +992,11 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
+    ) -> SuiResult<(
+        InnerTemporaryStore,
+        SignedTransactionEffects, // the signed effects with events removed
+        TransactionEffects,       // the original effects with the events (for indexing).
+    )> {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
         let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
             &self.database,
@@ -1016,7 +1037,7 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, *certificate.digest());
-        let (inner_temp_store, effects, _execution_error) =
+        let (inner_temp_store, mut effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
                 shared_object_refs,
                 temporary_store,
@@ -1029,10 +1050,23 @@ impl AuthorityState {
                 epoch_store.epoch(),
             );
 
+        let effects_with_events = effects.clone();
+
+        if epoch_store.epoch() >= REMOVE_EFFECTS_EPOCH {
+            // remove all events (except some events required by rosetta) from effects -
+            // fullnode will still
+            // index them, but they will not be transmitted over state sync.
+            // This is a temporary hack until we replace events with events_digest.
+            effects.events.retain(|e| match e {
+                Event::CoinBalanceChange { .. } | Event::Publish { .. } => true,
+                _ => false,
+            })
+        }
+
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects =
             SignedTransactionEffects::new(epoch_store.epoch(), effects, &*self.secret, self.name);
-        Ok((inner_temp_store, signed_effects))
+        Ok((inner_temp_store, signed_effects, effects_with_events))
     }
 
     /// Notifies TransactionManager about an executed certificate.
@@ -1179,7 +1213,7 @@ impl AuthorityState {
         indexes: &IndexStore,
         digest: &TransactionDigest,
         cert: &VerifiedCertificate,
-        effects: &SignedTransactionEffects,
+        effects: &TransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult<u64> {
         let changes = self
@@ -1195,7 +1229,6 @@ impl AuthorityState {
                 .iter()
                 .map(|o| o.object_id()),
             effects
-                .data()
                 .all_mutated()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
@@ -1212,7 +1245,7 @@ impl AuthorityState {
 
     fn process_object_index(
         &self,
-        effects: &SignedTransactionEffects,
+        effects: &TransactionEffects,
     ) -> Result<ObjectIndexChanges, SuiError> {
         let modified_at_version = effects
             .modified_at_versions
@@ -1361,7 +1394,13 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest=?digest), err)]
-    async fn post_process_one_tx(&self, digest: &TransactionDigest) -> SuiResult {
+    async fn post_process_one_tx(
+        &self,
+        digest: &TransactionDigest,
+        cert: &VerifiedCertificate,
+        effects: &SignedTransactionEffects,
+        effects_with_events: &TransactionEffects,
+    ) -> SuiResult {
         if self.indexes.is_none()
             && self.transaction_streamer.is_none()
             && self.event_handler.is_none()
@@ -1369,47 +1408,39 @@ impl AuthorityState {
             return Ok(());
         }
 
-        // Load cert and effects.
-        let info = (
-            self.database.get_certified_transaction(digest)?,
-            self.database.get_signed_effects(digest)?,
-        );
-        let (cert, effects) = match info {
-            (Some(cert), Some(effects)) => (cert, effects),
-            _ => {
-                return Err(SuiError::CertificateNotfound {
-                    certificate_digest: *digest,
-                })
-            }
-        };
-
         let timestamp_ms = Self::unixtime_now_ms();
 
         // Index tx
         if let Some(indexes) = &self.indexes {
             let res = self
-                .index_tx(indexes.as_ref(), digest, &cert, &effects, timestamp_ms)
+                .index_tx(
+                    indexes.as_ref(),
+                    digest,
+                    cert,
+                    effects_with_events,
+                    timestamp_ms,
+                )
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
                 .tap_err(|e| error!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
 
             // Emit events
             if let (Some(event_handler), Ok(seq)) = (&self.event_handler, res) {
                 event_handler
-                    .process_events(effects.data(), timestamp_ms, seq)
+                    .process_events(effects_with_events, timestamp_ms, seq)
                     .await
                     .tap_ok(|_| self.metrics.post_processing_total_tx_had_event_processed.inc())
                     .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't process events for tx: {}", e))?;
 
                 self.metrics
                     .post_processing_total_events_emitted
-                    .inc_by(effects.data().events.len() as u64);
+                    .inc_by(effects_with_events.events.len() as u64);
             }
         };
 
         // Stream transaction
         if let Some(transaction_streamer) = &self.transaction_streamer {
             transaction_streamer
-                .enqueue((cert.into(), effects.clone()))
+                .enqueue((cert.clone().into(), effects.clone()))
                 .await;
             self.metrics
                 .post_processing_total_tx_added_to_streamer
