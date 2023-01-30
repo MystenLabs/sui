@@ -3,6 +3,7 @@
 
 import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
+import { isPureArg } from '../../types';
 import { TransactionBytes } from '../../types/transactions';
 import {
   MoveCallTransaction,
@@ -115,6 +116,11 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         break;
       case 'moveCall':
         const moveCall = unserializedTxn.data as MoveCallTransaction;
+        for (const arg of moveCall.arguments) {
+          if (isPureArg(arg)) {
+            throw new Error('PureArg is not allowed as argument in RpcTxnDataSerializer');
+          }
+        }
         endpoint = 'sui_moveCall';
         args = [
           signerAddress,
