@@ -86,6 +86,11 @@ module risk_management::policy_config {
         });
     }
 
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx)
+    }
+
     /// Optional
     // entry fun create_administrator(
     //     _: &AdministratorCap,
@@ -98,7 +103,7 @@ module risk_management::policy_config {
 
     /// Create spender function can only be called by an administrator, specifying the spender's thresholds.
     /// When a spender is created the Roles Registry gets updated.
-    entry fun create_spender(
+    public entry fun create_spender(
         admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
         recipient: address,
@@ -121,7 +126,7 @@ module risk_management::policy_config {
 
     /// Same function as above, with the difference 
     /// that a final_approver is specified for this kind of spender.
-    entry fun create_spender_with_final_approver(
+    public entry fun create_spender_with_final_approver(
         admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
         recipient: address,
@@ -146,7 +151,7 @@ module risk_management::policy_config {
 
     /// Create approver function can only be called by an administrator.
     /// When a approver is created the Roles Registry gets updated.
-    entry fun create_approver(
+    public entry fun create_approver(
         admin_cap: &AdministratorCap,
         reg: &mut RolesRegistry,
         recipient: address,
@@ -162,7 +167,7 @@ module risk_management::policy_config {
     }
 
     /// Function that can be called by whoever to top up foundation's balance.
-    entry fun top_up(
+    public entry fun top_up(
         assets: &mut Assets,
         coin: Coin<SUI>,
         _ctx: &mut TxContext,
@@ -170,7 +175,7 @@ module risk_management::policy_config {
         coin::put(&mut assets.foundation_balance, coin)
     }
 
-    entry fun reset_spent(
+    public entry fun reset_spent(
         spender_cap: &mut SpenderCap,
         ctx: &mut TxContext,
     ) {

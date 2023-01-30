@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module risk_management::transaction {
 
     use risk_management::policy_config::{Self, SpenderCap, ApproverCap, RolesRegistry, Assets};
@@ -47,7 +50,7 @@ module risk_management::transaction {
     /// containing the amount to be transfered, the recipient and a description.
     /// M out of N rule is applied here by getting the number of existed approvers, dividing with 2 and adding 1.
     /// eg. if we have 4 approvers, 3 must approve this request.
-    entry fun initiate_transaction(
+    public entry fun initiate_transaction(
         spender_cap: &SpenderCap,
         registry: &RolesRegistry,
         amount: u64,
@@ -76,7 +79,7 @@ module risk_management::transaction {
     /// If the spender is associated with a final approver, then only the final approver can
     /// create the Transaction Approval and send it to spender. Otherwise, when the m out of n
     /// rule is met, the Transaction Approval is send to spender.
-    entry fun approve_request(
+    public entry fun approve_request(
         approver_cap: &ApproverCap,
         tx_request: &mut TransactionRequest,
         ctx: &mut TxContext,
@@ -105,7 +108,7 @@ module risk_management::transaction {
         }
     }
 
-    entry fun reject_request(
+    public entry fun reject_request(
         _: &ApproverCap,
         _tx_request: &TransactionRequest,
         _ctx: &mut TxContext,
@@ -116,7 +119,7 @@ module risk_management::transaction {
 
     /// Once the spender gets the Transaction Approval, the transaction can be executed.
     /// The funds are extracted from Assets and transfered to the recipient.
-    entry fun execute_transaction(
+    public entry fun execute_transaction(
         spender_cap: &mut SpenderCap,
         tx_approval: TransactionApproval,
         assets: &mut Assets,
