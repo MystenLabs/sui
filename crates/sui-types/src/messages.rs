@@ -1208,17 +1208,6 @@ pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStron
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct AccountInfoRequest {
-    pub account: SuiAddress,
-}
-
-impl From<SuiAddress> for AccountInfoRequest {
-    fn from(account: SuiAddress) -> Self {
-        AccountInfoRequest { account }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
     /// Request the latest object state, if a format option is provided,
     /// return the layout of the object in the given format.
@@ -1259,12 +1248,6 @@ impl ObjectInfoRequest {
             request_kind: ObjectInfoRequestKind::LatestObjectInfo(layout),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct AccountInfoResponse {
-    pub object_ids: Vec<ObjectRef>,
-    pub owner: SuiAddress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
