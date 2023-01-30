@@ -45,7 +45,18 @@ export default function PageMainLayout({
                 <Link to="/tokens" className="no-underline text-gray-90">
                     <Logo networkName={networkName} />
                 </Link>
-                {dappStatusEnabled ? <DappStatus /> : null}
+                {dappStatusEnabled ? (
+                    // hack to position the DappStatus horizontally in the view and take into account the logo width
+                    <div className={st.dappStatusContainer}>
+                        <div className={st.dappLogoContainer}>
+                            <Logo networkName={networkName} />
+                        </div>
+                        <DappStatus />
+                        <div className={st.dappLogoContainer}>
+                            <Logo networkName={networkName} />
+                        </div>
+                    </div>
+                ) : null}
                 {topNavMenuEnabled ? (
                     <MenuButton className={st.menuButton} />
                 ) : null}

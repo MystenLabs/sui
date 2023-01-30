@@ -19,6 +19,7 @@
     padding: 0 15px;
     justify-content: space-between;
     min-height: 52px;
+    position: relative;
 
     &.center {
         justify-content: center;
@@ -53,4 +54,18 @@
 .with-nav {
     padding: 25px sizing.$main-sides-space;
     @include utils.main-extra-space-for-nav;
+}
+
+.dapp-status-container {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1;
+    inset: 0 15px;
+    gap: 4px;
+}
+
+.dapp-logo-container {
+    visibility: hidden;
 }
