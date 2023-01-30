@@ -103,18 +103,38 @@ impl CheckpointStore {
         contents: CheckpointContents,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        if epoch_store.epoch() == checkpoint.summary.epoch {
-            epoch_store
-                .put_genesis_checkpoint_in_builder(&checkpoint.summary, &contents)
-                .unwrap();
-        } else {
-            debug!("Not inserting checkpoint builder data for genesis checkpoint, validator epoch {}, genesis epoch {}",
-                epoch_store.epoch(), checkpoint.summary.epoch,
-            );
+        assert_eq!(
+            checkpoint.epoch(),
+            0,
+            "can't call insert_genesis_checkpoint with a checkpoint not in epoch 0"
+        );
+        assert_eq!(
+            checkpoint.sequence_number(),
+            0,
+            "can't call insert_genesis_checkpoint with a checkpoint that doesn't have a sequence number of 0"
+        );
+
+        // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
+        if self
+            .get_checkpoint_by_digest(&checkpoint.digest())
+            .unwrap()
+            .is_none()
+        {
+            if epoch_store.epoch() == checkpoint.summary.epoch {
+                epoch_store
+                    .put_genesis_checkpoint_in_builder(&checkpoint.summary, &contents)
+                    .unwrap();
+            } else {
+                debug!(
+                    validator_epoch =% epoch_store.epoch(),
+                    genesis_epoch =% checkpoint.epoch(),
+                    "Not inserting checkpoint builder data for genesis checkpoint",
+                );
+            }
+            self.insert_checkpoint_contents(contents).unwrap();
+            self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
+            self.update_highest_synced_checkpoint(&checkpoint).unwrap();
         }
-        self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
-        self.insert_checkpoint_contents(contents).unwrap();
-        self.update_highest_synced_checkpoint(&checkpoint).unwrap();
     }
 
     pub fn get_checkpoint_by_digest(
