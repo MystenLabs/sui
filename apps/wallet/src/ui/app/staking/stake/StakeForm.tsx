@@ -5,7 +5,8 @@ import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useRef, memo, useCallback } from 'react';
 
-import { Content } from '_app/shared/bottom-menu-layout';
+import Loading from '../../components/loading';
+import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
@@ -36,15 +37,14 @@ function StakeForm({
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-
-    const [gasBudgetEstimation] = useFormatCoin(
-        DEFAULT_GAS_BUDGET_FOR_STAKE,
-        SUI_TYPE_ARG
+    const { gasBudget: gasBudgetInMist, isLoading } = useGasBudgetInMist(
+        DEFAULT_GAS_BUDGET_FOR_STAKE
     );
+    const [gasBudgetEstimation] = useFormatCoin(gasBudgetInMist, SUI_TYPE_ARG);
 
     const totalAvailableBalance =
         coinBalance -
-        BigInt(coinType === SUI_TYPE_ARG ? DEFAULT_GAS_BUDGET_FOR_STAKE : 0);
+        BigInt(coinType === SUI_TYPE_ARG ? gasBudgetInMist || 0 : 0);
 
     const [maxToken, symbol, queryResult] = useFormatCoin(
         totalAvailableBalance,
@@ -57,8 +57,11 @@ function StakeForm({
     }, [maxToken, setFieldValue]);
 
     return (
-        <Form className="flex flex-1 flex-col flex-nowrap" autoComplete="off">
-            <Content>
+        <Form
+            className="flex flex-1 flex-col flex-nowrap items-center"
+            autoComplete="off"
+        >
+            <Loading loading={isLoading}>
                 <div className="flex flex-col justify-between items-center mb-3 mt-3.5 w-full gap-1.5">
                     <Text variant="caption" color="gray-85" weight="semibold">
                         Enter the amount of SUI to stake
@@ -145,7 +148,7 @@ function StakeForm({
                         </Alert>
                     </div>
                 ) : null}
-            </Content>
+            </Loading>
         </Form>
     );
 }

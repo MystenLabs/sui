@@ -13,6 +13,7 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useIndividualCoinMaxBalance } from '_hooks';
+import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 
 import type { FormValues } from '.';
 
@@ -40,7 +41,8 @@ function TransferNFTForm({
         onClearRef.current();
     }, [to]);
     const maxGasCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
-    const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudget);
+    const { gasBudget: gasBudgetInMist } = useGasBudgetInMist(gasBudget);
+    const isInsufficientGas = maxGasCoinBalance < BigInt(gasBudgetInMist || 0);
     return (
         <div className={st.sendNft}>
             <Content>
@@ -86,7 +88,7 @@ function TransferNFTForm({
                                 !isValid ||
                                 isSubmitting ||
                                 isInsufficientGas ||
-                                gasBudget === null
+                                !gasBudgetInMist
                             }
                             className={cl(st.action, 'btn', st.sendNftBtn)}
                         >
