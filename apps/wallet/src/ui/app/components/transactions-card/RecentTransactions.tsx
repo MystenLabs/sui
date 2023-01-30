@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect } from 'react';
+import { useMemo } from 'react';
 
+import { useRecentTransactions } from '../../hooks/useRecentTransactions';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import TransactionCard from '_components/transactions-card';
-import { useAppSelector, useAppDispatch } from '_hooks';
-import { getTransactionsByAddress } from '_redux/slices/txresults';
-
-import type { TxResultState } from '_redux/slices/txresults';
 
 import st from './TransactionsCard.module.scss';
 
@@ -18,24 +15,16 @@ type Props = {
 };
 
 function RecentTransactions({ coinType }: Props) {
-    const dispatch = useAppDispatch();
-    const txByAddress: TxResultState[] = useAppSelector(({ txresults }) =>
-        coinType
-            ? txresults.latestTx.filter((tx) => tx.coinType === coinType)
-            : txresults.latestTx
-    );
+    const { isLoading, data } = useRecentTransactions();
 
-    const loading: boolean = useAppSelector(
-        ({ txresults }) => txresults.loading
-    );
-
-    useEffect(() => {
-        dispatch(getTransactionsByAddress());
-    }, [dispatch]);
+    const txByAddress = useMemo(() => {
+        if (!data) return [];
+        return coinType ? data?.filter((tx) => tx.coinType === coinType) : data;
+    }, [data, coinType]);
 
     return (
         <>
-            <Loading loading={loading} className={st.centerLoading}>
+            <Loading loading={isLoading} className={st.centerLoading}>
                 {txByAddress.map((txn) => (
                     <ErrorBoundary key={txn.txId}>
                         <TransactionCard txn={txn} />
