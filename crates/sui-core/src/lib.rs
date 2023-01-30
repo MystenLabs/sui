@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;
