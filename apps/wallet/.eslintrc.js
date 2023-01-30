@@ -53,6 +53,7 @@ module.exports = {
         '@typescript-eslint/unified-signatures': 'error',
         '@typescript-eslint/parameter-properties': 'error',
         'no-console': ['warn'],
+        '@typescript-eslint/no-non-null-assertion': 'off',
     },
     overrides: [
         {
@@ -60,7 +61,6 @@ module.exports = {
             rules: {
                 // Allow any casting in tests:
                 '@typescript-eslint/no-explicit-any': 'off',
-                '@typescript-eslint/no-non-null-assertion': 'off',
             },
         },
     ],
