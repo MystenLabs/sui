@@ -148,7 +148,7 @@ pub fn compile_basics_package() -> CompiledPackage {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
 
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     sui_framework::build_move_package(&path, build_config).unwrap()
 }
 

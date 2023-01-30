@@ -48,6 +48,12 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
+    pub fn new_for_testing() -> Self {
+        let mut build_config: Self = Default::default();
+        build_config.config.install_dir = Some(tempfile::TempDir::new().unwrap().into_path());
+        build_config
+    }
+
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
