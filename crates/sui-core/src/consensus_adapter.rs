@@ -9,9 +9,11 @@ use itertools::Itertools;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::RwLockReadGuard;
-use prometheus::register_int_counter_with_registry;
 use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::{
+    linear_buckets, register_histogram_with_registry, register_int_counter_with_registry, Histogram,
+};
 use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_registry};
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
@@ -56,12 +58,19 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_inflight: IntGauge,
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
+    pub sequencing_certificate_authority_position: Histogram,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
 
 impl ConsensusAdapterMetrics {
     pub fn new(registry: &Registry) -> OptArcConsensusAdapterMetrics {
+        let authority_position_buckets = &[
+            linear_buckets(0.0, 1.0, 19).unwrap().as_slice(),
+            linear_buckets(20.0, 5.0, 10).unwrap().as_slice(),
+        ]
+        .concat();
+
         Some(Arc::new(ConsensusAdapterMetrics {
             sequencing_certificate_attempt: register_int_counter_with_registry!(
                 "sequencing_certificate_attempt",
@@ -90,7 +99,7 @@ impl ConsensusAdapterMetrics {
             sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
-                &["retry", "position"],
+                &["retry"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -103,6 +112,12 @@ impl ConsensusAdapterMetrics {
                 registry,
             )
             .unwrap(),
+            sequencing_certificate_authority_position: register_histogram_with_registry!(
+                "sequencing_certificate_authority_position",
+                "The position of the authority when submitted a certificate to consensus.",
+                authority_position_buckets.to_vec(),
+                registry,
+            ).unwrap(),
         }))
     }
 
@@ -391,7 +406,7 @@ impl ConsensusAdapter {
                 self.opt_metrics.as_ref().map(|metrics| {
                     metrics
                         .sequencing_acknowledge_latency
-                        .with_label_values(&[&bucket, &position.to_string()])
+                        .with_label_values(&[&bucket])
                         .observe(ack_start.elapsed().as_secs_f64());
                 });
             }
@@ -529,6 +544,9 @@ impl<'a> Drop for InflightDropGuard<'a> {
             metrics.sequencing_certificate_inflight.set(inflight as i64);
 
             let position = if let Some(position) = self.position {
+                metrics
+                    .sequencing_certificate_authority_position
+                    .observe(position as f64);
                 position.to_string()
             } else {
                 "not_submitted".to_string()
