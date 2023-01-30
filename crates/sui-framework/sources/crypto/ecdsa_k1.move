@@ -30,13 +30,25 @@ module sui::ecdsa_k1 {
     /// Hash the input bytes using keccak256 and returns 32 bytes.
     public native fun keccak256(data: &vector<u8>): vector<u8>;
 
-    /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
-    /// Secp256k1. Reference implementation on signature generation using RFC6979:
-    /// https://github.com/MystenLabs/narwhal/blob/5d6f6df8ccee94446ff88786c0dbbc98be7cfc09/crypto/src/secp256k1.rs
+    /// @param signature: A 64-bytes signature in form (r, s) that is signed using
+    /// Secp256k1. This is an non-recoverable signature without recovery id.
+    /// Reference implementation on signature generation using RFC6979:
+    /// https://github.com/MystenLabs/fastcrypto/blob/74aec4886e62122a5b769464c2bea5f803cf8ecc/fastcrypto/src/secp256k1/mod.rs#L193
     ///
     /// @param public_key: The public key to verify the signature against
     /// @param hashed_msg: The hashed 32-bytes message, same as what the signature is signed against.
     ///
     /// If the signature is valid to the pubkey and hashed message, return true. Else false.
     public native fun secp256k1_verify(signature: &vector<u8>, public_key: &vector<u8>, hashed_msg: &vector<u8>): bool;
+
+    /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using
+    /// Secp256k1. This is an recoverable signature with recovery id denoted as v.
+    /// Reference implementation on signature generation using RFC6979:
+    /// https://github.com/MystenLabs/fastcrypto/blob/74aec4886e62122a5b769464c2bea5f803cf8ecc/fastcrypto/src/secp256k1/mod.rs#L193
+    ///
+    /// @param public_key: The public key to verify the signature against
+    /// @param hashed_msg: The hashed 32-bytes message, same as what the signature is signed against.
+    ///
+    /// If the signature is valid to the pubkey and hashed message, return true. Else false.
+    public native fun secp256k1_verify_recoverable(signature: &vector<u8>, public_key: &vector<u8>, hashed_msg: &vector<u8>): bool;
 }
