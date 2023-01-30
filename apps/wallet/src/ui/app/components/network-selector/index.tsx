@@ -3,7 +3,8 @@
 
 import cl from 'classnames';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo, useCallback, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
 
 import { CustomRPCInput } from './custom-rpc-input';
 import {
@@ -13,57 +14,30 @@ import {
 } from '_app/ApiProvider';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
-import { changeRPCNetwork } from '_redux/slices/app';
+import { changeActiveNetwork } from '_redux/slices/app';
 
 import st from './NetworkSelector.module.scss';
 
 const NetworkSelector = () => {
-    const [selectedApiEnv, customRPC] = useAppSelector(({ app }) => [
+    const [activeApiEnv, activeRpcUrl] = useAppSelector(({ app }) => [
         app.apiEnv,
         app.customRPC,
     ]);
-    const [showCustomRPCInput, setShowCustomRPCInput] = useState<boolean>(
-        selectedApiEnv === API_ENV.customRPC
-    );
-
-    const [selectedNetworkName, setSelectedNetworkName] =
-        useState<string>(selectedApiEnv);
-
+    const [isCustomRpcInputVisible, setCustomRpcInputVisible] =
+        useState<boolean>(activeApiEnv === API_ENV.customRPC);
     // change the selected network name whenever the selectedApiEnv changes
     useEffect(() => {
-        setSelectedNetworkName(selectedApiEnv);
-    }, [selectedApiEnv]);
-
+        setCustomRpcInputVisible(
+            activeApiEnv === API_ENV.customRPC && !!activeRpcUrl
+        );
+    }, [activeApiEnv, activeRpcUrl]);
     const dispatch = useAppDispatch();
-
     const netWorks = useMemo(() => {
         return generateActiveNetworkList().map((itm) => ({
             ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
             networkName: itm,
         }));
     }, []);
-
-    const changeNetwork = useCallback(
-        (e: React.MouseEvent<HTMLElement>) => {
-            const networkName = e.currentTarget.dataset.network;
-            setShowCustomRPCInput(networkName === API_ENV.customRPC);
-            const isEmptyCustomRpc =
-                networkName === API_ENV.customRPC && !customRPC;
-
-            setSelectedNetworkName(
-                networkName && !isEmptyCustomRpc ? networkName : ''
-            );
-
-            if (isEmptyCustomRpc) {
-                setShowCustomRPCInput(true);
-                return;
-            }
-            const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
-
-            dispatch(changeRPCNetwork(apiEnv));
-        },
-        [customRPC, dispatch]
-    );
 
     return (
         <div className={st.networkOptions}>
@@ -72,8 +46,29 @@ const NetworkSelector = () => {
                     <li className={st.networkItem} key={apiEnv.networkName}>
                         <button
                             type="button"
-                            data-network={apiEnv.networkName}
-                            onClick={changeNetwork}
+                            onClick={async () => {
+                                if (activeApiEnv === apiEnv.env) {
+                                    return;
+                                }
+                                setCustomRpcInputVisible(
+                                    apiEnv.env === API_ENV.customRPC
+                                );
+                                if (apiEnv.env !== API_ENV.customRPC) {
+                                    try {
+                                        await dispatch(
+                                            changeActiveNetwork({
+                                                network: {
+                                                    env: apiEnv.env,
+                                                    customRpcUrl: null,
+                                                },
+                                                store: true,
+                                            })
+                                        ).unwrap();
+                                    } catch (e) {
+                                        toast.error((e as Error).message);
+                                    }
+                                }
+                            }}
                             className={st.networkSelector}
                         >
                             <Icon
@@ -81,10 +76,10 @@ const NetworkSelector = () => {
                                 className={cl(
                                     st.networkIcon,
                                     st.selectedNetwork,
-                                    selectedNetworkName ===
-                                        apiEnv.networkName && st.networkActive,
+                                    activeApiEnv === apiEnv.env &&
+                                        st.networkActive,
                                     apiEnv.networkName === API_ENV.customRPC &&
-                                        showCustomRPCInput &&
+                                        isCustomRpcInputVisible &&
                                         st.customRpcActive
                                 )}
                             />
@@ -95,7 +90,7 @@ const NetworkSelector = () => {
                 ))}
             </ul>
             <AnimatePresence>
-                {showCustomRPCInput && (
+                {isCustomRpcInputVisible && (
                     <motion.div
                         initial={{
                             opacity: 0,
