@@ -59,6 +59,10 @@ export class Connections {
             | { event: 'permissionReply'; permission: Permission }
             | {
                   event: 'walletStatusChange';
+                  change: Omit<WalletStatusChange, 'accounts'>;
+              }
+            | {
+                  event: 'walletStatusChange';
                   origin: string;
                   change: WalletStatusChange;
               }
@@ -70,7 +74,10 @@ export class Connections {
                         aConnection.permissionReply(notification.permission);
                         break;
                     case 'walletStatusChange':
-                        if (aConnection.origin === notification.origin) {
+                        if (
+                            !('origin' in notification) ||
+                            aConnection.origin === notification.origin
+                        ) {
                             aConnection.send(
                                 createMessage<WalletStatusChangePayload>({
                                     type: 'wallet-status-changed',

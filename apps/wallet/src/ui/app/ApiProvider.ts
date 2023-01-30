@@ -6,17 +6,11 @@ import { JsonRpcProvider, LocalTxnDataSerializer } from '@mysten/sui.js';
 import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
+import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { BackgroundClient } from './background-client';
 import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
-
-export enum API_ENV {
-    local = 'local',
-    devNet = 'devNet',
-    testNet = 'testNet',
-    customRPC = 'customRPC',
-}
 
 type EnvInfo = {
     name: string;
