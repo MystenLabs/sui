@@ -209,6 +209,21 @@ mod tests {
     }
 
     fn check_move_unit_tests(path: &Path) {
+        // build tests first to enable Sui-specific test code verification
+        matches!(
+            build_move_package(
+                path,
+                BuildConfig {
+                    config: MoveBuildConfig {
+                        test_mode: true, // make sure to verify tests
+                        ..MoveBuildConfig::default()
+                    },
+                    run_bytecode_verifier: true,
+                    print_diags_to_stderr: true,
+                },
+            ),
+            Ok(_)
+        );
         assert_eq!(
             run_move_unit_tests(path, MoveBuildConfig::default(), None, false).unwrap(),
             UnitTestResult::Success
