@@ -10,11 +10,12 @@ import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
 import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
 import { isKeyringPayload } from '_payloads/keyring';
+import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import { setKeyringStatus } from '_redux/slices/account';
-import { setActiveOrigin } from '_redux/slices/app';
+import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
@@ -32,6 +33,7 @@ import type {
 import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
+import type { NetworkEnvType } from '_src/background/NetworkEnv';
 import type { AppDispatch } from '_store';
 
 /**
@@ -59,6 +61,7 @@ export class BackgroundClient {
             this.sendGetTransactionRequests(),
             this.getWalletStatus(),
             this.loadFeatures(),
+            this.getNetwork(),
         ]).then(() => undefined);
     }
 
@@ -245,6 +248,17 @@ export class BackgroundClient {
         );
     }
 
+    public async setActiveNetworkEnv(network: NetworkEnvType) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<SetNetworkPayload>({
+                    type: 'set-network',
+                    network,
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();
@@ -283,6 +297,16 @@ export class BackgroundClient {
         );
     }
 
+    private async getNetwork() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<BasePayload>({
+                    type: 'get-network',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -307,6 +331,10 @@ export class BackgroundClient {
             action = setKeyringStatus(payload.return);
         } else if (isLoadedFeaturesPayload(payload)) {
             growthbook.setFeatures(payload.features);
+        } else if (isSetNetworkPayload(payload)) {
+            action = changeActiveNetwork({
+                network: payload.network,
+            });
         }
         if (action) {
             this._dispatch(action);
