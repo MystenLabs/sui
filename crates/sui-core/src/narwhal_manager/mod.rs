@@ -7,13 +7,14 @@ pub mod narwhal_manager_tests;
 
 use arc_swap::ArcSwap;
 use fastcrypto::traits::KeyPair;
-use mysten_metrics::{monitored_scope, RegistryService};
+use mysten_metrics::RegistryService;
 use narwhal_config::{Committee, Epoch, Parameters, SharedWorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::NodeStorage;
 use narwhal_worker::TransactionValidator;
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -36,6 +37,44 @@ pub struct NarwhalConfiguration {
     pub registry_service: RegistryService,
 }
 
+pub struct NarwhalManagerMetrics {
+    start_latency: IntGauge,
+    shutdown_latency: IntGauge,
+    start_primary_retries: IntGauge,
+    start_worker_retries: IntGauge,
+}
+
+impl NarwhalManagerMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            start_latency: register_int_gauge_with_registry!(
+                "narwhal_manager_start_latency",
+                "The latency of starting up narwhal nodes",
+                registry,
+            )
+            .unwrap(),
+            shutdown_latency: register_int_gauge_with_registry!(
+                "narwhal_manager_shutdown_latency",
+                "The latency of shutting down narwhal nodes",
+                registry,
+            )
+            .unwrap(),
+            start_primary_retries: register_int_gauge_with_registry!(
+                "narwhal_manager_start_primary_retries",
+                "The number of retries took to start narwhal primary node",
+                registry
+            )
+            .unwrap(),
+            start_worker_retries: register_int_gauge_with_registry!(
+                "narwhal_manager_start_worker_retries",
+                "The number of retries took to start narwhal worker node",
+                registry
+            )
+            .unwrap(),
+        }
+    }
+}
+
 pub struct NarwhalManager {
     storage_base_path: PathBuf,
     primary_keypair: AuthorityKeyPair,
@@ -44,10 +83,11 @@ pub struct NarwhalManager {
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
     running: Mutex<Running>,
+    metrics: NarwhalManagerMetrics,
 }
 
 impl NarwhalManager {
-    pub fn new(config: NarwhalConfiguration) -> Self {
+    pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node = PrimaryNode::new(
             config.parameters.clone(),
@@ -67,6 +107,7 @@ impl NarwhalManager {
             worker_ids_and_keypairs: config.worker_ids_and_keypairs,
             storage_base_path: config.storage_base_path,
             running: Mutex::new(Running::False),
+            metrics,
         }
     }
 
@@ -90,7 +131,7 @@ impl NarwhalManager {
             return;
         }
 
-        let _guard = monitored_scope("NarwhalManagerStart");
+        let now = Instant::now();
 
         // Create a new store
         let store_path = self.get_store_path(committee.epoch());
@@ -98,12 +139,12 @@ impl NarwhalManager {
 
         let name = self.primary_keypair.public().clone();
 
-        let now = Instant::now();
         tracing::info!("Starting up Narwhal for epoch {}", committee.epoch());
 
         // start primary
-        let mut retries_left = 2;
-        while retries_left > 0 {
+        const MAX_PRIMARY_RETRIES: u32 = 2;
+        let mut primary_retries = 0;
+        loop {
             match self
                 .primary_node
                 .start(
@@ -120,19 +161,20 @@ impl NarwhalManager {
                     break;
                 }
                 Err(e) => {
-                    if retries_left <= 0 {
+                    primary_retries += 1;
+                    if primary_retries >= MAX_PRIMARY_RETRIES {
                         panic!("Unable to start Narwhal Primary: {:?}", e);
                     }
                     tracing::error!("Unable to start Narwhal Primary: {:?}, retrying", e);
-                    retries_left -= 1;
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
         }
 
         // Start Narwhal Workers with configuration
-        let mut retries_left = 2;
-        while retries_left > 0 {
+        const MAX_WORKER_RETRIES: u32 = 2;
+        let mut worker_retries = 0;
+        loop {
             // Copy the config for this iteration of the loop
             let id_keypair_copy = self
                 .worker_ids_and_keypairs
@@ -156,11 +198,11 @@ impl NarwhalManager {
                     break;
                 }
                 Err(e) => {
-                    if retries_left <= 0 {
+                    worker_retries += 1;
+                    if worker_retries >= MAX_WORKER_RETRIES {
                         panic!("Unable to start Narwhal Worker: {:?}", e);
                     }
                     tracing::error!("Unable to start Narwhal Worker: {:?}, retrying", e);
-                    retries_left -= 1;
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
@@ -172,6 +214,15 @@ impl NarwhalManager {
             now.elapsed().as_secs_f64()
         );
 
+        self.metrics
+            .start_latency
+            .set(now.elapsed().as_secs_f64() as i64);
+
+        self.metrics
+            .start_primary_retries
+            .set(primary_retries as i64);
+        self.metrics.start_worker_retries.set(worker_retries as i64);
+
         *running = Running::True(committee.epoch());
     }
 
@@ -182,8 +233,6 @@ impl NarwhalManager {
 
         match *running {
             Running::True(epoch) => {
-                let _guard = monitored_scope("NarwhalManagerShutdown");
-
                 let now = Instant::now();
                 tracing::info!("Shutting down Narwhal epoch {:?}", epoch);
 
@@ -195,6 +244,10 @@ impl NarwhalManager {
                     epoch,
                     now.elapsed().as_secs_f64()
                 );
+
+                self.metrics
+                    .shutdown_latency
+                    .set(now.elapsed().as_secs_f64() as i64);
             }
             Running::False => {
                 tracing::info!(
