@@ -118,7 +118,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         const moveCall = unserializedTxn.data as MoveCallTransaction;
         for (const arg of moveCall.arguments) {
           if (isPureArg(arg)) {
-            throw new Error('PureArg is not allowed as argument in RpcTxnDataSerializer');
+            throw new Error('PureArg is not allowed as argument in RpcTxnDataSerializer. Please use LocalTxnDataSerializer instead.');
           }
         }
         endpoint = 'sui_moveCall';
