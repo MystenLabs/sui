@@ -201,7 +201,11 @@ impl HistogramCollector {
         let mut deadline = Instant::now();
         loop {
             // We calculate deadline here instead of just using sleep inside cycle to avoid accumulating error
-            deadline += Duration::from_secs(1);
+            #[cfg(test)]
+            const HISTOGRAM_WINDOW_SEC: u64 = 1;
+            #[cfg(not(test))]
+            const HISTOGRAM_WINDOW_SEC: u64 = 60;
+            deadline += Duration::from_secs(HISTOGRAM_WINDOW_SEC);
             if self.cycle(deadline).await.is_err() {
                 return;
             }
@@ -212,7 +216,7 @@ impl HistogramCollector {
         let mut labeled_data: HashMap<HistogramLabels, Vec<Point>> = HashMap::new();
         let mut count = 0usize;
         let mut timeout = tokio::time::sleep_until(deadline).boxed();
-        const MAX_POINTS: usize = 100_000;
+        const MAX_POINTS: usize = 500_000;
         loop {
             tokio::select! {
              _ = &mut timeout => {
