@@ -19,6 +19,14 @@ module sui::transfer {
     /// longer be transferred or mutated.
     public native fun freeze_object<T: key>(obj: T);
 
+    spec freeze_object {
+        pragma opaque;
+        aborts_if [abstract] sui::prover::owned(obj);
+        modifies [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] exists<sui::prover::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).status == 3 /* IMMUTABLE */;
+    }
+
     /// Turn the given object into a mutable shared object that everyone
     /// can access and mutate. This is irreversible, i.e. once an object
     /// is shared, it will stay shared forever.
@@ -26,7 +34,24 @@ module sui::transfer {
     /// in this transaction. This restriction may be relaxed in the future.
     public native fun share_object<T: key>(obj: T);
 
+    spec share_object {
+        pragma opaque;
+        aborts_if [abstract] sui::prover::owned(obj);
+        modifies [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] exists<sui::prover::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).status == 2 /* SHARED */;
+    }
+
     native fun transfer_internal<T: key>(obj: T, recipient: address);
+
+    spec transfer_internal {
+        pragma opaque;
+        aborts_if [abstract] false;
+        modifies [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] exists<sui::prover::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).owner == recipient;
+        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).status == 1 /* OWNED */;
+    }
 
     // Cost calibration functions
     #[test_only]

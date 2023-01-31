@@ -12,61 +12,6 @@ procedure {:inline 1} $2_address_to_u256(addr: int) returns (res: int);
 procedure {:inline 1} $2_address_from_u256(num: int) returns (res: int);
 
 // ==================================================================================
-// Native transfer
-
-const INVALID_ADDR: int;
-axiom INVALID_ADDR == -1;
-
-
-function {:inline} ownership_update<T>(m: $Memory T, id: int, v: T): $Memory T {
-    $Memory(domain#$Memory(m)[id := true], contents#$Memory(m)[id := v])
-}
-
-{%- for instance in transfer_instances %}
-
-{%- set S = "'" ~ instance.suffix ~ "'" -%}
-{%- set T = instance.name -%}
-
-// ----------------------------------------------------------------------------------
-// Native transfer implementation for object type `{{instance.suffix}}`
-
-procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int) {
-    var id: int;
-    var v: $2_prover_Ownership;
-    id := $bytes#$2_object_ID($2_object_$id{{S}}(obj));
-    v := $2_prover_Ownership(recipient, 1);
-    $2_prover_Ownership_$memory := ownership_update($2_prover_Ownership_$memory, id, v);
-}
-
-procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}}) {
-    var id: int;
-    var v: $2_prover_Ownership;
-    if ($2_prover_owned{{S}}($2_prover_Ownership_$memory, obj)) {
-        call $ExecFailureAbort();
-        return;
-    }
-
-    id := $bytes#$2_object_ID($2_object_$id{{S}}(obj));
-    v := $2_prover_Ownership(INVALID_ADDR, 2);
-    $2_prover_Ownership_$memory := ownership_update($2_prover_Ownership_$memory, id, v);
-}
-
-procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}}) {
-    var id: int;
-    var v: $2_prover_Ownership;
-    if ($2_prover_owned{{S}}($2_prover_Ownership_$memory, obj)) {
-        call $ExecFailureAbort();
-        return;
-    }
-
-    id := $bytes#$2_object_ID($2_object_$id{{S}}(obj));
-    v := $2_prover_Ownership(INVALID_ADDR, 3);
-    $2_prover_Ownership_$memory := ownership_update($2_prover_Ownership_$memory, id, v);
-}
-
-{%- endfor %}
-
-// ==================================================================================
 // Native object
 
 
