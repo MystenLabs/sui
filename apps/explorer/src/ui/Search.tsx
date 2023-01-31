@@ -6,9 +6,15 @@ import { Search16 } from '@mysten/icons';
 import { LoadingSpinner } from './LoadingSpinner';
 import { Text } from './Text';
 
-type SearchResult = {
-    id: number;
+export type SearchResult = {
+    id: string;
     label: string;
+    type: string;
+};
+
+export type SearchResults = {
+    label: string;
+    results: SearchResult[];
 };
 
 export interface SearchProps {
@@ -16,10 +22,9 @@ export interface SearchProps {
     onSelectResult: (result: SearchResult) => void;
     placeholder?: string;
     isLoading: boolean;
-    name?: string;
-    options?: Record<string, SearchResult[]>;
+    options?: SearchResults[];
     value?: SearchResult;
-    inputValue: string;
+    queryValue: string;
 }
 
 export interface SearchResultProps {
@@ -31,7 +36,7 @@ export interface SearchResultProps {
 function SearchItem({ value, children }: SearchResultProps) {
     return (
         <Combobox.Option
-            className="cursor-pointer rounded-md bg-opacity-10 py-1.5 pl-2 ui-active:bg-sui ui-active:bg-opacity-10 ui-active:shadow-sm"
+            className="cursor-pointer rounded-md bg-opacity-10 py-1.5 pl-2 ui-active:bg-sui/10 ui-active:shadow-sm"
             value={value}
             key={value.id}
         >
@@ -46,73 +51,52 @@ export function Search({
     onChange,
     onSelectResult,
     placeholder,
-    name = 'search',
-    options = {},
+    options = [],
     isLoading = false,
-    inputValue,
+    queryValue,
     value,
 }: SearchProps) {
-    const hasOptions = Object.entries(options).some(
-        ([k, v]) => !!v && Object.keys(v).length
-    );
+    const hasOptions = options.some((group) => group.results.length > 0);
     return (
         <Combobox
             value={value}
             onChange={onSelectResult}
-            name={name}
-            data-testid={`${name}-root`}
             as="div"
             className="relative flex w-full flex-col"
         >
             <Combobox.Input
-                data-testid={`${name}-input`}
                 displayValue={(value: SearchResult) => value.label}
-                className="text-white/0.4 border-1 h-[2rem] w-full rounded-md border-transparent bg-search-fill pl-2 text-xs leading-8 text-white focus:border-solid focus:border-sui"
+                className="border-1 w-full rounded-md border-transparent bg-search-fill pl-2 leading-8 text-white/20 placeholder:text-xs placeholder:text-white/20 focus:border-solid focus:border-sui focus:text-white"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
-                value={inputValue}
+                value={queryValue}
             />
-            <button
-                type="button"
-                className="text-white/0.4 absolute inset-y-0 right-0 flex items-center border-none bg-transparent text-2xl focus:outline-none"
-            >
-                <Search16 className="bg-search-fill text-white opacity-40" />
-            </button>
 
-            {inputValue && (
-                <Combobox.Options
-                    className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md"
-                    data-testid={`${name}-results`}
-                >
+            <Search16 className="absolute right-0 top-0 bg-search-fill text-white opacity-0" />
+
+            {queryValue && (
+                <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
                     {isLoading ? (
                         <div className="flex items-center justify-center">
                             <LoadingSpinner />
                         </div>
                     ) : hasOptions ? (
-                        Object.entries(options).map(([key, results], idx) => {
+                        options.map(({ label, results }) => {
                             if (!results.length) return null;
                             return (
-                                <div
-                                    className={
-                                        idx !==
-                                        Object.entries(options).length - 1
-                                            ? 'mb-4'
-                                            : ''
-                                    }
-                                    key={key}
-                                >
+                                <div key={label}>
                                     {!!results?.length && (
                                         <div className="mb-2">
                                             <Text
                                                 color="steel-dark"
                                                 variant="captionSmall/medium"
                                             >
-                                                {key}
+                                                {label}
                                             </Text>
                                         </div>
                                     )}
-                                    {results?.map((item: any) => {
+                                    {results?.map((item) => {
                                         return (
                                             <SearchItem
                                                 key={item.id}

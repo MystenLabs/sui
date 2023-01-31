@@ -56,7 +56,7 @@ export const Default: StoryObj<SearchProps> = {
             <div className="flex h-screen w-screen bg-headerNav p-10">
                 <div className="w-[500px] ">
                     <Search
-                        inputValue={query}
+                        queryValue={query}
                         isLoading={false}
                         onChange={(e) => setQuery(e.currentTarget.value)}
                         placeholder="Search Addresses / Objects / Transactions / Epochs"

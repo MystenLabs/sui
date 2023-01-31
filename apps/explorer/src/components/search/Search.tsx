@@ -4,29 +4,32 @@ import React, { useState, useCallback } from 'react';
 
 import { useDebouncedValue } from '~/hooks/useDebouncedValue';
 import { useSearch } from '~/hooks/useSearch';
-import { Search as SearchBox } from '~/ui/Search';
+import { Search as SearchBox, type SearchResult } from '~/ui/Search';
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
 
 function Search() {
-    const [input, setInput] = useState('');
-    const query = useDebouncedValue(input);
-    const { isLoading, data: results } = useSearch(query);
+    const [query, setQuery] = useState('');
+    const debouncedQuery = useDebouncedValue(query);
+    const { isLoading, data: results } = useSearch(debouncedQuery);
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
-            setInput(e.currentTarget.value.trim()),
-        [setInput]
+            setQuery(e.currentTarget.value.trim()),
+        [setQuery]
     );
     const navigate = useNavigateWithQuery();
     const handleSelectResult = useCallback(
-        (result: any) => {
+        (result: SearchResult) => {
             navigate(`/${result.type}/${encodeURIComponent(result.id)}`, {});
         },
         [navigate]
     );
+
+    console.log(results);
+
     return (
         <div className="flex max-w-lg">
             <SearchBox
-                inputValue={input}
+                queryValue={query}
                 onChange={handleTextChange}
                 onSelectResult={handleSelectResult}
                 placeholder="Search Addresses / Objects / Transactions / Epochs"

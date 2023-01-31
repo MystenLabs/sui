@@ -6,9 +6,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { faucet, mint } from './utils/localnet';
 
 async function search(page: Page, text: string) {
-    const searchbar = page.getByTestId('search-input');
+    const searchbar = await page.getByRole('combobox');
     await searchbar.fill(text);
-    const result = page.getByRole('option');
+    const result = await page.getByRole('option').first();
     await result.click();
 }
 
