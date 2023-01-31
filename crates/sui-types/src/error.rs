@@ -681,6 +681,10 @@ impl ExecutionError {
         &self.inner.kind
     }
 
+    pub fn source(&self) -> &Option<BoxError> {
+        &self.inner.source
+    }
+
     pub fn to_execution_status(&self) -> ExecutionFailureStatus {
         self.kind().clone()
     }
