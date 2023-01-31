@@ -57,6 +57,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  CoinStruct,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -437,9 +438,9 @@ export class JsonRpcProvider extends Provider {
 
   async getGasObjectsOwnedByAddress(
     address: SuiAddress
-  ): Promise<SuiObjectInfo[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
+  ): Promise<CoinStruct[]> {
+    const objects = await this.getCoins(address, SUI_TYPE_ARG);
+    return objects.data;
   }
 
   /**

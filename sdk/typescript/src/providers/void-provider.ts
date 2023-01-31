@@ -44,6 +44,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  CoinStruct,
 } from '../types';
 import { Provider } from './provider';
 
@@ -121,7 +122,7 @@ export class VoidProvider extends Provider {
 
   async getGasObjectsOwnedByAddress(
     _address: string
-  ): Promise<SuiObjectInfo[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
