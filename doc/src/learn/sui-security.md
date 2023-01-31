@@ -13,7 +13,7 @@ Before diving into this be sure to read [How Sui Works?](how-sui-works.md) to fa
 We designed Sui to provide very high security guarantees to asset owners. We ensure that assets on Sui can be used only by their owners, according to the logic pre-defined by smart contracts that can be audited, and that the network will be available to process them correctly despite some of the validators operating Sui not following the protocol correctly (fault tolerance).
 
 The security features of the Sui system ensure a number of properties:
-* Only the owner of an owned asset can authorize a transaction that operates on this asset. Authoritzation is performed through the use of a private signature key that is known only to the asset owner.
+* Only the owner of an owned asset can authorize a transaction that operates on this asset. Authorization is performed through the use of a private signature key that is known only to the asset owner.
 * Everyone can operate on shared assets or immutable assets, but additional access control logic can be implemented by the smart contract. 
 * Transactions operate on assets according to predefined rules set by the smart contract creator that defined the asset type. These are expressed using the Move language.
 * Once a transaction is finalized, its effects - namely changes to the assets it operates on or new assets created - will be persisted, and the resulting assets will be available for further processing.
