@@ -145,7 +145,6 @@ sudo apt-get install libclang-dev
 
 ### libpq-dev
 
-Fix [`/usr/bin/ld: cannot find -lpq`](https://github.com/MystenLabs/sui/issues/6578) issue.
 
 Use the following command to install `libpq-dev`:
 
