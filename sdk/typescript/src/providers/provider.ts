@@ -47,7 +47,7 @@ import {
   CommitteeInfo,
 } from '../types';
 
-import { DynamicFieldPage } from '../types/dynamic_fields';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 
 ///////////////////////////////
 // Exported Abstracts
@@ -356,7 +356,7 @@ export abstract class Provider {
    */
   abstract getDynamicFieldObject(
     parent_object_id: ObjectId,
-    name: string,
+    name: DynamicFieldName,
   ): Promise<GetObjectDataResponse>;
 
   /**

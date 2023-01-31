@@ -4,11 +4,11 @@
 use std::fmt;
 
 use crate::sui_serde::Readable;
+use crate::sui_serde::ToArray;
 use fastcrypto::encoding::{Base58, Base64, Encoding};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
-
 /// A representation of a SHA3-256 Digest
 #[serde_as]
 #[derive(
@@ -16,7 +16,7 @@ use serde_with::{serde_as, Bytes};
 )]
 pub struct Sha3Digest(
     #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
+    #[serde_as(as = "Readable<ToArray<Base58>, Bytes>")]
     [u8; 32],
 );
 
@@ -464,7 +464,7 @@ impl fmt::UpperHex for TransactionEffectsDigest {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[serde_as(as = "Readable<ToArray<Base64>, Bytes>")]
     [u8; 32],
     // Sha3Digest,
 );

@@ -17,7 +17,6 @@ use crate::{
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
-use fastcrypto::encoding::{Base58, Encoding, Hex};
 use fastcrypto::traits::Signer;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
