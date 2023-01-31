@@ -581,7 +581,7 @@ The publish might fail for other reasons, as well, based on dependency verificat
 * The address supplied for the dependency points to an object instead of a package.
 * The CLI fails to connect to the node to fetch the package.
 
-Include the `--skip-dependency-verification` flag to bypass default verification of dependencies. 
+If your package fails to publish because of an error in dependency verification, you must find and include the correct and verifiable source package for the failing dependency. If you fully understand the circumstances preventing your package from passing the dependency verification, and you appreciate the risk involved with skipping that verification, you can add the `--skip-dependency-verification` flag to the `sui client publish` command to bypass the dependency check.
 
 **Note:** If your package includes unpublished depenedencies, you can add the `--with-unpublished-dependencies` flag to the `sui client publish` command to include modules from those packages in the published build.
 
