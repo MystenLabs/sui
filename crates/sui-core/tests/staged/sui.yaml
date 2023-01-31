@@ -12,8 +12,6 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
-AuthorityPublicKeyBytes:
-  NEWTYPESTRUCT: BYTES
 BLS12381Signature:
   STRUCT:
     - sig:

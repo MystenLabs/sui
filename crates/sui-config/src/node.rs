@@ -474,7 +474,6 @@ pub struct KeyPairWithPath {
 #[serde(untagged)]
 enum KeyPairLocation {
     InPlace {
-        #[serde_as(as = "Arc<KeyPairBase64>")]
         value: Arc<SuiKeyPair>,
     },
     File {
