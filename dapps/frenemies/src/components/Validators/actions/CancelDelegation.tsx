@@ -61,7 +61,7 @@ export function CancelDelegation({ stake }: Props) {
       disabled={!coins?.length}
       onClick={() => withdrawDelegation.mutate()}
     >
-      Cancel
+      Unstake
     </StakeButton>
   );
 }
