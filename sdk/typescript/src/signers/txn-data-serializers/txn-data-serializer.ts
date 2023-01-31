@@ -6,16 +6,22 @@ import { ObjectId, SuiAddress, SuiJsonValue, TypeTag } from '../../types';
 
 ///////////////////////////////
 // Exported Types
-export interface TransferObjectTransaction {
+export interface TransactionCommon {
+  /* This field is required for regular transaction but can be omitted for devinspect transaction */
+  gasBudget?: number;
+  /* If omitted, reference gas price fetched from the connected fullnode will be used */
+  gasPrice?: number;
+}
+
+export interface TransferObjectTransaction extends TransactionCommon {
   objectId: ObjectId;
   gasPayment?: ObjectId;
   gasBudget: number;
   recipient: SuiAddress;
 }
 
-export interface TransferSuiTransaction {
+export interface TransferSuiTransaction extends TransactionCommon {
   suiObjectId: ObjectId;
-  gasBudget: number;
   recipient: SuiAddress;
   amount: number | null;
 }
@@ -24,7 +30,7 @@ export interface TransferSuiTransaction {
 /// The object specified in the `gas` field will be used to pay the gas fee for the transaction.
 /// The gas object can not appear in `input_coins`. If the gas object is not specified, the RPC server
 /// will auto-select one.
-export interface PayTransaction {
+export interface PayTransaction extends TransactionCommon {
   /**
    * use `provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual` to
    * derive a minimal set of coins with combined balance greater than or
@@ -34,7 +40,6 @@ export interface PayTransaction {
   recipients: SuiAddress[];
   amounts: number[];
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
 /// Send SUI coins to a list of addresses, following a list of amounts.
@@ -46,7 +51,7 @@ export interface PayTransaction {
 /// input coin, then use the first input coin as the gas coin object.
 /// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
 /// 4. all other input coins other than the first one are deleted.
-export interface PaySuiTransaction {
+export interface PaySuiTransaction extends TransactionCommon {
   /**
    * use `provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual` to
    * derive a minimal set of coins with combined balance greater than or
@@ -55,7 +60,6 @@ export interface PaySuiTransaction {
   inputCoins: ObjectId[];
   recipients: SuiAddress[];
   amounts: number[];
-  gasBudget: number;
 }
 
 /// Send all SUI coins to one recipient.
@@ -65,34 +69,30 @@ export interface PaySuiTransaction {
 /// 2. transfer the updated first coin to the recipient and also use this first coin as gas coin object.
 /// 3. the balance of the first input coin after tx is sum(input_coins) - actual_gas_cost.
 /// 4. all other input coins other than the first are deleted.
-export interface PayAllSuiTransaction {
+export interface PayAllSuiTransaction extends TransactionCommon {
   inputCoins: ObjectId[];
   recipient: SuiAddress;
-  gasBudget: number;
 }
 
-export interface MergeCoinTransaction {
+export interface MergeCoinTransaction extends TransactionCommon {
   primaryCoin: ObjectId;
   coinToMerge: ObjectId;
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
-export interface SplitCoinTransaction {
+export interface SplitCoinTransaction extends TransactionCommon {
   coinObjectId: ObjectId;
   splitAmounts: number[];
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
-export interface MoveCallTransaction {
+export interface MoveCallTransaction extends TransactionCommon {
   packageObjectId: ObjectId;
   module: string;
   function: string;
   typeArguments: string[] | TypeTag[];
   arguments: SuiJsonValue[];
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
 export interface RawMoveCall {
@@ -173,10 +173,9 @@ export type SignableTransactionData = SignableTransaction['data'];
  * ```
  *
  */
-export interface PublishTransaction {
+export interface PublishTransaction extends TransactionCommon {
   compiledModules: ArrayLike<string> | ArrayLike<ArrayLike<number>>;
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
 export type TransactionBuilderMode = 'Commit' | 'DevInspect';

@@ -51,7 +51,8 @@ describe('Transaction Serialization and deserialization', () => {
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const version = await toolbox.provider.getRpcApiVersion();
-    const useIntentSigning = version != null && version.major >= 0 && version.minor > 18;
+    const useIntentSigning =
+      version != null && version.major >= 0 && version.minor > 18;
     const deserialized =
       (await localSerializer.deserializeTransactionBytesToSignableTransaction(
         useIntentSigning,
@@ -59,9 +60,12 @@ describe('Transaction Serialization and deserialization', () => {
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
 
-    const deserializedTxnData =
-      deserializeTransactionBytesToTransactionData(useIntentSigning, localTxnBytes);
-    const reserialized = await localSerializer.serializeTransactionData(useIntentSigning,
+    const deserializedTxnData = deserializeTransactionBytesToTransactionData(
+      useIntentSigning,
+      localTxnBytes
+    );
+    const reserialized = await localSerializer.serializeTransactionData(
+      useIntentSigning,
       deserializedTxnData
     );
     expect(reserialized).toEqual(localTxnBytes);
@@ -70,6 +74,7 @@ describe('Transaction Serialization and deserialization', () => {
         ...deserialized.data,
         gasBudget: Number(deserialized.data.gasBudget.toString(10)),
         gasPayment: '0x' + deserialized.data.gasPayment,
+        gasPrice: Number(deserialized.data.gasPrice!.toString(10)),
       };
       return normalized;
     }
@@ -111,7 +116,6 @@ describe('Transaction Serialization and deserialization', () => {
       arguments: [coins[0].objectId],
       gasBudget: DEFAULT_GAS_BUDGET,
     };
-
     await serializeAndDeserialize(moveCall);
   });
 
