@@ -38,6 +38,7 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSI
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
+pub const MAX_DELEGATION_GAS: u64 = 15_000;
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -413,7 +414,7 @@ pub fn make_delegation_transaction(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
             CallArg::Pure(bcs::to_bytes(&validator).unwrap()),
         ],
-        MAX_GAS,
+        MAX_DELEGATION_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
