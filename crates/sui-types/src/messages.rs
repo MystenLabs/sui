@@ -283,6 +283,28 @@ impl MoveCall {
             .chain([InputObjectKind::MovePackage(package.0)])
             .collect()
     }
+
+    fn type_argument_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &TypeTag) {
+        let mut stack = vec![type_argument];
+        while let Some(cur) = stack.pop() {
+            match cur {
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::Address
+                | TypeTag::Signer
+                | TypeTag::U16
+                | TypeTag::U32
+                | TypeTag::U256 => (),
+                TypeTag::Vector(inner) => stack.push(inner),
+                TypeTag::Struct(struct_tag) => {
+                    packages.insert(struct_tag.address.into());
+                    stack.extend(struct_tag.type_params.iter())
+                }
+            }
+        }
+    }
 }
 
 impl SingleTransactionKind {
@@ -348,6 +370,21 @@ impl SingleTransactionKind {
         match &self {
             Self::Call(call @ MoveCall { .. }) => Some(call),
             _ => None,
+        }
+    }
+
+    pub fn type_argument_packages(&self) -> Vec<InputObjectKind> {
+        if let Self::Call(MoveCall { type_arguments, .. }) = self {
+            let mut packages = BTreeSet::new();
+            for type_argument in type_arguments {
+                MoveCall::type_argument_packages(&mut packages, type_argument)
+            }
+            packages
+                .into_iter()
+                .map(InputObjectKind::MovePackage)
+                .collect()
+        } else {
+            Vec::new()
         }
     }
 
@@ -546,6 +583,15 @@ impl TransactionKind {
             .flatten()
             .collect();
         Ok(inputs)
+    }
+
+    pub fn type_argument_packages(&self) -> Vec<InputObjectKind> {
+        self.single_transactions()
+            .map(|s| s.type_argument_packages())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .flatten()
+            .collect()
     }
 
     pub fn shared_input_objects(
@@ -901,6 +947,10 @@ impl TransactionData {
             .single_transactions()
             .flat_map(|s| s.move_call())
             .collect()
+    }
+
+    pub fn type_argument_packages(&self) -> Vec<InputObjectKind> {
+        self.kind.type_argument_packages()
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {

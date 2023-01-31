@@ -137,13 +137,12 @@ impl TransactionManager {
                 continue;
             }
 
+            let mut package_inputs = cert.data().intent_message.value.type_argument_packages();
+            package_inputs.extend_from_slice(&cert.data().intent_message.value.input_objects()?);
+
             let missing = self
                 .authority_store
-                .get_missing_input_objects(
-                    &digest,
-                    &cert.data().intent_message.value.input_objects()?,
-                    epoch_store,
-                )
+                .get_missing_input_objects(&digest, &package_inputs, epoch_store)
                 .expect("Are shared object locks set prior to enqueueing certificates?");
 
             if missing.is_empty() {
