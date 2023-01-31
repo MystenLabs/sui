@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-    bcsForVersion,
+  bcsForVersion,
   deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
@@ -57,11 +57,10 @@ describe('Transaction Serialization and deserialization', () => {
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
 
-    const deserializedTxnData =
-      deserializeTransactionBytesToTransactionData(
-        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
-        localTxnBytes,
-      );
+    const deserializedTxnData = deserializeTransactionBytesToTransactionData(
+      bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+      localTxnBytes
+    );
     const reserialized = await localSerializer.serializeTransactionData(
       deserializedTxnData
     );
@@ -71,6 +70,7 @@ describe('Transaction Serialization and deserialization', () => {
         ...deserialized.data,
         gasBudget: Number(deserialized.data.gasBudget!.toString(10)),
         gasPayment: '0x' + deserialized.data.gasPayment,
+        gasPrice: Number(deserialized.data.gasPrice!.toString(10)),
       };
       return normalized;
     }
@@ -112,7 +112,6 @@ describe('Transaction Serialization and deserialization', () => {
       arguments: [coins[0].objectId],
       gasBudget: DEFAULT_GAS_BUDGET,
     };
-
     await serializeAndDeserialize(moveCall);
   });
 
