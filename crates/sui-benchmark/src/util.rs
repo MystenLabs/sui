@@ -173,7 +173,7 @@ pub async fn generate_all_gas_for_test(
     info!(
         "Generating gas with number of coins for shared counter init = {:?}, number of coins for \
     shared counter payloads = {:?}, number of transfer object token = {:?}, number of coins for \
-    transfer object payloads = {:?}",
+    transfer object payloads = {:?}, number of coins for delegation payloads = {:?}",
         workload_gas_config
             .shared_counter_workload_init_gas_config
             .len(),
@@ -183,7 +183,8 @@ pub async fn generate_all_gas_for_test(
         workload_gas_config.transfer_object_workload_tokens.len(),
         workload_gas_config
             .transfer_object_workload_payload_gas_config
-            .len()
+            .len(),
+        workload_gas_config.delegation_gas_configs.len(),
     );
     let mut coin_configs = vec![];
     coin_configs.extend(
