@@ -133,7 +133,7 @@ pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
 
 // The epoch at which we start removing events from effects
-const REMOVE_EFFECTS_EPOCH: u64 = 0;
+const REMOVE_EFFECTS_EPOCH: u64 = 7;
 
 type CertTxGuard<'a> = DBTxGuard<
     'a,
