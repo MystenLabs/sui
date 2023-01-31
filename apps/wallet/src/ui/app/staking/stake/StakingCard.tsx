@@ -13,6 +13,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
+import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -153,6 +154,7 @@ function StakingCard() {
         return delegationData.delegation_status.Active.id.id;
     }, [delegationData]);
 
+    const gasPrice = useReferenceGasPrice();
     const navigate = useNavigate();
     const signer = useSigner();
     const allSuiCoinsSelector = useMemo(
@@ -180,7 +182,8 @@ function StakingCard() {
                 signer,
                 allSuiCoins,
                 amount,
-                validatorAddress
+                validatorAddress,
+                gasPrice.data!
             );
             return response;
         },
@@ -394,7 +397,8 @@ function StakingCard() {
                                         !isValid ||
                                         isSubmitting ||
                                         (unstake && !delegationId) ||
-                                        gasBudget.isLoading
+                                        gasBudget.isLoading ||
+                                        gasPrice.isLoading
                                     }
                                 >
                                     {isSubmitting ? (

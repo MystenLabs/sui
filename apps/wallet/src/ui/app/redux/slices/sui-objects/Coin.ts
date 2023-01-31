@@ -92,13 +92,14 @@ export class Coin {
         signer: SignerWithProvider,
         coins: SuiMoveObject[],
         amount: bigint,
-        validator: SuiAddress
+        validator: SuiAddress,
+        gasPrice: number
     ): Promise<SuiExecuteTransactionResponse> {
         const stakeCoin = await this.coinManageForStake(
             signer,
             coins,
             amount,
-            BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
+            BigInt(gasPrice * DEFAULT_GAS_BUDGET_FOR_STAKE)
         );
 
         return await signer.executeMoveCall({
