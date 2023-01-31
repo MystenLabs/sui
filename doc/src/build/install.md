@@ -145,7 +145,6 @@ sudo apt-get install libclang-dev
 
 ### libpq-dev
 
-
 Use the following command to install `libpq-dev`:
 
 ```shell
@@ -153,7 +152,6 @@ sudo apt-get install libpq-dev
 ```
 
 Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
-
 
 ## macOS prerequisites
 
@@ -328,7 +326,7 @@ See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
 > **Note:** The previous `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run a network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
- 
+
 ## Next steps
 
 Continue your journey through:
