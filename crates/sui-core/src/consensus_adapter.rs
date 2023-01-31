@@ -264,12 +264,13 @@ impl ConsensusAdapter {
         tx_digest: &TransactionDigest,
     ) -> (Duration, usize) {
         let position = position_submit_certificate(committee, ourselves, tx_digest);
+        const PARALLEL_SUBMITS: usize = 2;
         const MAX_DELAY_MUL: usize = 10;
         // DELAY_STEP is chosen as 1.5 * mean consensus delay
         // In the future we can actually use information about consensus rounds instead of this delay
         const DELAY_STEP: Duration = Duration::from_secs(7);
         (
-            DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+            DELAY_STEP * std::cmp::min(position / PARALLEL_SUBMITS, MAX_DELAY_MUL) as u32,
             position,
         )
     }
