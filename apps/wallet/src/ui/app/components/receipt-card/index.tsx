@@ -87,88 +87,87 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         moveCallLabel === 'Staked' || moveCallLabel === 'Unstaked';
 
     return (
-        <>
-            <div className="block relative w-full">
-                <div className="flex mt-2.5 justify-center items-start">
-                    <StatusIcon status={isSuccessful} />
+        <div className="block relative w-full">
+            <div className="flex mt-2.5 justify-center items-start">
+                <StatusIcon status={isSuccessful} />
+            </div>
+            {timestamp_ms && (
+                <div className="my-3 flex justify-center">
+                    <DateCard timestamp={timestamp_ms} size="md" />
                 </div>
-                {timestamp_ms && (
-                    <div className="my-3 flex justify-center">
-                        <DateCard timestamp={timestamp_ms} size="md" />
-                    </div>
+            )}
+
+            <ReceiptCardBg status={isSuccessful}>
+                {isStakeTxn ? (
+                    moveCallLabel === 'Staked' ? (
+                        <StakeTxnCard
+                            amount={transferAmount.amount}
+                            txnEffects={effects}
+                        />
+                    ) : (
+                        <UnStakeTxnCard
+                            txn={txn}
+                            activeAddress={activeAddress}
+                            amount={transferAmount.amount}
+                        />
+                    )
+                ) : (
+                    <>
+                        {objectId && (
+                            <TxnImage
+                                id={objectId}
+                                label={isSender ? 'Sent' : 'Received'}
+                            />
+                        )}
+
+                        {transferAmount.amount > 0 ? (
+                            <div className="w-full">
+                                <TxnAmount
+                                    amount={transferAmount.amount}
+                                    label={isSender ? 'Sent' : 'Received'}
+                                    coinType={transferAmount.coinType}
+                                />
+                            </div>
+                        ) : null}
+
+                        {recipientAddress && (
+                            <TxnAddress
+                                address={recipientAddress}
+                                label={isSender ? 'To' : 'From'}
+                            />
+                        )}
+                    </>
                 )}
 
-                <ReceiptCardBg status={isSuccessful}>
-                    {isStakeTxn ? (
-                        moveCallLabel === 'Staked' ? (
-                            <StakeTxnCard
-                                amount={transferAmount.amount}
-                                txnEffects={effects}
-                            />
-                        ) : (
-                            <UnStakeTxnCard
-                                txn={txn}
-                                activeAddress={activeAddress}
-                                amount={transferAmount.amount}
-                            />
-                        )
-                    ) : (
-                        <>
-                            {objectId && (
-                                <TxnImage
-                                    id={objectId}
-                                    label={isSender ? 'Sent' : 'Received'}
-                                />
-                            )}
+                {gasTotal && isSender ? (
+                    <TxnGasSummery
+                        totalGas={gasTotal}
+                        transferAmount={
+                            transferAmount.amount > 0 &&
+                            moveCallLabel !== 'Unstaked'
+                                ? transferAmount.amount
+                                : null
+                        }
+                    />
+                ) : null}
 
-                            {transferAmount.amount > 0 ? (
-                                <div className="w-full">
-                                    <TxnAmount
-                                        amount={transferAmount.amount}
-                                        label={isSender ? 'Sent' : 'Received'}
-                                        coinType={transferAmount.coinType}
-                                    />
-                                </div>
-                            ) : null}
-
-                            {recipientAddress && (
-                                <TxnAddress
-                                    address={recipientAddress}
-                                    label={isSender ? 'To' : 'From'}
-                                />
-                            )}
-                        </>
-                    )}
-
-                    {gasTotal && isSender ? (
-                        <TxnGasSummery
-                            totalGas={gasTotal}
-                            transferAmount={
-                                transferAmount.amount > 0 &&
-                                moveCallLabel !== 'Unstaked'
-                                    ? transferAmount.amount
-                                    : null
-                            }
-                        />
-                    ) : null}
-
-                    <div className="flex gap-1.5 pt-3.75 w-full">
-                        <ExplorerLink
-                            type={ExplorerLinkType.transaction}
-                            transactionID={certificate.transactionDigest}
-                            title="View on Sui Explorer"
-                            className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
-                        >
-                            View on Explorer
-                        </ExplorerLink>
-                        <Icon
-                            icon={SuiIcons.ArrowLeft}
-                            className="text-steel text-p3 rotate-135"
-                        />
-                    </div>
-                </ReceiptCardBg>
-            </div>
-        </>
+                <div className="flex gap-1.5 pt-3.75 w-full">
+                    <ExplorerLink
+                        type={ExplorerLinkType.transaction}
+                        transactionID={certificate.transactionDigest}
+                        title="View on Sui Explorer"
+                        className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
+                        showIcon={false}
+                    >
+                        View on Explorer
+                    </ExplorerLink>
+                    <Icon
+                        icon={SuiIcons.ArrowLeft}
+                        className="text-steel text-p3 rotate-135"
+                    />
+                </div>
+            </ReceiptCardBg>
+        </div>
     );
 }
 

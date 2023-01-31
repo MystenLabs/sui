@@ -18,7 +18,6 @@ export function TxnAmount({ amount, coinType, label }: TxnAmountProps) {
             <Text variant="body" weight="medium" color="steel-darker">
                 {label}
             </Text>
-
             <div className="flex gap-1 items-center">
                 <Heading variant="heading2" weight="semibold" color="gray-90">
                     {formatAmount}

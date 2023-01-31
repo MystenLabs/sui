@@ -23,7 +23,7 @@ type StakeTxnCardProps = {
 const REQUEST_DELEGATION_EVENT = '0x2::validator_set::DelegationRequestEvent';
 
 // TODO: moveEvents is will be changing
-// For Staked Transaction use moveEvent Felids to get the validator address, delegation amount, epoch
+// For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
 export function StakeTxnCard({ txnEffects, amount }: StakeTxnCardProps) {
     const stakingData = useMemo(() => {
         if (!txnEffects?.events) return null;
