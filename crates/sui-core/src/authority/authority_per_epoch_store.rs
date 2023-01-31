@@ -683,6 +683,10 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn pending_consensus_certificates_count(&self) -> usize {
+        self.pending_consensus_certificates.lock().len()
+    }
+
     pub fn pending_consensus_certificates_empty(&self) -> bool {
         self.pending_consensus_certificates.lock().is_empty()
     }
