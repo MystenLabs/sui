@@ -17,8 +17,12 @@ import { isGenesisLibAddress } from '~/utils/api/searchUtil';
 const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
     const version = await rpc.getRpcApiVersion();
     let results: any = {};
-
-    if (isValidTransactionDigest(query, version)) {
+    if (
+        isValidTransactionDigest(
+            query,
+            version?.major === 0 && version?.minor < 18 ? 'base64' : 'base58'
+        )
+    ) {
         const txdata: SuiTransactionResponse =
             await rpc.getTransactionWithEffects(query);
         results.transaction = [
@@ -40,6 +44,13 @@ const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
                     type: 'address',
                 },
             ];
+            results.object = data
+                .map((obj) => ({
+                    id: obj.objectId,
+                    label: obj.objectId,
+                    type: 'object',
+                }))
+                .slice(0, 5);
         }
     }
 
