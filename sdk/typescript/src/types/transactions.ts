@@ -229,13 +229,18 @@ export const SuiCertifiedTransactionEffects = object({
 });
 
 export const SuiExecuteTransactionResponse = union([
-  object({ TxCert: object({ certificate: CertifiedTransaction }) }),
+  // TODO: remove after devnet 0.25.0(or 0.24.0) is released
   object({
     EffectsCert: object({
       certificate: CertifiedTransaction,
       effects: SuiCertifiedTransactionEffects,
       confirmed_local_execution: boolean(),
     }),
+  }),
+  object({
+    certificate: CertifiedTransaction,
+    effects: SuiCertifiedTransactionEffects,
+    confirmed_local_execution: boolean(),
   }),
 ]);
 export type SuiExecuteTransactionResponse = Infer<
@@ -338,8 +343,6 @@ export function getCertifiedTransaction(
 ): CertifiedTransaction | undefined {
   if ('certificate' in tx) {
     return tx.certificate;
-  } else if ('TxCert' in tx) {
-    return tx.TxCert.certificate;
   } else if ('EffectsCert' in tx) {
     return tx.EffectsCert.certificate;
   }
@@ -523,7 +526,7 @@ export function getTransactionEffects(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse
 ): TransactionEffects | undefined {
   if ('effects' in data) {
-    return data.effects;
+    return `effects` in data.effects ? data.effects.effects : data.effects;
   }
   return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
 }
@@ -612,6 +615,10 @@ export function getNewlyCreatedCoinRefsAfterSplit(
 ): SuiObjectRef[] | undefined {
   if ('EffectsCert' in data) {
     const effects = data.EffectsCert.effects.effects;
+    return effects.created?.map((c) => c.reference);
+  }
+  if ('effects' in data) {
+    const effects = ('effects' in data.effects ? data.effects.effects : data.effects);
     return effects.created?.map((c) => c.reference);
   }
   return undefined;
