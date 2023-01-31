@@ -36,7 +36,6 @@ import {
     useSigner,
     useAppSelector,
     useCoinDecimals,
-    useIndividualCoinMaxBalance,
     useGetObject,
 } from '_hooks';
 import {
@@ -45,8 +44,9 @@ import {
 } from '_redux/slices/account';
 import {
     Coin,
-    GAS_TYPE_ARG,
+    DEFAULT_GAS_BUDGET_FOR_PAY,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
+    GAS_TYPE_ARG,
 } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
@@ -127,41 +127,23 @@ function StakingCard() {
     }, [delegationData, validatorsData]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
-    const gasBudget = useGasBudgetInMist(DEFAULT_GAS_BUDGET_FOR_STAKE);
-    //TODO: this is a hack to get the total amount of gas coins
-    // for unstake add gas
-    //NOTE: I think we should remove this. Validation expects just the total amount of SUI
-    const gasAggregateBalance = useMemo(
-        () =>
-            unstake
-                ? coinBalance + BigInt(gasBudget.gasBudget || 0)
-                : aggregateBalances[GAS_TYPE_ARG] || 0n,
-        [aggregateBalances, coinBalance, unstake, gasBudget.gasBudget]
+
+    // NOTE: We don't know how many input coins will go into this pay transaction without
+    // knowing the target amounts, so we just peg the gas budget to 4x the default budget
+    // which hopefully works for most cases.
+    const gasBudget = useGasBudgetInMist(
+        DEFAULT_GAS_BUDGET_FOR_PAY * 4 + DEFAULT_GAS_BUDGET_FOR_STAKE
     );
+
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
-                coinType || '',
-                coinBalance,
+                // NOTE: We remove the gas budget required for a pay transaction + stake transaction:
+                coinBalance - BigInt(gasBudget.gasBudget || 0n),
                 coinSymbol,
-                gasAggregateBalance,
-                coinDecimals,
-                gasDecimals,
-                gasBudget.gasBudget || 0,
-                maxSuiSingleCoinBalance
+                coinDecimals
             ),
-        [
-            coinType,
-            coinBalance,
-            coinSymbol,
-            gasAggregateBalance,
-            coinDecimals,
-            gasDecimals,
-            maxSuiSingleCoinBalance,
-            gasBudget.gasBudget,
-        ]
+        [coinBalance, coinSymbol, coinDecimals, gasBudget.gasBudget]
     );
 
     const queryClient = useQueryClient();

@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin as CoinAPI, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    Coin as CoinAPI,
+    getTransactionEffects,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
 
 import type {
     ObjectId,
@@ -212,7 +216,6 @@ export class Coin {
     ) {
         const totalAmount = amount + gasFee;
 
-        // TODO: Validate behavior if the sum can't make it up:
         const inputCoins =
             CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
                 coins,
@@ -233,17 +236,13 @@ export class Coin {
             gasBudget: Coin.computeGasBudgetForPay(coins, totalAmount),
         });
 
-        if (!('EffectsCert' in result)) {
-            throw new Error('Missing effects cert');
+        const effects = getTransactionEffects(result);
+
+        if (!effects || !effects.events) {
+            throw new Error('Missing effects or events');
         }
 
-        const { events } = result.EffectsCert.effects.effects;
-
-        if (!events) {
-            throw new Error('Missing events');
-        }
-
-        const changeEvent = events.find((event) => {
+        const changeEvent = effects.events.find((event) => {
             if ('coinBalanceChange' in event) {
                 return event.coinBalanceChange.amount === Number(amount);
             }
