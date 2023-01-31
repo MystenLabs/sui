@@ -8,6 +8,9 @@ import {
     isValidSuiAddress,
     isValidSuiObjectId,
     normalizeSuiObjectId,
+    type GetObjectDataResponse,
+    is,
+    SuiObject,
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
@@ -55,11 +58,11 @@ const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
     }
 
     if (isValidSuiObjectId(query)) {
-        const { status, details } = await rpc.getObject(
+        const { details, status } = (await rpc.getObject(
             normalizeSuiObjectId(query)
-        );
+        )) as GetObjectDataResponse;
 
-        if (status === 'Exists') {
+        if (is(details, SuiObject) && status === 'Exists') {
             results.object = [
                 {
                     id: details.reference.objectId,
