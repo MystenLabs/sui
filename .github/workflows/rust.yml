@@ -257,6 +257,10 @@ jobs:
     runs-on: [ubuntu-ghcloud]
 
     steps:
+      - name: Sleep for 20 minutes
+        run: sleep 1200
+        shell: bash
+      
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       
