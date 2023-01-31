@@ -37,7 +37,6 @@ import {
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
-  CommitteeInfoResponse,
   DelegatedStake,
   ValidatorMetaData,
   PaginatedCoins,
@@ -64,22 +63,8 @@ export class VoidProvider extends Provider {
     throw this.newError('getReferenceGasPrice');
   }
 
-  async getCommitteeInfo(
-    _epoch: number | null
-  ): Promise<CommitteeInfoResponse> {
-    throw this.newError('getCommitteeInfo');
-  }
-
   async getSuiSystemState(): Promise<SuiSystemState> {
     throw this.newError('getSuiSystemState');
-  }
-
-  async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
-    throw this.newError('getDelegatedStakes');
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    throw this.newError('getValidators');
   }
 
   // Faucet

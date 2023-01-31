@@ -36,7 +36,6 @@ import {
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
-  CommitteeInfoResponse,
   DelegatedStake,
   ValidatorMetaData,
   PaginatedCoins,
@@ -375,14 +374,6 @@ export abstract class Provider {
    */
   abstract getReferenceGasPrice(): Promise<number>;
 
-  abstract getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]>;
-
-  abstract getValidators(): Promise<ValidatorMetaData[]>;
-
-  abstract getCommitteeInfo(
-    epoch: number | null
-  ): Promise<CommitteeInfoResponse>;
-  
   abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
