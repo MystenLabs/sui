@@ -6,9 +6,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { faucet, mint } from './utils/localnet';
 
 async function search(page: Page, text: string) {
-    const searchbar = page.getByTestId('search');
+    const searchbar = page.getByTestId('search-input');
     await searchbar.fill(text);
-    await searchbar.press('Enter');
+    const result = page.getByRole('option');
+    await result.click();
 }
 
 test('can search for an address', async ({ page }) => {

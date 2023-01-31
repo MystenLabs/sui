@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Combobox } from '@headlessui/react';
 import { Search16 } from '@mysten/icons';
+import { type ComponentType } from 'react';
 
 import { LoadingSpinner } from './LoadingSpinner';
 import { Text } from './Text';
@@ -16,6 +17,7 @@ export interface SearchProps {
     onSelectResult: (result: SearchResult) => void;
     placeholder?: string;
     isLoading: boolean;
+    name?: string;
     options?: Record<string, SearchResult[]>;
     value?: SearchResult;
     inputValue: string;
@@ -45,6 +47,7 @@ export function Search({
     onChange,
     onSelectResult,
     placeholder,
+    name = 'search',
     options = {},
     isLoading = false,
     inputValue,
@@ -57,10 +60,13 @@ export function Search({
         <Combobox
             value={value}
             onChange={onSelectResult}
+            name={name}
+            data-testid={`${name}-root`}
             as="div"
             className="relative flex w-full flex-col"
         >
             <Combobox.Input
+                data-testid={`${name}-input`}
                 displayValue={(value: SearchResult) => value.label}
                 className="text-white/0.4 border-1 h-[2rem] w-full rounded-md border-transparent bg-search-fill pl-2 text-xs leading-8 text-white focus:border-solid focus:border-sui"
                 onChange={onChange}
@@ -76,7 +82,10 @@ export function Search({
             </button>
 
             {inputValue && (
-                <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                <Combobox.Options
+                    className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md"
+                    data-testid={`${name}-results`}
+                >
                     {isLoading ? (
                         <div className="flex items-center justify-center">
                             <LoadingSpinner />
