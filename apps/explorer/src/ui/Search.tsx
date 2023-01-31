@@ -27,7 +27,7 @@ export interface SearchResultProps {
     children: React.ReactNode;
 }
 
-function SearchResult({ value, children }: SearchResultProps) {
+function SearchItem({ value, children }: SearchResultProps) {
     return (
         <Combobox.Option
             className="cursor-pointer rounded-md bg-opacity-10 py-1.5 pl-2 ui-active:bg-sui ui-active:bg-opacity-10 ui-active:shadow-sm"
@@ -53,7 +53,6 @@ export function Search({
     const hasOptions = Object.entries(options).some(
         ([k, v]) => !!v && Object.keys(v).length
     );
-
     return (
         <Combobox
             value={value}
@@ -62,7 +61,7 @@ export function Search({
             className="relative flex w-full flex-col"
         >
             <Combobox.Input
-                displayValue={(value) => value?.label}
+                displayValue={(value: SearchResult) => value?.label}
                 className="text-white/0.4 border-1 h-[2rem] w-full rounded-md border-transparent bg-search-fill pl-2 text-xs leading-8 text-white focus:border-solid focus:border-sui"
                 onChange={onChange}
                 placeholder={placeholder}
@@ -71,20 +70,20 @@ export function Search({
             />
             <button
                 type="button"
-                className="text-white/0.4 absolute inset-y-0 right-0 flex items-center rounded-r-md border-none bg-transparent  text-2xl focus:outline-none"
+                className="text-white/0.4 absolute inset-y-0 right-0 flex items-center border-none bg-transparent text-2xl focus:outline-none"
             >
-                <Search16 className="text-white opacity-40" />
+                <Search16 className="bg-search-fill text-white opacity-40" />
             </button>
 
-            <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-full list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
+            <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
                 {isLoading ? (
                     <div className="flex items-center justify-center">
                         <LoadingSpinner />
                     </div>
                 ) : hasOptions ? (
-                    Object.entries(options).map(([category, results], idx) => {
+                    Object.entries(options).map(([key, results], idx) => {
                         if (!results.length) return null;
-
+                        console.log(results);
                         return (
                             <div
                                 className={
@@ -92,7 +91,7 @@ export function Search({
                                         ? 'mb-4'
                                         : ''
                                 }
-                                key={category}
+                                key={key}
                             >
                                 {!!results?.length && (
                                     <div className="mb-2">
@@ -100,18 +99,15 @@ export function Search({
                                             color="steel-dark"
                                             variant="captionSmall/medium"
                                         >
-                                            {category}
+                                            {key}
                                         </Text>
                                     </div>
                                 )}
                                 {results?.map((item: any) => {
                                     return (
-                                        <SearchResult
-                                            key={item.id}
-                                            value={item}
-                                        >
+                                        <SearchItem key={item.id} value={item}>
                                             {item.label}
-                                        </SearchResult>
+                                        </SearchItem>
                                     );
                                 })}
                             </div>

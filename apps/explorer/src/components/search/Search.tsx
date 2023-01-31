@@ -19,15 +19,12 @@ function Search() {
     const navigate = useNavigateWithQuery();
     const handleSelectResult = useCallback(
         (result: any) => {
-            navigate(
-                `/${result.category}/${encodeURIComponent(result.id)}`,
-                {}
-            );
+            navigate(`/${result.type}/${encodeURIComponent(result.id)}`, {});
         },
         [navigate]
     );
     return (
-        <div className="flex h-full max-w-lg">
+        <div className="flex max-w-lg">
             <SearchBox
                 inputValue={input}
                 onChange={handleTextChange}

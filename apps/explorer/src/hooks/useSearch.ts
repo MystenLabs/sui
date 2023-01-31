@@ -25,30 +25,22 @@ const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
             {
                 id: txdata.certificate.transactionDigest,
                 label: txdata.certificate.transactionDigest,
-                category: 'transaction',
+                type: 'transaction',
             },
         ];
     }
 
     if (isValidSuiAddress(query) && !isGenesisLibAddress(query)) {
         const data = await rpc.getObjectsOwnedByAddress(query);
-        results = {
-            ...results,
-            address: [
+        if (data.length) {
+            results.address = [
                 {
                     id: query,
                     label: query,
-                    category: 'address',
+                    type: 'address',
                 },
-            ],
-            object: data
-                .map((obj) => ({
-                    id: obj.objectId,
-                    label: obj.objectId,
-                    category: 'object',
-                }))
-                .slice(0, 5),
-        };
+            ];
+        }
     }
 
     if (isValidSuiObjectId(query)) {
@@ -58,14 +50,11 @@ const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
 
         if (status === 'Exists') {
             results.object = [
-                ...(results.object || []),
-                [
-                    {
-                        id: details.reference.objectId,
-                        label: details.reference.objectId,
-                        category: 'object',
-                    },
-                ],
+                {
+                    id: details.reference.objectId,
+                    label: details.reference.objectId,
+                    type: 'object',
+                },
             ];
         }
     }
@@ -75,7 +64,14 @@ const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
 
 export function useSearch(query: string) {
     const rpc = useRpc();
-    return useQuery(['search', query], () => handleSearch(rpc, query), {
-        enabled: !!query,
-    });
+
+    return useQuery(
+        ['search', query],
+        () => {
+            return handleSearch(rpc, query);
+        },
+        {
+            enabled: !!query,
+        }
+    );
 }
