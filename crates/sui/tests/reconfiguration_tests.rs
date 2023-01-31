@@ -146,7 +146,11 @@ async fn reconfig_with_revert_end_to_end_test() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
     let effects1 = net
         .process_certificate(cert.clone().into_inner())
         .await
@@ -162,7 +166,11 @@ async fn reconfig_with_revert_end_to_end_test() {
         &keypair,
         None,
     );
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
 
     // Close epoch on 3 (2f+1) validators.
     let mut reverting_authority_idx = None;
@@ -237,7 +245,7 @@ async fn reconfig_with_revert_end_to_end_test() {
                     .unwrap();
                 assert_eq!(2, object.version().value());
                 // Due to race conditions, it's possible that tx2 went in
-                // before 2f+1 validators sent EndOfPublish messges and close
+                // before 2f+1 validators sent EndOfPublish messages and close
                 // the curtain of epoch 0. So, we are asserting that
                 // the object version is either 1 or 2, but needs to be
                 // consistent in all validators.
@@ -321,7 +329,11 @@ async fn test_validator_resign_effects() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
     let effects0 = net
         .process_certificate(cert.clone().into_inner())
         .await

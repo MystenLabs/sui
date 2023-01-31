@@ -301,7 +301,10 @@ async fn execute_transaction_with_fault_configs(
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
 
-    authorities.process_certificate(cert.into()).await.is_ok()
+    authorities
+        .process_certificate(cert.into_cert_for_testing().into())
+        .await
+        .is_ok()
 }
 
 /// The intent of this is to test whether client side timeouts
@@ -331,7 +334,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1);
     let certified_tx = authorities.process_transaction(tx.clone()).await;
     assert!(certified_tx.is_ok());
-    let certificate = certified_tx.unwrap();
+    let certificate = certified_tx.unwrap().into_cert_for_testing();
     // Send request with a very small timeout to trigger timeout error
     authorities.timeouts.pre_quorum_timeout = Duration::from_nanos(0);
     authorities.timeouts.post_quorum_timeout = Duration::from_nanos(0);
@@ -1002,7 +1005,11 @@ async fn test_handle_transaction_response() {
     set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
     // Validators now gives valid signed tx and we get TxCert
     let mut agg = get_agg(authorities.clone(), clients.clone(), 0);
-    let cert_epoch_0 = agg.process_transaction(tx.clone()).await.unwrap();
+    let cert_epoch_0 = agg
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
 
     // Case 2
     // Validators return signed-tx with epoch 0, client expects 1
@@ -1060,7 +1067,11 @@ async fn test_handle_transaction_response() {
         .insert_new_committee(&committee_1)
         .unwrap();
     agg.committee = committee_1.clone();
-    let cert_epoch_1 = agg.process_transaction(tx.clone()).await.unwrap();
+    let cert_epoch_1 = agg
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
 
     // Case 5
     // Validators return tx-cert with epoch 0, client expects 1

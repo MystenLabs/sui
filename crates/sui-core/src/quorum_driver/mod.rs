@@ -27,7 +27,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority_aggregator::{
-    AuthorityAggregator, QuorumExecuteCertificateError, QuorumSignTransactionError,
+    AuthorityAggregator, ProcessTransactionResult, QuorumExecuteCertificateError,
+    QuorumSignTransactionError,
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
@@ -267,7 +268,7 @@ where
     pub(crate) async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedCertificate, QuorumDriverInternalError> {
+    ) -> Result<ProcessTransactionResult, QuorumDriverInternalError> {
         let tx_digest = *transaction.digest();
         let result = self
             .validators
@@ -682,9 +683,21 @@ where
 
         let tx_cert = match tx_cert {
             None => match quorum_driver.process_transaction(transaction.clone()).await {
-                Ok(tx_cert) => {
+                Ok(ProcessTransactionResult::Certified(tx_cert)) => {
                     debug!(?tx_digest, "Transaction processing succeeded");
                     tx_cert
+                }
+                Ok(ProcessTransactionResult::Executed(tx_cert, effects_cert)) => {
+                    debug!(
+                        ?tx_digest,
+                        "Transaction processing succeeded with effects directly"
+                    );
+                    let response = QuorumDriverResponse {
+                        tx_cert,
+                        effects_cert,
+                    };
+                    quorum_driver.notify(&tx_digest, &Ok(response), old_retry_times + 1);
+                    return;
                 }
                 Err(err) => {
                     Self::handle_error(

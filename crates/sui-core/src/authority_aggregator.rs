@@ -300,6 +300,21 @@ struct ProcessTransactionState {
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
 }
 
+#[derive(Debug)]
+pub enum ProcessTransactionResult {
+    Certified(VerifiedCertificate),
+    Executed(VerifiedCertificate, VerifiedCertifiedTransactionEffects),
+}
+
+impl ProcessTransactionResult {
+    pub fn into_cert_for_testing(self) -> VerifiedCertificate {
+        match self {
+            Self::Certified(cert) => cert,
+            Self::Executed(..) => panic!("Wrong type"),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
@@ -1249,7 +1264,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedCertificate, QuorumSignTransactionError> {
+    ) -> Result<ProcessTransactionResult, QuorumSignTransactionError> {
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
@@ -1337,12 +1352,18 @@ where
         state = Self::record_non_quorum_effects_maybe(tx_digest, state);
 
         // If we have some certificate return it, or return an error.
-        state.certificate.ok_or(QuorumSignTransactionError {
+        let cert = state.certificate.ok_or(QuorumSignTransactionError {
             total_stake: self.committee.total_votes,
             good_stake: state.good_stake,
             errors: state.errors,
             conflicting_tx_digests: state.conflicting_tx_digests,
-        })
+        })?;
+
+        if let Some(effects_cert) = state.effects_map.effects_cert {
+            Ok(ProcessTransactionResult::Executed(cert, effects_cert))
+        } else {
+            Ok(ProcessTransactionResult::Certified(cert))
+        }
     }
 
     fn handle_response_with_err(
@@ -1664,17 +1685,23 @@ where
         &self,
         transaction: &VerifiedTransaction,
     ) -> Result<(VerifiedCertificate, VerifiedCertifiedTransactionEffects), anyhow::Error> {
-        let new_certificate = self
+        let result = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
+        let cert = match result {
+            ProcessTransactionResult::Certified(cert) => cert,
+            ProcessTransactionResult::Executed(cert, effects) => {
+                return Ok((cert, effects));
+            }
+        };
         self.metrics.total_tx_certificates_created.inc();
         let response = self
-            .process_certificate(new_certificate.clone().into())
+            .process_certificate(cert.clone().into())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok((new_certificate, response))
+        Ok((cert, response))
     }
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
@@ -1749,7 +1776,8 @@ where
                     return cert;
                 }
                 match self.process_transaction(transaction.clone()).await {
-                    Ok(cert) => {
+                    Ok(ProcessTransactionResult::Certified(cert))
+                    | Ok(ProcessTransactionResult::Executed(cert, _)) => {
                         return cert;
                     }
                     Err(err) => {
