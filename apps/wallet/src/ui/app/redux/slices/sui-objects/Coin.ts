@@ -137,7 +137,7 @@ export class Coin {
             ],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
         };
-        return await signer.executeMoveCall(txn, 'WaitForEffectsCert');
+        return await signer.executeMoveCall(txn);
     }
 
     public static async unStakeCoin(
@@ -153,7 +153,7 @@ export class Coin {
             arguments: [SUI_SYSTEM_STATE_OBJECT_ID, delegation, stakedSuiId],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
         };
-        return signer.executeMoveCall(txn, 'WaitForEffectsCert');
+        return signer.executeMoveCall(txn);
     }
 
     private static async requestSuiCoinWithExactAmount(

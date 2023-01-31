@@ -94,7 +94,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async signAndExecuteTransaction(
     transaction: Base64DataBuffer | SignableTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
   ): Promise<SuiExecuteTransactionResponse> {
     // Handle submitting raw transaction bytes:
     if (
