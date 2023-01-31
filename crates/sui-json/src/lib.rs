@@ -389,10 +389,7 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
             } = &**st;
             let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
             // is id or..
-            if resolved_struct == RESOLVED_SUI_ID {
-                return true;
-            }
-            else if resolved_struct == RESOLVED_SUI_UID {
+            if resolved_struct == RESOLVED_SUI_ID || resolved_struct == RESOLVED_SUI_UID {
                 return true;
             }
             // is option of a primitive
@@ -443,19 +440,12 @@ pub fn primitive_type(
                         MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
                     ]))),
                 )
-            } else if resolved_struct == RESOLVED_SUI_ID {
+            } else if resolved_struct == RESOLVED_SUI_ID || resolved_struct == RESOLVED_SUI_UID {
                 (
                     true,
                     Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
                         MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
                     ]))),
-                )
-            } else if resolved_struct == RESOLVED_SUI_UID {
-                (
-                    true,
-                    Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
-                        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Address)),
-                    ])))
                 )
             } else {
                 (false, None)

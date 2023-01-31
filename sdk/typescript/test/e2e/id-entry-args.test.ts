@@ -11,7 +11,7 @@ import {
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
-  'Test ID as args to entry functions',
+  'Test ID and UID as args to entry functions',
   ({ useLocalTxnBuilder }) => {
     let toolbox: TestToolbox;
     let signer: RawSigner;
@@ -37,6 +37,18 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         function: 'test_id',
         typeArguments: [],
         arguments: ['0xc2b5625c221264078310a084df0a3137956d20ee'],
+        gasBudget: 2000,
+      });
+      expect(getExecutionStatusType(txn)).toEqual('success');
+    });
+
+    it('Test UID as arg to entry functions', async () => {
+      const txn = await signer.executeMoveCall({
+        packageObjectId: packageId,
+        module: 'test',
+        function: 'test_uid',
+        typeArguments: [],
+        arguments: [],
         gasBudget: 2000,
       });
       expect(getExecutionStatusType(txn)).toEqual('success');
