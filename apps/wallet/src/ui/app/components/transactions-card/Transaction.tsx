@@ -70,11 +70,15 @@ export function Transaction({
         txn.effects
     );
 
+    // Since we cant show all transfer amount, show only sui coins
     const transferAmount = useMemo(() => {
-        const amount = amountByRecipient && amountByRecipient?.[0];
+        const amount =
+            amountByRecipient &&
+            amountByRecipient.find((item) => item.coinType === SUI_TYPE_ARG);
 
         const amountTransfers = eventsSummary.find(
-            ({ receiverAddress }) => receiverAddress === address
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType === SUI_TYPE_ARG
         );
 
         return {
@@ -97,10 +101,19 @@ export function Transaction({
     const isSuiTransfer =
         txnKind === 'PaySui' ||
         txnKind === 'TransferSui' ||
-        txnKind === 'PayAllSui' ||
-        txnKind === 'Pay';
+        txnKind === 'PayAllSui';
 
-    const isTransfer = isSuiTransfer || txnKind === 'TransferObject';
+    const isTransfer =
+        isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
+
+    // call txn with multiple coinsType with multiple coins type
+    const isSwapTransfer = useMemo(() => {
+        if (txnKind !== 'Call') return null;
+
+        const coinTypeList = eventsSummary.map(({ coinType }) => coinType);
+
+        return coinTypeList?.length > 1;
+    }, [eventsSummary, txnKind]);
 
     const moveCallLabel = useMemo(() => {
         if (txnKind !== 'Call') return null;
@@ -114,8 +127,9 @@ export function Transaction({
             moveCallTxn?.function === 'request_withdraw_delegation'
         )
             return 'Unstaked';
+        if (isSwapTransfer) return 'Swapped';
         return 'Call';
-    }, [moveCallTxn, txnKind]);
+    }, [isSwapTransfer, moveCallTxn?.function, moveCallTxn?.module, txnKind]);
 
     const txnIcon = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Rewards';
@@ -126,8 +140,9 @@ export function Transaction({
     const txnLabel = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Received Staking Rewards';
         if (moveCallLabel) return moveCallLabel;
+        if (isSwapTransfer) return 'Swapped';
         return isSender ? 'Sent' : 'Received';
-    }, [txnKind, moveCallLabel, isSender]);
+    }, [txnKind, moveCallLabel, isSwapTransfer, isSender]);
 
     // Show sui symbol only if it is a sui transfer, staking or unstaking
     const showSuiSymbol =

@@ -13,8 +13,13 @@ type Props = {
 };
 
 export function useGetTxnRecipientAddress({ txn, address }: Props) {
-    const { certificate } = txn;
-    const { coins: eventsSummary } = getEventsSummary(txn.effects, address);
+    const { certificate, effects } = txn;
+
+    const eventsSummary = useMemo(() => {
+        const { coins } = getEventsSummary(effects, address);
+        return coins;
+    }, [effects, address]);
+
     const amountByRecipient = getAmount(
         certificate.data.transactions[0],
         txn.effects
