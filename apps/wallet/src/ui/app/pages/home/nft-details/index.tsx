@@ -19,6 +19,7 @@ import {
     useMiddleEllipsis,
     useNFTBasicData,
     useObjectsState,
+    useOriginbyteNft,
 } from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import ExternalLink from '_src/ui/app/components/external-link';
@@ -75,6 +76,10 @@ function NFTDetailsPage() {
         useNFTBasicData(selectedNft);
     const { loading } = useObjectsState();
 
+    const { data: originByteNft } = useOriginbyteNft(
+        selectedNft?.reference.objectId
+    );
+
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
         nftFields?.metadata?.fields?.attributes?.fields ||
@@ -89,8 +94,16 @@ function NFTDetailsPage() {
                 { keys: [] as string[], values: [] as string[] }
             );
 
-    const metaKeys: string[] = metaFields ? metaFields.keys : [];
-    const metaValues = metaFields ? metaFields.values : [];
+    const metaKeys: string[] = [
+        ...(originByteNft?.fields.attributeKeys || []),
+        ...(metaFields ? metaFields.keys : []),
+    ];
+
+    const metaValues = [
+        ...(originByteNft?.fields.attributeValues || []),
+        ...(metaFields ? metaFields.values : []),
+    ];
+
     return (
         <div
             className={cl('flex flex-col flex-nowrap flex-1 gap-5', {

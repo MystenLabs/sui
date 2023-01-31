@@ -7,7 +7,7 @@ import { NftClient } from '../helpers/NftClient';
 import { useRpc } from './useRpc';
 import { parseIpfsUrl } from '_hooks';
 
-export function useOriginbyteNft(nftId: string | null) {
+export function useOriginbyteNft(nftId?: string | null) {
     const rpc = useRpc();
     return useQuery(
         ['originbyte-nft', nftId],

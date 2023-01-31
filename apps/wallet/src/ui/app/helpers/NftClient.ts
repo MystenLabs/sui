@@ -37,13 +37,13 @@ type Bag = {
 
 type NftRpcResponse = {
     logical_owner: string;
-    bag: Bag;
+    bag?: Bag;
 };
 
 type NftRaw = {
     id: string;
     logicalOwner: string;
-    bagId: string;
+    bagId?: string;
 };
 
 type DomainRpcBase<T> = {
@@ -60,20 +60,42 @@ type DomainRpcBase<T> = {
     };
 };
 
-type UrlDomainRpcResponse = DomainRpcBase<{
+type UrlDomain = {
     url: string;
-}>;
+};
 
-type DisplayDomainRpcResponse = DomainRpcBase<{
+type UrlDomainRpcResponse = DomainRpcBase<UrlDomain>;
+
+type DisplayDomain = {
     description: string;
     name: string;
-}>;
+};
+type DisplayDomainRpcResponse = DomainRpcBase<DisplayDomain>;
 
 type NftDomains = {
     url: string;
     name: string;
     description: string;
+    attributeKeys: string[];
+    attributeValues: string[];
 };
+
+export type AttributionDomain = {
+    map: {
+        type: string;
+        fields: {
+            contents: {
+                type: string;
+                fields: {
+                    key: string;
+                    value: string;
+                };
+            }[];
+        };
+    };
+};
+
+export type AttributionDomainBagRpcResponse = DomainRpcBase<AttributionDomain>;
 
 export type Nft = {
     nft: NftRaw;
@@ -82,10 +104,12 @@ export type Nft = {
 
 const NftRegex =
     /(0x[a-f0-9]{39,40})::nft::Nft<0x[a-f0-9]{39,40}::([a-zA-Z]{1,})::([a-zA-Z]{1,})>/;
-const UrlDomainRegex =
+const UrlDomainBagRegex =
     /0x2::dynamic_field::Field<(0x[a-f0-9]{39,40})::utils::Marker<(0x[a-f0-9]{39,40})::display::UrlDomain>, (0x[a-f0-9]{39,40})::display::UrlDomain>/;
-const DisplayDomainRegex =
+const DisplayDomainBagRegex =
     /0x2::dynamic_field::Field<(0x[a-f0-9]{39,40})::utils::Marker<(0x[a-f0-9]{39,40})::display::DisplayDomain>, (0x[a-f0-9]{39,40})::display::DisplayDomain>/;
+const AttributesDomainBagRegex =
+    /dynamic_field::Field<(0x[a-f0-9]{39,40})::utils::Marker<(0x[a-f0-9]{39,40})::display::AttributesDomain>, (0x[a-f0-9]{39,40})::display::AttributesDomain>/;
 
 export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
     parser: (data, suiData, rpcResponse) => {
@@ -114,7 +138,7 @@ export const NftParser: SuiObjectParser<NftRpcResponse, NftRaw> = {
                 packageModuleClassName,
                 rawResponse: rpcResponse,
                 logicalOwner: data.logical_owner,
-                bagId: data.bag.fields.id.id,
+                bagId: data.bag?.fields.id.id,
             };
         }
         return undefined;
@@ -135,11 +159,16 @@ const isTypeMatchRegex = (d: GetObjectDataResponse, regex: RegExp) => {
     return false;
 };
 
-export const parseDomains = (domains: GetObjectDataResponse[]) => {
+export const parseBagDomains = (domains: GetObjectDataResponse[]) => {
     const response: Partial<NftDomains> = {};
-    const urlDomain = domains.find((d) => isTypeMatchRegex(d, UrlDomainRegex));
+    const urlDomain = domains.find((d) =>
+        isTypeMatchRegex(d, UrlDomainBagRegex)
+    );
     const displayDomain = domains.find((d) =>
-        isTypeMatchRegex(d, DisplayDomainRegex)
+        isTypeMatchRegex(d, DisplayDomainBagRegex)
+    );
+    const attributesDomain = domains.find((d) =>
+        isTypeMatchRegex(d, AttributesDomainBagRegex)
     );
 
     if (
@@ -162,6 +191,77 @@ export const parseDomains = (domains: GetObjectDataResponse[]) => {
         response.name = (
             data.fields as DisplayDomainRpcResponse
         ).value.fields.name;
+
+        if (
+            attributesDomain &&
+            is(attributesDomain.details, SuiObject) &&
+            'fields' in attributesDomain.details.data
+        ) {
+            const { data } = attributesDomain.details;
+            response.attributeKeys = (
+                data.fields as AttributionDomainBagRpcResponse
+            ).value.fields.map.fields.contents.map(
+                (attribute) => attribute.fields.key
+            );
+
+            response.attributeValues = (
+                data.fields as AttributionDomainBagRpcResponse
+            ).value.fields.map.fields.contents.map(
+                (attribute) => attribute.fields.value
+            );
+        }
+    }
+
+    return response;
+};
+
+const UrlDomainRegex = /(0x[a-f0-9]{39,40})::display::UrlDomain/;
+const DisplayDomainRegex = /(0x[a-f0-9]{39,40})::display::DisplayDomain/;
+const AttributesDomainRegex = /(0x[a-f0-9]{39,40})::display::AttributesDomain/;
+
+export const parseDynamicDomains = (domains: GetObjectDataResponse[]) => {
+    const response: Partial<NftDomains> = {};
+
+    const urlDomain = domains.find((d) => isTypeMatchRegex(d, UrlDomainRegex));
+
+    const displayDomain = domains.find((d) =>
+        isTypeMatchRegex(d, DisplayDomainRegex)
+    );
+    const attibutesDomain = domains.find((d) =>
+        isTypeMatchRegex(d, AttributesDomainRegex)
+    );
+
+    if (
+        urlDomain &&
+        is(urlDomain.details, SuiObject) &&
+        'fields' in urlDomain.details.data
+    ) {
+        const { data } = urlDomain.details;
+        response.url = (data.fields as UrlDomain).url;
+    }
+    if (
+        displayDomain &&
+        is(displayDomain.details, SuiObject) &&
+        'fields' in displayDomain.details.data
+    ) {
+        const { data } = displayDomain.details;
+        response.description = (data.fields as DisplayDomain).description;
+        response.name = (data.fields as DisplayDomain).name;
+    }
+
+    if (
+        attibutesDomain &&
+        is(attibutesDomain.details, SuiObject) &&
+        'fields' in attibutesDomain.details.data
+    ) {
+        const { data } = attibutesDomain.details;
+        response.attributeKeys = (
+            data.fields as AttributionDomain
+        ).map.fields.contents.map((attribute) => attribute.fields.key);
+
+        response.attributeValues = (
+            data.fields as AttributionDomain
+        ).map.fields.contents.map((attribute) => attribute.fields.value);
     }
 
     return response;
@@ -212,14 +312,26 @@ export class NftClient {
         return this.provider.getObjectBatch(objectIds);
     };
 
+    getDynamicFields = async (parentdId: string) => {
+        const objects = await this.provider.getDynamicFields(parentdId);
+        const objectIds = objects.data.map((_) => _.objectId);
+        return this.provider.getObjectBatch(objectIds);
+    };
+
     getNftsById = async (params: WithIds): Promise<Nft[]> => {
         const nfts = await this.fetchAndParseObjectsById(params.objectIds);
+
         const bags = await Promise.all(
             nfts.map(async (nft) => {
-                const content = await this.getBagContent(nft.bagId);
+                const content = nft.bagId
+                    ? await this.getBagContent(nft.bagId)
+                    : await this.getDynamicFields(nft.id);
+
                 return {
                     nftId: nft.id,
-                    content: parseDomains(content),
+                    content: nft.bagId
+                        ? parseBagDomains(content)
+                        : parseDynamicDomains(content),
                 };
             })
         );
