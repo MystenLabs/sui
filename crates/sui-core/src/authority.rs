@@ -1052,7 +1052,7 @@ impl AuthorityState {
 
         let effects_with_events = effects.clone();
 
-        if epoch_store.epoch() >= REMOVE_EFFECTS_EPOCH {
+        if epoch_store.epoch() >= REMOVE_EFFECTS_EPOCH && certificate.is_change_epoch_tx() {
             // remove all events (except some events required by rosetta) from effects -
             // fullnode will still
             // index them, but they will not be transmitted over state sync.
