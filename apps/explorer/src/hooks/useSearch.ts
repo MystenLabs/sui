@@ -63,10 +63,16 @@ const handleSearch = async (rpc: JsonRpcProvider, query: string) => {
         )) as GetObjectDataResponse;
 
         if (is(details, SuiObject) && status === 'Exists') {
+            let name;
+            if (details.data.dataType === 'moveObject') {
+                name = details.data.fields.name;
+            }
             results.object = [
                 {
                     id: details.reference.objectId,
-                    label: details.reference.objectId,
+                    label: `${name ? `${name} ` : ''}${
+                        details.reference.objectId
+                    }`,
                     type: 'object',
                 },
             ];
