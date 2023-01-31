@@ -27,7 +27,10 @@
 }
 
 .menu-button {
-    justify-self: flex-end;
+    margin-left: auto;
+    display: flex;
+    flex: 1;
+    justify-content: flex-end;
 }
 
 .content {
@@ -57,13 +60,10 @@
 }
 
 .dapp-status-container {
-    position: absolute;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     flex: 1;
-    inset: 0 15px;
-    gap: 4px;
 }
 
 .dapp-logo-container {
