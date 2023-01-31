@@ -18,7 +18,7 @@ import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { getEventsSummary, getAmount, notEmpty } from '_helpers';
+import { getEventsSummary, notEmpty } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';
 
 import type {
@@ -65,28 +65,32 @@ export function Transaction({
             : getTxnEffectsEventID(txn.effects, address)[0];
     }, [address, certificate.data.transactions, txn.effects]);
 
-    const amountByRecipient = getAmount(
-        certificate.data.transactions[0],
-        txn.effects
-    );
-
-    // Since we cant show all transfer amount, show only sui coins
+    // we only show Sui Transfer amount or the first non-Sui transfer amount
     const transferAmount = useMemo(() => {
-        const amount =
-            amountByRecipient &&
-            amountByRecipient.find((item) => item.coinType === SUI_TYPE_ARG);
-
-        const amountTransfers = eventsSummary.find(
+        // Find SUI transfer amount
+        const amountTransfersSui = eventsSummary.find(
             ({ receiverAddress, coinType }) =>
                 receiverAddress === address && coinType === SUI_TYPE_ARG
         );
 
+        // Find non-SUI transfer amount
+        const amountTransfersNonSui = eventsSummary.filter(
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType !== SUI_TYPE_ARG
+        );
+
         return {
-            amount: Math.abs(amount?.amount || amountTransfers?.amount || 0),
+            amount: Math.abs(
+                amountTransfersSui?.amount ||
+                    amountTransfersNonSui[0]?.amount ||
+                    0
+            ),
             coinType:
-                amount?.coinType || amountTransfers?.coinType || SUI_TYPE_ARG,
+                amountTransfersSui?.coinType ||
+                amountTransfersNonSui[0]?.coinType ||
+                SUI_TYPE_ARG,
         };
-    }, [address, amountByRecipient, eventsSummary]);
+    }, [address, eventsSummary]);
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
@@ -106,15 +110,6 @@ export function Transaction({
     const isTransfer =
         isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
 
-    // call txn with multiple coinsType with multiple coins type
-    const isSwapTransfer = useMemo(() => {
-        if (txnKind !== 'Call') return null;
-
-        const coinTypeList = eventsSummary.map(({ coinType }) => coinType);
-
-        return coinTypeList?.length > 1;
-    }, [eventsSummary, txnKind]);
-
     const moveCallLabel = useMemo(() => {
         if (txnKind !== 'Call') return null;
         if (
@@ -127,9 +122,8 @@ export function Transaction({
             moveCallTxn?.function === 'request_withdraw_delegation'
         )
             return 'Unstaked';
-        if (isSwapTransfer) return 'Swapped';
         return 'Call';
-    }, [isSwapTransfer, moveCallTxn?.function, moveCallTxn?.module, txnKind]);
+    }, [moveCallTxn?.function, moveCallTxn?.module, txnKind]);
 
     const txnIcon = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Rewards';
@@ -140,9 +134,8 @@ export function Transaction({
     const txnLabel = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Received Staking Rewards';
         if (moveCallLabel) return moveCallLabel;
-        if (isSwapTransfer) return 'Swapped';
         return isSender ? 'Sent' : 'Received';
-    }, [txnKind, moveCallLabel, isSwapTransfer, isSender]);
+    }, [txnKind, moveCallLabel, isSender]);
 
     // Show sui symbol only if it is a sui transfer, staking or unstaking
     const showSuiSymbol =
