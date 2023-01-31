@@ -51,6 +51,7 @@ import {
   DelegatedStake,
   ValidatorMetaData,
   SuiSystemState,
+  CommitteeInfoResponse,
   CoinBalance,
   CoinSupply,
   CheckpointSummary,
@@ -784,6 +785,53 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(`Error getting the reference gas price ${err}`);
+    }
+  }
+
+  async getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]> {
+    try {
+      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+        throw new Error('Invalid Sui address');
+      }
+      const resp = await this.client.requestWithType(
+        'sui_getDelegatedStakes',
+        [address],
+        array(DelegatedStake),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getDelegatedStake: ${err}`);
+    }
+  }
+
+  async getValidators(): Promise<ValidatorMetaData[]> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getValidators',
+        [],
+        array(ValidatorMetaData),
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getValidators: ${err}`);
+    }
+  }
+
+  async getCommitteeInfo(
+    epoch: number | null = null
+  ): Promise<CommitteeInfoResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_getCommitteeInfo',
+        [epoch],
+        CommitteeInfoResponse,
+        this.options.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error in getCommitteeInfo: ${err}`);
     }
   }
 

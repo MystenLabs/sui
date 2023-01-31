@@ -33,18 +33,15 @@ describe('Governance API', () => {
     let delcoins: ObjectId[] = [];
 
     delcoins.push(normalizeSuiObjectId(coins[0].objectId));
-    delcoins.push(normalizeSuiObjectId(coins[2].objectId));
 
     console.log(delcoins);
 
     const tx = {
       coins: delcoins,
-      amount: '10',
+      amount: '0.1',
       validator: normalizeSuiObjectId('0x1'),
       gasBudget: 10000,
     };
-
-    console.log(tx);
 
     const radd = await signer.requestAddDelegation(tx);
   });
@@ -66,6 +63,6 @@ describe('Governance API', () => {
   });
   it('test getSuiSystemState', async () => {
     const systemState = await toolbox.provider.getSuiSystemState();
-    expect(systemState.epoch).toBeGreaterThanOrEqual(0);
+    expect(systemState.epoch).greaterThan(0);
   });
 });
