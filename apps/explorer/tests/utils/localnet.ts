@@ -45,8 +45,11 @@ export async function mint(address: string) {
         gasBudget: 30000,
     });
 
-    if (!('EffectsCert' in tx)) {
-        throw new Error('Missing effects cert');
+    if (!('certificate' in tx)) {
+        throw new Error('Missing certificate');
+    }
+    if (!('effects' in tx)) {
+        throw new Error('Missing effects');
     }
 
     return tx;
