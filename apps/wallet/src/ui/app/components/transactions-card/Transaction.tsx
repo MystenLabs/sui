@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom';
 import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
+import { useCallTxnLabel } from './useCallTxnLabel';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
@@ -66,6 +67,7 @@ export function Transaction({
     }, [address, certificate.data.transactions, txn.effects]);
 
     // we only show Sui Transfer amount or the first non-Sui transfer amount
+    // positive amount means received, negative amount means sent
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
         const amountTransfersSui = eventsSummary.find(
@@ -80,21 +82,26 @@ export function Transaction({
         );
 
         return {
-            amount: Math.abs(
+            amount:
                 amountTransfersSui?.amount ||
-                    amountTransfersNonSui[0]?.amount ||
-                    0
-            ),
+                amountTransfersNonSui[0]?.amount ||
+                0,
             coinType:
                 amountTransfersSui?.coinType ||
                 amountTransfersNonSui[0]?.coinType ||
-                SUI_TYPE_ARG,
+                0,
         };
     }, [address, eventsSummary]);
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
-    const isSender = address === certificate.data.sender;
+    // sometime sender and receiver are the same address
+    // for txn with amount determine sender or receiver by amount. negative amount means sender and positive amount means receiver
+    // fall back to address comparison if amount is not available
+    const isSender =
+        transferAmount.amount === 0
+            ? address === certificate.data.sender
+            : transferAmount.amount < 0;
 
     const moveCallTxn = getMoveCallTransaction(
         certificate.data.transactions[0]
@@ -110,20 +117,7 @@ export function Transaction({
     const isTransfer =
         isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
 
-    const moveCallLabel = useMemo(() => {
-        if (txnKind !== 'Call') return null;
-        if (
-            moveCallTxn?.module === 'sui_system' &&
-            moveCallTxn?.function === 'request_add_delegation_mul_coin'
-        )
-            return 'Staked';
-        if (
-            moveCallTxn?.module === 'sui_system' &&
-            moveCallTxn?.function === 'request_withdraw_delegation'
-        )
-            return 'Unstaked';
-        return 'Call';
-    }, [moveCallTxn?.function, moveCallTxn?.module, txnKind]);
+    const moveCallLabel = useCallTxnLabel(certificate);
 
     const txnIcon = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Rewards';
@@ -182,7 +176,9 @@ export function Transaction({
                                         </Text>
                                     )}
                                 </div>
-                                <CoinBalance amount={transferAmount.amount} />
+                                <CoinBalance
+                                    amount={Math.abs(transferAmount.amount)}
+                                />
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel
