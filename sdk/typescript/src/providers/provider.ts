@@ -43,6 +43,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  CoinStruct,
 } from '../types';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
@@ -151,7 +152,7 @@ export abstract class Provider {
    */
   abstract getGasObjectsOwnedByAddress(
     _address: string
-  ): Promise<SuiObjectInfo[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * @deprecated The method should not be used
