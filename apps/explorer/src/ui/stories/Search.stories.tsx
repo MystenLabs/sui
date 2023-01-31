@@ -47,7 +47,7 @@ export const Default: StoryObj<SearchProps> = {
                     }
                     return acc;
                 },
-                {}
+                {} as any
             );
             return filtered;
         }, [query]);
@@ -56,7 +56,8 @@ export const Default: StoryObj<SearchProps> = {
             <div className="flex h-screen w-screen bg-headerNav p-10">
                 <div className="w-[500px] ">
                     <Search
-                        query={query}
+                        inputValue={query}
+                        isLoading={false}
                         onChange={(e) => setQuery(e.currentTarget.value)}
                         placeholder="Search Addresses / Objects / Transactions / Epochs"
                         onSelectResult={(val) => {
