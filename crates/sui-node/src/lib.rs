@@ -344,21 +344,23 @@ impl SuiNode {
             .with_metrics(prometheus_registry)
             .build();
 
-        // TODO only configure validators as seed/preferred peers for validators and not for
-        // fullnodes once we've had a chance to re-work fullnode configuration generation.
         let mut p2p_config = config.p2p_config.clone();
         let network_kp = config.network_key_pair();
         let our_network_public_key = network_kp.public();
-        let other_validators = config
-            .genesis()?
-            .validator_set()
-            .iter()
-            .filter(|validator| &validator.network_key != our_network_public_key)
-            .map(|validator| sui_config::p2p::SeedPeer {
-                peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
-                address: validator.p2p_address.clone(),
-            });
-        p2p_config.seed_peers.extend(other_validators);
+
+        // Configure validators as seed/preferred peers if this node is configured as a validator
+        if config.consensus_config().is_some() {
+            let other_validators = config
+                .genesis()?
+                .validator_set()
+                .iter()
+                .filter(|validator| &validator.network_key != our_network_public_key)
+                .map(|validator| sui_config::p2p::SeedPeer {
+                    peer_id: Some(anemo::PeerId(validator.network_key.0.to_bytes())),
+                    address: validator.p2p_address.clone(),
+                });
+            p2p_config.seed_peers.extend(other_validators);
+        }
 
         let (discovery, discovery_server) = discovery::Builder::new().config(p2p_config).build();
 
