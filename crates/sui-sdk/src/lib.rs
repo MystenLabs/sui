@@ -28,7 +28,7 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 pub mod apis;
 pub mod error;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
-const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 10;
+const WAIT_FOR_TX_TIMEOUT_SEC: u64 = 60;
 
 #[derive(Debug)]
 pub struct TransactionExecutionResult {
