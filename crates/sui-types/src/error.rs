@@ -19,7 +19,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
-use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -572,12 +571,6 @@ impl From<VMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
-    }
-}
-
-impl From<SubscriberError> for SuiError {
-    fn from(error: SubscriberError) -> Self {
-        SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
 }
 

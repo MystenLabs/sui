@@ -384,7 +384,6 @@ num-rational = { version = "0.4", default-features = false, features = ["num-big
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
 num_cpus = { version = "1", default-features = false }
-num_enum = { version = "0.5" }
 number_prefix = { version = "0.4" }
 object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
@@ -1070,8 +1069,6 @@ num-rational = { version = "0.4", default-features = false, features = ["num-big
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm"] }
 num_cpus = { version = "1", default-features = false }
-num_enum = { version = "0.5" }
-num_enum_derive = { version = "0.5", default-features = false, features = ["std"] }
 number_prefix = { version = "0.4" }
 object = { version = "0.30", default-features = false, features = ["archive", "elf", "macho", "pe", "read_core", "unaligned"] }
 oid-registry = { version = "0.6", features = ["crypto", "x509"] }
