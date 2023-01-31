@@ -14,8 +14,6 @@ import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
 import { useRpc, useAppSelector } from '_hooks';
 
-// Response pages for all transactions
-// use txDigest for the transaction result
 function ReceiptPage() {
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
@@ -23,10 +21,8 @@ function ReceiptPage() {
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
-
     // get Return route from URL params
     const fromRoute = searchParams.get('from');
-
     const rpc = useRpc();
 
     const { data, isLoading, isError } = useQuery(

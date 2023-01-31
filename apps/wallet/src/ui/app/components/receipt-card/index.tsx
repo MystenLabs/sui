@@ -35,9 +35,7 @@ type ReceiptCardProps = {
 };
 
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
-    // return route or default to transactions
     const { timestamp_ms, certificate, effects } = txn;
-
     const executionStatus = getExecutionStatusType(txn);
     const isSuccessful = executionStatus === 'success';
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
@@ -160,7 +158,6 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             transactionID={certificate.transactionDigest}
                             title="View on Sui Explorer"
                             className="text-sui-dark text-p4 font-semibold no-underline uppercase tracking-wider"
-                            showIcon={false}
                         >
                             View on Explorer
                         </ExplorerLink>

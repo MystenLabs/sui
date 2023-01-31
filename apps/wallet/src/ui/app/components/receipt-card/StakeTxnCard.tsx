@@ -24,7 +24,6 @@ const REQUEST_DELEGATION_EVENT = '0x2::validator_set::DelegationRequestEvent';
 
 // TODO: moveEvents is will be changing
 // For Staked Transaction use moveEvent Felids to get the validator address, delegation amount, epoch
-// and calculate the APY and reward epoch
 export function StakeTxnCard({ txnEffects, amount }: StakeTxnCardProps) {
     const stakingData = useMemo(() => {
         if (!txnEffects?.events) return null;
@@ -63,7 +62,7 @@ export function StakeTxnCard({ txnEffects, amount }: StakeTxnCardProps) {
 
     const rewardEpoch = useMemo(() => {
         if (!validatorsData || !stakingData?.fields.epoch) return 0;
-
+        // show reward epoch only after 2 epochs
         const rewardStarts = +stakingData.fields.epoch + 2;
         return +validatorsData.epoch > rewardStarts ? rewardStarts : 0;
     }, [stakingData, validatorsData]);
