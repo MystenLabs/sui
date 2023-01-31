@@ -29,7 +29,7 @@ import type {
     SuiEvent,
 } from '@mysten/sui.js';
 
-const getTxnEffectsEventID = (
+export const getTxnEffectsEventID = (
     txEffects: TransactionEffects,
     address: string
 ): string[] => {

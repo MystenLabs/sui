@@ -6,10 +6,17 @@ import { NftImage } from '_components/nft-display/NftImage';
 import { useGetNFTMeta } from '_hooks';
 
 //TODO merge all NFT image displays
-export function TxnImage({ id }: { id: string }) {
+export function TxnImage({ id, label }: { id: string; label?: string }) {
     const nftMeta = useGetNFTMeta(id);
 
     return nftMeta?.url ? (
+        <div className="flex gap-2 flex-col">
+            {label && (
+                <Text variant="body" weight="medium" color="steel-darker">
+                    {label}
+                </Text>
+            )}
+           
         <div className="flex w-full gap-2">
             <NftImage
                 borderRadius="sm"
@@ -40,6 +47,7 @@ export function TxnImage({ id }: { id: string }) {
                     </Text>
                 )}
             </div>
+        </div>
         </div>
     ) : null;
 }
