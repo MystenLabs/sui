@@ -634,6 +634,8 @@ Supply a package path to `verify-source` (or run from package root) to have the 
 
 The default behavior is for the command to verify only the direct source of the package, but you can supply the `--verify-deps` flag to have the command verify dependencies, as well. If you just want to verify dependencies, you can also add the `--skip-source` flag. Attempting to use the `--skip-source` flag without including the `--verify-deps` flag results in an error because there is essentially nothing to verify.
 
+Running `sui client verify-source --skip-source --verify-deps` does not publish the package, but performs the same dependency verification as `sui client publish`. You could use this command to check dependency verification before attempting to publish, as described in the [previous section](#publish-packages).
+
 The `sui client verify-source` command expects package on-chain addresses to be set in the package manifest. There should not be any unspecified or `0x0` addresses in the package. If you want to verify a seemingly unpublished package against an on-chain address, use the `--address-override` flag to supply the on-chain address to verify against. This flag only supports packages that are truly unpublished, with all modules at address `0x0`. You receive an error if you attempt to use this flag on a published (or somehow partially published) package. 
 
 If successful, the command returns a `0` exit code and prints `Source verification succeeded!` to the console. If it fails, it returns a non-zero exit code and prints an error message to the console.
