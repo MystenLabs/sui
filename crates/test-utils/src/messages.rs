@@ -315,7 +315,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransac
     let (sender, keypair) = deterministic_random_account_key();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let all_module_bytes = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_package_bytes(/* with_unpublished_deps */ false);
