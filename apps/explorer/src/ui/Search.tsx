@@ -61,7 +61,7 @@ export function Search({
             className="relative flex w-full flex-col"
         >
             <Combobox.Input
-                displayValue={(value: SearchResult) => value?.label}
+                displayValue={(value: SearchResult) => value.label}
                 className="text-white/0.4 border-1 h-[2rem] w-full rounded-md border-transparent bg-search-fill pl-2 text-xs leading-8 text-white focus:border-solid focus:border-sui"
                 onChange={onChange}
                 placeholder={placeholder}
@@ -75,52 +75,61 @@ export function Search({
                 <Search16 className="bg-search-fill text-white opacity-40" />
             </button>
 
-            <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
-                {isLoading ? (
-                    <div className="flex items-center justify-center">
-                        <LoadingSpinner />
-                    </div>
-                ) : hasOptions ? (
-                    Object.entries(options).map(([key, results], idx) => {
-                        if (!results.length) return null;
-                        console.log(results);
-                        return (
-                            <div
-                                className={
-                                    idx !== Object.entries(options).length - 1
-                                        ? 'mb-4'
-                                        : ''
-                                }
-                                key={key}
+            {inputValue && (
+                <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center">
+                            <LoadingSpinner />
+                        </div>
+                    ) : hasOptions ? (
+                        Object.entries(options).map(([key, results], idx) => {
+                            if (!results.length) return null;
+                            return (
+                                <div
+                                    className={
+                                        idx !==
+                                        Object.entries(options).length - 1
+                                            ? 'mb-4'
+                                            : ''
+                                    }
+                                    key={key}
+                                >
+                                    {!!results?.length && (
+                                        <div className="mb-2">
+                                            <Text
+                                                color="steel-dark"
+                                                variant="captionSmall/medium"
+                                            >
+                                                {key}
+                                            </Text>
+                                        </div>
+                                    )}
+                                    {results?.map((item: any) => {
+                                        return (
+                                            <SearchItem
+                                                key={item.id}
+                                                value={item}
+                                            >
+                                                {item.label}
+                                            </SearchItem>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="flex items-center justify-center">
+                            <Text
+                                variant="body/medium"
+                                italic
+                                color="steel-darker"
                             >
-                                {!!results?.length && (
-                                    <div className="mb-2">
-                                        <Text
-                                            color="steel-dark"
-                                            variant="captionSmall/medium"
-                                        >
-                                            {key}
-                                        </Text>
-                                    </div>
-                                )}
-                                {results?.map((item: any) => {
-                                    return (
-                                        <SearchItem key={item.id} value={item}>
-                                            {item.label}
-                                        </SearchItem>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })
-                ) : (
-                    <div className="flex items-center justify-center p-5">
-                        <Text variant="body/medium" italic color="steel-darker">
-                            No Results
-                        </Text>
-                    </div>
-                )}
-            </Combobox.Options>
+                                No Results
+                            </Text>
+                        </div>
+                    )}
+                </Combobox.Options>
+            )}
         </Combobox>
     );
 }

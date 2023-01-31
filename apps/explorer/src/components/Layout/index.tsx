@@ -45,7 +45,7 @@ export function Layout() {
                             >
                                 <Header />
                                 <main className="relative z-10 min-h-screen rounded-3xl bg-offwhite py-2 shadow-2xl">
-                                    <section className="mx-auto mt-[68px] max-w-[1440px] p-5">
+                                    <section className="mx-auto max-w-[1440px] p-5">
                                         <Outlet />
                                     </section>
                                 </main>

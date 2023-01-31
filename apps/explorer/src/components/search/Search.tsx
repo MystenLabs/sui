@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import React, { useState, useCallback } from 'react';
 
-import { useDebouncedValue } from '~/hooks/useDebounce';
+import { useDebouncedValue } from '~/hooks/useDebouncedValue';
 import { useSearch } from '~/hooks/useSearch';
 import { Search as SearchBox } from '~/ui/Search';
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
