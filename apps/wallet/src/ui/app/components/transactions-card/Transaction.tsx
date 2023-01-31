@@ -125,15 +125,18 @@ export function Transaction({
         return isSender ? 'Send' : 'Received';
     }, [isSender, moveCallLabel, txnKind]);
 
+    // Transition label
     const txnLabel = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Received Staking Rewards';
         if (moveCallLabel) return moveCallLabel;
         return isSender ? 'Sent' : 'Received';
     }, [txnKind, moveCallLabel, isSender]);
 
-    // Show sui symbol only if it is a sui transfer, staking or unstaking
+    // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
     const showSuiSymbol =
-        isSuiTransfer || (moveCallLabel && moveCallLabel !== 'Call');
+        (transferAmount.coinType === SUI_TYPE_ARG && isSuiTransfer) ||
+        moveCallLabel === 'Staked' ||
+        moveCallLabel === 'Unstaked';
 
     return (
         <Link

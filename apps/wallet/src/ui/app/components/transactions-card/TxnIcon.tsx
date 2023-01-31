@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    WalletActionStake24,
+    ArrowRight16,
+    Info16,
+    Swap16,
+} from '@mysten/icons';
 import cl from 'classnames';
 
 import Icon, { SuiIcons } from '_components/icon';
@@ -8,18 +14,20 @@ import Icon, { SuiIcons } from '_components/icon';
 // TODO: use update icons lib
 const icons = {
     Send: (
-        <Icon
-            icon={SuiIcons.ArrowLeft}
-            className="text-gradient-blue-start rotate-135"
+        <ArrowRight16
+            fill="currentColor"
+            className="text-gradient-blue-start text-body -rotate-45"
         />
     ),
     Received: (
-        <Icon
-            icon={SuiIcons.ArrowLeft}
-            className="text-gradient-blue-start -rotate-45"
+        <ArrowRight16
+            fill="currentColor"
+            className="text-gradient-blue-start text-body rotate-135"
         />
     ),
-    Staked: <Icon icon={SuiIcons.Union} className="text-gradient-blue-start" />,
+    Staked: (
+        <WalletActionStake24 className="text-gradient-blue-start text-heading2 bg-transparent" />
+    ),
     Unstaked: (
         <Icon
             icon={SuiIcons.Tokens}
@@ -32,8 +40,8 @@ const icons = {
             className="text-gradient-blue-start text-body"
         />
     ),
-    Swapped: <Icon icon={SuiIcons.Swap} className="text-gradient-blue-start" />,
-    Failed: <Icon icon={SuiIcons.Info} className="text-issue-dark text-body" />,
+    Swapped: <Swap16 className="text-gradient-blue-start text-heading6" />,
+    Failed: <Info16 className="text-issue-dark text-heading6" />,
 };
 
 interface TxnItemIconProps {
