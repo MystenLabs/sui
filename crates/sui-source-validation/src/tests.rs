@@ -447,7 +447,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
 
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
-    sui_framework::build_move_package(package.as_ref(), BuildConfig::default()).unwrap()
+    sui_framework::build_move_package(package.as_ref(), BuildConfig::new_for_testing()).unwrap()
 }
 
 /// Compile and publish package at absolute path `package` to chain.
