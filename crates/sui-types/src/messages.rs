@@ -1067,6 +1067,10 @@ impl<S> Envelope<SenderSignedData, S> {
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message.value.kind.is_system_tx()
     }
+
+    pub fn is_change_epoch_tx(&self) -> bool {
+        self.data().intent_message.value.kind.is_change_epoch_tx()
+    }
 }
 
 /// A transaction that is signed by a sender but not yet by an authority.
