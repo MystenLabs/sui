@@ -13,6 +13,7 @@ mod tx_context;
 mod types;
 
 use crate::make_native;
+use crate::natives::crypto::ecvrf;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
@@ -84,6 +85,11 @@ pub fn all_natives(
             "dynamic_field",
             "has_child_object_with_ty",
             make_native!(dynamic_field::has_child_object_with_ty),
+        ),
+        (
+            "ecvrf",
+            "native_ecvrf_verify",
+            make_native!(ecvrf::ecvrf_verify),
         ),
         ("ecdsa_k1", "ecrecover", make_native!(ecdsa_k1::ecrecover)),
         (
