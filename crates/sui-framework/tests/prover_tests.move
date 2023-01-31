@@ -39,6 +39,16 @@ module sui::prover_tests {
         aborts_if sui::prover::owned(o);
     }
 
+    public fun simple_delete(o: Obj) {
+        let Obj { id } = o;
+        sui::object::delete(id);
+    }
+
+    spec simple_delete {
+        aborts_if false;
+        ensures !sui::prover::owned(o) && !sui::prover::shared(o) && !sui::prover::immutable(o);
+    }
+
     // ====================================================================
     // Dynamic fields
     // ====================================================================

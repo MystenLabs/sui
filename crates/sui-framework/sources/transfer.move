@@ -22,9 +22,9 @@ module sui::transfer {
     spec freeze_object {
         pragma opaque;
         aborts_if [abstract] sui::prover::owned(obj);
-        modifies [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] exists<sui::prover::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).status == 3 /* IMMUTABLE */;
+        modifies [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] exists<sui::object::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).status == 3 /* IMMUTABLE */;
     }
 
     /// Turn the given object into a mutable shared object that everyone
@@ -37,9 +37,9 @@ module sui::transfer {
     spec share_object {
         pragma opaque;
         aborts_if [abstract] sui::prover::owned(obj);
-        modifies [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] exists<sui::prover::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).status == 2 /* SHARED */;
+        modifies [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] exists<sui::object::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).status == 2 /* SHARED */;
     }
 
     native fun transfer_internal<T: key>(obj: T, recipient: address);
@@ -47,10 +47,10 @@ module sui::transfer {
     spec transfer_internal {
         pragma opaque;
         aborts_if [abstract] false;
-        modifies [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] exists<sui::prover::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).owner == recipient;
-        ensures [abstract] global<sui::prover::Ownership>(sui::object::id(obj).bytes).status == 1 /* OWNED */;
+        modifies [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] exists<sui::object::Ownership>(sui::object::id(obj).bytes);
+        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).owner == recipient;
+        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).status == 1 /* OWNED */;
     }
 
     // Cost calibration functions

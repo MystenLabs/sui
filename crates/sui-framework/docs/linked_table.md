@@ -27,6 +27,7 @@ removal
 -  [Function `is_empty`](#0x2_linked_table_is_empty)
 -  [Function `destroy_empty`](#0x2_linked_table_destroy_empty)
 -  [Function `drop`](#0x2_linked_table_drop)
+-  [Module Specification](#@Module_Specification_1)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -647,3 +648,12 @@ Usable only if the value type <code>V</code> has the <code>drop</code> ability
 
 
 </details>
+
+<a name="@Module_Specification_1"></a>
+
+## Module Specification
+
+
+
+<pre><code><b>pragma</b> verify = <b>false</b>;
+</code></pre>

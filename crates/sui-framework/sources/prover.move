@@ -9,21 +9,6 @@ module sui::prover {
     const SHARED: u64 = 2;
     const IMMUTABLE: u64 = 3;
 
-
-    #[verify_only]
-    /// Ownership information for a given object (stored at the object's address)
-    struct Ownership has key {
-        owner: address, // only matters if status == OWNED
-        status: u64,
-    }
-
-    #[verify_only]
-    /// List of fields with a given name type of an object containing fields (stored at the
-    /// containing object's address)
-    struct DynamicFields<K: copy + drop + store> has key {
-        names: vector<K>,
-    }
-
     #[verify_only]
     /// Information about which object contains a given object field (stored at the field object's
     /// address).
@@ -36,30 +21,30 @@ module sui::prover {
     /// Verifies if a given object it owned.
     spec fun owned<T: key>(obj: T): bool {
         let addr = object::id(obj).bytes;
-        exists<Ownership>(addr) &&
-        global<Ownership>(addr).status == OWNED
+        exists<object::Ownership>(addr) &&
+        global<object::Ownership>(addr).status == OWNED
     }
 
     /// Verifies if a given object is owned.
     spec fun owned_by<T: key>(obj: T, owner: address): bool {
         let addr = object::id(obj).bytes;
-        exists<Ownership>(addr) &&
-        global<Ownership>(addr).status == OWNED &&
-        global<Ownership>(addr).owner == owner
+        exists<object::Ownership>(addr) &&
+        global<object::Ownership>(addr).status == OWNED &&
+        global<object::Ownership>(addr).owner == owner
     }
 
     /// Verifies if a given object is shared.
     spec fun shared<T: key>(obj: T): bool {
         let addr = object::id(obj).bytes;
-        exists<Ownership>(addr) &&
-        global<Ownership>(addr).status == SHARED
+        exists<object::Ownership>(addr) &&
+        global<object::Ownership>(addr).status == SHARED
     }
 
     /// Verifies if a given object is immutable.
     spec fun immutable<T: key>(obj: T): bool {
         let addr = object::id(obj).bytes;
-        exists<Ownership>(addr) &&
-        global<Ownership>(addr).status == IMMUTABLE
+        exists<object::Ownership>(addr) &&
+        global<object::Ownership>(addr).status == IMMUTABLE
     }
 
     /// Verifies if a given object has field with a given name.
@@ -71,10 +56,10 @@ module sui::prover {
     /// Returns number of K-type fields of a given object.
     spec fun num_fields<T: key, K: copy + drop + store>(obj: T): u64 {
         let addr = object::id(obj).bytes;
-        if (!exists<DynamicFields<K>>(addr)) {
+        if (!exists<object::DynamicFields<K>>(addr)) {
             0
         } else {
-            len(global<DynamicFields<K>>(addr).names)
+            len(global<object::DynamicFields<K>>(addr).names)
         }
     }
 
@@ -82,7 +67,7 @@ module sui::prover {
     // framework functions
 
     spec fun uid_has_field<K: copy + drop + store>(addr: address, name: K): bool {
-        exists<DynamicFields<K>>(addr) && contains(global<DynamicFields<K>>(addr).names, name)
+        exists<object::DynamicFields<K>>(addr) && contains(global<object::DynamicFields<K>>(addr).names, name)
     }
 
     // remove an element at index from a vector and return the resulting vector

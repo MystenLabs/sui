@@ -5,8 +5,6 @@
 
 
 
--  [Resource `Ownership`](#0x2_prover_Ownership)
--  [Resource `DynamicFields`](#0x2_prover_DynamicFields)
 -  [Resource `DynamicFieldContainment`](#0x2_prover_DynamicFieldContainment)
 -  [Constants](#@Constants_0)
 -  [Module Specification](#@Module_Specification_1)
@@ -15,69 +13,6 @@
 <pre><code></code></pre>
 
 
-
-<a name="0x2_prover_Ownership"></a>
-
-## Resource `Ownership`
-
-Ownership information for a given object (stored at the object's address)
-
-
-<pre><code><b>struct</b> <a href="prover.md#0x2_prover_Ownership">Ownership</a> <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>owner: <b>address</b></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>status: u64</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_prover_DynamicFields"></a>
-
-## Resource `DynamicFields`
-
-List of fields with a given name type of an object containing fields (stored at the
-containing object's address)
-
-
-<pre><code><b>struct</b> <a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K: <b>copy</b>, drop, store&gt; <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>names: <a href="">vector</a>&lt;K&gt;</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
 
 <a name="0x2_prover_DynamicFieldContainment"></a>
 
@@ -152,8 +87,8 @@ Verifies if a given object it owned.
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_owned">owned</a>&lt;T: key&gt;(obj: T): bool {
    <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr) &&
-   <b>global</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_OWNED">OWNED</a>
+   <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr) &&
+   <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_OWNED">OWNED</a>
 }
 </code></pre>
 
@@ -166,9 +101,9 @@ Verifies if a given object is owned.
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_owned_by">owned_by</a>&lt;T: key&gt;(obj: T, owner: <b>address</b>): bool {
    <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr) &&
-   <b>global</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_OWNED">OWNED</a> &&
-   <b>global</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr).owner == owner
+   <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr) &&
+   <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_OWNED">OWNED</a> &&
+   <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr).owner == owner
 }
 </code></pre>
 
@@ -181,8 +116,8 @@ Verifies if a given object is shared.
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_shared">shared</a>&lt;T: key&gt;(obj: T): bool {
    <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr) &&
-   <b>global</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_SHARED">SHARED</a>
+   <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr) &&
+   <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_SHARED">SHARED</a>
 }
 </code></pre>
 
@@ -195,8 +130,8 @@ Verifies if a given object is immutable.
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_immutable">immutable</a>&lt;T: key&gt;(obj: T): bool {
    <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr) &&
-   <b>global</b>&lt;<a href="prover.md#0x2_prover_Ownership">Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_IMMUTABLE">IMMUTABLE</a>
+   <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr) &&
+   <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(addr).status == <a href="prover.md#0x2_prover_IMMUTABLE">IMMUTABLE</a>
 }
 </code></pre>
 
@@ -222,10 +157,10 @@ Returns number of K-type fields of a given object.
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_num_fields">num_fields</a>&lt;T: key, K: <b>copy</b> + drop + store&gt;(obj: T): u64 {
    <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
-   <b>if</b> (!<b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr)) {
+   <b>if</b> (!<b>exists</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr)) {
        0
    } <b>else</b> {
-       len(<b>global</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr).names)
+       len(<b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr).names)
    }
 }
 </code></pre>
@@ -237,7 +172,7 @@ Returns number of K-type fields of a given object.
 
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K: <b>copy</b> + drop + store&gt;(addr: <b>address</b>, name: K): bool {
-   <b>exists</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr) && contains(<b>global</b>&lt;<a href="prover.md#0x2_prover_DynamicFields">DynamicFields</a>&lt;K&gt;&gt;(addr).names, name)
+   <b>exists</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr) && contains(<b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr).names, name)
 }
 </code></pre>
 
