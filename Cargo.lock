@@ -8992,6 +8992,7 @@ dependencies = [
  "sui-core",
  "sui-json-rpc",
  "sui-network",
+ "sui-protocol-constants",
  "sui-simulator",
  "sui-storage",
  "sui-telemetry",
