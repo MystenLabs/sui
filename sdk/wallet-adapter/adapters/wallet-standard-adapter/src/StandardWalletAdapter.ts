@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SignableTransaction } from "@mysten/sui.js";
+import {
+  ExecuteTransactionRequestType,
+  SignableTransaction,
+} from "@mysten/sui.js";
 import {
   WalletAdapter,
   WalletAdapterEvents,
@@ -86,11 +89,15 @@ export class StandardWalletAdapter implements WalletAdapter {
     }
   }
 
-  async signAndExecuteTransaction(transaction: SignableTransaction) {
+  async signAndExecuteTransaction(
+    transaction: SignableTransaction,
+    options?: { requestType?: ExecuteTransactionRequestType }
+  ) {
     return this.#wallet.features[
       "sui:signAndExecuteTransaction"
     ].signAndExecuteTransaction({
       transaction,
+      options,
     });
   }
 
