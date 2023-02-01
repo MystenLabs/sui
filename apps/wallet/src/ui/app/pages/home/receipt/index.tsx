@@ -6,12 +6,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 
-import { checkStakingTxn } from '../../../components/receipt-card/checkStakingTxn';
 import Alert from '_components/alert';
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
+import { checkStakingTxn } from '_helpers';
 import { useRpc, useAppSelector } from '_hooks';
 
 function ReceiptPage() {

@@ -14,7 +14,6 @@ import { useMemo } from 'react';
 import { DateCard } from '../../shared/date-card';
 import { ReceiptCardBg } from './ReceiptCardBg';
 import { StatusIcon } from './StatusIcon';
-import { checkStakingTxn } from './checkStakingTxn';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { DelegationObjectCard } from '_components/receipt-card/DelegationObjectCard';
@@ -25,7 +24,7 @@ import { TxnGasSummery } from '_components/receipt-card/TxnGasSummery';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
 import { getTxnEffectsEventID } from '_components/transactions-card/Transaction';
 import { TxnImage } from '_components/transactions-card/TxnImage';
-import { getEventsSummary } from '_helpers';
+import { getEventsSummary, checkStakingTxn } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
