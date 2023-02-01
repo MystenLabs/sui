@@ -3,14 +3,23 @@
 
 use crate::metrics::NetworkConnectionMetrics;
 use anemo::PeerId;
+use futures::SinkExt;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
+use tracing::error;
+
+pub enum ConnectionStatus {
+    Connected,
+    Disconnected,
+}
 
 pub struct ConnectionMonitor {
     network: anemo::NetworkRef,
     connection_metrics: NetworkConnectionMetrics,
     peer_id_types: HashMap<PeerId, String>,
+    sender: Option<Sender<(PeerId, ConnectionStatus)>>,
 }
 
 impl ConnectionMonitor {
@@ -19,12 +28,14 @@ impl ConnectionMonitor {
         network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
         peer_id_types: HashMap<PeerId, String>,
+        sender: Option<Sender<(PeerId, ConnectionStatus)>>,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             Self {
                 network,
                 connection_metrics,
                 peer_id_types
+                sender,
             }
             .run(),
             "ConnectionMonitor"
@@ -81,7 +92,16 @@ impl ConnectionMonitor {
             self.connection_metrics
                 .network_peer_connected
                 .with_label_values(&[&format!("{peer_id}"), ty])
-                .set(1)
+                .set(1);
+
+            match &self.sender {
+                Some(s) => {
+                    if let Err(e) = s.send((peer_id, ConnectionStatus::Connected)) {
+                        error!("Error sending connection status {e}");
+                    }
+                }
+                None => {}
+            }
         }
     }
 
@@ -92,7 +112,16 @@ impl ConnectionMonitor {
             self.connection_metrics
                 .network_peer_connected
                 .with_label_values(&[&format!("{peer_id}"), ty])
-                .set(0)
+                .set(0);
+
+            match &self.sender {
+                Some(s) => {
+                    if let Err(e) = s.send((peer_id, ConnectionStatus::Disconnected)) {
+                        error!("Error sending connection status {e}");
+                    }
+                }
+                None => {}
+            }
         }
     }
 }
