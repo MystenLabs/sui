@@ -13,8 +13,17 @@ import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
+import { useGetEvents } from '~/hooks/useGetEvents';
 import { useGetObject } from '~/hooks/useGetObject';
+<<<<<<< HEAD
 import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
+=======
+import {
+    VALIDATORS_OBJECT_ID,
+    VALIDATORS_EVENTS_QUERY,
+    type ActiveValidator,
+} from '~/pages/validator/ValidatorDataTypes';
+>>>>>>> 5c130e1e4c (update)
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -29,7 +38,7 @@ import { getName } from '~/utils/getName';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { roundFloat } from '~/utils/roundFloat';
 
-const APY_DECIMALS = 4;
+const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
@@ -162,8 +171,6 @@ function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
 
-    const rpc = useRpc();
-
     const validatorsData =
         data &&
         is(data.details, SuiObject) &&
@@ -179,19 +186,11 @@ function ValidatorPageResult() {
         data: validatorEvents,
         isLoading: validatorsEventsLoading,
         isError: validatorEventError,
-    } = useQuery(
-        ['events', VALIDATORS_EVENTS_QUERY],
-        async () => {
-            if (!numberOfValidators) return;
-            return rpc.getEvents(
-                { MoveEvent: VALIDATORS_EVENTS_QUERY },
-                null,
-                numberOfValidators,
-                'descending'
-            );
-        },
-        { enabled: !!numberOfValidators }
-    );
+    } = useGetEvents({
+        query: { MoveEvent: VALIDATORS_EVENTS_QUERY },
+        limit: numberOfValidators || null,
+        order: 'descending',
+    });
 
     const totalStaked = useMemo(() => {
         if (!validatorsData) return 0;
@@ -216,7 +215,7 @@ function ValidatorPageResult() {
         return roundFloat(
             validatorsApy.reduce((acc, cur) => acc + cur, 0) /
                 validatorsApy.length,
-            3
+            APY_DECIMALS
         );
     }, [validatorsData]);
 

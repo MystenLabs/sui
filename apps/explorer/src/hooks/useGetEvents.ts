@@ -13,7 +13,7 @@ import { useRpc } from './useRpc';
 type GetEventsProps = {
     query: EventQuery;
     cursor?: EventId | null;
-    limit?: number | null;
+    limit: number | null;
     order: 'ascending' | 'descending';
 };
 
@@ -30,7 +30,7 @@ export function useGetEvents({
     const response = useQuery(
         ['events', query],
         () => rpc.getEvents(query, eventCursor, eventLimit, order),
-        { enabled: !!query }
+        { enabled: !!limit }
     );
 
     return response;
