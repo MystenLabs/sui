@@ -336,7 +336,7 @@ impl Proposer {
             // min delay value to increase the chance of committing the leader.
             NetworkModel::PartiallySynchronous
                 if self.committee.size() > 1
-                    && self.committee.leader(self.round + 1).id() == self.authority_id =>
+                    && self.committee.leader(self.round + 1) == self.name =>
             {
                 Duration::ZERO
             }
@@ -366,7 +366,7 @@ impl Proposer {
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
-        if self.committee.leader(self.round + 1).id() == self.authority_id {
+        if self.committee.leader(self.round + 1) == self.name {
             return true;
         }
 
@@ -423,7 +423,6 @@ impl Proposer {
         let timer_start = Instant::now();
         let max_delay_timer = sleep_until(timer_start + self.max_header_delay);
         let min_delay_timer = sleep_until(timer_start + self.min_header_delay);
-
         let header_resend_timeout = self
             .header_resend_timeout
             .unwrap_or(DEFAULT_HEADER_RESEND_TIMEOUT);
@@ -490,6 +489,14 @@ impl Proposer {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok((header, digests)) => {
+                        let reason = if max_delay_timed_out {
+                            "max_timeout"
+                        } else if enough_digests {
+                            "threshold_size_reached"
+                        } else {
+                            "min_timeout"
+                        };
+
                         // Save the header
                         opt_latest_header = Some(header);
                         header_repeat_timer = Box::pin(sleep(header_resend_timeout));
