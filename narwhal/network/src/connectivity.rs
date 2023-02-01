@@ -3,10 +3,9 @@
 
 use crate::metrics::NetworkConnectionMetrics;
 use anemo::PeerId;
-use futures::SinkExt;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::HashMap;
-use std::sync::mpsc::Sender;
+use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tracing::error;
 
@@ -34,7 +33,7 @@ impl ConnectionMonitor {
             Self {
                 network,
                 connection_metrics,
-                peer_id_types
+                peer_id_types,
                 sender,
             }
             .run(),
@@ -70,22 +69,22 @@ impl ConnectionMonitor {
 
         // now report the connected peers
         for peer_id in connected_peers {
-            self.handle_peer_connect(peer_id);
+            self.handle_peer_connect(peer_id).await;
         }
 
         while let Ok(event) = subscriber.recv().await {
             match event {
                 anemo::types::PeerEvent::NewPeer(peer_id) => {
-                    self.handle_peer_connect(peer_id);
+                    self.handle_peer_connect(peer_id).await;
                 }
                 anemo::types::PeerEvent::LostPeer(peer_id, _) => {
-                    self.handle_peer_disconnect(peer_id);
+                    self.handle_peer_disconnect(peer_id).await;
                 }
             }
         }
     }
 
-    fn handle_peer_connect(&self, peer_id: PeerId) {
+    async fn handle_peer_connect(&self, peer_id: PeerId) {
         self.connection_metrics.network_peers.inc();
 
         if let Some(ty) = self.peer_id_types.get(&peer_id) {
@@ -96,7 +95,7 @@ impl ConnectionMonitor {
 
             match &self.sender {
                 Some(s) => {
-                    if let Err(e) = s.send((peer_id, ConnectionStatus::Connected)) {
+                    if let Err(e) = s.send((peer_id, ConnectionStatus::Connected)).await {
                         error!("Error sending connection status {e}");
                     }
                 }
@@ -105,7 +104,7 @@ impl ConnectionMonitor {
         }
     }
 
-    fn handle_peer_disconnect(&self, peer_id: PeerId) {
+    async fn handle_peer_disconnect(&self, peer_id: PeerId) {
         self.connection_metrics.network_peers.dec();
 
         if let Some(ty) = self.peer_id_types.get(&peer_id) {
@@ -116,7 +115,7 @@ impl ConnectionMonitor {
 
             match &self.sender {
                 Some(s) => {
-                    if let Err(e) = s.send((peer_id, ConnectionStatus::Disconnected)) {
+                    if let Err(e) = s.send((peer_id, ConnectionStatus::Disconnected)).await {
                         error!("Error sending connection status {e}");
                     }
                 }

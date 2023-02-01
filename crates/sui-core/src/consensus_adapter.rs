@@ -18,6 +18,7 @@ use prometheus::{register_histogram_vec_with_registry, register_int_gauge_with_r
 use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
@@ -35,9 +36,13 @@ use tap::prelude::*;
 use tokio::task::JoinHandle;
 use tokio::time;
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use mysten_metrics::spawn_monitored_task;
+use sui_simulator::anemo::PeerId;
+use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
 use sui_types::messages::ConsensusTransactionKind;
+use tokio::sync::mpsc::Receiver;
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 
@@ -126,18 +131,6 @@ impl ConsensusAdapterMetrics {
     }
 }
 
-/// Submit Sui certificates to the consensus.
-pub struct ConsensusAdapter {
-    /// The network client connecting to the consensus node of this authority.
-    consensus_client: Box<dyn SubmitToConsensus>,
-    /// Authority pubkey.
-    authority: AuthorityName,
-    /// Number of submitted transactions still inflight at this node.
-    num_inflight_transactions: AtomicU64,
-    /// A structure to register metrics
-    opt_metrics: OptArcConsensusAdapterMetrics,
-}
-
 #[async_trait::async_trait]
 pub trait SubmitToConsensus: Sync + Send + 'static {
     async fn submit_to_consensus(
@@ -168,6 +161,83 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
             })?;
         Ok(())
     }
+}
+
+pub struct ConnectionMonitorStatus {
+    /// Current connection statuses forwarded from the connection monitor
+    pub connection_statuses: Arc<HashMap<AuthorityName, ConnectionStatus>>,
+    /// Join handle for the Connection Monitor Listener
+    pub connection_monitor_listener_handle: JoinHandle<()>,
+}
+
+pub struct ConnectionMonitorListener {
+    /// Receiver from the Connection Monitor
+    receiver: Receiver<(PeerId, ConnectionStatus)>,
+    /// Map to look up the connection statuses as a latency aid during submit to consensus
+    pub current_connection_statuses: Arc<HashMap<AuthorityName, ConnectionStatus>>,
+    /// Map to populate the current connection statuses from the receiver
+    peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
+}
+
+impl ConnectionMonitorListener {
+    async fn spawn(
+        receiver: Receiver<(PeerId, ConnectionStatus)>,
+        peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
+    ) -> ConnectionMonitorStatus {
+        let mut connection_statuses = HashMap::new();
+        for (_, authority_name) in peer_id_to_authority_names.iter() {
+            // initialize all to connected as default,if we don't have a consensus monitor running so
+            // the fallback behavior used in tests is we submit to consensus once and not 2f+1 times
+            connection_statuses.insert(authority_name.clone(), ConnectionStatus::Connected);
+        }
+        let current_connection_statuses = Arc::new(connection_statuses);
+
+        ConnectionMonitorStatus {
+            connection_statuses: current_connection_statuses.clone(),
+            connection_monitor_listener_handle: spawn_monitored_task!(Self {
+                receiver,
+                current_connection_statuses,
+                peer_id_to_authority_names
+            }
+            .run()),
+        }
+    }
+
+    async fn run(&mut self) {
+        loop {
+            match self.receiver.recv().await {
+                Some((peer_id, connection_status)) => {
+                    let current_connection_statuses = match Arc::get_mut(
+                        &mut self.current_connection_statuses,
+                    ) {
+                        Some(c) => c,
+                        None => {
+                            error!("Consensus monitor failed to get current connection statuses for update");
+                            continue;
+                        }
+                    };
+                    let authority_name = self
+                        .peer_id_to_authority_names
+                        .get(&peer_id)
+                        .expect("failed to find peer {:?} in connection monitor listener");
+                    current_connection_statuses.insert(*authority_name, connection_status);
+                }
+                None => return,
+            }
+        }
+    }
+}
+
+/// Submit Sui certificates to the consensus.
+pub struct ConsensusAdapter {
+    /// The network client connecting to the consensus node of this authority.
+    consensus_client: Box<dyn SubmitToConsensus>,
+    /// Authority pubkey.
+    authority: AuthorityName,
+    /// Number of submitted transactions still inflight at this node.
+    num_inflight_transactions: AtomicU64,
+    /// A structure to register metrics
+    opt_metrics: OptArcConsensusAdapterMetrics,
 }
 
 impl ConsensusAdapter {
@@ -571,7 +641,6 @@ impl<'a> Drop for InflightDropGuard<'a> {
     }
 }
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 
