@@ -33,6 +33,7 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
         // Narwhal parameters may result in tests taking >60 seconds.
         parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
+        parameters.min_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
     }
@@ -54,6 +55,7 @@ pub fn test_authority_configs_with_objects(objects: Vec<Object>) -> (NetworkConf
         // Narwhal parameters may result in tests taking >60 seconds.
         parameters.header_num_of_batches_threshold = 1;
         parameters.max_header_delay = Duration::from_millis(200);
+        parameters.min_header_delay = Duration::from_millis(200);
         parameters.batch_size = 1;
         parameters.max_batch_delay = Duration::from_millis(200);
     }
