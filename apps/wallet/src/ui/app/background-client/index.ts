@@ -259,6 +259,18 @@ export class BackgroundClient {
         );
     }
 
+    public async selectAccount(address: SuiAddress) {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'switchAccount'>>({
+                    type: 'keyring',
+                    method: 'switchAccount',
+                    args: { address },
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();

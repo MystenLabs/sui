@@ -5,12 +5,16 @@ import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import PageMainLayout from '_app/shared/page-main-layout';
 import { useLockedGuard } from '_app/wallet/hooks';
 import Loading from '_components/loading';
-import { useInitializedGuard, useAppDispatch } from '_hooks';
+import { useInitializedGuard, useAppDispatch, useAppSelector } from '_hooks';
 import PageLayout from '_pages/layout';
-import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
+import {
+    clearSuiObjects,
+    fetchAllOwnedAndRequiredObjects,
+} from '_redux/slices/sui-objects';
 import { usePageView } from '_shared/utils';
 
 const POLL_SUI_OBJECTS_INTERVAL = 4000;
@@ -28,6 +32,10 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
         document?.visibilityState || null
     );
     const dispatch = useAppDispatch();
+    const activeAddress = useActiveAddress();
+    const network = useAppSelector(
+        ({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`
+    );
     useEffect(() => {
         const callback = () => {
             setVisibility(document.visibilityState);
@@ -38,6 +46,9 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
             document.removeEventListener('visibilitychange', callback);
         };
     }, []);
+    useEffect(() => {
+        dispatch(clearSuiObjects());
+    }, [activeAddress, network, dispatch]);
     useEffect(() => {
         const sub = of(guardChecking || visibility === 'hidden')
             .pipe(
@@ -50,7 +61,7 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
             )
             .subscribe();
         return () => sub.unsubscribe();
-    }, [guardChecking, visibility, dispatch]);
+    }, [guardChecking, visibility, dispatch, activeAddress, network]);
 
     usePageView();
     return (

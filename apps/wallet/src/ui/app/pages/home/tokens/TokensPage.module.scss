@@ -7,8 +7,6 @@
     height: 100%;
     flex-grow: 1;
     align-items: center;
-    overflow-y: scroll;
-    margin-top: 20px;
 
     @include utils.override-main-padding;
 }
