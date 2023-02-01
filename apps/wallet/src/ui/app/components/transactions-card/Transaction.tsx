@@ -76,7 +76,7 @@ export function Transaction({
         );
 
         // Find non-SUI transfer amount
-        const amountTransfersNonSui = eventsSummary.filter(
+        const amountTransfersNonSui = eventsSummary.find(
             ({ receiverAddress, coinType }) =>
                 receiverAddress === address && coinType !== SUI_TYPE_ARG
         );
@@ -84,12 +84,12 @@ export function Transaction({
         return {
             amount:
                 amountTransfersSui?.amount ||
-                amountTransfersNonSui[0]?.amount ||
-                0,
+                amountTransfersNonSui?.amount ||
+                null,
             coinType:
                 amountTransfersSui?.coinType ||
-                amountTransfersNonSui[0]?.coinType ||
-                SUI_TYPE_ARG,
+                amountTransfersNonSui?.coinType ||
+                null,
         };
     }, [address, eventsSummary]);
 
@@ -98,10 +98,9 @@ export function Transaction({
     // sometime sender and receiver are the same address
     // for txn with amount determine sender or receiver by amount. negative amount means sender and positive amount means receiver
     // fall back to address comparison if amount is not available
-    const isSender =
-        transferAmount.amount === 0
-            ? address === certificate.data.sender
-            : transferAmount.amount < 0;
+    const isSender = transferAmount.amount
+        ? transferAmount.amount < 0
+        : address === certificate.data.sender;
 
     const moveCallTxn = getMoveCallTransaction(
         certificate.data.transactions[0]
@@ -179,10 +178,15 @@ export function Transaction({
                                         </Text>
                                     )}
                                 </div>
-                                <CoinBalance
-                                    amount={Math.abs(transferAmount.amount)}
-                                    coinType={transferAmount.coinType}
-                                />
+                                {transferAmount.coinType &&
+                                    transferAmount.amount && (
+                                        <CoinBalance
+                                            amount={Math.abs(
+                                                transferAmount.amount
+                                            )}
+                                            coinType={transferAmount.coinType}
+                                        />
+                                    )}
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
                                 <TxnTypeLabel
