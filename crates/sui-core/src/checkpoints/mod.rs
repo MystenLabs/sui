@@ -423,7 +423,7 @@ impl CheckpointBuilder {
 
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
-        loop {
+        'main: loop {
             // Check whether an exit signal has been received, if so we break the loop.
             // This gives us a chance to exit, in case checkpoint making keeps failing.
             match self.exit.has_changed() {
@@ -440,7 +440,7 @@ impl CheckpointBuilder {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
-                    continue;
+                    continue 'main;
                 }
             }
             debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
