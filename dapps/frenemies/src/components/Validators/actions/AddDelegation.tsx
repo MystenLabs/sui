@@ -11,7 +11,7 @@ import { useMutation } from "@tanstack/react-query";
 import BigNumber from "bignumber.js";
 import provider from "../../../network/provider";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
-import { getGas, useGetLatestCoins, useManageCoin } from "../../../utils/coins";
+import { useGetLatestCoins, useManageCoin } from "../../../utils/coins";
 import { formatBalance } from "../../../utils/format";
 import { StakeButton } from "../../StakeButton";
 
@@ -44,18 +44,19 @@ export function AddDelegation({ validator, amount }: Props) {
       throw new Error("No coins found.");
     }
 
+    const totalBalance = coins.reduce((acc, coin) => (acc += coin.balance), 0);
+
     const mistAmount = toMist(amount);
 
     const gasPrice = await provider.getReferenceGasPrice();
     const gasRequired = GAS_BUDGET * BigInt(gasPrice);
-    const { max } = getGas(coins, gasRequired);
 
-    if (mistAmount > max) {
+    if (mistAmount > totalBalance) {
       throw new Error(
         `Requested amount ${formatBalance(
           mistAmount,
           SUI_DECIMALS
-        )} is bigger than max ${formatBalance(max, SUI_DECIMALS)}`
+        )} is bigger than max ${formatBalance(totalBalance, SUI_DECIMALS)}`
       );
     }
 

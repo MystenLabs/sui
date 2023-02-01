@@ -24,7 +24,9 @@ export function useGetLatestCoins() {
 }
 
 export function getCoins(coins: CoinStruct[], amount: bigint) {
-  const sorted = [...coins].sort((a, b) => Number(b.balance - a.balance));
+  const sorted = [...coins]
+    .sort((a, b) => Number(b.balance - a.balance))
+    .reverse();
 
   let sum = 0;
   let ret: CoinStruct[] = [];
@@ -39,43 +41,10 @@ export function getCoins(coins: CoinStruct[], amount: bigint) {
   return ret;
 }
 
-/**
- * Returns a Gas `ObjectData` if found or null;
- * Returns the rest of the Coins and their sum.
- */
-export function getGas(coins: CoinStruct[], gasBudget: bigint) {
-  const sorted = [...coins].sort((a, b) => Number(a.balance - b.balance));
-  const gas = sorted.find((coin) => coin.balance >= gasBudget) || null;
+export const DEFAULT_GAS_BUDGET_FOR_PAY = 500;
 
-  if (gas === null) {
-    return {
-      gas: null,
-      coins,
-      max: 0n,
-    };
-  }
-
-  const left = sorted.filter((c) => c.coinObjectId !== gas.coinObjectId);
-  const max = BigInt(left.reduce((acc, c) => acc + c.balance, 0));
-
-  return {
-    gas,
-    max,
-    coins: left,
-  };
-}
-
-export const DEFAULT_GAS_BUDGET_FOR_PAY = 150;
-
-function computeGasBudgetForPay(
-  coins: CoinStruct[],
-  amountToSend: bigint
-): number {
-  const numInputCoins = getCoins(coins, amountToSend).length;
-
-  return (
-    DEFAULT_GAS_BUDGET_FOR_PAY * Math.max(2, Math.min(100, numInputCoins / 2))
-  );
+function computeGasBudgetForPay(coinCount: number): number {
+  return DEFAULT_GAS_BUDGET_FOR_PAY * Math.max(2, Math.min(100, coinCount / 2));
 }
 
 export function useManageCoin() {
@@ -89,20 +58,14 @@ export function useManageCoin() {
 
     const inputCoins = getCoins(coins, totalAmount);
 
-    console.log(inputCoins, coins);
-
     const result = await signAndExecuteTransaction({
       kind: "paySui",
       data: {
-        // NOTE: We reverse the order here so that the highest coin is in the front
-        // so that it is used as the gas coin.
-        inputCoins: [...inputCoins]
-          .reverse()
-          .map((coin) => coin.coinObjectId),
+        inputCoins: inputCoins.map((coin) => coin.coinObjectId),
         recipients: [currentAccount, currentAccount],
         // TODO: Update SDK to accept bigint
         amounts: [Number(amount), Number(gasFee)],
-        gasBudget: computeGasBudgetForPay(coins, totalAmount),
+        gasBudget: computeGasBudgetForPay(inputCoins.length),
       },
     });
 

@@ -72,23 +72,24 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
       <div>
         <div className="w-3/4">
           <div className="relative flex items-center">
-            <input
-              disabled={!!stake}
-              type="number"
-              // Some arbitrary decent step value:
-              step={0.0001}
-              min={0}
-              onInput={onInputAmount}
-              className={clsx(
-                "block w-full pr-28 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border appearance-none",
-                stake && "font-bold"
-              )}
-              placeholder="0 SUI"
-              defaultValue={
-                stake &&
-                formatBalance(stake?.data.staked.toString() || "0", DEC)
-              }
-            />
+            {stake ? (
+              <div className="block w-full pr-28 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border font-bold">
+                {formatBalance(stake?.data.staked.toString() || "0", DEC)} SUI
+              </div>
+            ) : (
+              <input
+                type="number"
+                // Some arbitrary decent step value:
+                step={0.0001}
+                min={0}
+                onInput={onInputAmount}
+                className={clsx(
+                  "block w-full pr-28 bg-white rounded-lg py-2 pl-3 border-steel-darker/30 border appearance-none"
+                )}
+                placeholder="0 SUI"
+                value={amount}
+              />
+            )}
 
             {delegation ? (
               <WithdrawDelegation delegation={delegation!} stake={stake} />
