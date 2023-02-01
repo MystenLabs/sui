@@ -120,7 +120,10 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             ? transferAmount.map(
                                   ({ amount, coinType, receiverAddress }) => {
                                       return (
-                                          <div key={coinType + receiverAddress}>
+                                          <div
+                                              key={coinType + receiverAddress}
+                                              className="divide-y divide-solid divide-steel/20 divide-x-0 gap-3.5 flex flex-col"
+                                          >
                                               <TxnAmount
                                                   amount={amount}
                                                   label={

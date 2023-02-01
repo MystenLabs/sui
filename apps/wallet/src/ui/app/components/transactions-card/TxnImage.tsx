@@ -16,14 +16,6 @@ export function TxnImage({ id, label }: { id: string; label?: string }) {
                     {label}
                 </Text>
             )}
-           
-        <div className="flex w-full gap-2">
-            <NftImage
-                borderRadius="sm"
-                size="xs"
-                name={nftMeta.name}
-                src={nftMeta.url}
-            />
 
             <div className="flex w-full gap-2">
                 <NftImage
@@ -59,7 +51,6 @@ export function TxnImage({ id, label }: { id: string; label?: string }) {
                     )}
                 </div>
             </div>
-        </div>
         </div>
     ) : null;
 }
