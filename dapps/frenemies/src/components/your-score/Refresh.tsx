@@ -6,6 +6,7 @@ import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
 import { config } from "../../config";
 import provider from "../../network/provider";
+import { useEpoch } from "../../network/queries/epoch";
 import { SUI_SYSTEM_ID, useSuiSystem } from "../../network/queries/sui-system";
 import { useMyType, useRawObject } from "../../network/queries/use-raw";
 import { ObjectData } from "../../network/rawObject";
@@ -21,9 +22,9 @@ interface Props {
 }
 
 export function Refresh({ scorecard, round, leaderboardID }: Props) {
-  const { data: system } = useSuiSystem();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
+  const { data: epoch } = useEpoch();
   const { data: leaderboard } = useRawObject<Leaderboard>(config.VITE_LEADERBOARD, LEADERBOARD);
 
   const refreshScorecard = useMutation(["refresh-scorecard"], async () => {
@@ -57,7 +58,7 @@ export function Refresh({ scorecard, round, leaderboardID }: Props) {
     });
   });
 
-  if (!system || scorecard.data.epoch == BigInt(system.epoch) + 1n || !leaderboard) {
+  if (scorecard.data.assignment.epoch == epoch?.data.epoch || !leaderboard) {
     return null;
   }
 
