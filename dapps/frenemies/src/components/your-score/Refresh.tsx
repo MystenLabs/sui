@@ -36,8 +36,6 @@ export function Refresh({ scorecard, round, leaderboardID }: Props) {
     const gasRequred = GAS_BUDGET * BigInt(gasPrice);
     const { gas } = getGas(coins, gasRequred);
 
-    console.log(gas?.data.value, gasRequred);
-
     if (!gas) {
       return null;
     }
