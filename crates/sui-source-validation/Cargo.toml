@@ -30,7 +30,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 
-expect-test = "1.4.0"
 rand = "0.8.5"
 tempfile = "3.3.0"
 tokio = { version = "1.20.1", features = ["macros", "test-util"] }
