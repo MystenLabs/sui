@@ -8,9 +8,6 @@ import {
   PAY_MODULE_NAME,
   SUI_FRAMEWORK_ADDRESS,
   PAY_SPLIT_COIN_VEC_FUNC_NAME,
-  SUI_SYSTEM_MODULE_NAME,
-  WITHDRAW_DELEGATION_FUN_NAME,
-  SWITCH_DELEGATION_FUN_NAME,
   ObjectId,
   SuiAddress,
   SUI_TYPE_ARG,
@@ -20,8 +17,6 @@ import {
   TypeTag,
   SuiObjectRef,
   deserializeTransactionBytesToTransactionData,
-  ADD_DELEGATION_MUL_COIN_FUN_NAME,
-  ADD_DELEGATION_LOCKED_COIN_FUN_NAME,
   normalizeSuiObjectId,
   bcsForVersion,
 } from '../../types';
@@ -39,9 +34,7 @@ import {
   SignableTransaction,
   UnserializedSignableTransaction,
   TransactionBuilderMode,
-  RequestAddDelegationTransaction,
-  RequestWithdrawDelegationTransaction,
-  RequestSwitchDelegationTransaction,
+  SpecialMoveCallTransaction,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
@@ -103,10 +96,13 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
   async constructTransactionKindAndPayment(
     signerAddress: string,
-    unserializedTxn: UnserializedSignableTransaction
+    unserializedTxn:
+      | UnserializedSignableTransaction
+      | SpecialMoveCallTransaction
   ): Promise<[TransactionKind, ObjectId | undefined]> {
     let tx: Transaction;
     let gasPayment: ObjectId | undefined;
+    const unsupportedErrorMsg = `${unserializedTxn.kind} has not yet been implemented on LocalTxnDataSerializer. Please use RpcTxnDataSerializer instead`;
     switch (unserializedTxn.kind) {
       case 'transferObject':
         const t = unserializedTxn.data as TransferObjectTransaction;
@@ -237,78 +233,11 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           },
         });
       case 'requestAddDelegation':
-        const requestAddDelegation =
-          unserializedTxn.data as RequestAddDelegationTransaction;
-        const pc = await this.provider.getCoins(
-          signerAddress,
-          null,
-          null,
-          null
-        );
-        let fun = '';
-        if (pc.data[0].lockedUntilEpoch == null) {
-          fun = ADD_DELEGATION_MUL_COIN_FUN_NAME;
-        } else {
-          fun = ADD_DELEGATION_LOCKED_COIN_FUN_NAME;
-        }
-        const suiSystemState = normalizeSuiObjectId('0x5');
-        console.log(fun);
-        return this.constructTransactionData(signerAddress, {
-          kind: 'moveCall',
-          data: {
-            packageObjectId: SUI_FRAMEWORK_ADDRESS,
-            module: SUI_SYSTEM_MODULE_NAME,
-            function: fun,
-            typeArguments: [],
-            arguments: [
-              suiSystemState,
-              requestAddDelegation.coins,
-              requestAddDelegation.amount,
-              requestAddDelegation.validator,
-            ],
-            gasPayment: requestAddDelegation.gasPayment,
-            gasBudget: requestAddDelegation.gasBudget,
-          },
-        });
+        throw new Error(unsupportedErrorMsg);
       case 'requestWithdrawDelegation':
-        const requestWithdrawDelegation =
-          unserializedTxn.data as RequestWithdrawDelegationTransaction;
-        return this.constructTransactionData(signerAddress, {
-          kind: 'moveCall',
-          data: {
-            packageObjectId: SUI_FRAMEWORK_ADDRESS,
-            module: SUI_SYSTEM_MODULE_NAME,
-            function: WITHDRAW_DELEGATION_FUN_NAME,
-            typeArguments: [],
-            arguments: [
-              requestWithdrawDelegation.delegation,
-              requestWithdrawDelegation.stakedSui,
-              requestWithdrawDelegation.principalWithdrawAmount,
-            ],
-            gasPayment: requestWithdrawDelegation.gasPayment,
-            gasBudget: requestWithdrawDelegation.gasBudget,
-          },
-        });
+        throw new Error(unsupportedErrorMsg);
       case 'requestSwitchDelegation':
-        const requestSwitchDelegation =
-          unserializedTxn.data as RequestSwitchDelegationTransaction;
-        return this.constructTransactionData(signerAddress, {
-          kind: 'moveCall',
-          data: {
-            packageObjectId: SUI_FRAMEWORK_ADDRESS,
-            module: SUI_SYSTEM_MODULE_NAME,
-            function: SWITCH_DELEGATION_FUN_NAME,
-            typeArguments: [],
-            arguments: [
-              requestSwitchDelegation.delegation,
-              requestSwitchDelegation.stakedSui,
-              requestSwitchDelegation.newValidatorAddress,
-              requestSwitchDelegation.switchPoolTokenAmount,
-            ],
-            gasPayment: requestSwitchDelegation.gasPayment,
-            gasBudget: requestSwitchDelegation.gasBudget,
-          },
-        });
+        throw new Error(unsupportedErrorMsg);
       case 'publish':
         const publish = unserializedTxn.data as PublishTransaction;
         tx = {

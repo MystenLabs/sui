@@ -83,42 +83,38 @@ export interface SplitCoinTransaction extends TransactionCommon {
   coinObjectId: ObjectId;
   splitAmounts: number[];
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
-export interface RequestAddDelegationTransaction {
+export interface RequestAddDelegationTransaction extends TransactionCommon {
   coins: ObjectId[];
   amount: string;
   validator: SuiAddress;
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
-export interface RequestWithdrawDelegationTransaction {
+export interface RequestWithdrawDelegationTransaction
+  extends TransactionCommon {
   delegation: ObjectId;
   stakedSui: ObjectId;
   principalWithdrawAmount: number;
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
-export interface RequestSwitchDelegationTransaction {
+export interface RequestSwitchDelegationTransaction extends TransactionCommon {
   delegation: ObjectId;
   stakedSui: ObjectId;
   newValidatorAddress: SuiAddress;
   switchPoolTokenAmount: number;
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
-export interface MoveCallTransaction {
+export interface MoveCallTransaction extends TransactionCommon {
   packageObjectId: ObjectId;
   module: string;
   function: string;
   typeArguments: string[] | TypeTag[];
   arguments: (SuiJsonValue | PureArg)[];
   gasPayment?: ObjectId;
-  gasBudget: number;
 }
 
 export interface RawMoveCall {
@@ -165,7 +161,9 @@ export type UnserializedSignableTransaction =
   | {
       kind: 'publish';
       data: PublishTransaction;
-    }
+    };
+
+export type SpecialMoveCallTransaction =
   | {
       kind: 'requestAddDelegation';
       data: RequestAddDelegationTransaction;
@@ -226,7 +224,7 @@ export type TransactionBuilderMode = 'Commit' | 'DevInspect';
 export interface TxnDataSerializer {
   serializeToBytes(
     signerAddress: SuiAddress,
-    txn: UnserializedSignableTransaction,
+    txn: UnserializedSignableTransaction | SpecialMoveCallTransaction,
     mode: TransactionBuilderMode
   ): Promise<Base64DataBuffer>;
 }

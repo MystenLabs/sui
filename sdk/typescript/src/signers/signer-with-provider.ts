@@ -32,9 +32,6 @@ import {
   TxnDataSerializer,
   PublishTransaction,
   SignableTransaction,
-  RequestAddDelegationTransaction,
-  RequestWithdrawDelegationTransaction,
-  RequestSwitchDelegationTransaction,
   UnserializedSignableTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
@@ -314,51 +311,6 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'splitCoin', data: transaction },
-      requestType
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `requestAddDelegation` transaction and submit to the Fullnode
-   * for execution
-   */
-  async requestAddDelegation(
-    transaction: RequestAddDelegationTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
-  ): Promise<SuiExecuteTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'requestAddDelegation', data: transaction },
-      requestType
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `requestWithdrawDelegation` transaction and submit to the Fullnode
-   * for execution
-   */
-  async requestWithdrawDelegation(
-    transaction: RequestWithdrawDelegationTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
-  ): Promise<SuiExecuteTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'requestWithdrawDelegation', data: transaction },
-      requestType
-    );
-  }
-
-  /**
-   *
-   * Serialize and sign a `requestWithdrawDelegation` transaction and submit to the Fullnode
-   * for execution
-   */
-  async requestSwitchDelegation(
-    transaction: RequestSwitchDelegationTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
-  ): Promise<SuiExecuteTransactionResponse> {
-    return this.signAndExecuteTransaction(
-      { kind: 'requestSwitchDelegation', data: transaction },
       requestType
     );
   }

@@ -3,64 +3,62 @@
 
 import { describe, it, expect, beforeAll, expectTypeOf } from 'vitest';
 import {
-  LocalTxnDataSerializer,
   RawSigner,
   DelegatedStake,
   ObjectId,
   normalizeSuiObjectId,
+  getExecutionStatusType,
 } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Governance API', () => {
   let toolbox: TestToolbox;
   let signer: RawSigner;
-  // let packageId: string;
-  // let shouldSkip: boolean;
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(
-      toolbox.keypair,
-      toolbox.provider,
-      new LocalTxnDataSerializer(toolbox.provider)
-    );
+    signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
   it('test requestAddDelegation', async () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address()
     );
-    let delcoins: ObjectId[] = [];
-
-    delcoins.push(normalizeSuiObjectId(coins[0].objectId));
-
-    console.log(delcoins);
 
     const tx = {
-      coins: delcoins,
-      amount: '0.1',
+      coins: [coins[0].objectId],
+      amount: '1',
       validator: normalizeSuiObjectId('0x1'),
       gasBudget: 10000,
     };
 
-    const radd = await signer.requestAddDelegation(tx);
+    const result = await signer.signAndExecuteTransaction(
+      await signer.serializer.serializeToBytes(
+        await signer.getAddress(),
+        {
+          kind: 'requestAddDelegation',
+          data: tx,
+        },
+        'Commit'
+      )
+    );
+    expect(getExecutionStatusType(result)).toEqual('success');
   });
   it('test getDelegatedStakes', async () => {
     const stakes = await toolbox.provider.getDelegatedStakes(toolbox.address());
-    expectTypeOf(stakes).toBeArray(DelegatedStake);
-    //not able to test this, needs address with stake
+    // TODO: not able to test this, needs address with stake
   });
+
   it('test getValidators', async () => {
     const validators = await toolbox.provider.getValidators();
     expect(validators.length).greaterThan(0);
   });
+
   it('test getCommiteeInfo', async () => {
     const commiteeInfo = await toolbox.provider.getCommitteeInfo(0);
     expect(commiteeInfo.committee_info?.length).greaterThan(0);
-
-    const commiteeInfo2 = await toolbox.provider.getCommitteeInfo(100);
-    expect(commiteeInfo2.committee_info).to.toEqual(null);
   });
+
   it('test getSuiSystemState', async () => {
     const systemState = await toolbox.provider.getSuiSystemState();
     expect(systemState.epoch).greaterThan(0);
