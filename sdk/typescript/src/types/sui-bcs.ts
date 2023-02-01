@@ -132,6 +132,21 @@ export type SharedObjectRef = {
 
   /** The version the object was shared at */
   initialSharedVersion: number;
+
+  /** Whether reference is mutable */
+  mutable: boolean;
+};
+
+/**
+ * A reference to a shared object.
+ */
+export type SharedObjectRef_23 = {
+  /** Hex code as string representing the object id */
+  objectId: string;
+
+  /** The version the object was shared at */
+  initialSharedVersion: number;
+
 };
 
 /**
@@ -139,7 +154,7 @@ export type SharedObjectRef = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef };
+  | { Shared: SharedObjectRef | SharedObjectRef_23 };
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -320,6 +335,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       initialSharedVersion: 'u64',
+      mutable: 'bool',
     },
   },
 
@@ -421,6 +437,12 @@ const BCS_0_23_SPEC = {
       typeArguments: 'vector<TypeTag>',
       arguments: 'vector<CallArg>',
     },
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
+    },
+  },
   },
 };
 
