@@ -74,6 +74,32 @@ struct ServerInfo {
 }
 
 impl RpcClient {
+    pub async fn new_with_max_concurrent_requests(
+        http: &str,
+        ws: Option<&str>,
+        request_timeout: Option<Duration>,
+        max_concurrent_requests: usize,
+    ) -> Result<Self, Error> {
+        let mut http_builder = HttpClientBuilder::default();
+        http_builder = http_builder.max_concurrent_requests(max_concurrent_requests);
+        if let Some(request_timeout) = request_timeout {
+            http_builder = http_builder.request_timeout(request_timeout);
+        }
+        let http = http_builder.max_request_body_size(2 << 30).build(http)?;
+
+        let ws = if let Some(url) = ws {
+            let mut ws_builder = WsClientBuilder::default();
+            if let Some(request_timeout) = request_timeout {
+                ws_builder = ws_builder.request_timeout(request_timeout);
+            }
+            let ws = ws_builder.build(url).await?;
+            Some(ws)
+        } else {
+            None
+        };
+        let info = Self::get_server_info(&http, &ws).await?;
+        Ok(Self { http, ws, info })
+    }
     pub async fn new(
         http: &str,
         ws: Option<&str>,
@@ -144,6 +170,37 @@ impl RpcClient {
 }
 
 impl SuiClient {
+    pub async fn new_with_max_concurrent_requests(
+        http_url: &str,
+        ws_url: Option<&str>,
+        request_timeout: Option<Duration>,
+        max_concurrent_requests: usize,
+    ) -> Result<Self, Error> {
+        let rpc = RpcClient::new_with_max_concurrent_requests(
+            http_url,
+            ws_url,
+            request_timeout,
+            max_concurrent_requests,
+        )
+        .await?;
+        let api = Arc::new(rpc);
+        let read_api = Arc::new(ReadApi::new(api.clone()));
+        let quorum_driver = QuorumDriver::new(api.clone());
+        let event_api = EventApi::new(api.clone());
+        let transaction_builder = TransactionBuilder::new(read_api.clone());
+        let coin_read_api = CoinReadApi::new(api.clone());
+        let governance_api = GovernanceApi::new(api.clone());
+
+        Ok(SuiClient {
+            api,
+            transaction_builder,
+            read_api,
+            coin_read_api,
+            event_api,
+            quorum_driver,
+            governance_api,
+        })
+    }
     pub async fn new(
         http_url: &str,
         ws_url: Option<&str>,

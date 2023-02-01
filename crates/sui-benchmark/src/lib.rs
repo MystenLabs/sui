@@ -269,8 +269,8 @@ pub struct FullNodeProxy {
 impl FullNodeProxy {
     pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
         // Each request times out after 60s (default value)
-        let sui_client = SuiClient::new(http_url, None, None).await?;
-
+        let sui_client =
+            SuiClient::new_with_max_concurrent_requests(http_url, None, None, 500_000).await?;
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
         let committee = if let Some(committee_vec) = resp.committee_info {
