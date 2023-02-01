@@ -367,10 +367,19 @@ export abstract class Provider {
    */
   abstract getReferenceGasPrice(): Promise<number>;
 
+  /**
+   * Return the delegated stakes for an address
+   */
   abstract getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]>;
 
+  /**
+   * Return all validators available for stake delegation.
+   */
   abstract getValidators(): Promise<ValidatorMetaData[]>;
 
+  /**
+   * Return the content of `0x5` object
+   */
   abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**

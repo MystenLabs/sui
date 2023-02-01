@@ -183,7 +183,6 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           signerAddress,
           requestWithdrawDelegation.delegation,
           requestWithdrawDelegation.stakedSui,
-          requestWithdrawDelegation.principalWithdrawAmount,
           requestWithdrawDelegation.gasPayment,
           requestWithdrawDelegation.gasBudget,
         ];
@@ -197,7 +196,6 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           requestSwitchDelegation.delegation,
           requestSwitchDelegation.stakedSui,
           requestSwitchDelegation.newValidatorAddress,
-          requestSwitchDelegation.switchPoolTokenAmount,
           requestSwitchDelegation.gasPayment,
           requestSwitchDelegation.gasBudget,
         ];

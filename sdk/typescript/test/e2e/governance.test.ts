@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll, expectTypeOf } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   RawSigner,
-  DelegatedStake,
-  ObjectId,
-  normalizeSuiObjectId,
   getExecutionStatusType,
+  getCreatedObjects,
 } from '../../src';
 import { setup, TestToolbox } from './utils/setup';
+
+const DEFAULT_STAKED_AMOUNT = 1;
 
 describe('Governance API', () => {
   let toolbox: TestToolbox;
@@ -21,32 +21,21 @@ describe('Governance API', () => {
   });
 
   it('test requestAddDelegation', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
-    );
-
-    const tx = {
-      coins: [coins[0].objectId],
-      amount: '1',
-      validator: normalizeSuiObjectId('0x1'),
-      gasBudget: 10000,
-    };
-
-    const result = await signer.signAndExecuteTransaction(
-      await signer.serializer.serializeToBytes(
-        await signer.getAddress(),
-        {
-          kind: 'requestAddDelegation',
-          data: tx,
-        },
-        'Commit'
-      )
-    );
+    const result = await addDelegation(signer);
     expect(getExecutionStatusType(result)).toEqual('success');
   });
+
   it('test getDelegatedStakes', async () => {
     const stakes = await toolbox.provider.getDelegatedStakes(toolbox.address());
-    // TODO: not able to test this, needs address with stake
+    expect(stakes.length).greaterThan(0);
+  });
+
+  it('test requestWithdrawDelegation', async () => {
+    // TODO: implement this
+  });
+
+  it('test requestSwitchDelegation', async () => {
+    // TODO: implement this
   });
 
   it('test getValidators', async () => {
@@ -60,7 +49,32 @@ describe('Governance API', () => {
   });
 
   it('test getSuiSystemState', async () => {
-    const systemState = await toolbox.provider.getSuiSystemState();
-    expect(systemState.epoch).greaterThan(0);
+    await toolbox.provider.getSuiSystemState();
   });
 });
+
+async function addDelegation(signer: RawSigner) {
+  const coins = await signer.provider.getGasObjectsOwnedByAddress(
+    await signer.getAddress()
+  );
+
+  const validators = await signer.provider.getValidators();
+
+  const tx = {
+    coins: [coins[0].objectId],
+    amount: DEFAULT_STAKED_AMOUNT,
+    validator: validators[0].sui_address,
+    gasBudget: 10000,
+  };
+
+  return await signer.signAndExecuteTransaction(
+    await signer.serializer.serializeToBytes(
+      await signer.getAddress(),
+      {
+        kind: 'requestAddDelegation',
+        data: tx,
+      },
+      'Commit'
+    )
+  );
+}

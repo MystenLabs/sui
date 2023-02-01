@@ -87,7 +87,7 @@ export interface SplitCoinTransaction extends TransactionCommon {
 
 export interface RequestAddDelegationTransaction extends TransactionCommon {
   coins: ObjectId[];
-  amount: string;
+  amount: number;
   validator: SuiAddress;
   gasPayment?: ObjectId;
 }
