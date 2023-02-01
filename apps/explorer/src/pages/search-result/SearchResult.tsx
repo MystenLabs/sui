@@ -30,8 +30,7 @@ const initState: SearchDataType = {
 
 const querySearchParams = async (input: string, network: Network | string) => {
     let searchPromises = [];
-    if (isValidTransactionDigest(input)
-    ) {
+    if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
                 .getTransactionWithEffects(input)
