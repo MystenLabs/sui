@@ -34,17 +34,17 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
 }
 
 pub fn keccak256(
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    hash::<Keccak256, 32>(_context, ty_args, args)
+    hash::<Keccak256, 32>(context, ty_args, args)
 }
 
 pub fn blake2b256(
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    hash::<Blake2b256, 32>(_context, ty_args, args)
+    hash::<Blake2b256, 32>(context, ty_args, args)
 }
