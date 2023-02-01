@@ -1,24 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin, SUI_COIN } from "../network/types";
-import { ObjectData } from "../network/rawObject";
-import { getTransactionEffects } from "@mysten/sui.js";
+import {
+  CoinStruct,
+  getTransactionEffects,
+  SUI_TYPE_ARG,
+} from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMyType } from "../network/queries/use-raw";
+import provider from "../network/provider";
 
-export function getCoins(coins: ObjectData<Coin>[], amount: bigint) {
-  const sorted = [...coins].sort((a, b) => Number(b.data.value - a.data.value));
+export function useGetLatestCoins() {
+  const { currentAccount } = useWalletKit();
+  return async () => {
+    if (!currentAccount) throw new Error("Wallet not connected");
+    const { data } = await provider.getCoins(
+      currentAccount,
+      SUI_TYPE_ARG,
+      undefined,
+      1000
+    );
+    return data;
+  };
+}
 
-  let sum = BigInt(0);
-  let ret: ObjectData<Coin>[] = [];
+export function getCoins(coins: CoinStruct[], amount: bigint) {
+  const sorted = [...coins].sort((a, b) => Number(b.balance - a.balance));
+
+  let sum = 0;
+  let ret: CoinStruct[] = [];
   while (sum < amount) {
     const coin = sorted.pop();
     if (!coin) {
       throw new Error("Cannot find coins to meet amount.");
     }
     ret.push(coin);
-    sum += coin.data.value;
+    sum += coin.balance;
   }
   return ret;
 }
@@ -27,9 +43,9 @@ export function getCoins(coins: ObjectData<Coin>[], amount: bigint) {
  * Returns a Gas `ObjectData` if found or null;
  * Returns the rest of the Coins and their sum.
  */
-export function getGas(coins: ObjectData<Coin>[], gasBudget: bigint) {
-  const sorted = [...coins].sort((a, b) => Number(a.data.value - b.data.value));
-  const gas = sorted.find((coin) => coin.data.value >= gasBudget) || null;
+export function getGas(coins: CoinStruct[], gasBudget: bigint) {
+  const sorted = [...coins].sort((a, b) => Number(a.balance - b.balance));
+  const gas = sorted.find((coin) => coin.balance >= gasBudget) || null;
 
   if (gas === null) {
     return {
@@ -39,10 +55,8 @@ export function getGas(coins: ObjectData<Coin>[], gasBudget: bigint) {
     };
   }
 
-  const left = sorted.filter(
-    (c) => c.reference.objectId !== gas.reference.objectId
-  );
-  const max = left.reduce((acc, c) => acc + c.data.value, 0n);
+  const left = sorted.filter((c) => c.coinObjectId !== gas.coinObjectId);
+  const max = BigInt(left.reduce((acc, c) => acc + c.balance, 0));
 
   return {
     gas,
@@ -54,7 +68,7 @@ export function getGas(coins: ObjectData<Coin>[], gasBudget: bigint) {
 export const DEFAULT_GAS_BUDGET_FOR_PAY = 150;
 
 function computeGasBudgetForPay(
-  coins: ObjectData<Coin>[],
+  coins: CoinStruct[],
   amountToSend: bigint
 ): number {
   const numInputCoins = getCoins(coins, amountToSend).length;
@@ -66,15 +80,16 @@ function computeGasBudgetForPay(
 
 export function useManageCoin() {
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
-  const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
 
-  return async (amount: bigint, gasFee: bigint) => {
+  return async (coins: CoinStruct[], amount: bigint, gasFee: bigint) => {
     if (!currentAccount) throw new Error("Missing account");
-    if (!coins) throw new Error("No coins");
+    if (!coins.length) throw new Error("No coins");
 
     const totalAmount = amount + gasFee;
 
     const inputCoins = getCoins(coins, totalAmount);
+
+    console.log(inputCoins, coins);
 
     const result = await signAndExecuteTransaction({
       kind: "paySui",
@@ -83,7 +98,7 @@ export function useManageCoin() {
         // so that it is used as the gas coin.
         inputCoins: [...inputCoins]
           .reverse()
-          .map((coin) => coin.reference.objectId),
+          .map((coin) => coin.coinObjectId),
         recipients: [currentAccount, currentAccount],
         // TODO: Update SDK to accept bigint
         amounts: [Number(amount), Number(gasFee)],
