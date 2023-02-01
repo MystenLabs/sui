@@ -238,7 +238,7 @@ export const SuiExecuteTransactionResponse = union([
     }),
   }),
   object({
-    certificate: CertifiedTransaction,
+    certificate: optional(CertifiedTransaction),
     effects: SuiCertifiedTransactionEffects,
     confirmed_local_execution: boolean(),
   }),
