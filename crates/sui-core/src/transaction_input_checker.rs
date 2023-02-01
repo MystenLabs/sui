@@ -49,6 +49,13 @@ pub async fn check_transaction_input(
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction.validity_check()?;
     let gas_status = get_gas_status(store, transaction).await?;
+
+    // Check for type arguements and ensure they exist
+    // ignore the returned objects because all we care about is that they exist for now in order to
+    // prevent more forks
+    let type_argument_packages = transaction.type_argument_packages();
+    store.check_input_objects(&type_argument_packages)?;
+
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
     let input_objects = check_objects(transaction, input_objects, objects).await?;
