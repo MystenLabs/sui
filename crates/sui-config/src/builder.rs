@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::node::{
-    default_checkpoints_per_epoch, default_end_of_epoch_broadcast_channel_capacity,
+    default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
 use crate::{
@@ -47,7 +47,7 @@ pub struct ConfigBuilder<R = OsRng> {
     additional_objects: Vec<Object>,
     with_swarm: bool,
     validator_ip_sel: ValidatorIpSelection,
-    checkpoints_per_epoch: Option<u64>,
+    epoch_duration_ms: u64,
 }
 
 impl ConfigBuilder {
@@ -67,7 +67,7 @@ impl ConfigBuilder {
             } else {
                 ValidatorIpSelection::Localhost
             },
-            checkpoints_per_epoch: default_checkpoints_per_epoch(),
+            epoch_duration_ms: default_epoch_duration_ms(),
         }
     }
 }
@@ -108,8 +108,8 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
-        self.checkpoints_per_epoch = Some(ckpts);
+    pub fn with_epoch_duration(mut self, epoch_duration_ms: u64) -> Self {
+        self.epoch_duration_ms = epoch_duration_ms;
         self
     }
 
@@ -123,7 +123,7 @@ impl<R> ConfigBuilder<R> {
             additional_objects: self.additional_objects,
             with_swarm: self.with_swarm,
             validator_ip_sel: self.validator_ip_sel,
-            checkpoints_per_epoch: self.checkpoints_per_epoch,
+            epoch_duration_ms: self.epoch_duration_ms,
         }
     }
 }
@@ -367,7 +367,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
-                    checkpoints_per_epoch: self.checkpoints_per_epoch,
+                    epoch_duration_ms: self.epoch_duration_ms,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                     grpc_load_shed: initial_accounts_config.grpc_load_shed,
                     grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,

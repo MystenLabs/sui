@@ -86,7 +86,9 @@ use sui_types::{
 };
 
 use crate::authority::authority_notify_read::NotifyRead;
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, EpochStartConfiguration,
+};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
 use crate::authority_aggregator::TransactionCertifier;
@@ -1696,6 +1698,7 @@ impl AuthorityState {
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
+            Some(Default::default()),
         );
 
         let epochs = Arc::new(CommitteeStore::new(
@@ -1821,14 +1824,19 @@ impl AuthorityState {
         })
     }
 
-    pub async fn reconfigure(&self, new_committee: Committee) -> SuiResult {
+    pub async fn reconfigure(
+        &self,
+        new_committee: Committee,
+        epoch_start_timestamp_ms: u64,
+    ) -> SuiResult {
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions().await?;
         let new_epoch = new_committee.epoch;
         db.perpetual_tables.set_recovery_epoch(new_epoch)?;
-        self.reopen_epoch_db(new_committee).await;
+        self.reopen_epoch_db(new_committee, epoch_start_timestamp_ms)
+            .await?;
         self.transaction_manager.reconfigure(new_epoch);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
@@ -2623,14 +2631,24 @@ impl AuthorityState {
         Ok(())
     }
 
-    async fn reopen_epoch_db(&self, new_committee: Committee) {
+    async fn reopen_epoch_db(
+        &self,
+        new_committee: Committee,
+        epoch_start_timestamp_ms: u64,
+    ) -> SuiResult<()> {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
-        let epoch_tables = self
-            .epoch_store()
-            .new_at_next_epoch(self.name, new_committee);
+        let epoch_start_configuration = EpochStartConfiguration {
+            epoch_start_timestamp_ms,
+        };
+        let epoch_tables = self.epoch_store().new_at_next_epoch(
+            self.name,
+            new_committee,
+            epoch_start_configuration,
+        );
         let previous_store = self.epoch_store.swap(epoch_tables);
         previous_store.epoch_terminated().await;
+        Ok(())
     }
 
     #[cfg(test)]

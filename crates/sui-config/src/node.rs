@@ -60,13 +60,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    /// Number of checkpoints per epoch.
-    /// Some means reconfiguration is enabled.
-    /// None means reconfiguration is disabled.
+    // TODO: It will be removed down the road.
+    /// Epoch duration in ms.
+    /// u64::MAX means reconfiguration is disabled
     /// Exposing this in config to allow easier testing with shorter epoch.
-    /// TODO: It will be removed down the road.
-    #[serde(default = "default_checkpoints_per_epoch")]
-    pub checkpoints_per_epoch: Option<u64>,
+    #[serde(default = "default_epoch_duration_ms")]
+    pub epoch_duration_ms: u64,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -135,9 +134,9 @@ pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
 }
 
-pub fn default_checkpoints_per_epoch() -> Option<u64> {
-    // Currently a checkpoint is ~3 seconds, 3000 checkpoints is 9000s, which is about 2.5 hours.
-    Some(3000)
+pub fn default_epoch_duration_ms() -> u64 {
+    // 24 Hrs
+    24 * 60 * 60 * 1000
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {

@@ -480,6 +480,10 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) {
         let send_end_of_publish = {
             let reconfig_guard = epoch_store.get_reconfig_state_write_lock_guard();
+            if !reconfig_guard.should_accept_user_certs() {
+                // Allow caller to call this method multiple times
+                return;
+            }
             let pending_count = epoch_store.pending_consensus_certificates_count();
             debug!(epoch=?epoch_store.epoch(), ?pending_count, "Trying to close epoch");
             let send_end_of_publish = pending_count == 0;

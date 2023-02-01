@@ -3,7 +3,7 @@
 
 use crate::node::AuthorityStorePruningConfig;
 use crate::node::{
-    default_checkpoints_per_epoch, default_end_of_epoch_broadcast_channel_capacity,
+    default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
 use crate::p2p::{P2pConfig, SeedPeer};
@@ -232,7 +232,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
-            checkpoints_per_epoch: default_checkpoints_per_epoch(),
+            epoch_duration_ms: default_epoch_duration_ms(),
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,

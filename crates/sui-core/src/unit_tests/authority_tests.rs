@@ -2398,6 +2398,7 @@ async fn test_authority_persist() {
             &epoch_store_path,
             None,
             EpochMetrics::new(&registry),
+            Some(Default::default()),
         );
 
         let checkpoint_store_path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -3921,6 +3922,7 @@ async fn test_tallying_rule_score_updates() {
         &epoch_store_path,
         None,
         metrics.clone(),
+        Some(Default::default()),
     );
 
     let get_stored_seq_num_and_counter = |auth_name: &AuthorityName| {
