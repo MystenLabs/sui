@@ -125,6 +125,7 @@ impl TransactionManager {
 
             // if effects indicate a success then we need to add and wait for argument packages,
             // otherwise we can skip
+            let mut module_not_found_error = false;
             let mut inputs = cert.data().intent_message.value.input_objects()?;
             if let Some(digest_to_effects) = &digest_to_effects {
                 if let Some(effect) = digest_to_effects.get(cert.digest()) {
@@ -139,7 +140,8 @@ impl TransactionManager {
                         }
                         false
                     }
-                    if !is_module_not_found_error(effect) {
+                    module_not_found_error = is_module_not_found_error(effect);
+                    if !module_not_found_error {
                         inputs.extend(cert.data().intent_message.value.type_argument_packages());
                     }
                 }
@@ -149,7 +151,7 @@ impl TransactionManager {
             }
 
             // skip already pending txes
-            if inputs.is_empty() {
+            if !module_not_found_error {
                 if inner.pending_certificates.contains_key(&digest) {
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
@@ -177,7 +179,7 @@ impl TransactionManager {
                         }
                     }
                 }
-                inner.executing_certificates.remove(&digest);  // should be no-op.
+                inner.executing_certificates.remove(&digest); // should be no-op.
             }
 
             // skip already executed txes
