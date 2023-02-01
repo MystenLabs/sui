@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ThumbUpFill32 } from '@mysten/icons';
 import cl from 'classnames';
-
-import Icon, { SuiIcons } from '_components/icon';
 
 export function StatusIcon({ status }: { status: boolean }) {
     return (
@@ -15,12 +14,12 @@ export function StatusIcon({ status }: { status: boolean }) {
         >
             <div
                 className={cl(
-                    'bg-success rounded-full h-8 w-8 flex items-center justify-center',
-                    status ? 'border-success' : 'border-issue'
+                    'rounded-full h-8 w-8 flex items-center justify-center',
+                    status ? 'bg-success' : 'bg-issue'
                 )}
             >
-                <Icon
-                    icon={SuiIcons.ThumbsUp}
+                <ThumbUpFill32
+                    fill="currentColor"
                     className={cl(
                         'text-white text-2xl',
                         !status && 'rotate-180'
