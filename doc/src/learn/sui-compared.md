@@ -123,6 +123,20 @@ Sui mitigates this with checkpoints. A checkpoint is established every time an i
 
 Sui uses the state commitment that arrives upon epoch change. Sui requires a single answer from the multiple validators and leverages an accessory protocol to derive the hash representing the state of the blockchain. This protocol consumes little bandwidth and does not impede the ingestion of transactions. Validators produce checkpoints at every epoch change. Sui requires the validators to also produce checkpoints even more frequently. So users may use these checkpoints to audit the blockchain with some effort.
 
+## Summary
+
+|                 **Concept**                 |                  **Sui**                  |  **Traditional blockchain** |
+|:-------------------------------------------:|:-----------------------------------------:|:---------------------------:|
+| _Unit of storage_                           | object                                    | account                     |
+| _Transaction execution_                     | parallel (for independent transactions)   | sequential                  |
+| _Transactions flow_                         | proactively talk with validators          | fire-and-forget broadcast   |
+| _Transactions validation_                   | individually                              | batching them in the blocks |
+| _Locked data during transaction validation_ | only the relevant piece of data           | the whole chain             |
+| _Transaction ordering_                      | most of them are causally ordered         | total ordered               |
+| _Machine per validator_                     | single or more                            | single                      |
+| _Consensus protocol_                        | two protocols                             | one protocol                |
+| _Consensus protocol invocation_             | for transactions involving shared objects | for all transactions        |
+
 ## Conclusion
 
 In summary, Sui offers many performance and usability gains at the cost of some complexity in less simple use cases. Direct sender transactions excel in Sui. And complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a [consensus](architecture/consensus.md) protocol.
