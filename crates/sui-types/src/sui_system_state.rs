@@ -21,7 +21,7 @@ use multiaddr::Multiaddr;
 use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -375,6 +375,11 @@ impl SuiSystemState {
             authorities: narwhal_committee,
             epoch: self.epoch as narwhal_config::Epoch,
         }
+    }
+
+    #[allow(clippy::mutable_key_type)]
+    pub fn get_current_epoch_peer_ids(&self) -> HashMap<anemo::PeerId, String> {
+        todo!();
     }
 
     #[allow(clippy::mutable_key_type)]
