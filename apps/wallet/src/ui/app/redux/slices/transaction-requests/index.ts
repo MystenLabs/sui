@@ -163,7 +163,12 @@ export const respondToTransactionRequest = createAsyncThunk<
                               }
                             : txRequest.tx.data;
 
-                    response = await signer.signAndExecuteTransaction(txn);
+                    response = await signer.signAndExecuteTransaction(
+                        txn,
+                        txRequest.tx.type === 'v2'
+                            ? txRequest.tx.options?.requestType
+                            : undefined
+                    );
                 } else if (txRequest.tx.type === 'serialized-move-call') {
                     const txBytes = new Base64DataBuffer(txRequest.tx.data);
                     response = await signer.signAndExecuteTransaction(txBytes);
