@@ -4,9 +4,9 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
-use sui_protocol_constants::STORAGE_GAS_PRICE;
+use sui_protocol_constants::{MAX_VERIFIER_TIME_US, STORAGE_GAS_PRICE};
 use sui_types::base_types::ObjectRef;
-use sui_types::messages::TransactionKind;
+use sui_types::messages::{MoveModulePublish, TransactionKind};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -17,6 +17,9 @@ use sui_types::{
     },
     object::{Object, Owner},
 };
+use tokio::select;
+use tokio::time::sleep;
+use tokio::time::Duration;
 use tracing::instrument;
 
 async fn get_gas_status(
@@ -58,6 +61,7 @@ pub async fn check_transaction_input(
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
     let input_objects = check_objects(transaction, input_objects, objects).await?;
+    verify_package(transaction).await?;
     Ok((gas_status, input_objects))
 }
 
@@ -190,6 +194,45 @@ async fn check_gas(
 
         gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)
     }
+}
+
+async fn verify_package(transaction: &TransactionData) -> Result<(), SuiError> {
+    async fn verify_package_impl(move_module_publish: &MoveModulePublish) -> Result<(), SuiError> {
+        let mods = move_module_publish.clone();
+
+        let task = async move {
+            let fut = async move {
+                // We don't actually care if it passes or fails. We just care that it completes on time.
+                let _ = sui_adapter::adapter::verify_modules(&mods.modules);
+            };
+
+            select! {
+
+                    () = sleep(Duration::from_micros(MAX_VERIFIER_TIME_US))=> {
+                        false
+                    }
+                    () = fut => {
+                        true
+                    }
+            }
+        };
+        if !task.await {
+            return Err(SuiError::ModuleVerificationFailure {
+                error: format!(
+                    "Move package verification exceeded timeout {MAX_VERIFIER_TIME_US}us"
+                ),
+            });
+        }
+
+        Ok(())
+    }
+    for tx in transaction.kind.single_transactions() {
+        if let SingleTransactionKind::Publish(p) = tx {
+            let err = verify_package_impl(p).await;
+            err?;
+        }
+    }
+    Ok(())
 }
 
 /// Check all the objects used in the transaction against the database, and ensure

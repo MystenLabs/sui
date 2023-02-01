@@ -18,6 +18,9 @@ pub const MAX_MOVE_PACKAGE_SIZE: u64 = 100 * 1024; // 100 KB
 /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
 pub const MAX_TX_GAS: u64 = 1_000_000_000;
 
+/// Maximum time for bytecode verification in microseconds. Enforced by the adapter on the Move bytecode verifier.
+pub const MAX_VERIFIER_TIME_US: u64 = 200_000;
+
 /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
 pub const MAX_LOOP_DEPTH: usize = 5;
 

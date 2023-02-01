@@ -19,7 +19,7 @@ use move_binary_format::{
         StructHandleIndex, TypeParameterIndex,
     },
 };
-use move_bytecode_verifier::VerifierConfig;
+use move_bytecode_verifier::{verify_module_with_config, VerifierConfig};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -35,6 +35,7 @@ use move_vm_runtime::{
     session::{SerializedReturnValues, Session},
 };
 
+use once_cell::sync::Lazy;
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
@@ -44,7 +45,9 @@ use sui_types::{
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
     event::Event,
-    messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
+    messages::{
+        CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, InputObjectKind, ObjectArg,
+    },
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
     storage::{ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
 };
@@ -57,23 +60,25 @@ use tracing::instrument;
 
 use crate::execution_mode::{self, ExecutionMode};
 
+static VERIFIER_CONFIG: Lazy<VerifierConfig> = Lazy::new(|| VerifierConfig {
+    max_loop_depth: Some(MAX_LOOP_DEPTH),
+    max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
+    max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
+    max_basic_blocks: Some(MAX_BASIC_BLOCKS),
+    max_value_stack_size: MAX_VALUE_STACK_SIZE,
+    max_type_nodes: Some(MAX_TYPE_NODES),
+    max_push_size: Some(MAX_PUSH_SIZE),
+    max_dependency_depth: Some(MAX_DEPENDENCY_DEPTH),
+    max_fields_in_struct: Some(MAX_FIELDS_IN_STRUCT),
+    max_function_definitions: Some(MAX_FUNCTION_DEFINITIONS),
+    max_struct_definitions: Some(MAX_STRUCT_DEFINITIONS),
+});
+
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new_with_config(
         natives,
         VMConfig {
-            verifier: VerifierConfig {
-                max_loop_depth: Some(MAX_LOOP_DEPTH),
-                max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
-                max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
-                max_basic_blocks: Some(MAX_BASIC_BLOCKS),
-                max_value_stack_size: MAX_VALUE_STACK_SIZE,
-                max_type_nodes: Some(MAX_TYPE_NODES),
-                max_push_size: Some(MAX_PUSH_SIZE),
-                max_dependency_depth: Some(MAX_DEPENDENCY_DEPTH),
-                max_fields_in_struct: Some(MAX_FIELDS_IN_STRUCT),
-                max_function_definitions: Some(MAX_FUNCTION_DEFINITIONS),
-                max_struct_definitions: Some(MAX_STRUCT_DEFINITIONS),
-            },
+            verifier: Lazy::force(&VERIFIER_CONFIG).to_owned(),
             max_binary_format_version: MOVE_BINARY_FORMAT_VERSION,
             paranoid_type_checks: false,
         },
@@ -336,28 +341,37 @@ pub fn publish<
         + ChildObjectResolver,
 >(
     state_view: &mut S,
-    vm: &MoveVM,
+    _vm: &MoveVM,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
 ) -> Result<(), ExecutionError> {
-    let mut modules = module_bytes
+    let mut modules = make_compiled_modules(&module_bytes)?;
+    let package_id = generate_package_id(&mut modules, ctx)?;
+    let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
+    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
+}
+
+fn make_compiled_modules(module_bytes: &[Vec<u8>]) -> Result<Vec<CompiledModule>, ExecutionError> {
+    let modules = module_bytes
         .iter()
         .map(|b| {
             CompiledModule::deserialize(b)
                 .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         })
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
-        .map_err(|e| convert_vm_error(e, vm, state_view))?;
+        .map_err(|e| {
+            ExecutionError::new_with_source(
+                ExecutionFailureStatus::VMVerificationOrDeserializationError,
+                e,
+            )
+        })?;
 
     if modules.is_empty() {
         return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
     }
-
-    let package_id = generate_package_id(&mut modules, ctx)?;
-    let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
+    Ok(modules)
 }
 
 /// Store package in state_view and call module initializers
@@ -507,6 +521,25 @@ pub fn verify_and_link<
         verifier::verify_module(module, &BTreeMap::new())?;
     }
     Ok(vm)
+}
+
+/// Given a list of `module_bytes`, runs each module with both the Move VM verifier
+/// and the Sui verifier.
+pub fn verify_modules(module_bytes: &[Vec<u8>]) -> Result<(), ExecutionError> {
+    let modules = make_compiled_modules(module_bytes)?;
+
+    // run the Move verifier
+    for module in modules.iter() {
+        verify_module_with_config(Lazy::force(&VERIFIER_CONFIG), module).map_err(|e| {
+            ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationError, e)
+        })?;
+    }
+
+    // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
+    for module in modules.iter() {
+        verifier::verify_module(module, &BTreeMap::new())?;
+    }
+    Ok(())
 }
 
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
