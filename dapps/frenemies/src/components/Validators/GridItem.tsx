@@ -16,7 +16,7 @@ export function GridItem({
       className={clsx("grid", className)}
       style={{
         gridTemplateColumns:
-          "minmax(100px, 1fr) minmax(100px, 2fr) minmax(min-content, 5fr) minmax(min-content, 2fr)",
+          "minmax(50px, 1fr) minmax(150px, 3fr) minmax(min-content, 5fr) minmax(min-content, 2fr)",
       }}
     >
       {children}

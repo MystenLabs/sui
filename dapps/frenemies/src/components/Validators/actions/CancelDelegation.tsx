@@ -39,21 +39,26 @@ export function CancelDelegation({ stake }: Props) {
       return null;
     }
 
-    await signAndExecuteTransaction({
-      kind: "moveCall",
-      data: {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: "sui_system",
-        function: "cancel_delegation_request",
-        gasBudget: 10000,
-        typeArguments: [],
-        gasPayment: normalizeSuiAddress(gas.reference.objectId),
-        arguments: [
-          SUI_SYSTEM_ID,
-          normalizeSuiAddress(stake.reference.objectId),
-        ],
+    await signAndExecuteTransaction(
+      {
+        kind: "moveCall",
+        data: {
+          packageObjectId: SUI_FRAMEWORK_ADDRESS,
+          module: "sui_system",
+          function: "cancel_delegation_request",
+          gasBudget: 10000,
+          typeArguments: [],
+          gasPayment: normalizeSuiAddress(gas.reference.objectId),
+          arguments: [
+            SUI_SYSTEM_ID,
+            normalizeSuiAddress(stake.reference.objectId),
+          ],
+        },
       },
-    });
+      {
+        requestType: "WaitForEffectsCert",
+      }
+    );
   });
 
   return (

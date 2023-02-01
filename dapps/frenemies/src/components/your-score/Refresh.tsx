@@ -7,9 +7,9 @@ import { useMutation } from "@tanstack/react-query";
 import { config } from "../../config";
 import provider from "../../network/provider";
 import { SUI_SYSTEM_ID, useSuiSystem } from "../../network/queries/sui-system";
-import { useMyType } from "../../network/queries/use-raw";
+import { useMyType, useRawObject } from "../../network/queries/use-raw";
 import { ObjectData } from "../../network/rawObject";
-import { Coin, Scorecard, SUI_COIN } from "../../network/types";
+import { Coin, Leaderboard, LEADERBOARD, Scorecard, SUI_COIN } from "../../network/types";
 import { getGas } from "../../utils/coins";
 
 const GAS_BUDGET = 100000n;
@@ -17,12 +17,14 @@ const GAS_BUDGET = 100000n;
 interface Props {
   scorecard: ObjectData<Scorecard>;
   leaderboardID: string;
+  round: bigint;
 }
 
-export function Refresh({ scorecard, leaderboardID }: Props) {
+export function Refresh({ scorecard, round, leaderboardID }: Props) {
   const { data: system } = useSuiSystem();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
+  const { data: leaderboard } = useRawObject<Leaderboard>(config.VITE_LEADERBOARD, LEADERBOARD);
 
   const refreshScorecard = useMutation(["refresh-scorecard"], async () => {
     if (!coins || !coins.length) {
@@ -52,10 +54,10 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
           normalizeSuiAddress(leaderboardID),
         ],
       },
-    }).then(console.log);
+    });
   });
 
-  if (!system || scorecard.data.epoch == BigInt(system.epoch) + 1n) {
+  if (!system || scorecard.data.epoch == BigInt(system.epoch) + 1n || !leaderboard) {
     return null;
   }
 
@@ -68,7 +70,7 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
         }}
       >
         <img src="/refresh.svg" alt="refresh" />
-        Get Assignment
+        Play Round {(round || 0).toString()}
       </button>
     </div>
   );
