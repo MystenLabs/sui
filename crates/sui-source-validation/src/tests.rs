@@ -453,6 +453,66 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn multiple_failures() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await?;
+    let sender = cluster.get_address_0();
+    let context = &mut cluster.wallet;
+    let mut stable_addrs = HashMap::new();
+
+    // Publish package `b::b` on-chain without c.move.
+    let b_ref = {
+        let fixtures = tempfile::tempdir()?;
+        let b_src = copy_package(&fixtures, "b", [("b", SuiAddress::ZERO)]).await?;
+        tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
+        publish_package(context, sender, b_src).await
+    };
+
+    // Publish package `c::c` on-chain, unmodified.
+    let c_ref = {
+        let fixtures = tempfile::tempdir()?;
+        let c_src = copy_package(&fixtures, "c", [("c", SuiAddress::ZERO)]).await?;
+        publish_package(context, sender, c_src).await
+    };
+
+    // Compile local package `d` that references:
+    // - `b::b` (c.move exists locally but not on chain => error)
+    // - `c::c` (d.move exists on-chain but we delete it locally before compiling => error)
+    let d_pkg = {
+        let fixtures = tempfile::tempdir()?;
+        let b_id = b_ref.0.into();
+        let c_id = c_ref.0.into();
+        stable_addrs.insert(b_id, "<b_id>");
+        stable_addrs.insert(c_id, "<c_id>");
+        copy_package(&fixtures, "b", [("b", b_id)]).await?;
+        let c_src = copy_package(&fixtures, "c", [("c", c_id)]).await?;
+        let d_src = copy_package(
+            &fixtures,
+            "d",
+            [("d", SuiAddress::ZERO), ("b", b_id), ("c", c_id)],
+        )
+        .await?;
+        tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
+        compile_package(d_src)
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+
+    let Err(err) = verifier.verify_package_deps(&d_pkg.package).await else {
+        panic!("Expected verification to fail");
+    };
+
+    let expected = expect![[r#"
+        Multiple source verification errors found:
+
+        - On-chain version of dependency b::c was not found.
+        - Local version of dependency <c_id>::d was not found."#]];
+    expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
+
+    Ok(())
+}
+
 /// Compile the package at absolute path `package`.
 fn compile_package(package: impl AsRef<Path>) -> CompiledPackage {
     sui_framework::build_move_package(package.as_ref(), BuildConfig::new_for_testing()).unwrap()
