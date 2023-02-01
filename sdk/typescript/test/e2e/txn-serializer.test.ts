@@ -95,7 +95,7 @@ describe('Transaction Serialization and deserialization', () => {
         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
       ],
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[0].objectId,
+      gasPayment: coins[0].coinObjectId,
     };
 
     const deserialized = await serializeAndDeserialize(moveCall);
@@ -111,7 +111,7 @@ describe('Transaction Serialization and deserialization', () => {
       module: 'serializer_tests',
       function: 'list',
       typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>', '0x2::sui::SUI'],
-      arguments: [coins[0].objectId],
+      arguments: [coins[0].coinObjectId],
       gasBudget: DEFAULT_GAS_BUDGET,
     };
     await serializeAndDeserialize(moveCall);
@@ -134,11 +134,11 @@ describe('Transaction Serialization and deserialization', () => {
       typeArguments: [],
       arguments: [
         SUI_SYSTEM_STATE_OBJECT_ID,
-        coins[2].objectId,
+        coins[2].coinObjectId,
         validator_address,
       ],
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[3].objectId,
+      gasPayment: coins[3].coinObjectId,
     };
 
     const deserialized = await serializeAndDeserialize(moveCall);

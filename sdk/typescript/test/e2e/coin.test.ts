@@ -4,12 +4,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Coin,
+  CoinStruct,
   getObjectId,
   LocalTxnDataSerializer,
   normalizeSuiObjectId,
   ObjectId,
   RawSigner,
-  SuiObjectInfo,
   SUI_TYPE_ARG,
 } from '../../src';
 
@@ -21,7 +21,7 @@ describe('Coin related API', () => {
   let toolbox: TestToolbox;
   let signer: RawSigner;
   let coinToSplit: ObjectId;
-  let coinsAfterSplit: SuiObjectInfo[];
+  let coinsAfterSplit: CoinStruct[];
 
   beforeAll(async () => {
     toolbox = await setup();
@@ -33,28 +33,18 @@ describe('Coin related API', () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address()
     );
-    coinToSplit = coins[0].objectId;
+    coinToSplit = coins[0].coinObjectId;
     // split coins into desired amount
     await signer.splitCoin({
       coinObjectId: coinToSplit,
       splitAmounts: SPLIT_AMOUNTS.map((s) => Number(s)),
       gasBudget: DEFAULT_GAS_BUDGET,
-      gasPayment: coins[1].objectId,
+      gasPayment: coins[1].coinObjectId,
     });
     coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address()
     );
     expect(coinsAfterSplit.length).toEqual(coins.length + SPLIT_AMOUNTS.length);
-  });
-
-  it('test Coin utility functions', async () => {
-    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
-    );
-    coins.forEach((c) => {
-      expect(Coin.isCoin(c)).toBeTruthy;
-      expect(Coin.isSUI(c)).toBeTruthy;
-    })
   });
 
   it('test getCoinStructTag', async () => {
@@ -67,7 +57,7 @@ describe('Coin related API', () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
       toolbox.address()
     );
-    const coinTypeArg: string = Coin.getCoinTypeArg(coins[0])!;
+    const coinTypeArg: string = coins[0].coinType;
     expect(Coin.getCoinStructTag(coinTypeArg)).toStrictEqual(exampleStructTag);
   });
 
