@@ -189,14 +189,17 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registrations = self.effects_notify_read.register_all(digests.clone());
         let effects = EffectsStore::get_effects(self, digests.iter())?;
-        // Zipping together registrations and effects ensures returned order is the same as order of digests
+        let mut needs_wait = false;
         let mut results: FuturesUnordered<_> = effects
             .into_iter()
             .zip(registrations.into_iter())
             .map(|(e, r)| match e {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
+                None => {
+                    needs_wait = true;
+                    Either::Right(r)
+                }
             })
             .collect();
         let mut effects_map = HashMap::new();
@@ -205,7 +208,11 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
             last_finished = Some(finished.transaction_digest);
             effects_map.insert(finished.transaction_digest, finished);
         }
-        debug!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
+        if needs_wait {
+            // Only log the duration if we ended up waiting.
+            debug!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
+        }
+        // Map from digests to ensures returned order is the same as order of digests
         Ok(digests
             .iter()
             .map(|d| {
