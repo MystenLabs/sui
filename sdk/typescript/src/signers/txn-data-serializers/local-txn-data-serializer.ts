@@ -23,9 +23,6 @@ import {
   ADD_DELEGATION_MUL_COIN_FUN_NAME,
   ADD_DELEGATION_LOCKED_COIN_FUN_NAME,
   normalizeSuiObjectId,
-  // CallArg,
-  // SUI_SYSTEM_STATE_OBJECT_ID,
-  normalizeSuiObjectId,
   bcsForVersion,
 } from '../../types';
 import {

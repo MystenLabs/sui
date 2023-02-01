@@ -51,7 +51,6 @@ import {
   DelegatedStake,
   ValidatorMetaData,
   SuiSystemState,
-  CommitteeInfoResponse,
   CoinBalance,
   CoinSupply,
   CheckpointSummary,

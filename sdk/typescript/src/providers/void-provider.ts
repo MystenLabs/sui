@@ -37,7 +37,6 @@ import {
   CoinMetadata,
   DevInspectResults,
   SuiSystemState,
-  CommitteeInfoResponse,
   DelegatedStake,
   ValidatorMetaData,
   PaginatedCoins,
