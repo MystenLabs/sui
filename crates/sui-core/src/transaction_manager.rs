@@ -120,17 +120,17 @@ impl TransactionManager {
 
             // if effects indicate a success then we need to add and wait for argument packages,
             // otherwise we can skip
-            let mut skip_adding_type_arg_deps = false;
+            let mut skip_adding_type_arg_deps = true; // default to not adding these temporarily to
+                                                      // unbrick validators
             let mut inputs = cert.data().intent_message.value.input_objects()?;
+
             if let Some(digest_to_effects) = &digest_to_effects {
                 if let Some(effect) = digest_to_effects.get(cert.digest()) {
                     skip_adding_type_arg_deps = effect.status.is_err();
-                    if !skip_adding_type_arg_deps {
-                        inputs.extend(cert.data().intent_message.value.type_argument_packages());
-                    }
                 }
-            } else {
-                // if this is called from anywhere but checkpoint executor, do the normal "fix"
+            }
+
+            if !skip_adding_type_arg_deps {
                 inputs.extend(cert.data().intent_message.value.type_argument_packages());
             }
 
