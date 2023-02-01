@@ -32,7 +32,7 @@ test('can search for transaction', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
 
-    const txid = tx.certificate.transactionDigest;
+    const txid = tx.effects.effects.transactionDigest;
     await page.goto('/');
     await search(page, txid);
     await expect(page).toHaveURL(`/transaction/${txid}`);
