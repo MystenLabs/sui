@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use itertools::Itertools;
 use parking_lot::RwLock;
 use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
@@ -143,7 +144,10 @@ impl TransactionManager {
             let missing = self
                 .authority_store
                 .get_missing_input_objects(&digest, &package_inputs, epoch_store)
-                .expect("Are shared object locks set prior to enqueueing certificates?");
+                .expect("Are shared object locks set prior to enqueueing certificates?")
+                .into_iter()
+                .filter(|key| key.0 != ObjectID::ZERO)
+                .collect_vec();
 
             if missing.is_empty() {
                 debug!(tx_digest = ?digest, "certificate ready");
