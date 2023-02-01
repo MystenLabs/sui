@@ -41,7 +41,7 @@ export async function mint(address: string) {
             'An example NFT.',
             'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
         ],
-        gasPayment: gasPayment.objectId,
+        gasPayment: gasPayment.coinObjectId,
         gasBudget: 30000,
     });
 
