@@ -15,8 +15,8 @@ export function calculateAPY(validators: ActiveValidator, epoch: number) {
     const apy =
         Math.pow(
             1 +
-                (+sui_balance - +delegation_token_supply.fields.value) /
-                    +delegation_token_supply.fields.value,
+                (+sui_balance - +delegation_token_supply.value) /
+                    +delegation_token_supply.value,
             365 / num_epochs_participated
         ) - 1;
 

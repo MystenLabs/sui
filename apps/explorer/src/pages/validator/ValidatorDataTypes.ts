@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Nullable } from "vitest";
+
 //TODO pull from the SDK
 export const VALIDATORS_OBJECT_ID = '0x5';
 export const VALDIATOR_NAME = /^[A-Z-_.\s0-9]+$/i;
@@ -46,9 +48,9 @@ export interface StakeSubsidy {
 }
 
 export interface StakeSubsidyFields {
-    balance: string;
-    current_epoch_amount: string;
-    epoch_counter: string;
+    balance: Value;
+    current_epoch_amount: number;
+    epoch_counter: number;
 }
 
 export interface Supply {
@@ -57,7 +59,7 @@ export interface Supply {
 }
 
 export interface SuiSupplyFields {
-    value: string;
+    value: number;
 }
 
 export interface ValidatorReportRecords {
@@ -98,6 +100,7 @@ export interface ActiveValidatorFields {
     pending_stake: string;
     pending_withdraw: string;
     stake_amount: string;
+    voting_power: string | null;
 }
 
 export interface DelegationStakingPool {
@@ -106,13 +109,17 @@ export interface DelegationStakingPool {
 }
 
 export interface DelegationStakingPoolFields {
-    delegation_token_supply: Supply;
-    pending_delegations: Pending;
-    pending_withdraws: Pending;
-    rewards_pool: string;
-    starting_epoch: string;
-    sui_balance: string;
+    delegation_token_supply: SuiSupplyFields;
+    pending_delegations: ContentsFields;
+    pending_withdraws: PendingDelegationsFields;
+    rewards_pool: Value;
+    starting_epoch: number;
+    sui_balance: number;
     validator_address: string;
+}
+
+export interface Value {
+    value: number;
 }
 
 export interface Pending {
@@ -121,7 +128,12 @@ export interface Pending {
 }
 
 export interface PendingDelegationsFields {
-    contents: Contents;
+    contents: ContentsFieldsWithdraw;
+}
+
+export interface ContentsFieldsWithdraw {
+    id: string;
+    size: number;
 }
 
 export interface Contents {
@@ -130,8 +142,14 @@ export interface Contents {
 }
 
 export interface ContentsFields {
-    id: ID;
-    size: string;
+    id: string;
+    size: number;
+    head: Vector;
+    tail: Vector;
+}
+
+export interface Vector {
+    vec: any[];
 }
 
 export interface NextEpochValidator {
@@ -142,9 +160,9 @@ export interface NextEpochValidator {
 export interface NextEpochValidatorFields {
     consensus_address: number[];
     name: number[] | string;
-    image_url?: number[] | string;
-    description?: number[] | string;
-    project_url?: number[] | string;
+    image_url?: number[] | string | null;
+    description?: number[] | string | null;
+    project_url?: number[] | string | null;
     net_address: number[];
     network_pubkey_bytes: number[];
     next_epoch_commission_rate: string;
