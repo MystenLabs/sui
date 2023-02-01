@@ -13,7 +13,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub fn keccak256(
+fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -28,27 +28,23 @@ pub fn keccak256(
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(
-            Keccak256::digest(msg.as_bytes_ref().as_slice()).to_vec()
+            H::digest(msg.as_bytes_ref().as_slice()).digest
         )],
     ))
+}
+
+pub fn keccak256(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    hash::<Keccak256, 32>(_context, ty_args, args)
 }
 
 pub fn blake2b256(
     _context: &mut NativeContext,
     ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
+    args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
-
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = legacy_empty_cost();
-    let msg = pop_arg!(args, VectorRef);
-
-    Ok(NativeResult::ok(
-        cost,
-        smallvec![Value::vector_u8(
-            Blake2b256::digest(msg.as_bytes_ref().as_slice()).to_vec()
-        )],
-    ))
+    hash::<Blake2b256, 32>(_context, ty_args, args)
 }
