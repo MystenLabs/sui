@@ -413,7 +413,9 @@ pub struct SuiTBlsSignRandomnessObjectResponse {
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SuiExecuteTransactionResponse {
-    pub certificate: SuiCertifiedTransaction,
+    // If this transaction was already finalized previously, there is no guarantee that a
+    // certificate is still available.
+    pub certificate: Option<SuiCertifiedTransaction>,
     pub effects: SuiCertifiedTransactionEffects,
     // If the transaction is confirmed to be executed locally
     // before this response.
@@ -428,7 +430,10 @@ impl SuiExecuteTransactionResponse {
         Ok(match resp {
             ExecuteTransactionResponse::EffectsCert(cert) => {
                 let (certificate, effects, is_executed_locally) = *cert;
-                let certificate: SuiCertifiedTransaction = certificate.try_into()?;
+                let certificate: Option<SuiCertifiedTransaction> = match certificate {
+                    Some(c) => Some(c.try_into()?),
+                    None => None,
+                };
                 let effects: SuiCertifiedTransactionEffects =
                     SuiCertifiedTransactionEffects::try_from(effects, resolver)?;
                 SuiExecuteTransactionResponse {
