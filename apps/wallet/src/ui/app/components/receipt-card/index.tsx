@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowUpRight12 } from '@mysten/icons';
 import {
     getExecutionStatusType,
     getTransferObjectTransaction,
     getTransactionKindName,
     getTotalGasUsed,
-    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -16,7 +16,7 @@ import { StatusIcon } from './StatusIcon';
 import { checkStakingTxn } from './checkStakingTxn';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import Icon, { SuiIcons } from '_components/icon';
+import { DelegationObjectCard } from '_components/receipt-card/DelegationObjectCard';
 import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
@@ -24,7 +24,7 @@ import { TxnGasSummery } from '_components/receipt-card/TxnGasSummery';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
 import { getTxnEffectsEventID } from '_components/transactions-card/Transaction';
 import { TxnImage } from '_components/transactions-card/TxnImage';
-import { getEventsSummary, getAmount } from '_helpers';
+import { getEventsSummary } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
@@ -55,25 +55,6 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             : getTxnEffectsEventID(effects, activeAddress)[0];
     }, [activeAddress, certificate.data.transactions, effects]);
 
-    const amountByRecipient = getAmount(
-        certificate.data.transactions[0],
-        effects
-    );
-
-    const transferAmount = useMemo(() => {
-        const amount = amountByRecipient && amountByRecipient?.[0];
-
-        const amountTransfers = eventsSummary.find(
-            ({ receiverAddress }) => receiverAddress === activeAddress
-        );
-
-        return {
-            amount: Math.abs(amount?.amount || amountTransfers?.amount || 0),
-            coinType:
-                amount?.coinType || amountTransfers?.coinType || SUI_TYPE_ARG,
-        };
-    }, [activeAddress, amountByRecipient, eventsSummary]);
-
     const gasTotal = getTotalGasUsed(txn);
 
     const moveCallLabel = useMemo(() => {
@@ -81,6 +62,12 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         const moveCallLabel = checkStakingTxn(txn);
         return moveCallLabel ? moveCallLabel : 'Call';
     }, [txn, txnKind]);
+
+    const transferAmount = useMemo(() => {
+        return eventsSummary.filter(
+            ({ receiverAddress }) => receiverAddress === activeAddress
+        );
+    }, [eventsSummary, activeAddress]);
 
     const isSender = activeAddress === certificate.data.sender;
     const isStakeTxn =
@@ -101,14 +88,14 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                 {isStakeTxn ? (
                     moveCallLabel === 'Staked' ? (
                         <StakeTxnCard
-                            amount={transferAmount.amount}
+                            amount={eventsSummary[0].amount}
                             txnEffects={effects}
                         />
                     ) : (
                         <UnStakeTxnCard
                             txn={txn}
                             activeAddress={activeAddress}
-                            amount={transferAmount.amount}
+                            amount={eventsSummary[0].amount}
                         />
                     )
                 ) : (
@@ -120,35 +107,40 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                             />
                         )}
 
-                        {transferAmount.amount > 0 ? (
-                            <div className="w-full">
-                                <TxnAmount
-                                    amount={transferAmount.amount}
-                                    label={isSender ? 'Sent' : 'Received'}
-                                    coinType={transferAmount.coinType}
-                                />
-                            </div>
-                        ) : null}
-
-                        {recipientAddress && (
-                            <TxnAddress
-                                address={recipientAddress}
-                                label={isSender ? 'To' : 'From'}
-                            />
-                        )}
+                        {transferAmount.length > 0
+                            ? transferAmount.map(
+                                  ({ amount, coinType, receiverAddress }) => {
+                                      return (
+                                          <div key={coinType + receiverAddress}>
+                                              <TxnAmount
+                                                  amount={amount}
+                                                  label={
+                                                      amount > 0
+                                                          ? 'Received'
+                                                          : 'Sent'
+                                                  }
+                                                  coinType={coinType}
+                                              />
+                                              <TxnAddress
+                                                  address={recipientAddress}
+                                                  label={
+                                                      amount > 0 ? 'From' : 'To'
+                                                  }
+                                              />
+                                          </div>
+                                      );
+                                  }
+                              )
+                            : null}
                     </>
                 )}
 
+                {txnKind === 'ChangeEpoch' && !transferAmount.length ? (
+                    <DelegationObjectCard senderAddress={recipientAddress} />
+                ) : null}
+
                 {gasTotal && isSender ? (
-                    <TxnGasSummery
-                        totalGas={gasTotal}
-                        transferAmount={
-                            transferAmount.amount > 0 &&
-                            moveCallLabel !== 'Unstaked'
-                                ? transferAmount.amount
-                                : null
-                        }
-                    />
+                    <TxnGasSummery totalGas={gasTotal} transferAmount={null} />
                 ) : null}
 
                 <div className="flex gap-1.5 pt-3.75 w-full">
@@ -161,10 +153,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                     >
                         View on Explorer
                     </ExplorerLink>
-                    <Icon
-                        icon={SuiIcons.ArrowLeft}
-                        className="text-steel text-p3 rotate-135"
-                    />
+                    <ArrowUpRight12 className="text-steel text-p3" />
                 </div>
             </ReceiptCardBg>
         </div>

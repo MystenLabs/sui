@@ -52,7 +52,7 @@ function ReceiptPage() {
             const txnKind = getTransactionKindName(transactions[0]);
             const stakingTxn = checkStakingTxn(data);
 
-            const isSuiTransfer =
+            const isTransfer =
                 txnKind === 'PaySui' ||
                 txnKind === 'TransferSui' ||
                 txnKind === 'PayAllSui' ||
@@ -61,7 +61,7 @@ function ReceiptPage() {
 
             const isSender = activeAddress === sender;
 
-            const transferName = isSuiTransfer
+            const transferName = isTransfer
                 ? isSender
                     ? 'Sent Successfully'
                     : 'Received Successfully'

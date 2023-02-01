@@ -126,10 +126,14 @@ export function Transaction({
 
     // Transition label
     const txnLabel = useMemo(() => {
-        if (txnKind === 'ChangeEpoch') return 'Received Staking Rewards';
+        // Epoch change with amount is staking rewards and without amount is delegation object
+        if (txnKind === 'ChangeEpoch')
+            return transferAmount.amount
+                ? 'Received Staking Rewards'
+                : 'Received Delegation Object';
         if (moveCallLabel) return moveCallLabel;
         return isSender ? 'Sent' : 'Received';
-    }, [txnKind, moveCallLabel, isSender]);
+    }, [txnKind, transferAmount.amount, moveCallLabel, isSender]);
 
     // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
     const showSuiSymbol =
