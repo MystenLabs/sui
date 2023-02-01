@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useSuiSystem } from "../../network/queries/sui-system";
@@ -105,8 +108,8 @@ export function Assignment() {
 
               {/* TODO: Validate copy states: */}
               <div className="mt-1 max-w-xs text-steel-dark text-p1">
-                Move your Validator to the assigned rank by allocating
-                Sui Stake to them.
+                Move your Validator to the assigned rank by allocating Sui Stake
+                to them.
               </div>
             </div>
           </div>
