@@ -1,35 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type PaginatedEvents,
-    type EventQuery,
-    type EventId,
-} from '@mysten/sui.js';
+import { type PaginatedEvents, type EventId } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { useRpc } from './useRpc';
 
-type GetEventsProps = {
-    query: EventQuery;
+import { VALIDATORS_EVENTS_QUERY } from '~/pages/validator/ValidatorDataTypes';
+
+type GetValidatorsEvent = {
     cursor?: EventId | null;
     limit: number | null;
     order: 'ascending' | 'descending';
 };
 
-export function useGetEvents({
-    query,
+export function useGetValidatorsEvents({
     cursor,
     limit,
     order,
-}: GetEventsProps): UseQueryResult<PaginatedEvents> {
+}: GetValidatorsEvent): UseQueryResult<PaginatedEvents> {
     const rpc = useRpc();
     const eventCursor = cursor || null;
     const eventLimit = limit || null;
 
     const response = useQuery(
-        ['events', query],
-        () => rpc.getEvents(query, eventCursor, eventLimit, order),
+        ['validatorEvents', limit],
+        () =>
+            rpc.getEvents(
+                { MoveEvent: VALIDATORS_EVENTS_QUERY },
+                eventCursor,
+                eventLimit,
+                order
+            ),
         { enabled: !!limit }
     );
 

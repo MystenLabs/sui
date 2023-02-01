@@ -8,12 +8,9 @@ import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
-import { useGetEvents } from '~/hooks/useGetEvents';
 import { useGetObject } from '~/hooks/useGetObject';
-import {
-    VALIDATORS_OBJECT_ID,
-    VALIDATORS_EVENTS_QUERY,
-} from '~/pages/validator/ValidatorDataTypes';
+import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
@@ -39,13 +36,14 @@ function ValidatorDetails() {
     }, [id, validatorsData]);
 
     const numberOfValidators = useMemo(() => {
-        return validatorsData?.validators.fields.active_validators.length;
+        return (
+            validatorsData?.validators.fields.active_validators.length || null
+        );
     }, [validatorsData]);
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
-        useGetEvents({
-            query: { MoveEvent: VALIDATORS_EVENTS_QUERY },
-            limit: numberOfValidators || null,
+        useGetValidatorsEvents({
+            limit: numberOfValidators,
             order: 'descending',
         });
 

@@ -13,14 +13,16 @@ import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
-import { useGetEvents } from '~/hooks/useGetEvents';
 import { useGetObject } from '~/hooks/useGetObject';
+<<<<<<< HEAD
 <<<<<<< HEAD
 import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 =======
+=======
+import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
+>>>>>>> 969165c130 (added useGetValidatorEvent)
 import {
     VALIDATORS_OBJECT_ID,
-    VALIDATORS_EVENTS_QUERY,
     type ActiveValidator,
 } from '~/pages/validator/ValidatorDataTypes';
 >>>>>>> 5c130e1e4c (update)
@@ -179,16 +181,17 @@ function ValidatorPageResult() {
             : null;
 
     const numberOfValidators = useMemo(() => {
-        return validatorsData?.validators.fields.active_validators.length;
+        return (
+            validatorsData?.validators.fields.active_validators.length || null
+        );
     }, [validatorsData]);
 
     const {
         data: validatorEvents,
         isLoading: validatorsEventsLoading,
         isError: validatorEventError,
-    } = useGetEvents({
-        query: { MoveEvent: VALIDATORS_EVENTS_QUERY },
-        limit: numberOfValidators || null,
+    } = useGetValidatorsEvents({
+        limit: numberOfValidators,
         order: 'descending',
     });
 
