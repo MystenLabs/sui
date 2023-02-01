@@ -9,12 +9,12 @@ import {
     offset,
     arrow,
 } from '@floating-ui/react';
-import cn from 'classnames';
+import { ChevronDown12, Dot12 } from '@mysten/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
+import { ButtonConnectedTo } from '../ButtonConnectedTo';
 import { appDisconnect } from './actions';
-import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
@@ -44,7 +44,6 @@ function DappStatus() {
     const isConnected = useAppSelector(dappStatusSelector);
     const [disconnecting, setDisconnecting] = useState(false);
     const [visible, setVisible] = useState(false);
-    const Component = isConnected ? 'button' : 'span';
     const onHandleClick = useCallback(
         (e: boolean) => {
             if (!disconnecting) {
@@ -97,27 +96,13 @@ function DappStatus() {
     }
     return (
         <>
-            <Component
-                type="button"
-                className={cn(st.container, {
-                    [st.connected]: isConnected,
-                    [st.active]: visible,
-                })}
-                disabled={!isConnected}
+            <ButtonConnectedTo
+                iconBefore={<Dot12 className="text-success" />}
+                text={activeOrigin || ''}
+                iconAfter={<ChevronDown12 />}
                 ref={reference}
                 {...getReferenceProps()}
-            >
-                <Icon
-                    icon="circle-fill"
-                    className={cn(st.icon, { [st.connected]: isConnected })}
-                />
-                <span className={st.label}>
-                    {(isConnected && activeOrigin) || 'Not connected'}
-                </span>
-                {isConnected ? (
-                    <Icon icon={SuiIcons.ChevronDown} className={st.chevron} />
-                ) : null}
-            </Component>
+            />
             <AnimatePresence>
                 {visible ? (
                     <motion.div

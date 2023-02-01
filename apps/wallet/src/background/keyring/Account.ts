@@ -44,7 +44,9 @@ export class Account {
     async sign(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
         return {
             signatureScheme: this.#keypair.getKeyScheme(),
-            signature: this.#keypair.signData(data),
+            // TODO(joyqvq): Remove once 0.25.0 is released.
+            // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
+            signature: this.#keypair.signData(data, false),
             pubKey: this.#keypair.getPublicKey(),
         };
     }

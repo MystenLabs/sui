@@ -68,7 +68,7 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
         }}
       >
         <img src="/refresh.svg" alt="refresh" />
-        Refresh Score
+        Get Assignment
       </button>
     </div>
   );

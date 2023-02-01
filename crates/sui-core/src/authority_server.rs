@@ -430,17 +430,6 @@ impl Validator for ValidatorService {
         .unwrap()
     }
 
-    async fn account_info(
-        &self,
-        request: tonic::Request<AccountInfoRequest>,
-    ) -> Result<tonic::Response<AccountInfoResponse>, tonic::Status> {
-        let request = request.into_inner();
-
-        let response = self.state.handle_account_info_request(request).await?;
-
-        Ok(tonic::Response::new(response))
-    }
-
     async fn object_info(
         &self,
         request: tonic::Request<ObjectInfoRequest>,

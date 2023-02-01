@@ -486,15 +486,6 @@ where
         Ok(verified)
     }
 
-    pub async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
-        self.authority_client
-            .handle_account_info_request(request)
-            .await
-    }
-
     /// Pass `skip_committee_check_during_reconfig = true` during reconfiguration, so that
     /// we can tolerate missing committee information when processing the object data.
     pub async fn handle_object_info_request(

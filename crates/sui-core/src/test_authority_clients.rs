@@ -16,9 +16,8 @@ use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
-        AccountInfoRequest, AccountInfoResponse, CertifiedTransaction, CommitteeInfoRequest,
-        CommitteeInfoResponse, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-        TransactionInfoRequest, TransactionInfoResponse,
+        CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse, ObjectInfoRequest,
+        ObjectInfoResponse, Transaction, TransactionInfoRequest, TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
@@ -73,14 +72,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         spawn_monitored_task!(Self::handle_certificate(state, certificate, fault_config))
             .await
             .unwrap()
-    }
-
-    async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
-        let state = self.state.clone();
-        state.handle_account_info_request(request).await
     }
 
     async fn handle_object_info_request(
@@ -222,14 +213,6 @@ impl AuthorityAPI for MockAuthorityApi {
         unreachable!()
     }
 
-    /// Handle Account information requests for this account.
-    async fn handle_account_info_request(
-        &self,
-        _request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
-        unreachable!();
-    }
-
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
         &self,
@@ -295,13 +278,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
-    async fn handle_account_info_request(
-        &self,
-        _request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, SuiError> {
         unimplemented!()
     }
 

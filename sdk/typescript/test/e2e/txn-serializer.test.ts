@@ -3,15 +3,17 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-    bcsForVersion,
+  bcsForVersion,
   deserializeTransactionBytesToTransactionData,
   LocalTxnDataSerializer,
   MoveCallTransaction,
+  PureArg,
   RawSigner,
   RpcTxnDataSerializer,
   SuiMoveObject,
   UnserializedSignableTransaction,
 } from '../../src';
+import { CallArgSerializer } from '../../src/signers/txn-data-serializers/call-arg-serializer';
 import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
@@ -57,11 +59,10 @@ describe('Transaction Serialization and deserialization', () => {
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
 
-    const deserializedTxnData =
-      deserializeTransactionBytesToTransactionData(
-        bcsForVersion(await toolbox.provider.getRpcApiVersion()),
-        localTxnBytes,
-      );
+    const deserializedTxnData = deserializeTransactionBytesToTransactionData(
+      bcsForVersion(await toolbox.provider.getRpcApiVersion()),
+      localTxnBytes
+    );
     const reserialized = await localSerializer.serializeTransactionData(
       deserializedTxnData
     );
@@ -71,6 +72,7 @@ describe('Transaction Serialization and deserialization', () => {
         ...deserialized.data,
         gasBudget: Number(deserialized.data.gasBudget!.toString(10)),
         gasPayment: '0x' + deserialized.data.gasPayment,
+        gasPrice: Number(deserialized.data.gasPrice!.toString(10)),
       };
       return normalized;
     }
@@ -112,7 +114,6 @@ describe('Transaction Serialization and deserialization', () => {
       arguments: [coins[0].objectId],
       gasBudget: DEFAULT_GAS_BUDGET,
     };
-
     await serializeAndDeserialize(moveCall);
   });
 
@@ -147,4 +148,47 @@ describe('Transaction Serialization and deserialization', () => {
     };
     expect(normalized).toEqual(moveCall);
   });
+
+  it('Move Call with Pure Arg', async () => {
+    const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
+      toolbox.address()
+    );
+    const moveCallExpected = { 
+      packageObjectId: '0x2',
+      module: 'devnet_nft',
+      function: 'mint',
+      typeArguments: [],
+      arguments: [
+        'Example NFT',
+        'An NFT created by the wallet Command Line Tool',
+        'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+      ],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: coins[0].objectId,
+    } as MoveCallTransaction;
+    const serArgsExpected = await new CallArgSerializer(
+      toolbox.provider
+    ).serializeMoveCallArguments(moveCallExpected);
+    
+    const version = await toolbox.provider.getRpcApiVersion();
+    const pureArg: PureArg = { Pure: bcsForVersion(version).ser('string', 'Example NFT').toBytes()};
+    const moveCall = { 
+      packageObjectId: '0x2',
+      module: 'devnet_nft',
+      function: 'mint',
+      typeArguments: [],
+      arguments: [
+        pureArg,
+        'An NFT created by the wallet Command Line Tool',
+        'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+      ],
+      gasBudget: DEFAULT_GAS_BUDGET,
+      gasPayment: coins[0].objectId,
+    } as MoveCallTransaction;
+    const serArgs = await new CallArgSerializer(
+      toolbox.provider
+    ).serializeMoveCallArguments(moveCall);
+    expect(serArgs).toEqual(serArgsExpected);
+
+  })
 });

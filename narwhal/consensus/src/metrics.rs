@@ -27,12 +27,13 @@ pub struct ConsensusMetrics {
     /// The number of certificates from consensus that were restored and sent to the executor
     /// following a node restart
     pub recovered_consensus_output: IntCounter,
-    /// The approximate size in memory (including heap allocations) of the Dag.
-    pub dag_size_bytes: IntGauge,
     /// The latency between two successful commit rounds
     pub commit_rounds_latency: Histogram,
     /// The number of certificates committed per commit round
     pub committed_certificates: Histogram,
+    /// The time it takes for a certificate from the moment it gets created
+    /// up to the moment it gets committed.
+    pub certificate_commit_latency: Histogram,
     /// When a certificate is received on an odd round, we check
     /// about the previous (even) round leader. We do have three possible cases which
     /// are tagged as values of the label "outcome":
@@ -40,9 +41,8 @@ pub struct ConsensusMetrics {
     /// * not_enough_support: when the leader certificate has been found but there was not enough support
     /// * elected: when the leader certificate has been found and had enough support
     pub leader_election: IntCounterVec,
-    /// The time it takes for a certificate from the moment it gets created
-    /// up to the moment it gets committed.
-    pub certificate_commit_latency: Histogram,
+    /// Count leader certificates committed, and whether the leader has strong support.
+    pub leader_commits: IntCounterVec,
 }
 
 impl ConsensusMetrics {
@@ -82,11 +82,6 @@ impl ConsensusMetrics {
                 "The number of certificates from consensus that were restored and sent to the executor following a node restart",
                 registry
             ).unwrap(),
-            dag_size_bytes: register_int_gauge_with_registry!(
-                "dag_size_bytes",
-                "The approximate size in memory (including heap allocations) of the dag",
-                registry
-            ).unwrap(),
             commit_rounds_latency: register_histogram_with_registry!(
                 "consensus_commit_rounds_latency",
                 "The latency between two successful commit rounds (when we have successful leader election)",
@@ -104,18 +99,24 @@ impl ConsensusMetrics {
                 ],
                 registry
             ).unwrap(),
+            certificate_commit_latency: register_histogram_with_registry!(
+                "certificate_commit_latency",
+                "The time it takes for a certificate from the moment it gets created up to the moment it gets committed.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             leader_election: register_int_counter_vec_with_registry!(
                 "leader_election",
                 "The outcome of a leader election round",
                 &["outcome"],
                 registry
             ).unwrap(),
-            certificate_commit_latency: register_histogram_with_registry!(
-                "certificate_commit_latency",
-                "The time it takes for a certificate from the moment it gets created up to the moment it gets committed.",
-                LATENCY_SEC_BUCKETS.to_vec(),
+            leader_commits: register_int_counter_vec_with_registry!(
+                "leader_commits",
+                "Count leader commits, broken down by strong vs weak support",
+                &["type"],
                 registry
-            ).unwrap()
+            ).unwrap(),
         }
     }
 }
