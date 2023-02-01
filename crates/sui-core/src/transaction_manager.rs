@@ -9,12 +9,7 @@ use std::{
 use itertools::Itertools;
 use parking_lot::RwLock;
 use sui_types::{
-    base_types::ObjectID,
-    committee::EpochId,
-    messages::{
-        EntryTypeArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus, TransactionEffects,
-    },
-    storage::ObjectKey,
+    base_types::ObjectID, committee::EpochId, messages::TransactionEffects, storage::ObjectKey,
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
@@ -125,23 +120,12 @@ impl TransactionManager {
 
             // if effects indicate a success then we need to add and wait for argument packages,
             // otherwise we can skip
-            let mut module_not_found_error = false;
+            let mut skip_adding_type_arg_deps = false;
             let mut inputs = cert.data().intent_message.value.input_objects()?;
             if let Some(digest_to_effects) = &digest_to_effects {
                 if let Some(effect) = digest_to_effects.get(cert.digest()) {
-                    fn is_module_not_found_error(effect: &TransactionEffects) -> bool {
-                        if let ExecutionStatus::Failure { error } = &effect.status {
-                            if let ExecutionFailureStatus::EntryTypeArgumentError(error) = error {
-                                if matches!(error.kind, EntryTypeArgumentErrorKind::ModuleNotFound)
-                                {
-                                    return true;
-                                }
-                            }
-                        }
-                        false
-                    }
-                    module_not_found_error = is_module_not_found_error(effect);
-                    if !module_not_found_error {
+                    skip_adding_type_arg_deps = effect.status.is_err();
+                    if !skip_adding_type_arg_deps {
                         inputs.extend(cert.data().intent_message.value.type_argument_packages());
                     }
                 }
@@ -151,7 +135,7 @@ impl TransactionManager {
             }
 
             // skip already pending txes
-            if !module_not_found_error {
+            if !skip_adding_type_arg_deps {
                 if inner.pending_certificates.contains_key(&digest) {
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
