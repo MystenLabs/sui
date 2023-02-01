@@ -7,7 +7,7 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::{
-    CertifiedTransaction, ExecuteTransactionRequest, ExecuteTransactionRequestType,
+    CertifiedTransactionEffects, ExecuteTransactionRequest, ExecuteTransactionRequestType,
     ExecuteTransactionResponse, TransactionData, VerifiedTransaction,
 };
 use sui_types::object::generate_test_gas_objects_with_owner;
@@ -206,7 +206,7 @@ async fn test_tx_across_epoch_boundaries() {
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
     let gas_objects = generate_test_gas_objects_with_owner(1, sender);
     let (result_tx, mut result_rx) =
-        tokio::sync::mpsc::channel::<CertifiedTransaction>(total_tx_cnt);
+        tokio::sync::mpsc::channel::<CertifiedTransactionEffects>(total_tx_cnt);
 
     let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
     let authorities = spawn_test_authorities([], &config).await;
@@ -247,8 +247,8 @@ async fn test_tx_across_epoch_boundaries() {
                 {
                     Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
                         info!(?tx_digest, "tx result: ok");
-                        let (tx_cert, _, _) = *res;
-                        result_tx.send(tx_cert).await.unwrap();
+                        let (_, effects_cert, _) = *res;
+                        result_tx.send(effects_cert).await.unwrap();
                     }
                     Err(QuorumDriverError::TimeoutBeforeFinality) => {
                         info!(?tx_digest, "tx result: timeout and will retry")
@@ -277,7 +277,7 @@ async fn test_tx_across_epoch_boundaries() {
     // The transaction must finalize in epoch 1
     let start = std::time::Instant::now();
     match tokio::time::timeout(tokio::time::Duration::from_secs(15), result_rx.recv()).await {
-        Ok(Some(tx_cert)) if tx_cert.auth_sig().epoch == 1 => (),
+        Ok(Some(effects_cert)) if effects_cert.epoch() == 1 => (),
         other => panic!("unexpected error: {:?}", other),
     }
     info!("test completed in {:?}", start.elapsed());
