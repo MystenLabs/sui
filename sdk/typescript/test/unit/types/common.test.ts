@@ -36,8 +36,7 @@ describe('Test common functions', () => {
         'ED25519',
         signature,
         publicKey,
-        bcs,
-        true
+        bcs
       );
       expect(transactionDigest).toEqual(
         'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ'

@@ -162,8 +162,7 @@ export abstract class SignerWithProvider implements Signer {
       sig.signatureScheme,
       sig.signature,
       sig.pubKey,
-      bcs,
-      true
+      bcs
     );
   }
 
