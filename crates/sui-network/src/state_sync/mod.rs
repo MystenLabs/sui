@@ -869,6 +869,7 @@ where
             VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
 
+        debug!(sequence_number = ?checkpoint.summary.sequence_number, "verified checkpoint summary");
         SystemTime::now()
             .duration_since(checkpoint.summary.timestamp())
             .map(|latency| metrics.report_checkpoint_summary_age(latency))

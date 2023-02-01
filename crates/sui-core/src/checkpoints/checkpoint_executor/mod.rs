@@ -155,6 +155,10 @@ impl CheckpointExecutor {
                 }
                 // Check for newly synced checkpoints from StateSync.
                 Ok(checkpoint) = self.mailbox.recv() => {
+                    debug!(
+                        sequence_number = ?checkpoint.summary.sequence_number,
+                        "received checkpoint summary from state sync"
+                    );
                     SystemTime::now().duration_since(checkpoint.summary.timestamp())
                         .map(|latency|
                             self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
