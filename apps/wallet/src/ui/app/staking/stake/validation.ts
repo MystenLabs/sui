@@ -1,41 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import BigNumber from 'bignumber.js';
 import * as Yup from 'yup';
 
-import {
-    GAS_TYPE_ARG,
-    GAS_SYMBOL,
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-} from '_redux/slices/sui-objects/Coin';
-import { createTokenValidation } from '_src/shared/validation';
+import { formatBalance } from '../../hooks/useFormatCoin';
 
 export function createValidationSchema(
-    coinType: string,
     coinBalance: bigint,
     coinSymbol: string,
-    gasBalance: bigint,
-    totalGasCoins: number,
-    decimals: number,
-    gasDecimals: number,
-    maxSuiSingleCoinBalance: bigint
+    decimals: number
 ) {
     return Yup.object({
-        amount: createTokenValidation(
-            coinType,
-            coinBalance,
-            coinSymbol,
-            gasBalance,
-            decimals,
-            gasDecimals,
-            DEFAULT_GAS_BUDGET_FOR_STAKE,
-            maxSuiSingleCoinBalance
-        ).test(
-            'num-gas-coins-check',
-            `Need at least 2 ${GAS_SYMBOL} coins to stake a ${GAS_SYMBOL} coin`,
-            () => {
-                return coinType !== GAS_TYPE_ARG || totalGasCoins >= 2;
-            }
-        ),
+        // NOTE: This is an intentional subset of the token validaiton:
+        amount: Yup.mixed()
+            .transform((_, original) => {
+                return new BigNumber(original);
+            })
+            .test('required', `\${path} is a required field`, (value) => {
+                return !!value;
+            })
+            .test(
+                'valid',
+                'The value provided is not valid.',
+                (value?: BigNumber) => {
+                    if (!value || value.isNaN() || !value.isFinite()) {
+                        return false;
+                    }
+                    return true;
+                }
+            )
+            .test(
+                'min',
+                `\${path} must be greater than 0 ${coinSymbol}`,
+                (amount?: BigNumber) => (amount ? amount.gt(0) : false)
+            )
+            .test(
+                'max',
+                `\${path} must be less than ${formatBalance(
+                    coinBalance,
+                    decimals
+                )} ${coinSymbol}`,
+                (amount?: BigNumber) =>
+                    amount
+                        ? amount.shiftedBy(decimals).lte(coinBalance.toString())
+                        : false
+            )
+            .test(
+                'max-decimals',
+                `The value exceeds the maximum decimals (${decimals}).`,
+                (amount?: BigNumber) => {
+                    return amount
+                        ? amount.shiftedBy(decimals).isInteger()
+                        : false;
+                }
+            )
+            .label('Amount'),
     });
 }

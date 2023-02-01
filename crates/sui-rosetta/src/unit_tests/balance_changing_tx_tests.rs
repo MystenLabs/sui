@@ -90,7 +90,7 @@ async fn test_publish_and_move_call() {
     let sender = get_random_address(&network.accounts, vec![]);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../sui_programmability/examples/fungible_tokens");
-    let package = sui_framework::build_move_package(&path, BuildConfig::default()).unwrap();
+    let package = sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
     let compiled_module = package
         .get_modules()
         .map(|m| {

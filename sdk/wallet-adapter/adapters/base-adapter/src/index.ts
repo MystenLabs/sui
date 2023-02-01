@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  ExecuteTransactionRequestType,
   SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
@@ -29,7 +30,10 @@ export interface WalletAdapter {
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */
   signAndExecuteTransaction(
-    transaction: SignableTransaction
+    transaction: SignableTransaction,
+    options?: {
+      requestType?: ExecuteTransactionRequestType;
+    }
   ): Promise<SuiTransactionResponse>;
 
   getAccounts: () => Promise<SuiAddress[]>;

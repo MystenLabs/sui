@@ -126,3 +126,10 @@ pub const STAKE_SUBSIDY_RATE: u64 = 1;
 
 /// Unit gas price, Mist per internal gas unit.
 pub const STORAGE_GAS_PRICE: u64 = 1;
+
+/// === Core Protocol ===
+
+/// Max number of transactions per checkpoint.
+/// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
+pub const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
+pub const MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING: usize = 2;

@@ -242,7 +242,7 @@ impl WorkloadConfiguration {
                 )
             };
         let delegation_gas_configs = if delegation_weight > 0 {
-            DelegationWorkload::generate_gas_config_for_payloads(num_transfer_accounts)
+            DelegationWorkload::generate_gas_config_for_payloads(delegate_max_ops)
         } else {
             vec![]
         };

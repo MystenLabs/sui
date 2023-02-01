@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.24.0"
+    "version": "0.25.0"
   },
   "methods": [
     {
@@ -5296,36 +5296,23 @@
         }
       },
       "SuiExecuteTransactionResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "EffectsCert"
-            ],
-            "properties": {
-              "EffectsCert": {
-                "type": "object",
-                "required": [
-                  "certificate",
-                  "confirmed_local_execution",
-                  "effects"
-                ],
-                "properties": {
-                  "certificate": {
-                    "$ref": "#/components/schemas/CertifiedTransaction"
-                  },
-                  "confirmed_local_execution": {
-                    "type": "boolean"
-                  },
-                  "effects": {
-                    "$ref": "#/components/schemas/CertifiedTransactionEffects"
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
+        "type": "object",
+        "required": [
+          "certificate",
+          "confirmed_local_execution",
+          "effects"
+        ],
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/CertifiedTransaction"
+          },
+          "confirmed_local_execution": {
+            "type": "boolean"
+          },
+          "effects": {
+            "$ref": "#/components/schemas/CertifiedTransactionEffects"
           }
-        ]
+        }
       },
       "SuiExecutionResult": {
         "type": "object",

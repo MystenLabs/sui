@@ -306,7 +306,7 @@ async fn execute_transaction_with_fault_configs(
 /// execution on its side
 #[sim_test(config = "constant_latency_ms(1)")]
 async fn test_quorum_map_and_reduce_timeout() {
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
     let modules = sui_framework::build_move_package(&path, build_config)
