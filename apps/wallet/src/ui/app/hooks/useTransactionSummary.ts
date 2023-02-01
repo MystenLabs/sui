@@ -26,8 +26,6 @@ export function useTransactionSummary({
     txData,
     activeAddress,
 }: ExecuteDryRunTransactionRequestProps): ExecuteDryRunTransactionReqResponse {
-    console.log(txData);
-
     const { data } = useTransactionDryRun(txData);
 
     const eventsSummary = useMemo(
