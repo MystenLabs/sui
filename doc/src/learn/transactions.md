@@ -63,6 +63,27 @@ This transaction type combines several coin objects into one. It includes the fo
 
 Inputs: A list of unique object references pointing to mutable objects owned by the sender. The objects must all have the same type: `sui::coin::Coin<T>` with arbitrary `T`--that is, any fungible token. The list must contain at least two objects. All objects except the first one will be destroyed, and the new value of the first object will be its old value plus the sum of the value of all destroyed objects. The gas input object from above cannot also appear as an object input.
 
+## Transactions flow - example
+
+Here's an example showing how objects and transactions are connected to each other in Sui.
+
+In the example below we have two objects:
+- object A with 5 SUI coins that belongs to Tom
+- object B with 2 SUI coins that belongs to John
+
+Tom decided to send 1 SUI coin to Alice. In this case the object A will be the input to this transaction and 1 SUI coin will be debited from this object. The output of the transaction will be two objects: 
+- object A with 4 SUI coins which is still assigned to Tom
+- new created object B with 1 SUI coin that belongs now to Alice
+
+In the same time John wanted to send 2 SUI coins to Anna. Due to the fact, that [the relationship between objects and transactions is written in a directed acyclic graph (DAG)](objects.md#the-transaction-object-dag-relating-objects-and-transactions) and both transactions interact with different objects, the transaction can be executed in parallel with the above one (Tom -> Alice).
+This transaction will only change the owner of object B from John to Anna.
+
+After receiving 2 SUI coins, Anna sent it immediately to Tom. Now Tom has 6 SUI coins (4 from object A and 2 from object B).
+
+Lastly, Tom sent all his SUI coins to John. For this transaction the input will be actually two objects (object A and object B). The object B will be destroyed, and it's value will be added to the object A. As a result, the transaction's output will be only object A with a value of 6 SUI coins.
+
+![Sui transactions flow](../../static/sui-transactions-flow.png "See transactions flow in Sui")
+
 ## Further reading
 
 * See the [Move tutorial](move/index.md) to develop Sui smart contracts.
