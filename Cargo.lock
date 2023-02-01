@@ -2524,6 +2524,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
+name = "expect-test"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d4661aca38d826eb7c72fe128e4238220616de4c0cc00db7bfc38e2e1364dd3"
+dependencies = [
+ "dissimilar",
+ "once_cell",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9163,6 +9173,7 @@ name = "sui-source-validation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "expect-test",
  "futures",
  "move-binary-format",
  "move-bytecode-utils",
@@ -11140,6 +11151,7 @@ dependencies = [
  "error-code",
  "ethnum",
  "event-listener",
+ "expect-test",
  "eyre",
  "fail 0.4.0",
  "fail 0.5.1",
