@@ -12,10 +12,12 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Scoreboard } from "../components/Scoreboard";
 import { useEpoch } from "../network/queries/epoch";
-import { Goal } from "../network/types";
+import { Goal, LEADERBOARD, Leaderboard } from "../network/types";
 import { Assignment } from "../components/Assignment";
 import { useSuiSystem } from "../network/queries/sui-system";
 import { Logo } from "../components/Validators/Logo";
+import { useRawObject } from "../network/queries/use-raw";
+import { config } from "../config";
 
 /**
  * The Home page.
@@ -24,6 +26,7 @@ export function Home() {
   const navigate = useNavigate();
   const { data: epoch } = useEpoch();
   const { currentAccount } = useWalletKit();
+  const { data: leaderboard } = useRawObject<Leaderboard>(config.VITE_LEADERBOARD, LEADERBOARD);
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
   const { data: system } = useSuiSystem();
 
@@ -54,15 +57,15 @@ export function Home() {
     if (!epoch) return;
 
     const interval = setInterval(
-      () => setTime(getTime(epoch?.timestamp, epoch?.prevTimestamp)),
+      () => setTime(getTime(epoch.timestamp, epoch.prevTimestamp)),
       1000
     );
     return () => clearInterval(interval);
   }, [epoch]);
 
-  if (!epoch) {
-    return null;
-  }
+  const hasAssignment = !!scorecard
+    && scorecard.data.epoch == (epoch?.data.epoch || 0n) + 1n
+    && scorecard.data.participation > 0;
 
   return (
     <>
@@ -70,11 +73,11 @@ export function Home() {
       <Round />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card spacing="sm">
-          <Stat label="Your Role">{formatGoal(goal)}</Stat>
+          <Stat label="Your Role">{hasAssignment ? formatGoal(goal) : 'Not Assigned'}</Stat>
         </Card>
         <Card spacing="sm">
           <Stat label="Assigned Validator">
-            {assignedValidator ? (
+            {assignedValidator && hasAssignment ? (
               <div className="flex items-center gap-2">
                 <Logo
                   src={
@@ -101,8 +104,8 @@ export function Home() {
           </Stat>
         </Card>
       </div>
-      <Assignment />
-      <Validators />
+      {hasAssignment && <Assignment />}
+      <Validators hasAssignment={hasAssignment} />
     </>
   );
 }
@@ -117,6 +120,5 @@ function getTime(timestamp?: number, prevTimestamp?: number): number | null {
   const prevEpochLength = timestamp - prevTimestamp;
   const timePassed = Date.now() - timestamp;
   const timeLeft = prevEpochLength - timePassed;
-
   return timeLeft <= 0 ? 0 : timeLeft;
 };

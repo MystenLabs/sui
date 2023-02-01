@@ -6,11 +6,11 @@ import { useScorecard } from "../../network/queries/scorecard";
 import { useSuiSystem } from "../../network/queries/sui-system";
 import { formatGoal } from "../../utils/format";
 import { Goal } from "../../network/types";
-import { Card } from "../Card";
 import { Balance } from "./Balance";
 import { Table } from "./Table";
+import { Card } from "../Card";
 
-export function Validators() {
+export function Validators({ hasAssignment }: { hasAssignment: boolean }) {
   const { currentAccount } = useWalletKit();
   const { data: system } = useSuiSystem();
   const { data: scorecard } = useScorecard(currentAccount);
@@ -26,7 +26,7 @@ export function Validators() {
   return (
     <Card variant="white" spacing="lg">
       <div className="flex items-center justify-between mb-10">
-        {assignment ? (
+        {assignment && hasAssignment ? (
           <h2 className="text-steel-dark font-normal text-2xl">
             Stake SUI to achieve your goal as{" "}
             {assignment.goal === Goal.Enemy ? "an " : "a "}

@@ -32,11 +32,11 @@ export function Setup() {
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
-      if (!currentAccount || !epoch || !coins || !coins.length) {
+      if (!currentAccount || !coins || !coins.length) {
         throw new Error("No Coins found, please request some from faucet");
       }
 
-      const gasPrice = epoch.data.referenceGasPrice;
+      const gasPrice = epoch?.data.referenceGasPrice || 1n;
       const checkTx: UnserializedSignableTransaction = {
         kind: "moveCall",
         data: {
@@ -63,10 +63,8 @@ export function Setup() {
       // @ts-ignore // also not cool
       const {
         Ok: [
-          [
-            ,
-            {
-              returnValues: [[[exists]]],
+          [,{
+              returnValues: [[[ exists ]]],
             },
           ],
         ],

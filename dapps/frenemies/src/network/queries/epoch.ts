@@ -28,7 +28,7 @@ export function useEpoch() {
 
     return {
       timestamp: evt.timestamp,
-      prevTimestamp: prevEvt.timestamp,
+      prevTimestamp: prevEvt?.timestamp || 0,
       data: bcs.de(SYSTEM_EPOCH_INFO, evt.event.moveEvent.bcs, "base64"),
     };
   }, {
