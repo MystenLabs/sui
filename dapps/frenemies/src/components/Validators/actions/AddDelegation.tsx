@@ -13,7 +13,7 @@ import provider from "../../../network/provider";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { Coin, SUI_COIN } from "../../../network/types";
-import { getCoins, getGas } from "../../../utils/coins";
+import { getCoins, getGas, useManageCoin } from "../../../utils/coins";
 import { StakeButton } from "../../StakeButton";
 
 interface Props {
@@ -34,19 +34,20 @@ function toMist(sui: string) {
  * Can only be performed if there's no `StakedSui` (hence no `Delegation`) object.
  */
 export function AddDelegation({ validator, amount }: Props) {
+  const manageCoins = useManageCoin();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
 
-  const stakeFor = useMutation(["stake-for-validator"], async () => {
+  const stake = useMutation(["stake-for-validator"], async () => {
     if (!coins || !coins.length) {
-      throw new Error('Not enough coins');
+      throw new Error("No coins found.");
     }
 
     const mistAmount = toMist(amount);
 
     const gasPrice = await provider.getReferenceGasPrice();
-    const gasRequred = GAS_BUDGET * BigInt(gasPrice);
-    const { gas, coins: available, max } = getGas(coins, gasRequred);
+    const gasRequired = GAS_BUDGET * BigInt(gasPrice);
+    const { max } = getGas(coins, gasRequired);
 
     if (mistAmount > max) {
       throw new Error(
@@ -54,36 +55,35 @@ export function AddDelegation({ validator, amount }: Props) {
       );
     }
 
-    if (!gas) {
-      throw new Error('No gas coin found')
-    }
+    const stakeCoin = await manageCoins(mistAmount, gasRequired);
 
-    const stakeCoins = getCoins(available, mistAmount);
-
-    await signAndExecuteTransaction({
-      kind: "moveCall",
-      data: {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: "sui_system",
-        function: "request_add_delegation_mul_coin",
-        gasPayment: normalizeSuiAddress(gas.reference.objectId),
-        typeArguments: [],
-        gasBudget: 10000,
-        arguments: [
-          SUI_SYSTEM_ID,
-          stakeCoins.map((c) => normalizeSuiAddress(c.reference.objectId)),
-          [mistAmount.toString()], // Option<u64> // [amt] = Some(amt)
-          normalizeSuiAddress(validator),
-        ],
+    await signAndExecuteTransaction(
+      {
+        kind: "moveCall",
+        data: {
+          packageObjectId: SUI_FRAMEWORK_ADDRESS,
+          module: "sui_system",
+          function: "request_add_delegation_mul_coin",
+          typeArguments: [],
+          gasBudget: Number(GAS_BUDGET),
+          arguments: [
+            SUI_SYSTEM_ID,
+            [stakeCoin],
+            [mistAmount.toString()], // Option<u64> // [amt] = Some(amt)
+            normalizeSuiAddress(validator),
+          ],
+        },
       },
-    });
+      {
+        requestType: "WaitForEffectsCert",
+      }
+    );
   });
 
   return (
     <StakeButton
-      // we can only stake if there's at least 2 coins (one gas and one stake)
-      disabled={!amount || !coins?.length || coins.length < 2}
-      onClick={() => stakeFor.mutate()}
+      disabled={!amount || !coins?.length || stake.isLoading}
+      onClick={() => stake.mutate()}
     >
       Stake
     </StakeButton>
