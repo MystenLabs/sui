@@ -39,7 +39,8 @@ The nodes parameters determine the configuration for the primaries and workers:
 node_params = {
     'header_num_of_batches_threshold': 32,
     'max_header_num_of_batches': 1000,
-    'max_header_delay': '100ms',
+    'max_header_delay': '2000ms',
+    'min_header_delay': '1000ms',
     'gc_depth': 50,
     'sync_retry_delay': '10000ms',
     'sync_retry_nodes': 3,
@@ -65,7 +66,8 @@ They are defined as follows:
 
 - `header_num_of_batches_threshold`: The minimum number of batches that will trigger a new header creation
 - `max_header_num_of_batches`: The maximum number of batch digests included in a header.
-- `max_header_delay`: The maximum delay that the primary waits between generating two headers, even if the header did not reach `header_num_of_batches_threshold`. Denominated in milliseconds (ms).
+- `max_header_delay`: The maximum delay that the primary waits between generating two headers, even if the header does not reach `header_num_of_batches_threshold` or contain leader in parents. Denominated in milliseconds (ms).
+- `min_header_delay`: The delay that the primary waits between generating two headers, even if `header_num_of_batches_threshold` is not reached. Denominated in ms.
 - `gc_depth`: The depth of the garbage collection. Denominated in number of rounds.
 - `sync_retry_delay`: The delay after which the synchronizer retries to send sync requests. Denominated in ms.
 - `sync_retry_nodes`: How many nodes to sync when re-trying to send sync-request. These nodes are picked at random from the committee.
