@@ -1,0 +1,9 @@
+[package]
+name = "axelar"
+version = "0.0.0"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework" }
+
+[addresses]
+axelar = "0x0"
