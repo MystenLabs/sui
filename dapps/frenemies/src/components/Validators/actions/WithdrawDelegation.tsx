@@ -17,7 +17,7 @@ interface Props {
   delegation: ObjectData<Delegation>;
 }
 
-const GAS_BUDGET = 10000n;
+const GAS_BUDGET = 100000n;
 
 /**
  * Request delegation withdrawal.
@@ -47,7 +47,7 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
           module: "sui_system",
           function: "request_withdraw_delegation",
-          gasBudget: 10000,
+          gasBudget: Number(GAS_BUDGET),
           typeArguments: [],
           gasPayment: normalizeSuiAddress(gas.reference.objectId),
           arguments: [

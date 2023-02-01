@@ -13,7 +13,7 @@ import provider from "../../../network/provider";
 import { SUI_SYSTEM_ID } from "../../../network/queries/sui-system";
 import { useMyType } from "../../../network/queries/use-raw";
 import { Coin, SUI_COIN } from "../../../network/types";
-import { getCoins, getGas, useManageCoin } from "../../../utils/coins";
+import { getGas, useManageCoin } from "../../../utils/coins";
 import { StakeButton } from "../../StakeButton";
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
 }
 
 const SUI_DECIMALS = 9;
-const GAS_BUDGET = 10000n;
+const GAS_BUDGET = 100000n;
 
 function toMist(sui: string) {
   return BigInt(new BigNumber(sui).shiftedBy(SUI_DECIMALS).toString());
