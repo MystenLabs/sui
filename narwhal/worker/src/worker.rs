@@ -324,6 +324,7 @@ impl Worker {
             network.downgrade(),
             network_connection_metrics,
             peer_types,
+            None,
         );
 
         let network_admin_server_base_port = parameters
