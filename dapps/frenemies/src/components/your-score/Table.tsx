@@ -35,8 +35,9 @@ export function Table({ data, round, leaderboard }: Props) {
       [(row.assignment.epoch - leaderboard.startEpoch).toString()]: row
     }), {});
 
+  const firstRound = Math.min(...Object.keys(dataByRound).map((e) => +e));
   const tableData: (ScorecardUpdatedEvent | null)[] = [];
-  for (let i = 0n; i < round; i++) {
+  for (let i = firstRound; i < round; i++) {
     tableData.push(dataByRound[i.toString()] || null);
   }
 
@@ -54,7 +55,7 @@ export function Table({ data, round, leaderboard }: Props) {
         </thead>
         <tbody>
           {[...tableData].reverse().map((evt, round, arr) => {
-            const currRound = arr.length - round - 1;
+            const currRound = firstRound + arr.length - round - 1;
             let totalScore = 0;
 
             if (evt) {

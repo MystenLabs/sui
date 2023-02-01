@@ -64,8 +64,8 @@ export function Home() {
   }, [epoch]);
 
   const hasAssignment = !!scorecard
-    && scorecard.data.epoch == (epoch?.data.epoch || 0n) + 1n
-    && scorecard.data.participation > 0;
+    && !!epoch
+    && scorecard.data.assignment.epoch == epoch.data.epoch;
 
   return (
     <>
