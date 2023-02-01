@@ -7,7 +7,7 @@ import { faucet, mint } from './utils/localnet';
 test('displays the transaction timestamp', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
-    const txid = tx.EffectsCert.certificate.transactionDigest;
+    const txid = tx.certificate.transactionDigest;
     await page.goto(`/transaction/${txid}`);
     await expect(
         page.getByTestId('transaction-timestamp').locator('div').nth(1)
@@ -17,7 +17,7 @@ test('displays the transaction timestamp', async ({ page }) => {
 test('displays gas breakdown', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
-    const txid = tx.EffectsCert.certificate.transactionDigest;
+    const txid = tx.certificate.transactionDigest;
     await page.goto(`/transaction/${txid}`);
     await expect(page.getByTestId('gas-breakdown')).toBeVisible();
 });

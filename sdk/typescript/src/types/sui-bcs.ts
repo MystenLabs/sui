@@ -157,6 +157,15 @@ export type ObjectArg =
   | { Shared: SharedObjectRef | SharedObjectRef_23 };
 
 /**
+ * A pure argument.
+ */
+export type PureArg = { Pure: ArrayLike<number> };
+
+export function isPureArg(arg: any): arg is PureArg {
+  return (arg as PureArg).Pure !== undefined;
+}  
+
+/**
  * An argument for the transaction. It is a 'meant' enum which expects to have
  * one of the optional properties. If not, the BCS error will be thrown while
  * attempting to form a transaction.
@@ -179,7 +188,7 @@ export type ObjectArg =
  * to the type required by the called function. Pure accepts only serialized values
  */
 export type CallArg =
-  | { Pure: ArrayLike<number> }
+  | PureArg
   | { Object: ObjectArg }
   | { ObjVec: ArrayLike<ObjectArg> };
 

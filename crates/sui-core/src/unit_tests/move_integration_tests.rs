@@ -1896,7 +1896,7 @@ async fn test_entry_point_string_vec_error() {
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_object_no_id_error() {
-    let mut build_config = BuildConfig::default();
+    let mut build_config = BuildConfig::new_for_testing();
     build_config.config.test_mode = true;
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // in this package object struct (NotObject) is defined incorrectly and publishing should
@@ -1919,7 +1919,7 @@ pub async fn build_and_try_publish_test_package(
     gas_budget: u64,
     with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);

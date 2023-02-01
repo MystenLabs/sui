@@ -2524,6 +2524,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
+name = "expect-test"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d4661aca38d826eb7c72fe128e4238220616de4c0cc00db7bfc38e2e1364dd3"
+dependencies = [
+ "dissimilar",
+ "once_cell",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8352,7 +8362,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -8573,7 +8583,7 @@ dependencies = [
 
 [[package]]
 name = "sui-core"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -8689,7 +8699,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8961,7 +8971,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -9105,7 +9115,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -9163,6 +9173,7 @@ name = "sui-source-validation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "expect-test",
  "futures",
  "move-binary-format",
  "move-bytecode-utils",
@@ -9283,7 +9294,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
@@ -11140,6 +11151,7 @@ dependencies = [
  "error-code",
  "ethnum",
  "event-listener",
+ "expect-test",
  "eyre",
  "fail 0.4.0",
  "fail 0.5.1",

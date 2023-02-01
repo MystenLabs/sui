@@ -13,6 +13,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
+import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -36,18 +37,17 @@ import {
     useSigner,
     useAppSelector,
     useCoinDecimals,
-    useIndividualCoinMaxBalance,
     useGetObject,
 } from '_hooks';
 import {
     accountAggregateBalancesSelector,
-    accountItemizedBalancesSelector,
     createCoinsForTypeSelector,
 } from '_redux/slices/account';
 import {
     Coin,
-    GAS_TYPE_ARG,
+    DEFAULT_GAS_BUDGET_FOR_PAY,
     DEFAULT_GAS_BUDGET_FOR_STAKE,
+    GAS_TYPE_ARG,
 } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
@@ -65,7 +65,6 @@ function StakingCard() {
     const coinType = GAS_TYPE_ARG;
     const [sendError, setSendError] = useState<string | null>(null);
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
@@ -80,12 +79,6 @@ function StakingCard() {
         useGetObject(STATE_OBJECT);
 
     const validatorsData = validators && validatorsFields(validators);
-
-    // TODO: this is a hack to get the total amount of gas coins
-    const totalGasCoins = useMemo(
-        () => (unstake ? 2 : balances[GAS_TYPE_ARG]?.length || 0),
-        [balances, unstake]
-    );
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -135,43 +128,23 @@ function StakingCard() {
     }, [delegationData, validatorsData]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
-    const gasBudget = useGasBudgetInMist(DEFAULT_GAS_BUDGET_FOR_STAKE);
-    //TODO: this is a hack to get the total amount of gas coins
-    // for unstake add gas
-    //NOTE: I think we should remove this. Validation expects just the total amount of SUI
-    const gasAggregateBalance = useMemo(
-        () =>
-            unstake
-                ? coinBalance + BigInt(gasBudget.gasBudget || 0)
-                : aggregateBalances[GAS_TYPE_ARG] || 0n,
-        [aggregateBalances, coinBalance, unstake, gasBudget.gasBudget]
+
+    // NOTE: We don't know how many input coins will go into this pay transaction without
+    // knowing the target amounts, so we just peg the gas budget to 4x the default budget
+    // which hopefully works for most cases.
+    const gasBudget = useGasBudgetInMist(
+        DEFAULT_GAS_BUDGET_FOR_PAY * 4 + DEFAULT_GAS_BUDGET_FOR_STAKE
     );
+
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
-                coinType || '',
-                coinBalance,
+                // NOTE: We remove the gas budget required for a pay transaction + stake transaction:
+                coinBalance - BigInt(gasBudget.gasBudget || 0n),
                 coinSymbol,
-                gasAggregateBalance,
-                totalGasCoins,
-                coinDecimals,
-                gasDecimals,
-                gasBudget.gasBudget || 0,
-                maxSuiSingleCoinBalance
+                coinDecimals
             ),
-        [
-            coinType,
-            coinBalance,
-            coinSymbol,
-            gasAggregateBalance,
-            totalGasCoins,
-            coinDecimals,
-            gasDecimals,
-            maxSuiSingleCoinBalance,
-            gasBudget.gasBudget,
-        ]
+        [coinBalance, coinSymbol, coinDecimals, gasBudget.gasBudget]
     );
 
     const queryClient = useQueryClient();
@@ -181,13 +154,9 @@ function StakingCard() {
         return delegationData.delegation_status.Active.id.id;
     }, [delegationData]);
 
+    const gasPrice = useReferenceGasPrice();
     const navigate = useNavigate();
     const signer = useSigner();
-    const allCoinsForStakeSelector = useMemo(
-        () => createCoinsForTypeSelector(coinType),
-        [coinType]
-    );
-    const allCoinsForStake = useAppSelector(allCoinsForStakeSelector);
     const allSuiCoinsSelector = useMemo(
         () => createCoinsForTypeSelector(SUI_TYPE_ARG),
         []
@@ -211,10 +180,10 @@ function StakingCard() {
             });
             const response = await Coin.stakeCoin(
                 signer,
-                allCoinsForStake,
                 allSuiCoins,
                 amount,
-                validatorAddress
+                validatorAddress,
+                gasPrice.data!
             );
             return response;
         },
@@ -428,7 +397,8 @@ function StakingCard() {
                                         !isValid ||
                                         isSubmitting ||
                                         (unstake && !delegationId) ||
-                                        gasBudget.isLoading
+                                        gasBudget.isLoading ||
+                                        gasPrice.isLoading
                                     }
                                 >
                                     {isSubmitting ? (

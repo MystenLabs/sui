@@ -173,7 +173,7 @@ mod tests {
         get_sui_framework();
         get_move_stdlib();
         let path = PathBuf::from(DEFAULT_FRAMEWORK_PATH);
-        BuildConfig::default().build(path.clone()).unwrap();
+        BuildConfig::new_for_testing().build(path.clone()).unwrap();
         check_move_unit_tests(&path);
     }
 
@@ -194,7 +194,7 @@ mod tests {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../sui_programmability/examples")
                 .join(example);
-            BuildConfig::default().build(path.clone()).unwrap();
+            BuildConfig::new_for_testing().build(path.clone()).unwrap();
             check_move_unit_tests(&path);
         }
     }
@@ -204,7 +204,7 @@ mod tests {
     fn run_book_examples_move_unit_tests() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../doc/book/examples");
 
-        BuildConfig::default().build(path.clone()).unwrap();
+        BuildConfig::new_for_testing().build(path.clone()).unwrap();
         check_move_unit_tests(&path);
     }
 

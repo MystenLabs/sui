@@ -3244,7 +3244,7 @@ pub async fn init_state_with_ids_and_object_basics<
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules: Vec<_> = BuildConfig::default()
+    let modules: Vec<_> = BuildConfig::new_for_testing()
         .build(path)
         .unwrap()
         .get_modules()
@@ -3276,7 +3276,7 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules: Vec<_> = BuildConfig::default()
+    let modules: Vec<_> = BuildConfig::new_for_testing()
         .build(path)
         .unwrap()
         .get_modules()
