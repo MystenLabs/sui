@@ -99,7 +99,7 @@ export function Home() {
         <Card spacing="sm">
           <Stat label="Time Remaining">
             <div className="text-steel-dark font-light">
-              {timer && formatTimeRemaining(timer)}
+              {formatTimeRemaining(timer || 0)}
             </div>
           </Stat>
         </Card>
