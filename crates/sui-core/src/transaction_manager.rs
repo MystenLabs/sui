@@ -123,37 +123,9 @@ impl TransactionManager {
             // don't race with a concurrent execution of this tx.
             let _tx_lock = epoch_store.acquire_tx_lock(&digest);
 
-            // skip already pending txes
-            if inner.pending_certificates.contains_key(&digest) {
-                self.metrics
-                    .transaction_manager_num_enqueued_certificates
-                    .with_label_values(&["already_pending"])
-                    .inc();
-                continue;
-            }
-            // skip already executing txes
-            if inner.executing_certificates.contains(&digest) {
-                self.metrics
-                    .transaction_manager_num_enqueued_certificates
-                    .with_label_values(&["already_executing"])
-                    .inc();
-                continue;
-            }
-            // skip already executed txes
-            if self.authority_store.effects_exists(&digest)? {
-                // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_certificate(&digest);
-                self.metrics
-                    .transaction_manager_num_enqueued_certificates
-                    .with_label_values(&["already_executed"])
-                    .inc();
-                continue;
-            }
-
-            let mut inputs = cert.data().intent_message.value.input_objects()?;
-
             // if effects indicate a success then we need to add and wait for argument packages,
             // otherwise we can skip
+            let mut inputs = cert.data().intent_message.value.input_objects()?;
             if let Some(digest_to_effects) = &digest_to_effects {
                 if let Some(effect) = digest_to_effects.get(cert.digest()) {
                     fn is_module_not_found_error(effect: &TransactionEffects) -> bool {
@@ -174,6 +146,49 @@ impl TransactionManager {
             } else {
                 // if this is called from anywhere but checkpoint executor, do the normal "fix"
                 inputs.extend(cert.data().intent_message.value.type_argument_packages());
+            }
+
+            // skip already pending txes
+            if inputs.is_empty() {
+                if inner.pending_certificates.contains_key(&digest) {
+                    self.metrics
+                        .transaction_manager_num_enqueued_certificates
+                        .with_label_values(&["already_pending"])
+                        .inc();
+                    continue;
+                }
+                // skip already executing txes
+                if inner.executing_certificates.contains(&digest) {
+                    self.metrics
+                        .transaction_manager_num_enqueued_certificates
+                        .with_label_values(&["already_executing"])
+                        .inc();
+                    continue;
+                }
+            } else if let Some(objects) = inner.pending_certificates.remove(&digest) {
+                for obj in objects {
+                    if let Some(txns) = inner.missing_inputs.get_mut(&obj) {
+                        txns.remove(&digest);
+                    }
+                    if let Some(count) = inner.input_objects.get_mut(&obj.0) {
+                        *count -= 1;
+                        if *count == 0 {
+                            inner.input_objects.remove(&obj.0);
+                        }
+                    }
+                }
+                inner.executing_certificates.remove(&digest);  // should be no-op.
+            }
+
+            // skip already executed txes
+            if self.authority_store.effects_exists(&digest)? {
+                // also ensure the transaction will not be retried after restart.
+                let _ = epoch_store.remove_pending_certificate(&digest);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
+                continue;
             }
 
             let missing = self
