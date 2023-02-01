@@ -7,6 +7,7 @@ import {
     getTransferObjectTransaction,
     getTransactionKindName,
     getTotalGasUsed,
+    SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -68,6 +69,14 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             ({ receiverAddress }) => receiverAddress === activeAddress
         );
     }, [eventsSummary, activeAddress]);
+
+    const totalSuiAmount = useMemo(() => {
+        const amount = eventsSummary.find(
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === activeAddress && coinType === SUI_TYPE_ARG
+        )?.amount;
+        return amount ? Math.abs(amount) : null;
+    }, [activeAddress, eventsSummary]);
 
     const isSender = activeAddress === certificate.data.sender;
     const isStakeTxn =
@@ -140,7 +149,10 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                 ) : null}
 
                 {gasTotal && isSender ? (
-                    <TxnGasSummery totalGas={gasTotal} transferAmount={null} />
+                    <TxnGasSummery
+                        totalGas={gasTotal}
+                        transferAmount={totalSuiAmount}
+                    />
                 ) : null}
 
                 <div className="flex gap-1.5 pt-3.75 w-full">
