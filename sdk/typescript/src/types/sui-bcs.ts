@@ -132,6 +132,21 @@ export type SharedObjectRef = {
 
   /** The version the object was shared at */
   initialSharedVersion: number;
+
+  /** Whether reference is mutable */
+  mutable: boolean;
+};
+
+/**
+ * A reference to a shared object from 0.23.0.
+ */
+export type SharedObjectRef_23 = {
+  /** Hex code as string representing the object id */
+  objectId: string;
+
+  /** The version the object was shared at */
+  initialSharedVersion: number;
+
 };
 
 /**
@@ -139,7 +154,7 @@ export type SharedObjectRef = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef };
+  | { Shared: SharedObjectRef | SharedObjectRef_23 };
 
 /**
  * A pure argument.
@@ -329,6 +344,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       initialSharedVersion: 'u64',
+      mutable: 'bool'
     },
   },
 
@@ -429,6 +445,12 @@ const BCS_0_23_SPEC = {
       function: 'string',
       typeArguments: 'vector<TypeTag>',
       arguments: 'vector<CallArg>',
+    },
+  },
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
     },
   },
 };
