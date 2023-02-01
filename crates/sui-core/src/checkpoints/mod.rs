@@ -1252,7 +1252,7 @@ mod tests {
         for digest in all_digests {
             let signature = Signature::Ed25519SuiSignature(Default::default());
             state
-                .epoch_store()
+                .epoch_store_for_testing()
                 .test_insert_user_signature(digest, &signature);
         }
 

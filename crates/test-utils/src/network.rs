@@ -344,7 +344,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
         .map(|handle| {
             handle.with_async(|node| async move {
                 let mut rx = node.subscribe_to_epoch_change();
-                let epoch = node.current_epoch();
+                let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
                     let committee = rx.recv().await.unwrap();
                     assert_eq!(committee.epoch, expected_epoch);

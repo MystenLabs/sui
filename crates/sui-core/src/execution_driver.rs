@@ -66,7 +66,7 @@ pub async fn execution_process(
             return;
         };
 
-        let epoch_store = authority.epoch_store();
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();
         debug!(?digest, "Pending certificate execution activated.");

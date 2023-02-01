@@ -145,7 +145,7 @@ impl LocalAuthorityClient {
         // Check existing effects before verifying the cert to allow querying certs finalized
         // from previous epochs.
         let tx_digest = *certificate.digest();
-        let epoch_store = state.epoch_store();
+        let epoch_store = state.epoch_store_for_testing();
         let signed_effects =
             match state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest) {
                 Ok(Some(effects)) => effects,

@@ -272,7 +272,7 @@ impl SuiNode {
         )
         .await?;
 
-        let validator_components = if state.is_validator() {
+        let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
                 config,
                 state.clone(),
@@ -321,22 +321,23 @@ impl SuiNode {
         self.end_of_epoch_channel.subscribe()
     }
 
-    pub fn current_epoch(&self) -> EpochId {
-        self.state.epoch()
+    pub fn current_epoch_for_testing(&self) -> EpochId {
+        self.state.current_epoch_for_testing()
     }
 
     // Init reconfig process by starting to reject user certs
-    pub async fn close_epoch(&self) -> SuiResult {
-        info!("close_epoch (current epoch = {})", self.state.epoch());
+    // TODO: If this function is ever called in non-testing code, we need to make sure this
+    // function has no race with the passive reconfiguration.
+    pub async fn close_epoch_for_testing(&self) -> SuiResult {
+        let epoch_store = self.state.epoch_store_for_testing();
+        info!("close_epoch (current epoch = {})", epoch_store.epoch());
         self.validator_components
             .lock()
             .await
             .as_ref()
             .ok_or_else(|| SuiError::from("Node is not a validator"))?
             .consensus_adapter
-            // TODO: If this function is ever called in non-testing code, we need to make sure this
-            // function has no race with the passive reconfiguration.
-            .close_epoch(&self.state.epoch_store());
+            .close_epoch(&epoch_store);
         Ok(())
     }
 
@@ -745,9 +746,8 @@ impl SuiNode {
         );
 
         loop {
-            let committee = checkpoint_executor
-                .run_epoch(self.state.epoch_store().clone())
-                .await;
+            let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
+            let committee = checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
             let next_epoch = committee.epoch();
 
             info!(
@@ -755,9 +755,7 @@ impl SuiNode {
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
 
-            self.state
-                .epoch_store()
-                .record_epoch_reconfig_start_time_metric();
+            cur_epoch_store.record_epoch_reconfig_start_time_metric();
             let _ = self.end_of_epoch_channel.send(committee);
 
             // The following code handles 4 different cases, depending on whether the node
@@ -781,11 +779,14 @@ impl SuiNode {
 
                 self.reconfigure_state(next_epoch).await;
 
+                let new_epoch_store = self.state.load_epoch_store_one_call_per_task();
+                assert_eq!(new_epoch_store.epoch(), next_epoch);
+
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
                     .await;
 
-                if self.state.is_validator() {
+                if self.state.is_validator(&new_epoch_store) {
                     // Only restart Narwhal if this node is still a validator in the new epoch.
                     Some(
                         Self::start_epoch_specific_validator_components(
@@ -793,7 +794,7 @@ impl SuiNode {
                             self.state.clone(),
                             consensus_adapter,
                             self.checkpoint_store.clone(),
-                            self.state.epoch_store().clone(),
+                            new_epoch_store.clone(),
                             self.state_sync.clone(),
                             narwhal_manager,
                             narwhal_epoch_data_remover,
@@ -810,14 +811,17 @@ impl SuiNode {
             } else {
                 self.reconfigure_state(next_epoch).await;
 
-                if self.state.is_validator() {
+                let new_epoch_store = self.state.load_epoch_store_one_call_per_task();
+                assert_eq!(new_epoch_store.epoch(), next_epoch);
+
+                if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
 
                     Some(
                         Self::construct_validator_components(
                             &self.config,
                             self.state.clone(),
-                            self.state.epoch_store().clone(),
+                            new_epoch_store.clone(),
                             self.checkpoint_store.clone(),
                             self.state_sync.clone(),
                             &self.registry_service,

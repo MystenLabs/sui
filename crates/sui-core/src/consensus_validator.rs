@@ -185,7 +185,7 @@ mod tests {
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
-            state.epoch_store().clone(),
+            state.epoch_store_for_testing(),
             state.transaction_manager().clone(),
             metrics,
         );
