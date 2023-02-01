@@ -15,11 +15,10 @@ import { Link } from 'react-router-dom';
 import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
-import { useCallTxnLabel } from './useCallTxnLabel';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { getEventsSummary, notEmpty } from '_helpers';
+import { getEventsSummary, notEmpty, checkStakingTxn } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';
 
 import type {
@@ -116,7 +115,10 @@ export function Transaction({
     const isTransfer =
         isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
 
-    const moveCallLabel = useCallTxnLabel(certificate);
+    const moveCallLabel = useMemo(() => {
+        if (txnKind !== 'Call') return null;
+        return checkStakingTxn(txn) || txnKind;
+    }, [txn, txnKind]);
 
     const txnIcon = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Rewards';
