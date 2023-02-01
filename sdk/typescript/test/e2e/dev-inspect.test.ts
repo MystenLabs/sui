@@ -80,7 +80,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         module: 'serializer_tests',
         function: 'return_struct',
         typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-        arguments: [coins[0].objectId],
+        arguments: [coins[0].coinObjectId],
         gasBudget: DEFAULT_GAS_BUDGET,
       };
 
