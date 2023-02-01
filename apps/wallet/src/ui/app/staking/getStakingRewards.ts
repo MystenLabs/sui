@@ -29,7 +29,7 @@ export function getStakingRewards(
         delegation.delegation_status.Active.pool_tokens.value
     );
     const delegationTokenSupply = new BigNumber(
-        validatorFields.delegation_staking_pool.fields.delegation_token_supply.fields.value
+        validatorFields.delegation_staking_pool.fields.delegation_token_supply.value
     );
     const suiBalance = new BigNumber(
         validatorFields.delegation_staking_pool.fields.sui_balance
