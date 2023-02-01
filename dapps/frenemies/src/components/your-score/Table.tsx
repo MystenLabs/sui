@@ -53,7 +53,7 @@ export function Table({ data, round, leaderboard }: Props) {
           </tr>
         </thead>
         <tbody>
-          {tableData.reverse().map((evt, round, arr) => {
+          {[...tableData].reverse().map((evt, round, arr) => {
             const currRound = arr.length - round - 1;
             let totalScore = 0;
 
