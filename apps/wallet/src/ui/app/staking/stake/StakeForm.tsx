@@ -12,7 +12,10 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import NumberInput from '_components/number-input';
 import { useFormatCoin } from '_hooks';
-import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
+import {
+    DEFAULT_GAS_BUDGET_FOR_PAY,
+    DEFAULT_GAS_BUDGET_FOR_STAKE,
+} from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
@@ -38,7 +41,7 @@ function StakeForm({
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
     const { gasBudget: gasBudgetInMist, isLoading } = useGasBudgetInMist(
-        DEFAULT_GAS_BUDGET_FOR_STAKE
+        DEFAULT_GAS_BUDGET_FOR_PAY * 4 + DEFAULT_GAS_BUDGET_FOR_STAKE
     );
     const [gasBudgetEstimation] = useFormatCoin(gasBudgetInMist, SUI_TYPE_ARG);
 
