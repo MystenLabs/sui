@@ -3,7 +3,7 @@
 
 # Module `0x2::hash`
 
-Module which defines SHA hashes for byte vectors.
+Module which defines hash functions.
 
 
 -  [Function `blake2b256`](#0x2_hash_blake2b256)
