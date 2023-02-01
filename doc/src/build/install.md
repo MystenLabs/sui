@@ -257,7 +257,7 @@ Use the `--help` flag to access helpful information for any of these binaries.
 
 ## Integrated development environment
 
-The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` using the `--features` flag:
+The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), then install the move-analyzer language server passing `address20` using the `--features` flag:
 
 ```shell
 cargo install --git https://github.com/move-language/move move-analyzer --features "address20"
