@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { MoveCallTransaction, LocalTxnDataSerializer, UnserializedSignableTransaction } from "@mysten/sui.js";
+import {
+  LocalTxnDataSerializer,
+  UnserializedSignableTransaction,
+} from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
@@ -30,29 +33,44 @@ export function Setup() {
     ["create-scorecard"],
     async (username: string) => {
       if (!currentAccount || !epoch || !coins || !coins.length) {
-        throw new Error('No Coins found, please request some from faucet');
+        throw new Error("No Coins found, please request some from faucet");
       }
 
       const gasPrice = epoch.data.referenceGasPrice;
       const checkTx: UnserializedSignableTransaction = {
-        kind: 'moveCall',
+        kind: "moveCall",
         data: {
           packageObjectId: config.VITE_PKG,
           module: "registry",
           function: "is_registered",
           typeArguments: [],
           arguments: [config.VITE_REGISTRY, username],
-        }
+        },
       };
 
-      const inspectRes = await provider.devInspectTransaction(currentAccount, checkTx, Number(gasPrice));
+      const inspectRes = await provider.devInspectTransaction(
+        currentAccount,
+        checkTx,
+        Number(gasPrice)
+      );
 
-      if ('Err' in inspectRes.results) {
-        throw new Error(`Error happened while checking for uniqueness: ${inspectRes.results.Err}`);
+      if ("Err" in inspectRes.results) {
+        throw new Error(
+          `Error happened while checking for uniqueness: ${inspectRes.results.Err}`
+        );
       }
 
       // @ts-ignore // also not cool
-      const { Ok: [ [, { returnValues: [ [ [ exists ] ] ] } ] ] } = inspectRes.results;
+      const {
+        Ok: [
+          [
+            ,
+            {
+              returnValues: [[[exists]]],
+            },
+          ],
+        ],
+      } = inspectRes.results;
 
       // Add a warning saying that the name is already taken.
       // Depending on the the `exists` result: 0 or 1;
@@ -63,7 +81,9 @@ export function Setup() {
       const gasSearch = GAS_BUDGET * gasPrice;
       const { gas } = getGas(coins, gasSearch);
       if (!gas) {
-        throw new Error(`Gas object with at least '${gasSearch}' MIST not found`);
+        throw new Error(
+          `Gas object with at least '${gasSearch}' MIST not found`
+        );
       }
 
       const submitTx: UnserializedSignableTransaction = {
@@ -83,11 +103,18 @@ export function Setup() {
       };
 
       const serializer = new LocalTxnDataSerializer(provider);
-      const serializedTx = await serializer.serializeToBytes(currentAccount, submitTx);
-      const dryRunRes = await provider.dryRunTransaction(serializedTx.toString());
+      const serializedTx = await serializer.serializeToBytes(
+        currentAccount,
+        submitTx
+      );
+      const dryRunRes = await provider.dryRunTransaction(
+        serializedTx.toString()
+      );
 
-      if (dryRunRes.status.status == 'failure') {
-        throw new Error(`Transaction would've failed with a reason '${dryRunRes.status.error}'`);
+      if (dryRunRes.status.status == "failure") {
+        throw new Error(
+          `Transaction would've failed with a reason '${dryRunRes.status.error}'`
+        );
       }
 
       await signAndExecuteTransaction(submitTx);

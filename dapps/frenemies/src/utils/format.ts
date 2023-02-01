@@ -25,7 +25,7 @@ export function formatGoal(goal: Goal): string {
 
 /** Pretty-print balance of the currency based on the decimals */
 export function formatBalance(
-  balance: bigint | string,
+  balance: bigint | string | number,
   decimals: number
 ): string {
   return new BigNumber(balance.toString()).shiftedBy(-1 * decimals).toFormat();

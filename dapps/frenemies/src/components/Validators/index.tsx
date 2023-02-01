@@ -16,21 +16,23 @@ export function Validators() {
   const { data: scorecard } = useScorecard(currentAccount);
 
   // At this point there's no way it errors out.
-  if (!system || !scorecard || !currentAccount) {
+  if (!system || !currentAccount) {
     return null;
   }
 
   const validators = system.validators.fields.active_validators;
-  const assignment = scorecard.data.assignment;
+  const assignment = scorecard?.data.assignment;
 
   return (
     <Card variant="white" spacing="lg">
       <div className="flex items-center justify-between mb-10">
-        <h2 className="text-steel-dark font-normal text-2xl">
-          Stake SUI to achieve your goal as{" "}
-          {assignment.goal === Goal.Enemy ? "an " : "a "}
-          <span className="font-bold">{formatGoal(assignment.goal)}</span>.
-        </h2>
+        {assignment ? (
+          <h2 className="text-steel-dark font-normal text-2xl">
+            Stake SUI to achieve your goal as{" "}
+            {assignment.goal === Goal.Enemy ? "an " : "a "}
+            <span className="font-bold">{formatGoal(assignment.goal)}</span>.
+          </h2>
+        ): <div />}
 
         <Balance />
       </div>

@@ -6,11 +6,7 @@ import { Card } from "../components/Card";
 import { Stat } from "../components/Stat";
 import { Validators } from "../components/Validators";
 import { useScorecard } from "../network/queries/scorecard";
-import {
-  formatAddress,
-  formatGoal,
-  formatTimeRemaining,
-} from "../utils/format";
+import { formatGoal, formatTimeRemaining } from "../utils/format";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -18,6 +14,9 @@ import { Scoreboard } from "../components/Scoreboard";
 import { useEpoch } from "../network/queries/epoch";
 import { Goal } from "../network/types";
 import { config } from "../config";
+import { Assignment } from "../components/Assignment";
+import { useSuiSystem } from "../network/queries/sui-system";
+import { Logo } from "../components/Validators/Logo";
 
 const getTime = (timestamp?: number) => {
   if (!timestamp) return null;
@@ -35,11 +34,16 @@ export function Home() {
   const { data: epoch } = useEpoch();
   const { currentAccount } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
+  const { data: system } = useSuiSystem();
 
   const { goal, validator } = scorecard?.data.assignment || {
     goal: Goal.Neutral,
     validator: "not_assigned",
   };
+
+  const assignedValidator = system?.validators.fields.active_validators.find(
+    (v) => v.fields.metadata.fields.sui_address.replace("0x", "") === validator
+  );
 
   useEffect(() => {
     if (!currentAccount) {
@@ -78,7 +82,25 @@ export function Home() {
           <Stat label="Your Role">{formatGoal(goal)}</Stat>
         </Card>
         <Card spacing="sm">
-          <Stat label="Assigned Validator">{formatAddress(validator)}</Stat>
+          <Stat label="Assigned Validator">
+            {assignedValidator ? (
+              <div className="flex items-center gap-2">
+                <Logo
+                  src={
+                    assignedValidator.fields.metadata.fields.image_url as string
+                  }
+                  size="md"
+                  label={
+                    assignedValidator.fields.metadata.fields.name as string
+                  }
+                  circle
+                />
+                <div>{assignedValidator.fields.metadata.fields.name}</div>
+              </div>
+            ) : (
+              "--"
+            )}
+          </Stat>
         </Card>
         <Card spacing="sm">
           <Stat label="Time Remaining">
@@ -88,6 +110,7 @@ export function Home() {
           </Stat>
         </Card>
       </div>
+      <Assignment />
       <Validators />
     </>
   );

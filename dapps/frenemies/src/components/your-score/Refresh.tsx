@@ -52,7 +52,7 @@ export function Refresh({ scorecard, leaderboardID }: Props) {
           normalizeSuiAddress(leaderboardID),
         ],
       },
-    }).then(console.log);
+    });
   });
 
   if (!system || scorecard.data.epoch == BigInt(system.epoch) + 1n) {
