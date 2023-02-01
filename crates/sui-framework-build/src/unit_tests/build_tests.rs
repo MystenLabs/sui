@@ -13,7 +13,7 @@ fn generate_struct_layouts() {
         .unwrap()
         .to_path_buf();
     path.push("sui-framework");
-    let pkg = BuildConfig::default().build(path).unwrap();
+    let pkg = BuildConfig::new_for_testing().build(path).unwrap();
     let registry = pkg.generate_struct_layouts();
     // check for a couple of types that aren't likely to go away
     assert!(registry.contains_key("0000000000000000000000000000000000000001::string::String"));

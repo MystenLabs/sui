@@ -3,6 +3,8 @@
 
 import { GrowthBook } from '@growthbook/growthbook';
 
+import { setAttributes } from '_src/shared/experimentation/features';
+
 const GROWTHBOOK_API_KEY =
     process.env.NODE_ENV === 'production'
         ? 'key_prod_ac59fe325855eb5f'
@@ -22,6 +24,7 @@ class FeatureGating {
     }
 
     private async loadFeatures() {
+        setAttributes(this.#growthBook);
         try {
             const res = await fetch(
                 `https://cdn.growthbook.io/api/features/${GROWTHBOOK_API_KEY}`

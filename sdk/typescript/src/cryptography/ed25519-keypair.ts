@@ -116,7 +116,7 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Return the signature for the provided data using Ed25519.
    */
-  signData(data: Base64DataBuffer): Base64DataBuffer {
+  signData(data: Base64DataBuffer, _useRecoverable: boolean = false): Base64DataBuffer {
     return new Base64DataBuffer(
       nacl.sign.detached(data.getData(), this.keypair.secretKey)
     );

@@ -11,7 +11,7 @@ use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use types::{Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, Round, StoreResult};
 
 #[cfg(test)]
@@ -194,6 +194,17 @@ impl ConsensusProtocol for Bullshark {
             .with_label_values(&["elected"])
             .inc();
 
+        // The total leader_commits are expected to grow the same amount on validators,
+        // but strong vs weak counts are not expected to be the same across validators.
+        self.metrics
+            .leader_commits
+            .with_label_values(&["strong"])
+            .inc();
+        self.metrics
+            .leader_commits
+            .with_label_values(&["weak"])
+            .inc_by(committed_sub_dags.len() as u64 - 1);
+
         // Log the latest committed round of every authority (for debug).
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
@@ -201,15 +212,18 @@ impl ConsensusProtocol for Bullshark {
             debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
-        let total_commits: usize = committed_sub_dags
+        let total_committed_certificates: usize = committed_sub_dags
             .iter()
             .map(|x| x.certificates.len())
             .sum();
-        debug!("Total committed certificates: {}", total_commits);
+        debug!(
+            "Total committed certificates: {}",
+            total_committed_certificates
+        );
 
         self.metrics
             .committed_certificates
-            .observe(total_commits as f64);
+            .observe(total_committed_certificates as f64);
 
         Ok(committed_sub_dags)
     }
@@ -276,7 +290,7 @@ impl Bullshark {
                     }
                 }
             } else {
-                error!(
+                trace!(
                     "Round not present in Dag store: {:?} when looking for parents of {:?}",
                     round - 1,
                     certificate

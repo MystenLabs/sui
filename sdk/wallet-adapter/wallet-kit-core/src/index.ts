@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  ExecuteTransactionRequestType,
   SignableTransaction,
   SuiAddress,
   SuiTransactionResponse,
@@ -46,7 +47,8 @@ export interface WalletKitCore {
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
   signAndExecuteTransaction(
-    transaction: SignableTransaction
+    transaction: SignableTransaction,
+    options?: { requestType?: ExecuteTransactionRequestType }
   ): Promise<SuiTransactionResponse>;
 }
 
@@ -198,14 +200,17 @@ export function createWalletKitCore({
       disconnected();
     },
 
-    signAndExecuteTransaction(transaction) {
+    signAndExecuteTransaction(transaction, options) {
       if (!internalState.currentWallet) {
         throw new Error(
           "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
         );
       }
 
-      return internalState.currentWallet.signAndExecuteTransaction(transaction);
+      return internalState.currentWallet.signAndExecuteTransaction(
+        transaction,
+        options
+      );
     },
   };
 }

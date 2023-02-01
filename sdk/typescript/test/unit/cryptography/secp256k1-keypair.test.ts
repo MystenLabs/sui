@@ -73,14 +73,23 @@ describe('secp256k1-keypair', () => {
     );
 
     const msgHash = await secp.utils.sha256(signData.getData());
-    const sig = keypair.signData(signData);
-    const pubkey = secp.recoverPublicKey(
-      msgHash,
-      Signature.fromCompact(sig.getData().slice(0, 64)),
-      sig.getData()[64],
-      true
+    const sig = keypair.signData(signData, false);
+    expect(secp.verify(Signature.fromCompact(sig.getData()), msgHash, keypair.getPublicKey().toBytes())).toBeTruthy();
+  });
+
+  it('signature of data is same as rust implementation', async () => {
+    const secret_key = new Uint8Array(VALID_SECP256K1_SECRET_KEY);
+    const keypair = Secp256k1Keypair.fromSecretKey(secret_key);
+    const signData = new Base64DataBuffer(
+      new TextEncoder().encode('Hello, world!')
     );
-    expect(toB64(pubkey)).toEqual(keypair.getPublicKey().toBase64());
+
+    const msgHash = await secp.utils.sha256(signData.getData());
+    const sig = keypair.signData(signData, false);
+    
+    // Assert the signature is the same as the rust implementation. See https://github.com/MystenLabs/fastcrypto/blob/0436d6ef11684c291b75c930035cb24abbaf581e/fastcrypto/src/tests/secp256k1_tests.rs#L115
+    expect(Buffer.from(sig.getData()).toString('hex')).toEqual('25d450f191f6d844bf5760c5c7b94bc67acc88be76398129d7f43abdef32dc7f7f1a65b7d65991347650f3dd3fa3b3a7f9892a0608521cbcf811ded433b31f8b')
+    expect(secp.verify(Signature.fromCompact(sig.getData()), msgHash, keypair.getPublicKey().toBytes())).toBeTruthy();
   });
 
   it('invalid mnemonics to derive secp256k1 keypair', () => {

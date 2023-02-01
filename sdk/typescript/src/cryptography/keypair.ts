@@ -24,7 +24,7 @@ export interface Keypair {
   /**
    * Return the signature for the data
    */
-  signData(data: Base64DataBuffer): Base64DataBuffer;
+  signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer;
 
   /**
    * Get the key scheme of the keypair: Secp256k1 or ED25519
