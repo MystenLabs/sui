@@ -251,7 +251,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     let a_pkg = {
         let fixtures = tempfile::tempdir()?;
         let b_id = SuiAddress::random_for_testing_only();
-        stable_addrs.insert(b_id, "<b_id>");
+        stable_addrs.insert(b_id, "<id>");
         copy_package(&fixtures, "b", [("b", b_id)]).await?;
         let a_src = copy_package(&fixtures, "a", [("a", SuiAddress::ZERO), ("b", b_id)]).await?;
         compile_package(a_src)
@@ -264,21 +264,25 @@ async fn package_not_found() -> anyhow::Result<()> {
         panic!("Expected verification to fail");
     };
 
-    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<b_id>, version: None }"];
+    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<id>, version: None }"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
+    let package_root = AccountAddress::random();
+    stable_addrs.insert(SuiAddress::from(package_root), "<id>");
     let Err(err) = verifier.verify_package_root_and_deps(
 	&a_pkg.package,
-	/* Subst address here doesnt matter */ AccountAddress::random(),
+	package_root,
     ).await else {
 	panic!("Expected verification to fail");
     };
 
-    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<b_id>, version: None }"];
+    // <id> below may refer to either the package_root or dependent package `b`
+    // (the check reports the first missing object nondeterministically)
+    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<id>, version: None }"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     let package_root = AccountAddress::random();
-    stable_addrs.insert(SuiAddress::from(package_root), "<package_root>");
+    stable_addrs.insert(SuiAddress::from(package_root), "<id>");
     let Err(err) = verifier.verify_package_root(
 	&a_pkg.package,
 	package_root,
@@ -286,7 +290,7 @@ async fn package_not_found() -> anyhow::Result<()> {
 	panic!("Expected verification to fail");
     };
 
-    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<package_root>, version: None }"];
+    let expected = expect!["Dependency object does not exist or was deleted: ObjectNotFound { object_id: 0x<id>, version: None }"];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
 
     Ok(())
