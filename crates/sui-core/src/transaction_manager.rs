@@ -134,20 +134,31 @@ impl TransactionManager {
                 inputs.extend(cert.data().intent_message.value.type_argument_packages());
             }
 
+            // skip already executing txes
+            if inner.executing_certificates.contains(&digest) {
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executing"])
+                    .inc();
+                continue;
+            }
+            // skip already executed txes
+            if self.authority_store.effects_exists(&digest)? {
+                // also ensure the transaction will not be retried after restart.
+                let _ = epoch_store.remove_pending_certificate(&digest);
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
+                continue;
+            }
+
             // skip already pending txes
             if !skip_adding_type_arg_deps {
                 if inner.pending_certificates.contains_key(&digest) {
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_pending"])
-                        .inc();
-                    continue;
-                }
-                // skip already executing txes
-                if inner.executing_certificates.contains(&digest) {
-                    self.metrics
-                        .transaction_manager_num_enqueued_certificates
-                        .with_label_values(&["already_executing"])
                         .inc();
                     continue;
                 }
@@ -163,18 +174,6 @@ impl TransactionManager {
                         }
                     }
                 }
-                inner.executing_certificates.remove(&digest); // should be no-op.
-            }
-
-            // skip already executed txes
-            if self.authority_store.effects_exists(&digest)? {
-                // also ensure the transaction will not be retried after restart.
-                let _ = epoch_store.remove_pending_certificate(&digest);
-                self.metrics
-                    .transaction_manager_num_enqueued_certificates
-                    .with_label_values(&["already_executed"])
-                    .inc();
-                continue;
             }
 
             let missing = self
