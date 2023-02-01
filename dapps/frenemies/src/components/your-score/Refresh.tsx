@@ -36,6 +36,8 @@ export function Refresh({ scorecard, round, leaderboardID }: Props) {
     const gasRequred = GAS_BUDGET * BigInt(gasPrice);
     const { gas } = getGas(coins, gasRequred);
 
+    console.log(gas?.data.value, gasRequred);
+
     if (!gas) {
       return null;
     }
@@ -48,7 +50,7 @@ export function Refresh({ scorecard, round, leaderboardID }: Props) {
         function: "update",
         gasPayment: normalizeSuiAddress(gas.reference.objectId),
         typeArguments: [],
-        gasBudget: 1000000,
+        gasBudget: Number(GAS_BUDGET),
         arguments: [
           normalizeSuiAddress(scorecard.reference.objectId),
           SUI_SYSTEM_ID,
