@@ -107,7 +107,7 @@ export class SuiWallet implements Wallet {
                 on: this.#on,
             },
             'sui:signAndExecuteTransaction': {
-                version: '1.0.0',
+                version: '1.1.0',
                 signAndExecuteTransaction: this.#signAndExecuteTransaction,
             },
             'suiWallet:stake': {
@@ -216,6 +216,7 @@ export class SuiWallet implements Wallet {
                 transaction: {
                     type: 'v2',
                     data: input.transaction,
+                    options: input.options,
                 },
             }),
             (response) => response.result
