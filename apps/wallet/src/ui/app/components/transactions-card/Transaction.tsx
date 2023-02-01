@@ -89,7 +89,7 @@ export function Transaction({
             coinType:
                 amountTransfersSui?.coinType ||
                 amountTransfersNonSui[0]?.coinType ||
-                0,
+                SUI_TYPE_ARG,
         };
     }, [address, eventsSummary]);
 
@@ -181,6 +181,7 @@ export function Transaction({
                                 </div>
                                 <CoinBalance
                                     amount={Math.abs(transferAmount.amount)}
+                                    coinType={transferAmount.coinType}
                                 />
                             </div>
                             <div className="flex flex-col w-full gap-1.5">
