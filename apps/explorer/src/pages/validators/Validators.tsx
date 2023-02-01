@@ -26,6 +26,7 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
@@ -47,6 +48,12 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 typeof validator.fields.metadata.fields.image_url === 'string'
                     ? validator.fields.metadata.fields.image_url
                     : null;
+
+            const event = getValidatorMoveEvent(
+                validatorsEvents,
+                validator.fields.metadata.fields.sui_address
+            );
+
             return {
                 name: {
                     name: validatorName,
@@ -57,9 +64,7 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 commission: +validator.fields.commission_rate / 100,
                 img: img,
                 address: validator.fields.metadata.fields.sui_address,
-                lastEpochReward:
-                    validator.fields.delegation_staking_pool.fields
-                        .rewards_pool,
+                lastReward: event?.fields.stake_rewards || 0,
             };
         }),
         columns: [
@@ -136,12 +141,12 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 },
             },
             {
-                header: 'Last Epoch Rewards Pool',
-                accessorKey: 'lastEpochReward',
+                header: 'Last Epoch Rewards',
+                accessorKey: 'lastReward',
                 cell: (props: any) => {
-                    const lastEpochReward = props.getValue();
-                    return lastEpochReward > 0 ? (
-                        <StakeColumn stake={lastEpochReward} hideCoinSymbol />
+                    const lastReward = props.getValue();
+                    return lastReward > 0 ? (
+                        <StakeColumn stake={lastReward} hideCoinSymbol />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
@@ -157,12 +162,36 @@ function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } =
         useGetObject(VALIDATORS_OBJECT_ID);
 
+    const rpc = useRpc();
+
     const validatorsData =
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
             ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
+
+    const numberOfValidators = useMemo(() => {
+        return validatorsData?.validators.fields.active_validators.length;
+    }, [validatorsData]);
+
+    const {
+        data: validatorEvents,
+        isLoading: validatorsEventsLoading,
+        isError: validatorEventError,
+    } = useQuery(
+        ['events', VALIDATORS_EVENTS_QUERY],
+        async () => {
+            if (!numberOfValidators) return;
+            return rpc.getEvents(
+                { MoveEvent: VALIDATORS_EVENTS_QUERY },
+                null,
+                numberOfValidators,
+                'descending'
+            );
+        },
+        { enabled: !!numberOfValidators }
+    );
 
     const totalStaked = useMemo(() => {
         if (!validatorsData) return 0;
@@ -187,7 +216,7 @@ function ValidatorPageResult() {
         return roundFloat(
             validatorsApy.reduce((acc, cur) => acc + cur, 0) /
                 validatorsApy.length,
-            APY_DECIMALS
+            3
         );
     }, [validatorsData]);
 
@@ -203,16 +232,20 @@ function ValidatorPageResult() {
     }, [validatorsData]);
 
     const validatorsTable = useMemo(() => {
-        if (!validatorsData) return null;
+        if (!validatorsData || !validatorEvents) return null;
 
         const validators = validatorsData.validators.fields.active_validators;
 
-        return validatorsTableData(validators, +validatorsData.epoch);
-    }, [validatorsData]);
+        return validatorsTableData(
+            validators,
+            +validatorsData.epoch,
+            validatorEvents.data
+        );
+    }, [validatorEvents, validatorsData]);
 
     const defaultSorting = [{ id: 'stake', desc: false }];
 
-    if (isError || (!isLoading && !validatorsTable?.data.length)) {
+    if (isError || validatorEventError) {
         return (
             <Banner variant="error" fullWidth>
                 Validator data could not be loaded
@@ -292,7 +325,7 @@ function ValidatorPageResult() {
             <div className="mt-8">
                 <ErrorBoundary>
                     <TableHeader>All Validators</TableHeader>
-                    {isLoading && (
+                    {(isLoading || validatorsEventsLoading) && (
                         <PlaceholderTable
                             rowCount={20}
                             rowHeight="13px"
