@@ -22,10 +22,7 @@ export function TxnImage({ id, label }: { id: string; label?: string }) {
                     borderRadius="sm"
                     size="xs"
                     name={nftMeta.name}
-                    src={nftMeta.url.replace(
-                        /^ipfs:\/\//,
-                        'https://ipfs.io/ipfs/'
-                    )}
+                    src={nftMeta.url}
                 />
 
                 <div className="flex flex-col gap-1 justify-center break-all w-56">
