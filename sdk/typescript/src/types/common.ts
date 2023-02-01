@@ -164,14 +164,6 @@ export function generateTransactionDigest(
   txSignature.set(signatureBytes, 1);
   txSignature.set(publicKeyBytes, 1 + signatureBytes.length);
 
-  const senderSignedData = {
-    data,
-    txSignature,
-  };
-  const senderSignedDataBytes = bcs
-    .ser('SenderSignedData', senderSignedData)
-    .toBytes();
-
   const txBytes = bcs.ser('TransactionData', data).toBytes();
   const hash = sha256Hash('TransactionData', txBytes);
 
