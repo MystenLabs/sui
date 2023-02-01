@@ -60,10 +60,9 @@ export function Setup() {
         );
       }
 
-      // @ts-ignore // also not cool
       const {
         Ok: [
-          [,{
+          [,{ // @ts-ignore // not cool
               returnValues: [[[ exists ]]],
             },
           ],
