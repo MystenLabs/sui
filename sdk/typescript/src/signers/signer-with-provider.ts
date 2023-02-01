@@ -162,9 +162,7 @@ export abstract class SignerWithProvider implements Signer {
       sig.signatureScheme,
       sig.signature,
       sig.pubKey,
-      bcs,
-      version?.major == 0 && version?.minor < 18 ? 'base64' : 'base58',
-      version?.major == 0 && version?.minor < 18 ? false : true
+      bcs
     );
   }
 
