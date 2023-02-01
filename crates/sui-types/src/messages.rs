@@ -251,7 +251,7 @@ impl MoveCall {
         // using a BTreeSet so the output of `input_objects` has a stable ordering
         let mut packages = BTreeSet::from([*package]);
         for type_argument in type_arguments {
-            Self::type_argument_packages(&mut packages, type_argument)
+            add_type_tag_packages(&mut packages, type_argument)
         }
         arguments
             .iter()
@@ -302,25 +302,26 @@ impl MoveCall {
             .chain(packages.into_iter().map(InputObjectKind::MovePackage))
             .collect()
     }
+}
 
-    fn type_argument_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &TypeTag) {
-        let mut stack = vec![type_argument];
-        while let Some(cur) = stack.pop() {
-            match cur {
-                TypeTag::Bool
-                | TypeTag::U8
-                | TypeTag::U64
-                | TypeTag::U128
-                | TypeTag::Address
-                | TypeTag::Signer
-                | TypeTag::U16
-                | TypeTag::U32
-                | TypeTag::U256 => (),
-                TypeTag::Vector(inner) => stack.push(inner),
-                TypeTag::Struct(struct_tag) => {
-                    packages.insert(struct_tag.address.into());
-                    stack.extend(struct_tag.type_params.iter())
-                }
+// Add package IDs, `ObjectID`, for types defined in modules.
+fn add_type_tag_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &TypeTag) {
+    let mut stack = vec![type_argument];
+    while let Some(cur) = stack.pop() {
+        match cur {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256 => (),
+            TypeTag::Vector(inner) => stack.push(inner),
+            TypeTag::Struct(struct_tag) => {
+                packages.insert(struct_tag.address.into());
+                stack.extend(struct_tag.type_params.iter())
             }
         }
     }
