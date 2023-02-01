@@ -273,7 +273,7 @@ where
                 tx_cert,
                 effects_cert,
                 // TODO: Check whether it's safe to call epoch_store here.
-                &validator_state.epoch_store(),
+                &validator_state.load_epoch_store_one_call_per_task(),
             ),
         )
         .instrument(error_span!("transaction_orchestrator", ?tx_digest))

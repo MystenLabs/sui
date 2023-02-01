@@ -181,7 +181,7 @@ async fn reconfig_with_revert_end_to_end_test() {
                 if position_submit_certificate(&net.committee, &node.state().name, tx.digest())
                     < (authorities.len() - 1)
                 {
-                    node.close_epoch().await.unwrap();
+                    node.close_epoch_for_testing().await.unwrap();
                 } else {
                     // remember the authority that wouild submit it to consensus last.
                     reverting_authority_idx = Some(i);
@@ -221,7 +221,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .map(|handle| {
             handle.with_async(|node| async {
                 loop {
-                    if node.state().epoch() == 1 {
+                    if node.state().current_epoch_for_testing() == 1 {
                         break;
                     }
                     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -358,7 +358,7 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
     // Close epoch on 3 (2f+1) validators.
     for handle in authorities.iter().skip(1) {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
     info!("close_epoch complete after {:?}", start.elapsed());

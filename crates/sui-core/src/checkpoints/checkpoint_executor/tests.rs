@@ -45,7 +45,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
         &committee,
     );
 
-    let epoch_store = state.epoch_store().clone();
+    let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
         spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -78,7 +78,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
         state.transaction_manager().clone(),
     );
 
-    let epoch_store = state.epoch_store().clone();
+    let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
         spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -155,7 +155,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     // Ensure executor reaches end of epoch in a timely manner
     timeout(Duration::from_secs(5), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await
@@ -179,7 +179,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     // of next epoch
     timeout(Duration::from_secs(5), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await
@@ -249,7 +249,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_secs(1), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await
@@ -278,7 +278,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_millis(200), async {
         executor
-            .run_epoch(authority_state.epoch_store().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone())
             .await;
     })
     .await

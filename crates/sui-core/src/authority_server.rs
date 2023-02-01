@@ -287,7 +287,7 @@ impl ValidatorService {
                 .start_timer()
         };
 
-        let epoch_store = state.epoch_store();
+        let epoch_store = state.load_epoch_store_one_call_per_task();
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
@@ -300,7 +300,7 @@ impl ValidatorService {
         }
 
         // 2) Validate if cert can be executed, and verify the cert.
-        if state.is_fullnode() {
+        if state.is_fullnode(&epoch_store) {
             return Err(tonic::Status::unimplemented(format!(
                 "Cannot execute certificate without effects on fullnode! {:?}",
                 certificate.digest()
