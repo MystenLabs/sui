@@ -196,7 +196,7 @@ export class JsonRpcProvider extends Provider {
     coinType: String | null = null,
     cursor: ObjectId | null = null,
     limit: number | null = null
-  ) : Promise<PaginatedCoins> {
+  ): Promise<PaginatedCoins> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -208,9 +208,7 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(
-        `Error getting coins for owner ${owner}: ${err}`
-      );
+      throw new Error(`Error getting coins for owner ${owner}: ${err}`);
     }
   }
 
@@ -218,7 +216,7 @@ export class JsonRpcProvider extends Provider {
     owner: SuiAddress,
     cursor: ObjectId | null = null,
     limit: number | null = null
-  ) : Promise<PaginatedCoins> {
+  ): Promise<PaginatedCoins> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -230,16 +228,14 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(
-        `Error getting all coins for owner ${owner}: ${err}`
-      )
+      throw new Error(`Error getting all coins for owner ${owner}: ${err}`);
     }
   }
 
   async getBalance(
     owner: SuiAddress,
-    coinType: String | null = null,
-  ) : Promise<CoinBalance> {
+    coinType: String | null = null
+  ): Promise<CoinBalance> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -253,13 +249,11 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error getting balance for coin type ${coinType} for owner ${owner}: ${err}`
-      )
+      );
     }
   }
 
-  async getAllBalances(
-    owner: SuiAddress
-  ) : Promise<CoinBalance[]> {
+  async getAllBalances(owner: SuiAddress): Promise<CoinBalance[]> {
     try {
       if (!owner || !isValidSuiAddress(normalizeSuiAddress(owner))) {
         throw new Error('Invalid Sui address');
@@ -271,9 +265,7 @@ export class JsonRpcProvider extends Provider {
         this.options.skipDataValidation
       );
     } catch (err) {
-      throw new Error(
-        `Error getting all balances for owner ${owner}: ${err}`
-      )
+      throw new Error(`Error getting all balances for owner ${owner}: ${err}`);
     }
   }
 
@@ -290,9 +282,7 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getTotalSupply(
-    coinType: String
-  ) : Promise<CoinSupply> {
+  async getTotalSupply(coinType: String): Promise<CoinSupply> {
     try {
       return await this.client.requestWithType(
         'sui_getTotalSupply',
@@ -819,22 +809,6 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getCommitteeInfo(
-    epoch: number | null = null
-  ): Promise<CommitteeInfoResponse> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCommitteeInfo',
-        [epoch],
-        CommitteeInfoResponse,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getCommitteeInfo: ${err}`);
-    }
-  }
-
   async getSuiSystemState(): Promise<SuiSystemState> {
     try {
       const resp = await this.client.requestWithType(
@@ -1020,65 +994,6 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getDelegatedStake(address: SuiAddress): Promise<DelegatedStake[]> {
-    try {
-      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
-        throw new Error('Invalid Sui address');
-      }
-      const resp = await this.client.requestWithType(
-        'sui_getDelegatedStakes',
-        [address],
-        array(DelegatedStake),
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getDelegatedStake: ${err}`);
-    }
-  }
-
-  async getValidators(): Promise<ValidatorMetaData[]> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getValidators',
-        [],
-        array(ValidatorMetaData),
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getValidators: ${err}`);
-    }
-  }
-
-  async getCommitteeInfo(epoch: number | null = null): Promise<CommitteeInfoResponse> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getCommitteeInfo',
-        [epoch],
-        CommitteeInfoResponse,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getCommitteeInfo: ${err}`);
-    }
-  }
-
-  async getSuiSystemState(): Promise<SuiSystemState> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getSuiSystemState',
-        [],
-        SuiSystemState,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error in getSuiSystemState: ${err}`);
-    }
-  }
-
   // Checkpoints
   async getLatestCheckpointSequenceNumber(): Promise<number> {
     try {
@@ -1090,12 +1005,14 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
-      throw new Error(`Error fetching latest checkpoint sequence number: ${err}`);
+      throw new Error(
+        `Error fetching latest checkpoint sequence number: ${err}`
+      );
     }
   }
 
   async getCheckpointSummary(
-    sequence_number: number,
+    sequence_number: number
   ): Promise<CheckpointSummary> {
     try {
       const resp = await this.client.requestWithType(
@@ -1113,7 +1030,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getCheckpointSummaryByDigest(
-    digest: CheckpointDigest,
+    digest: CheckpointDigest
   ): Promise<CheckpointSummary> {
     try {
       const resp = await this.client.requestWithType(
@@ -1131,7 +1048,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getCheckpointContents(
-    sequence_number: number,
+    sequence_number: number
   ): Promise<CheckpointContents> {
     try {
       const resp = await this.client.requestWithType(
@@ -1149,7 +1066,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getCheckpointContentsByDigest(
-    digest: CheckPointContentsDigest,
+    digest: CheckPointContentsDigest
   ): Promise<CheckpointContents> {
     try {
       const resp = await this.client.requestWithType(
