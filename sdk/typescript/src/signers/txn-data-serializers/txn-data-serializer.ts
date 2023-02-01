@@ -96,7 +96,6 @@ export interface RequestWithdrawDelegationTransaction
   extends TransactionCommon {
   delegation: ObjectId;
   stakedSui: ObjectId;
-  principalWithdrawAmount: number;
   gasPayment?: ObjectId;
 }
 
