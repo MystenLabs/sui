@@ -162,8 +162,11 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() == (MAX_NUM_EVENT_EMIT as usize) {
-            return Err(PartialVMError::new(StatusCode::UNKNOWN_STATUS /* TODO (Ade): should we add a new VM StatusCode for TOO_MANY_EVENTS? */)
-                .with_message(format!("Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed")));
+            return Err(
+                PartialVMError::new(StatusCode::EVENT_COUNT_LIMIT_EXCEEDED).with_message(format!(
+                    "Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed"
+                )),
+            );
         }
         self.state.events.push((ty, tag, event));
         Ok(())
