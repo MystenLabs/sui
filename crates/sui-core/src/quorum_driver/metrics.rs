@@ -7,7 +7,7 @@ use prometheus::{
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 
-use crate::histogram::Histogram;
+use mysten_metrics::histogram::Histogram;
 
 #[derive(Clone)]
 pub struct QuorumDriverMetrics {

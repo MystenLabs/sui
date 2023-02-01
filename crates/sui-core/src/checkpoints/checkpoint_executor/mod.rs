@@ -18,7 +18,11 @@
 //! CheckpointExecutor enforces the invariant that if `run` returns successfully, we have reached the
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use futures::stream::FuturesOrdered;
 use mysten_metrics::spawn_monitored_task;
@@ -31,6 +35,7 @@ use sui_types::{
     messages::{TransactionEffects, VerifiedCertificate},
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
+use tap::TapFallible;
 use tokio::{sync::broadcast, task::JoinHandle, time::timeout};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, instrument, warn};
@@ -149,7 +154,14 @@ impl CheckpointExecutor {
                     highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
-                _ = self.mailbox.recv() => (),
+                Ok(checkpoint) = self.mailbox.recv() => {
+                    SystemTime::now().duration_since(checkpoint.summary.timestamp())
+                        .map(|latency|
+                            self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
+                        )
+                        .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
+                        .ok();
+                }
             }
         }
     }

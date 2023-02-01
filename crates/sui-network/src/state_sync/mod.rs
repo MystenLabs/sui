@@ -53,7 +53,7 @@ use futures::{FutureExt, StreamExt};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
@@ -868,6 +868,12 @@ where
                 .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
             VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
+
+        SystemTime::now()
+            .duration_since(checkpoint.summary.timestamp())
+            .map(|latency| metrics.report_checkpoint_summary_age(latency))
+            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
+            .ok();
 
         current = checkpoint.clone();
         // Insert the newly verified checkpoint into our store, which will bump our highest
