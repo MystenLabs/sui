@@ -12,14 +12,14 @@ import { config } from "../../config";
  * data on the current epoch and timestamps.
  */
 export function useEpoch() {
-  return useQuery(["epoch"], async (): Promise<{ timestamp: number; data: SystemEpochInfo } | null> => {
+  return useQuery(["epoch"], async (): Promise<{ timestamp: number; prevTimestamp: number; data: SystemEpochInfo } | null> => {
     const { data } = await provider.getEvents(
       { MoveEvent: SYSTEM_EPOCH_INFO },
       null,
-      1,
+      2,
       "descending"
     );
-    const [evt] = data;
+    const [evt, prevEvt] = data;
 
     // should never happen; it's a platform requirement.
     if (data.length == 0 || !("moveEvent" in evt.event)) {
@@ -28,6 +28,7 @@ export function useEpoch() {
 
     return {
       timestamp: evt.timestamp,
+      prevTimestamp: prevEvt.timestamp,
       data: bcs.de(SYSTEM_EPOCH_INFO, evt.event.moveEvent.bcs, "base64"),
     };
   }, {

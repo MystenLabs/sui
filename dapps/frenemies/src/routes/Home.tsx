@@ -13,18 +13,9 @@ import { useEffect, useState } from "react";
 import { Scoreboard } from "../components/Scoreboard";
 import { useEpoch } from "../network/queries/epoch";
 import { Goal } from "../network/types";
-import { config } from "../config";
 import { Assignment } from "../components/Assignment";
 import { useSuiSystem } from "../network/queries/sui-system";
 import { Logo } from "../components/Validators/Logo";
-
-const getTime = (timestamp?: number) => {
-  if (!timestamp) return null;
-
-  const timePassed = Date.now() - timestamp;
-  const timeLeft = +config.VITE_EPOCH_LEN * 60000 - timePassed;
-  return timeLeft <= 0 ? 0 : timeLeft;
-};
 
 /**
  * The Home page.
@@ -57,13 +48,13 @@ export function Home() {
     }
   }, [scorecard, isSuccess]);
 
-  const [timer, setTime] = useState(() => getTime(epoch?.timestamp));
+  const [timer, setTime] = useState(() => getTime(epoch?.timestamp, epoch?.prevTimestamp));
 
   useEffect(() => {
     if (!epoch) return;
 
     const interval = setInterval(
-      () => setTime(getTime(epoch?.timestamp)),
+      () => setTime(getTime(epoch?.timestamp, epoch?.prevTimestamp)),
       1000
     );
     return () => clearInterval(interval);
@@ -115,3 +106,17 @@ export function Home() {
     </>
   );
 }
+
+/**
+ * Calculate time left until the next epoch based on the last two timestamps
+ * for epoch changes (`timestamp` and `prevTimestamp`).
+ */
+function getTime(timestamp?: number, prevTimestamp?: number): number | null {
+  if (!timestamp || !prevTimestamp) return null;
+
+  const prevEpochLength = timestamp - prevTimestamp;
+  const timePassed = Date.now() - timestamp;
+  const timeLeft = prevEpochLength - timePassed;
+
+  return timeLeft <= 0 ? 0 : timeLeft;
+};
