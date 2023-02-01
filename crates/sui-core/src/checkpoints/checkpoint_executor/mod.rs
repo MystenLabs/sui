@@ -613,7 +613,7 @@ async fn execute_transactions(
     }
     epoch_store.insert_pending_certificates(&synced_txns)?;
 
-    transaction_manager.enqueue(synced_txns, &epoch_store)?;
+    transaction_manager.enqueue(synced_txns, &epoch_store, Some(digest_to_effects))?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;

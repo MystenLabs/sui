@@ -1777,7 +1777,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
         epoch_store.insert_pending_certificates(&certs)?;
-        self.transaction_manager.enqueue(certs, epoch_store)
+        self.transaction_manager.enqueue(certs, epoch_store, None)
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.

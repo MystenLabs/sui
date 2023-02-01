@@ -8,7 +8,14 @@ use std::{
 
 use itertools::Itertools;
 use parking_lot::RwLock;
-use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
+use sui_types::{
+    base_types::ObjectID,
+    committee::EpochId,
+    messages::{
+        EntryTypeArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus, TransactionEffects,
+    },
+    storage::ObjectKey,
+};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, warn};
@@ -79,7 +86,11 @@ impl TransactionManager {
             tx_ready_certificates,
         };
         transaction_manager
-            .enqueue(epoch_store.all_pending_certificates().unwrap(), epoch_store)
+            .enqueue(
+                epoch_store.all_pending_certificates().unwrap(),
+                epoch_store,
+                None,
+            )
             .expect("Initialize TransactionManager with pending certificates failed.");
         transaction_manager
     }
@@ -97,6 +108,7 @@ impl TransactionManager {
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &AuthorityPerEpochStore,
+        digest_to_effects: Option<HashMap<TransactionDigest, TransactionEffects>>,
     ) -> SuiResult<()> {
         let inner = &mut self.inner.write();
         for cert in certs {
@@ -138,12 +150,35 @@ impl TransactionManager {
                 continue;
             }
 
-            let mut package_inputs = cert.data().intent_message.value.type_argument_packages();
-            package_inputs.extend_from_slice(&cert.data().intent_message.value.input_objects()?);
+            let mut inputs = cert.data().intent_message.value.input_objects()?;
+
+            // if effects indicate a success then we need to add and wait for argument packages,
+            // otherwise we can skip
+            if let Some(digest_to_effects) = &digest_to_effects {
+                if let Some(effect) = digest_to_effects.get(cert.digest()) {
+                    fn is_module_not_found_error(effect: &TransactionEffects) -> bool {
+                        if let ExecutionStatus::Failure { error } = &effect.status {
+                            if let ExecutionFailureStatus::EntryTypeArgumentError(error) = error {
+                                if matches!(error.kind, EntryTypeArgumentErrorKind::ModuleNotFound)
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                        false
+                    }
+                    if !is_module_not_found_error(effect) {
+                        inputs.extend(cert.data().intent_message.value.type_argument_packages());
+                    }
+                }
+            } else {
+                // if this is called from anywhere but checkpoint executor, do the normal "fix"
+                inputs.extend(cert.data().intent_message.value.type_argument_packages());
+            }
 
             let missing = self
                 .authority_store
-                .get_missing_input_objects(&digest, &package_inputs, epoch_store)
+                .get_missing_input_objects(&digest, &inputs, epoch_store)
                 .expect("Are shared object locks set prior to enqueueing certificates?")
                 .into_iter()
                 .filter(|key| key.0 != ObjectID::ZERO)

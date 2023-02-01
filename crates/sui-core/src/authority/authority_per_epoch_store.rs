@@ -1277,7 +1277,7 @@ impl AuthorityPerEpochStore {
         {
             // The certificate has already been inserted into the pending_certificates table by
             // process_consensus_transaction() above.
-            transaction_manager.enqueue(vec![certificate], self)?;
+            transaction_manager.enqueue(vec![certificate], self, None)?;
         }
         Ok(())
     }
