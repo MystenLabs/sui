@@ -5298,13 +5298,19 @@
       "SuiExecuteTransactionResponse": {
         "type": "object",
         "required": [
-          "certificate",
           "confirmed_local_execution",
           "effects"
         ],
         "properties": {
           "certificate": {
-            "$ref": "#/components/schemas/CertifiedTransaction"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CertifiedTransaction"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "confirmed_local_execution": {
             "type": "boolean"

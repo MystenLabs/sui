@@ -2427,7 +2427,7 @@ pub type IsTransactionExecutedLocally = bool;
 pub enum ExecuteTransactionResponse {
     EffectsCert(
         Box<(
-            CertifiedTransaction,
+            Option<CertifiedTransaction>,
             CertifiedTransactionEffects,
             IsTransactionExecutedLocally,
         )>,

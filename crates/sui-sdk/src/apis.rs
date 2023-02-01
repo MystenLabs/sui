@@ -478,6 +478,7 @@ impl QuorumDriver {
         tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<TransactionExecutionResult> {
+        let tx_digest = *tx.digest();
         let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
@@ -495,8 +496,8 @@ impl QuorumDriver {
 
         Ok(match request_type {
             ExecuteTransactionRequestType::WaitForEffectsCert => TransactionExecutionResult {
-                tx_digest: certificate.transaction_digest,
-                tx_cert: Some(certificate),
+                tx_digest,
+                tx_cert: certificate,
                 effects: Some(effects.effects),
                 confirmed_local_execution,
                 timestamp_ms: None,
@@ -504,12 +505,11 @@ impl QuorumDriver {
             },
             ExecuteTransactionRequestType::WaitForLocalExecution => {
                 if !confirmed_local_execution {
-                    Self::wait_until_fullnode_sees_tx(&self.api, certificate.transaction_digest)
-                        .await?;
+                    Self::wait_until_fullnode_sees_tx(&self.api, tx_digest).await?;
                 }
                 TransactionExecutionResult {
-                    tx_digest: certificate.transaction_digest,
-                    tx_cert: Some(certificate),
+                    tx_digest,
+                    tx_cert: certificate,
                     effects: Some(effects.effects),
                     confirmed_local_execution,
                     timestamp_ms: None,
