@@ -577,6 +577,7 @@ impl CheckpointBuilder {
             let signatures = self
                 .epoch_store
                 .user_signatures_for_checkpoint(&digests_without_epoch_augment)
+                .in_monitored_scope("CheckpointBuilder::wait_user_signatures")
                 .await?;
             debug!(
                 "Received {} checkpoint user signatures from consensus",
