@@ -2656,7 +2656,7 @@
           "name": "Threshold BLS APIs"
         }
       ],
-      "description": "Sign an a Randomness object with threshold BLS.",
+      "description": "Sign an a Randomness object with threshold BLS. **Warning**: This API is a work in progress and uses insecure randomness. Please use it for testing purposes only.",
       "params": [
         {
           "name": "object_id",
