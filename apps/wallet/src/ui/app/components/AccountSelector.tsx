@@ -56,7 +56,7 @@ export function AccountSelector() {
                         enter="transition duration-200 ease-out"
                         enterFrom="transform scale-95 opacity-0"
                         enterTo="transform scale-100 opacity-100"
-                        leave="transition duration-500 ease-out"
+                        leave="transition duration-200 ease-out"
                         leaveFrom="transform scale-100 opacity-100"
                         leaveTo="transform scale-75 opacity-0"
                     >

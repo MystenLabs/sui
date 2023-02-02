@@ -45,7 +45,7 @@ export function AccountListItem({
                 <Check12 className="text-success" />
             ) : null}
             <Copy12
-                className="text-gray-60 group-hover:text-steel transition-colors"
+                className="text-gray-60 group-hover:text-steel transition-colors hover:!text-hero-dark"
                 onClick={copy}
             />
         </div>
