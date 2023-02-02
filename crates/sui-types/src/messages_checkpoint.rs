@@ -14,7 +14,6 @@ use crate::crypto::{
 };
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::sui_serde::Readable;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
@@ -24,7 +23,9 @@ use crate::{
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, Bytes};
+
+pub use crate::digests::CheckpointContentsDigest;
+pub use crate::digests::CheckpointDigest;
 
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
@@ -44,73 +45,6 @@ pub struct CheckpointRequest {
 pub struct CheckpointResponse {
     pub checkpoint: Option<CertifiedCheckpointSummary>,
     pub contents: Option<CheckpointContents>,
-}
-
-#[serde_as]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-)]
-pub struct CheckpointDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    pub [u8; 32],
-);
-
-impl AsRef<[u8]> for CheckpointDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for CheckpointDigest {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl CheckpointDigest {
-    pub fn encode(&self) -> String {
-        Base58::encode(self.0)
-    }
-}
-
-#[serde_as]
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
-pub struct CheckpointContentsDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    pub [u8; 32],
-);
-
-impl AsRef<[u8]> for CheckpointContentsDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for CheckpointContentsDigest {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl CheckpointContentsDigest {
-    pub fn encode(&self) -> String {
-        Base58::encode(self.0)
-    }
 }
 
 // The constituent parts of checkpoints, signed and certified
@@ -180,7 +114,7 @@ impl CheckpointSummary {
     }
 
     pub fn digest(&self) -> CheckpointDigest {
-        CheckpointDigest(sha3_hash(self))
+        CheckpointDigest::new(sha3_hash(self))
     }
 
     pub fn timestamp(&self) -> SystemTime {
@@ -521,7 +455,7 @@ impl CheckpointContents {
     }
 
     pub fn digest(&self) -> CheckpointContentsDigest {
-        CheckpointContentsDigest(sha3_hash(self))
+        CheckpointContentsDigest::new(sha3_hash(self))
     }
 }
 
