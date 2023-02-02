@@ -1,41 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
 import { memo } from 'react';
 
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
+import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
 import { Transaction } from '_components/transactions-card/Transaction';
-import { useAppSelector, useRpc } from '_hooks';
+import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
-
-import type { SuiTransactionResponse } from '@mysten/sui.js';
 
 function TransactionsPage() {
     const activeAddress = useAppSelector(({ account: { address } }) => address);
-    const rpc = useRpc();
     const {
         data: txns,
         isLoading,
         isError,
         error,
-    } = useQuery<SuiTransactionResponse[], Error>(
-        ['transactions-by-address', activeAddress],
-        async () => {
-            if (!activeAddress) {
-                return [];
-            }
-            const txnsIds = await rpc.getTransactions({
-                ToAddress: activeAddress,
-            });
-            return rpc.getTransactionWithEffectsBatch(txnsIds.data);
-        },
-        {
-            enabled: !!activeAddress,
-        }
-    );
+    } = useGetTransactionsByAddress(activeAddress);
 
     if (isError) {
         return (
@@ -59,10 +42,9 @@ function TransactionsPage() {
             <div className="mt-5 flex-grow overflow-y-auto px-5 -mx-5 divide-y divide-solid divide-gray-45 divide-x-0">
                 <Loading
                     loading={isLoading}
-                    className="flex justify-center items-center"
+                    className="flex justify-center items-center h-full"
                 >
-                    {txns &&
-                        activeAddress &&
+                    {txns?.length && activeAddress ? (
                         txns.map((txn) => (
                             <ErrorBoundary
                                 key={txn.certificate.transactionDigest}
@@ -72,7 +54,10 @@ function TransactionsPage() {
                                     address={activeAddress}
                                 />
                             </ErrorBoundary>
-                        ))}
+                        ))
+                    ) : (
+                        <NoActivityCard />
+                    )}
                 </Loading>
             </div>
         </div>
