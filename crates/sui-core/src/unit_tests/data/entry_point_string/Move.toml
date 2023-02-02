@@ -1,9 +1,0 @@
-[package]
-name = "entry_point_string"
-version = "0.0.1"
-
-[dependencies]
-Sui = { local = "../../../../../sui-framework" }
-
-[addresses]
-entry_point_string =  "0x0"
