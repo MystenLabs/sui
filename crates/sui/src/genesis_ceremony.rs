@@ -161,7 +161,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let mut builder = Builder::load(&dir)?;
             let (unsigned_checkpoint, ..) = builder.build_unsigned_genesis_checkpoint();
             println!(
-                "Successfully built unsigned checkpoint: {:?}",
+                "Successfully built unsigned checkpoint: {}",
                 unsigned_checkpoint.digest()
             );
 
@@ -185,7 +185,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
 
             println!(
-                "Successfully verified and signed genesis checkpoint: {:?}",
+                "Successfully verified and signed genesis checkpoint: {}",
                 checkpoint.digest()
             );
         }
