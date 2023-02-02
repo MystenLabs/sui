@@ -10,26 +10,35 @@ export default {
     component: Search,
 } as Meta;
 
-const options = {
-    transaction: [
-        { id: 1, label: 'transaction 1' },
-        { id: 2, label: 'transaction 2' },
-        { id: 3, label: 'transaction 3' },
-        { id: 4, label: 'transaction 4' },
-    ],
-    object: [
-        { id: 1, label: 'object 1' },
-        { id: 2, label: 'object 2' },
-        { id: 3, label: 'object 3' },
-        { id: 4, label: 'object 4' },
-    ],
-    address: [
-        { id: 1, label: 'address 1' },
-        { id: 2, label: 'address 2' },
-        { id: 3, label: 'address 3' },
-        { id: 4, label: 'address 4' },
-    ],
-};
+const options = [
+    {
+        label: 'transaction',
+        results: [
+            { id: 1, label: 'transaction 1' },
+            { id: 2, label: 'transaction 2' },
+            { id: 3, label: 'transaction 3' },
+            { id: 4, label: 'transaction 4' },
+        ],
+    },
+    {
+        label: 'object',
+        results: [
+            { id: 1, label: 'object 1' },
+            { id: 2, label: 'object 2' },
+            { id: 3, label: 'object 3' },
+            { id: 4, label: 'object 4' },
+        ],
+    },
+    {
+        label: 'address',
+        results: [
+            { id: 1, label: 'address 1' },
+            { id: 2, label: 'address 2' },
+            { id: 3, label: 'address 3' },
+            { id: 4, label: 'address 4' },
+        ],
+    },
+];
 
 export const Default: StoryObj<SearchProps> = {
     args: {},
@@ -37,24 +46,21 @@ export const Default: StoryObj<SearchProps> = {
         const [query, setQuery] = useState('');
         const [value, setValue] = useState(undefined);
         const filteredOptions = useMemo(() => {
-            const filtered = Object.entries(options).reduce(
-                (acc, [key, value]) => {
-                    const filtered = value.filter((option) =>
-                        option.label.toLowerCase().includes(query.toLowerCase())
-                    );
-                    if (filtered.length) {
-                        acc[key] = filtered;
-                    }
-                    return acc;
-                },
-                {} as any
-            );
+            const filtered = options.reduce((acc, curr) => {
+                const filtered = curr.results.filter((option) =>
+                    option.label.toLowerCase().includes(query.toLowerCase())
+                );
+                if (filtered.length) {
+                    acc.push({ label: curr.label, results: filtered });
+                }
+                return acc;
+            }, [] as any);
             return filtered;
         }, [query]);
 
         return (
             <div className="flex h-screen w-screen bg-headerNav p-10">
-                <div className="w-[500px] ">
+                <div className="flex max-w-xl flex-1">
                     <Search
                         queryValue={query}
                         isLoading={false}

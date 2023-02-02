@@ -62,7 +62,7 @@ export function Search({
             value={value}
             onChange={onSelectResult}
             as="div"
-            className="relative flex w-full flex-col"
+            className="relative flex h-fit w-full flex-col"
         >
             <Combobox.Input
                 displayValue={(value: SearchResult) => value.label}
