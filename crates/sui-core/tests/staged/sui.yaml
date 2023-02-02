@@ -360,7 +360,8 @@ ObjectArg:
           - initial_shared_version:
               TYPENAME: SequenceNumber
 ObjectDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL
