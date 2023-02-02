@@ -14,6 +14,7 @@ type GetValidatorsEvent = {
     order: 'ascending' | 'descending';
 };
 
+//TODO: get validatorEvents by validator address
 export function useGetValidatorsEvents({
     cursor,
     limit,
