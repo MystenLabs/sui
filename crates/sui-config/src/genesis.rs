@@ -22,7 +22,7 @@ use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
-    AuthorityWeakQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
+    AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
 };
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -464,7 +464,7 @@ impl Builder {
 
             CertifiedCheckpointSummary {
                 summary: checkpoint,
-                auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+                auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                     signatures, &committee,
                 )
                 .unwrap(),

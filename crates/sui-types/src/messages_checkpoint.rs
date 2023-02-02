@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature,
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, Signature,
 };
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
@@ -249,7 +249,7 @@ impl SignedCheckpointSummary {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
+pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
@@ -270,7 +270,7 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signed_checkpoints
                     .into_iter()
                     .map(|v| v.auth_signature)
