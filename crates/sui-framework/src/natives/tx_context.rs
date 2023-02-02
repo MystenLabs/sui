@@ -9,7 +9,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, convert::TryFrom};
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{ObjectID, TransactionDigest};
 
 use crate::{legacy_create_signer_cost, natives::object_runtime::ObjectRuntime};
 
@@ -27,7 +27,7 @@ pub fn derive_id(
     // TODO(https://github.com/MystenLabs/sui/issues/58): finalize digest format
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(tx_hash.as_slice()).unwrap();
-    let address = AccountAddress::from(digest.derive_id(ids_created));
+    let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     obj_runtime.new_id(address.into());
 
