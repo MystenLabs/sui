@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Encoding, Hex};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 
@@ -115,7 +114,7 @@ impl Display for CheckpointSummary {
             epoch_rolling_gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
-            Hex::encode(self.content_digest),
+            self.content_digest,
             self.epoch_rolling_gas_cost_summary,
         )
     }
