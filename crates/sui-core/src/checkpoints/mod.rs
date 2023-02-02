@@ -1390,12 +1390,7 @@ mod tests {
         ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
             Ok(digests
                 .into_iter()
-                .map(|d| {
-                    self.get(d.as_ref())
-                        .expect("effects not found")
-                        .clone()
-                        .into()
-                })
+                .map(|d| self.get(&d).expect("effects not found").clone().into())
                 .collect())
         }
 
@@ -1405,7 +1400,7 @@ mod tests {
         ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
             Ok(digests
                 .iter()
-                .map(|d| self.get(d.as_ref()).cloned().map(|e_opt| e_opt.into()))
+                .map(|d| self.get(d).cloned().map(|e_opt| e_opt.into()))
                 .collect())
         }
     }

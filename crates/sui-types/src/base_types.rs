@@ -13,7 +13,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
-use std::borrow::Borrow;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -23,13 +22,14 @@ pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
 };
+pub use crate::digests::TransactionDigest;
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
-use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
@@ -276,17 +276,7 @@ impl AsRef<[u8]> for SuiAddress {
 }
 
 // We use SHA3-256 hence 32 bytes here
-pub const TRANSACTION_DIGEST_LENGTH: usize = 32;
 pub const OBJECT_DIGEST_LENGTH: usize = 32;
-
-/// A transaction will have a (unique) digest.
-#[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    [u8; TRANSACTION_DIGEST_LENGTH],
-);
 
 // Each object has a unique digest
 #[serde_as]
@@ -367,7 +357,7 @@ impl TxContext {
     pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
-            digest: digest.0.to_vec(),
+            digest: digest.into_inner().to_vec(),
             epoch,
             ids_created: 0,
         }
@@ -425,61 +415,6 @@ impl TxContext {
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
         Self::new(sender, &TransactionDigest::random(), 0)
-    }
-}
-
-impl TransactionDigest {
-    pub fn new(bytes: [u8; TRANSACTION_DIGEST_LENGTH]) -> Self {
-        Self(bytes)
-    }
-
-    /// A digest we use to signify the parent transaction was the genesis,
-    /// ie. for an object there is no parent digest.
-    // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
-    pub fn genesis() -> Self {
-        Self::new([0; TRANSACTION_DIGEST_LENGTH])
-    }
-
-    // for testing
-    pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; TRANSACTION_DIGEST_LENGTH]>();
-        Self::new(random_bytes)
-    }
-
-    /// Translates digest into a Vec of bytes
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-
-    pub fn into_bytes(self) -> [u8; TRANSACTION_DIGEST_LENGTH] {
-        self.0
-    }
-
-    pub fn encode(&self) -> String {
-        Base64::encode(self.0)
-    }
-
-    // TODO: de-dup this
-    pub fn base58_encode(&self) -> String {
-        Base58::encode(self.0)
-    }
-}
-
-impl AsRef<[u8]> for TransactionDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl Borrow<[u8]> for TransactionDigest {
-    fn borrow(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl Borrow<[u8]> for &TransactionDigest {
-    fn borrow(&self) -> &[u8] {
-        &self.0
     }
 }
 
@@ -620,14 +555,6 @@ impl TryFrom<&[u8]> for ObjectDigest {
     }
 }
 
-impl std::fmt::Debug for TransactionDigest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base58::encode(self.0);
-        write!(f, "{}", s)?;
-        Ok(())
-    }
-}
-
 impl std::fmt::Debug for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = Base64::encode(self.0);
@@ -694,17 +621,6 @@ impl From<u64> for SequenceNumber {
 impl From<SequenceNumber> for usize {
     fn from(value: SequenceNumber) -> Self {
         value.0 as usize
-    }
-}
-
-impl TryFrom<&[u8]> for TransactionDigest {
-    type Error = SuiError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
-            .try_into()
-            .map_err(|_| SuiError::InvalidTransactionDigest)?;
-        Ok(Self(arr))
     }
 }
 
@@ -984,15 +900,5 @@ impl FromStr for ObjectID {
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
         // Try to match both the literal (0xABC..) and the normal (ABC)
         decode_bytes_hex(s).or_else(|_| Self::from_hex_literal(s))
-    }
-}
-
-impl FromStr for TransactionDigest {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow!(e))?);
-        Ok(TransactionDigest(result))
     }
 }
