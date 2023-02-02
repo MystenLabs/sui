@@ -379,7 +379,7 @@ impl TxContext {
 
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
-        let id = self.digest().derive_id(self.ids_created);
+        let id = ObjectID::derive_id(self.digest(), self.ids_created);
 
         self.ids_created += 1;
         id
@@ -438,21 +438,6 @@ impl TransactionDigest {
     // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
     pub fn genesis() -> Self {
         Self::new([0; TRANSACTION_DIGEST_LENGTH])
-    }
-
-    /// Create an ObjectID from `self` and `creation_num`.
-    /// Caller is responsible for ensuring that `creation_num` is fresh
-    pub fn derive_id(&self, creation_num: u64) -> ObjectID {
-        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
-
-        let mut hasher = Sha3_256::default();
-        hasher.update(self.0);
-        hasher.update(creation_num.to_le_bytes());
-        let hash = hasher.finalize();
-
-        // truncate into an ObjectID.
-        // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
-        ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
     // for testing
@@ -774,6 +759,21 @@ impl ObjectID {
         } else {
             Self::from_str(&literal[2..])
         }
+    }
+
+    /// Create an ObjectID from `TransactionDigest` and `creation_num`.
+    /// Caller is responsible for ensuring that `creation_num` is fresh
+    pub fn derive_id(digest: TransactionDigest, creation_num: u64) -> Self {
+        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
+
+        let mut hasher = Sha3_256::default();
+        hasher.update(digest);
+        hasher.update(creation_num.to_le_bytes());
+        let hash = hasher.finalize();
+
+        // truncate into an ObjectID.
+        // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
+        ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
