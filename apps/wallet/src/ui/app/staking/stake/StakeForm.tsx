@@ -135,7 +135,7 @@ function StakeForm({
                 </Card>
                 <ErrorMessage name="amount" component="div">
                     {(msg) => (
-                        <div className="mt-2 flex flex-col flex-nowrap">
+                        <div className="mt-2 flex flex-col flex-nowrap self-stretch">
                             <Alert mode="warning" className="text-body">
                                 {msg}
                             </Alert>
@@ -144,9 +144,11 @@ function StakeForm({
                 </ErrorMessage>
 
                 {submitError ? (
-                    <div className="mt-2 flex flex-col flex-nowrap">
+                    <div className="mt-2 flex flex-col flex-nowrap self-stretch">
                         <Alert mode="warning">
-                            <strong>Stake failed</strong>
+                            <div>
+                                <strong>Stake failed</strong>
+                            </div>
                             <small>{submitError}</small>
                         </Alert>
                     </div>

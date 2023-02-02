@@ -134,7 +134,7 @@ export function UnStakeForm({
             </Card>
             <ErrorMessage name="amount" component="div">
                 {(msg) => (
-                    <div className="mt-2 flex flex-col flex-nowrap">
+                    <div className="mt-2 flex flex-col flex-nowrap self-stretch">
                         <Alert mode="warning" className="text-body">
                             {msg}
                         </Alert>
@@ -143,10 +143,9 @@ export function UnStakeForm({
             </ErrorMessage>
 
             {submitError ? (
-                <div className="mt-2 flex flex-col flex-nowrap">
+                <div className="mt-2 flex flex-col flex-nowrap self-stretch">
                     <Alert mode="warning">
                         <strong>Unstake failed</strong>
-
                         <div>
                             <small>{submitError}</small>
                         </div>
