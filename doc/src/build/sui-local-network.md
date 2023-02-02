@@ -54,6 +54,6 @@ Use the following command to use a network.yaml file in a directory other than t
 ```shell
 sui start --network.config /workspace/config-files/network.yaml
 ```
-When you start the network, Sui generates an authorities_db directory that stores validator data, and a consensus_db directory that stores consensus data.
+When you start the network, Sui generates an authorities_db directory that stores validator data, and a consensus_db directory that stores consensus data. These directories are created alongside the other configuration files, either in the default directory or where you specified the `--working-dir` to be when you ran `genesis`.
 
 After the process completes, use the [Sui Client CLI](cli-client.md) to interact with the local network.
