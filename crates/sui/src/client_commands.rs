@@ -24,7 +24,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use sui_adapter::adapter::verify_modules;
+use sui_adapter::adapter::run_move_and_sui_bytecode_verifier;
 use sui_framework::build_move_package;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
@@ -1061,7 +1061,7 @@ impl SuiClientCommands {
 
                 let timer = Instant::now();
                 for _ in 0..trials {
-                    verify_modules(&compiled_modules)?;
+                    run_move_and_sui_bytecode_verifier(&compiled_modules)?;
                 }
                 let elapsed = timer.elapsed().as_micros();
                 SuiClientCommandResult::BytecodeVerify(trials, elapsed as u64)

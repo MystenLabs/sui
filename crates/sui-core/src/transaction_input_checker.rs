@@ -62,7 +62,7 @@ pub async fn check_transaction_input(
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;
     let input_objects = check_objects(transaction, input_objects, objects).await?;
-    verify_package(transaction).await?;
+    run_timed_bytecode_verifier(transaction, MAX_VERIFIER_TIME_US).await?;
     Ok((gas_status, input_objects))
 }
 
@@ -197,8 +197,18 @@ async fn check_gas(
     }
 }
 
-async fn verify_package(transaction: &TransactionData) -> Result<(), SuiError> {
-    async fn verify_package_impl(move_module_publish: &MoveModulePublish) -> Result<(), SuiError> {
+/// Run the bytecode verifier with a timeout of `timeout_us`
+/// This function only fails if the verification does not complete within the timeout
+/// If the actual verification succeeds or fails within the timeout, the function still succeeds
+#[instrument(level = "trace", skip_all)]
+async fn run_timed_bytecode_verifier(
+    transaction: &TransactionData,
+    timeout_us: u64,
+) -> Result<(), SuiError> {
+    async fn verify_package_inner(
+        move_module_publish: &MoveModulePublish,
+        timeout_us: u64,
+    ) -> Result<(), SuiError> {
         let mods = move_module_publish.clone();
 
         let task = async move {
@@ -210,11 +220,11 @@ async fn verify_package(transaction: &TransactionData) -> Result<(), SuiError> {
 
             let fut = async move {
                 // We don't actually care if it passes or fails. We just care that it completes on time.
-                let _ = sui_adapter::adapter::verify_modules(&modules);
+                let _ = sui_adapter::adapter::run_move_and_sui_bytecode_verifier(&modules);
             };
 
             select! {
-                () = sleep(Duration::from_micros(MAX_VERIFIER_TIME_US))=> {
+                () = sleep(Duration::from_micros(timeout_us))=> {
                     Ok::<bool, SuiError>(false)
                 }
                 () = fut => {
@@ -224,9 +234,7 @@ async fn verify_package(transaction: &TransactionData) -> Result<(), SuiError> {
         };
         if !task.await? {
             return Err(SuiError::ModuleVerificationFailure {
-                error: format!(
-                    "Move package verification exceeded timeout {MAX_VERIFIER_TIME_US}us"
-                ),
+                error: format!("Move package verification exceeded timeout {timeout_us}us"),
             });
         }
 
@@ -234,7 +242,7 @@ async fn verify_package(transaction: &TransactionData) -> Result<(), SuiError> {
     }
     for tx in transaction.kind.single_transactions() {
         if let SingleTransactionKind::Publish(p) = tx {
-            let err = verify_package_impl(p).await;
+            let err = verify_package_inner(p, timeout_us).await;
             err?;
         }
     }

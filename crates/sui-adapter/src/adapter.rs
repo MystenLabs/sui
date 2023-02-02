@@ -527,7 +527,9 @@ pub fn verify_and_link<
 
 /// Given a Vec of `CompiledModule`, runs each module with both the Move VM verifier
 /// and the Sui verifier.
-pub fn verify_modules(modules: &[CompiledModule]) -> Result<(), ExecutionError> {
+pub fn run_move_and_sui_bytecode_verifier(
+    modules: &[CompiledModule],
+) -> Result<(), ExecutionError> {
     // run the Move verifier
     for module in modules.iter() {
         verify_module_with_config(Lazy::force(&VERIFIER_CONFIG), module).map_err(|e| {
