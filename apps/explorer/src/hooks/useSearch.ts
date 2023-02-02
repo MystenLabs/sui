@@ -3,7 +3,6 @@
 
 import {
     isValidTransactionDigest,
-    type SuiTransactionResponse,
     isValidSuiAddress,
     isValidSuiObjectId,
     normalizeSuiObjectId,
@@ -25,8 +24,7 @@ export function useSearch(query: string) {
 
             if (isValidTransactionDigest(query)) {
                 promises.push(async () => {
-                    const txdata: SuiTransactionResponse =
-                        await rpc.getTransactionWithEffects(query);
+                    const txdata = await rpc.getTransactionWithEffects(query);
                     return [
                         {
                             label: 'transaction',
@@ -48,8 +46,7 @@ export function useSearch(query: string) {
                         rpc.getTransactions({ FromAddress: query }, null, 1),
                         rpc.getTransactions({ ToAddress: query }, null, 1),
                     ]);
-
-                    if (from.data[0] || to.data[0]) {
+                    if (from.data.length || to.data.length) {
                         return [
                             {
                                 label: 'address',
@@ -89,10 +86,11 @@ export function useSearch(query: string) {
                     }
                 });
             }
-            return Promise.any(promises.map((p) => p())).catch(() => []);
+            return Promise.all(promises.map((p) => p())).catch(() => []);
         },
         {
             enabled: !!query,
+            cacheTime: 10e3,
         }
     );
 }
