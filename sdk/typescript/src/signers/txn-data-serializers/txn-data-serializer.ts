@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer } from '../../serialization/base64';
-import { ObjectId, PureArg, SuiAddress, SuiJsonValue, TypeTag } from '../../types';
+import {
+  ObjectId,
+  PureArg,
+  SuiAddress,
+  SuiJsonValue,
+  TypeTag,
+} from '../../types';
 
 ///////////////////////////////
 // Exported Types
@@ -85,28 +91,6 @@ export interface SplitCoinTransaction extends TransactionCommon {
   gasPayment?: ObjectId;
 }
 
-export interface RequestAddDelegationTransaction extends TransactionCommon {
-  coins: ObjectId[];
-  amount: number;
-  validator: SuiAddress;
-  gasPayment?: ObjectId;
-}
-
-export interface RequestWithdrawDelegationTransaction
-  extends TransactionCommon {
-  delegation: ObjectId;
-  stakedSui: ObjectId;
-  gasPayment?: ObjectId;
-}
-
-export interface RequestSwitchDelegationTransaction extends TransactionCommon {
-  delegation: ObjectId;
-  stakedSui: ObjectId;
-  newValidatorAddress: SuiAddress;
-  switchPoolTokenAmount: number;
-  gasPayment?: ObjectId;
-}
-
 export interface MoveCallTransaction extends TransactionCommon {
   packageObjectId: ObjectId;
   module: string;
@@ -160,20 +144,6 @@ export type UnserializedSignableTransaction =
   | {
       kind: 'publish';
       data: PublishTransaction;
-    };
-
-export type SpecialMoveCallTransaction =
-  | {
-      kind: 'requestAddDelegation';
-      data: RequestAddDelegationTransaction;
-    }
-  | {
-      kind: 'requestWithdrawDelegation';
-      data: RequestWithdrawDelegationTransaction;
-    }
-  | {
-      kind: 'requestSwitchDelegation';
-      data: RequestSwitchDelegationTransaction;
     };
 
 /** A type that represents the possible transactions that can be signed: */

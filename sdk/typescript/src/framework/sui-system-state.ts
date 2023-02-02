@@ -1,4 +1,4 @@
-import { MoveCallTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
+import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   normalizeSuiAddress,
   ObjectId,
@@ -38,10 +38,7 @@ export class SuiSystemStateUtil {
     gasBudget?: number,
     gasPayment?: ObjectId,
     gasPrice?: number
-  ): Promise<{
-    kind: 'moveCall';
-    data: MoveCallTransaction;
-  }> {
+  ): Promise<UnserializedSignableTransaction> {
     // TODO: validate coin types and handle locked coins
     return {
       kind: 'moveCall',
@@ -77,10 +74,7 @@ export class SuiSystemStateUtil {
     gasBudget?: number,
     gasPayment?: ObjectId,
     gasPrice?: number
-  ): Promise<{
-    kind: 'moveCall';
-    data: MoveCallTransaction;
-  }> {
+  ): Promise<UnserializedSignableTransaction> {
     return {
       kind: 'moveCall',
       data: {
@@ -111,10 +105,7 @@ export class SuiSystemStateUtil {
     gasBudget?: number,
     gasPayment?: ObjectId,
     gasPrice?: number
-  ): Promise<{
-    kind: 'moveCall';
-    data: MoveCallTransaction;
-  }> {
+  ): Promise<UnserializedSignableTransaction> {
     return {
       kind: 'moveCall',
       data: {
