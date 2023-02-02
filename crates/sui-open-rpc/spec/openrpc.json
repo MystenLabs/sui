@@ -6143,7 +6143,7 @@
         "description": "A transaction will have a (unique) digest.",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Sha3Digest"
           }
         ]
       },

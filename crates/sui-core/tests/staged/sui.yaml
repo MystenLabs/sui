@@ -439,6 +439,8 @@ PaySui:
         SEQ: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
+Sha3Digest:
+  NEWTYPESTRUCT: BYTES
 SingleTransactionKind:
   ENUM:
     0:
@@ -494,7 +496,8 @@ SuiAddress:
       CONTENT: U8
       SIZE: 20
 TransactionDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 TransactionEffectsDigest:
   NEWTYPESTRUCT: BYTES
 TransactionKind:

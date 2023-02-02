@@ -726,9 +726,7 @@ impl AuthorityPerEpochStore {
     pub fn remove_pending_consensus_transaction(&self, key: &ConsensusTransactionKey) -> SuiResult {
         self.tables.pending_consensus_transactions.remove(key)?;
         if let ConsensusTransactionKey::Certificate(cert) = key {
-            self.pending_consensus_certificates
-                .lock()
-                .remove(cert.as_ref());
+            self.pending_consensus_certificates.lock().remove(cert);
         }
         Ok(())
     }
