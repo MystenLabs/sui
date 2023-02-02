@@ -5,52 +5,46 @@
 
 
 
--  [Function `native_ecvrf_verify`](#0x2_ecvrf_native_ecvrf_verify)
+-  [Constants](#@Constants_0)
 -  [Function `ecvrf_verify`](#0x2_ecvrf_ecvrf_verify)
+-  [Module Specification](#@Module_Specification_1)
 
 
 <pre><code></code></pre>
 
 
 
-<a name="0x2_ecvrf_native_ecvrf_verify"></a>
+<a name="@Constants_0"></a>
 
-## Function `native_ecvrf_verify`
-
-@param hash: The hash/output from a ECVRF to be verified.
-@param alpha_string: Input/seed to the ECVRF used to generate the output.
-@param public_key: The public key corresponding to the private key used to generate the output.
-@param proof: The proof of validity of the output.
-A native move wrapper around the Ristretto ECVRF. Returns true if the proof is valid and corresponds to the given output.
+## Constants
 
 
-<pre><code><b>fun</b> <a href="ecvrf.md#0x2_ecvrf_native_ecvrf_verify">native_ecvrf_verify</a>(<a href="">hash</a>: &<a href="">vector</a>&lt;u8&gt;, alpha_string: &<a href="">vector</a>&lt;u8&gt;, public_key: &<a href="">vector</a>&lt;u8&gt;, proof: &<a href="">vector</a>&lt;u8&gt;): bool
+<a name="0x2_ecvrf_EInvalidHashLength"></a>
+
+
+
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidHashLength">EInvalidHashLength</a>: u64 = 1;
 </code></pre>
 
 
 
-<details>
-<summary>Implementation</summary>
+<a name="0x2_ecvrf_EInvalidProofEncoding"></a>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_native_ecvrf_verify">native_ecvrf_verify</a>(<a href="">hash</a>: &<a href="">vector</a>&lt;u8&gt;, alpha_string: &<a href="">vector</a>&lt;u8&gt;, public_key: &<a href="">vector</a>&lt;u8&gt;, proof: &<a href="">vector</a>&lt;u8&gt;): bool;
+
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidProofEncoding">EInvalidProofEncoding</a>: u64 = 3;
 </code></pre>
 
 
 
-</details>
-
-<details>
-<summary>Specification</summary>
+<a name="0x2_ecvrf_EInvalidPublicKeyEncoding"></a>
 
 
 
-<pre><code><b>pragma</b> opaque;
+<pre><code><b>const</b> <a href="ecvrf.md#0x2_ecvrf_EInvalidPublicKeyEncoding">EInvalidPublicKeyEncoding</a>: u64 = 2;
 </code></pre>
 
 
-
-</details>
 
 <a name="0x2_ecvrf_ecvrf_verify"></a>
 
@@ -72,11 +66,18 @@ Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and cor
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="">hash</a>: &<a href="">vector</a>&lt;u8&gt;, alpha_string: &<a href="">vector</a>&lt;u8&gt;, public_key: &<a href="">vector</a>&lt;u8&gt;, proof: &<a href="">vector</a>&lt;u8&gt;): bool {
-    <a href="ecvrf.md#0x2_ecvrf_native_ecvrf_verify">native_ecvrf_verify</a>(<a href="">hash</a>, alpha_string, public_key, proof)
-}
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="ecvrf.md#0x2_ecvrf_ecvrf_verify">ecvrf_verify</a>(<a href="">hash</a>: &<a href="">vector</a>&lt;u8&gt;, alpha_string: &<a href="">vector</a>&lt;u8&gt;, public_key: &<a href="">vector</a>&lt;u8&gt;, proof: &<a href="">vector</a>&lt;u8&gt;): bool;
 </code></pre>
 
 
 
 </details>
+
+<a name="@Module_Specification_1"></a>
+
+## Module Specification
+
+
+
+<pre><code><b>pragma</b> opaque;
+</code></pre>
