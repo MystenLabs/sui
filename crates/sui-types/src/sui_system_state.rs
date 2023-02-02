@@ -21,7 +21,7 @@ use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex, WorkerInfo};
+use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -419,11 +419,9 @@ impl SuiSystemState {
         result
     }
 
-    pub fn get_current_epoch_peer_id_to_authority_name_map(
-        &self,
-    ) -> HashMap<PeerId, AuthorityName> {
+    pub fn get_current_epoch_peer_id_to_authority_names(&self) -> HashMap<PeerId, AuthorityName> {
         let mut result = HashMap::new();
-        let _ = self
+        let _: () = self
             .validators
             .active_validators
             .iter()

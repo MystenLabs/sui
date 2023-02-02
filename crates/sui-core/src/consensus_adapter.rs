@@ -163,6 +163,18 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
     }
 }
 
+pub struct ConnectionMonitorStatusForTests {}
+
+impl CheckConnection for ConnectionMonitorStatusForTests {
+    fn check_connection(&self, _authority: &AuthorityName) -> Option<&ConnectionStatus> {
+        Some(&ConnectionStatus::Connected)
+    }
+}
+
+pub trait CheckConnection {
+    fn check_connection(&self, authority: &AuthorityName) -> Option<&ConnectionStatus>;
+}
+
 pub struct ConnectionMonitorStatus {
     /// Current connection statuses forwarded from the connection monitor
     pub connection_statuses: Arc<HashMap<AuthorityName, ConnectionStatus>>,
@@ -179,16 +191,22 @@ pub struct ConnectionMonitorListener {
     peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
 }
 
+impl CheckConnection for ConnectionMonitorStatus {
+    fn check_connection(&self, authority: &AuthorityName) -> Option<&ConnectionStatus> {
+        self.connection_statuses.get(authority)
+    }
+}
+
 impl ConnectionMonitorListener {
-    async fn spawn(
+    pub async fn spawn(
         receiver: Receiver<(PeerId, ConnectionStatus)>,
         peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
     ) -> ConnectionMonitorStatus {
         let mut connection_statuses = HashMap::new();
         for (_, authority_name) in peer_id_to_authority_names.iter() {
             // initialize all to connected as default,if we don't have a consensus monitor running so
-            // the fallback behavior used in tests is we submit to consensus once and not 2f+1 times
-            connection_statuses.insert(authority_name.clone(), ConnectionStatus::Connected);
+            // the fallback behavior is we submit to consensus once and not 2f+1 times
+            connection_statuses.insert(*authority_name, ConnectionStatus::Connected);
         }
         let current_connection_statuses = Arc::new(connection_statuses);
 
@@ -227,8 +245,8 @@ impl ConnectionMonitorListener {
         }
     }
 }
-
 /// Submit Sui certificates to the consensus.
+#[allow(unused)]
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
     consensus_client: Box<dyn SubmitToConsensus>,
@@ -236,6 +254,8 @@ pub struct ConsensusAdapter {
     authority: AuthorityName,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
+    /// A structure to check the connection statuses populated by the Connection Monitor Listener
+    connection_monitor_status: Box<dyn CheckConnection + Send + Sync>,
     /// A structure to register metrics
     opt_metrics: OptArcConsensusAdapterMetrics,
 }
@@ -245,6 +265,7 @@ impl ConsensusAdapter {
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
+        connection_monitor_status: Box<dyn CheckConnection + Send + Sync>,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
@@ -252,6 +273,7 @@ impl ConsensusAdapter {
             consensus_client,
             authority,
             num_inflight_transactions,
+            connection_monitor_status,
             opt_metrics,
         })
     }

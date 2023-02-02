@@ -26,6 +26,7 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
 
+use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -86,9 +87,11 @@ impl AuthorityServer {
             mysten_network::client::connect_lazy(&consensus_address)
                 .expect("Failed to connect to consensus"),
         ));
+
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.name,
+            Box::new(ConnectionMonitorStatusForTests {}),
             ConsensusAdapterMetrics::new_test(),
         );
 
