@@ -25,8 +25,8 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -662,9 +662,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
