@@ -653,7 +653,6 @@ pub trait EventReadApi {
 #[rpc(server, client, namespace = "sui")]
 pub trait ThresholdBlsApi {
     /// Sign an a Randomness object with threshold BLS.
-    ///
     /// **Warning**: This API is a work in progress and uses insecure randomness. Please use it for
     /// testing purposes only.
     #[method(name = "tblsSignRandomnessObject")]
