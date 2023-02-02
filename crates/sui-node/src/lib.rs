@@ -165,6 +165,7 @@ impl SuiNode {
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
+            None,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -577,7 +578,11 @@ impl SuiNode {
             sender: consensus_adapter,
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
-            checkpoints_per_epoch: config.checkpoints_per_epoch,
+            next_reconfiguration_timestamp_ms: epoch_store
+                .epoch_start_configuration()
+                .expect("Failed to load epoch start configuration")
+                .epoch_start_timestamp_ms
+                .saturating_add(config.epoch_duration_ms),
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
@@ -828,7 +833,10 @@ impl SuiNode {
         let new_committee = system_state.get_current_epoch_committee();
         assert_eq!(next_epoch, new_committee.committee.epoch);
         self.state
-            .reconfigure(new_committee.committee)
+            .reconfigure(
+                new_committee.committee,
+                system_state.epoch_start_timestamp_ms,
+            )
             .await
             .expect("Reconfigure authority state cannot fail");
         info!("Validator State has been reconfigured");

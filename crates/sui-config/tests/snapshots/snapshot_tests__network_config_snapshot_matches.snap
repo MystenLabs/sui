@@ -54,7 +54,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -122,7 +122,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -190,7 +190,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -258,7 +258,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -326,7 +326,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -394,7 +394,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -462,7 +462,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:

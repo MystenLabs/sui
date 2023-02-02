@@ -37,7 +37,7 @@ pub struct SubmitCheckpointToConsensus<T> {
     pub sender: T,
     pub signer: StableSyncAuthoritySigner,
     pub authority: AuthorityName,
-    pub checkpoints_per_epoch: Option<u64>,
+    pub next_reconfiguration_timestamp_ms: u64,
 }
 
 pub struct LogCheckpointOutput;
@@ -63,9 +63,9 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let checkpoint_seq = summary.sequence_number;
+        let checkpoint_timestamp = summary.timestamp_ms;
         debug!(
-            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {}",
-            summary.timestamp_ms
+            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}"
         );
         LogCheckpointOutput
             .checkpoint_created(summary, contents, epoch_store)
@@ -80,10 +80,9 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         self.sender
             .submit_to_consensus(&transaction, epoch_store)
             .await?;
-        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
-            if checkpoint_seq != 0 && checkpoint_seq % checkpoints_per_epoch == 0 {
-                self.sender.close_epoch(epoch_store);
-            }
+        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
+            // close_epoch is ok if called multiple times
+            self.sender.close_epoch(epoch_store);
         }
         Ok(())
     }
