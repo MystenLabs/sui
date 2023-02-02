@@ -6,7 +6,6 @@ use crate::authority::StableSyncAuthoritySigner;
 use crate::consensus_adapter::SubmitToConsensus;
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
-use fastcrypto::encoding::{Encoding, Hex};
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
@@ -102,12 +101,12 @@ impl CheckpointOutput for LogCheckpointOutput {
         );
         info!(
             "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, next_epoch_committee {:?}",
-            Hex::encode(summary.digest()),
+            summary.digest(),
             summary.epoch,
             summary.sequence_number,
-            summary.previous_digest.map(Hex::encode),
+            summary.previous_digest,
             contents.size(),
-            Hex::encode(summary.content_digest),
+            summary.content_digest,
             summary.next_epoch_committee,
         );
 
@@ -124,7 +123,7 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
             summary.summary.sequence_number,
-            Hex::encode(summary.summary.digest())
+            summary.summary.digest()
         );
         Ok(())
     }
@@ -149,7 +148,7 @@ impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
             summary.summary.sequence_number,
-            Hex::encode(summary.summary.digest())
+            summary.summary.digest()
         );
         self.handle
             .send_checkpoint(VerifiedCheckpoint::new_unchecked(summary.to_owned()))
