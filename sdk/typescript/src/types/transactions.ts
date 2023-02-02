@@ -77,6 +77,11 @@ export const MoveCall = object({
 });
 export type MoveCall = Infer<typeof MoveCall>;
 
+export const Genesis = object( {
+  objects: array(ObjectId),
+});
+export type Genesis = Infer<typeof Genesis>;
+
 export type ExecuteTransactionRequestType =
   | 'WaitForEffectsCert'
   | 'WaitForLocalExecution';
@@ -101,6 +106,7 @@ export const SuiTransactionKind = union([
   object({ Pay: Pay }),
   object({ PaySui: PaySui }),
   object({ PayAllSui: PayAllSui }),
+  object({ Genesis: Genesis}),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
