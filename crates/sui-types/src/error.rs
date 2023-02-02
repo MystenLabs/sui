@@ -550,6 +550,18 @@ pub enum SuiError {
     Unknown(String),
 }
 
+#[repr(u64)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Sub-status codes for the `MEMORY_LIMIT_EXCEEDED` VM Status Code which provides more context
+pub enum VMMemoryLimitExceededSubStatusCode {
+    EVENT_COUNT_LIMIT_EXCEEDED = 0,
+    EVENT_SIZE_LIMIT_EXCEEDED = 1,
+    CREATED_OBJECT_COUNT_LIMIT_EXCEEDED = 2,
+    DELETED_OBJECT_COUNT_LIMIT_EXCEEDED = 3,
+    MUTATED_OBJECT_COUNT_LIMIT_EXCEEDED = 4,
+}
+
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered

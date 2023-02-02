@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use sui_protocol_constants::MAX_NUM_EVENT_EMIT;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -162,11 +162,13 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() == (MAX_NUM_EVENT_EMIT as usize) {
-            return Err(
-                PartialVMError::new(StatusCode::EVENT_COUNT_LIMIT_EXCEEDED).with_message(format!(
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
                     "Emitting more than {MAX_NUM_EVENT_EMIT} events is not allowed"
-                )),
-            );
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64,
+                ));
         }
         self.state.events.push((ty, tag, event));
         Ok(())
