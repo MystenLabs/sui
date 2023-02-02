@@ -16,5 +16,7 @@ tokio = { workspace = true }
 tap = "1.0"
 dashmap = "5.4.0"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"]}
+parking_lot = "0.12.1"
+futures = "0.3.23"
 
 prometheus-closure-metric = { path = "../prometheus-closure-metric" }
