@@ -23,7 +23,7 @@ export function useGetValidatorsEvents({
     const eventCursor = cursor || null;
     const eventLimit = limit || null;
 
-    // since we are getting events from base on the number of validators, we need to make sure that the limit is not null and cache by the limit
+    // since we are getting events base on the number of validators, we need to make sure that the limit is not null and cache by the limit
     // number of validators can change from network to network
     const response = useQuery(
         ['validatorEvents', limit],
