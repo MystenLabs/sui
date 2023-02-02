@@ -33,7 +33,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 tempfile = "3.3.0"
 once_cell = "1.13.0"
-proc-macro2 = "1.0.47"
+proc-macro2 = "1.0"
 quote = "1.0.23"
 rstest = "0.16.0"
 rand = "0.8.5"
