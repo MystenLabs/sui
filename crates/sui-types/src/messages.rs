@@ -2034,7 +2034,7 @@ impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest(sha3_hash(self))
+        TransactionEffectsDigest::new(sha3_hash(self))
     }
 
     fn verify(&self) -> SuiResult {
