@@ -15,6 +15,13 @@ module risk_management::policy_config {
     const EAdministratorCannotBeSpender : u64 = 0;
     const ENotOriginalOwnerOfCapability : u64 = 1;
     const EFinalApproverDoesNotExist : u64 = 2;
+    const ENoAdministratorsAssigned : u64 = 3;
+
+    /// SuperAdministrator capability is created in init function and transfered to the publisher.
+    /// It is used to assign the specified Administrators and then deleted forever.
+    struct SuperAdministratorCap has key {
+        id: UID
+    }
 
     /// Administrator capability holder has the right to 
     /// create and assign spender and approver roles.
@@ -71,18 +78,12 @@ module risk_management::policy_config {
     /// A Roles Registry object is shared containing the created administrator.
     /// Assets struct is also shared containing a balance with zero amount. 
     fun init(ctx: &mut TxContext) {
-        transfer::transfer(AdministratorCap{id: object::new(ctx), original_owner: tx_context::sender(ctx)}, 
+        transfer::transfer(SuperAdministratorCap{id: object::new(ctx)}, 
                           tx_context::sender(ctx)
                         );
         transfer::share_object(Assets {
             id: object::new(ctx),
             foundation_balance: balance::zero()
-        });
-        transfer::share_object(RolesRegistry {
-            id: object::new(ctx),
-            administrators: vec::singleton(tx_context::sender(ctx)),
-            spenders: vec::empty(),
-            approvers: vec::empty()
         });
     }
 
@@ -91,15 +92,30 @@ module risk_management::policy_config {
         init(ctx)
     }
 
-    /// Optional
-    // entry fun create_administrator(
-    //     _: &AdministratorCap,
-    //     reg: &mut RolesRegistry,
-    //     recipient: address,
-    //     ctx: &mut TxContext,
-    // ) {
-
-    // }
+    public entry fun create_administrator(
+        super_admin: SuperAdministratorCap,
+        administrators: vector<address>,
+        ctx: &mut TxContext,
+    ) {
+        assert!(vec::is_empty(&administrators) != true, 3);
+        let registry = RolesRegistry {
+            id: object::new(ctx),
+            administrators: vec::empty(),
+            spenders: vec::empty(),
+            approvers: vec::empty()
+            };
+        let admin = @0x0;
+        while (!vec::is_empty(&administrators)) {  
+            admin = vec::pop_back(&mut administrators);  
+            transfer::transfer(AdministratorCap{id: object::new(ctx), original_owner: admin}, 
+                               admin
+                            );
+            vec::push_back(&mut registry.administrators, admin);
+        };
+        transfer::share_object(registry);
+        let SuperAdministratorCap { id } = super_admin;
+        object::delete(id);
+    }
 
     /// Create spender function can only be called by an administrator, specifying the spender's thresholds.
     /// When a spender is created the Roles Registry gets updated.
