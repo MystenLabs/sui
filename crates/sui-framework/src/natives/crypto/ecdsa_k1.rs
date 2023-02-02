@@ -58,7 +58,7 @@ fn recover_pubkey(
     hashed_msg: &[u8],
 ) -> Result<Secp256k1RecoverablePublicKey, SuiError> {
     match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(signature) {
-        Ok(signature) => match signature.recover(hashed_msg) {
+        Ok(signature) => match signature.recover_hashed(hashed_msg) {
             Ok(pubkey) => Ok(pubkey),
             Err(e) => Err(SuiError::KeyConversionError(e.to_string())),
         },

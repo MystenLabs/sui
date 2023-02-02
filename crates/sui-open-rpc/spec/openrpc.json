@@ -317,7 +317,7 @@
                 "txSignature": "AACunVNQ+43nTvpMty4ILN+tTvYAaUsYn3Spu1eZu7SZVTPs5tkYxPF8h1o6iFDgDgq/rrua+hMNxMkGYVhXtw+NZVNaIOpz/rPnTIA7TCFEizybXsMse2pIqWIapAFigQ==",
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": "AaCQESRLSxMntCxHAXuRk66nmlID2DZn3gU64vkZ7iHSjE2Nbhfr21Ovri7AMdAl4Q==",
+                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                   "signers_map": [
                     58,
                     48,
@@ -1611,7 +1611,7 @@
                 "txSignature": "AFZ8tG38gA3u5IuKSokps32CdlDnnpmimXshB3im6qUj+22Ltqqk63mAb3IHgOo1+oNueMdQURjAsGWt5eENpAQDLkEuBAj2KOz9QdstOZDvZkpc3HAEpmjABCW7F+5FSQ==",
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": "AaCQESRLSxMntCxHAXuRk66nmlID2DZn3gU64vkZ7iHSjE2Nbhfr21Ovri7AMdAl4Q==",
+                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                   "signers_map": [
                     58,
                     48,
