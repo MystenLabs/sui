@@ -223,15 +223,18 @@ function ValidatorPageResult() {
     }, [validatorsData]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!validatorEvents) return 0;
+        let totalRewards = 0;
 
-        return validators.reduce(
-            (acc, cur) =>
-                acc + +cur.fields.delegation_staking_pool.fields.rewards_pool,
-            0
-        );
-    }, [validatorsData]);
+        validatorEvents.data.forEach(({ event }) => {
+            if ('moveEvent' in event) {
+                const { moveEvent } = event;
+                totalRewards += +moveEvent.fields.stake_rewards;
+            }
+        });
+
+        return totalRewards;
+    }, [validatorEvents]);
 
     const validatorsTable = useMemo(() => {
         if (!validatorsData || !validatorEvents) return null;
