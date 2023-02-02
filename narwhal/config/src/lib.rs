@@ -110,8 +110,8 @@ pub type WorkerId = u32;
 /// milliseconds or seconds (e.x 5s, 10ms , 2000ms).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// When the primary has at least `header_num_of_batches_threshold` num of batch digests
-    /// available, then it can propose a new header.
+    /// When the primary has `header_num_of_batches_threshold` num of batch digests available,
+    /// then it can propose a new header.
     #[serde(default = "Parameters::default_header_num_of_batches_threshold")]
     pub header_num_of_batches_threshold: usize,
 
@@ -119,10 +119,21 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_header_num_of_batches")]
     pub max_header_num_of_batches: usize,
 
-    /// The maximum delay that the primary waits between generating two headers, even if the header
-    /// did not reach `max_header_num_of_batches`.
-    #[serde(with = "duration_format")]
+    /// The maximum delay that the primary should wait between generating two headers, even if
+    /// other conditions are not satisfied besides having enough parent stakes.
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_max_header_delay"
+    )]
     pub max_header_delay: Duration,
+    /// When the delay from last header reaches `min_header_delay`, a new header can be proposed
+    /// even if batches have not reached `header_num_of_batches_threshold`.
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_min_header_delay"
+    )]
+    pub min_header_delay: Duration,
+
     /// The depth of the garbage collection (Denominated in number of rounds).
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
@@ -160,6 +171,14 @@ impl Parameters {
 
     fn default_max_header_num_of_batches() -> usize {
         1_000
+    }
+
+    fn default_max_header_delay() -> Duration {
+        Duration::from_secs(2)
+    }
+
+    fn default_min_header_delay() -> Duration {
+        Duration::from_secs_f64(1.8)
     }
 }
 
@@ -347,6 +366,7 @@ impl Default for Parameters {
             header_num_of_batches_threshold: 32,
             max_header_num_of_batches: 1000,
             max_header_delay: Duration::from_millis(100),
+            min_header_delay: Duration::from_millis(100),
             gc_depth: 50,
             sync_retry_delay: Duration::from_millis(5_000),
             sync_retry_nodes: 3,
@@ -383,6 +403,10 @@ impl Parameters {
         info!(
             "Max header delay set to {} ms",
             self.max_header_delay.as_millis()
+        );
+        info!(
+            "Min header delay set to {} ms",
+            self.min_header_delay.as_millis()
         );
         info!("Garbage collection depth set to {} rounds", self.gc_depth);
         info!(

@@ -19,7 +19,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
-use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -575,12 +574,6 @@ impl From<VMError> for SuiError {
     }
 }
 
-impl From<SubscriberError> for SuiError {
-    fn from(error: SubscriberError) -> Self {
-        SuiError::HandleConsensusTransactionFailure(error.to_string())
-    }
-}
-
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
         let result = bincode::deserialize::<SuiError>(status.details());
@@ -679,6 +672,10 @@ impl ExecutionError {
 
     pub fn kind(&self) -> &ExecutionErrorKind {
         &self.inner.kind
+    }
+
+    pub fn source(&self) -> &Option<BoxError> {
+        &self.inner.source
     }
 
     pub fn to_execution_status(&self) -> ExecutionFailureStatus {

@@ -9,7 +9,7 @@ Before you install Sui, you need to install some prerequisite tools and configur
 The steps to install Sui include:
 
 1. Install [prerequisites](#prerequisites) for your operating system.
-1. Install the [Sui binaries](#install-sui-binaries).
+1. Install the [Sui binaries](#install-or-update-sui-binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
 1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet.
 1. Optionally, download the [source code](#source-code) to have local
@@ -143,7 +143,7 @@ Use the following command to install `libclang-dev`:
 sudo apt-get install libclang-dev
 ```
 
-Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-or-update-sui-binaries) to continue installing Sui.
 
 
 ## macOS prerequisites
@@ -180,7 +180,7 @@ brew install git
 
 After installing Git, download and install the [Git command line interface](https://git-scm.com/download/).
 
-Proceed to [Install Sui binaries](#install-sui-binaries) to continue installing Sui.
+Proceed to [Install Sui binaries](#install-or-update-sui-binaries) to continue installing Sui.
 
 ## Windows prerequisites
 
@@ -257,7 +257,7 @@ Use the `--help` flag to access helpful information for any of these binaries.
 
 ## Integrated development environment
 
-The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-nalyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), passing `address20` using the `--features` flag:
+The recommended IDE for Move development is [Visual Studio Code](https://code.visualstudio.com/) with the move-analyzer extension. Follow the Visual Studio Marketplace instructions to install the [move-analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer), then install the move-analyzer language server passing `address20` using the `--features` flag:
 
 ```shell
 cargo install --git https://github.com/move-language/move move-analyzer --features "address20"

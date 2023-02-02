@@ -65,16 +65,10 @@ const TX_DIGEST_LENGTH = 32;
 
 /** Returns whether the tx digest is valid based on the serialization format */
 export function isValidTransactionDigest(
-  value: string,
-  serializationFmt: 'base64' | 'base58'
+  value: string
 ): value is TransactionDigest {
-  let buffer;
   try {
-    if (serializationFmt === 'base58') {
-      buffer = new Base58DataBuffer(value);
-    } else {
-      buffer = new Base64DataBuffer(value);
-    }
+    const buffer = new Base58DataBuffer(value);
     return buffer.getLength() === TX_DIGEST_LENGTH;
   } catch (e) {
     return false;
@@ -138,9 +132,7 @@ export function generateTransactionDigest(
   signatureScheme: SignatureScheme,
   signature: string | Base64DataBuffer,
   publicKey: PublicKeyInitData | PublicKey,
-  bcs: BCS,
-  serializationFmt: 'base64' | 'base58',
-  excludeSig: boolean = false
+  bcs: BCS
 ): string {
   const signatureBytes = (
     typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
@@ -172,25 +164,10 @@ export function generateTransactionDigest(
   txSignature.set(signatureBytes, 1);
   txSignature.set(publicKeyBytes, 1 + signatureBytes.length);
 
-  const senderSignedData = {
-    data,
-    txSignature,
-  };
-  const senderSignedDataBytes = bcs
-    .ser('SenderSignedData', senderSignedData)
-    .toBytes();
+  const txBytes = bcs.ser('TransactionData', data).toBytes();
+  const hash = sha256Hash('TransactionData', txBytes);
 
-  let hash;
-  if (excludeSig) {
-    const txBytes = bcs.ser('TransactionData', data).toBytes();
-    hash = sha256Hash('TransactionData', txBytes);
-  } else {
-    hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
-  }
-
-  return serializationFmt === 'base58'
-    ? new Base58DataBuffer(hash).toString()
-    : new Base64DataBuffer(hash).toString();
+  return new Base58DataBuffer(hash).toString()
 }
 
 function isHex(value: string): boolean {
