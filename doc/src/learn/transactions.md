@@ -67,22 +67,43 @@ Inputs: A list of unique object references pointing to mutable objects owned by 
 
 Here's an example showing how objects and transactions are connected to each other in Sui.
 
-In the example below we have two objects:
-- object A with 5 SUI coins that belongs to Tom
-- object B with 2 SUI coins that belongs to John
+In the following example we have two objects:
+- Object A with 5 SUI coins that belongs to Tom
+- Object B with 2 SUI coins that belongs to John
 
-Tom decided to send 1 SUI coin to Alice. In this case the object A will be the input to this transaction and 1 SUI coin will be debited from this object. The output of the transaction will be two objects: 
-- object A with 4 SUI coins which is still assigned to Tom
-- new created object B with 1 SUI coin that belongs now to Alice
+Tom decides to send 1 SUI coin to Alice. In this case, Object A is the input to this transaction and 1 SUI coin is debited from this object. The output of the transaction is two objects: 
+- Object A with 4 SUI coins that still belongs to Tom
+- new created Object C with 1 SUI coin that belongs now to Alice
 
-In the same time John wanted to send 2 SUI coins to Anna. Due to the fact, that [the relationship between objects and transactions is written in a directed acyclic graph (DAG)](objects.md#the-transaction-object-dag-relating-objects-and-transactions) and both transactions interact with different objects, the transaction can be executed in parallel with the above one (Tom -> Alice).
-This transaction will only change the owner of object B from John to Anna.
+At the same time, John decides to send 2 SUI coins to Anna. Because [the relationship between objects and transactions is written in a directed acyclic graph (DAG)](objects.md#the-transaction-object-dag-relating-objects-and-transactions), and both transactions interact with different objects, this transaction executes in parallel with the transaction that sends coins from Tom to Alice.
+This transaction changes only the owner of Object B from John to Anna.
 
-After receiving 2 SUI coins, Anna sent it immediately to Tom. Now Tom has 6 SUI coins (4 from object A and 2 from object B).
+After receiving 2 SUI coins, Anna sent it immediately to Tom. Now Tom has 6 SUI coins (4 from Object A and 2 from Object B).
 
-Lastly, Tom sent all his SUI coins to John. For this transaction the input will be actually two objects (object A and object B). The object B will be destroyed, and it's value will be added to the object A. As a result, the transaction's output will be only object A with a value of 6 SUI coins.
+Finally, Tom sends all of his SUI coins to John. For this transaction, the input is actually two objects (Object A and Object B). Object B is destroyed, and its value is added to Object A. As a result, the transaction's output is only Object A with a value of 6 SUI.
 
-![Sui transactions flow](../../static/sui-transactions-flow.png "See transactions flow in Sui")
+```mermaid
+flowchart LR
+    id1(Object A\nfa:fa-coins 5 SUI\n fa:fa-person Tom):::object-a
+    id2(Object C\nfa:fa-coins 1 SUI\n fa:fa-person Alice)
+    id3(Object A\nfa:fa-coins 4 SUI\n fa:fa-person Tom):::object-a
+    id4(Object B\nfa:fa-coins 2 SUI\n fa:fa-person John):::object-b
+    id5(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Anna):::object-b
+    id6(Object B\nfa:fa-coins 2 SUI\n fa:fa-person Tom):::object-b
+    id7(Object A\nfa:fa-coins 6 SUI\n fa:fa-person John):::object-a
+
+    id1-->|tx-1|id2
+    id1-->|tx-1|id3
+
+    id4-->|tx-2|id5
+    id5-->|tx-3|id6
+
+    id3-->|tx-4|id7
+    id6-->|tx-4|id7
+
+    classDef object-a fill:#f225
+    classDef object-b fill:#ff43
+```
 
 ## Further reading
 
