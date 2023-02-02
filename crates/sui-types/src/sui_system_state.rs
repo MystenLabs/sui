@@ -7,10 +7,13 @@ use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, St
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::dynamic_field::{derive_dynamic_field_id, Field};
 use crate::error::SuiError;
-use crate::id::UID;
 use crate::storage::ObjectStore;
-use crate::{balance::Balance, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
-
+use crate::{
+    balance::{Balance, Supply},
+    id::UID,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+};
+use anemo::PeerId;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::language_storage::TypeTag;
@@ -18,7 +21,7 @@ use move_core_types::value::MoveTypeLayout;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use move_vm_types::values::Value;
 use multiaddr::Multiaddr;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
+use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex, WorkerInfo};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -377,9 +380,38 @@ impl SuiSystemState {
         }
     }
 
-    #[allow(clippy::mutable_key_type)]
-    pub fn get_current_epoch_peer_ids(&self) -> HashMap<anemo::PeerId, String> {
-        todo!();
+    pub fn get_current_epoch_peer_ids(&self) -> HashMap<PeerId, String> {
+        let mut result = HashMap::new();
+        let primary_peer_ids: Vec<PeerId> = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+                PeerId(network_key.0.to_bytes())
+            })
+            .collect();
+
+        for peer_id in primary_peer_ids {
+            result.insert(peer_id, "other_primary".to_string());
+        }
+
+        let worker_peer_ids: Vec<PeerId> = self
+            .get_current_epoch_narwhal_worker_cache(&Multiaddr::empty())
+            .workers
+            .iter()
+            .flat_map(|(_, authority)| authority.0.iter().map(|v| v.1.clone()))
+            .map(|info| PeerId(info.name.0.to_bytes()))
+            .collect();
+
+        for peer_id in worker_peer_ids.iter() {
+            result.insert(*peer_id, "other_worker".to_string());
+        }
+
+        result
     }
 
     #[allow(clippy::mutable_key_type)]
