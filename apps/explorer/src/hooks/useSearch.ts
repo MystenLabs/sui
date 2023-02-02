@@ -89,7 +89,7 @@ export function useSearch(query: string) {
                     }
                 });
             }
-            return Promise.any(promises.map((p) => p()));
+            return Promise.any(promises.map((p) => p())).catch(() => []);
         },
         {
             enabled: !!query,

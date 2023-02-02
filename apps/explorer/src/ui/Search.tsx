@@ -29,7 +29,7 @@ export interface SearchProps {
 
 export interface SearchResultProps {
     key: string;
-    value: any;
+    value: SearchResult;
     children: React.ReactNode;
 }
 
@@ -66,7 +66,7 @@ export function Search({
         >
             <Combobox.Input
                 displayValue={(value: SearchResult) => value.label}
-                className="border-1 w-full rounded-md border-transparent bg-search-fill pl-2 leading-8 text-white/20 placeholder:text-xs placeholder:text-white/20 focus:border-solid focus:border-sui focus:text-white"
+                className="border-1 box-border w-full rounded-md border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 focus:border-solid focus:border-sui focus:text-white focus:placeholder:text-white/60"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"

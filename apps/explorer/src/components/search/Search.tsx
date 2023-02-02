@@ -20,11 +20,10 @@ function Search() {
     const handleSelectResult = useCallback(
         (result: SearchResult) => {
             navigate(`/${result.type}/${encodeURIComponent(result.id)}`, {});
+            setQuery('');
         },
         [navigate]
     );
-
-    console.log(results);
 
     return (
         <div className="flex max-w-lg">
