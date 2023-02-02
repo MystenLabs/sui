@@ -1138,6 +1138,11 @@ impl<S> Envelope<SenderSignedData, S> {
         self.shared_input_objects().next().is_some()
     }
 
+    pub fn touches_system_object(&self) -> bool {
+        self.shared_input_objects()
+            .any(|o| o.id() == SUI_SYSTEM_STATE_OBJECT_ID)
+    }
+
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         self.data().intent_message.value.kind.shared_input_objects()
     }
@@ -2439,6 +2444,26 @@ pub enum ExecuteTransactionRequestType {
 pub struct ExecuteTransactionRequest {
     pub transaction: Transaction,
     pub request_type: ExecuteTransactionRequestType,
+}
+#[derive(Debug)]
+pub enum TransactionType {
+    SingleWriter, // Txes that only use owned objects and/or immutable objects
+    SharedObject, // Txes that use at least one shared object
+    SystemObject, // SystemObject is a subset of SharedObject txes that touch the 0x5 System Object
+}
+
+impl ExecuteTransactionRequest {
+    pub fn transaction_type(&self) -> TransactionType {
+        if self.transaction.contains_shared_object() {
+            if self.transaction.touches_system_object() {
+                TransactionType::SystemObject
+            } else {
+                TransactionType::SharedObject
+            }
+        } else {
+            TransactionType::SingleWriter
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
