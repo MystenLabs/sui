@@ -44,7 +44,6 @@ export const Default: StoryObj<SearchProps> = {
     args: {},
     render: () => {
         const [query, setQuery] = useState('');
-        const [value, setValue] = useState(undefined);
         const filteredOptions = useMemo(() => {
             const filtered = options.reduce((acc, curr) => {
                 const filtered = curr.results.filter((option) =>
@@ -66,10 +65,6 @@ export const Default: StoryObj<SearchProps> = {
                         isLoading={false}
                         onChange={(e) => setQuery(e.currentTarget.value)}
                         placeholder="Search Addresses / Objects / Transactions / Epochs"
-                        onSelectResult={(val) => {
-                            setValue(value);
-                        }}
-                        value={value}
                         options={filteredOptions}
                     />
                 </div>

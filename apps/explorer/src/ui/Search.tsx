@@ -19,11 +19,10 @@ export type SearchResults = {
 
 export interface SearchProps {
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    onSelectResult: (result: SearchResult) => void;
+    onSelectResult?: (result: SearchResult) => void;
     placeholder?: string;
     isLoading: boolean;
     options?: SearchResults[];
-    value?: SearchResult;
     queryValue: string;
 }
 
@@ -54,12 +53,10 @@ export function Search({
     options = [],
     isLoading = false,
     queryValue,
-    value,
 }: SearchProps) {
-    const hasOptions = options.some((group) => group.results.length > 0);
+    const hasOptions = options.some((group) => group.results?.length > 0);
     return (
         <Combobox
-            value={value}
             onChange={onSelectResult}
             as="div"
             className="relative flex h-fit w-full flex-col"
@@ -78,14 +75,13 @@ export function Search({
             </div>
 
             {queryValue && (
-                <Combobox.Options className="absolute right-0 left-0 top-6 list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                <Combobox.Options className="absolute right-0 left-0 top-6 flex list-none flex-col gap-y-2 overflow-auto rounded-md bg-white p-3.5 shadow-md">
                     {isLoading ? (
                         <div className="flex items-center justify-center">
                             <LoadingSpinner />
                         </div>
                     ) : hasOptions ? (
                         options.map(({ label, results }) => {
-                            if (!results.length) return null;
                             return (
                                 <div key={label}>
                                     {!!results?.length && (
