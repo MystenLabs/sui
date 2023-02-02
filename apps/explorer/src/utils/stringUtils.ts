@@ -51,12 +51,10 @@ export function truncate(fullStr: string, strLen: number, separator?: string) {
 const ELLIPSIS = '\u{2026}';
 export function formatAddress(address: string) {
     const offset = address.startsWith('0x') ? 2 : 0;
-    const addressPrefix = offset ? '0x' : '';
 
-    return `${addressPrefix}${address.slice(
-        offset,
-        offset + 4
-    )}${ELLIPSIS}${address.slice(-4)}`;
+    return `0x${address.slice(offset, offset + 4)}${ELLIPSIS}${address.slice(
+        -4
+    )}`;
 }
 
 export async function extractFileType(
