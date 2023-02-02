@@ -32,7 +32,7 @@ impl CheckpointExecutorMetrics {
             )
             .unwrap(),
             checkpoint_exec_epoch: register_int_gauge_with_registry!(
-                "current_local_epoch",
+                "checkpoint_exec_epoch",
                 "Current epoch number in the checkpoint executor",
                 registry
             )
