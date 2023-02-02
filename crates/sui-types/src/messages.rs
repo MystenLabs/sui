@@ -18,7 +18,7 @@ use crate::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::Base64;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -465,7 +465,7 @@ impl Display for SingleTransactionKind {
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                writeln!(writer, "Object Digest : {}", digest)?;
             }
             Self::TransferSui(t) => {
                 writeln!(writer, "Transaction Kind : Transfer SUI")?;
@@ -482,7 +482,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -499,7 +499,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -516,7 +516,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipient:")?;
                 writeln!(writer, "{}", &p.recipient)?;
