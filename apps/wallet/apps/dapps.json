@@ -14,6 +14,13 @@
         "tags": ["NFT"]
     },
     {
+        "name": "Sui Name Service"
+        "description": "Your .sui domain & profile!",
+        "link": "https://sns.domains",
+        "icon": "https://sns.domains/logo/logo.png",
+        "tags": ["Infra"],
+    },
+    {
         "name": "Sui Name Service (SuiNS)",
         "description": "Find your .sui name!",
         "link": "https://suins.io/",
