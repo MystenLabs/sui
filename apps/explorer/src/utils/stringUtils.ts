@@ -57,6 +57,10 @@ export function formatAddress(address: string) {
     )}`;
 }
 
+export function formatTransaction(digest: string) {
+    return `${digest.slice(0, 6)}${ELLIPSIS}${digest.slice(-4)}`;
+}
+
 export async function extractFileType(
     displayString: string,
     signal: AbortSignal

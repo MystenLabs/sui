@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, truncate } from '../utils/stringUtils';
+import { formatAddress, formatTransaction } from '../utils/stringUtils';
 
 import { Link, type LinkProps } from '~/ui/Link';
 
@@ -9,9 +9,11 @@ interface BaseInternalLinkProps extends LinkProps {
     noTruncate?: boolean;
 }
 
-const TRUNCATE_LENGTH = 10;
-
-function createInternalLink<T extends string>(base: string, propName: T) {
+function createInternalLink<T extends string>(
+    base: string,
+    propName: T,
+    formatter?: boolean
+) {
     return ({
         [propName]: id,
         noTruncate,
@@ -19,8 +21,8 @@ function createInternalLink<T extends string>(base: string, propName: T) {
     }: BaseInternalLinkProps & Record<T, string>) => {
         const truncatedAddress = noTruncate
             ? id
-            : base === 'transaction'
-            ? truncate(id, TRUNCATE_LENGTH)
+            : formatter
+            ? formatTransaction(id)
             : formatAddress(id);
         return (
             <Link
@@ -36,5 +38,9 @@ function createInternalLink<T extends string>(base: string, propName: T) {
 
 export const AddressLink = createInternalLink('address', 'address');
 export const ObjectLink = createInternalLink('object', 'objectId');
-export const TransactionLink = createInternalLink('transaction', 'digest');
+export const TransactionLink = createInternalLink(
+    'transaction',
+    'digest',
+    true
+);
 export const ValidatorLink = createInternalLink('validator', 'address');
