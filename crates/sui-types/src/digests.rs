@@ -25,6 +25,16 @@ impl Sha3Digest {
         Self(digest)
     }
 
+    pub fn generate<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> Self {
+        let mut bytes = [0; 32];
+        rng.fill_bytes(&mut bytes);
+        Self(bytes)
+    }
+
+    pub fn random() -> Self {
+        Self::generate(rand::thread_rng())
+    }
+
     pub fn inner(&self) -> &[u8; 32] {
         &self.0
     }
@@ -82,6 +92,14 @@ impl CheckpointDigest {
         Self(Sha3Digest::new(digest))
     }
 
+    pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
+        Self(Sha3Digest::generate(rng))
+    }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
+    }
+
     pub fn inner(&self) -> &[u8; 32] {
         self.0.inner()
     }
@@ -137,6 +155,14 @@ pub struct CheckpointContentsDigest(Sha3Digest);
 impl CheckpointContentsDigest {
     pub fn new(digest: [u8; 32]) -> Self {
         Self(Sha3Digest::new(digest))
+    }
+
+    pub fn generate<R: rand::RngCore + rand::CryptoRng>(rng: R) -> Self {
+        Self(Sha3Digest::generate(rng))
+    }
+
+    pub fn random() -> Self {
+        Self(Sha3Digest::random())
     }
 
     pub fn inner(&self) -> &[u8; 32] {
