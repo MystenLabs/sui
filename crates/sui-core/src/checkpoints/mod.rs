@@ -31,7 +31,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{EpochId, TransactionDigest};
-use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
@@ -397,7 +397,7 @@ pub struct CheckpointSignatureAggregator {
     next_index: u64,
     summary: CheckpointSummary,
     digest: CheckpointDigest,
-    signatures: StakeAggregator<AuthoritySignInfo, false>,
+    signatures: StakeAggregator<AuthoritySignInfo, true>,
 }
 
 impl CheckpointBuilder {
@@ -937,7 +937,7 @@ impl CheckpointSignatureAggregator {
     pub fn try_aggregate(
         &mut self,
         data: CheckpointSignatureMessage,
-    ) -> Result<AuthorityWeakQuorumSignInfo, ()> {
+    ) -> Result<AuthorityStrongQuorumSignInfo, ()> {
         let their_digest = data.summary.summary.digest();
         let author = data.summary.auth_signature.authority;
         let signature = data.summary.auth_signature;
