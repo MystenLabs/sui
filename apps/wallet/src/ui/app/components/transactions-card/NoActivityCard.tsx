@@ -10,8 +10,7 @@ export function NoActivityCard() {
         <div className="flex flex-col gap-4 justify-center items-center text-center  h-full">
             <TransferObject16 className="text-gray-45 text-3xl" />
             <Text variant="p1" weight="medium" color="steel">
-                When available, your Sui blockchain transactions will show up
-                here.
+                When available, your Sui network transactions will show up here.
             </Text>
         </div>
     );
