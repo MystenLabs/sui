@@ -2,52 +2,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { ErrorMessage, Form, useFormikContext } from 'formik';
-import { useEffect, useRef } from 'react';
+import { Form, useFormikContext } from 'formik';
+import { useEffect } from 'react';
 
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
 import { useGasBudgetInMist } from '../../hooks/useGasBudgetInMist';
 import { Card } from '_app/shared/card';
 import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
 import { useFormatCoin } from '_hooks';
 import { DEFAULT_GAS_BUDGET_FOR_STAKE } from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from './StakingCard';
 
 export type StakeFromProps = {
-    submitError: string | null;
     coinBalance: bigint;
     coinType: string;
     stakingReward?: number;
-    onClearSubmitError: () => void;
 };
 
 export function UnStakeForm({
-    submitError,
     coinBalance,
     coinType,
-    onClearSubmitError,
     stakingReward,
 }: StakeFromProps) {
-    const { setFieldValue, setTouched } = useFormikContext<FormValues>();
-
-    const onClearRef = useRef(onClearSubmitError);
-    onClearRef.current = onClearSubmitError;
-
+    const { setFieldValue } = useFormikContext<FormValues>();
     const { gasBudget, isLoading } = useGasBudgetInMist(
         DEFAULT_GAS_BUDGET_FOR_STAKE
     );
     const [gasBudgetFormatted, symbol] = useFormatCoin(gasBudget, SUI_TYPE_ARG);
-
     const [rewards, rewardSymbol] = useFormatCoin(stakingReward, SUI_TYPE_ARG);
-
     const [tokenBalance] = useFormatCoin(coinBalance, coinType);
-
     useEffect(() => {
-        onClearRef.current();
-        setFieldValue('amount', tokenBalance);
-    }, [setFieldValue, setTouched, tokenBalance]);
+        setFieldValue(
+            'gasBudget',
+            isLoading ? '' : (gasBudget || 0).toString(),
+            true
+        );
+    }, [setFieldValue, gasBudget, isLoading]);
 
     return (
         <Form
@@ -132,27 +123,6 @@ export function UnStakeForm({
                     </div>
                 </div>
             </Card>
-            <ErrorMessage name="amount" component="div">
-                {(msg) => (
-                    <div className="mt-2 flex flex-col flex-nowrap">
-                        <Alert mode="warning" className="text-body">
-                            {msg}
-                        </Alert>
-                    </div>
-                )}
-            </ErrorMessage>
-
-            {submitError ? (
-                <div className="mt-2 flex flex-col flex-nowrap">
-                    <Alert mode="warning">
-                        <strong>Unstake failed</strong>
-
-                        <div>
-                            <small>{submitError}</small>
-                        </div>
-                    </Alert>
-                </div>
-            ) : null}
         </Form>
     );
 }
