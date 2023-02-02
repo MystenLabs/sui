@@ -7,8 +7,8 @@ use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::messages::{
-    CertifiedTransactionEffects, ExecuteTransactionRequest, ExecuteTransactionRequestType,
-    ExecuteTransactionResponse, TransactionData, VerifiedTransaction,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    FinalizedEffects, TransactionData, VerifiedTransaction,
 };
 use sui_types::object::generate_test_gas_objects_with_owner;
 use sui_types::quorum_driver_types::QuorumDriverError;
@@ -205,8 +205,7 @@ async fn test_tx_across_epoch_boundaries() {
     let total_tx_cnt = 1;
     let (sender, keypair) = get_key_pair::<AccountKeyPair>();
     let gas_objects = generate_test_gas_objects_with_owner(1, sender);
-    let (result_tx, mut result_rx) =
-        tokio::sync::mpsc::channel::<CertifiedTransactionEffects>(total_tx_cnt);
+    let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<FinalizedEffects>(total_tx_cnt);
 
     let (config, mut gas_objects) = test_authority_configs_with_objects(gas_objects);
     let authorities = spawn_test_authorities([], &config).await;

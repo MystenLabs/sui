@@ -228,6 +228,19 @@ export const SuiCertifiedTransactionEffects = object({
   effects: TransactionEffects,
 });
 
+export const SuiEffectsFinalityInfo = union([
+  object({ certified: AuthorityQuorumSignInfo }),
+  object({ checkpointed: tuple([number(), number()]) }),
+]);
+export type SuiEffectsFinalityInfo = Infer<typeof SuiEffectsFinalityInfo>;
+
+export const SuiFinalizedEffects = object({
+  transactionEffectsDigest: string(),
+  effects: TransactionEffects,
+  finalityInfo: SuiEffectsFinalityInfo,
+});
+export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
+
 export const SuiExecuteTransactionResponse = union([
   // TODO: remove after devnet 0.25.0(or 0.24.0) is released
   object({
@@ -239,7 +252,7 @@ export const SuiExecuteTransactionResponse = union([
   }),
   object({
     certificate: optional(CertifiedTransaction),
-    effects: SuiCertifiedTransactionEffects,
+    effects: SuiFinalizedEffects,
     confirmed_local_execution: boolean(),
   }),
 ]);
@@ -516,11 +529,9 @@ export function getTotalGasUsedUpperBound(
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost +
-        gasSummary.storageCost
+    ? gasSummary.computationCost + gasSummary.storageCost
     : undefined;
 }
-
 
 export function getTransactionEffects(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse
@@ -618,7 +629,8 @@ export function getNewlyCreatedCoinRefsAfterSplit(
     return effects.created?.map((c) => c.reference);
   }
   if ('effects' in data) {
-    const effects = ('effects' in data.effects ? data.effects.effects : data.effects);
+    const effects =
+      'effects' in data.effects ? data.effects.effects : data.effects;
     return effects.created?.map((c) => c.reference);
   }
   return undefined;

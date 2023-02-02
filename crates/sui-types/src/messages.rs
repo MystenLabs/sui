@@ -2417,6 +2417,35 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EffectsFinalityInfo {
+    Certified(AuthorityStrongQuorumSignInfo),
+    Checkpointed(EpochId, CheckpointSequenceNumber),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FinalizedEffects {
+    pub effects: TransactionEffects,
+    pub finality_info: EffectsFinalityInfo,
+}
+
+impl FinalizedEffects {
+    pub fn new_from_effects_cert(effects_cert: CertifiedTransactionEffects) -> Self {
+        let (data, sig) = effects_cert.into_data_and_sig();
+        Self {
+            effects: data,
+            finality_info: EffectsFinalityInfo::Certified(sig),
+        }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        match &self.finality_info {
+            EffectsFinalityInfo::Certified(cert) => cert.epoch,
+            EffectsFinalityInfo::Checkpointed(epoch, _) => *epoch,
+        }
+    }
+}
+
 /// When requested to execute a transaction with WaitForLocalExecution,
 /// TransactionOrchestrator attempts to execute this transaction locally
 /// after it is finalized. This value represents whether the transaction
@@ -2428,7 +2457,7 @@ pub enum ExecuteTransactionResponse {
     EffectsCert(
         Box<(
             Option<CertifiedTransaction>,
-            CertifiedTransactionEffects,
+            FinalizedEffects,
             IsTransactionExecutedLocally,
         )>,
     ),

@@ -25,6 +25,7 @@ use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse,
@@ -957,7 +958,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.unwrap().digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
-    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
     node.state().get_transaction(digest).await
@@ -982,7 +983,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.unwrap().digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
-    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
     node.state().get_transaction(digest).await
