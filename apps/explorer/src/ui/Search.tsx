@@ -57,13 +57,14 @@ export function Search({
     const hasOptions = options.length;
     return (
         <Combobox
+            nullable
             onChange={onSelectResult}
             as="div"
             className="relative flex h-fit w-full flex-col"
         >
             <Combobox.Input
-                displayValue={(value: SearchResult) => value.label}
-                className="border-1 box-border w-full rounded-md border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-solid focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+                displayValue={(value: SearchResult) => value?.label}
+                className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-solid focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
