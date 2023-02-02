@@ -25,6 +25,7 @@ futures = "0.3.23"
 tokio = { workspace = true, features = ["full"] }
 signature = "1.6.0"
 thiserror = "1.0.37"
+scopeguard = "1.1"
 bcs = "0.1.4"
 
 tap = "1.0"

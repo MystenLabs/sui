@@ -8965,6 +8965,7 @@ dependencies = [
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",
+ "scopeguard",
  "serde 1.0.152",
  "signature",
  "sui-adapter",
