@@ -36,7 +36,7 @@ export interface SearchResultProps {
 function SearchItem({ value, children }: SearchResultProps) {
     return (
         <Combobox.Option
-            className="cursor-pointer rounded-md bg-opacity-10 py-1.5 pl-2 ui-active:bg-sui/10 ui-active:shadow-sm"
+            className="cursor-pointer rounded-md py-1.5 pl-2 ui-active:bg-sui/10 ui-active:shadow-sm"
             value={value}
             key={value.id}
         >
@@ -66,17 +66,19 @@ export function Search({
         >
             <Combobox.Input
                 displayValue={(value: SearchResult) => value.label}
-                className="border-1 box-border w-full rounded-md border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 focus:border-solid focus:border-sui focus:text-white focus:placeholder:text-white/60"
+                className="border-1 box-border w-full rounded-md border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 focus:border-solid focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
                 value={queryValue}
             />
 
-            <Search16 className="absolute right-0 top-0 bg-search-fill text-white opacity-0" />
+            <div className="absolute right-0 mr-2 hidden h-full items-center text-2xl text-white/20 sm:flex">
+                <Search16 />
+            </div>
 
             {queryValue && (
-                <Combobox.Options className="absolute top-9 mt-1 max-h-[500px] w-[500px] list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
+                <Combobox.Options className="absolute right-0 left-0 top-6 list-none overflow-auto rounded-md bg-white p-3.5 shadow-md">
                     {isLoading ? (
                         <div className="flex items-center justify-center">
                             <LoadingSpinner />

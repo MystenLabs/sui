@@ -73,7 +73,6 @@ export function useSearch(query: string) {
                     const { details, status } = await rpc.getObject(normalized);
 
                     if (is(details, SuiObject) && status === 'Exists') {
-                        console.log('object exists');
                         return [
                             {
                                 label: 'object',
