@@ -15,11 +15,10 @@ import { Link } from 'react-router-dom';
 import { TxnTypeLabel } from './TxnActionLabel';
 import { TxnIcon } from './TxnIcon';
 import { TxnImage } from './TxnImage';
-import { useCallTxnLabel } from './useCallTxnLabel';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { getEventsSummary, notEmpty } from '_helpers';
+import { getEventsSummary, notEmpty, checkStakingTxn } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';
 
 import type {
@@ -29,7 +28,7 @@ import type {
     SuiEvent,
 } from '@mysten/sui.js';
 
-const getTxnEffectsEventID = (
+export const getTxnEffectsEventID = (
     txEffects: TransactionEffects,
     address: string
 ): string[] => {
@@ -116,7 +115,10 @@ export function Transaction({
     const isTransfer =
         isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
 
-    const moveCallLabel = useCallTxnLabel(certificate);
+    const moveCallLabel = useMemo(() => {
+        if (txnKind !== 'Call') return null;
+        return checkStakingTxn(txn) || txnKind;
+    }, [txn, txnKind]);
 
     const txnIcon = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Rewards';
@@ -126,10 +128,14 @@ export function Transaction({
 
     // Transition label
     const txnLabel = useMemo(() => {
-        if (txnKind === 'ChangeEpoch') return 'Received Staking Rewards';
+        // Epoch change with amount is staking rewards and without amount is delegation object
+        if (txnKind === 'ChangeEpoch')
+            return transferAmount.amount
+                ? 'Received Staking Rewards'
+                : 'Received Delegation Object';
         if (moveCallLabel) return moveCallLabel;
         return isSender ? 'Sent' : 'Received';
-    }, [txnKind, moveCallLabel, isSender]);
+    }, [txnKind, transferAmount.amount, moveCallLabel, isSender]);
 
     // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
     const showSuiSymbol =
