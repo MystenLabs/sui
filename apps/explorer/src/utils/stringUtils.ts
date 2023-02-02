@@ -57,7 +57,8 @@ export function formatAddress(address: string) {
     )}`;
 }
 
-export function formatTransaction(digest: string) {
+export function formatDigest(digest: string) {
+    // Use 6 characters prefix to match the address format
     return `${digest.slice(0, 6)}${ELLIPSIS}${digest.slice(-4)}`;
 }
 

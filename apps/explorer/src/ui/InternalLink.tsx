@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, formatTransaction } from '../utils/stringUtils';
+import { formatAddress, formatDigest } from '../utils/stringUtils';
 
 import { Link, type LinkProps } from '~/ui/Link';
 
@@ -12,18 +12,14 @@ interface BaseInternalLinkProps extends LinkProps {
 function createInternalLink<T extends string>(
     base: string,
     propName: T,
-    formatter?: boolean
+    formatter = formatAddress
 ) {
     return ({
         [propName]: id,
         noTruncate,
         ...props
     }: BaseInternalLinkProps & Record<T, string>) => {
-        const truncatedAddress = noTruncate
-            ? id
-            : formatter
-            ? formatTransaction(id)
-            : formatAddress(id);
+        const truncatedAddress = noTruncate ? id : formatter(id);
         return (
             <Link
                 variant="mono"
@@ -41,6 +37,6 @@ export const ObjectLink = createInternalLink('object', 'objectId');
 export const TransactionLink = createInternalLink(
     'transaction',
     'digest',
-    true
+    formatDigest
 );
 export const ValidatorLink = createInternalLink('validator', 'address');
