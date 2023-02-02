@@ -28,13 +28,10 @@ config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 network = { path = "../network", package = "narwhal-network" }
-primary = { path = "../primary", package = "narwhal-primary" }
 types = { path = "../types", package = "narwhal-types" }
-storage = { path = "../storage", package = "narwhal-storage" }
 prometheus = "0.13.3"
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
@@ -53,6 +50,8 @@ reqwest = { version = "0.11.13", features = ["json"] }
 node = { path = "../node", package = "narwhal-node" }
 consensus = { path = "../consensus", package = "narwhal-consensus" }
 primary = { path = "../primary", package = "narwhal-primary" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
+storage = { path = "../storage", package = "narwhal-storage" }
 
 [features]
 benchmark = []

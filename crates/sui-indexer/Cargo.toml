@@ -26,7 +26,6 @@ tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }
 
 narwhal-network = { path = "../../narwhal/network" }
-sui = { path = "../sui" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
