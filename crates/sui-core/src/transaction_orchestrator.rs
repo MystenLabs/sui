@@ -30,7 +30,6 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverResponse, VerifiedCertificate,
-    VerifiedCertifiedTransactionEffects,
 };
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
@@ -189,31 +188,31 @@ where
                 good_response_metrics.inc();
                 let QuorumDriverResponse {
                     tx_cert,
-                    effects_cert,
+                    finalized_effects,
                 } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         Some(tx_cert.into()),
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        finalized_effects,
                         false,
                     ))));
                 }
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
                     &tx_cert,
-                    &effects_cert,
+                    &finalized_effects,
                     &self.metrics,
                 )
                 .await
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         Some(tx_cert.into()),
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        finalized_effects,
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         Some(tx_cert.into()),
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        finalized_effects,
                         false,
                     )))),
                 }
@@ -241,7 +240,7 @@ where
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
         tx_cert: &VerifiedCertificate,
-        effects_cert: &VerifiedCertifiedTransactionEffects,
+        finalized_effects: &FinalizedEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
         // TODO: attempt a finalized tx at most once per request.
@@ -266,7 +265,7 @@ where
             LOCAL_EXECUTION_TIMEOUT,
             validator_state.fullnode_execute_certificate_with_effects(
                 tx_cert,
-                effects_cert,
+                finalized_effects,
                 // TODO: Check whether it's safe to call epoch_store here.
                 &validator_state.epoch_store(),
             ),
@@ -310,7 +309,7 @@ where
             match effects_receiver.recv().await {
                 Ok(Ok(QuorumDriverResponse {
                     tx_cert,
-                    effects_cert,
+                    finalized_effects,
                 })) => {
                     let tx_digest = tx_cert.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
@@ -322,7 +321,7 @@ where
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
                         &tx_cert,
-                        &effects_cert,
+                        &finalized_effects,
                         &metrics,
                     )
                     .await;

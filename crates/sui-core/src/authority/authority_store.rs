@@ -143,11 +143,12 @@ impl AuthorityStore {
     pub(crate) fn get_signed_effects(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TrustedSignedTransactionEffects>> {
+    ) -> SuiResult<Option<VerifiedSignedTransactionEffects>> {
         Ok(self
             .perpetual_tables
             .executed_effects
-            .get(transaction_digest)?)
+            .get(transaction_digest)?
+            .map(|e| e.into()))
     }
 
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
@@ -218,6 +219,16 @@ impl AuthorityStore {
             .executed_transactions_to_checkpoint
             .get(digest)?
             .map(|(epoch, _)| epoch))
+    }
+
+    pub fn get_transaction_checkpoint_info(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
+        Ok(self
+            .perpetual_tables
+            .executed_transactions_to_checkpoint
+            .get(digest)?)
     }
 
     /// Returns true if there are no objects in the database

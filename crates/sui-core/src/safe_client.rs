@@ -412,9 +412,16 @@ where
         digest: &TransactionDigest,
         response: HandleCertificateResponse,
     ) -> SuiResult<VerifiedHandleCertificateResponse> {
-        Ok(VerifiedHandleCertificateResponse {
-            signed_effects: self.check_signed_effects(digest, response.signed_effects, None)?,
-        })
+        match response {
+            HandleCertificateResponse::Executed(signed_effects) => {
+                Ok(VerifiedHandleCertificateResponse::Executed(
+                    self.check_signed_effects(digest, signed_effects, None)?,
+                ))
+            }
+            HandleCertificateResponse::Finalized(epoch, checkpoint, effects) => Ok(
+                VerifiedHandleCertificateResponse::Finalized(epoch, checkpoint, effects),
+            ),
+        }
     }
 
     /// Execute a certificate.

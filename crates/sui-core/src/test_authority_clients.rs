@@ -11,6 +11,7 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
+use sui_types::messages::VerifiedHandleCertificateResponse;
 use sui_types::{
     committee::Committee,
     crypto::AuthorityKeyPair,
@@ -146,23 +147,22 @@ impl LocalAuthorityClient {
         // from previous epochs.
         let tx_digest = *certificate.digest();
         let epoch_store = state.epoch_store();
-        let signed_effects =
-            match state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest) {
-                Ok(Some(effects)) => effects,
-                _ => {
-                    let certificate = { certificate.verify(epoch_store.committee())? };
-                    state
-                        .try_execute_immediately(&certificate, &epoch_store)
-                        .await?
-                }
+        let response = match state.get_already_executed_transaction_info(&epoch_store, &tx_digest) {
+            Ok(Some(response)) => response,
+            _ => {
+                let certificate = { certificate.verify(epoch_store.committee())? };
+                let effects = state
+                    .try_execute_immediately(&certificate, &epoch_store)
+                    .await?;
+                VerifiedHandleCertificateResponse::Executed(effects)
             }
-            .into_inner();
+        };
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        Ok(HandleCertificateResponse { signed_effects })
+        Ok(response.into())
     }
 }
 

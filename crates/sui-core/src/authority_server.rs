@@ -290,14 +290,12 @@ impl ValidatorService {
 
         let epoch_store = state.epoch_store();
 
-        // 1) Check if cert already executed
+        // 1) Check if the cert was already executed previously.
         let tx_digest = *certificate.digest();
-        if let Some(signed_effects) =
-            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+        if let Some(response) =
+            state.get_already_executed_transaction_info(&epoch_store, &tx_digest)?
         {
-            return Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: signed_effects.into_inner(),
-            }));
+            return Ok(tonic::Response::new(response.into()));
         }
 
         // 2) Validate if cert can be executed, and verify the cert.
@@ -376,7 +374,7 @@ impl ValidatorService {
             certificate
         };
 
-        // 4) Execute the certificate if it contains only owned object transactions, or wait for
+        // ４) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
         let res = if certificate.contains_shared_object() {
             // The transaction needs sequencing by Narwhal before it can be sent for execution.
@@ -386,9 +384,9 @@ impl ValidatorService {
             state.execute_certificate(&certificate, &epoch_store).await
         };
         match res {
-            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: signed_effects.into_inner(),
-            })),
+            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse::Executed(
+                signed_effects.into_inner(),
+            ))),
             Err(e) => Err(tonic::Status::from(e)),
         }
     }

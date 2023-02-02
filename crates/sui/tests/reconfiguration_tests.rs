@@ -20,7 +20,7 @@ use sui_node::SuiNodeHandle;
 use sui_types::crypto::get_account_key_pair;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{EffectsFinalityInfo, VerifiedTransaction};
 use sui_types::object::Object;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
@@ -345,9 +345,13 @@ async fn test_validator_resign_effects() {
     // Manually reconfigure the aggregator.
     net.committee.epoch = 1;
     let effects1 = net.process_certificate(cert.into_inner()).await.unwrap();
-    // Ensure that we are able to form a new effects cert in the new epoch.
-    assert_eq!(effects1.epoch(), 1);
-    assert_eq!(effects0.into_message(), effects1.into_message());
+    // The effects were finalized at epoch 0, with finality information.
+    assert_eq!(effects1.epoch(), 0);
+    assert!(matches!(
+        effects1.finality_info,
+        EffectsFinalityInfo::Checkpointed(..)
+    ));
+    assert_eq!(effects0.effects, effects1.effects);
 }
 
 async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {

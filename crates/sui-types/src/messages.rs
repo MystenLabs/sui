@@ -1390,14 +1390,35 @@ impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleCertificateResponse {
-    pub signed_effects: SignedTransactionEffects,
-    // TODO: Add a case for finalized transaction.
+pub enum HandleCertificateResponse<EfxT = SignedTransactionEffects> {
+    Executed(EfxT),
+    Finalized(EpochId, CheckpointSequenceNumber, TransactionEffects),
 }
 
-#[derive(Clone, Debug)]
-pub struct VerifiedHandleCertificateResponse {
-    pub signed_effects: VerifiedSignedTransactionEffects,
+pub type VerifiedHandleCertificateResponse =
+    HandleCertificateResponse<VerifiedSignedTransactionEffects>;
+
+impl From<VerifiedHandleCertificateResponse> for HandleCertificateResponse {
+    fn from(response: VerifiedHandleCertificateResponse) -> Self {
+        match response {
+            VerifiedHandleCertificateResponse::Executed(e) => Self::Executed(e.into()),
+            VerifiedHandleCertificateResponse::Finalized(epoch, ckpt, effects) => {
+                Self::Finalized(epoch, ckpt, effects)
+            }
+        }
+    }
+}
+
+impl<T> HandleCertificateResponse<T>
+where
+    T: Into<SignedTransactionEffects>,
+{
+    pub fn into_effects(self) -> TransactionEffects {
+        match self {
+            Self::Executed(effects) => effects.into().into_data(),
+            Self::Finalized(_, _, effects) => effects,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -2446,6 +2467,16 @@ impl FinalizedEffects {
     }
 }
 
+impl From<CertifiedTransactionEffects> for FinalizedEffects {
+    fn from(cert: CertifiedTransactionEffects) -> Self {
+        let (effects, sigs) = cert.into_data_and_sig();
+        Self {
+            effects,
+            finality_info: EffectsFinalityInfo::Certified(sigs),
+        }
+    }
+}
+
 /// When requested to execute a transaction with WaitForLocalExecution,
 /// TransactionOrchestrator attempts to execute this transaction locally
 /// after it is finalized. This value represents whether the transaction
@@ -2471,7 +2502,7 @@ pub struct QuorumDriverRequest {
 #[derive(Debug, Clone)]
 pub struct QuorumDriverResponse {
     pub tx_cert: VerifiedCertificate,
-    pub effects_cert: VerifiedCertifiedTransactionEffects,
+    pub finalized_effects: FinalizedEffects,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

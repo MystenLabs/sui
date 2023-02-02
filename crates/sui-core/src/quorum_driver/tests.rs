@@ -67,7 +67,7 @@ async fn test_quorum_driver_submit_transaction() {
     let handle = tokio::task::spawn(async move {
         let QuorumDriverResponse {
             tx_cert,
-            effects_cert,
+            finalized_effects,
         } = qd_clone
             .subscribe_to_effects()
             .recv()
@@ -75,7 +75,7 @@ async fn test_quorum_driver_submit_transaction() {
             .unwrap()
             .unwrap();
         assert_eq!(*tx_cert.digest(), digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
+        assert_eq!(finalized_effects.effects.transaction_digest, digest);
     });
     let ticket = quorum_driver_handler.submit_transaction(tx).await.unwrap();
     verify_ticket_response(ticket, &digest).await;
@@ -100,7 +100,7 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
     let handle = tokio::task::spawn(async move {
         let QuorumDriverResponse {
             tx_cert,
-            effects_cert,
+            finalized_effects,
         } = qd_clone
             .subscribe_to_effects()
             .recv()
@@ -108,7 +108,7 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
             .unwrap()
             .unwrap();
         assert_eq!(*tx_cert.digest(), digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
+        assert_eq!(finalized_effects.effects.transaction_digest, digest);
     });
     quorum_driver_handler
         .submit_transaction_no_ticket(tx)
@@ -123,10 +123,10 @@ async fn verify_ticket_response<'a>(
 ) {
     let QuorumDriverResponse {
         tx_cert,
-        effects_cert,
+        finalized_effects,
     } = ticket.await.unwrap();
     assert_eq!(tx_cert.digest(), tx_digest);
-    assert_eq!(&effects_cert.data().transaction_digest, tx_digest);
+    assert_eq!(&finalized_effects.effects.transaction_digest, tx_digest);
 }
 
 #[tokio::test]
@@ -149,7 +149,7 @@ async fn test_quorum_driver_with_given_notify_read() {
     let handle = tokio::task::spawn(async move {
         let QuorumDriverResponse {
             tx_cert,
-            effects_cert,
+            finalized_effects,
         } = qd_clone
             .subscribe_to_effects()
             .recv()
@@ -157,7 +157,7 @@ async fn test_quorum_driver_with_given_notify_read() {
             .unwrap()
             .unwrap();
         assert_eq!(*tx_cert.digest(), digest);
-        assert_eq!(effects_cert.data().transaction_digest, digest);
+        assert_eq!(finalized_effects.effects.transaction_digest, digest);
     });
     let ticket1 = notifier.register_one(&digest);
     let ticket2 = quorum_driver_handler.submit_transaction(tx).await.unwrap();
@@ -324,7 +324,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
     // Aggregator gets three good responses and execution succeeds.
     let QuorumDriverResponse {
         tx_cert,
-        effects_cert: _,
+        finalized_effects: _,
     } = res;
     assert_eq!(tx_cert.digest(), &tx2_digest);
 
@@ -388,7 +388,7 @@ async fn test_quorum_driver_retry_on_object_locked() -> Result<(), anyhow::Error
 
     let QuorumDriverResponse {
         tx_cert,
-        effects_cert: _,
+        finalized_effects: _,
     } = res;
     assert_eq!(*tx_cert.digest(), tx_digest);
 

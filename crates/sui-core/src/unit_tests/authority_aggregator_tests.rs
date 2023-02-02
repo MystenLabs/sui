@@ -232,8 +232,7 @@ where
         .handle_certificate(cert.clone())
         .await
         .unwrap()
-        .signed_effects
-        .into_message()
+        .into_effects()
 }
 
 pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)

@@ -487,7 +487,7 @@ pub async fn submit_shared_object_transaction_with_committee(
 pub fn get_unique_effects(replies: Vec<HandleCertificateResponse>) -> TransactionEffects {
     let mut all_effects = HashMap::new();
     for reply in replies {
-        let effects = reply.signed_effects.into_data();
+        let effects = reply.into_effects();
         all_effects.insert(effects.digest(), effects);
     }
     assert_eq!(all_effects.len(), 1);

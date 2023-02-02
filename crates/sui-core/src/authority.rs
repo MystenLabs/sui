@@ -100,6 +100,7 @@ use crate::{
     transaction_manager::TransactionManager, transaction_streamer::TransactionStreamer,
 };
 use sui_adapter::execution_engine;
+use sui_types::message_envelope::Message;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -580,11 +581,10 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         // NOTE: the caller of this must promise to wait until it
         // knows for sure this tx is finalized, namely, it has seen a
-        // CertifiedTransactionEffects or at least f+1 identifical effects
-        // digests matching this TransactionEffectsEnvelope, before calling
-        // this function, in order to prevent a byzantine validator from
+        // CertifiedTransactionEffects or at least f+1 checkpointed effects
+        // before calling this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
-        effects: &VerifiedCertifiedTransactionEffects,
+        finalized_effects: &FinalizedEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode());
@@ -595,7 +595,7 @@ impl AuthorityState {
         let digest = *certificate.digest();
         debug!("execute_certificate_with_effects");
         fp_ensure!(
-            effects.data().transaction_digest == digest,
+            finalized_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingCertificate {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -603,11 +603,15 @@ impl AuthorityState {
 
         if certificate.contains_shared_object() {
             epoch_store
-                .acquire_shared_locks_from_effects(certificate, effects.data(), &self.database)
+                .acquire_shared_locks_from_effects(
+                    certificate,
+                    &finalized_effects.effects,
+                    &self.database,
+                )
                 .await?;
         }
 
-        let expected_effects_digest = effects.digest();
+        let expected_effects_digest = finalized_effects.effects.digest();
 
         self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
 
@@ -623,11 +627,11 @@ impl AuthorityState {
             .into_inner();
 
         let observed_effects_digest = observed_effects.digest();
-        if observed_effects_digest != expected_effects_digest {
+        if observed_effects_digest != &expected_effects_digest {
             error!(
                 ?expected_effects_digest,
                 ?observed_effects_digest,
-                expected_effects=?effects.data(),
+                expected_effects=?finalized_effects.effects,
                 observed_effects=?observed_effects.data(),
                 input_objects = ?certificate.data().intent_message.value.input_objects(),
                 "Locally executed effects do not match canonical effects!");
@@ -2328,6 +2332,33 @@ impl AuthorityState {
         }
     }
 
+    pub fn get_already_executed_transaction_info(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<VerifiedHandleCertificateResponse>> {
+        // TODO: We should be reading from the effects store, and then effects signature store once
+        // we have it, separately.
+        let Some(effects) = self.database.get_signed_effects(transaction_digest)? else {
+            return Ok(None);
+        };
+        if effects.epoch() == epoch_store.epoch() {
+            // We prefer to check this before finalized case because a validator executes a transaction
+            // much earlier than observing its finality in a checkpoint. Returning signed effects give
+            // authority aggregator much higher chance to form finality information.
+            Ok(Some(VerifiedHandleCertificateResponse::Executed(effects)))
+        } else {
+            let (epoch, checkpoint) =
+                self.database.get_transaction_checkpoint_info(transaction_digest)?
+                    .expect("Transactions executed in previous epochs must have been included in a checkpoint");
+            Ok(Some(VerifiedHandleCertificateResponse::Finalized(
+                epoch,
+                checkpoint,
+                effects.into_message(),
+            )))
+        }
+    }
+
     /// Get the signed effects of the given transaction. If the effects was signed in a previous
     /// epoch, re-sign it so that the caller is able to form a cert of the effects in the current
     /// epoch.
@@ -2366,7 +2397,6 @@ impl AuthorityState {
         // the authority's signature, as well as to identify in which epoch the transaction was
         // executed.
         Ok(effects.map(|effects| {
-            let effects: VerifiedSignedTransactionEffects = effects.into();
             if effects.epoch() < cur_epoch {
                 debug!(
                     effects_epoch=?effects.epoch(),

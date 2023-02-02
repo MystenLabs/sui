@@ -43,6 +43,7 @@ use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::{CommitteeWithNetAddresses, StakeUnit};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::time::{sleep, timeout};
 
 use crate::authority::{AuthorityState, AuthorityStore};
@@ -1469,7 +1470,8 @@ where
         if state.certificate.is_none() && state.effects_map.unique_key_count() > 0 {
             warn!(
                 ?tx_digest,
-                "Received signed Effects but not with a quorum {:?}", state.effects_map
+                "Received signed Effects but not with a quorum {:?}",
+                state.effects_map.get_all_unique_values(),
             );
             let non_quorum_effects = state.effects_map.get_all_unique_values();
 
@@ -1494,7 +1496,7 @@ where
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> Result<VerifiedCertifiedTransactionEffects, QuorumExecuteCertificateError> {
+    ) -> Result<FinalizedEffects, QuorumExecuteCertificateError> {
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
@@ -1505,14 +1507,22 @@ where
                 AuthoritySignInfo,
                 true,
             >,
-            effects_cert: Option<VerifiedCertifiedTransactionEffects>,
+            finality_map: MultiStakeAggregator<
+                (EpochId, CheckpointSequenceNumber),
+                TransactionEffects,
+                (),
+                false,
+            >,
+            finalized_effects: Option<FinalizedEffects>,
             bad_stake: StakeUnit,
             errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
         }
 
+        let committee = Arc::new(self.committee.clone());
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(Arc::new(self.committee.clone())),
-            effects_cert: None,
+            finality_map: MultiStakeAggregator::new(committee),
+            finalized_effects: None,
             bad_stake: 0,
             errors: vec![],
         };
@@ -1545,9 +1555,7 @@ where
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
-                            Ok(VerifiedHandleCertificateResponse {
-                                signed_effects,
-                            }) => {
+                            Ok(VerifiedHandleCertificateResponse::Executed(signed_effects)) => {
                                 debug!(
                                     ?tx_digest,
                                     name = ?name.concise(),
@@ -1558,11 +1566,22 @@ where
                                 if let Some(effects_cert) = state.effects_map.insert((signed_effects.epoch(), *signed_effects.digest()), signed_effects.data(), signed_effects.auth_sig().clone()) {
                                     debug!(
                                         ?tx_digest,
-                                        "Got quorum for validators handle_certificate."
+                                        "Got effects certificate quorum for validators handle_certificate."
                                     );
-                                    state.effects_cert = Some(effects_cert);
+                                    state.finalized_effects = Some(effects_cert.into_inner().into());
                                     return Ok(ReduceOutput::End(state));
                                 }
+                            }
+                            Ok(VerifiedHandleCertificateResponse::Finalized(epoch, checkpoint, effects)) => {
+
+                                        if state.finality_map.insert_generic((epoch, checkpoint), &effects, name, ()) {
+                                            debug!(?tx_digest, ?epoch, ?checkpoint, "f+1 validators returned finality information for validators handle_certificate");
+                                            state.finalized_effects = Some(FinalizedEffects {
+                                                effects,
+                                                finality_info: EffectsFinalityInfo::Checkpointed(epoch, checkpoint)
+                                            });
+                                            return Ok(ReduceOutput::End(state));
+                                        }
                             }
                             Err(err) => {
                                 let concise_name = name.concise();
@@ -1588,15 +1607,15 @@ where
         debug!(
             ?tx_digest,
             num_unique_effects = state.effects_map.unique_key_count(),
+            num_unique_finality = state.finality_map.unique_key_count(),
             bad_stake = state.bad_stake,
             "Received effects responses from validators"
         );
 
         // Check that one effects structure has more than 2f votes,
         // and return it.
-        if let Some(effects_cert) = state.effects_cert {
-            debug!(?tx_digest, "Found an effect with good stake over threshold");
-            return Ok(effects_cert);
+        if let Some(effects) = state.finalized_effects {
+            return Ok(effects);
         }
 
         // If none has, fail.
@@ -1609,7 +1628,7 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &VerifiedTransaction,
-    ) -> Result<(VerifiedCertificate, VerifiedCertifiedTransactionEffects), anyhow::Error> {
+    ) -> Result<(VerifiedCertificate, FinalizedEffects), anyhow::Error> {
         let result = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
@@ -1617,7 +1636,7 @@ where
         let cert = match result {
             ProcessTransactionResult::Certified(cert) => cert,
             ProcessTransactionResult::Executed(cert, effects) => {
-                return Ok((cert, effects));
+                return Ok((cert, effects.into_inner().into()));
             }
         };
         self.metrics.total_tx_certificates_created.inc();
