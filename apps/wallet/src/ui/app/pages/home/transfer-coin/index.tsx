@@ -6,6 +6,7 @@ import {
     SUI_TYPE_ARG,
     getTransactionDigest,
 } from '@mysten/sui.js';
+import { useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -26,17 +27,18 @@ import {
     useAppDispatch,
     useCoinDecimals,
     useIndividualCoinMaxBalance,
+    useSigner,
 } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountCoinsSelector,
 } from '_redux/slices/account';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
+import { fetchAllOwnedAndRequiredObjects } from '_src/ui/app/redux/slices/sui-objects';
 
-import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 import st from './TransferCoinPage.module.scss';
@@ -54,6 +56,7 @@ const DEFAULT_FORM_STEP = 1;
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const coinType = searchParams.get('type');
+    const address = useActiveAddress();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
         () => (coinType && aggregateBalances[coinType]) || BigInt(0),
@@ -72,7 +75,6 @@ function TransferCoinPage() {
         () => allCoins.filter((aCoin) => aCoin.type === coinType),
         [allCoins, coinType]
     );
-    const [sendError, setSendError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
     const [formData] = useState<FormValues>(initialValues);
     const [coinDecimals] = useCoinDecimals(coinType);
@@ -114,44 +116,66 @@ function TransferCoinPage() {
         []
     );
 
-    const dispatch = useAppDispatch();
-    const navigate = useNavigate();
-    const onHandleSubmit = useCallback(
-        async (
-            { to, amount }: FormValues,
-            { resetForm }: FormikHelpers<FormValues>
-        ) => {
+    const signer = useSigner();
+
+    const sendTokens = useMutation(
+        ['send-tokens'],
+        async ({
+            values: { to, amount },
+            helpers: { resetForm },
+        }: {
+            values: FormValues;
+            helpers: FormikHelpers<FormValues>;
+        }) => {
             if (coinType === null || !gasBudgetEstimationUnits) {
                 return;
             }
-            setSendError(null);
+
+            if (!address) {
+                throw new Error('Error, active address is not defined');
+            }
+
+            if (!signer) {
+                throw new Error('Missing signer.');
+            }
+
             trackEvent('TransferCoins', {
                 props: { coinType },
             });
-            try {
-                const bigIntAmount = parseAmount(amount, coinDecimals);
-                const response = await dispatch(
-                    sendTokens({
-                        amount: bigIntAmount,
-                        recipientAddress: to,
-                        tokenTypeArg: coinType,
-                        gasBudget: gasBudgetEstimationUnits,
-                    })
-                ).unwrap();
 
-                resetForm();
-                const txDigest = getTransactionDigest(response);
+            const bigIntAmount = parseAmount(amount, coinDecimals);
+
+            const response = await signer.signAndExecuteTransaction(
+                await CoinAPI.newPayTransaction(
+                    allCoins,
+                    coinType,
+                    bigIntAmount,
+                    to,
+                    gasBudgetEstimationUnits
+                )
+            );
+
+            resetForm();
+
+            return response;
+        },
+        {
+            onSuccess(data) {
+                // TODO: Move this to a cache invalidation once we move this to react query.
+                dispatch(fetchAllOwnedAndRequiredObjects());
+
+                const txDigest = getTransactionDigest(data!);
                 const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
                     txDigest
                 )}&transfer=coin`;
 
                 navigate(receiptUrl);
-            } catch (e) {
-                setSendError((e as SerializedError).message || null);
-            }
-        },
-        [dispatch, navigate, coinType, coinDecimals, gasBudgetEstimationUnits]
+            },
+        }
     );
+
+    const dispatch = useAppDispatch();
+    const navigate = useNavigate();
 
     const handleNextStep = useCallback(
         (_: FormValues, { setSubmitting }: FormikHelpers<FormValues>) => {
@@ -166,8 +190,8 @@ function TransferCoinPage() {
     }, []);
 
     const handleOnClearSubmitError = useCallback(() => {
-        setSendError(null);
-    }, []);
+        sendTokens.reset();
+    }, [sendTokens]);
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
@@ -197,10 +221,14 @@ function TransferCoinPage() {
             initialValues={formData}
             validateOnMount={true}
             validationSchema={validationSchemaStepTwo}
-            onSubmit={onHandleSubmit}
+            onSubmit={(values, helpers) =>
+                sendTokens.mutate({ values, helpers })
+            }
         >
             <StepTwo
-                submitError={sendError}
+                submitError={
+                    sendTokens.isError ? String(sendTokens.error) : null
+                }
                 coinSymbol={coinSymbol}
                 coinType={coinType}
                 gasBudgetEstimation={gasBudgetEstimation || null}
