@@ -9,7 +9,7 @@
 )]
 
 use fastcrypto::{
-    ed25519,
+    bls12381, ed25519,
     hash::{Blake2b256, HashFunction},
 };
 
