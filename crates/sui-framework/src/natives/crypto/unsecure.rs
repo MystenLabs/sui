@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::legacy_empty_cost;
 use fastcrypto::{traits::ToFromBytes, unsecure, Verifier};
 use move_binary_format::errors::PartialVMResult;
