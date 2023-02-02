@@ -121,8 +121,12 @@ async fn submit_transaction_to_consensus_adapter() {
         }
     }
     // Make a new consensus adapter instance.
-    let adapter =
-        ConsensusAdapter::new(Box::new(SubmitDirectly(state.clone())), state.name, metrics);
+    let adapter = ConsensusAdapter::new(
+        Box::new(SubmitDirectly(state.clone())),
+        state.name,
+        Box::new(ConnectionMonitorStatusForTests {}),
+        metrics,
+    );
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
