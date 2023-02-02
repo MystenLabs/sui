@@ -64,7 +64,7 @@ thiserror = "1.0.35"
 tracing = "0.1.36"
 worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
-reqwest = { version = "0.11.13", default_features= false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.11.13", features = ["json"] }
 telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 [features]

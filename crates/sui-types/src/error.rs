@@ -16,7 +16,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -532,6 +531,14 @@ impl From<sui_protocol_config::Error> for SuiError {
 impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
+    }
+}
+
+impl From<VMError> for SuiError {
+    fn from(error: VMError) -> Self {
+        SuiError::ModuleVerificationFailure {
+            error: error.to_string(),
+        }
     }
 }
 

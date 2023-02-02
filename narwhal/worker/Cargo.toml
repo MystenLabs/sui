@@ -30,6 +30,7 @@ types = { path = "../types", package = "narwhal-types" }
 prometheus = "0.13.3"
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network = { path = "../../crates/mysten-network"}
+
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 anemo.workspace = true
