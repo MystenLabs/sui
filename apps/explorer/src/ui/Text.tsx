@@ -15,7 +15,7 @@ const textStyles = cva(['break-words'], {
             subtitleSmall: 'text-subtitleSmall',
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
-            captionSmall: 'uppercase text-captionSmall ',
+            captionSmall: 'uppercase text-captionSmall',
             p1: 'text-p1',
             p2: 'text-p2',
         },
