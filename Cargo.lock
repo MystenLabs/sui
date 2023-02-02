@@ -5108,7 +5108,6 @@ dependencies = [
  "prometheus-closure-metric",
  "scopeguard",
  "tap",
- "tokio",
  "tracing",
  "uuid",
  "workspace-hack",
