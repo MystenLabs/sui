@@ -499,7 +499,8 @@ TransactionDigest:
   NEWTYPESTRUCT:
     TYPENAME: Sha3Digest
 TransactionEffectsDigest:
-  NEWTYPESTRUCT: BYTES
+  NEWTYPESTRUCT:
+    TYPENAME: Sha3Digest
 TransactionKind:
   ENUM:
     0:

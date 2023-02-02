@@ -22,7 +22,7 @@ pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
 };
-pub use crate::digests::TransactionDigest;
+pub use crate::digests::{TransactionDigest, TransactionEffectsDigest};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -287,24 +287,6 @@ pub struct ObjectDigest(
     pub [u8; OBJECT_DIGEST_LENGTH],
 ); // We use SHA3-256 hence 32 bytes here
 
-#[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionEffectsDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; TRANSACTION_DIGEST_LENGTH],
-);
-
-impl TransactionEffectsDigest {
-    pub const ZERO: Self = TransactionEffectsDigest([0u8; TRANSACTION_DIGEST_LENGTH]);
-
-    // for testing
-    pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; TRANSACTION_DIGEST_LENGTH]>();
-        Self(random_bytes)
-    }
-}
-
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
 )]
@@ -552,14 +534,6 @@ impl TryFrom<&[u8]> for ObjectDigest {
             .try_into()
             .map_err(|_| SuiError::InvalidTransactionDigest)?;
         Ok(Self(arr))
-    }
-}
-
-impl std::fmt::Debug for TransactionEffectsDigest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
-        write!(f, "{}", s)?;
-        Ok(())
     }
 }
 
