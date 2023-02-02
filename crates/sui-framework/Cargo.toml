@@ -38,6 +38,7 @@ move-unit-test.workspace = true
 move-vm-runtime.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
+sui-protocol-constants = { path = "../sui-protocol-constants" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]
