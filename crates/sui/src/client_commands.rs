@@ -1,20 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::fmt;
-use std::sync::Arc;
-use std::{
-    collections::BTreeSet,
-    fmt::{Debug, Display, Formatter, Write},
-    path::{Path, PathBuf},
-    time::Instant,
-};
-
 use crate::config::{Config, PersistedConfig, SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
+use core::fmt;
 use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
@@ -25,6 +17,14 @@ use prettytable::Table;
 use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::sync::Arc;
+use std::{
+    collections::BTreeSet,
+    fmt::{Debug, Display, Formatter, Write},
+    path::{Path, PathBuf},
+    time::Instant,
+};
+use sui_adapter::adapter::verify_modules;
 use sui_framework::build_move_package;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
@@ -172,6 +172,27 @@ pub enum SuiClientCommands {
         /// Only works for unpublished modules (whose addresses are currently 0x0).
         #[clap(long)]
         address_override: Option<ObjectID>,
+    },
+
+    /// Run the bytecode verifier on given package and report statistics.
+    #[clap(name = "bytecode-verify")]
+    BytecodeVerify {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+
+        /// Number of trials to run
+        #[clap(long, default_value = "1000")]
+        trials: u64,
     },
 
     /// Call Move function
@@ -1022,6 +1043,29 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::VerifySource
             }
+            SuiClientCommands::BytecodeVerify {
+                package_path,
+                build_config,
+                trials,
+            } => {
+                let compiled_package = build_move_package(
+                    &package_path,
+                    BuildConfig {
+                        config: build_config,
+                        run_bytecode_verifier: true,
+                        print_diags_to_stderr: true,
+                    },
+                )?;
+
+                let compiled_modules: Vec<_> = compiled_package.get_modules().cloned().collect();
+
+                let timer = Instant::now();
+                for _ in 0..trials {
+                    verify_modules(&compiled_modules)?;
+                }
+                let elapsed = timer.elapsed().as_micros();
+                SuiClientCommandResult::BytecodeVerify(trials, elapsed as u64)
+            }
         });
         ret
     }
@@ -1406,6 +1450,13 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::VerifySource => {
                 writeln!(writer, "Source verification succeeded!")?;
             }
+            SuiClientCommandResult::BytecodeVerify(trials, total_time) => {
+                writeln!(
+                    writer,
+                    "Bytecode verifier ran {trials} trials in {total_time}us. Average time {}us",
+                    (*total_time as f64) / (*trials as f64)
+                )?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1540,6 +1591,7 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
+    BytecodeVerify(u64, u64),
     Object(GetObjectDataResponse, bool),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(

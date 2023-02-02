@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
+use sui_adapter::adapter::make_compiled_modules;
 use sui_protocol_constants::{MAX_VERIFIER_TIME_US, STORAGE_GAS_PRICE};
 use sui_types::base_types::ObjectRef;
 use sui_types::messages::{MoveModulePublish, TransactionKind};
@@ -201,22 +202,27 @@ async fn verify_package(transaction: &TransactionData) -> Result<(), SuiError> {
         let mods = move_module_publish.clone();
 
         let task = async move {
+            let modules = make_compiled_modules(&mods.modules).map_err(|e| {
+                SuiError::ModuleDeserializationFailure {
+                    error: e.to_string(),
+                }
+            })?;
+
             let fut = async move {
                 // We don't actually care if it passes or fails. We just care that it completes on time.
-                let _ = sui_adapter::adapter::verify_modules(&mods.modules);
+                let _ = sui_adapter::adapter::verify_modules(&modules);
             };
 
             select! {
-
-                    () = sleep(Duration::from_micros(MAX_VERIFIER_TIME_US))=> {
-                        false
-                    }
-                    () = fut => {
-                        true
-                    }
+                () = sleep(Duration::from_micros(MAX_VERIFIER_TIME_US))=> {
+                    Ok::<bool, SuiError>(false)
+                }
+                () = fut => {
+                    Ok(true)
+                }
             }
         };
-        if !task.await {
+        if !task.await? {
             return Err(SuiError::ModuleVerificationFailure {
                 error: format!(
                     "Move package verification exceeded timeout {MAX_VERIFIER_TIME_US}us"

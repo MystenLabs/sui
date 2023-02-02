@@ -353,7 +353,9 @@ pub fn publish<
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
-fn make_compiled_modules(module_bytes: &[Vec<u8>]) -> Result<Vec<CompiledModule>, ExecutionError> {
+pub fn make_compiled_modules(
+    module_bytes: &[Vec<u8>],
+) -> Result<Vec<CompiledModule>, ExecutionError> {
     let modules = module_bytes
         .iter()
         .map(|b| {
@@ -523,11 +525,9 @@ pub fn verify_and_link<
     Ok(vm)
 }
 
-/// Given a list of `module_bytes`, runs each module with both the Move VM verifier
+/// Given a Vec of `CompiledModule`, runs each module with both the Move VM verifier
 /// and the Sui verifier.
-pub fn verify_modules(module_bytes: &[Vec<u8>]) -> Result<(), ExecutionError> {
-    let modules = make_compiled_modules(module_bytes)?;
-
+pub fn verify_modules(modules: &[CompiledModule]) -> Result<(), ExecutionError> {
     // run the Move verifier
     for module in modules.iter() {
         verify_module_with_config(Lazy::force(&VERIFIER_CONFIG), module).map_err(|e| {
