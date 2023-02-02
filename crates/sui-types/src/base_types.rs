@@ -12,7 +12,6 @@ use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use serde_with::Bytes;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -22,14 +21,14 @@ pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
 };
-pub use crate::digests::{TransactionDigest, TransactionEffectsDigest};
+pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
@@ -275,18 +274,6 @@ impl AsRef<[u8]> for SuiAddress {
     }
 }
 
-// We use SHA3-256 hence 32 bytes here
-pub const OBJECT_DIGEST_LENGTH: usize = 32;
-
-// Each object has a unique digest
-#[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct ObjectDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; OBJECT_DIGEST_LENGTH],
-); // We use SHA3-256 hence 32 bytes here
-
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
 )]
@@ -400,39 +387,6 @@ impl TxContext {
     }
 }
 
-impl ObjectDigest {
-    pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; OBJECT_DIGEST_LENGTH]);
-    pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; OBJECT_DIGEST_LENGTH]);
-    pub const OBJECT_DIGEST_DELETED_BYTE_VAL: u8 = 99;
-    pub const OBJECT_DIGEST_WRAPPED_BYTE_VAL: u8 = 88;
-
-    /// A marker that signifies the object is deleted.
-    pub const OBJECT_DIGEST_DELETED: ObjectDigest =
-        ObjectDigest([Self::OBJECT_DIGEST_DELETED_BYTE_VAL; OBJECT_DIGEST_LENGTH]);
-
-    /// A marker that signifies the object is wrapped into another object.
-    pub const OBJECT_DIGEST_WRAPPED: ObjectDigest =
-        ObjectDigest([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; OBJECT_DIGEST_LENGTH]);
-
-    pub fn new(bytes: [u8; OBJECT_DIGEST_LENGTH]) -> Self {
-        Self(bytes)
-    }
-
-    pub fn is_alive(&self) -> bool {
-        *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
-    }
-
-    // for testing
-    pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
-        Self::new(random_bytes)
-    }
-
-    pub fn encode(&self) -> String {
-        Base64::encode(self.0)
-    }
-}
-
 pub fn get_new_address<K: KeypairTraits>() -> SuiAddress
 where
     <K as KeypairTraits>::PubKey: SuiPublicKey,
@@ -495,46 +449,6 @@ pub fn dbg_addr(name: u8) -> SuiAddress {
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
-}
-
-impl std::fmt::Debug for ObjectDigest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0);
-        write!(f, "o#{}", s)?;
-        Ok(())
-    }
-}
-
-impl AsRef<[u8]> for ObjectDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl fmt::Display for ObjectDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
-    }
-}
-
-impl fmt::LowerHex for ObjectDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self))
-    }
-}
-
-impl TryFrom<&[u8]> for ObjectDigest {
-    type Error = SuiError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; OBJECT_DIGEST_LENGTH] = bytes
-            .try_into()
-            .map_err(|_| SuiError::InvalidTransactionDigest)?;
-        Ok(Self(arr))
-    }
 }
 
 // TODO: rename to version
