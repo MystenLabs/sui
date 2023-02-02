@@ -22,7 +22,8 @@ export function useSearch(query: string) {
         ['search', query],
         () => {
             const promises = [];
-            if (isValidTransactionDigest(query, 'base58')) {
+
+            if (isValidTransactionDigest(query)) {
                 promises.push(async () => {
                     const txdata: SuiTransactionResponse =
                         await rpc.getTransactionWithEffects(query);
@@ -62,7 +63,7 @@ export function useSearch(query: string) {
                             },
                         ];
                     } else {
-                        throw Error('not a valid address');
+                        throw new Error('not a valid address');
                     }
                 });
             }
