@@ -2953,31 +2953,6 @@
           }
         }
       },
-      "CertifiedTransactionEffects": {
-        "description": "The certified Transaction Effects which has signatures from >= 2/3 of validators",
-        "type": "object",
-        "required": [
-          "authSignInfo",
-          "effects",
-          "transactionEffectsDigest"
-        ],
-        "properties": {
-          "authSignInfo": {
-            "description": "authority signature information signed by the quorum of the validators.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SuiAuthorityStrongQuorumSignInfo"
-              }
-            ]
-          },
-          "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
-          },
-          "transactionEffectsDigest": {
-            "$ref": "#/components/schemas/TransactionEffectsDigest"
-          }
-        }
-      },
       "CheckpointContents": {
         "description": "CheckpointContents are the transactions included in an upcoming checkpoint. They must have already been causally ordered. Since the causal order algorithm is the same among validators, we expect all honest validators to come up with the same order for each checkpoint content.",
         "type": "object",
@@ -3347,6 +3322,48 @@
       },
       "Ed25519SuiSignature": {
         "$ref": "#/components/schemas/Base64"
+      },
+      "EffectsFinalityInfo": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "certified"
+            ],
+            "properties": {
+              "certified": {
+                "$ref": "#/components/schemas/SuiAuthorityStrongQuorumSignInfo"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkpointed"
+            ],
+            "properties": {
+              "checkpointed": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "Entry_for_SuiAddress_and_VecSet_for_SuiAddress": {
         "description": "Rust version of the Move sui::vec_map::Entry type",
@@ -4222,6 +4239,25 @@
             }
           }
         ]
+      },
+      "FinalizedEffects": {
+        "type": "object",
+        "required": [
+          "effects",
+          "finalityInfo",
+          "transactionEffectsDigest"
+        ],
+        "properties": {
+          "effects": {
+            "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "finalityInfo": {
+            "$ref": "#/components/schemas/EffectsFinalityInfo"
+          },
+          "transactionEffectsDigest": {
+            "$ref": "#/components/schemas/TransactionEffectsDigest"
+          }
+        }
       },
       "GasCostSummary": {
         "type": "object",
@@ -5316,7 +5352,7 @@
             "type": "boolean"
           },
           "effects": {
-            "$ref": "#/components/schemas/CertifiedTransactionEffects"
+            "$ref": "#/components/schemas/FinalizedEffects"
           }
         }
       },
@@ -5877,7 +5913,7 @@
             ],
             "properties": {
               "FastPathCommitted": {
-                "$ref": "#/components/schemas/CertifiedTransactionEffects"
+                "$ref": "#/components/schemas/FinalizedEffects"
               }
             },
             "additionalProperties": false
