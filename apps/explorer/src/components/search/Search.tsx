@@ -1,87 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import React, { useState, useCallback } from 'react';
 
-import React, { useState, useCallback, useContext } from 'react';
-
-import { ReactComponent as SearchIcon } from '../../assets/search.svg';
-import { NetworkContext } from '../../context';
-
-import styles from './Search.module.css';
-
+import { useDebouncedValue } from '~/hooks/useDebouncedValue';
+import { useSearch } from '~/hooks/useSearch';
+import { Search as SearchBox, type SearchResult } from '~/ui/Search';
 import { useNavigateWithQuery } from '~/ui/utils/LinkWithQuery';
-import { navigateWithUnknown } from '~/utils/api/searchUtil';
 
 function Search() {
-    const [input, setInput] = useState('');
-    const [network] = useContext(NetworkContext);
-    const navigate = useNavigateWithQuery();
-
-    const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
-
-    const handleSubmit = useCallback(
-        (e: React.FormEvent<HTMLFormElement>) => {
-            e.preventDefault();
-            // Prevent empty search
-            if (!input.length) return;
-            setPleaseWaitMode(true);
-
-            // remove empty char from input
-            let query = input.trim();
-
-            navigateWithUnknown(query, navigate, network).then(() => {
-                setInput('');
-                setPleaseWaitMode(false);
-            });
-        },
-        [input, navigate, setInput, network]
-    );
-
+    const [query, setQuery] = useState('');
+    const debouncedQuery = useDebouncedValue(query);
+    const { isLoading, data: results } = useSearch(debouncedQuery);
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
-            setInput(e.currentTarget.value),
-        [setInput]
+            setQuery(e.currentTarget.value.trim()),
+        [setQuery]
+    );
+    const navigate = useNavigateWithQuery();
+    const handleSelectResult = useCallback(
+        (result: SearchResult) => {
+            navigate(`/${result.type}/${encodeURIComponent(result.id)}`, {});
+            setQuery('');
+        },
+        [navigate]
     );
 
     return (
-        <form
-            className={styles.form}
-            onSubmit={handleSubmit}
-            aria-label="search form"
-        >
-            <input
-                className={styles.searchtextdesktop}
-                id="searchText"
-                data-testid="search"
-                placeholder="Search by Addresses / Objects / Transactions"
-                value={input}
+        <div className="flex max-w-lg">
+            <SearchBox
+                queryValue={query}
                 onChange={handleTextChange}
-                autoFocus
-                type="text"
+                onSelectResult={handleSelectResult}
+                placeholder="Search Addresses / Objects / Transactions / Epochs"
+                isLoading={isLoading}
+                options={results}
             />
-            <input
-                className={styles.searchtextmobile}
-                id="searchText"
-                placeholder="Search Anything"
-                value={input}
-                onChange={handleTextChange}
-                autoFocus
-                type="text"
-            />
-            <button
-                id="searchBtn"
-                type="submit"
-                disabled={pleaseWaitMode}
-                className={`${styles.searchbtn} ${
-                    pleaseWaitMode && styles.disabled
-                }`}
-            >
-                {pleaseWaitMode ? (
-                    'Please Wait'
-                ) : (
-                    <SearchIcon className={styles.searchicon} />
-                )}
-            </button>
-        </form>
+        </div>
     );
 }
 
