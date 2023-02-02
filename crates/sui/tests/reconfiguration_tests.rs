@@ -76,7 +76,7 @@ async fn advance_epoch_tx_test_impl(
         .create_advance_epoch_tx_cert(
             &states[0].epoch_store_for_testing(),
             &GasCostSummary::new(0, 0, 0),
-            0,
+            0, // epoch_start_timestamp_ms
             Duration::from_secs(15),
             certifier,
         )
@@ -92,7 +92,7 @@ async fn advance_epoch_tx_test_impl(
                 .create_advance_epoch_tx_cert(
                     &state.epoch_store_for_testing(),
                     &GasCostSummary::new(0, 0, 0),
-                    0,
+                    0,                         // epoch_start_timestamp_ms
                     Duration::from_secs(1000), // A very very long time
                     certifier,
                 )
@@ -277,7 +277,7 @@ async fn test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
 
     let test_cluster = TestClusterBuilder::new()
-        .with_checkpoints_per_epoch(10)
+        .with_epoch_duration_ms(1000)
         .build()
         .await
         .unwrap();

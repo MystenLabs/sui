@@ -50,7 +50,7 @@ use std::cmp::Ordering as CmpOrdering;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
-    CheckpointSignatureMessage, CheckpointSummary,
+    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -223,6 +223,16 @@ pub struct AuthorityEpochTables {
     /// epoch, used for tallying rule scores.
     num_certified_checkpoint_signatures:
         DBMap<AuthorityName, (Option<CheckpointSequenceNumber>, u64)>,
+
+    /// Parameters of the system fixed at the epoch start
+    epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+}
+
+/// Parameters of the epoch fixed at epoch start.
+#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfiguration {
+    pub epoch_start_timestamp_ms: CheckpointTimestamp,
+    // Current epoch committee can eventually move here too, though right now it is served from a different table
 }
 
 impl AuthorityEpochTables {
@@ -271,6 +281,7 @@ impl AuthorityPerEpochStore {
         parent_path: &Path,
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
+        epoch_start_configuration: Option<EpochStartConfiguration>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -294,6 +305,18 @@ impl AuthorityPerEpochStore {
                 }
             })
             .collect();
+        // Insert epoch_start_configuration in the DB. This is used by unit tests
+        //
+        // Production code goes different path:
+        // (1) For the first epoch, this is inserted in the DB along with genesis checkpoint
+        // (2) For other epochs, this is updated when AuthorityPerEpochStore
+        // is initialized during epoch change
+        if let Some(epoch_start_configuration) = epoch_start_configuration {
+            tables
+                .epoch_start_configuration
+                .insert(&(), &epoch_start_configuration)
+                .expect("Failed to store epoch_start_configuration");
+        }
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
@@ -321,7 +344,20 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
-    pub fn new_at_next_epoch(&self, name: AuthorityName, new_committee: Committee) -> Arc<Self> {
+    pub fn epoch_start_configuration(&self) -> SuiResult<EpochStartConfiguration> {
+        Ok(self
+            .tables
+            .epoch_start_configuration
+            .get(&())?
+            .expect("epoch_start_configuration was not initialized properly"))
+    }
+
+    pub fn new_at_next_epoch(
+        &self,
+        name: AuthorityName,
+        new_committee: Committee,
+        epoch_start_configuration: EpochStartConfiguration,
+    ) -> Arc<Self> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
         self.record_epoch_total_duration_metric();
@@ -331,6 +367,7 @@ impl AuthorityPerEpochStore {
             &self.parent_path,
             self.db_options.clone(),
             self.metrics.clone(),
+            Some(epoch_start_configuration),
         )
     }
 
@@ -1481,6 +1518,12 @@ impl AuthorityPerEpochStore {
                 .builder_digest_to_checkpoint
                 .insert(&digest, &sequence)?;
         }
+        let epoch_start_configuration = EpochStartConfiguration {
+            epoch_start_timestamp_ms: summary.timestamp_ms,
+        };
+        self.tables
+            .epoch_start_configuration
+            .insert(&(), &epoch_start_configuration)?;
         self.tables
             .builder_checkpoint_summary
             .insert(summary.sequence_number(), summary)?;
