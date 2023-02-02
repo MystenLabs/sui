@@ -713,11 +713,14 @@ async fn query_peers_for_their_latest_checkpoint(
 }
 
 fn allowed_peer_id_to_source(peer_id: &PeerId) -> bool {
-    let peer_id = &format!("{peer_id}");
-    peer_id == "9bcd493b7ee275e7389659830640ac2e771128d062431c049fc23ed4da072ce5"
-        || peer_id == "9c4fed2aa224d16c8df0e58b787926a8797c9ecee5a961b89acdb1f8230d7def"
-        || peer_id == "806872b45857c8f2094497cabb1e8507f6973d6d3feecfe6a6d45df62ee912ed"
-        || peer_id == "fb33aa5706e105ddadedbef7a05639403af2e85fba340920098acd3dc9b1e9f3"
+    let peer_id_str = &format!("{peer_id}");
+    let is_allowed = peer_id_str
+        == "9bcd493b7ee275e7389659830640ac2e771128d062431c049fc23ed4da072ce5"
+        || peer_id_str == "9c4fed2aa224d16c8df0e58b787926a8797c9ecee5a961b89acdb1f8230d7def"
+        || peer_id_str == "806872b45857c8f2094497cabb1e8507f6973d6d3feecfe6a6d45df62ee912ed"
+        || peer_id_str == "fb33aa5706e105ddadedbef7a05639403af2e85fba340920098acd3dc9b1e9f3";
+    debug!("peer_id {peer_id} is allowd: {is_allowed}");
+    is_allowed
 }
 
 async fn sync_to_checkpoint<S>(
