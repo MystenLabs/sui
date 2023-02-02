@@ -97,7 +97,7 @@ export function useSearch(query: string) {
         },
         {
             enabled: !!query,
-            cacheTime: 10e3,
+            cacheTime: 10000,
         }
     );
 }
