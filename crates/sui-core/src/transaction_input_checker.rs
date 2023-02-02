@@ -205,7 +205,7 @@ async fn run_timed_bytecode_verifier(
     transaction: &TransactionData,
     timeout_us: u64,
 ) -> Result<(), SuiError> {
-    async fn verify_package_inner(
+    async fn run_timed_bytecode_verifier_inner(
         move_module_publish: &MoveModulePublish,
         timeout_us: u64,
     ) -> Result<(), SuiError> {
@@ -240,10 +240,10 @@ async fn run_timed_bytecode_verifier(
 
         Ok(())
     }
+
     for tx in transaction.kind.single_transactions() {
         if let SingleTransactionKind::Publish(p) = tx {
-            let err = verify_package_inner(p, timeout_us).await;
-            err?;
+            run_timed_bytecode_verifier_inner(p, timeout_us).await?;
         }
     }
     Ok(())
