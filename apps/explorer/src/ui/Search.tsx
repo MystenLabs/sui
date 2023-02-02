@@ -54,7 +54,7 @@ export function Search({
     isLoading = false,
     queryValue,
 }: SearchProps) {
-    const hasOptions = options.some((group) => group.results?.length > 0);
+    const hasOptions = options.length;
     return (
         <Combobox
             onChange={onSelectResult}
