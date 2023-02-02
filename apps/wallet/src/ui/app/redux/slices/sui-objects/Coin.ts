@@ -216,11 +216,11 @@ export class Coin {
         gasFee: bigint
     ) {
         const totalAmount = amount + gasFee;
-
+        const gasBudget = Coin.computeGasBudgetForPay(coins, totalAmount);
         const inputCoins =
             CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
                 coins,
-                totalAmount
+                totalAmount + BigInt(gasBudget)
             );
 
         const address = await signer.getAddress();
@@ -234,7 +234,7 @@ export class Coin {
             recipients: [address, address],
             // TODO: Update SDK to accept bigint
             amounts: [Number(amount), Number(gasFee)],
-            gasBudget: Coin.computeGasBudgetForPay(coins, totalAmount),
+            gasBudget,
         });
 
         const effects = getTransactionEffects(result);
