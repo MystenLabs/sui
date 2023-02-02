@@ -5101,7 +5101,9 @@ name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
  "dashmap",
+ "futures",
  "once_cell",
+ "parking_lot 0.12.1",
  "prometheus",
  "prometheus-closure-metric",
  "scopeguard",
@@ -8960,6 +8962,7 @@ dependencies = [
  "futures",
  "governor",
  "multiaddr",
+ "mysten-metrics",
  "mysten-network",
  "prometheus",
  "rand 0.8.5",

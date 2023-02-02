@@ -5,6 +5,7 @@ use fastcrypto::encoding::{Base58, Encoding, Hex};
 use fastcrypto::hash::Digest;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
@@ -180,6 +181,10 @@ impl CheckpointSummary {
 
     pub fn digest(&self) -> CheckpointDigest {
         CheckpointDigest(sha3_hash(self))
+    }
+
+    pub fn timestamp(&self) -> SystemTime {
+        UNIX_EPOCH + Duration::from_millis(self.timestamp_ms)
     }
 }
 
