@@ -9,11 +9,11 @@ import {
   SuiObject,
   getMoveObjectType,
   getObjectId,
-} from './objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
+} from '../types/objects';
+import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 
-import { getOption, Option } from './option';
-import { StructTag } from './sui-bcs';
+import { getOption, Option } from '../types/option';
+import { StructTag } from '../types/sui-bcs';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { Infer, literal, number, object, string, union } from 'superstruct';
 
@@ -23,14 +23,6 @@ export const OBJECT_MODULE_NAME = 'object';
 export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
-
-export const SUI_SYSTEM_MODULE_NAME = 'sui_system';
-export const ADD_DELEGATION_MUL_COIN_FUN_NAME =
-  'request_add_delegation_mul_coin';
-export const ADD_DELEGATION_LOCKED_COIN_FUN_NAME =
-  'request_add_delegation_mul_locked_coin';
-export const WITHDRAW_DELEGATION_FUN_NAME = 'request_withdraw_delegation';
-export const SWITCH_DELEGATION_FUN_NAME = 'request_switch_delegation';
 
 // `sui::pay` module is used for Coin management (split, join, join_and_transfer etc);
 export const PAY_MODULE_NAME = 'pay';

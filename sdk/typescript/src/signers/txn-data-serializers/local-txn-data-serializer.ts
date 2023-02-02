@@ -34,7 +34,6 @@ import {
   SignableTransaction,
   UnserializedSignableTransaction,
   TransactionBuilderMode,
-  SpecialMoveCallTransaction,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
@@ -96,13 +95,10 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
   async constructTransactionKindAndPayment(
     signerAddress: string,
-    unserializedTxn:
-      | UnserializedSignableTransaction
-      | SpecialMoveCallTransaction
+    unserializedTxn: UnserializedSignableTransaction
   ): Promise<[TransactionKind, ObjectId | undefined]> {
     let tx: Transaction;
     let gasPayment: ObjectId | undefined;
-    const unsupportedErrorMsg = `${unserializedTxn.kind} has not yet been implemented on LocalTxnDataSerializer. Please use RpcTxnDataSerializer instead`;
     switch (unserializedTxn.kind) {
       case 'transferObject':
         const t = unserializedTxn.data as TransferObjectTransaction;
@@ -232,12 +228,6 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
             gasBudget: splitCoin.gasBudget,
           },
         });
-      case 'requestAddDelegation':
-        throw new Error(unsupportedErrorMsg);
-      case 'requestWithdrawDelegation':
-        throw new Error(unsupportedErrorMsg);
-      case 'requestSwitchDelegation':
-        throw new Error(unsupportedErrorMsg);
       case 'publish':
         const publish = unserializedTxn.data as PublishTransaction;
         tx = {

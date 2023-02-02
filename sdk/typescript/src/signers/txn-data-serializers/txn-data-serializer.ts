@@ -223,7 +223,7 @@ export type TransactionBuilderMode = 'Commit' | 'DevInspect';
 export interface TxnDataSerializer {
   serializeToBytes(
     signerAddress: SuiAddress,
-    txn: UnserializedSignableTransaction | SpecialMoveCallTransaction,
+    txn: UnserializedSignableTransaction,
     mode: TransactionBuilderMode
   ): Promise<Base64DataBuffer>;
 }

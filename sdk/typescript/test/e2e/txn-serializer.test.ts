@@ -11,6 +11,7 @@ import {
   RawSigner,
   RpcTxnDataSerializer,
   SuiMoveObject,
+  SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
 } from '../../src';
 import { CallArgSerializer } from '../../src/signers/txn-data-serializers/call-arg-serializer';
@@ -18,7 +19,6 @@ import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
   setup,
-  SUI_SYSTEM_STATE_OBJECT_ID,
   TestToolbox,
 } from './utils/setup';
 
