@@ -7,8 +7,14 @@ import {
   LocalTxnDataSerializer,
   ObjectId,
   RawSigner,
+  UnserializedSignableTransaction,
 } from '../../src';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import {
+  publishPackage,
+  setup,
+  TestToolbox,
+  DEFAULT_GAS_BUDGET,
+} from './utils/setup';
 
 describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
   'Test ID and UID as args to entry functions',
@@ -43,15 +49,20 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
     });
 
     it('Test UID as arg to entry functions', async () => {
-      const txn = await signer.executeMoveCall({
+      const moveCall = {
         packageObjectId: packageId,
         module: 'test',
         function: 'test_uid',
         typeArguments: [],
-        arguments: [],
-        gasBudget: 2000,
+        arguments: ['0xc2b5625c221264078310a084df0a3137956d20ee'],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      };
+
+      const result = await signer.devInspectTransaction({
+        kind: 'moveCall',
+        data: moveCall,
       });
-      expect(getExecutionStatusType(txn)).toEqual('success');
+      expect(result.effects.status.status).toEqual('success');
     });
   },
 );
