@@ -16,6 +16,7 @@ use sui_types::{
     storage::WriteStore,
 };
 use tokio::sync::mpsc;
+use tracing::debug;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GetCheckpointSummaryRequest {
@@ -90,7 +91,15 @@ where
         }
         .map_err(|e| Status::internal(e.to_string()))?
         .map(VerifiedCheckpoint::into_inner);
-
+        if let Some(cs) = &checkpoint {
+            debug!(
+                "Shared checkpoint {} digest: {:?}, previous digest: {:?}, summary: {:?}",
+                cs.sequence_number(),
+                cs.digest(),
+                cs.previous_digest(),
+                cs.summary(),
+            );
+        }
         Ok(Response::new(checkpoint))
     }
 

@@ -712,6 +712,17 @@ async fn query_peers_for_their_latest_checkpoint(
     }
 }
 
+fn allowed_peer_id_to_source(peer_id: &PeerId) -> bool {
+    let peer_id_str = &format!("{peer_id}");
+    let is_allowed = peer_id_str
+        == "9bcd493b7ee275e7389659830640ac2e771128d062431c049fc23ed4da072ce5"
+        || peer_id_str == "9c4fed2aa224d16c8df0e58b787926a8797c9ecee5a961b89acdb1f8230d7def"
+        || peer_id_str == "806872b45857c8f2094497cabb1e8507f6973d6d3feecfe6a6d45df62ee912ed"
+        || peer_id_str == "fb33aa5706e105ddadedbef7a05639403af2e85fba340920098acd3dc9b1e9f3";
+    debug!("peer_id {peer_id} is allowd: {is_allowed}");
+    is_allowed
+}
+
 async fn sync_to_checkpoint<S>(
     network: anemo::Network,
     store: S,
@@ -757,8 +768,11 @@ where
                 // Filter out any peers who can't help with this particular checkpoint
                 .filter(|(_peer_id, info)| info.height >= next)
                 // Filter out any peers who we aren't connected with
-                .flat_map(|(peer_id, _height)| network.peer(*peer_id))
-                .map(StateSyncClient::new)
+                .map(|(peer_id, _height)| (*peer_id, network.peer(*peer_id)))
+                .filter(|(peer_id, peer)|
+                    allowed_peer_id_to_source(peer_id) && peer.is_some()
+                )
+                .map(|(peer_id, peer)| (peer_id, StateSyncClient::new(peer.unwrap())))
                 .collect::<Vec<_>>();
             rand::seq::SliceRandom::shuffle(peers.as_mut_slice(), &mut rng);
             let peer_heights = peer_heights.clone();
@@ -773,7 +787,7 @@ where
 
                 // Iterate through our selected peers trying each one in turn until we're able to
                 // successfully get the target checkpoint
-                for mut peer in peers {
+                for (peer_id, mut peer) in peers {
                     let request = Request::new(GetCheckpointSummaryRequest::BySequenceNumber(next))
                         .with_timeout(DEFAULT_TIMEOUT);
                     if let Some(checkpoint) = peer
@@ -788,7 +802,7 @@ where
                         if checkpoint.sequence_number() != next {
                             continue;
                         }
-
+                        debug!("Sourced Checkpoint {next} from Peer {peer_id}, digest: {:?}, previous digest: {:?}, summary: {:?}", checkpoint.digest(), checkpoint.previous_digest(), checkpoint.summary());
                         // Insert in our store in the event that things fail and we need to retry
                         peer_heights
                             .write()
@@ -813,7 +827,9 @@ where
             if checkpoint.sequence_number() != next
                 || Some(current.digest()) != checkpoint.previous_digest()
             {
-                return Err(anyhow::anyhow!("detected fork"));
+                return Err(anyhow::anyhow!(
+                    "detected fork, checkpoint.sequence_number: {}, next: {}. current digest: {:?}, checkpoint digest: {:?}", checkpoint.sequence_number(), next, current.digest(), checkpoint.previous_digest()
+                ));
             }
 
             let current_epoch = current.epoch();

@@ -224,11 +224,12 @@ impl ToolCommand {
                 } else {
                     for (i, val_info) in genesis.validator_set().iter().enumerate() {
                         println!(
-                            "#{:<2} {:<20} {:?<66} {:?}",
+                            "#{:<2} {:<20} {:?<66} {:?} {}",
                             i,
                             val_info.name(),
                             val_info.protocol_key(),
-                            val_info.network_address()
+                            val_info.network_address(),
+                            anemo::PeerId(val_info.network_key().0.to_bytes()),
                         )
                     }
                 }
