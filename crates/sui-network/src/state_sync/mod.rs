@@ -58,10 +58,11 @@ use std::{
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
     base_types::ExecutionDigests,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
     message_envelope::Message,
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
-        CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
+        VerifiedCheckpoint,
     },
     storage::ReadStore,
     storage::WriteStore,

@@ -30,13 +30,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{TransactionEffects, VerifiedSignedTransactionEffects};
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
-    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
-    VerifiedCheckpoint,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::time::Instant;

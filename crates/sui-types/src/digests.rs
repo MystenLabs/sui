@@ -70,3 +70,122 @@ impl fmt::Debug for Sha3Digest {
         fmt::Display::fmt(self, f)
     }
 }
+
+/// Representation of a Checkpoint's digest
+#[derive(
+    Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub struct CheckpointDigest(Sha3Digest);
+
+impl CheckpointDigest {
+    pub fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+
+    pub fn inner(&self) -> &[u8; 32] {
+        self.0.inner()
+    }
+
+    pub fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+}
+
+impl AsRef<[u8]> for CheckpointDigest {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<[u8; 32]> for CheckpointDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        self.0.as_ref()
+    }
+}
+
+impl From<CheckpointDigest> for [u8; 32] {
+    fn from(digest: CheckpointDigest) -> Self {
+        digest.into_inner()
+    }
+}
+
+impl From<[u8; 32]> for CheckpointDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self::new(digest)
+    }
+}
+
+impl fmt::Display for CheckpointDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CheckpointDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("CheckpointDigest").field(&self.0).finish()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct CheckpointContentsDigest(Sha3Digest);
+
+impl CheckpointContentsDigest {
+    pub fn new(digest: [u8; 32]) -> Self {
+        Self(Sha3Digest::new(digest))
+    }
+
+    pub fn inner(&self) -> &[u8; 32] {
+        self.0.inner()
+    }
+
+    pub fn into_inner(self) -> [u8; 32] {
+        self.0.into_inner()
+    }
+
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
+}
+
+impl AsRef<[u8]> for CheckpointContentsDigest {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<[u8; 32]> for CheckpointContentsDigest {
+    fn as_ref(&self) -> &[u8; 32] {
+        self.0.as_ref()
+    }
+}
+
+impl From<CheckpointContentsDigest> for [u8; 32] {
+    fn from(digest: CheckpointContentsDigest) -> Self {
+        digest.into_inner()
+    }
+}
+
+impl From<[u8; 32]> for CheckpointContentsDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self::new(digest)
+    }
+}
+
+impl fmt::Display for CheckpointContentsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for CheckpointContentsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("CheckpointContentsDigest")
+            .field(&self.0)
+            .finish()
+    }
+}
