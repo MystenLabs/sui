@@ -185,6 +185,11 @@ impl Validator {
             self.metadata.net_address.clone(),
         )
     }
+
+    pub fn authority_name(&self) -> AuthorityName {
+        AuthorityPublicKeyBytes::from_bytes(self.metadata.pubkey_bytes.as_ref())
+            .expect("Validity of public key bytes should be verified on-chain")
+    }
 }
 
 /// Rust version of the Move sui::staking_pool::PendingDelegationEntry type.
@@ -410,6 +415,31 @@ impl SuiSystemState {
         for peer_id in worker_peer_ids.iter() {
             result.insert(*peer_id, "other_worker".to_string());
         }
+
+        result
+    }
+
+    pub fn get_current_epoch_peer_id_to_authority_name_map(
+        &self,
+    ) -> HashMap<PeerId, AuthorityName> {
+        let mut result = HashMap::new();
+        let _ = self
+            .validators
+            .active_validators
+            .iter()
+            .map(|validator| {
+                let name = validator.authority_name();
+
+                let network_key = narwhal_crypto::NetworkPublicKey::from_bytes(
+                    &validator.metadata.network_pubkey_bytes,
+                )
+                .expect("Can't get narwhal network key");
+
+                let peer_id = PeerId(network_key.0.to_bytes());
+
+                result.insert(peer_id, name);
+            })
+            .collect();
 
         result
     }
