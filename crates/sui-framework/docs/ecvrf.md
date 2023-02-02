@@ -7,7 +7,6 @@
 
 -  [Constants](#@Constants_0)
 -  [Function `ecvrf_verify`](#0x2_ecvrf_ecvrf_verify)
--  [Module Specification](#@Module_Specification_1)
 
 
 <pre><code></code></pre>
@@ -73,11 +72,14 @@ Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and cor
 
 </details>
 
-<a name="@Module_Specification_1"></a>
-
-## Module Specification
+<details>
+<summary>Specification</summary>
 
 
 
 <pre><code><b>pragma</b> opaque;
 </code></pre>
+
+
+
+</details>
