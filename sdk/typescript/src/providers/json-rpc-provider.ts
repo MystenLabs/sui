@@ -77,6 +77,7 @@ import { Base64DataBuffer } from '../serialization/base64';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
+import { Base58DataBuffer } from '../serialization/base58';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -709,7 +710,7 @@ export class JsonRpcProvider extends Provider {
         'sui_executeTransactionSerializedSig',
         [
           txnBytes.toString(),
-          new Base64DataBuffer(serialized_sig).toString(),
+          new Base58DataBuffer(serialized_sig).toString(),
           requestType,
         ],
         SuiExecuteTransactionResponse,
