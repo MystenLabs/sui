@@ -446,6 +446,7 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signature: String,
     },
+    EvenStake,
 }
 
 impl SuiClientCommands {
@@ -1009,6 +1010,10 @@ impl SuiClientCommands {
 
                 SuiClientCommandResult::VerifySource
             }
+            SuiClientCommands::EvenStake => {
+                even_stake(context).await;
+                SuiClientCommandResult::EvenStake
+            }
         });
         ret
     }
@@ -1018,6 +1023,103 @@ impl SuiClientCommands {
         ensure!(config.get_env(&env).is_some(), "Environment config not found for [{env:?}], add new environment config using the `sui client new-env` command.");
         config.active_env = env;
         Ok(())
+    }
+}
+
+async fn even_stake(context: &mut WalletContext) {
+    const GAS_BUDGET: u64 = 1_000_000;
+    let client = context.get_client().await.unwrap();
+    let signer = context.active_address().unwrap();
+
+    let read_api = client.read_api();
+
+    let sui_system_state = read_api.get_sui_system_state().await.unwrap();
+    let mut max = 0;
+    let validators = &sui_system_state.validators.active_validators;
+    // We don't have pending_validators now
+    for val in validators {
+        let name: &str = std::str::from_utf8(&val.metadata.name).unwrap();
+        let new_total_stake = val.metadata.next_epoch_stake + val.metadata.next_epoch_delegation;
+        if max < new_total_stake {
+            max = new_total_stake;
+        }
+        println!(
+            "{:<20}: next epoch stake {:.3} SUI",
+            name,
+            new_total_stake / 1_000_000_000
+        );
+    }
+    println!("max: {max}");
+
+    let coins = context
+        .gas_objects(signer)
+        .await
+        .unwrap()
+        .iter()
+        .map(|q| GasCoin::try_from(&q.1).unwrap())
+        .collect::<Vec<GasCoin>>();
+
+    if coins.len() < (validators.len() - 1) * 2 {
+        panic!("Not enough coins!");
+    }
+    let mut coins = coins.iter();
+
+    let mut txes = Vec::with_capacity(validators.len());
+    for val in &sui_system_state.validators.active_validators {
+        let name: &str = std::str::from_utf8(&val.metadata.name).unwrap();
+        let address = val.metadata.sui_address;
+        let new_total_stake = val.metadata.next_epoch_stake + val.metadata.next_epoch_delegation;
+        let diff = max - new_total_stake;
+        if diff > 0 {
+            println!(
+                "{:<20}: Planning to stake {:.3} SUI",
+                name,
+                diff / 1_000_000_000
+            );
+            let delegate_coin = coins.find(|c| c.value() >= diff).unwrap();
+            let gas_coin = coins.find(|c| c.value() >= GAS_BUDGET).unwrap();
+            let tx = client
+                .transaction_builder()
+                .request_add_delegation(
+                    signer,
+                    vec![*delegate_coin.id()],
+                    Some(diff),
+                    // Some(1),
+                    address,
+                    Some(*gas_coin.id()),
+                    GAS_BUDGET,
+                )
+                .await
+                .unwrap();
+            let signature = context
+                .config
+                .keystore
+                .sign_secure(&signer, &tx, Intent::default())
+                .unwrap();
+            txes.push((
+                name,
+                Transaction::from_data(tx, Intent::default(), signature)
+                    .verify()
+                    .unwrap(),
+            ));
+        }
+    }
+
+    for (name, tx) in txes {
+        let mut cnt = 1;
+        let tx_digst = *tx.digest();
+        loop {
+            if let Err(err) = context.execute_transaction(tx.clone()).await {
+                println!(
+                    "{:<20}: {:?} failed for {} time(s): {:?}",
+                    name, tx_digst, cnt, err
+                );
+                cnt += 1;
+            } else {
+                break;
+            }
+        }
+        println!("{:<20}: {:?} succeeded.", name, tx_digst);
     }
 }
 
@@ -1109,17 +1211,20 @@ impl WalletContext {
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
-        for oref in object_refs {
-            let response = client.read_api().get_parsed_object(oref.object_id).await?;
-            match response {
-                GetObjectDataResponse::Exists(o) => {
-                    if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
-                        // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o, oref));
-                    }
+        let tasks = object_refs
+            .iter()
+            .map(|oref| client.read_api().get_parsed_object(oref.object_id))
+            .collect::<Vec<_>>();
+        let results = futures::future::join_all(tasks).await;
+
+        for (oref, result) in object_refs.into_iter().zip(results.into_iter()) {
+            // let response = client.read_api().get_parsed_object(oref.object_id).await?;
+            if let Ok(GetObjectDataResponse::Exists(o)) = result {
+                if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
+                    // Okay to unwrap() since we already checked type
+                    let gas_coin = GasCoin::try_from(&o)?;
+                    values_objects.push((gas_coin.value(), o, oref));
                 }
-                _ => continue,
             }
         }
 
@@ -1392,6 +1497,9 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::VerifySource => {
                 writeln!(writer, "Source verification succeeded!")?;
             }
+            SuiClientCommandResult::EvenStake => {
+                writeln!(writer, "Evening Stakes finished!")?;
+            }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1526,6 +1634,7 @@ impl SuiClientCommandResult {
 pub enum SuiClientCommandResult {
     Publish(SuiTransactionResponse),
     VerifySource,
+    EvenStake,
     Object(GetObjectDataResponse, bool),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(
