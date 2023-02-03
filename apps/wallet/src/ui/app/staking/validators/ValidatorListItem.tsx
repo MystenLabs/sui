@@ -18,7 +18,7 @@ const TRUNCATE_PREFIX_LENGTH = 6;
 type ValidatorListItemProp = {
     selected?: boolean;
     // APY can be N/A
-    apy: number;
+    stakeShare: number;
     validatorName: string;
     validatorAddress: string;
     logo: string | null;
@@ -26,7 +26,7 @@ type ValidatorListItemProp = {
 export function ValidatorListItem({
     selected,
     validatorName,
-    apy,
+    stakeShare,
     logo,
     validatorAddress,
 }: ValidatorListItemProp) {
@@ -87,13 +87,13 @@ export function ValidatorListItem({
                         </div>
                     </div>
                     <div className="flex gap-0.5 items-center">
-                        {typeof apy !== 'string' && (
+                        {typeof stakeShare !== 'string' && (
                             <Text
                                 variant="body"
                                 weight="semibold"
                                 color="steel-darker"
                             >
-                                {apy}
+                                {stakeShare}
                             </Text>
                         )}
                         <div className="flex gap-0.5 leading-none">
@@ -102,7 +102,9 @@ export function ValidatorListItem({
                                 weight="medium"
                                 color="steel-dark"
                             >
-                                {typeof apy === 'string' ? apy : '% APY'}
+                                {typeof stakeShare === 'string'
+                                    ? stakeShare
+                                    : '%'}
                             </Text>
                             <div
                                 className={cl(

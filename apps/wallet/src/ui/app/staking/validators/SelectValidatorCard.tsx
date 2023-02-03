@@ -4,7 +4,6 @@
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
-import { calculateAPY } from '../calculateAPY';
 import { STATE_OBJECT, getName } from '../usePendingDelegation';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
@@ -15,12 +14,13 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject } from '_hooks';
+import { formatPercentage } from '_src/shared/formatting';
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
-    const [sortKey, setSortKey] = useState<'name' | 'apy'>('apy');
+    const [sortKey, setSortKey] = useState<'name' | 'stakeShare'>('stakeShare');
     const [sortAscending, setSortAscending] = useState(true);
 
     const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
@@ -31,12 +31,23 @@ export function SelectValidatorCard() {
         setSelectedValidator((state) => (state !== address ? address : null));
     };
 
-    const handleSortByKey = (key: 'name' | 'apy') => {
+    const handleSortByKey = (key: 'name' | 'stakeShare') => {
         if (key === sortKey) {
             setSortAscending(!sortAscending);
         }
         setSortKey(key);
     };
+
+    const totalStake = useMemo(() => {
+        if (!validatorsData) return 0;
+        return validatorsData?.validators.fields.active_validators.reduce(
+            (acc, curr) =>
+                (acc +=
+                    +curr.fields.delegation_staking_pool.fields.sui_balance +
+                    +curr.fields.stake_amount),
+            0
+        );
+    }, [validatorsData]);
 
     const validatorList = useMemo(() => {
         if (!validatorsData) return [];
@@ -45,7 +56,11 @@ export function SelectValidatorCard() {
             .map((validator) => ({
                 name: getName(validator.fields.metadata.fields.name),
                 address: validator.fields.metadata.fields.sui_address,
-                apy: calculateAPY(validator, +validatorsData.epoch),
+                stakeShare: formatPercentage(
+                    +validator.fields.delegation_staking_pool.fields
+                        .sui_balance + +validator.fields.stake_amount,
+                    BigInt(totalStake)
+                ),
                 logo:
                     validator.fields.metadata.fields.image_url &&
                     typeof validator.fields.metadata.fields.image_url ===
@@ -63,7 +78,7 @@ export function SelectValidatorCard() {
                 return a[sortKey] - b[sortKey];
             });
         return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [sortAscending, sortKey, validatorsData]);
+    }, [sortAscending, sortKey, validatorsData, totalStake]);
 
     if (isLoading) {
         return (
@@ -100,20 +115,20 @@ export function SelectValidatorCard() {
                         <div className="flex items-center ml-2 gap-1.5">
                             <button
                                 className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
-                                onClick={() => handleSortByKey('apy')}
+                                onClick={() => handleSortByKey('stakeShare')}
                             >
                                 <Text
                                     variant="caption"
                                     weight="medium"
                                     color={
-                                        sortKey === 'apy'
+                                        sortKey === 'stakeShare'
                                             ? 'hero'
                                             : 'steel-darker'
                                     }
                                 >
-                                    APY
+                                    Stake Share
                                 </Text>
-                                {sortKey === 'apy' && (
+                                {sortKey === 'stakeShare' && (
                                     <Icon
                                         icon={SuiIcons.ArrowLeft}
                                         className={cl(
@@ -168,21 +183,23 @@ export function SelectValidatorCard() {
                 </div>
                 <div className="flex items-start flex-col w-full mt-1 flex-1">
                     {validatorsData &&
-                        validatorList.map(({ name, address, apy, logo }) => (
-                            <div
-                                className="cursor-pointer w-full relative"
-                                key={address}
-                                onClick={() => selectValidator(address)}
-                            >
-                                <ValidatorListItem
-                                    selected={selectedValidator === address}
-                                    validatorAddress={address}
-                                    validatorName={name}
-                                    logo={logo}
-                                    apy={apy}
-                                />
-                            </div>
-                        ))}
+                        validatorList.map(
+                            ({ name, address, stakeShare, logo }) => (
+                                <div
+                                    className="cursor-pointer w-full relative"
+                                    key={address}
+                                    onClick={() => selectValidator(address)}
+                                >
+                                    <ValidatorListItem
+                                        selected={selectedValidator === address}
+                                        validatorAddress={address}
+                                        validatorName={name}
+                                        logo={logo}
+                                        stakeShare={stakeShare}
+                                    />
+                                </div>
+                            )
+                        )}
                 </div>
             </Content>
             {selectedValidator && (
