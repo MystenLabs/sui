@@ -29,9 +29,10 @@ impl SystemStateObserver {
                     _ = interval.tick() => {
                         if let Ok(system_state) = proxy.get_object(SUI_SYSTEM_STATE_OBJECT_ID).await {
                             let move_obj = system_state.data.try_as_move().unwrap();
-                            if let Ok(result) = bcs::from_bytes::<SuiSystemState>(move_obj.contents()) {
-                                if tx.send(result.reference_gas_price).is_ok() {
-                                    info!("Reference gas price = {:?}", result.reference_gas_price);
+                            if let Ok(system_state) = bcs::from_bytes::<SuiSystemState>(move_obj.contents()) {
+                                let reference_gas_price = compute_reference_gas_price(&system_state);
+                                if tx.send(reference_gas_price).is_ok() {
+                                    info!("Reference gas price = {:?}", reference_gas_price);
                                 }
                             }
                         }
@@ -45,4 +46,28 @@ impl SystemStateObserver {
             _sender: sender,
         }
     }
+}
+
+// Temporary fix-up of reference gas price.
+fn compute_reference_gas_price(system_state: &SuiSystemState) -> u64 {
+    let mut gas_prices: Vec<_> = system_state
+        .validators
+        .active_validators
+        .iter()
+        .map(|v| (v.gas_price, v.voting_power))
+        .collect();
+
+    gas_prices.sort();
+    let mut votes = 0;
+    let mut reference_gas_price = 0;
+    const VOTING_THRESHOLD: u64 = 3_333;
+    for (price, vote) in gas_prices.into_iter().rev() {
+        if votes >= VOTING_THRESHOLD {
+            break;
+        }
+
+        reference_gas_price = price;
+        votes += vote;
+    }
+    reference_gas_price
 }
