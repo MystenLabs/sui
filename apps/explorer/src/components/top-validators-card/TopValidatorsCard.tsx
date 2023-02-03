@@ -51,12 +51,7 @@ const validatorsTable = (
 ) => {
     const validators = processValidators(
         validatorsData.validators.fields.active_validators
-    ).sort((a, b) =>
-        a.name.localeCompare(b.name, 'en', {
-            sensitivity: 'base',
-            numeric: true,
-        })
-    );
+    ).sort((a, b) => (Math.random() > 0.5 ? -1 : 1));
 
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
