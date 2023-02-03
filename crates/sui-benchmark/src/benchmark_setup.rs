@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use move_core_types::language_storage::TypeTag;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
@@ -32,14 +32,13 @@ pub enum Env {
     Remote,
 }
 
-pub struct BenchmarkSetup {
+pub struct ProxyGasAndCoin {
+    pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     // Gas to use for execution of gas generation transaction
     pub primary_gas: Gas,
     // Coin to use for splitting and generating small gas coins
     pub pay_coin: Gas,
     pub pay_coin_type_tag: TypeTag,
-    // Validator endpoint proxy
-    pub validator_proxy: Arc<dyn ValidatorProxy + Send + Sync>,
 }
 
 impl Env {
@@ -48,7 +47,7 @@ impl Env {
         barrier: Arc<Barrier>,
         registry: &Registry,
         opts: &Opts,
-    ) -> Result<BenchmarkSetup> {
+    ) -> Result<Vec<ProxyGasAndCoin>> {
         match self {
             Env::Local => {
                 self.setup_local_env(
@@ -70,7 +69,7 @@ impl Env {
                     opts.genesis_blob_path.as_str(),
                     opts.use_fullnode_for_reconfig,
                     opts.use_fullnode_for_execution,
-                    opts.fullnode_rpc_address.clone(),
+                    opts.fullnode_rpc_addresses.clone(),
                 )
                 .await
             }
@@ -84,7 +83,7 @@ impl Env {
         committee_size: usize,
         server_metric_port: u16,
         num_server_threads: u64,
-    ) -> Result<BenchmarkSetup> {
+    ) -> Result<Vec<ProxyGasAndCoin>> {
         info!("Running benchmark setup in local mode..");
         let mut network_config = test_and_configure_authority_configs(committee_size);
         let mut metric_port = server_metric_port;
@@ -156,7 +155,7 @@ impl Env {
         );
         let keypair = Arc::new(keypair);
         let ttag = pay_coin.get_move_template_type()?;
-        Ok(BenchmarkSetup {
+        Ok(vec![ProxyGasAndCoin {
             primary_gas: (
                 primary_gas.compute_object_reference(),
                 Owner::AddressOwner(owner),
@@ -168,8 +167,8 @@ impl Env {
                 keypair,
             ),
             pay_coin_type_tag: ttag,
-            validator_proxy: proxy,
-        })
+            proxy,
+        }])
     }
 
     async fn setup_remote_env(
@@ -182,8 +181,8 @@ impl Env {
         genesis_blob_path: &str,
         use_fullnode_for_reconfig: bool,
         use_fullnode_for_execution: bool,
-        fullnode_rpc_address: Option<String>,
-    ) -> Result<BenchmarkSetup> {
+        fullnode_rpc_address: Vec<String>,
+    ) -> Result<Vec<ProxyGasAndCoin>> {
         info!("Running benchmark setup in remote mode ..");
         std::thread::spawn(move || {
             Builder::new_multi_thread()
@@ -194,21 +193,24 @@ impl Env {
                 });
         });
 
-        let fullnode_rpc_url = fullnode_rpc_address.clone();
-        info!("Fullnode rpc url: {:?}", fullnode_rpc_url);
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if use_fullnode_for_execution {
-            info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
-            Arc::new(
-                FullNodeProxy::from_url(&fullnode_rpc_url.expect(
-                    "fullnode-rpc-url is required when use-fullnode-for-execution is true",
-                ))
-                .await?,
-            )
+        let fullnode_rpc_urls = fullnode_rpc_address.clone();
+        info!("List of fullnode rpc urls: {:?}", fullnode_rpc_urls);
+        let proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = if use_fullnode_for_execution {
+            if fullnode_rpc_urls.is_empty() {
+                bail!("fullnode-rpc-url is required when use-fullnode-for-execution is true");
+            }
+            let mut fullnodes: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
+            for fullnode_rpc_url in fullnode_rpc_urls {
+                info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
+                fullnodes.push(Arc::new(FullNodeProxy::from_url(&fullnode_rpc_url).await?));
+            }
+            fullnodes
         } else {
             info!("Using LocalValidatorAggregatorProxy");
             let reconfig_fullnode_rpc_url =
                 if use_fullnode_for_reconfig {
-                    Some(fullnode_rpc_url.expect(
+                    // Only need to use one full node for reconfiguration.
+                    Some(fullnode_rpc_urls.get(0).expect(
                         "fullnode-rpc-url is required when use-fullnode-for-reconfig is true",
                     ))
                 } else {
@@ -216,54 +218,59 @@ impl Env {
                 };
             let genesis = sui_config::node::Genesis::new_from_file(genesis_blob_path);
             let genesis = genesis.genesis()?;
-            Arc::new(
+            vec![Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     genesis,
                     registry,
-                    reconfig_fullnode_rpc_url.as_deref(),
+                    reconfig_fullnode_rpc_url.map(|x| &**x),
                 )
                 .await,
-            )
+            )]
         };
         info!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
-            proxy.get_current_epoch(),
+            proxies[0].get_current_epoch(),
         );
 
-        let offset = ObjectID::from_hex_literal(primary_gas_id)?;
-        let ids = ObjectID::in_range(offset, primary_gas_objects)?;
-        let primary_gas_id = ids
-            .choose(&mut rand::thread_rng())
-            .context("Failed to choose a random primary gas id")?;
-        let primary_gas = proxy.get_object(*primary_gas_id).await?;
-        let pay_coin_id = ids
-            .choose(&mut rand::thread_rng())
-            .context("Failed to choose a random pay coin")?;
-        let pay_coin = proxy.get_object(*pay_coin_id).await?;
-        let primary_gas_account = primary_gas.owner.get_owner_address()?;
-        let keystore_path = Some(&keystore_path)
-            .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                anyhow!(format!(
-                    "Failed to find keypair at path: {}",
-                    &keystore_path
-                ))
-            })?;
-        let keypair = Arc::new(get_ed25519_keypair_from_keystore(
-            keystore_path,
-            &primary_gas_account,
-        )?);
-        let ttag = pay_coin.get_move_template_type()?;
-        Ok(BenchmarkSetup {
-            primary_gas: (
-                primary_gas.compute_object_reference(),
-                Owner::AddressOwner(primary_gas_account),
-                keypair.clone(),
-            ),
-            pay_coin: (pay_coin.compute_object_reference(), pay_coin.owner, keypair),
-            pay_coin_type_tag: ttag,
-            validator_proxy: proxy,
-        })
+        let mut proxy_gas_and_coins = vec![];
+
+        for proxy in proxies.iter() {
+            let offset = ObjectID::from_hex_literal(primary_gas_id)?;
+            let ids = ObjectID::in_range(offset, primary_gas_objects)?;
+            let primary_gas_id = ids
+                .choose(&mut rand::thread_rng())
+                .context("Failed to choose a random primary gas id")?;
+            let primary_gas = proxy.get_object(*primary_gas_id).await?;
+            let pay_coin_id = ids
+                .choose(&mut rand::thread_rng())
+                .context("Failed to choose a random pay coin")?;
+            let pay_coin = proxy.get_object(*pay_coin_id).await?;
+            let primary_gas_account = primary_gas.owner.get_owner_address()?;
+            let keystore_path = Some(&keystore_path)
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .ok_or_else(|| {
+                    anyhow!(format!(
+                        "Failed to find keypair at path: {}",
+                        &keystore_path
+                    ))
+                })?;
+            let keypair = Arc::new(get_ed25519_keypair_from_keystore(
+                keystore_path,
+                &primary_gas_account,
+            )?);
+            let ttag = pay_coin.get_move_template_type()?;
+            proxy_gas_and_coins.push(ProxyGasAndCoin {
+                primary_gas: (
+                    primary_gas.compute_object_reference(),
+                    Owner::AddressOwner(primary_gas_account),
+                    keypair.clone(),
+                ),
+                pay_coin: (pay_coin.compute_object_reference(), pay_coin.owner, keypair),
+                pay_coin_type_tag: ttag,
+                proxy: proxy.clone(),
+            })
+        }
+        Ok(proxy_gas_and_coins)
     }
 }

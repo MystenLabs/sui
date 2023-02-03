@@ -140,10 +140,10 @@ async fn print_and_start_benchmark() -> &'static Instant {
     .await
 }
 
-#[derive(Debug)]
 pub struct BenchWorker {
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
+    pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
 }
 
 pub struct BenchDriver {
@@ -216,6 +216,7 @@ impl BenchDriver {
                 workers.push(BenchWorker {
                     target_qps,
                     payload: payloads,
+                    proxy: proxy.clone(),
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -241,8 +242,7 @@ async fn ctrl_c() -> std::io::Result<()> {
 impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
-        workloads: Vec<WorkloadInfo>,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        proxy_workloads: Vec<(Arc<dyn ValidatorProxy + Send + Sync>, Vec<WorkloadInfo>)>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
@@ -254,11 +254,13 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
-        for workload in workloads.iter() {
-            bench_workers.extend(
-                self.make_workers(workload, proxy.clone(), system_state_observer.clone())
-                    .await,
-            );
+        for (proxy, workloads) in proxy_workloads.iter() {
+            for workload in workloads.iter() {
+                bench_workers.extend(
+                    self.make_workers(workload, proxy.clone(), system_state_observer.clone())
+                        .await,
+                );
+            }
         }
         let num_workers = bench_workers.len() as u64;
         if num_workers == 0 {
@@ -289,10 +291,6 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
-
-            // Make a per worker proxy, otherwise they all share the same task.
-            // For remote proxy, this call is a no-op
-            let proxy = Arc::new(proxy.clone_new());
 
             let runner = tokio::spawn(async move {
                 cloned_barrier.wait().await;
@@ -352,9 +350,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(proxy.clone_committee());
+                                let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
-                                let res = proxy
+                                let res = worker.proxy
                                     .execute_transaction(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
@@ -401,8 +399,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let start = Arc::new(Instant::now());
                                 let metrics_cloned = metrics_cloned.clone();
                                 // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(proxy.clone_committee());
-                                let res = proxy
+                                let committee_cloned = Arc::new(worker.proxy.clone_committee());
+                                let res = worker.proxy
                                     .execute_transaction(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
