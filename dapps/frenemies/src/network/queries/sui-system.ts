@@ -5,7 +5,7 @@ import {
   is,
   normalizeSuiAddress,
   SuiObject,
-  ValidatorsFields,
+  MoveSuiSystemObjectFields,
 } from "@mysten/sui.js";
 import { useQuery } from "@tanstack/react-query";
 import provider from "../provider";
@@ -26,7 +26,7 @@ export function useSuiSystem() {
       data &&
       is(data.details, SuiObject) &&
       data.details.data.dataType === "moveObject"
-        ? (data.details.data.fields as ValidatorsFields)
+        ? (data.details.data.fields as MoveSuiSystemObjectFields)
         : null;
 
     return systemObject;
