@@ -53,15 +53,16 @@ use futures::{FutureExt, StreamExt};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use sui_config::p2p::StateSyncConfig;
 use sui_types::{
     base_types::ExecutionDigests,
+    digests::{CheckpointContentsDigest, CheckpointDigest},
     message_envelope::Message,
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
-        CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointSequenceNumber,
+        VerifiedCheckpoint,
     },
     storage::ReadStore,
     storage::WriteStore,
@@ -276,6 +277,20 @@ where
             }
             subscriber
         };
+
+        // Initialize checkpoint watermark metrics
+        self.metrics.set_highest_verified_checkpoint(
+            self.store
+                .get_highest_verified_checkpoint()
+                .expect("store operation should not fail")
+                .sequence_number(),
+        );
+        self.metrics.set_highest_synced_checkpoint(
+            self.store
+                .get_highest_synced_checkpoint()
+                .expect("store operation should not fail")
+                .sequence_number(),
+        );
 
         loop {
             tokio::select! {
@@ -854,6 +869,13 @@ where
                 .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
             VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
+
+        debug!(sequence_number = ?checkpoint.summary.sequence_number, "verified checkpoint summary");
+        SystemTime::now()
+            .duration_since(checkpoint.summary.timestamp())
+            .map(|latency| metrics.report_checkpoint_summary_age(latency))
+            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
+            .ok();
 
         current = checkpoint.clone();
         // Insert the newly verified checkpoint into our store, which will bump our highest

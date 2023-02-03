@@ -197,7 +197,7 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
+        let mut state = ConsensusState::new(metrics);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, certificate).unwrap();
@@ -234,14 +234,14 @@ mod tests {
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
             test_utils::make_certificates(&committee, 1..=rounds, &genesis, &keys, 0.333);
-        let arc_committee = Arc::new(ArcSwap::from_pointee(committee.clone()));
+        let arc_committee = Arc::new(ArcSwap::from_pointee(committee));
 
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
+        let mut state = ConsensusState::new(metrics);
         let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {

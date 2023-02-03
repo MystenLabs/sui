@@ -16,6 +16,8 @@ use tracing::warn;
 pub use scopeguard;
 use uuid::Uuid;
 
+pub mod histogram;
+
 #[derive(Debug)]
 pub struct Metrics {
     pub tasks: IntGaugeVec,

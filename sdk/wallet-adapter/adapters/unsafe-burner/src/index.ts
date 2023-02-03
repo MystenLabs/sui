@@ -3,6 +3,7 @@
 
 import {
   Ed25519Keypair,
+  ExecuteTransactionRequestType,
   getCertifiedTransaction,
   getTransactionEffects,
   JsonRpcProvider,
@@ -48,8 +49,14 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     return [this.#keypair.getPublicKey().toSuiAddress()];
   }
 
-  async signAndExecuteTransaction(transaction: SignableTransaction) {
-    const response = await this.#signer.signAndExecuteTransaction(transaction);
+  async signAndExecuteTransaction(
+    transaction: SignableTransaction,
+    options?: { requestType?: ExecuteTransactionRequestType }
+  ) {
+    const response = await this.#signer.signAndExecuteTransaction(
+      transaction,
+      options?.requestType
+    );
 
     return {
       certificate: getCertifiedTransaction(response)!,

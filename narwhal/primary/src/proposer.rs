@@ -9,7 +9,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::BTreeMap;
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
-use tokio::time::Instant;
+use tokio::time::{sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -54,8 +54,10 @@ pub struct Proposer {
     header_num_of_batches_threshold: usize,
     /// The maximum number of batches in header.
     max_header_num_of_batches: usize,
-    /// The maximum delay to wait for batches' digests.
+    /// The maximum delay to wait for conditions like having leader in parents.
     max_header_delay: Duration,
+    /// The minimum delay between generating headers.
+    min_header_delay: Duration,
     /// The delay to wait until resending the last proposed header if proposer
     /// hasn't proposed anything new since then. If None is provided then the
     /// default value will be used instead.
@@ -107,6 +109,7 @@ impl Proposer {
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
+        min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
         network_model: NetworkModel,
         rx_shutdown: ConditionalBroadcastReceiver,
@@ -127,6 +130,7 @@ impl Proposer {
                     header_num_of_batches_threshold,
                     max_header_num_of_batches,
                     max_header_delay,
+                    min_header_delay,
                     header_resend_timeout,
                     network_model,
                     rx_shutdown,
@@ -304,20 +308,36 @@ impl Proposer {
         Ok(header)
     }
 
-    /// Compute the timeout value of the proposer.
-    fn timeout_value(&self) -> Instant {
+    fn max_delay(&self) -> Duration {
         match self.network_model {
             // In partial synchrony, if this node is going to be the leader of the next
-            // round, we set a lower timeout value to increase its chance of committing
-            // the leader committed.
+            // round, we set a lower max timeout value to increase its chance of committing
+            // the leader.
             NetworkModel::PartiallySynchronous
                 if self.committee.leader(self.round + 1) == self.name =>
             {
-                Instant::now() + self.max_header_delay / 2
+                self.max_header_delay / 2
             }
 
             // Otherwise we keep the default timeout value.
-            _ => Instant::now() + self.max_header_delay,
+            _ => self.max_header_delay,
+        }
+    }
+
+    fn min_delay(&self) -> Duration {
+        match self.network_model {
+            // In partial synchrony, if this node is going to be the leader of the next
+            // round and there are more than 1 primary in the committee, we use a lower
+            // min delay value to increase the chance of committing the leader.
+            NetworkModel::PartiallySynchronous
+                if self.committee.size() > 1
+                    && self.committee.leader(self.round + 1) == self.name =>
+            {
+                Duration::ZERO
+            }
+
+            // Otherwise we keep the default timeout value.
+            _ => self.min_header_delay,
         }
     }
 
@@ -337,9 +357,14 @@ impl Proposer {
         self.last_leader.is_some()
     }
 
-    /// Check whether if we have (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
-    /// or (iii) there is no leader to vote for. This is only relevant in partial synchrony.
+    /// Check whether if this validator is the leader of the round, or if we have
+    /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
+    /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
+        if self.committee.leader(self.round + 1) == self.name {
+            return true;
+        }
+
         let leader = match &self.last_leader {
             Some(x) => x.digest(),
             None => return true,
@@ -390,14 +415,17 @@ impl Proposer {
         debug!("Dag starting at round {}", self.round);
         let mut advance = true;
 
-        let timer = sleep(self.max_header_delay);
+        let timer_start = Instant::now();
+        let max_delay_timer = sleep_until(timer_start + self.max_header_delay);
+        let min_delay_timer = sleep_until(timer_start + self.min_header_delay);
         let header_resend_timeout = self
             .header_resend_timeout
             .unwrap_or(DEFAULT_HEADER_RESEND_TIMEOUT);
         let mut header_repeat_timer = Box::pin(sleep(header_resend_timeout));
         let mut opt_latest_header = None;
 
-        tokio::pin!(timer);
+        tokio::pin!(max_delay_timer);
+        tokio::pin!(min_delay_timer);
 
         info!(
             "Proposer on node {} has started successfully with header resend timeout {:?}.",
@@ -412,10 +440,14 @@ impl Proposer {
             // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
-            let mut timer_expired = timer.is_elapsed();
+            let max_delay_timed_out = max_delay_timer.is_elapsed();
+            let min_delay_timed_out = min_delay_timer.is_elapsed();
 
-            if (timer_expired || (enough_digests && advance)) && enough_parents {
-                if timer_expired && matches!(self.network_model, NetworkModel::PartiallySynchronous)
+            if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
+                && enough_parents
+            {
+                if max_delay_timed_out
+                    && matches!(self.network_model, NetworkModel::PartiallySynchronous)
                 {
                     // It is expected that this timer expires from time to time. If it expires too often, it
                     // either means some validators are Byzantine or that the network is experiencing periods
@@ -435,10 +467,12 @@ impl Proposer {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok((header, digests)) => {
-                        let reason = if timer_expired {
-                            "timeout"
-                        } else {
+                        let reason = if max_delay_timed_out {
+                            "max_timeout"
+                        } else if enough_digests {
                             "threshold_size_reached"
+                        } else {
+                            "min_timeout"
                         };
 
                         // Save the header
@@ -453,9 +487,13 @@ impl Proposer {
                 }
 
                 // Reschedule the timer.
-                let deadline = self.timeout_value();
-                timer.as_mut().reset(deadline);
-                timer_expired = false;
+                let timer_start = Instant::now();
+                max_delay_timer
+                    .as_mut()
+                    .reset(timer_start + self.max_delay());
+                min_delay_timer
+                    .as_mut()
+                    .reset(timer_start + self.min_delay());
             }
 
             tokio::select! {
@@ -592,9 +630,12 @@ impl Proposer {
                     let _ = ack_channel.send(());
                 }
 
-                // Check whether the timer expired.
-                () = &mut timer, if !timer_expired => {
-                    // Nothing to do.
+                // Check whether any timer expired.
+                () = &mut max_delay_timer, if !max_delay_timed_out => {
+                    // Continue to next iteration of the loop.
+                }
+                () = &mut min_delay_timer, if !min_delay_timed_out => {
+                    // Continue to next iteration of the loop.
                 }
 
                 _ = self.rx_shutdown.receiver.recv() => {

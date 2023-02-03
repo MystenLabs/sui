@@ -255,7 +255,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::error_span!("validator_state_process_tx", ?tx_digest);
+        let span = error_span!("validator_state_process_tx", ?tx_digest);
 
         let info = state
             .handle_transaction(transaction)
@@ -428,17 +428,6 @@ impl Validator for ValidatorService {
         })
         .await
         .unwrap()
-    }
-
-    async fn account_info(
-        &self,
-        request: tonic::Request<AccountInfoRequest>,
-    ) -> Result<tonic::Response<AccountInfoResponse>, tonic::Status> {
-        let request = request.into_inner();
-
-        let response = self.state.handle_account_info_request(request).await?;
-
-        Ok(tonic::Response::new(response))
     }
 
     async fn object_info(

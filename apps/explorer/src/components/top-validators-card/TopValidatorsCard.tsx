@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+import {
+    is,
+    SuiObject,
+    type MoveSuiSystemObjectFields,
+    type MoveActiveValidator,
+} from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import { StakeColumn } from './StakeColumn';
 
 import { useGetObject } from '~/hooks/useGetObject';
-import {
-    VALIDATORS_OBJECT_ID,
-    type ActiveValidator,
-} from '~/pages/validator/ValidatorDataTypes';
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { ValidatorLink } from '~/ui/InternalLink';
@@ -23,7 +25,7 @@ import { getName } from '~/utils/getName';
 
 const NUMBER_OF_VALIDATORS = 10;
 
-export function processValidators(set: ActiveValidator[]) {
+export function processValidators(set: MoveActiveValidator[]) {
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;
         const delegatedStake =
@@ -43,7 +45,7 @@ export function processValidators(set: ActiveValidator[]) {
 }
 
 const validatorsTable = (
-    validatorsData: ValidatorsFields,
+    validatorsData: MoveSuiSystemObjectFields,
     limit?: number,
     showIcon?: boolean
 ) => {
@@ -119,7 +121,7 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorsFields)
+            ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
 
     const tableData = useMemo(

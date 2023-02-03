@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Encoding, Hex};
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo, Signature,
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, Signature,
 };
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::sui_serde::Readable;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
@@ -22,7 +21,9 @@ use crate::{
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, Bytes};
+
+pub use crate::digests::CheckpointContentsDigest;
+pub use crate::digests::CheckpointDigest;
 
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
@@ -42,73 +43,6 @@ pub struct CheckpointRequest {
 pub struct CheckpointResponse {
     pub checkpoint: Option<CertifiedCheckpointSummary>,
     pub contents: Option<CheckpointContents>,
-}
-
-#[serde_as]
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-)]
-pub struct CheckpointDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    pub [u8; 32],
-);
-
-impl AsRef<[u8]> for CheckpointDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for CheckpointDigest {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl CheckpointDigest {
-    pub fn encode(&self) -> String {
-        Base58::encode(self.0)
-    }
-}
-
-#[serde_as]
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
-pub struct CheckpointContentsDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    pub [u8; 32],
-);
-
-impl AsRef<[u8]> for CheckpointContentsDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for CheckpointContentsDigest {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl CheckpointContentsDigest {
-    pub fn encode(&self) -> String {
-        Base58::encode(self.0)
-    }
 }
 
 // The constituent parts of checkpoints, signed and certified
@@ -169,7 +103,11 @@ impl CheckpointSummary {
     }
 
     pub fn digest(&self) -> CheckpointDigest {
-        CheckpointDigest(sha3_hash(self))
+        CheckpointDigest::new(sha3_hash(self))
+    }
+
+    pub fn timestamp(&self) -> SystemTime {
+        UNIX_EPOCH + Duration::from_millis(self.timestamp_ms)
     }
 }
 
@@ -181,7 +119,7 @@ impl Display for CheckpointSummary {
             epoch_rolling_gas_cost_summary: {:?}}}",
             self.epoch,
             self.sequence_number,
-            Hex::encode(self.content_digest),
+            self.content_digest,
             self.epoch_rolling_gas_cost_summary,
         )
     }
@@ -311,7 +249,7 @@ impl SignedCheckpointSummary {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
+pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
@@ -332,7 +270,7 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+            auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signed_checkpoints
                     .into_iter()
                     .map(|v| v.auth_signature)
@@ -504,7 +442,7 @@ impl CheckpointContents {
     }
 
     pub fn digest(&self) -> CheckpointContentsDigest {
-        CheckpointContentsDigest(sha3_hash(self))
+        CheckpointContentsDigest::new(sha3_hash(self))
     }
 }
 

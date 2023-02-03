@@ -43,6 +43,12 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+
+#[cfg(not(test))]
+use sui_protocol_constants::MAX_TRANSACTIONS_PER_CHECKPOINT;
+#[cfg(test)]
+use sui_protocol_constants::MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING;
+
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     IndexStore,
@@ -73,7 +79,7 @@ use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
+use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::threshold_bls_api::ThresholdBlsApi;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -159,6 +165,7 @@ impl SuiNode {
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
+            None,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -571,15 +578,18 @@ impl SuiNode {
             sender: consensus_adapter,
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
-            checkpoints_per_epoch: config.checkpoints_per_epoch,
+            next_reconfiguration_timestamp_ms: epoch_store
+                .epoch_start_configuration()
+                .expect("Failed to load epoch start configuration")
+                .epoch_start_timestamp_ms
+                .saturating_add(config.epoch_duration_ms),
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);
-        // Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
         #[cfg(test)]
-        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 2;
+        let max_tx_per_checkpoint = MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING;
         #[cfg(not(test))]
-        const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
+        let max_tx_per_checkpoint = MAX_TRANSACTIONS_PER_CHECKPOINT;
 
         CheckpointService::spawn(
             state.clone(),
@@ -590,7 +600,7 @@ impl SuiNode {
             Box::new(certified_checkpoint_output),
             Box::new(NetworkTransactionCertifier::default()),
             checkpoint_metrics,
-            MAX_TRANSACTIONS_PER_CHECKPOINT,
+            max_tx_per_checkpoint,
         )
     }
 
@@ -608,7 +618,9 @@ impl SuiNode {
             registry_service: registry_service.clone(),
         };
 
-        Ok(NarwhalManager::new(narwhal_config))
+        let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
+
+        Ok(NarwhalManager::new(narwhal_config, metrics))
     }
 
     fn construct_consensus_adapter(
@@ -821,7 +833,10 @@ impl SuiNode {
         let new_committee = system_state.get_current_epoch_committee();
         assert_eq!(next_epoch, new_committee.committee.epoch);
         self.state
-            .reconfigure(new_committee.committee)
+            .reconfigure(
+                new_committee.committee,
+                system_state.epoch_start_timestamp_ms,
+            )
             .await
             .expect("Reconfigure authority state cannot fail");
         info!("Validator State has been reconfigured");

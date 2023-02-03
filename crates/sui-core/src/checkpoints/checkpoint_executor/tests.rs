@@ -170,7 +170,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     );
 
     authority_state
-        .reconfigure(second_committee.committee().clone())
+        .reconfigure(second_committee.committee().clone(), 0)
         .await
         .unwrap();
 

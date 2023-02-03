@@ -6,9 +6,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { faucet, mint } from './utils/localnet';
 
 async function search(page: Page, text: string) {
-    const searchbar = page.getByTestId('search');
+    const searchbar = page.getByRole('combobox');
     await searchbar.fill(text);
-    await searchbar.press('Enter');
+    const result = page.getByRole('option').first();
+    await result.click();
 }
 
 test('can search for an address', async ({ page }) => {
@@ -22,7 +23,7 @@ test('can search for objects', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
 
-    const { objectId } = tx.EffectsCert.effects.effects.created![0].reference;
+    const { objectId } = tx.effects.effects.created![0].reference;
     await page.goto('/');
     await search(page, objectId);
     await expect(page).toHaveURL(`/object/${objectId}`);
@@ -32,7 +33,7 @@ test('can search for transaction', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
 
-    const txid = tx.EffectsCert.certificate.transactionDigest;
+    const txid = tx.effects.effects.transactionDigest;
     await page.goto('/');
     await search(page, txid);
     await expect(page).toHaveURL(`/transaction/${txid}`);

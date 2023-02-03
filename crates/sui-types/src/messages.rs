@@ -18,7 +18,7 @@ use crate::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::Base64;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -465,7 +465,7 @@ impl Display for SingleTransactionKind {
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                writeln!(writer, "Object Digest : {}", digest)?;
             }
             Self::TransferSui(t) => {
                 writeln!(writer, "Transaction Kind : Transfer SUI")?;
@@ -482,7 +482,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -499,7 +499,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -516,7 +516,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipient:")?;
                 writeln!(writer, "{}", &p.recipient)?;
@@ -1208,17 +1208,6 @@ pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStron
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct AccountInfoRequest {
-    pub account: SuiAddress,
-}
-
-impl From<SuiAddress> for AccountInfoRequest {
-    fn from(account: SuiAddress) -> Self {
-        AccountInfoRequest { account }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
     /// Request the latest object state, if a format option is provided,
     /// return the layout of the object in the given format.
@@ -1259,12 +1248,6 @@ impl ObjectInfoRequest {
             request_kind: ObjectInfoRequestKind::LatestObjectInfo(layout),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct AccountInfoResponse {
-    pub object_ids: Vec<ObjectRef>,
-    pub owner: SuiAddress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1340,40 +1323,37 @@ impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionInfoRequest {
     pub transaction_digest: TransactionDigest,
 }
 
-impl From<TransactionDigest> for TransactionInfoRequest {
-    fn from(transaction_digest: TransactionDigest) -> Self {
-        TransactionInfoRequest { transaction_digest }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleCertificateResponse {
-    pub signed_effects: SignedTransactionEffects,
-}
-
-#[derive(Clone, Debug)]
-pub struct VerifiedHandleCertificateResponse {
-    pub signed_effects: VerifiedSignedTransactionEffects,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfoResponse<
+pub enum TransactionInfoResponse<
     TxnT = SignedTransaction,
     CertT = CertifiedTransaction,
-    EffectsT = SignedTransactionEffects,
+    EfxT = SignedTransactionEffects,
 > {
-    // The signed transaction response to handle_transaction
-    pub signed_transaction: Option<TxnT>,
-    // The certificate in case one is available
-    pub certified_transaction: Option<CertT>,
-    // The effects resulting from a successful execution should
-    // contain ObjectRef created, mutated, deleted and events.
-    pub signed_effects: Option<EffectsT>,
+    Signed(TxnT),
+    // TODO: Eventually support a mode for finalized transactions, where we include raw effects
+    // and the finalized epoch/checkpoint number.
+    // We also shouldn't return the cert in the Executed case, but currently the client is expecting it.
+    Executed(CertT, EfxT),
+}
+
+impl PartialEq for TransactionInfoResponse {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Signed(s1) => match other {
+                Self::Signed(s2) => s1.digest() == s2.digest(),
+                _ => false,
+            },
+            Self::Executed(c1, e1) => match other {
+                Self::Executed(c2, e2) => c1.digest() == c2.digest() && e1.digest() == e2.digest(),
+                _ => false,
+            },
+        }
+    }
 }
 
 pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
@@ -1382,23 +1362,42 @@ pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
     VerifiedSignedTransactionEffects,
 >;
 
-impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
-    fn from(v: VerifiedTransactionInfoResponse) -> Self {
-        let VerifiedTransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
-        } = v;
-
-        let certified_transaction = certified_transaction.map(|c| c.into_inner());
-        let signed_transaction = signed_transaction.map(|c| c.into_inner());
-        let signed_effects = signed_effects.map(|s| s.into_inner());
-        TransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
+impl<TxnT, CertT, EfxT> TransactionInfoResponse<TxnT, CertT, EfxT> {
+    pub fn into_signed_for_testing(self) -> TxnT {
+        match self {
+            Self::Signed(s) => s,
+            _ => unreachable!("Incorrect response type"),
         }
     }
+
+    pub fn into_executed_for_testing(self) -> (CertT, EfxT) {
+        match self {
+            Self::Executed(c, e) => (c, e),
+            _ => unreachable!("Incorrect response type"),
+        }
+    }
+}
+
+impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
+    fn from(other: VerifiedTransactionInfoResponse) -> Self {
+        match other {
+            VerifiedTransactionInfoResponse::Signed(s) => Self::Signed(s.into_inner()),
+            VerifiedTransactionInfoResponse::Executed(c, e) => {
+                Self::Executed(c.into_inner(), e.into_inner())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
+    // TODO: Add a case for finalized transaction.
+}
+
+#[derive(Clone, Debug)]
+pub struct VerifiedHandleCertificateResponse {
+    pub signed_effects: VerifiedSignedTransactionEffects,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -2035,7 +2034,7 @@ impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest(sha3_hash(self))
+        TransactionEffectsDigest::new(sha3_hash(self))
     }
 
     fn verify(&self) -> SuiResult {
@@ -2418,6 +2417,35 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EffectsFinalityInfo {
+    Certified(AuthorityStrongQuorumSignInfo),
+    Checkpointed(EpochId, CheckpointSequenceNumber),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FinalizedEffects {
+    pub effects: TransactionEffects,
+    pub finality_info: EffectsFinalityInfo,
+}
+
+impl FinalizedEffects {
+    pub fn new_from_effects_cert(effects_cert: CertifiedTransactionEffects) -> Self {
+        let (data, sig) = effects_cert.into_data_and_sig();
+        Self {
+            effects: data,
+            finality_info: EffectsFinalityInfo::Certified(sig),
+        }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        match &self.finality_info {
+            EffectsFinalityInfo::Certified(cert) => cert.epoch,
+            EffectsFinalityInfo::Checkpointed(epoch, _) => *epoch,
+        }
+    }
+}
+
 /// When requested to execute a transaction with WaitForLocalExecution,
 /// TransactionOrchestrator attempts to execute this transaction locally
 /// after it is finalized. This value represents whether the transaction
@@ -2428,8 +2456,8 @@ pub type IsTransactionExecutedLocally = bool;
 pub enum ExecuteTransactionResponse {
     EffectsCert(
         Box<(
-            CertifiedTransaction,
-            CertifiedTransactionEffects,
+            Option<CertifiedTransaction>,
+            FinalizedEffects,
             IsTransactionExecutedLocally,
         )>,
     ),

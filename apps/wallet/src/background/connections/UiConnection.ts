@@ -4,9 +4,11 @@
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
 import FeatureGating from '../FeatureGating';
+import NetworkEnv from '../NetworkEnv';
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
-import { isBasePayload } from '_payloads';
+import { type ErrorPayload, isBasePayload } from '_payloads';
+import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import {
     isGetPermissionRequests,
     isPermissionResponse,
@@ -118,10 +120,34 @@ export class UiConnection extends Connection {
                         id
                     )
                 );
+            } else if (
+                isBasePayload(payload) &&
+                payload.type === 'get-network'
+            ) {
+                this.send(
+                    createMessage<SetNetworkPayload>(
+                        {
+                            type: 'set-network',
+                            network: await NetworkEnv.getActiveNetwork(),
+                        },
+                        id
+                    )
+                );
+            } else if (isSetNetworkPayload(payload)) {
+                await NetworkEnv.setActiveNetwork(payload.network);
+                this.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
-            // just in case
-            // we could log it also
+            this.send(
+                createMessage<ErrorPayload>(
+                    {
+                        error: true,
+                        code: -1,
+                        message: (e as Error).message,
+                    },
+                    id
+                )
+            );
         }
     }
 

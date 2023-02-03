@@ -42,12 +42,6 @@ pub struct AuthorityPerpetualTables {
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
     pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
 
-    /// This is a an index of object references to currently existing objects, indexed by the
-    /// composite key of the SuiAddress of their owner and the object ID of the object.
-    /// This composite index allows an efficient iterator to list all objected currently owned
-    /// by a specific user, and their object reference.
-    pub(crate) owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
-
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this

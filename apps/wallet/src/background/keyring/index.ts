@@ -261,6 +261,19 @@ export class Keyring {
                         id
                     )
                 );
+            } else if (isKeyringPayload(payload, 'switchAccount')) {
+                if (this.#locked) {
+                    throw new Error('Keyring is locked. Unlock it first.');
+                }
+                if (!payload.args) {
+                    throw new Error('Missing parameters.');
+                }
+                const { address } = payload.args;
+                const changed = await this.changeActiveAccount(address);
+                if (!changed) {
+                    throw new Error(`Failed to change account to ${address}`);
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(

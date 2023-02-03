@@ -56,7 +56,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
-        let test_cluster = build_test_cluster(4, 10).await;
+        let test_cluster = build_test_cluster(4, 1000).await;
         test_simulated_load(test_cluster, 60).await;
     }
 
@@ -79,7 +79,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_restarts() {
-        let test_cluster = build_test_cluster(4, 10).await;
+        let test_cluster = build_test_cluster(4, 1000).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
@@ -90,7 +90,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_crashes() {
-        let test_cluster = build_test_cluster(4, 10).await;
+        let test_cluster = build_test_cluster(4, 1000).await;
 
         struct DeadValidator {
             node_id: sui_simulator::task::NodeId,
@@ -141,16 +141,18 @@ mod test {
 
     async fn build_test_cluster(
         default_num_validators: usize,
-        default_checkpoints_per_epoch: u64,
+        default_epoch_duration_ms: u64,
     ) -> Arc<TestCluster> {
         let mut builder = TestClusterBuilder::new().with_num_validators(get_var(
             "SIM_STRESS_TEST_NUM_VALIDATORS",
             default_num_validators,
         ));
-
-        let checkpoints_per_epoch = get_var("CHECKPOINTS_PER_EPOCH", default_checkpoints_per_epoch);
-        if checkpoints_per_epoch > 0 {
-            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
+        if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
+            eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
+        }
+        let epoch_duration_ms = get_var("EPOCH_DURATION_MS", default_epoch_duration_ms);
+        if epoch_duration_ms > 0 {
+            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         Arc::new(builder.build().await.unwrap())

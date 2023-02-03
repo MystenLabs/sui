@@ -27,13 +27,16 @@ use tracing::{debug, error, info, warn};
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority_aggregator::{
-    AuthorityAggregator, QuorumExecuteCertificateError, QuorumSignTransactionError,
+    AuthorityAggregator, ProcessTransactionResult, QuorumExecuteCertificateError,
+    QuorumSignTransactionError,
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages::{
+    QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction, VerifiedTransactionInfoResponse,
+};
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -265,7 +268,7 @@ where
     pub(crate) async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedCertificate, QuorumDriverInternalError> {
+    ) -> Result<ProcessTransactionResult, QuorumDriverInternalError> {
         let tx_digest = *transaction.digest();
         let result = self
             .validators
@@ -455,7 +458,7 @@ where
         original_tx_digest: &TransactionDigest,
         validators: BTreeSet<AuthorityName>,
     ) -> SuiResult<bool> {
-        let (signed_transaction, certified_transaction) = self
+        let response = self
             .validators
             .load()
             .handle_transaction_info_request_from_some_validators(
@@ -465,68 +468,63 @@ where
             )
             .await?;
 
-        // If we happen to find that a validator returns TransactionCertificate:
-        if let Some(certified_transaction) = certified_transaction {
-            self.metrics
-                .total_times_conflicting_transaction_already_finalized_when_retrying
-                .inc();
-            // We still want to ask validators to execute this certificate in case this certificate is not
-            // known to the rest of them (e.g. when *this* validator is bad).
-            let result = self
-                .validators
-                .load()
-                .process_certificate(certified_transaction.into_inner())
-                .await
-                .tap_ok(|_resp| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction certificate succeeded."
-                    );
-                })
-                .tap_err(|err| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction certificate got an error: {:?}",
-                        err
-                    );
-                });
-            // We only try it once.
-            return Ok(result.is_ok());
+        match response {
+            VerifiedTransactionInfoResponse::Executed(cert, _) => {
+                self.metrics
+                    .total_times_conflicting_transaction_already_finalized_when_retrying
+                    .inc();
+                // We still want to ask validators to execute this certificate in case this certificate is not
+                // known to the rest of them (e.g. when *this* validator is bad).
+                let result = self
+                    .validators
+                    .load()
+                    .process_certificate(cert.into_inner())
+                    .await
+                    .tap_ok(|_resp| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction certificate succeeded."
+                        );
+                    })
+                    .tap_err(|err| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction certificate got an error: {:?}",
+                            err
+                        );
+                    });
+                // We only try it once.
+                Ok(result.is_ok())
+            }
+            VerifiedTransactionInfoResponse::Signed(signed) => {
+                let verified_transaction = signed.into_unsigned();
+                // Now ask validators to execute this transaction.
+                let result = self
+                    .validators
+                    .load()
+                    .execute_transaction(&verified_transaction)
+                    .await
+                    .tap_ok(|_resp| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction succeeded."
+                        );
+                    })
+                    .tap_err(|err| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction got an error: {:?}",
+                            err
+                        );
+                    });
+                // We only try it once
+                Ok(result.is_ok())
+            }
         }
-
-        if let Some(signed_transaction) = signed_transaction {
-            let verified_transaction = signed_transaction.into_unsigned();
-            // Now ask validators to execute this transaction.
-            let result = self
-                .validators
-                .load()
-                .execute_transaction(&verified_transaction)
-                .await
-                .tap_ok(|_resp| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction succeeded."
-                    );
-                })
-                .tap_err(|err| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction got an error: {:?}",
-                        err
-                    );
-                });
-            // We only try it once
-            return Ok(result.is_ok());
-        }
-
-        // This is unreachable.
-        let err_str = "handle_transaction_info_request_from_some_validators shouldn't return empty SignedTransaction and empty CertifiedTransaction";
-        error!(err_str);
-        Err(SuiError::from(err_str))
     }
 }
 
@@ -685,9 +683,21 @@ where
 
         let tx_cert = match tx_cert {
             None => match quorum_driver.process_transaction(transaction.clone()).await {
-                Ok(tx_cert) => {
+                Ok(ProcessTransactionResult::Certified(tx_cert)) => {
                     debug!(?tx_digest, "Transaction processing succeeded");
                     tx_cert
+                }
+                Ok(ProcessTransactionResult::Executed(tx_cert, effects_cert)) => {
+                    debug!(
+                        ?tx_digest,
+                        "Transaction processing succeeded with effects directly"
+                    );
+                    let response = QuorumDriverResponse {
+                        tx_cert,
+                        effects_cert,
+                    };
+                    quorum_driver.notify(&tx_digest, &Ok(response), old_retry_times + 1);
+                    return;
                 }
                 Err(err) => {
                     Self::handle_error(

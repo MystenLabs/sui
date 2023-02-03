@@ -59,7 +59,6 @@ async fn commit_one() {
         tx_output,
         tusk,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -125,7 +124,6 @@ async fn dead_node() {
         tx_output,
         tusk,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -245,7 +243,6 @@ async fn not_enough_support() {
         tx_output,
         tusk,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -334,7 +331,6 @@ async fn missing_leader() {
         tx_output,
         tusk,
         metrics,
-        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -397,7 +393,6 @@ async fn restart_with_new_committee() {
             tx_output,
             tusk,
             metrics.clone(),
-            gc_depth,
         );
         tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 

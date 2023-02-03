@@ -25,6 +25,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -53,7 +54,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -92,6 +93,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -120,7 +122,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -159,6 +161,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -187,7 +190,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -226,6 +229,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -254,7 +258,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -293,6 +297,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -321,7 +326,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -360,6 +365,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -388,7 +394,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -427,6 +433,7 @@ validator_configs:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
         max_header_delay: 100ms
+        min_header_delay: 100ms
         gc_depth: 50
         sync_retry_delay: 5000ms
         sync_retry_nodes: 3
@@ -455,7 +462,7 @@ validator_configs:
           report_batch_rate_limit: ~
           request_batch_rate_limit: ~
     enable-event-processing: false
-    checkpoints-per-epoch: 3000
+    epoch-duration-ms: 86400000
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:

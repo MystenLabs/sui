@@ -11,10 +11,10 @@ import { useRawObject } from "../../network/queries/use-raw";
  * Table representing a Leaderboard
  */
 export function Leaderboard() {
-  const { data } = useRawObject<LeaderboardType>(config.VITE_LEADERBOARD, LEADERBOARD);
+  const { data: leaderboard } = useRawObject<LeaderboardType>(config.VITE_LEADERBOARD, LEADERBOARD);
 
   // TODO: Loading and error states:
-  if (!data) {
+  if (!leaderboard) {
     return null;
   }
 
@@ -22,13 +22,13 @@ export function Leaderboard() {
     <>
       <div className="flex gap-16 mt-3 mb-7">
         <Stat variant="leaderboard" label="Highest Score">
-          --
+          {leaderboard.data.topScores[0].score || 0}
         </Stat>
         {/* <Stat variant="leaderboard" label="Total Score">
           420
         </Stat> */}
       </div>
-      <Table data={data.data} />
+      <Table data={leaderboard.data} />
     </>
   );
 }

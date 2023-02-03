@@ -337,7 +337,6 @@ impl PrimaryNodeInner {
             tx_sequence,
             ordering_engine,
             consensus_metrics.clone(),
-            parameters.gc_depth,
         );
 
         // Spawn the client executing the transactions. It can also synchronize with the

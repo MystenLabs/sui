@@ -10,9 +10,11 @@ import { Stat } from "../Stat";
 import { useRawObject } from "../../network/queries/use-raw";
 import { LEADERBOARD, Leaderboard } from "../../network/types";
 import { Refresh } from "./Refresh";
+import { useSuiSystem } from "../../network/queries/sui-system";
 
 export function YourScore() {
   const { currentAccount } = useWalletKit();
+  const { data: system } = useSuiSystem();
   const { data: scorecard } = useScorecard(currentAccount);
   const { data: history } = useScorecardHistory(scorecard && scorecard.data.id);
   const { data: leaderboard } = useRawObject<Leaderboard>(
@@ -25,6 +27,7 @@ export function YourScore() {
     return null;
   }
 
+  const round = BigInt(system?.epoch || 0) - leaderboard.data.startEpoch || 0n;
   const rank =
     (leaderboard &&
       leaderboard.data.topScores.findIndex(
@@ -35,6 +38,7 @@ export function YourScore() {
   return (
     <>
       <Refresh
+        round={round}
         scorecard={scorecard}
         leaderboardID={leaderboard.reference.objectId}
       />
@@ -46,7 +50,7 @@ export function YourScore() {
           {scorecard.data.score}
         </Stat>
       </div>
-      <Table data={history || []} leaderboard={leaderboard.data} />
+      <Table data={history || []} round={round} leaderboard={leaderboard.data} />
     </>
   );
 }

@@ -77,6 +77,11 @@ export const MoveCall = object({
 });
 export type MoveCall = Infer<typeof MoveCall>;
 
+export const Genesis = object( {
+  objects: array(ObjectId),
+});
+export type Genesis = Infer<typeof Genesis>;
+
 export type ExecuteTransactionRequestType =
   | 'WaitForEffectsCert'
   | 'WaitForLocalExecution';
@@ -101,6 +106,7 @@ export const SuiTransactionKind = union([
   object({ Pay: Pay }),
   object({ PaySui: PaySui }),
   object({ PayAllSui: PayAllSui }),
+  object({ Genesis: Genesis}),
 ]);
 export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 
@@ -228,14 +234,32 @@ export const SuiCertifiedTransactionEffects = object({
   effects: TransactionEffects,
 });
 
+export const SuiEffectsFinalityInfo = union([
+  object({ certified: AuthorityQuorumSignInfo }),
+  object({ checkpointed: tuple([number(), number()]) }),
+]);
+export type SuiEffectsFinalityInfo = Infer<typeof SuiEffectsFinalityInfo>;
+
+export const SuiFinalizedEffects = object({
+  transactionEffectsDigest: string(),
+  effects: TransactionEffects,
+  finalityInfo: SuiEffectsFinalityInfo,
+});
+export type SuiFinalizedEffects = Infer<typeof SuiFinalizedEffects>;
+
 export const SuiExecuteTransactionResponse = union([
-  object({ TxCert: object({ certificate: CertifiedTransaction }) }),
+  // TODO: remove after devnet 0.25.0(or 0.24.0) is released
   object({
     EffectsCert: object({
       certificate: CertifiedTransaction,
       effects: SuiCertifiedTransactionEffects,
       confirmed_local_execution: boolean(),
     }),
+  }),
+  object({
+    certificate: optional(CertifiedTransaction),
+    effects: SuiFinalizedEffects,
+    confirmed_local_execution: boolean(),
   }),
 ]);
 export type SuiExecuteTransactionResponse = Infer<
@@ -338,8 +362,6 @@ export function getCertifiedTransaction(
 ): CertifiedTransaction | undefined {
   if ('certificate' in tx) {
     return tx.certificate;
-  } else if ('TxCert' in tx) {
-    return tx.TxCert.certificate;
   } else if ('EffectsCert' in tx) {
     return tx.EffectsCert.certificate;
   }
@@ -513,17 +535,15 @@ export function getTotalGasUsedUpperBound(
 ): number | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost +
-        gasSummary.storageCost
+    ? gasSummary.computationCost + gasSummary.storageCost
     : undefined;
 }
-
 
 export function getTransactionEffects(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse
 ): TransactionEffects | undefined {
   if ('effects' in data) {
-    return data.effects;
+    return `effects` in data.effects ? data.effects.effects : data.effects;
   }
   return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
 }
@@ -612,6 +632,11 @@ export function getNewlyCreatedCoinRefsAfterSplit(
 ): SuiObjectRef[] | undefined {
   if ('EffectsCert' in data) {
     const effects = data.EffectsCert.effects.effects;
+    return effects.created?.map((c) => c.reference);
+  }
+  if ('effects' in data) {
+    const effects =
+      'effects' in data.effects ? data.effects.effects : data.effects;
     return effects.created?.map((c) => c.reference);
   }
   return undefined;

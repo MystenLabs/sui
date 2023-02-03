@@ -25,6 +25,7 @@ use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     QuorumDriverResponse,
@@ -423,7 +424,8 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
             transaction_digest: digest,
         })
         .await?;
-    assert!(info.signed_effects.is_some());
+    // Check that it has been executed.
+    info.into_executed_for_testing();
 
     Ok(())
 }
@@ -954,9 +956,9 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         effects_cert: certified_txn_effects,
     } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.digest(), digest);
+    assert_eq!(*ct.unwrap().digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
-    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
     node.state().get_transaction(digest).await
@@ -979,9 +981,9 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         effects_cert: certified_txn_effects,
     } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
-    assert_eq!(*ct.digest(), digest);
+    assert_eq!(*ct.unwrap().digest(), digest);
     assert_eq!(*certified_txn.digest(), digest);
-    assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+    assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;
     node.state().get_transaction(digest).await
@@ -1035,12 +1037,12 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
             .await
             .unwrap();
 
-        let SuiExecuteTransactionResponse::EffectsCert {
-            certificate,
-            effects: _,
+        let SuiExecuteTransactionResponse {
+            certificate: _,
+            effects,
             confirmed_local_execution,
         } = response;
-        assert_eq!(&certificate.transaction_digest, tx_digest);
+        assert_eq!(&effects.effects.transaction_digest, tx_digest);
         assert!(confirmed_local_execution);
     }
     Ok(())
@@ -1075,12 +1077,12 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse::EffectsCert {
-        certificate,
-        effects: _,
+    let SuiExecuteTransactionResponse {
+        certificate: _,
+        effects,
         confirmed_local_execution,
     } = response;
-    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert_eq!(&effects.effects.transaction_digest, tx_digest);
     assert!(confirmed_local_execution);
 
     let _response: SuiTransactionResponse = jsonrpc_client
@@ -1100,12 +1102,12 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .await
         .unwrap();
 
-    let SuiExecuteTransactionResponse::EffectsCert {
-        certificate,
-        effects: _,
+    let SuiExecuteTransactionResponse {
+        certificate: _,
+        effects,
         confirmed_local_execution,
     } = response;
-    assert_eq!(&certificate.transaction_digest, tx_digest);
+    assert_eq!(&effects.effects.transaction_digest, tx_digest);
     assert!(!confirmed_local_execution);
 
     Ok(())

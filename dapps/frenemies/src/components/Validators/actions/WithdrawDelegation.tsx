@@ -17,7 +17,7 @@ interface Props {
   delegation: ObjectData<Delegation>;
 }
 
-const GAS_BUDGET = 10000n;
+const GAS_BUDGET = 100000n;
 
 /**
  * Request delegation withdrawal.
@@ -40,22 +40,27 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
       return null;
     }
 
-    await signAndExecuteTransaction({
-      kind: "moveCall",
-      data: {
-        packageObjectId: SUI_FRAMEWORK_ADDRESS,
-        module: "sui_system",
-        function: "request_withdraw_delegation",
-        gasBudget: 10000,
-        typeArguments: [],
-        gasPayment: normalizeSuiAddress(gas.reference.objectId),
-        arguments: [
-          SUI_SYSTEM_ID,
-          normalizeSuiAddress(delegation.reference.objectId),
-          normalizeSuiAddress(stake.reference.objectId),
-        ],
+    await signAndExecuteTransaction(
+      {
+        kind: "moveCall",
+        data: {
+          packageObjectId: SUI_FRAMEWORK_ADDRESS,
+          module: "sui_system",
+          function: "request_withdraw_delegation",
+          gasBudget: Number(GAS_BUDGET),
+          typeArguments: [],
+          gasPayment: normalizeSuiAddress(gas.reference.objectId),
+          arguments: [
+            SUI_SYSTEM_ID,
+            normalizeSuiAddress(delegation.reference.objectId),
+            normalizeSuiAddress(stake.reference.objectId),
+          ],
+        },
       },
-    });
+      {
+        requestType: "WaitForEffectsCert",
+      }
+    );
   });
 
   return (

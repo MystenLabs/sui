@@ -25,7 +25,7 @@ export function formatGoal(goal: Goal): string {
 
 /** Pretty-print balance of the currency based on the decimals */
 export function formatBalance(
-  balance: bigint | string,
+  balance: bigint | string | number,
   decimals: number
 ): string {
   return new BigNumber(balance.toString()).shiftedBy(-1 * decimals).toFormat();
@@ -33,14 +33,15 @@ export function formatBalance(
 
 /** Print time in the format `hh:mm:ss` */
 export function formatTimeRemaining(timer: number): string {
-  return `${new Date(timer)
-    .getUTCHours()
-    .toString()
-    .padStart(2, "0")}:${new Date(timer)
-    .getUTCMinutes()
-    .toString()
-    .padStart(2, "0")}:${new Date(timer)
-    .getUTCSeconds()
-    .toString()
-    .padStart(2, "0")}`;
+  const date = new Date(timer);
+  const hh = date.getUTCHours().toString().padStart(2, '0');
+  const mm = date.getUTCMinutes().toString().padStart(2, '0');
+  const ss = date.getUTCSeconds().toString().padStart(2, '0');
+
+  // When it's less than a minute, we show a text
+  if (hh == '00' && mm == '00') {
+    return 'About a min';
+  }
+
+  return `${hh}:${mm}:${ss}`;
 }

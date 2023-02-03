@@ -119,9 +119,12 @@ export class Secp256k1Keypair implements Keypair {
   /**
    * Return the signature for the provided data.
    */
-  signData(data: Base64DataBuffer): Base64DataBuffer {
+  signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer {
     const msgHash = sha256(data.getData());
-    const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
+    // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1. 
+    // TODO(joyqvq): Remove recoverable signature support after 0.25.0 is released.
+    if (useRecoverable) {
+      const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
       canonical: true,
       recovered: true,
     });
@@ -129,7 +132,14 @@ export class Secp256k1Keypair implements Keypair {
     recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
     recoverable_sig.set([rec_id], 64);
     return new Base64DataBuffer(recoverable_sig);
+   } else {
+    const sig = secp.signSync(msgHash, this.keypair.secretKey, {
+      canonical: true,
+      recovered: false,
+    });
+    return new Base64DataBuffer(Signature.fromDER(sig).toCompactRawBytes());
   }
+}
 
   /**
    * Derive Secp256k1 keypair from mnemonics and path. The mnemonics must be normalized

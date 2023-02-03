@@ -35,6 +35,14 @@ pub struct Envelope<T: Message, S> {
 }
 
 impl<T: Message, S> Envelope<T, S> {
+    pub fn new_from_data_and_sig(data: T, sig: S) -> Self {
+        Self {
+            digest: Default::default(),
+            data,
+            auth_signature: sig,
+        }
+    }
+
     pub fn data(&self) -> &T {
         &self.data
     }

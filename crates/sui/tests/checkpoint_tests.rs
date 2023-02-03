@@ -40,7 +40,11 @@ async fn basic_checkpoints_integration_test() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
     let _effects = net
         .process_certificate(cert.clone().into_inner())
         .await

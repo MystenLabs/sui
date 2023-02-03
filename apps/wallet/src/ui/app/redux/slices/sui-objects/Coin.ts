@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin as CoinAPI, SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    Coin as CoinAPI,
+    getTransactionEffects,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
 
 import type {
     ObjectId,
@@ -81,63 +85,36 @@ export class Coin {
      *
      * @param signer A signer with connection to fullnode
      * @param coins A list of Coins owned by the signer with the same generic type(e.g., 0x2::Sui::Sui)
-     * @param gasCoins A list of Sui coins owned by the signer
      * @param amount The amount to be staked
      * @param validator The sui address of the chosen validator
      */
     public static async stakeCoin(
         signer: SignerWithProvider,
         coins: SuiMoveObject[],
-        gasCoins: SuiMoveObject[],
         amount: bigint,
-        validator: SuiAddress
+        validator: SuiAddress,
+        gasPrice: number
     ): Promise<SuiExecuteTransactionResponse> {
-        // sort to get the smallest one for gas
-        const sortedGasCoins = CoinAPI.sortByBalance(gasCoins);
-        const gasCoin = CoinAPI.selectCoinWithBalanceGreaterThanOrEqual(
-            sortedGasCoins,
-            BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
+        const stakeCoin = await this.coinManageForStake(
+            signer,
+            coins,
+            amount,
+            BigInt(gasPrice * DEFAULT_GAS_BUDGET_FOR_STAKE)
         );
-        if (!gasCoin) {
-            throw new Error(
-                'Insufficient funds, not enough funds to cover for gas fee.'
-            );
-        }
-        if (!coins.length) {
-            throw new Error('Insufficient funds, no coins found.');
-        }
-        const isSui = CoinAPI.getCoinTypeArg(coins[0]) === SUI_TYPE_ARG;
-        const stakeCoins =
-            CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-                coins,
-                amount,
-                isSui ? [CoinAPI.getID(gasCoin)] : undefined
-            ).map(CoinAPI.getID);
-        if (!stakeCoins.length) {
-            if (stakeCoins.length === 1 && isSui) {
-                throw new Error(
-                    'Not enough coin objects, at least 2 coin objects are required.'
-                );
-            } else {
-                throw new Error(
-                    'Insufficient funds, try reducing the stake amount.'
-                );
-            }
-        }
-        const txn = {
+
+        return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'sui_system',
             function: 'request_add_delegation_mul_coin',
             typeArguments: [],
             arguments: [
                 SUI_SYSTEM_STATE_OBJECT_ID,
-                stakeCoins,
+                [stakeCoin],
                 [String(amount)],
                 validator,
             ],
             gasBudget: DEFAULT_GAS_BUDGET_FOR_STAKE,
-        };
-        return await signer.executeMoveCall(txn);
+        });
     }
 
     public static async unStakeCoin(
@@ -230,5 +207,54 @@ export class Coin {
         const active_validators = (validators as SuiMoveObject).fields
             .active_validators;
         return active_validators as Array<SuiMoveObject>;
+    }
+
+    private static async coinManageForStake(
+        signer: SignerWithProvider,
+        coins: SuiMoveObject[],
+        amount: bigint,
+        gasFee: bigint
+    ) {
+        const totalAmount = amount + gasFee;
+        const gasBudget = Coin.computeGasBudgetForPay(coins, totalAmount);
+        const inputCoins =
+            CoinAPI.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
+                coins,
+                totalAmount + BigInt(gasBudget)
+            );
+
+        const address = await signer.getAddress();
+
+        const result = await signer.paySui({
+            // NOTE: We reverse the order here so that the highest coin is in the front
+            // so that it is used as the gas coin.
+            inputCoins: [...inputCoins]
+                .reverse()
+                .map((coin) => Coin.getID(coin as SuiMoveObject)),
+            recipients: [address, address],
+            // TODO: Update SDK to accept bigint
+            amounts: [Number(amount), Number(gasFee)],
+            gasBudget,
+        });
+
+        const effects = getTransactionEffects(result);
+
+        if (!effects || !effects.events) {
+            throw new Error('Missing effects or events');
+        }
+
+        const changeEvent = effects.events.find((event) => {
+            if ('coinBalanceChange' in event) {
+                return event.coinBalanceChange.amount === Number(amount);
+            }
+
+            return false;
+        });
+
+        if (!changeEvent || !('coinBalanceChange' in changeEvent)) {
+            throw new Error('Missing coin balance event');
+        }
+
+        return changeEvent.coinBalanceChange.coinObjectId;
     }
 }

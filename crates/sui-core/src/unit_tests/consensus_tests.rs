@@ -76,7 +76,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .handle_transaction(transaction.clone())
             .await
             .unwrap();
-        let vote = response.signed_transaction.unwrap();
+        let vote = response.into_signed_for_testing();
         let certificate = CertifiedTransaction::new(
             transaction.into_message(),
             vec![vote.auth_sig().clone()],

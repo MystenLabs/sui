@@ -5,12 +5,15 @@ import { lte, coerce } from 'semver';
 import Browser from 'webextension-polyfill';
 
 import { LOCK_ALARM_NAME } from './Alarms';
+import FeatureGating from './FeatureGating';
+import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import { Connections } from './connections';
 import Keyring from './keyring';
 import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
 import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
+import { setAttributes } from '_src/shared/experimentation/features';
 
 Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
     // Skip automatically opening the onboarding in end-to-end tests.
@@ -40,18 +43,27 @@ const connections = new Connections();
 
 Permissions.permissionReply.subscribe((permission) => {
     if (permission) {
-        connections.notifyForPermissionReply(permission);
+        connections.notifyContentScript({
+            event: 'permissionReply',
+            permission,
+        });
     }
 });
 
 Permissions.on('connectedAccountsChanged', ({ origin, accounts }) => {
-    connections.notifyWalletStatusChange(origin, { accounts });
+    connections.notifyContentScript({
+        event: 'walletStatusChange',
+        origin,
+        change: { accounts },
+    });
 });
 
 const keyringStatusCallback = () => {
-    connections.notifyForLockedStatusUpdate(Keyring.isLocked);
+    connections.notifyUI({
+        event: 'lockStatusUpdate',
+        isLocked: Keyring.isLocked,
+    });
 };
-
 Keyring.on('lockedStatusUpdate', keyringStatusCallback);
 Keyring.on('accountsChanged', keyringStatusCallback);
 Keyring.on('activeAccountChanged', keyringStatusCallback);
@@ -78,3 +90,21 @@ if (!isSessionStorageSupported()) {
         }
     });
 }
+NetworkEnv.getActiveNetwork().then(async ({ env, customRpcUrl }) => {
+    setAttributes(await FeatureGating.getGrowthBook(), {
+        apiEnv: env,
+        customRPC: customRpcUrl,
+    });
+});
+
+NetworkEnv.on('changed', async (network) => {
+    setAttributes(await FeatureGating.getGrowthBook(), {
+        apiEnv: network.env,
+        customRPC: network.customRpcUrl,
+    });
+    connections.notifyUI({ event: 'networkChanged', network });
+    connections.notifyContentScript({
+        event: 'walletStatusChange',
+        change: { network },
+    });
+});
