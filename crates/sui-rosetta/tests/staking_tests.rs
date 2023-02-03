@@ -61,7 +61,7 @@ async fn test_locked_sui() {
         currencies: vec![],
     };
     let response: AccountBalanceResponse = rosetta_client.call("account/balance", &request).await;
-    assert!(response.balances.is_empty());
+    assert_eq!(response.balances[0].value, 0);
 
     // Lock some sui
     let call_args = vec![
@@ -157,7 +157,7 @@ async fn test_get_delegated_sui() {
         currencies: vec![],
     };
     let response: AccountBalanceResponse = rosetta_client.call("account/balance", &request).await;
-    assert_eq!(0, response.balances.len());
+    assert_eq!(response.balances[0].value, 0);
 
     // Delegate some sui
     let validators = client.governance_api().get_validators().await.unwrap();
