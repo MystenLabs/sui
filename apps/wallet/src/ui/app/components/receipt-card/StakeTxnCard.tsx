@@ -91,7 +91,7 @@ export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
 
             {stakingData?.fields.amount && (
                 <TxnAmount
-                    amount={stakingData.fields.amunt}
+                    amount={stakingData.fields.amount}
                     coinType={SUI_TYPE_ARG}
                     label="Stake"
                 />
