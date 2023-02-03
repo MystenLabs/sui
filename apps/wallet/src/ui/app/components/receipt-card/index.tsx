@@ -7,6 +7,7 @@ import {
     getTransferObjectTransaction,
     getTransactionKindName,
     getTotalGasUsed,
+    getExecutionStatusError,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
 import { useMemo } from 'react';
@@ -26,6 +27,7 @@ import { getTxnEffectsEventID } from '_components/transactions-card/Transaction'
 import { TxnImage } from '_components/transactions-card/TxnImage';
 import { getEventsSummary, checkStakingTxn } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';
+import { Text } from '_src/ui/app/shared/text';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
 
@@ -37,6 +39,7 @@ type ReceiptCardProps = {
 function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const { timestamp_ms, certificate, effects } = txn;
     const executionStatus = getExecutionStatusType(txn);
+    const error = useMemo(() => getExecutionStatusError(txn), [txn]);
     const isSuccessful = executionStatus === 'success';
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
     const { coins: eventsSummary } = getEventsSummary(effects, activeAddress);
@@ -93,17 +96,20 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             )}
 
             <ReceiptCardBg status={isSuccessful}>
+                {error && (
+                    <Text variant="body" weight="medium" color="steel-darker">
+                        {error}
+                    </Text>
+                )}
+
                 {isStakeTxn ? (
                     moveCallLabel === 'Staked' ? (
-                        <StakeTxnCard
-                            amount={eventsSummary[0].amount}
-                            txnEffects={effects}
-                        />
+                        <StakeTxnCard txnEffects={effects} />
                     ) : (
                         <UnStakeTxnCard
                             txn={txn}
                             activeAddress={activeAddress}
-                            amount={eventsSummary[0].amount}
+                            amount={totalSuiAmount || 0}
                         />
                     )
                 ) : (
