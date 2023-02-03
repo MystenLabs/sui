@@ -48,7 +48,6 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                     ? validator.fields.metadata.fields.image_url
                     : null;
             return {
-                number: index + 1,
                 name: {
                     name: validatorName,
                     logo: validator.fields.metadata.fields.image_url,
@@ -69,7 +68,9 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 accessorKey: 'number',
                 cell: (props: any) => (
                     <Text variant="bodySmall/medium" color="steel-dark">
-                        {props.getValue()}
+                        {props.table
+                            .getSortedRowModel()
+                            .flatRows.indexOf(props.row) + 1}
                     </Text>
                 ),
             },
@@ -209,7 +210,7 @@ function ValidatorPageResult() {
         return validatorsTableData(validators, +validatorsData.epoch);
     }, [validatorsData]);
 
-    const defaultSorting = [{ id: 'stake', desc: true }];
+    const defaultSorting = [{ id: 'stake', desc: false }];
 
     if (isError || (!isLoading && !validatorsTable?.data.length)) {
         return (
