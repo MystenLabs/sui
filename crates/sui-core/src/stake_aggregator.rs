@@ -2,20 +2,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::Hash;
+use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
 use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo};
 use sui_types::error::SuiError;
+use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 
-pub struct StakeAggregator<V, const STRENGTH: bool> {
-    data: HashMap<AuthorityName, V>,
+#[derive(Debug)]
+pub struct StakeAggregator<S, const STRENGTH: bool> {
+    data: HashMap<AuthorityName, S>,
     total_votes: StakeUnit,
-    committee: Committee,
+    committee: Arc<Committee>,
 }
 
-impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
-    pub fn new(committee: Committee) -> Self {
+/// StakeAggregator is a utility data structure that allows us to aggregate a list of validator
+/// signatures over time. A committee is used to determine whether we have reached sufficient
+/// quorum (defined based on `STRENGTH`). The generic implementation does not require `S` to be
+/// an actual signature, but just an indication that a specific validator has voted. A specialized
+/// implementation for `AuthoritySignInfo` is followed below.
+impl<S: Clone, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
+    pub fn new(committee: Arc<Committee>) -> Self {
         Self {
             data: Default::default(),
             total_votes: Default::default(),
@@ -23,13 +32,13 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
         }
     }
 
-    pub fn from_iter<I: Iterator<Item = (AuthorityName, V)>>(
-        committee: Committee,
+    pub fn from_iter<I: Iterator<Item = (AuthorityName, S)>>(
+        committee: Arc<Committee>,
         data: I,
     ) -> Self {
         let mut this = Self::new(committee);
-        for (authority, v) in data {
-            this.insert_generic(authority, v);
+        for (authority, s) in data {
+            this.insert_generic(authority, s);
         }
         this
     }
@@ -37,16 +46,16 @@ impl<V: Clone, const STRENGTH: bool> StakeAggregator<V, STRENGTH> {
     /// A generic version of inserting arbitrary type of V (e.g. void type).
     /// If V is AuthoritySignInfo, the `insert` function should be used instead since it does extra
     /// checks and aggregations in the end.
-    pub fn insert_generic(&mut self, authority: AuthorityName, v: V) -> InsertResult<V, ()> {
+    pub fn insert_generic(&mut self, authority: AuthorityName, s: S) -> InsertResult<S, ()> {
         match self.data.entry(authority) {
             Entry::Occupied(oc) => {
                 return InsertResult::RepeatingEntry {
                     previous: oc.get().clone(),
-                    new: v,
+                    new: s,
                 };
             }
             Entry::Vacant(va) => {
-                va.insert(v);
+                va.insert(s);
             }
         }
         let votes = self.committee.weight(&authority);
@@ -119,5 +128,92 @@ pub enum InsertResult<V, CertT> {
 impl<V, CertT> InsertResult<V, CertT> {
     pub fn is_quorum_reached(&self) -> bool {
         matches!(self, Self::QuorumReached(..))
+    }
+}
+
+/// MultiStakeAggregator is a utility data structure that tracks the stake accumulation of
+/// potentially multiple different values (usually due to byzantine/corrupted responses). Each
+/// value is tracked using a StakeAggregator and determine whether it has reached a quorum.
+/// A specialized implementation is also provided for `Message` and `AuthSignInfo` type, so that
+/// we could create `Envelope` directly.
+#[derive(Debug)]
+pub struct MultiStakeAggregator<K, V, S, const STRENGTH: bool> {
+    committee: Arc<Committee>,
+    stake_maps: HashMap<K, (V, StakeAggregator<S, STRENGTH>)>,
+}
+
+impl<K, V, S, const STRENGTH: bool> MultiStakeAggregator<K, V, S, STRENGTH> {
+    pub fn new(committee: Arc<Committee>) -> Self {
+        Self {
+            committee,
+            stake_maps: Default::default(),
+        }
+    }
+
+    pub fn unique_key_count(&self) -> usize {
+        self.stake_maps.len()
+    }
+}
+
+impl<K, V, S, const STRENGTH: bool> MultiStakeAggregator<K, V, S, STRENGTH>
+where
+    K: Hash + Eq,
+    V: Clone,
+    S: Clone,
+{
+    #[allow(dead_code)]
+    pub fn insert_generic(&mut self, k: K, v: &V, authority: AuthorityName, sig: S) -> bool {
+        let entry = self
+            .stake_maps
+            .entry(k)
+            .or_insert((v.clone(), StakeAggregator::new(self.committee.clone())));
+        matches!(
+            entry.1.insert_generic(authority, sig),
+            InsertResult::QuorumReached(_)
+        )
+    }
+}
+
+impl<K, V, S, const STRENGTH: bool> MultiStakeAggregator<K, V, S, STRENGTH>
+where
+    K: Clone + Ord,
+{
+    pub fn get_all_unique_values(&self) -> BTreeMap<K, (Vec<AuthorityName>, StakeUnit)> {
+        self.stake_maps
+            .iter()
+            .map(|(k, (_, s))| {
+                (
+                    k.clone(),
+                    (
+                        s.data.iter().map(|(name, _)| *name).collect(),
+                        s.total_votes,
+                    ),
+                )
+            })
+            .collect()
+    }
+}
+
+impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, AuthoritySignInfo, STRENGTH>
+where
+    K: Hash + Eq,
+    V: Message + Clone,
+{
+    pub fn insert(
+        &mut self,
+        k: K,
+        v: &V,
+        sig: AuthoritySignInfo,
+    ) -> Option<VerifiedEnvelope<V, AuthorityQuorumSignInfo<STRENGTH>>> {
+        let entry = self
+            .stake_maps
+            .entry(k)
+            .or_insert((v.clone(), StakeAggregator::new(self.committee.clone())));
+        match entry.1.insert(sig) {
+            InsertResult::QuorumReached(cert) => Some(VerifiedEnvelope::new_unchecked(
+                Envelope::new_from_data_and_sig(v.clone(), cert),
+            )),
+            _ => None,
+        }
     }
 }
