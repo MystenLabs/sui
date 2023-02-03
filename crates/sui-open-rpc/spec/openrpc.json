@@ -5234,7 +5234,9 @@
         "required": [
           "computation_charge",
           "epoch",
-          "storage_charge"
+          "epoch_start_timestamp_ms",
+          "storage_charge",
+          "storage_rebate"
         ],
         "properties": {
           "computation_charge": {
@@ -5247,7 +5249,17 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "epoch_start_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "storage_charge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_rebate": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -5298,6 +5310,19 @@
           "symbol": {
             "description": "Symbol for the token",
             "type": "string"
+          }
+        }
+      },
+      "SuiConsensusCommitPrologue": {
+        "type": "object",
+        "required": [
+          "checkpoint_start_timestamp_ms"
+        ],
+        "properties": {
+          "checkpoint_start_timestamp_ms": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -6302,6 +6327,19 @@
             "properties": {
               "Genesis": {
                 "$ref": "#/components/schemas/SuiGenesisTransaction"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
+            "type": "object",
+            "required": [
+              "ConsensusCommitPrologue"
+            ],
+            "properties": {
+              "ConsensusCommitPrologue": {
+                "$ref": "#/components/schemas/SuiConsensusCommitPrologue"
               }
             },
             "additionalProperties": false

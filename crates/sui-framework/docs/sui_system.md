@@ -28,6 +28,7 @@
 -  [Function `undo_report_validator`](#0x2_sui_system_undo_report_validator)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
+-  [Function `consensus_commit_prologue`](#0x2_sui_system_consensus_commit_prologue)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_delegate_amount`](#0x2_sui_system_validator_delegate_amount)
@@ -40,6 +41,7 @@
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
@@ -1188,6 +1190,37 @@ version
     self.epoch = new_epoch;
     self.protocol_version = next_protocol_version;
     self.safe_mode = <b>true</b>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_sui_system_consensus_commit_prologue"></a>
+
+## Function `consensus_commit_prologue`
+
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: u64, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_consensus_commit_prologue">consensus_commit_prologue</a>(
+    <a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> Clock,
+    timestamp_ms: u64,
+    ctx: &TxContext,
+) {
+    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+
+    <a href="clock.md#0x2_clock_set_timestamp">clock::set_timestamp</a>(<a href="clock.md#0x2_clock">clock</a>, timestamp_ms);
 }
 </code></pre>
 

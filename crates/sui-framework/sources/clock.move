@@ -8,6 +8,7 @@ module sui::clock {
     use sui::transfer;
 
     friend sui::genesis;
+    friend sui::sui_system;
 
     /// Singleton shared object that exposes time to Move calls.  This
     /// object is found at address 0x6, and can only be read (accessed
@@ -42,6 +43,12 @@ module sui::clock {
             // call.
             timestamp_ms: 0,
         })
+    }
+
+    /// Set the Clock's timestamp -- this function should only be called by
+    /// `sui::system_state::consensus_commit_prologue`.
+    public(friend) fun set_timestamp(clock: &mut Clock, timestamp_ms: u64) {
+        clock.timestamp_ms = timestamp_ms
     }
 
     #[test_only]

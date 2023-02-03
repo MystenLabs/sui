@@ -40,7 +40,6 @@ use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode, genesis};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::temporary_store::TemporaryStore;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -53,6 +52,7 @@ use sui_types::{
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 pub(crate) type FakeID = u64;
 
 // initial value for fake object ID mapping
@@ -417,6 +417,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let output = self.object_summary_output(&summary, false);
                 Ok(output)
             }
+            SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
+                timestamp_ms,
+            }) => {
+                let transaction = VerifiedTransaction::new_consensus_commit_prologue(timestamp_ms);
+                let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
+                let output = self.object_summary_output(&summary, false);
+                Ok(output)
+            }
         }
     }
 }
@@ -455,7 +463,12 @@ impl<'a> SuiTestAdapter<'a> {
         transaction: VerifiedTransaction,
         gas_budget: u64,
     ) -> anyhow::Result<TxnSummary> {
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
+        let gas_status = if transaction.inner().is_system_tx() {
+            SuiGasStatus::new_unmetered()
+        } else {
+            gas::start_gas_metering(gas_budget, 1, 1).unwrap()
+        };
+
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
             .data()
