@@ -27,7 +27,7 @@ describe('Test option parameter', () => {
             ['2000'], // stake_amount
             '0x5d06f37654f11cdd27179088fcfeadaab21e13ef', //validator_address
         ],
-        gasPayment: '0x30c77a83f10b0a5f44db303b437108a4e33d7b89',
+        gasPayment: coins[1].objectId,
         gasBudget: 15000,
     };
     const serializedTx = await serializer.serializeToBytes(sender, { kind: 'moveCall', data: tx });
