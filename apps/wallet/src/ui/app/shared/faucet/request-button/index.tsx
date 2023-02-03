@@ -44,16 +44,15 @@ function FaucetRequestButton({
         <Button
             mode={mode}
             onClick={() => {
-                mutation.enabled &&
-                    toast.promise(mutation.mutateAsync(), {
-                        loading: <FaucetMessageInfo loading />,
-                        success: (totalReceived) => (
-                            <FaucetMessageInfo totalReceived={totalReceived} />
-                        ),
-                        error: (error) => (
-                            <FaucetMessageInfo error={error.message} />
-                        ),
-                    });
+                toast.promise(mutation.mutateAsync(), {
+                    loading: <FaucetMessageInfo loading />,
+                    success: (totalReceived) => (
+                        <FaucetMessageInfo totalReceived={totalReceived} />
+                    ),
+                    error: (error) => (
+                        <FaucetMessageInfo error={error.message} />
+                    ),
+                });
                 trackEvent('RequestGas', {
                     props: { source: trackEventSource, networkName },
                 });
