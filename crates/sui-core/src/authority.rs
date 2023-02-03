@@ -1812,7 +1812,6 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions().await?;
         let new_epoch = new_committee.epoch;
-        db.perpetual_tables.set_recovery_epoch(new_epoch)?;
         self.reopen_epoch_db(new_committee, epoch_start_timestamp_ms)
             .await?;
         self.transaction_manager.reconfigure(new_epoch);
@@ -2628,6 +2627,7 @@ impl AuthorityState {
         new_committee: Committee,
         epoch_start_timestamp_ms: u64,
     ) -> SuiResult<()> {
+        let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
         let epoch_start_configuration = EpochStartConfiguration {
@@ -2638,6 +2638,7 @@ impl AuthorityState {
             new_committee,
             epoch_start_configuration,
         );
+        self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;
         let previous_store = self.epoch_store.swap(epoch_tables);
         previous_store.epoch_terminated().await;
         Ok(())
