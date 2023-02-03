@@ -453,6 +453,50 @@ impl SingleTransactionKind {
         }
         Ok(input_objects)
     }
+
+    pub fn validity_check(&self, gas_payment: &ObjectRef) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
+        match self {
+            SingleTransactionKind::Pay(_)
+            | SingleTransactionKind::Call(_)
+            | SingleTransactionKind::Publish(_)
+            | SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::TransferSui(_)
+            | SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_) => (),
+            SingleTransactionKind::PaySui(p) => {
+                fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(
+                    // unwrap() is safe because coins are not empty.
+                    p.coins.first().unwrap() == gas_payment,
+                    SuiError::UnexpectedGasPaymentObject
+                );
+            }
+            SingleTransactionKind::PayAllSui(pa) => {
+                fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(
+                    // unwrap() is safe because coins are not empty.
+                    pa.coins.first().unwrap() == gas_payment,
+                    SuiError::UnexpectedGasPaymentObject
+                );
+            }
+        };
+        Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        match self {
+            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
+                call.package,
+                call.module.as_str(),
+                call.function.as_str(),
+            )),
+            _ => false,
+        }
+    }
 }
 
 impl Display for SingleTransactionKind {
@@ -628,17 +672,6 @@ impl TransactionKind {
             self,
             TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
-    }
-
-    fn is_blocked_move_function(&self) -> bool {
-        self.single_transactions().any(|tx| match tx {
-            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
-                call.package,
-                call.module.as_str(),
-                call.function.as_str(),
-            )),
-            _ => false,
-        })
     }
 }
 
@@ -965,10 +998,6 @@ impl TransactionData {
     }
 
     pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
-        fp_ensure!(
-            !kind.is_blocked_move_function(),
-            SuiError::BlockedMoveFunction
-        );
         match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
@@ -997,32 +1026,11 @@ impl TransactionData {
                             .to_string()
                     }
                 );
+                for s in b {
+                    s.validity_check(gas_payment)?
+                }
             }
-            TransactionKind::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::Genesis(_) => (),
-                SingleTransactionKind::PaySui(p) => {
-                    fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
-                    fp_ensure!(
-                        // unwrap() is safe because coins are not empty.
-                        p.coins.first().unwrap() == gas_payment,
-                        SuiError::UnexpectedGasPaymentObject
-                    );
-                }
-                SingleTransactionKind::PayAllSui(pa) => {
-                    fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
-                    fp_ensure!(
-                        // unwrap() is safe because coins are not empty.
-                        pa.coins.first().unwrap() == gas_payment,
-                        SuiError::UnexpectedGasPaymentObject
-                    );
-                }
-            },
+            TransactionKind::Single(s) => s.validity_check(gas_payment)?,
         }
         Ok(())
     }
