@@ -35,6 +35,9 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  SuiSystemState,
+  DelegatedStake,
+  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
@@ -76,10 +79,7 @@ export abstract class Provider {
    * @param endpoint the endpoint to be invoked
    * @param params the arguments to be passed to the RPC request
    */
-  abstract call(
-    endpoint: string,
-    params: Array<any>
-  ) : Promise<any>;
+  abstract call(endpoint: string, params: Array<any>): Promise<any>;
 
   // Coins
   /**
@@ -93,7 +93,7 @@ export abstract class Provider {
     coinType: String | null,
     cursor: ObjectId | null,
     limit: number | null
-  ) : Promise<PaginatedCoins>;
+  ): Promise<PaginatedCoins>;
 
   /**
    * Get all Coin objects owned by an address.
@@ -104,7 +104,7 @@ export abstract class Provider {
     owner: SuiAddress,
     cursor: ObjectId | null,
     limit: number | null
-  ) : Promise<PaginatedCoins>;
+  ): Promise<PaginatedCoins>;
 
   /**
    * Get the total coin balance for one coin type, owned by the address owner.
@@ -113,14 +113,12 @@ export abstract class Provider {
   abstract getBalance(
     owner: SuiAddress,
     coinType: String | null
-  ) : Promise<CoinBalance>;
+  ): Promise<CoinBalance>;
 
   /**
    * Get the total coin balance for all coin type, owned by the address owner.
    */
-  abstract getAllBalances(
-    owner: SuiAddress
-  ) : Promise<CoinBalance[]>;
+  abstract getAllBalances(owner: SuiAddress): Promise<CoinBalance[]>;
 
   /**
    * Fetch CoinMetadata for a given coin type
@@ -134,9 +132,7 @@ export abstract class Provider {
    *  Fetch total supply for a coin
    * @param coinType fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
    */
-  abstract getTotalSupply(
-    coinType: string
-  ) : Promise<CoinSupply>;
+  abstract getTotalSupply(coinType: string): Promise<CoinSupply>;
 
   // Objects
   /**
@@ -370,6 +366,21 @@ export abstract class Provider {
    * Getting the reference gas price for the network
    */
   abstract getReferenceGasPrice(): Promise<number>;
+
+  /**
+   * Return the delegated stakes for an address
+   */
+  abstract getDelegatedStakes(address: SuiAddress): Promise<DelegatedStake[]>;
+
+  /**
+   * Return all validators available for stake delegation.
+   */
+  abstract getValidators(): Promise<ValidatorMetaData[]>;
+
+  /**
+   * Return the content of `0x5` object
+   */
+  abstract getSuiSystemState(): Promise<SuiSystemState>;
 
   /**
    * Get the sequence number of the latest checkpoint that has been executed

@@ -9,11 +9,11 @@ import {
   SuiObject,
   getMoveObjectType,
   getObjectId,
-} from './objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
+} from '../types/objects';
+import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 
-import { getOption, Option } from './option';
-import { StructTag } from './sui-bcs';
+import { getOption, Option } from '../types/option';
+import { StructTag } from '../types/sui-bcs';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { Infer, literal, number, object, string, union } from 'superstruct';
 
