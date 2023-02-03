@@ -68,7 +68,7 @@ function MyTokens({
                 <div className={st.emptyWallet}>
                     <div className={st.emptyWalletIcon} />
                     <div className={st.emptyWalletTitle}>
-                        Your wallet contains no SUI.
+                        Why no sui in your wallet???/
                     </div>
                     {emptyWalletDescription}
                     <FaucetRequestButton trackEventSource="home" />

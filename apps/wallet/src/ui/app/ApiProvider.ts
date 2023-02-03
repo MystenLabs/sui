@@ -3,7 +3,7 @@
 
 import { JsonRpcProvider, LocalTxnDataSerializer } from '@mysten/sui.js';
 
-import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
+import { LedgerSigner } from './LedgerSigner';
 import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
 import { API_ENV } from '_src/shared/api-env';
@@ -119,9 +119,7 @@ export default class ApiProvider {
         if (!this._signerByAddress.has(address)) {
             this._signerByAddress.set(
                 address,
-                new BackgroundServiceSigner(
-                    address,
-                    backgroundClient,
+                new LedgerSigner(
                     this._apiFullNodeProvider,
                     growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
                         ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

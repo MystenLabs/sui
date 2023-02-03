@@ -1,7 +1,7 @@
 {
     "name": "sui-wallet",
     "private": true,
-    "description": "A wallet for Sui",
+    "description": "Testing A wallet for Sui",
     "main": "./dist/ui.js",
     "scripts": {
         "build": "pnpm build:prod",
@@ -116,6 +116,7 @@
         "@growthbook/growthbook": "^0.20.1",
         "@growthbook/growthbook-react": "^0.10.1",
         "@headlessui/react": "^1.7.7",
+        "@ledgerhq/hw-transport": "^6.27.10",
         "@metamask/browser-passworder": "^4.0.2",
         "@mysten/core": "workspace:*",
         "@mysten/icons": "workspace:*",
@@ -134,6 +135,7 @@
         "eslint-plugin-react": "^7.31.11",
         "formik": "^2.2.9",
         "framer-motion": "^8.1.9",
+        "hw-app-sui": "github:obsidiansystems/hw-app-sui",
         "mitt": "^3.0.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",

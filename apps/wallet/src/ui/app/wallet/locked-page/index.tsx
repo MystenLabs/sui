@@ -49,7 +49,7 @@ export default function LockedPage() {
                     <CardLayout
                         icon="sui"
                         headerCaption="Hello There"
-                        title="Welcome Back"
+                        title="testing in progressssss"
                         mode="plain"
                     >
                         <Formik
