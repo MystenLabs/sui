@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/anemo-cli",
     "crates/component",
     "crates/mysten-metrics",
     "crates/mysten-network",
@@ -133,6 +134,7 @@ fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea" }
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea" }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea" }
 
 # Use the same workspace-hack across crates.

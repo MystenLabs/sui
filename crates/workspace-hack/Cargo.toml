@@ -26,6 +26,7 @@ aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
@@ -113,7 +114,9 @@ ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
-clap_lex = { version = "0.2", default-features = false }
+clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
+clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
+clap_lex-468e82937335b1c9 = { package = "clap_lex", version = "0.3", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
@@ -476,6 +479,7 @@ ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["multi-threaded-cf"] }
+ron = { version = "0.8" }
 rstest = { version = "0.16" }
 rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
@@ -664,6 +668,7 @@ alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "a908ad636bc552df2f80dfdeea88120218c670ea", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
@@ -767,8 +772,11 @@ cipher = { version = "0.4", default-features = false, features = ["block-padding
 clang-sys = { version = "1", default-features = false, features = ["clang_6_0", "runtime"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
-clap_derive = { version = "3" }
-clap_lex = { version = "0.2", default-features = false }
+clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
+clap_derive-7b89eefb6aaa9bf3 = { package = "clap_derive", version = "3" }
+clap_derive-164d15cefe24d7eb = { package = "clap_derive", version = "4" }
+clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
+clap_lex-468e82937335b1c9 = { package = "clap_lex", version = "0.3", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
@@ -1187,6 +1195,7 @@ ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["multi-threaded-cf"] }
+ron = { version = "0.8" }
 rstest = { version = "0.16" }
 rstest_macros = { version = "0.16", default-features = false, features = ["async-timeout"] }
 rust-ini = { version = "0.13", default-features = false }
