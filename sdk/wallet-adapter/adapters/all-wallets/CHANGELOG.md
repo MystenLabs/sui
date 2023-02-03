@@ -1,5 +1,15 @@
 # @mysten/wallet-adapter-all-wallets
 
+## 0.3.12
+
+### Patch Changes
+
+- a8746d4e9: update SuiExecuteTransactionResponse
+- Updated dependencies [96e883fc1]
+- Updated dependencies [a8746d4e9]
+  - @mysten/wallet-adapter-wallet-standard@0.5.0
+  - @mysten/wallet-adapter-unsafe-burner@0.5.0
+
 ## 0.3.11
 
 ### Patch Changes
