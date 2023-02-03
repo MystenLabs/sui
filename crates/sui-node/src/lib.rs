@@ -25,7 +25,6 @@ use sui_core::authority_server::ValidatorService;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::state_accumulator::StateAccumulator;
-use sui_core::state_accumulator::StateAccumulatorService;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_core::transaction_streamer::TransactionStreamer;
@@ -113,7 +112,7 @@ pub struct SuiNode {
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    accumulator: Arc<StateAccumulatorService>,
+    accumulator: Arc<StateAccumulator>,
 
     end_of_epoch_channel: tokio::sync::broadcast::Sender<Committee>,
 
@@ -217,7 +216,7 @@ impl SuiNode {
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
-            store,
+            store.clone(),
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
@@ -272,12 +271,7 @@ impl SuiNode {
         )
         .await?;
 
-        // TODO(william) add config here
-        let (accumulator, _handle) =
-            StateAccumulator::new(1000, &config.db_path().join("accumulator_store"))
-                .start()
-                .await;
-        let accumulator = Arc::new(accumulator);
+        let accumulator = Arc::new(StateAccumulator::new(store));
 
         let validator_components = if state.is_validator() {
             Some(
@@ -456,7 +450,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
         registry_service: &RegistryService,
     ) -> Result<ValidatorComponents> {
         let consensus_config = config
@@ -517,7 +511,7 @@ impl SuiNode {
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
         validator_server_handle: JoinHandle<Result<()>>,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
@@ -588,7 +582,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> (Arc<CheckpointService>, watch::Sender<()>) {
         let checkpoint_output = Box::new(SubmitCheckpointToConsensus {

@@ -14,9 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
-use crate::state_accumulator::{State, StateAccumulatorService};
-use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::hash::MultisetHash;
+use crate::state_accumulator::{State, StateAccumulator};
 use futures::future::{select, Either};
 use futures::FutureExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
@@ -374,7 +372,7 @@ pub struct CheckpointBuilder {
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     effects_store: Box<dyn EffectsNotifyRead>,
-    accumulator: Arc<StateAccumulatorService>,
+    accumulator: Arc<StateAccumulator>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
     metrics: Arc<CheckpointMetrics>,
@@ -407,7 +405,7 @@ impl CheckpointBuilder {
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
         effects_store: Box<dyn EffectsNotifyRead>,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
         notify_aggregator: Arc<Notify>,
@@ -621,18 +619,15 @@ impl CheckpointBuilder {
                 let state = State {
                     effects: effects.clone(),
                     checkpoint_seq_num: sequence_number,
-                    epoch,
-                    end_of_epoch_flag: true,
                 };
-                self.accumulator.enqueue(state).await?;
-                Some(
-                    self.accumulator
-                        .store
-                        .notify_read_root_state_hash(epoch)
-                        .await
-                        .expect("Failed to read root state digest for epoch {epoch}")
-                        .digest(),
-                )
+                self.accumulator
+                    .accumulate_checkpoint(state, self.epoch_store.clone())?;
+
+                Some(self.accumulator.digest_epoch(
+                    &epoch,
+                    sequence_number.clone(),
+                    self.epoch_store.clone(),
+                )?)
             } else {
                 None
             };
@@ -1002,7 +997,7 @@ impl CheckpointService {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         effects_store: Box<dyn EffectsNotifyRead>,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         transaction_certifier: Box<dyn TransactionCertifier>,
@@ -1289,7 +1284,7 @@ mod tests {
 
         let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-        let (accumulator, _handle) = StateAccumulator::new_for_tests(100).start().await;
+        let accumulator = StateAccumulator::new(state.database.clone());
 
         let epoch_store = state.epoch_store_for_testing();
         let (checkpoint_service, _exit) = CheckpointService::spawn(

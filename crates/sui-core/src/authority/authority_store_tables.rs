@@ -6,6 +6,7 @@ use crate::authority::authority_store::LockDetails;
 use rocksdb::Options;
 use std::path::Path;
 use sui_storage::default_db_options;
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
@@ -69,6 +70,11 @@ pub struct AuthorityPerpetualTables {
     /// When transaction is executed via checkpoint executor, we store association here
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
+
+    // Finalized root state accumulator for epoch, to be included in CheckpointSummary
+    // of last checkpoint of epoch. These values should only ever be written once
+    // and never changed
+    pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
     /// A singleton table that stores the current epoch number. This is used only for the purpose of
     /// crash recovery so that when we restart we know which epoch we are at. This is needed because

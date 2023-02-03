@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::{select, Either};
+use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::CommittedSubDag;
@@ -17,6 +17,7 @@ use std::sync::Arc;
 use sui_storage::default_db_options;
 use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
+use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, Signature};
@@ -84,6 +85,9 @@ pub struct AuthorityPerEpochStore {
     /// In-memory cache of the content from the reconfig_state db table.
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<ConsensusTransactionKey, ()>,
+
+    pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
+
     /// This is used to notify all epoch specific tasks that epoch has ended.
     epoch_alive_notify: NotifyOnce,
     /// This lock acts as a barrier for tasks that should not be executed in parallel with reconfiguration
@@ -226,6 +230,11 @@ pub struct AuthorityEpochTables {
 
     /// Parameters of the system fixed at the epoch start
     epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+
+    // Maps checkpoint sequence number to an accumulator with accumulated state
+    // only for the checkpoint that the key references. Append-only, i.e.,
+    // the accumulator is complete wrt the checkpoint
+    pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, Accumulator>,
 }
 
 /// Parameters of the epoch fixed at epoch start.
@@ -331,6 +340,7 @@ impl AuthorityPerEpochStore {
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
+            checkpoint_state_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
             wal,
@@ -385,6 +395,28 @@ impl AuthorityPerEpochStore {
 
     pub fn epoch(&self) -> EpochId {
         self.committee.epoch
+    }
+
+    pub fn get_state_hash_for_checkpoint(
+        &self,
+        checkpoint: &CheckpointSequenceNumber,
+    ) -> SuiResult<Option<Accumulator>> {
+        Ok(self
+            .tables
+            .state_hash_by_checkpoint
+            .get(checkpoint)?
+            .map(|acc| acc.into()))
+    }
+
+    pub fn insert_state_hash_for_checkpoint(
+        &self,
+        checkpoint: &CheckpointSequenceNumber,
+        accumulator: &Accumulator,
+    ) -> SuiResult {
+        Ok(self
+            .tables
+            .state_hash_by_checkpoint
+            .insert(checkpoint, accumulator)?)
     }
 
     pub async fn acquire_tx_guard(&self, cert: &VerifiedCertificate) -> SuiResult<CertTxGuard> {
@@ -485,6 +517,37 @@ impl AuthorityPerEpochStore {
             .map(|(_idx, tx)| tx)
             .collect();
         Ok(roots)
+    }
+
+    /// Returns future containing the state digest for the given epoch
+    /// once available
+    pub async fn notify_read_checkpoint_state_digests(
+        &self,
+        checkpoints: Vec<CheckpointSequenceNumber>,
+    ) -> SuiResult<Vec<Accumulator>> {
+        // We need to register waiters _before_ reading from the database to avoid
+        // race conditions
+        let registrations = self
+            .checkpoint_state_notify_read
+            .register_all(checkpoints.clone());
+        let accumulators = self
+            .tables
+            .state_hash_by_checkpoint
+            .multi_get(checkpoints)?;
+
+        // Zipping together registrations and accumulators ensures returned order is
+        // the same as order of digests
+        let results =
+            accumulators
+                .into_iter()
+                .zip(registrations.into_iter())
+                .map(|(a, r)| match a {
+                    // Note that Some() clause also drops registration that is already fulfilled
+                    Some(ready) => Either::Left(futures::future::ready(ready)),
+                    None => Either::Right(r),
+                });
+
+        Ok(join_all(results).await)
     }
 
     /// `pending_certificates` table related methods. Should only be used from TransactionManager.

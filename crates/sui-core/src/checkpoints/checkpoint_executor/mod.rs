@@ -45,7 +45,7 @@ use crate::authority::AuthorityStore;
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore, authority_store::EffectsStore,
 };
-use crate::state_accumulator::{State, StateAccumulatorService};
+use crate::state_accumulator::{State, StateAccumulator};
 use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
@@ -62,7 +62,7 @@ pub struct CheckpointExecutor {
     checkpoint_store: Arc<CheckpointStore>,
     authority_store: Arc<AuthorityStore>,
     tx_manager: Arc<TransactionManager>,
-    accumulator: Arc<StateAccumulatorService>,
+    accumulator: Arc<StateAccumulator>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
 }
@@ -73,7 +73,7 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         authority_store: Arc<AuthorityStore>,
         tx_manager: Arc<TransactionManager>,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
         config: CheckpointExecutorConfig,
         prometheus_registry: &Registry,
     ) -> Self {
@@ -93,7 +93,7 @@ impl CheckpointExecutor {
         checkpoint_store: Arc<CheckpointStore>,
         authority_store: Arc<AuthorityStore>,
         tx_manager: Arc<TransactionManager>,
-        accumulator: Arc<StateAccumulatorService>,
+        accumulator: Arc<StateAccumulator>,
     ) -> Self {
         Self {
             mailbox,
@@ -272,7 +272,7 @@ impl CheckpointExecutor {
                 checkpoint.clone(),
                 authority_store.clone(),
                 checkpoint_store.clone(),
-                &epoch_store,
+                epoch_store.clone(),
                 tx_manager.clone(),
                 accumulator.clone(),
                 local_execution_timeout_sec,
@@ -323,9 +323,9 @@ pub async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
     authority_store: Arc<AuthorityStore>,
     checkpoint_store: Arc<CheckpointStore>,
-    epoch_store: &AuthorityPerEpochStore,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
-    accumulator: Arc<StateAccumulatorService>,
+    accumulator: Arc<StateAccumulator>,
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
 ) -> SuiResult {
@@ -367,11 +367,11 @@ pub async fn execute_checkpoint(
 async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     authority_store: Arc<AuthorityStore>,
-    epoch_store: &AuthorityPerEpochStore,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     transaction_manager: Arc<TransactionManager>,
     log_timeout_sec: u64,
     checkpoint: VerifiedCheckpoint,
-    accumulator: Arc<StateAccumulatorService>,
+    accumulator: Arc<StateAccumulator>,
 ) -> SuiResult {
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();
@@ -416,7 +416,7 @@ async fn execute_transactions(
     }
     epoch_store.insert_pending_certificates(&synced_txns)?;
 
-    transaction_manager.enqueue(synced_txns, epoch_store)?;
+    transaction_manager.enqueue(synced_txns, &epoch_store)?;
 
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
@@ -459,28 +459,14 @@ async fn execute_transactions(
                 )?;
 
                 let checkpoint_seq_num = checkpoint.sequence_number();
-                let epoch = epoch_store.epoch();
                 let effects: Vec<TransactionEffects> =
                     effects.into_iter().map(|fx| fx.data().clone()).collect();
 
                 let state = State {
                     effects,
                     checkpoint_seq_num,
-                    epoch,
-                    end_of_epoch_flag: checkpoint.next_epoch_committee().is_some(),
                 };
-                accumulator.enqueue(state).await?;
-                // TODO: for now, we block here, as this ensures
-                // that we don't need to handle crash recovery (in
-                // such a case, the checkpoint would get re-executed
-                // and re-enqueued, which is fine). However, for a
-                // checkpoint with 2,000 objects, checkpoint accumulation
-                // could take ~100ms. Therefore we should consider not blocking
-                // here, in which case StateAccumulator needs to be crash tolerant.
-                accumulator
-                    .store
-                    .notify_read_checkpoint_state_digests(vec![checkpoint_seq_num])
-                    .await?;
+                accumulator.accumulate_checkpoint(state, epoch_store)?;
 
                 return Ok(());
             }
