@@ -63,7 +63,7 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{Owner, PastObjectRead};
+use sui_types::object::{Data, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
 use sui_types::storage::{ObjectKey, WriteKind};
 use sui_types::sui_system_state::SuiSystemState;
@@ -1924,7 +1924,31 @@ impl AuthorityState {
 
     // TODO: Audit every call to this function to make sure there are no data races during reconfig.
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        self.database.get_sui_system_state_object()
+        let mut system_state = self.database.get_sui_system_state_object()?;
+
+        // Temporary fix-up of reference gas price
+        let mut gas_prices: Vec<_> = system_state
+            .validators
+            .active_validators
+            .iter()
+            .map(|v| (v.gas_price, v.voting_power))
+            .collect();
+
+        gas_prices.sort();
+        let mut votes = 0;
+        let mut reference_gas_price = 0;
+        const VOTING_THRESHOLD: u64 = 3_333;
+        for (price, vote) in gas_prices.into_iter().rev() {
+            if votes >= VOTING_THRESHOLD {
+                break;
+            }
+
+            reference_gas_price = price;
+            votes += vote;
+        }
+
+        system_state.reference_gas_price = reference_gas_price;
+        Ok(system_state)
     }
 
     pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
@@ -1940,11 +1964,25 @@ impl AuthorityState {
                                 version: Some(obj_ref.1),
                             })
                         }
-                        Some(object) => {
+                        Some(mut object) => {
                             let layout = object.get_layout(
                                 ObjectFormatOptions::default(),
                                 self.module_cache.as_ref(),
                             )?;
+
+                            if object_id == &SUI_SYSTEM_STATE_OBJECT_ID {
+                                if let Data::Move(o) = &mut object.data {
+                                    let sso = self.get_sui_system_state_object()?;
+                                    o.update_contents(bcs::to_bytes(&sso).map_err(|e| {
+                                        SuiError::ObjectSerializationError {
+                                            error: format!(
+                                                "Cannot serialize Sui state object, cause: {e}"
+                                            ),
+                                        }
+                                    })?)?
+                                }
+                            }
+
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }

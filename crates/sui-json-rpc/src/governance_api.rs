@@ -88,34 +88,10 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 
     async fn get_sui_system_state(&self) -> RpcResult<SuiSystemState> {
-        let mut system_state = self
+        Ok(self
             .state
             .get_sui_system_state_object()
-            .map_err(Error::from)?;
-
-        // Temporary fix-up of reference gas price
-        let mut gas_prices: Vec<_> = system_state
-            .validators
-            .active_validators
-            .iter()
-            .map(|v| (v.gas_price, v.voting_power))
-            .collect();
-
-        gas_prices.sort();
-        let mut votes = 0;
-        let mut reference_gas_price = 0;
-        const VOTING_THRESHOLD: u64 = 3_333;
-        for (price, vote) in gas_prices.into_iter().rev() {
-            if votes >= VOTING_THRESHOLD {
-                break;
-            }
-
-            reference_gas_price = price;
-            votes += vote;
-        }
-
-        system_state.reference_gas_price = reference_gas_price;
-        Ok(system_state)
+            .map_err(Error::from)?)
     }
 
     async fn get_reference_gas_price(&self) -> RpcResult<u64> {
