@@ -71,15 +71,3 @@ Verify a proof for a Ristretto ECVRF. Returns true if the proof is valid and cor
 
 
 </details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> opaque;
-</code></pre>
-
-
-
-</details>
