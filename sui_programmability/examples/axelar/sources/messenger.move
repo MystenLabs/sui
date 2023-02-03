@@ -62,9 +62,14 @@ module axelar::messenger {
     const EInvalidWeights: u64 = 8;
     /// For when Operators are already set for the epoch.
     const EDuplicateOperators: u64 = 9;
+    /// For when new threshold is zero or it's less than cummulative weight of validators.
+    const EInvalidThreshold: u64 = 10;
 
     /// Used for a check in `validate_proof` function.
     const OLD_KEY_RETENTION: u64 = 16;
+
+    /// Prefix for Sui Messages.
+    const PREFIX: vector<u8> = b"\x19Sui Signed Message:\n";
 
     // These are currently supported
     const SELECTOR_APPROVE_CONTRACT_CALL: vector<u8> = b"approveContractCall";
@@ -75,7 +80,8 @@ module axelar::messenger {
     struct Axelar has key {
         id: UID,
         epoch: u64,
-        epoch_for_hash: VecMap<vector<u8>, u64>
+        epoch_for_hash: VecMap<vector<u8>, u64>,
+        hash_for_epoch: VecMap<u64, vector<u8>>
     }
 
     /// Generic target for the messaging system.
@@ -296,13 +302,15 @@ module axelar::messenger {
                 });
                 continue
             } else if (cmd_selector == &SELECTOR_TRANSFER_OPERATORSHIP) {
-                let (new_operators, new_weights, new_threshold) = (
-                    bcs::peel_vec_vec_u8(&mut payload),
-                    bcs::peel_vec_u64(&mut payload),
-                    bcs::peel_u64(&mut payload),
-                );
+                if (allow_operatorship_transfer) {
+                    let (new_operators, new_weights, new_threshold) = (
+                        bcs::peel_vec_vec_u8(&mut payload),
+                        bcs::peel_vec_u64(&mut payload),
+                        bcs::peel_u64(&mut payload),
+                    );
 
-                transfer_operatorship(operators, new_operators, new_weights, new_threshold);
+                    transfer_operatorship(operators, new_operators, new_weights, new_threshold);
+                };
                 continue
             } else {
                 continue
@@ -396,7 +404,7 @@ module axelar::messenger {
         let operators_len = vec::length(&new_operators);
         let weights_len = vec::length(&new_weights);
         // TODO: also add weights and threshold into the hash
-        let new_hash = operators_hash(new_operators);
+        let new_hash = operators_hash(&new_operators);
 
         assert!(operators_len > 0, EInvalidOperatorsLength);
         assert!(operators_len == weights_len, EInvalidWeights);
@@ -407,15 +415,16 @@ module axelar::messenger {
         };
 
         assert!(new_threshold != 0 && total_weight >= new_threshold, EInvalidThreshold);
-        assert!(vec_map::contains(&operators.operators_for_hash, &new_hash), EDuplicateOperators);
+        assert!(vec_map::contains(&operators.epoch_for_hash, &new_hash), EDuplicateOperators);
 
         let epoch = operators.epoch + 1;
 
+        vec_map::insert(&mut operators.hash_for_epoch, epoch, new_hash);
+        vec_map::insert(&mut operators.epoch_for_hash, new_hash, epoch);
+        operators.epoch = epoch;
 
+        // event::emit(OperatorShipTransferred { new_operators, new_weights, new_threshold })
     }
-
-    /// Prefix for Sui Messages.
-    const PREFIX: vector<u8> = b"\x19Sui Signed Message:\n";
 
     /// Add a prefix to the bytes.
     fun to_signed(bytes: vector<u8>): vector<u8> {
@@ -439,10 +448,65 @@ module axelar::messenger {
         };
     }
 
+    /// Compute operators hash from the list of `operators` (public keys).
+    /// This hash is used in `Axelar.epoch_for_hash`.
+    ///
+    /// TODO: also take weights and thresholds (include into hashing).
+    fun operators_hash(operators: &vector<vector<u8>>): vector<u8> {
+        ecdsa::keccak256(&bcs::to_bytes(operators))
+    }
+
     #[test_only]
     /// Signer PubKey.
     /// Expected to be returned from ecrecover.
     const SIGNER: vector<u8> = x"03d0c81d1a2664b796715725f09501427549006b1468913fea2dcbd440ae086d4b";
+
+    #[test_only]
+    public fun create_test_messages(
+        operators: &mut Axelar,
+        input: vector<u8>
+    ): vector<Message> { create_messages(operators, input) }
+
+    #[test_only]
+    /// Test-only function to create an Axelar object with initial state.
+    public fun init_axelar(epoch: u64, operators: vector<vector<u8>>, ctx: &mut TxContext): Axelar {
+        let epoch_for_hash = vec_map::empty();
+        let hash_for_epoch = vec_map::empty();
+        let hash = operators_hash(&operators);
+
+        vec_map::insert(&mut epoch_for_hash, hash, epoch);
+        vec_map::insert(&mut hash_for_epoch, epoch, hash);
+
+        Axelar {
+            id: object::new(ctx),
+            epoch_for_hash,
+            hash_for_epoch,
+            epoch,
+        }
+    }
+
+    #[test_only]
+    /// Test-only function to consume an Axelar object.
+    public fun burn_axelar(a: Axelar) {
+        let Axelar { id, epoch: _, epoch_for_hash: _ } = a;
+        object::delete(id);
+    }
+
+    #[test_only]
+    /// Handy method for burning `vector<Message>` returned by the `execute` function.
+    public fun delete_messages(msgs: vector<Message>) {
+        while (vec::length(&msgs) > 0) {
+            let Message {
+                msg_id: _,
+                target_id: _,
+                source_chain: _,
+                source_address: _,
+                payload_hash: _,
+                payload: _
+            } = vec::pop_back(&mut msgs);
+        };
+        vec::destroy_empty(msgs);
+    }
 
     #[test]
     /// Tests `ecrecover`, makes sure external signing process works with Sui ecrecover.
@@ -475,55 +539,5 @@ module axelar::messenger {
         // std::debug::print(&pub_key);
         // TODO: broken test
         // assert!(pub_key == SIGNER, 0);
-    }
-
-    #[test_only]
-    public fun create_test_messages(
-        operators: &mut Axelar,
-        input: vector<u8>
-    ): vector<Message> { create_messages(operators, input) }
-
-    #[test_only]
-    /// Test-only function to create an Axelar object with initial state.
-    public fun init_axelar(epoch: u64, operators: vector<vector<u8>>, ctx: &mut TxContext): Axelar {
-        let epoch_for_hash = vec_map::empty();
-        vec_map::insert(&mut epoch_for_hash, operators_hash(&operators), epoch);
-
-        Axelar {
-            id: object::new(ctx),
-            epoch_for_hash,
-            epoch,
-        }
-    }
-
-    #[test_only]
-    /// Test-only function to consume an Axelar object.
-    public fun burn_axelar(a: Axelar) {
-        let Axelar { id, epoch: _, epoch_for_hash: _ } = a;
-        object::delete(id);
-    }
-
-    #[test_only]
-    /// Handy method for burning `vector<Message>` returned by the `execute` function.
-    public fun delete_messages(msgs: vector<Message>) {
-        while (vec::length(&msgs) > 0) {
-            let Message {
-                msg_id: _,
-                target_id: _,
-                source_chain: _,
-                source_address: _,
-                payload_hash: _,
-                payload: _
-            } = vec::pop_back(&mut msgs);
-        };
-        vec::destroy_empty(msgs);
-    }
-
-    /// Compute operators hash from the list of `operators` (public keys).
-    /// This hash is used in `Axelar.epoch_for_hash`.
-    ///
-    /// TODO: also take weights and thresholds (include into hashing).
-    fun operators_hash(operators: &vector<vector<u8>>): vector<u8> {
-        ecdsa::keccak256(&bcs::to_bytes(operators))
     }
 }
