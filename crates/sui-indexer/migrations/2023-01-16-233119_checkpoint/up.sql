@@ -8,10 +8,14 @@ CREATE TABLE checkpoints (
     total_storage_cost BIGINT NOT NULL,
     total_storage_rebate BIGINT NOT NULL,
     total_transactions BIGINT NOT NULL,
+    total_transactions_current_epoch BIGINT NOT NULL,
+    total_transactions_from_genesis BIGINT NOT NULL,
     previous_digest VARCHAR(255),
     next_epoch_committee TEXT,
     -- number of milliseconds from the Unix epoch
     timestamp_ms BIGINT NOT NULL,
+    timestamp_ms_str TIMESTAMP NOT NULL,
+    checkpoint_tps REAL NOT NULL,
     UNIQUE(sequence_number) 
 );
 
