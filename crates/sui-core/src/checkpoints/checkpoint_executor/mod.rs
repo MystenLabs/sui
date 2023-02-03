@@ -25,6 +25,7 @@ use std::{
 };
 
 use futures::stream::FuturesOrdered;
+use itertools::izip;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
@@ -381,7 +382,7 @@ async fn execute_transactions(
     let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_store
         .perpetual_tables
         .effects
-        .multi_get(effects_digests)?
+        .multi_get(effects_digests.clone())?
         .into_iter()
         .map(|fx| {
             if fx.is_none() {
@@ -440,7 +441,14 @@ async fn execute_transactions(
                 periods += 1;
             }
             Ok(Err(err)) => return Err(err),
-            Ok(Ok(_)) => {
+            Ok(Ok(effects)) => {
+                for (tx_digest, expected_effects_digest, actual_effects) in
+                    izip!(&all_tx_digests, &effects_digests, &effects)
+                {
+                    if expected_effects_digest != actual_effects.digest() {
+                        panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", actual_effects.digest());
+                    }
+                }
                 authority_store.insert_executed_transactions(
                     &all_tx_digests,
                     epoch_store.epoch(),
