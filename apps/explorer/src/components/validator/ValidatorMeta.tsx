@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { Base64DataBuffer } from '@mysten/sui.js';
+import { Base64DataBuffer, type MoveActiveValidator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { StakeButton } from './StakeButton';
-
-import type { ActiveValidator } from '~/pages/validator/ValidatorDataTypes';
 
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
@@ -17,7 +15,7 @@ import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
 
 type ValidatorMetaProps = {
-    validatorData: ActiveValidator;
+    validatorData: MoveActiveValidator;
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {

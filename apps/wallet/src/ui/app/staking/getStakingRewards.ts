@@ -3,10 +3,10 @@
 
 import BigNumber from 'bignumber.js';
 
-import type { ActiveValidator, DelegatedStake } from '@mysten/sui.js';
+import type { MoveActiveValidator, DelegatedStake } from '@mysten/sui.js';
 
 export function getStakingRewards(
-    activeValidators: ActiveValidator[],
+    activeValidators: MoveActiveValidator[],
     delegation: DelegatedStake
 ) {
     if (
@@ -29,7 +29,7 @@ export function getStakingRewards(
         delegation.delegation_status.Active.pool_tokens.value
     );
     const delegationTokenSupply = new BigNumber(
-        validatorFields.delegation_staking_pool.fields.delegation_token_supply.value
+        validatorFields.delegation_staking_pool.fields.delegation_token_supply.fields.value
     );
     const suiBalance = new BigNumber(
         validatorFields.delegation_staking_pool.fields.sui_balance
