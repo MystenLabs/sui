@@ -56,6 +56,11 @@ export class JsonRpcClient {
   }
 
   private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
+    headers.insert(
+      "client_api_version",
+      HeaderValue:: from_static(client_version),
+    );
+    headers.insert("client_type", HeaderValue:: from_static("rust_sdk"));
     const client = new RpcClient(
       async (
         request: any,
@@ -150,8 +155,7 @@ export class JsonRpcClient {
 
     if (responses.length > validResponses.length) {
       console.warn(
-        `Batch request contains invalid responses. ${
-          responses.length - validResponses.length
+        `Batch request contains invalid responses. ${responses.length - validResponses.length
         } of the ${responses.length} requests has invalid schema.`
       );
       const exampleTypeMismatch = responses.find(
@@ -163,9 +167,9 @@ export class JsonRpcClient {
       if (exampleTypeMismatch) {
         console.warn(
           TYPE_MISMATCH_ERROR +
-            `One example mismatch is: ${JSON.stringify(
-              exampleTypeMismatch.result
-            )}`
+          `One example mismatch is: ${JSON.stringify(
+            exampleTypeMismatch.result
+          )}`
         );
       }
       if (exampleInvalidResponseIndex !== -1) {
