@@ -4,6 +4,7 @@
 pub mod bls12381;
 pub mod bulletproofs;
 pub mod ecdsa_k1;
+pub mod ecvrf;
 pub mod ed25519;
 pub mod elliptic_curve;
 pub mod groth16;

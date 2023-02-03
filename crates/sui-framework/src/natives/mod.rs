@@ -24,7 +24,7 @@ use move_vm_types::{
 use std::sync::Arc;
 
 use self::crypto::{
-    bls12381, bulletproofs, ecdsa_k1, ed25519, elliptic_curve, groth16, hmac, tbls,
+    bls12381, bulletproofs, ecdsa_k1, ecvrf, ed25519, elliptic_curve, groth16, hmac, tbls,
 };
 
 pub fn all_natives(
@@ -102,6 +102,7 @@ pub fn all_natives(
             "secp256k1_verify_recoverable",
             make_native!(ecdsa_k1::secp256k1_verify_recoverable),
         ),
+        ("ecvrf", "ecvrf_verify", make_native!(ecvrf::ecvrf_verify)),
         (
             "ed25519",
             "ed25519_verify",
