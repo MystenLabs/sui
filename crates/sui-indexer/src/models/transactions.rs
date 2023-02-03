@@ -181,8 +181,8 @@ pub fn transaction_response_to_new_transaction(
     let gas_object_ref = tx_resp.effects.gas_object.reference.clone();
     let gas_object_id = gas_object_ref.object_id.to_string();
     let gas_object_seq = gas_object_ref.version;
-    // canonical object digest is Base58 encoded
-    let gas_object_digest = gas_object_ref.digest.base58_encode();
+    // canonical object digest is Base64 encoded
+    let gas_object_digest = gas_object_ref.digest.base64_encode();
 
     let gas_summary = tx_resp.effects.gas_used;
     let computation_cost = gas_summary.computation_cost;
