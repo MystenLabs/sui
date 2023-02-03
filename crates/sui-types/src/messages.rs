@@ -1468,7 +1468,6 @@ pub enum ExecutionFailureStatus {
     InsufficientGas,
     InvalidGasObject,
     InvalidTransactionUpdate,
-    ModuleNotFound,
     FunctionNotFound,
     InvariantViolation,
     MoveObjectTooBig {
@@ -1578,7 +1577,6 @@ pub struct EntryTypeArgumentError {
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
 pub enum EntryTypeArgumentErrorKind {
-    ModuleNotFound,
     TypeNotFound,
     ArityMismatch,
     ConstraintNotSatisfied,
@@ -1654,7 +1652,6 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
             ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
@@ -1853,10 +1850,6 @@ impl Display for EntryTypeArgumentError {
 impl Display for EntryTypeArgumentErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            EntryTypeArgumentErrorKind::ModuleNotFound => write!(
-                f,
-                "A package (or module) in the type argument was not found"
-            ),
             EntryTypeArgumentErrorKind::TypeNotFound => {
                 write!(f, "A type was not found in the module specified",)
             }

@@ -1678,8 +1678,7 @@ async fn test_type_argument_dependencies() {
         .handle_transaction(transaction)
         .await
         .unwrap()
-        .signed_transaction
-        .unwrap();
+        .into_signed_for_testing();
     // obj type tag succeeds
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         s2,
@@ -1701,8 +1700,7 @@ async fn test_type_argument_dependencies() {
         .handle_transaction(transaction)
         .await
         .unwrap()
-        .signed_transaction
-        .unwrap();
+        .into_signed_for_testing();
     // missing package fails obj type tag succeeds
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         s3,
