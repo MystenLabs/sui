@@ -7,23 +7,21 @@ use crate::types::{
     TransactionIdentifier,
 };
 use crate::Error;
-use anyhow::anyhow;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use mysten_metrics::spawn_monitored_task;
 use rocksdb::Options;
-use serde::Deserialize;
-use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 use sui_sdk::apis::Checkpoint;
 use sui_sdk::SuiClient;
 use sui_storage::default_db_options;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBMap, DBOptions, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
@@ -65,7 +63,7 @@ pub trait BlockProvider {
         &self,
         addr: SuiAddress,
         block_height: u64,
-    ) -> Result<u128, Error>;
+    ) -> Result<i128, Error>;
 }
 
 #[derive(Clone)]
@@ -112,20 +110,22 @@ impl BlockProvider for CheckpointBlockProvider {
         &self,
         addr: SuiAddress,
         block_height: u64,
-    ) -> Result<u128, Error> {
+    ) -> Result<i128, Error> {
         Ok(self
             .index_store
             .balances
             .iter()
             .skip_prior_to(&(addr, block_height))?
             .next()
-            .and_then(|((address, _), balance)| {
-                if address == addr {
-                    Some(balance.balance)
-                } else {
-                    None
-                }
-            })
+            .and_then(
+                |((address, _), balance)| {
+                    if address == addr {
+                        Some(balance)
+                    } else {
+                        None
+                    }
+                },
+            )
             .unwrap_or_default())
     }
 }
@@ -149,7 +149,7 @@ impl CheckpointBlockProvider {
                 info!("Index Store is empty, indexing genesis block.");
                 let checkpoint = f.client.read_api().get_checkpoint(0).await.unwrap();
                 let resp = f.create_block_response(checkpoint).await.unwrap();
-                f.update_balance(0, resp.block.transactions).await.unwrap();
+                f.update_balance(resp.block).await.unwrap();
             } else {
                 let current_block = f.current_block_identifier().await.unwrap();
                 info!("Resuming from block {}", current_block.index);
@@ -175,55 +175,51 @@ impl CheckpointBlockProvider {
         if last_checkpoint < head {
             for seq in last_checkpoint + 1..=head {
                 let checkpoint = self.client.read_api().get_checkpoint(seq).await?;
+                let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.summary.timestamp_ms);
+                info!(
+                    "indexing checkpoint {seq} with {} txs, timestamp: {}",
+                    checkpoint.content.size(),
+                    DateTime::<Utc>::from(timestamp).format("%Y-%m-%d %H:%M:%S")
+                );
                 let resp = self.create_block_response(checkpoint).await?;
-                self.update_balance(seq, resp.block.transactions).await?;
+                self.update_balance(resp.block).await?;
+                self.index_store.last_checkpoint.insert(&true, &seq)?;
             }
-            self.index_store.last_checkpoint.insert(&true, &head)?;
         } else {
             debug!("No new checkpoints.")
         };
         Ok(())
     }
 
-    async fn update_balance(
-        &self,
-        block_height: u64,
-        transactions: Vec<Transaction>,
-    ) -> Result<(), anyhow::Error> {
+    async fn update_balance(&self, block: Block) -> Result<(), anyhow::Error> {
+        let block_height = block.block_identifier.index;
+        let last_block_height = if block_height == 0 {
+            0
+        } else {
+            block_height - 1
+        };
         let balances: HashMap<SuiAddress, i128> =
-            transactions
+            block
+                .transactions
                 .into_iter()
-                .try_fold(HashMap::new(), |mut changes, tx| {
-                    for (address, balance) in extract_balance_changes_from_ops(tx.operations)? {
+                .fold(HashMap::new(), |mut changes, tx| {
+                    for (address, balance) in extract_balance_changes_from_ops(tx.operations) {
                         *changes.entry(address).or_default() += balance;
                     }
-                    Ok::<HashMap<SuiAddress, i128>, anyhow::Error>(changes)
-                })?;
+                    changes
+                });
 
         for (addr, value) in balances {
-            let current_balance = self.get_balance_at_block(addr, block_height).await? as i128;
-            let new_balance = if value.is_negative() {
-                if current_balance < value.abs() {
-                    // This can happen due to missing transactions data due to unstable validators, causing balance to
-                    // fall below zero temporarily. The problem should go away when we start using checkpoints for event and indexing
-                    return Err(anyhow!(
-                        "Account gas value fall below 0 at block {}, address: [{}]",
-                        block_height,
-                        addr
-                    ));
-                }
-                current_balance - value.abs()
-            } else {
-                current_balance + value.abs()
-            };
-
-            self.index_store.balances.insert(
-                &(addr, block_height),
-                &HistoricBalance {
-                    block_height,
-                    balance: new_balance as u128,
-                },
-            )?;
+            let current_balance = self.get_balance_at_block(addr, last_block_height).await?;
+            let new_balance = current_balance + value;
+            if new_balance < 0 {
+                // This can happen due to missing transactions data due to unstable validators, causing balance to
+                // fall below zero temporarily. The problem should go away when we start using checkpoints for event and indexing
+                warn!("Account gas value fall below 0 at block {block_height}, address: [{addr}], current balance = {current_balance}, balance change = {value}.");
+            }
+            self.index_store
+                .balances
+                .insert(&(addr, block_height), &new_balance)?;
         }
         Ok(())
     }
@@ -296,40 +292,28 @@ impl CheckpointBlockProvider {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct HistoricBalance {
-    block_height: u64,
-    balance: u128,
-}
-
-fn extract_balance_changes_from_ops(
-    ops: Operations,
-) -> Result<HashMap<SuiAddress, i128>, anyhow::Error> {
+fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128> {
     ops.into_iter()
-        .try_fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
+        .fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
             match op.type_ {
-                OperationType::SuiBalanceChange | OperationType::Gas | OperationType::PaySui => {
-                    let addr = op
-                        .account
-                        .ok_or_else(|| {
-                            anyhow!("Account address cannot be null for {:?}", op.type_)
-                        })?
-                        .address;
-                    let amount = op
-                        .amount
-                        .ok_or_else(|| anyhow!("Amount cannot be null for {:?}", op.type_))?;
-                    *changes.entry(addr).or_default() += amount.value
+                OperationType::SuiBalanceChange
+                | OperationType::Gas
+                | OperationType::PaySui
+                | OperationType::Delegation => {
+                    if let (Some(addr), Some(amount)) = (op.account, op.amount) {
+                        *changes.entry(addr.address).or_default() += amount.value
+                    }
                 }
                 _ => {}
             };
-            Ok(changes)
+            changes
         })
 }
 
 #[derive(DBMapUtils)]
 pub struct CheckpointIndexStore {
     #[default_options_override_fn = "default_config"]
-    balances: DBMap<(SuiAddress, EpochId), HistoricBalance>,
+    balances: DBMap<(SuiAddress, EpochId), i128>,
     #[default_options_override_fn = "default_config"]
     last_checkpoint: DBMap<bool, CheckpointSequenceNumber>,
 }
