@@ -840,7 +840,9 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: StakeAggregator::new(self.epoch_store.committee().clone()),
+                    signatures: StakeAggregator::new(Arc::new(
+                        self.epoch_store.committee().clone(),
+                    )),
                 });
                 self.current.as_mut().unwrap()
             };
