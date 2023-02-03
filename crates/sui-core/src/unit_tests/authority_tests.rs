@@ -1607,6 +1607,128 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
 }
 
 #[tokio::test]
+async fn test_missing_package() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, _object_basics) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let non_existent_package = ObjectID::MAX;
+    let gas_object_ref = gas_object.compute_object_reference();
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        non_existent_package,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("wrap").to_owned(),
+        vec![],
+        gas_object_ref,
+        vec![],
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let result = authority_state.handle_transaction(transaction).await;
+    let error = result.unwrap_err();
+    let error = error.collapse_if_single_transaction_input_error().unwrap();
+    assert!(
+        matches!(error, SuiError::DependentPackageNotFound { .. }),
+        "Wrong error {}",
+        error
+    );
+}
+
+#[tokio::test]
+async fn test_type_argument_dependencies() {
+    let (s1, s1_key): (_, AccountKeyPair) = get_key_pair();
+    let (s2, s2_key): (_, AccountKeyPair) = get_key_pair();
+    let (s3, s3_key): (_, AccountKeyPair) = get_key_pair();
+    let gas1 = ObjectID::random();
+    let gas2 = ObjectID::random();
+    let gas3 = ObjectID::random();
+    let (authority_state, (object_basics, _, _)) =
+        init_state_with_ids_and_object_basics(vec![(s1, gas1), (s2, gas2), (s3, gas3)]).await;
+    let gas1 = {
+        let o = authority_state.get_object(&gas1).await.unwrap().unwrap();
+        o.compute_object_reference()
+    };
+    let gas2 = {
+        let o = authority_state.get_object(&gas2).await.unwrap().unwrap();
+        o.compute_object_reference()
+    };
+    let gas3 = {
+        let o = authority_state.get_object(&gas3).await.unwrap().unwrap();
+        o.compute_object_reference()
+    };
+    // primitive type tag succeeds
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
+        s1,
+        object_basics,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("generic_test").to_owned(),
+        vec![TypeTag::U64],
+        gas1,
+        vec![],
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(data, &s1_key);
+    authority_state
+        .handle_transaction(transaction)
+        .await
+        .unwrap()
+        .into_signed_for_testing();
+    // obj type tag succeeds
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
+        s2,
+        object_basics,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("generic_test").to_owned(),
+        vec![TypeTag::Struct(Box::new(StructTag {
+            address: object_basics.into(),
+            module: ident_str!("object_basics").to_owned(),
+            name: ident_str!("Object").to_owned(),
+            type_params: vec![],
+        }))],
+        gas2,
+        vec![],
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(data, &s2_key);
+    authority_state
+        .handle_transaction(transaction)
+        .await
+        .unwrap()
+        .into_signed_for_testing();
+    // missing package fails obj type tag succeeds
+    let data = TransactionData::new_move_call_with_dummy_gas_price(
+        s3,
+        object_basics,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("generic_test").to_owned(),
+        vec![TypeTag::Struct(Box::new(StructTag {
+            address: ObjectID::MAX.into(),
+            module: ident_str!("object_basics").to_owned(),
+            name: ident_str!("Object").to_owned(),
+            type_params: vec![],
+        }))],
+        gas3,
+        vec![],
+        MAX_GAS,
+    );
+    let transaction = to_sender_signed_transaction(data, &s3_key);
+    let result = authority_state.handle_transaction(transaction).await;
+    let error = result.unwrap_err();
+    let error = error.collapse_if_single_transaction_input_error().unwrap();
+    assert!(
+        matches!(error, SuiError::DependentPackageNotFound { .. }),
+        "Wrong error {}",
+        error
+    );
+}
+
+#[tokio::test]
 async fn test_handle_confirmation_transaction_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
