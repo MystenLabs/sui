@@ -7,7 +7,8 @@ module risk_management::test_risk_management {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};
-    use risk_management::policy_config::{Self, AdministratorCap, SpenderCap, ApproverCap, RolesRegistry, Assets};
+    use std::vector as vec;
+    use risk_management::policy_config::{Self, SuperAdministratorCap, AdministratorCap ,SpenderCap, ApproverCap, RolesRegistry, Assets};
     use risk_management::transaction::{Self, TransactionRequest, TransactionApproval};
 
     const EWrongCoinValue: u64 = 0;
@@ -33,7 +34,9 @@ module risk_management::test_risk_management {
 
     #[test]
     fun simple_transaction() {
-        let admin = @0xBABE;
+        let super_admin = @0xBABE;
+        let admin = @0xBAD;
+        let admin_test = @0xBED;
         let approver1 = @0xCAFE;
         let approver2 = @0xDECAF;
         let spender = @0xFACE;
@@ -42,11 +45,21 @@ module risk_management::test_risk_management {
         let scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
 
-        // Call init function, transfer AdministratorCap to the admin
-        test_scenario::next_tx(scenario, admin);
+        // Call init function, transfer SuperAdministratorCap to the publisher
+        test_scenario::next_tx(scenario, super_admin);
         {
             let ctx = test_scenario::ctx(scenario);
             policy_config::init_for_testing(ctx);
+        };
+
+        test_scenario::next_tx(scenario, super_admin);
+        {
+            let super_administrator_cap = test_scenario::take_from_sender<SuperAdministratorCap>(scenario);
+            let admins = vec::empty();
+            vec::push_back(&mut admins, admin);
+            vec::push_back(&mut admins, admin_test);
+            let ctx = test_scenario::ctx(scenario);
+            policy_config::create_administrator(super_administrator_cap, admins, ctx);
         };
 
         // Admin creates first approver

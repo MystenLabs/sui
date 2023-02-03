@@ -104,9 +104,8 @@ module risk_management::policy_config {
             spenders: vec::empty(),
             approvers: vec::empty()
             };
-        let admin = @0x0;
         while (!vec::is_empty(&administrators)) {  
-            admin = vec::pop_back(&mut administrators);  
+            let admin = vec::pop_back(&mut administrators);  
             transfer::transfer(AdministratorCap{id: object::new(ctx), original_owner: admin}, 
                                admin
                             );
