@@ -213,6 +213,13 @@ impl PeerHeights {
             .insert(sequence_number, digest);
     }
 
+    pub fn remove_checkpoint(&mut self, digest: &CheckpointDigest) {
+        if let Some(checkpoint) = self.unprocessed_checkpoints.remove(digest) {
+            self.sequence_number_to_digest
+                .remove(&checkpoint.sequence_number());
+        }
+    }
+
     pub fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -411,13 +418,29 @@ where
                 assert_eq!(checkpoint.previous_digest(), Some(previous_digest));
             }
 
-            // Otherwise stick it with the other unprocessed checkpoints and we can try to sync the missing
-            // ones
-            self.peer_heights
-                .write()
-                .unwrap()
-                .insert_checkpoint(checkpoint.into_inner());
-            warn!("Consensus gave us too new of a checkpoint");
+            // See if the missing checkpoints are already in our store and quickly update our
+            // watermarks
+            for sequence_number in next_sequence_number..=checkpoint.sequence_number() {
+                if let Some(checkpoint) = self
+                    .store
+                    .get_checkpoint_by_sequence_number(sequence_number)
+                    .expect("store operation should not fail")
+                {
+                    self.store
+                        .insert_checkpoint(checkpoint.clone())
+                        .expect("store operation should not fail");
+                    self.store
+                        .update_highest_synced_checkpoint(&checkpoint)
+                        .expect("store operation should not fail");
+                    self.metrics
+                        .set_highest_verified_checkpoint(checkpoint.sequence_number());
+                    self.metrics
+                        .set_highest_synced_checkpoint(checkpoint.sequence_number());
+
+                    // We don't care if no one is listening as this is a broadcast channel
+                    let _ = self.checkpoint_event_sender.send(checkpoint.clone());
+                }
+            }
         }
     }
 
@@ -832,42 +855,24 @@ where
         .buffered(checkpoint_header_download_concurrency);
 
     while let Some((maybe_checkpoint, next)) = request_stream.next().await {
+        debug_assert!(current.sequence_number().saturating_add(1) == next);
+
         // Verify the checkpoint
         let checkpoint = {
             let checkpoint = maybe_checkpoint
                 .ok_or_else(|| anyhow::anyhow!("no peers were able to help sync"))?;
-
-            if checkpoint.sequence_number() != next
-                || Some(current.digest()) != checkpoint.previous_digest()
-            {
-                return Err(anyhow::anyhow!("detected fork"));
+            match verify_checkpoint(&current, &store, checkpoint) {
+                Ok(verified_checkpoint) => verified_checkpoint,
+                Err(checkpoint) => {
+                    // Remove the checkpoint from our temporary store so that we can try querying
+                    // another peer for a different one
+                    peer_heights
+                        .write()
+                        .unwrap()
+                        .remove_checkpoint(&checkpoint.digest());
+                    return Err(anyhow::anyhow!("unable to verify checkpoint {checkpoint}"));
+                }
             }
-
-            let current_epoch = current.epoch();
-            if checkpoint.epoch() != current_epoch
-                && checkpoint.epoch() != current_epoch.saturating_add(1)
-            {
-                return Err(anyhow::anyhow!(
-                    "cannot verify checkpoint with too high of an epoch {}, current epoch {}",
-                    checkpoint.epoch(),
-                    current_epoch,
-                ));
-            }
-
-            if checkpoint.epoch() == current_epoch.saturating_add(1)
-                && current.next_epoch_committee().is_none()
-            {
-                return Err(anyhow::anyhow!(
-                    "next checkpoint claims to be from the next epoch but the latest verified \
-                    checkpoint does not indicate that it is the last checkpoint of an epoch"
-                ));
-            }
-
-            let committee = store
-                .get_committee(checkpoint.epoch())
-            .expect("store operation should not fail")
-                .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
-            VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(_, e)| e)?
         };
 
         debug!(sequence_number = ?checkpoint.summary.sequence_number, "verified checkpoint summary");
@@ -892,6 +897,60 @@ where
         .cleanup_old_checkpoints(checkpoint.sequence_number());
 
     Ok(())
+}
+
+fn verify_checkpoint<S>(
+    current: &VerifiedCheckpoint,
+    store: S,
+    checkpoint: Checkpoint,
+) -> Result<VerifiedCheckpoint, Checkpoint>
+where
+    S: WriteStore,
+    <S as ReadStore>::Error: std::error::Error,
+{
+    if checkpoint.sequence_number() != current.sequence_number().saturating_add(1)
+        || Some(current.digest()) != checkpoint.previous_digest()
+    {
+        debug!(
+            current_sequence_number = current.sequence_number(),
+            current_digest =% current.digest(),
+            checkpoint_sequence_number = checkpoint.sequence_number(),
+            checkpoint_digest =% checkpoint.digest(),
+            checkpoint_previous_digest =? checkpoint.previous_digest(),
+            "checkpoint not on same chain"
+        );
+        return Err(checkpoint);
+    }
+
+    let current_epoch = current.epoch();
+    if checkpoint.epoch() != current_epoch && checkpoint.epoch() != current_epoch.saturating_add(1)
+    {
+        debug!(
+            current_epoch = current_epoch,
+            checkpoint_epoch = checkpoint.epoch(),
+            "cannont verify checkpoint with too high of an epoch",
+        );
+        return Err(checkpoint);
+    }
+
+    if checkpoint.epoch() == current_epoch.saturating_add(1)
+        && current.next_epoch_committee().is_none()
+    {
+        debug!(
+            "next checkpoint claims to be from the next epoch but the latest verified \
+            checkpoint does not indicate that it is the last checkpoint of an epoch"
+        );
+        return Err(checkpoint);
+    }
+
+    let committee = store
+        .get_committee(checkpoint.epoch())
+        .expect("store operation should not fail")
+        .expect("BUG: should have a committee for an epoch before we try to verify checkpoints from an epoch");
+    VerifiedCheckpoint::new(checkpoint, &committee).map_err(|(checkpoint, e)| {
+        debug!("error verifying checkpoint: {e}");
+        checkpoint
+    })
 }
 
 async fn sync_checkpoint_contents<S>(
