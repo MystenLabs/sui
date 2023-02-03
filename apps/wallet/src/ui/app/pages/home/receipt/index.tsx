@@ -28,12 +28,9 @@ function ReceiptPage() {
     const { data, isLoading, isError } = useQuery(
         ['transactions-by-id', transactionId],
         async () => {
-            if (!transactionId) {
-                return null;
-            }
-            return rpc.getTransactionWithEffects(transactionId);
+            return rpc.getTransactionWithEffects(transactionId!);
         },
-        { enabled: !!transactionId }
+        { enabled: !!transactionId, retry: 8 }
     );
 
     // return route or default to transactions
