@@ -198,6 +198,12 @@ impl PeerHeights {
         }
     }
 
+    pub fn mark_peer_as_not_on_same_chain(&mut self, peer_id: PeerId) {
+        if let Some(info) = self.peers.get_mut(&peer_id) {
+            info.on_same_chain_as_us = false;
+        }
+    }
+
     pub fn cleanup_old_checkpoints(&mut self, sequence_number: CheckpointSequenceNumber) {
         self.unprocessed_checkpoints
             .retain(|_digest, checkpoint| checkpoint.sequence_number() > sequence_number);
@@ -418,28 +424,30 @@ where
                 assert_eq!(checkpoint.previous_digest(), Some(previous_digest));
             }
 
+            debug!("consensus sent too new of a checkpoint");
+
             // See if the missing checkpoints are already in our store and quickly update our
             // watermarks
-            for sequence_number in next_sequence_number..=checkpoint.sequence_number() {
-                if let Some(checkpoint) = self
-                    .store
-                    .get_checkpoint_by_sequence_number(sequence_number)
-                    .expect("store operation should not fail")
-                {
+            let mut checkpoints_from_storage =
+                (next_sequence_number..=checkpoint.sequence_number()).map(|n| {
                     self.store
-                        .insert_checkpoint(checkpoint.clone())
-                        .expect("store operation should not fail");
-                    self.store
-                        .update_highest_synced_checkpoint(&checkpoint)
-                        .expect("store operation should not fail");
-                    self.metrics
-                        .set_highest_verified_checkpoint(checkpoint.sequence_number());
-                    self.metrics
-                        .set_highest_synced_checkpoint(checkpoint.sequence_number());
+                        .get_checkpoint_by_sequence_number(n)
+                        .expect("store operation should not fail")
+                });
+            while let Some(Some(checkpoint)) = checkpoints_from_storage.next() {
+                self.store
+                    .insert_checkpoint(checkpoint.clone())
+                    .expect("store operation should not fail");
+                self.store
+                    .update_highest_synced_checkpoint(&checkpoint)
+                    .expect("store operation should not fail");
+                self.metrics
+                    .set_highest_verified_checkpoint(checkpoint.sequence_number());
+                self.metrics
+                    .set_highest_synced_checkpoint(checkpoint.sequence_number());
 
-                    // We don't care if no one is listening as this is a broadcast channel
-                    let _ = self.checkpoint_event_sender.send(checkpoint.clone());
-                }
+                // We don't care if no one is listening as this is a broadcast channel
+                let _ = self.checkpoint_event_sender.send(checkpoint.clone());
             }
         }
     }
@@ -818,7 +826,7 @@ where
                     .unwrap()
                     .get_checkpoint_by_sequence_number(next)
                 {
-                    return (Some(checkpoint.to_owned()), next);
+                    return (Some(checkpoint.to_owned()), next, None);
                 }
 
                 // Iterate through our selected peers trying each one in turn until we're able to
@@ -844,17 +852,17 @@ where
                             .write()
                             .unwrap()
                             .insert_checkpoint(checkpoint.clone());
-                        return (Some(checkpoint), next);
+                        return (Some(checkpoint), next, Some(peer.inner().peer_id()));
                     }
                 }
 
-                (None, next)
+                (None, next, None)
             }
         })
         .pipe(futures::stream::iter)
         .buffered(checkpoint_header_download_concurrency);
 
-    while let Some((maybe_checkpoint, next)) = request_stream.next().await {
+    while let Some((maybe_checkpoint, next, maybe_peer_id)) = request_stream.next().await {
         debug_assert!(current.sequence_number().saturating_add(1) == next);
 
         // Verify the checkpoint
@@ -864,12 +872,16 @@ where
             match verify_checkpoint(&current, &store, checkpoint) {
                 Ok(verified_checkpoint) => verified_checkpoint,
                 Err(checkpoint) => {
+                    let mut peer_heights = peer_heights.write().unwrap();
                     // Remove the checkpoint from our temporary store so that we can try querying
                     // another peer for a different one
-                    peer_heights
-                        .write()
-                        .unwrap()
-                        .remove_checkpoint(&checkpoint.digest());
+                    peer_heights.remove_checkpoint(&checkpoint.digest());
+
+                    // Mark peer as not on the same chain as us
+                    if let Some(peer_id) = maybe_peer_id {
+                        peer_heights.mark_peer_as_not_on_same_chain(peer_id);
+                    }
+
                     return Err(anyhow::anyhow!("unable to verify checkpoint {checkpoint}"));
                 }
             }
@@ -908,9 +920,12 @@ where
     S: WriteStore,
     <S as ReadStore>::Error: std::error::Error,
 {
-    if checkpoint.sequence_number() != current.sequence_number().saturating_add(1)
-        || Some(current.digest()) != checkpoint.previous_digest()
-    {
+    assert_eq!(
+        checkpoint.sequence_number(),
+        current.sequence_number().saturating_add(1)
+    );
+
+    if Some(current.digest()) != checkpoint.previous_digest() {
         debug!(
             current_sequence_number = current.sequence_number(),
             current_digest =% current.digest(),
