@@ -23,7 +23,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
 use sui_verifier::entry_points_verifier::{
     is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
-    RESOLVED_UTF8_STR, RESOLVED_SUI_UID,
+    RESOLVED_SUI_UID, RESOLVED_UTF8_STR,
 };
 
 const HEX_PREFIX: &str = "0x";
