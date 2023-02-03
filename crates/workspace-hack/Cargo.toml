@@ -184,7 +184,8 @@ duration-str = { version = "0.4" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
 ecdsa-3575ec1268b04181 = { package = "ecdsa", version = "0.15", features = ["pkcs8", "signing", "std", "verifying"] }
-ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
+ed25519-dff4ba8e3ae991db = { package = "ed25519", version = "1", features = ["alloc", "serde", "zeroize"] }
+ed25519-f595c2ba2a3f28df = { package = "ed25519", version = "2", features = ["alloc", "zeroize"] }
 ed25519-consensus = { version = "2" }
 ed25519-dalek = { version = "1" }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
@@ -198,9 +199,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", features = ["copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", features = ["copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -852,7 +853,8 @@ duration-str = { version = "0.4" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
 ecdsa-3575ec1268b04181 = { package = "ecdsa", version = "0.15", features = ["pkcs8", "signing", "std", "verifying"] }
-ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
+ed25519-dff4ba8e3ae991db = { package = "ed25519", version = "1", features = ["alloc", "serde", "zeroize"] }
+ed25519-f595c2ba2a3f28df = { package = "ed25519", version = "2", features = ["alloc", "zeroize"] }
 ed25519-consensus = { version = "2" }
 ed25519-dalek = { version = "1" }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
@@ -867,10 +869,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "246fdfad10306029b31866758d40fdc3bd5f7bf9", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
