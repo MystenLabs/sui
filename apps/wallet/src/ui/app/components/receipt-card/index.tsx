@@ -23,7 +23,7 @@ import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
 import { TxnGasSummery } from '_components/receipt-card/TxnGasSummery';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
-import { getTxnEffectsEventID } from '_components/transactions-card/Transaction';
+import { getTxnEffectsEventID } from '_components/transactions-card';
 import { TxnImage } from '_components/transactions-card/TxnImage';
 import { getEventsSummary, checkStakingTxn } from '_helpers';
 import { useGetTxnRecipientAddress } from '_hooks';

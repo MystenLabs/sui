@@ -6,8 +6,8 @@ import { memo } from 'react';
 import PageTitle from '_app/shared/page-title';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
+import { TransactionCard } from '_components/transactions-card';
 import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
-import { Transaction } from '_components/transactions-card/Transaction';
 import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
@@ -46,7 +46,7 @@ function TransactionsPage() {
                             <ErrorBoundary
                                 key={txn.certificate.transactionDigest}
                             >
-                                <Transaction
+                                <TransactionCard
                                     txn={txn}
                                     address={activeAddress}
                                 />

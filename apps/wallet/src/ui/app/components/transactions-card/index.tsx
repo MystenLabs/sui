@@ -1,172 +1,216 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { memo } from 'react';
+import {
+    getExecutionStatusType,
+    getTransactionKindName,
+    getMoveCallTransaction,
+    getExecutionStatusError,
+    getTransferObjectTransaction,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import { type TxResultState } from '../../hooks/useRecentTransactions';
-import Icon, { SuiIcons } from '_components/icon';
-import { formatDate } from '_helpers';
-import { useMiddleEllipsis, useFormatCoin } from '_hooks';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { TxnTypeLabel } from './TxnActionLabel';
+import { TxnIcon } from './TxnIcon';
+import { TxnImage } from './TxnImage';
+import { CoinBalance } from '_app/shared/coin-balance';
+import { DateCard } from '_app/shared/date-card';
+import { Text } from '_app/shared/text';
+import { getEventsSummary, notEmpty, checkStakingTxn } from '_helpers';
+import { useGetTxnRecipientAddress } from '_hooks';
 
-import st from './TransactionsCard.module.scss';
+import type {
+    SuiTransactionResponse,
+    SuiAddress,
+    TransactionEffects,
+    SuiEvent,
+} from '@mysten/sui.js';
 
-const TRUNCATE_MAX_LENGTH = 8;
-const TRUNCATE_PREFIX_LENGTH = 4;
+export const getTxnEffectsEventID = (
+    txEffects: TransactionEffects,
+    address: string
+): string[] => {
+    const events = txEffects?.events || [];
+    const objectIDs = events
+        ?.map((event: SuiEvent) => {
+            const data = Object.values(event).find(
+                (itm) => itm?.recipient?.AddressOwner === address
+            );
+            return data?.objectId;
+        })
+        .filter(notEmpty);
+    return objectIDs;
+};
 
-// Truncate text after one line (~ 35 characters)
-const TRUNCATE_MAX_CHAR = 35;
+export function TransactionCard({
+    txn,
+    address,
+}: {
+    txn: SuiTransactionResponse;
+    address: SuiAddress;
+}) {
+    const { certificate } = txn;
+    const executionStatus = getExecutionStatusType(txn);
+    const txnKind = getTransactionKindName(certificate.data.transactions[0]);
+    const { coins: eventsSummary } = getEventsSummary(txn.effects, address);
 
-function TransactionCard({ txn }: { txn: TxResultState }) {
-    const toAddrStr = useMiddleEllipsis(
-        txn.to || '',
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
+    const objectId = useMemo(() => {
+        const transferId = getTransferObjectTransaction(
+            certificate.data.transactions[0]
+        )?.objectRef?.objectId;
+        return transferId
+            ? transferId
+            : getTxnEffectsEventID(txn.effects, address)[0];
+    }, [address, certificate.data.transactions, txn.effects]);
+
+    // we only show Sui Transfer amount or the first non-Sui transfer amount
+    // positive amount means received, negative amount means sent
+    const transferAmount = useMemo(() => {
+        // Find SUI transfer amount
+        const amountTransfersSui = eventsSummary.find(
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType === SUI_TYPE_ARG
+        );
+
+        // Find non-SUI transfer amount
+        const amountTransfersNonSui = eventsSummary.find(
+            ({ receiverAddress, coinType }) =>
+                receiverAddress === address && coinType !== SUI_TYPE_ARG
+        );
+
+        return {
+            amount:
+                amountTransfersSui?.amount ||
+                amountTransfersNonSui?.amount ||
+                null,
+            coinType:
+                amountTransfersSui?.coinType ||
+                amountTransfersNonSui?.coinType ||
+                null,
+        };
+    }, [address, eventsSummary]);
+
+    const recipientAddress = useGetTxnRecipientAddress({ txn, address });
+
+    // sometime sender and receiver are the same address
+    // for txn with amount determine sender or receiver by amount. negative amount means sender and positive amount means receiver
+    // fall back to address comparison if amount is not available
+    const isSender = transferAmount.amount
+        ? transferAmount.amount < 0
+        : address === certificate.data.sender;
+
+    const moveCallTxn = getMoveCallTransaction(
+        certificate.data.transactions[0]
     );
-    const fromAddrStr = useMiddleEllipsis(
-        txn.from || '',
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
 
-    const truncatedNftName = useMiddleEllipsis(
-        txn?.name || '',
-        TRUNCATE_MAX_CHAR,
-        TRUNCATE_MAX_CHAR - 1
-    );
-    const truncatedNftDescription = useMiddleEllipsis(
-        txn?.description || '',
-        TRUNCATE_MAX_CHAR,
-        TRUNCATE_MAX_CHAR - 1
-    );
+    const error = useMemo(() => getExecutionStatusError(txn), [txn]);
 
-    // TODO: update to account for bought, minted, swapped, etc
-    const transferType =
-        txn.kind === 'Call' ? 'Call' : txn.isSender ? 'Sent' : 'Received';
+    const isSuiTransfer =
+        txnKind === 'PaySui' ||
+        txnKind === 'TransferSui' ||
+        txnKind === 'PayAllSui';
 
-    const amount = txn?.amount || txn?.balance || txn?.txGas || 0;
+    const isTransfer =
+        isSuiTransfer || txnKind === 'Pay' || txnKind === 'TransferObject';
 
-    const transferMeta = {
-        Call: {
-            // For NFT with name and image use Mint else use Call (Function Name)
-            txName: txn.name && txn.url ? 'Minted' : 'Call',
-            transfer: false,
-            address: false,
-            icon: SuiIcons.Buy,
-            iconClassName: cl(st.arrowActionIcon, st.buyIcon),
-            amount: amount,
-        },
-        Sent: {
-            txName: 'Sent',
-            transfer: 'To',
-            address: toAddrStr,
-            icon: SuiIcons.ArrowLeft,
-            iconClassName: cl(st.arrowActionIcon, st.angledArrow),
-            amount: amount,
-        },
-        Received: {
-            txName: 'Received',
-            transfer: 'From',
-            address: fromAddrStr,
-            icon: SuiIcons.ArrowLeft,
-            iconClassName: cl(st.arrowActionIcon, st.angledArrow, st.received),
-            amount: amount,
-        },
-    };
+    const moveCallLabel = useMemo(() => {
+        if (txnKind !== 'Call') return null;
+        return checkStakingTxn(txn) || txnKind;
+    }, [txn, txnKind]);
 
-    const date = txn?.timestampMs
-        ? formatDate(txn.timestampMs, ['month', 'day', 'hour', 'minute'])
-        : false;
+    const txnIcon = useMemo(() => {
+        if (txnKind === 'ChangeEpoch') return 'Rewards';
+        if (moveCallLabel && moveCallLabel !== 'Call') return moveCallLabel;
+        return isSender ? 'Send' : 'Received';
+    }, [isSender, moveCallLabel, txnKind]);
 
-    const transferSuiTxn = txn.kind === 'TransferSui' ? <span>SUI</span> : null;
-    const transferFailed = txn.error ? (
-        <div className={st.transferFailed}>{txn.error}</div>
-    ) : null;
+    // Transition label
+    const txnLabel = useMemo(() => {
+        // Epoch change with amount is staking rewards and without amount is delegation object
+        if (txnKind === 'ChangeEpoch')
+            return transferAmount.amount
+                ? 'Received Staking Rewards'
+                : 'Received Delegation Object';
+        if (moveCallLabel) return moveCallLabel;
+        return isSender ? 'Sent' : 'Received';
+    }, [txnKind, transferAmount.amount, moveCallLabel, isSender]);
 
-    const txnsAddress = transferMeta[transferType]?.address ? (
-        <div className={st.address}>
-            <div className={st.txTypeName}>
-                {transferMeta[transferType].transfer}
-            </div>
-            <div className={cl(st.txValue, st.txAddress)}>
-                {transferMeta[transferType].address}
-            </div>
-        </div>
-    ) : null;
-
-    const callFnName = txn?.callFunctionName ? (
-        <span className={st.callFnName}>({txn?.callFunctionName})</span>
-    ) : null;
-
-    const [formattedAmount, symbol] = useFormatCoin(
-        transferMeta[transferType].amount,
-        txn.coinType || GAS_TYPE_ARG
-    );
+    // Show sui symbol only if transfer transferAmount coinType is SUI_TYPE_ARG, staking or unstaking
+    const showSuiSymbol =
+        (transferAmount.coinType === SUI_TYPE_ARG && isSuiTransfer) ||
+        moveCallLabel === 'Staked' ||
+        moveCallLabel === 'Unstaked';
 
     return (
         <Link
             to={`/receipt?${new URLSearchParams({
-                txdigest: txn.txId,
+                txdigest: txn.certificate.transactionDigest,
             }).toString()}`}
-            className={st.txCard}
+            className="flex items-center w-full flex-col gap-2 py-4 no-underline"
         >
-            <div className={st.card} key={txn.txId}>
-                <div className={st.cardIcon}>
-                    <Icon
-                        icon={transferMeta[transferType].icon}
-                        className={transferMeta[transferType].iconClassName}
+            <div className="flex items-start w-full justify-between gap-3">
+                <div className="w-7.5">
+                    <TxnIcon
+                        txnFailed={executionStatus !== 'success' || !!error}
+                        variant={txnIcon}
                     />
                 </div>
-                <div className={st.cardContent}>
-                    <div className={st.txResult}>
-                        <div className={cl(st.txTypeName, st.kind)}>
-                            {txn.error
-                                ? 'Transaction failed'
-                                : transferMeta[transferType].txName}{' '}
-                            {callFnName}
-                            {transferSuiTxn}
-                        </div>
-
-                        <div className={st.txTransferred}>
-                            <div className={st.txAmount}>
-                                {formattedAmount} <span>{symbol}</span>
+                <div className="flex flex-col w-full gap-1.5">
+                    {error ? (
+                        <div className="flex flex-col w-full gap-1.5">
+                            <Text color="gray-90" weight="semibold">
+                                Transaction Failed
+                            </Text>
+                            <div className="flex break-all text-issue-dark text-subtitle">
+                                {error}
                             </div>
                         </div>
-                    </div>
-
-                    {txnsAddress || transferFailed ? (
-                        <div className={st.txResult}>
-                            {txnsAddress}
-                            {transferFailed}
-                        </div>
-                    ) : null}
-
-                    {txn.url && (
-                        <div className={st.txImage}>
-                            <img
-                                src={txn.url.replace(
-                                    /^ipfs:\/\//,
-                                    'https://ipfs.io/ipfs/'
-                                )}
-                                alt={txn?.name || 'NFT'}
-                            />
-                            <div className={st.nftInfo}>
-                                <div className={st.nftName}>
-                                    {truncatedNftName}
+                    ) : (
+                        <div className="flex w-full justify-between flex-col ">
+                            <div className="flex w-full justify-between">
+                                <div className="flex gap-1 align-middle items-baseline">
+                                    <Text color="gray-90" weight="semibold">
+                                        {txnLabel}
+                                    </Text>
+                                    {showSuiSymbol && (
+                                        <Text
+                                            color="gray-90"
+                                            weight="normal"
+                                            variant="subtitleSmall"
+                                        >
+                                            SUI
+                                        </Text>
+                                    )}
                                 </div>
-                                <div className={st.nftDescription}>
-                                    {truncatedNftDescription}
-                                </div>
+                                {transferAmount.coinType &&
+                                    transferAmount.amount && (
+                                        <CoinBalance
+                                            amount={Math.abs(
+                                                transferAmount.amount
+                                            )}
+                                            coinType={transferAmount.coinType}
+                                        />
+                                    )}
+                            </div>
+                            <div className="flex flex-col w-full gap-1.5">
+                                <TxnTypeLabel
+                                    address={recipientAddress}
+                                    moveCallFnName={moveCallTxn?.function}
+                                    isSender={isSender}
+                                    isTransfer={isTransfer}
+                                />
+                                {objectId && <TxnImage id={objectId} />}
                             </div>
                         </div>
                     )}
-                    {date && <div className={st.txTypeDate}>{date}</div>}
+
+                    {txn.timestamp_ms && (
+                        <DateCard timestamp={txn.timestamp_ms} size="sm" />
+                    )}
                 </div>
             </div>
         </Link>
     );
 }
-
-export default memo(TransactionCard);

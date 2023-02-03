@@ -5,13 +5,13 @@ import cl from 'classnames';
 import { useMemo } from 'react';
 
 import { TokenIconLink } from './TokenIconLink';
+import { CoinActivities } from './coin-activities';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import RecentTransactions from '_components/transactions-card/RecentTransactions';
 import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
@@ -162,7 +162,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             {coinSymbol} activity
                         </div>
                         <div className={st.txContent}>
-                            <RecentTransactions coinType={activeCoinType} />
+                            <CoinActivities coinType={activeCoinType} />
                         </div>
                     </>
                 )}
