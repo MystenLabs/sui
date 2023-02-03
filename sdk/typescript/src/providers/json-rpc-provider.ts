@@ -68,7 +68,6 @@ import {
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
-import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
 import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
@@ -76,6 +75,7 @@ import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-tx
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { pkgVersion } from '../pkg-version';
+import { Connection, devnetConnection } from '../rpc/connection';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
 
@@ -119,7 +119,7 @@ const DEFAULT_OPTIONS: RpcProviderOptions = {
 };
 
 export class JsonRpcProvider extends Provider {
-  public endpoints: ApiEndpoints;
+  public connection: Connection;
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
@@ -128,27 +128,20 @@ export class JsonRpcProvider extends Provider {
   /**
    * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui RPC endpoint, or a `Network` enum
+   * @param connection The `Connection` object containing configuration for the network.
    * @param options configuration options for the provider
    */
   constructor(
-    endpoint: string | Network = Network.DEVNET,
-    public options: RpcProviderOptions = DEFAULT_OPTIONS,
+    // TODO: Probably remove the default endpoint here:
+    connection: Connection = devnetConnection,
+    public options: RpcProviderOptions = DEFAULT_OPTIONS
   ) {
     super();
 
-    if ((Object.values(Network) as string[]).includes(endpoint)) {
-      this.endpoints = NETWORK_TO_API[endpoint as Network];
-    } else {
-      this.endpoints = {
-        fullNode: endpoint,
-        faucet: options.faucetURL,
-      };
-    }
+    this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    this.client = new JsonRpcClient(this.endpoints.fullNode);
     // TODO: uncomment this when 0.27.0 is released. We cannot do this now because
     // the current Devnet(0.26.0) does not support the header. And we need to make
     // a request to RPC to know which version it is running. Therefore, we do not
@@ -160,8 +153,9 @@ export class JsonRpcProvider extends Provider {
     //   'Client-Target-Api-Version': TARGETED_RPC_VERSION,
     // });
     // TODO: add header for websocket request
+    this.client = new JsonRpcClient(this.connection.fullnode);
     this.wsClient = new WebsocketClient(
-      this.endpoints.fullNode,
+      this.connection.websocket,
       opts.skipDataValidation!,
       opts.socketOptions,
     );
@@ -210,10 +204,10 @@ export class JsonRpcProvider extends Provider {
     recipient: SuiAddress,
     httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
+    if (!this.connection.faucet) {
       throw new Error('Faucet URL is not specified');
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+    return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
   }
 
   // Coins
