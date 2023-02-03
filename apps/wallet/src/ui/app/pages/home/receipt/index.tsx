@@ -21,8 +21,6 @@ function ReceiptPage() {
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
-    // get Return route from URL params
-    const fromRoute = searchParams.get('from');
     const rpc = useRpc();
 
     const { data, isLoading, isError } = useQuery(
@@ -33,13 +31,10 @@ function ReceiptPage() {
         { enabled: !!transactionId, retry: 8 }
     );
 
-    // return route or default to transactions
-    const linkTo = fromRoute ? `/${fromRoute}` : '/transactions';
-
     const navigate = useNavigate();
     const closeReceipt = useCallback(() => {
-        navigate(linkTo);
-    }, [linkTo, navigate]);
+        navigate(-1);
+    }, [navigate]);
 
     const pageTitle = useMemo(() => {
         if (data) {
@@ -77,7 +72,7 @@ function ReceiptPage() {
     }, [activeAddress, data]);
 
     if (!transactionId || !activeAddress) {
-        return <Navigate to={linkTo} replace={true} />;
+        return <Navigate to="/transactions" replace={true} />;
     }
 
     return (

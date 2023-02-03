@@ -11,9 +11,11 @@ type TxnAmountProps = {
     label: string;
 };
 
+// dont show amount if it is 0
+// This happens when a user sends a transaction to self;
 export function TxnAmount({ amount, coinType, label }: TxnAmountProps) {
     const [formatAmount, symbol] = useFormatCoin(Math.abs(+amount), coinType);
-    return (
+    return +amount !== 0 ? (
         <div className="flex justify-between w-full items-center pt-3.5">
             <Text variant="body" weight="medium" color="steel-darker">
                 {label}
@@ -27,5 +29,5 @@ export function TxnAmount({ amount, coinType, label }: TxnAmountProps) {
                 </Text>
             </div>
         </div>
-    );
+    ) : null;
 }
