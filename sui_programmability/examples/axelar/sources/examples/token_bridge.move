@@ -10,8 +10,8 @@
 ///  - supply is empty by default unless some amount is first transferred to Sui
 ///
 /// Message format:
-///  - each message must target the Bridge `Channel`
-///  - message symbol must must exist in the `Bridge` as a dynamic field
+///  - each message must target the TokenBridge `Channel`
+///  - message symbol must must exist in the `TokenBridge` as a dynamic field
 ///  - fields of the incoming messages are: ( amount, symbol, receiver )
 ///  - fields of the outcoming messages are identical to the incoming
 ///
@@ -21,9 +21,9 @@
 ///
 ///  2. with this capability, the method `add_token` can be called; it makes
 ///  sure that the symbol is unique in the system and then publishes the `Supply<T>`
-///  as a dynamic field of the `Bridge`
+///  as a dynamic field of the `TokenBridge`
 ///
-///  3. from this moment mint messages for a symbol T can be received by a Bridge, and the
+///  3. from this moment mint messages for a symbol T can be received by a TokenBridge, and the
 ///  receiver specified in the message will receive a Coin<T> once a message is processed
 ///
 /// Potential improvements:
@@ -53,8 +53,6 @@ module axelar::token_bridge {
 
     /// For when a witness passed is not an OTW.
     const ENotOTW: u64 = 0;
-    /// For when message symbol mismatches the Bridge.
-    const ESymbolMismatch: u64 = 0;
 
     /// A Capability enabling a bridge creation request. Currently
     /// required, because there's no way to pass `TokenRegistry` as
@@ -72,9 +70,9 @@ module axelar::token_bridge {
     }
 
     /// The Token bridge. Controls minting and burning of new `Coin`s.
-    struct Bridge has key {
+    struct TokenBridge has key {
         id: UID,
-        /// Channel for the Bridge - messages to mint a Coin need to be targeted at
+        /// Channel for the TokenBridge - messages to mint a Coin need to be targeted at
         /// this channel. Also used when sending `burn` events to the Axelar chain.
         /// Contains a boolean value as a placeholder for missing T in the Channel.
         channel: Channel<bool>
@@ -89,13 +87,13 @@ module axelar::token_bridge {
 
     /// In the module initializer we create a single `TokenRegistry`.
     fun init(ctx: &mut TxContext) {
-        share_object(Bridge {
+        share_object(TokenBridge {
             id: object::new(ctx),
             channel: messenger::create_channel(true, ctx)
         })
     }
 
-    /// Bridge creation requires an OTW - can only be called in a module initializer.
+    /// TokenBridge creation requires an OTW - can only be called in a module initializer.
     /// Additionally we only count the name of the T as the token symbol.
     public fun get_token_creation_cap<T: drop>(otw: T, ctx: &mut TxContext): AddTokenCap<T> {
         assert!(sui::types::is_one_time_witness(&otw), ENotOTW);
@@ -109,14 +107,14 @@ module axelar::token_bridge {
         AddTokenCap { id: object::new(ctx), symbol, supply }
     }
 
-    /// Add a token to the `Bridge` using a `AddTokenCap` (previously acquired
+    /// Add a token to the `TokenBridge` using a `AddTokenCap` (previously acquired
     /// through module publishing).
     ///
     /// TODO (DevX):
     ///  does not check if a key exists and aborts with `df::EFieldAlreadyExists` if
     ///  it does; add a custom check + custom abort code for the scenario
     public entry fun add_token<T: drop>(
-        registry: &mut Bridge,
+        registry: &mut TokenBridge,
         cap: AddTokenCap<T>,
         _ctx: &mut TxContext
     ) {
@@ -128,14 +126,14 @@ module axelar::token_bridge {
     /// Process a mint message from the Axelar chain.
     ///
     /// If a message was targeted to this channel's bridge and contains the
-    /// correct symbol (matches the `Bridge`), mint some `Coin<T>` based on
+    /// correct symbol (matches the `TokenBridge`), mint some `Coin<T>` based on
     /// the message data (custom payload):
     ///  - amount
     ///  - symbol
     ///  - receiver (20 bytes in Sui)
     public entry fun process_mint_message<T: drop>(
         axelar: &mut Axelar,
-        bridge: &mut Bridge,
+        bridge: &mut TokenBridge,
         msg_id: vector<u8>,
         ctx: &mut TxContext
     ) {
@@ -161,12 +159,12 @@ module axelar::token_bridge {
         transfer(coin, receiver)
     }
 
-    /// Send the Coin<T> from this `Bridge` to some network X.
+    /// Send the Coin<T> from this `TokenBridge` to some network X.
     ///
     /// Effectively burns the Coin and emits a message authorized by a bridge Channel.
     /// The message cointains: `amount`, `symbol` and `receiver` (as vector<u8>).
     public entry fun send_coin<T: drop>(
-        bridge: &mut Bridge,
+        bridge: &mut TokenBridge,
         coin: Coin<T>,
         destination: vector<u8>,
         destination_address: vector<u8>,
