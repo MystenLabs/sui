@@ -20,7 +20,7 @@ export function AccountSelector() {
     const activeAddress = useActiveAddress();
     const multiAccountsEnabled = useFeature(FEATURES.WALLET_MULTI_ACCOUNTS).on;
     const activeAddressShort = useMiddleEllipsis(activeAddress);
-    const copyToAddress = useCopyToClipboard(activeAddressShort, {
+    const copyToAddress = useCopyToClipboard(activeAddress || '', {
         copySuccessMessage: 'Address copied',
     });
     const backgroundClient = useBackgroundClient();
