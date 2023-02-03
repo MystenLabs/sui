@@ -83,9 +83,9 @@ module t1::o1 {
 
 //# run t3::o3::create
 
-//# run t2::o2::create_shared --args object(109)
+//# run t2::o2::create_shared --args object(110)
 
 // This run should error as Obj2/Obj3 were not defined in o1
-//# run t1::o1::use_o2_o3 --args object(111) object(109)
+//# run t1::o1::use_o2_o3 --args object(112) object(110)
 
-//# run t2::o2::use_o2_o3 --args object(111) object(109)
+//# run t2::o2::use_o2_o3 --args object(112) object(110)
