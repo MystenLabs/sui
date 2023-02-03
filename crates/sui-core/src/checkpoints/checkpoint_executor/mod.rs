@@ -446,7 +446,7 @@ async fn execute_transactions(
                     izip!(&all_tx_digests, &effects_digests, &effects)
                 {
                     if expected_effects_digest != actual_effects.digest() {
-                        panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects {expected_effects_digest}, but got {}!", actual_effects.digest());
+                        panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", actual_effects.digest());
                     }
                 }
                 authority_store.insert_executed_transactions(
