@@ -213,6 +213,7 @@ module axelar::token_bridge {
 }
 
 /// An example module for adding an ETH bridge on Sui.
+/// The module name will be used a symbol in the bridge.
 module axelar::eth {
     use sui::tx_context::{TxContext, sender};
     use sui::transfer::transfer;
