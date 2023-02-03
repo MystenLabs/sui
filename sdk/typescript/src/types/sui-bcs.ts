@@ -146,7 +146,6 @@ export type SharedObjectRef_23 = {
 
   /** The version the object was shared at */
   initialSharedVersion: number;
-
 };
 
 /**
@@ -344,7 +343,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       initialSharedVersion: 'u64',
-      mutable: 'bool'
+      mutable: 'bool',
     },
   },
 
@@ -455,6 +454,16 @@ const BCS_0_23_SPEC = {
   },
 };
 
+const BCS_0_24_SPEC = {
+  ...BCS_SPEC,
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
+    },
+  },
+};
+
 const bcs = new BCS(getSuiMoveConfig());
 registerUTF8String(bcs);
 registerObjectDigest(bcs);
@@ -466,9 +475,17 @@ registerUTF8String(bcs_0_23);
 registerObjectDigest(bcs_0_23);
 registerTypes(bcs_0_23, BCS_0_23_SPEC);
 
+const bcs_0_24 = new BCS(getSuiMoveConfig());
+registerUTF8String(bcs_0_24);
+registerObjectDigest(bcs_0_24);
+registerTypes(bcs_0_24, BCS_0_24_SPEC);
+
 export function bcsForVersion(v?: RpcApiVersion) {
   if (v?.major === 0 && v?.minor < 24) {
     return bcs_0_23;
+  }
+  if (v?.major === 0 && v?.minor === 24) {
+    return bcs_0_24;
   } else {
     return bcs;
   }

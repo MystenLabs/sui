@@ -18,7 +18,14 @@ import {
   SuiObjectRef,
   SUI_FRAMEWORK_ADDRESS,
 } from '../../types';
-import { bcsForVersion, CallArg, isPureArg, MoveCallTx, ObjectArg, PureArg } from '../../types/sui-bcs';
+import {
+  bcsForVersion,
+  CallArg,
+  isPureArg,
+  MoveCallTx,
+  ObjectArg,
+  PureArg,
+} from '../../types/sui-bcs';
 import { MoveCallTransaction } from './txn-data-serializer';
 
 const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
@@ -125,9 +132,7 @@ export class CallArgSerializer {
   ) {
     const normalized = await this.provider.getNormalizedMoveFunction(
       normalizeSuiObjectId(
-        typeof packageId === "string"
-          ? packageId
-          : packageId.objectId
+        typeof packageId === 'string' ? packageId : packageId.objectId
       ),
       module,
       functionName
@@ -143,19 +148,17 @@ export class CallArgSerializer {
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
     const initialSharedVersion = getSharedObjectInitialVersion(object);
-    
+
     const mutable = true; // Defaulted to True to match current behavior.
     const api = await this.provider.getRpcApiVersion();
 
-    // if (initialSharedVersion) {
-    //   return { Shared: { objectId, initialSharedVersion } };
-    // }
-
     if (initialSharedVersion) {
-      const object_args = api?.major === 0 && api?.minor < 24 ? { Shared: { objectId, initialSharedVersion } } : { Shared: { objectId, initialSharedVersion, mutable } };
+      const object_args =
+        api?.major === 0 && api?.minor < 25
+          ? { Shared: { objectId, initialSharedVersion } }
+          : { Shared: { objectId, initialSharedVersion, mutable } };
       return object_args;
     }
-
     return { ImmOrOwned: getObjectReference(object)! };
   }
 
