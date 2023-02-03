@@ -56,4 +56,17 @@ describe('Transaction Reading API', () => {
     );
     expect([...resp2.data, ...resp3.data]).toEqual(resp);
   });
+
+  it('Genesis exists', async () =>{
+    const allTransactions = await toolbox.provider.getTransactions(
+      'All',
+      null,
+      1,
+      'ascending'
+    );
+    const txEffects = await toolbox.provider.getTransactionWithEffects(allTransactions.data[0]);
+    const txKind = txEffects.certificate.data.transactions[0];
+    expect(txKind.Genesis).toBeDefined();
+    
+  })
 });

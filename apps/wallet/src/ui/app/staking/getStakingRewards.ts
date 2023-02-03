@@ -3,10 +3,10 @@
 
 import BigNumber from 'bignumber.js';
 
-import type { ActiveValidator, DelegatedStake } from '@mysten/sui.js';
+import type { MoveActiveValidator, DelegatedStake } from '@mysten/sui.js';
 
 export function getStakingRewards(
-    activeValidators: ActiveValidator[],
+    activeValidators: MoveActiveValidator[],
     delegation: DelegatedStake
 ) {
     if (

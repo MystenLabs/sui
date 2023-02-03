@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+import { is, SuiObject, type MoveSuiSystemObjectFields } from '@mysten/sui.js';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -20,7 +20,7 @@ function ValidatorDetails() {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorsFields)
+            ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
 
     const validatorData = useMemo(() => {

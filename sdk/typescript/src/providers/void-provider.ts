@@ -36,6 +36,9 @@ import {
   TransactionEffects,
   CoinMetadata,
   DevInspectResults,
+  SuiSystemState,
+  DelegatedStake,
+  ValidatorMetaData,
   PaginatedCoins,
   CoinBalance,
   CoinSupply,
@@ -60,6 +63,18 @@ export class VoidProvider extends Provider {
     throw this.newError('getReferenceGasPrice');
   }
 
+  async getSuiSystemState(): Promise<SuiSystemState> {
+    throw this.newError('getSuiSystemState');
+  }
+
+  async getDelegatedStakes(_address: SuiAddress): Promise<DelegatedStake[]> {
+    throw this.newError('getDelegatedStakes');
+  }
+
+  async getValidators(): Promise<ValidatorMetaData[]> {
+    throw this.newError('getValidators');
+  }
+
   // Faucet
   async requestSuiFromFaucet(
     _recipient: SuiAddress,
@@ -79,7 +94,7 @@ export class VoidProvider extends Provider {
     _coinType: String | null,
     _cursor: ObjectId | null,
     _limit: number | null
-  ) : Promise<PaginatedCoins> {
+  ): Promise<PaginatedCoins> {
     throw this.newError('getCoins');
   }
 
@@ -87,30 +102,26 @@ export class VoidProvider extends Provider {
     _owner: SuiAddress,
     _cursor: ObjectId | null,
     _limit: number | null
-  ) : Promise<PaginatedCoins> {
+  ): Promise<PaginatedCoins> {
     throw this.newError('getAllCoins');
   }
 
   async getBalance(
-    _owner: string, 
+    _owner: string,
     _coinType: String | null
-    ): Promise<CoinBalance> {
-      throw this.newError('getBalance');
+  ): Promise<CoinBalance> {
+    throw this.newError('getBalance');
   }
 
-  async getAllBalances(
-    _owner: string, 
-    ): Promise<CoinBalance[]> {
-      throw this.newError('getAllBalances');
+  async getAllBalances(_owner: string): Promise<CoinBalance[]> {
+    throw this.newError('getAllBalances');
   }
 
   async getCoinMetadata(_coinType: string): Promise<CoinMetadata> {
     throw new Error('getCoinMetadata');
   }
 
-  async getTotalSupply(
-    _coinType: string
-  ) : Promise<CoinSupply> {
+  async getTotalSupply(_coinType: string): Promise<CoinSupply> {
     throw new Error('getTotalSupply');
   }
 
@@ -297,25 +308,25 @@ export class VoidProvider extends Provider {
   }
 
   async getCheckpointSummary(
-    _sequenceNumber: number,
+    _sequenceNumber: number
   ): Promise<CheckpointSummary> {
     throw this.newError('getCheckpointSummary');
   }
 
   async getCheckpointSummaryByDigest(
-    _digest: CheckpointDigest,
+    _digest: CheckpointDigest
   ): Promise<CheckpointSummary> {
     throw this.newError('getCheckpointSummaryByDigest');
   }
 
   async getCheckpointContents(
-    _sequenceNumber: number,
+    _sequenceNumber: number
   ): Promise<CheckpointContents> {
     throw this.newError('getCheckpointContents');
   }
 
   async getCheckpointContentsByDigest(
-    _digest: CheckPointContentsDigest,
+    _digest: CheckPointContentsDigest
   ): Promise<CheckpointContents> {
     throw this.newError('getCheckpointContentsByDigest');
   }

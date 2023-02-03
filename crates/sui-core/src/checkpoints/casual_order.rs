@@ -44,7 +44,7 @@ impl CasualOrder {
         // Once map_first_last is stabilized this function can be rewritten as this:
         // self.not_seen.pop_first()
         let key = *self.not_seen.keys().next()?;
-        Some(self.not_seen.remove(key.as_ref()).unwrap())
+        Some(self.not_seen.remove(&key).unwrap())
     }
 
     // effect is already removed from self.not_seen at this point
@@ -148,7 +148,7 @@ impl RWLockDependencyBuilder {
         digest: TransactionDigest,
         v: &mut BTreeSet<TransactionDigest>,
     ) {
-        let Some(overwrites) = self.overwrite_versions.get(digest.as_ref()) else {return;};
+        let Some(overwrites) = self.overwrite_versions.get(&digest) else {return;};
         for obj_ver in overwrites {
             let Some(reads) = self.read_version.get(obj_ver) else {continue;};
             for dep in reads {
@@ -178,7 +178,7 @@ impl InsertState {
 
     pub fn process(&mut self, casual_order: &mut CasualOrder) -> Option<InsertState> {
         while let Some(dep) = self.dependencies.pop() {
-            if let Some(dep_transaction) = casual_order.not_seen.remove(dep.as_ref()) {
+            if let Some(dep_transaction) = casual_order.not_seen.remove(&dep) {
                 return Some(InsertState::new(dep_transaction));
             }
         }
@@ -244,7 +244,7 @@ mod tests {
 
     fn extract(e: Vec<TransactionEffects>) -> Vec<u8> {
         e.into_iter()
-            .map(|e| e.transaction_digest.as_ref()[0])
+            .map(|e| e.transaction_digest.inner()[0])
             .collect()
     }
 

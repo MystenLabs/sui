@@ -297,7 +297,7 @@ impl SqlEventStore {
                 fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
             }
             if let Some(digest) = event.event.digest() {
-                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::encode(&digest));
+                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::base58_encode(&digest));
             }
             json!(fields).to_string()
         }
@@ -397,7 +397,7 @@ impl EventStore for SqlEventStore {
                 b.push_bind(event.timestamp as i64)
                     .push_bind(event.seq_num as i64)
                     .push_bind(event.event_num as i64)
-                    .push_bind(event.tx_digest.to_bytes())
+                    .push_bind(event.tx_digest.into_inner().to_vec())
                     .push_bind(event_type as u16)
                     .push_bind(event.event.package_id().map(|pid| pid.to_vec()))
                     .push_bind(event.event.module_name())
@@ -466,7 +466,7 @@ impl EventStore for SqlEventStore {
             .bind(tx_seq)
             .bind(tx_seq)
             .bind(event_seq)
-            .bind(digest.to_bytes())
+            .bind(digest.into_inner().to_vec())
             .bind(limit as i64)
             .map(StoredEvent::from)
             .fetch_all(&self.pool)

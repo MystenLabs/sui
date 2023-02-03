@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+import {
+    is,
+    SuiObject,
+    type MoveSuiSystemObjectFields,
+    type MoveActiveValidator,
+} from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -9,10 +14,7 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
-import {
-    VALIDATORS_OBJECT_ID,
-    type ActiveValidator,
-} from '~/pages/validator/ValidatorDataTypes';
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -30,7 +32,7 @@ const APY_DECIMALS = 4;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(validators: ActiveValidator[], epoch: number) {
+function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
     return {
         data: validators.map((validator, index) => {
             const validatorName = getName(
@@ -158,7 +160,7 @@ function ValidatorPageResult() {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorsFields)
+            ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
 
     const totalStaked = useMemo(() => {

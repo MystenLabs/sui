@@ -14,7 +14,6 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
-use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
@@ -29,14 +28,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{EpochId, TransactionDigest};
-use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
+use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{TransactionEffects, VerifiedSignedTransactionEffects};
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
-    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
-    VerifiedCheckpoint,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::time::Instant;
@@ -394,7 +393,7 @@ pub struct CheckpointSignatureAggregator {
     next_index: u64,
     summary: CheckpointSummary,
     digest: CheckpointDigest,
-    signatures: StakeAggregator<AuthoritySignInfo, false>,
+    signatures: StakeAggregator<AuthoritySignInfo, true>,
 }
 
 impl CheckpointBuilder {
@@ -907,7 +906,7 @@ impl CheckpointSignatureAggregator {
     pub fn try_aggregate(
         &mut self,
         data: CheckpointSignatureMessage,
-    ) -> Result<AuthorityWeakQuorumSignInfo, ()> {
+    ) -> Result<AuthorityStrongQuorumSignInfo, ()> {
         let their_digest = data.summary.summary.digest();
         let author = data.summary.auth_signature.authority;
         let signature = data.summary.auth_signature;
@@ -916,9 +915,9 @@ impl CheckpointSignatureAggregator {
             warn!(
                 "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
                 author.concise(),
-                Hex::encode(their_digest),
+                their_digest,
                 self.summary.sequence_number,
-                Hex::encode(self.digest)
+                self.digest
             );
             return Err(());
         }
@@ -1072,7 +1071,7 @@ impl CheckpointServiceNotify for CheckpointService {
         debug!(
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
-            Hex::encode(info.summary.summary.digest()),
+            info.summary.summary.digest(),
             info.summary.auth_signature.authority.concise(),
         );
         // While it can be tempting to make last_signature_index into AtomicU64, this won't work
@@ -1353,12 +1352,7 @@ mod tests {
         ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
             Ok(digests
                 .into_iter()
-                .map(|d| {
-                    self.get(d.as_ref())
-                        .expect("effects not found")
-                        .clone()
-                        .into()
-                })
+                .map(|d| self.get(&d).expect("effects not found").clone().into())
                 .collect())
         }
 
@@ -1368,7 +1362,7 @@ mod tests {
         ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
             Ok(digests
                 .iter()
-                .map(|d| self.get(d.as_ref()).cloned().map(|e_opt| e_opt.into()))
+                .map(|d| self.get(d).cloned().map(|e_opt| e_opt.into()))
                 .collect())
         }
     }

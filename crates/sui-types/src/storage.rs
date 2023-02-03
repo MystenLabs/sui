@@ -3,12 +3,12 @@
 
 use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
+use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{SenderSignedData, TransactionEffects, VerifiedCertificate};
 use crate::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    VerifiedCheckpoint,
+    CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
