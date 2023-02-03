@@ -28,10 +28,10 @@ describe('Coin related API', () => {
     signer = new RawSigner(
       toolbox.keypair,
       toolbox.provider,
-      new LocalTxnDataSerializer(toolbox.provider)
+      new LocalTxnDataSerializer(toolbox.provider),
     );
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     coinToSplit = coins[0].objectId;
     // split coins into desired amount
@@ -42,30 +42,30 @@ describe('Coin related API', () => {
       gasPayment: coins[1].objectId,
     });
     coinsAfterSplit = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     expect(coinsAfterSplit.length).toEqual(coins.length + SPLIT_AMOUNTS.length);
   });
 
   it('test Coin utility functions', async () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     coins.forEach((c) => {
-      expect(Coin.isCoin(c)).toBeTruthy;
-      expect(Coin.isSUI(c)).toBeTruthy;
-    })
+      expect(Coin.isCoin(c)).toBeTruthy();
+      expect(Coin.isSUI(c)).toBeTruthy();
+    });
   });
 
   it('test getCoinStructTag', async () => {
-    const exampleStructTag = { 
-      address: normalizeSuiObjectId('0x2'), 
-      module: 'sui', 
-      name: 'SUI', 
-      typeParams: [] 
+    const exampleStructTag = {
+      address: normalizeSuiObjectId('0x2'),
+      module: 'sui',
+      name: 'SUI',
+      typeParams: [],
     };
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     const coinTypeArg: string = Coin.getCoinTypeArg(coins[0])!;
     expect(Coin.getCoinStructTag(coinTypeArg)).toStrictEqual(exampleStructTag);
@@ -77,7 +77,7 @@ describe('Coin related API', () => {
         const coins =
           await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
             toolbox.address(),
-            BigInt(a)
+            BigInt(a),
           );
         expect(coins.length).toEqual(coinsAfterSplit.length - i);
         const balances = coins.map((c) => Coin.getBalance(c)!);
@@ -85,7 +85,7 @@ describe('Coin related API', () => {
         expect(balances).toStrictEqual(balances.sort());
         // verify that balances are all greater than or equal to the provided amount
         expect(balances.every((b) => b >= a));
-      })
+      }),
     );
   });
 
@@ -93,7 +93,7 @@ describe('Coin related API', () => {
     const coins =
       await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
         toolbox.address(),
-        BigInt(1)
+        BigInt(1),
       );
     expect(coins.find((c) => getObjectId(c) === coinToSplit)).toBeDefined();
 
@@ -102,10 +102,10 @@ describe('Coin related API', () => {
         toolbox.address(),
         BigInt(1),
         SUI_TYPE_ARG,
-        [coinToSplit]
+        [coinToSplit],
       );
     expect(
-      coinsWithExclude.find((c) => getObjectId(c) === coinToSplit)
+      coinsWithExclude.find((c) => getObjectId(c) === coinToSplit),
     ).toBeUndefined();
   });
 
@@ -115,24 +115,24 @@ describe('Coin related API', () => {
         const coins =
           await toolbox.provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
             toolbox.address(),
-            BigInt(a)
+            BigInt(a),
           );
         const balances = coins.map((c) => Coin.getBalance(c)!);
         expect(balances).toStrictEqual([SPLIT_AMOUNTS[i]]);
-      })
+      }),
     );
     // test multiple coins
     const allCoins =
       await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
         toolbox.address(),
-        BigInt(1)
+        BigInt(1),
       );
     const largestBalance = Coin.getBalance(allCoins[allCoins.length - 1])!;
 
     const coins =
       await toolbox.provider.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
         toolbox.address(),
-        largestBalance + SPLIT_AMOUNTS[0]
+        largestBalance + SPLIT_AMOUNTS[0],
       );
     const balances = coins.map((c) => Coin.getBalance(c)!);
     expect(balances).toStrictEqual([SPLIT_AMOUNTS[0], largestBalance]);

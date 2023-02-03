@@ -78,7 +78,7 @@ export class VoidProvider extends Provider {
   // Faucet
   async requestSuiFromFaucet(
     _recipient: SuiAddress,
-    _httpHeaders?: HttpHeaders
+    _httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
     throw this.newError('requestSuiFromFaucet');
   }
@@ -91,9 +91,9 @@ export class VoidProvider extends Provider {
   // Coins
   async getCoins(
     _owner: SuiAddress,
-    _coinType: String | null,
+    _coinType: string | null,
     _cursor: ObjectId | null,
-    _limit: number | null
+    _limit: number | null,
   ): Promise<PaginatedCoins> {
     throw this.newError('getCoins');
   }
@@ -101,14 +101,14 @@ export class VoidProvider extends Provider {
   async getAllCoins(
     _owner: SuiAddress,
     _cursor: ObjectId | null,
-    _limit: number | null
+    _limit: number | null,
   ): Promise<PaginatedCoins> {
     throw this.newError('getAllCoins');
   }
 
   async getBalance(
     _owner: string,
-    _coinType: String | null
+    _coinType: string | null,
   ): Promise<CoinBalance> {
     throw this.newError('getBalance');
   }
@@ -131,7 +131,7 @@ export class VoidProvider extends Provider {
   }
 
   async getGasObjectsOwnedByAddress(
-    _address: string
+    _address: string,
   ): Promise<SuiObjectInfo[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
@@ -141,7 +141,7 @@ export class VoidProvider extends Provider {
    */
   async getCoinBalancesOwnedByAddress(
     _address: string,
-    _typeArg?: string
+    _typeArg?: string,
   ): Promise<GetObjectDataResponse[]> {
     throw this.newError('getCoinBalancesOwnedByAddress');
   }
@@ -150,7 +150,7 @@ export class VoidProvider extends Provider {
     _address: string,
     _amount: bigint,
     _typeArg: string,
-    _exclude: ObjectId[] = []
+    _exclude: ObjectId[] = [],
   ): Promise<GetObjectDataResponse[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
@@ -159,7 +159,7 @@ export class VoidProvider extends Provider {
     _address: string,
     _amount: bigint,
     _typeArg: string,
-    _exclude: ObjectId[]
+    _exclude: ObjectId[],
   ): Promise<GetObjectDataResponse[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
@@ -174,7 +174,7 @@ export class VoidProvider extends Provider {
 
   // Transactions
   async getTransaction(
-    _digest: TransactionDigest
+    _digest: TransactionDigest,
   ): Promise<CertifiedTransaction> {
     throw this.newError('getTransaction');
   }
@@ -184,7 +184,7 @@ export class VoidProvider extends Provider {
     _signatureScheme: SignatureScheme,
     _signature: Base64DataBuffer,
     _pubkey: PublicKey,
-    _requestType: ExecuteTransactionRequestType
+    _requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');
   }
@@ -193,7 +193,7 @@ export class VoidProvider extends Provider {
     _sender: SuiAddress,
     _txn: UnserializedSignableTransaction | string | Base64DataBuffer,
     _gasPrice: number | null = null,
-    _epoch: number | null = null
+    _epoch: number | null = null,
   ): Promise<DevInspectResults> {
     throw this.newError('devInspectTransaction');
   }
@@ -205,14 +205,14 @@ export class VoidProvider extends Provider {
   getDynamicFields(
     _parent_object_id: ObjectId,
     _cursor: ObjectId | null = null,
-    _limit: number | null = null
+    _limit: number | null = null,
   ): Promise<DynamicFieldPage> {
     throw this.newError('getDynamicFields');
   }
 
   getDynamicFieldObject(
     _parent_object_id: ObjectId,
-    _name: string
+    _name: string,
   ): Promise<GetObjectDataResponse> {
     throw this.newError('getDynamicFieldObject');
   }
@@ -223,7 +223,7 @@ export class VoidProvider extends Provider {
 
   async getTransactionDigestsInRange(
     _start: GatewayTxSeqNumber,
-    _end: GatewayTxSeqNumber
+    _end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
     throw this.newError('getTransactionDigestsInRange');
   }
@@ -231,20 +231,20 @@ export class VoidProvider extends Provider {
   async getMoveFunctionArgTypes(
     _objectId: string,
     _moduleName: string,
-    _functionName: string
+    _functionName: string,
   ): Promise<SuiMoveFunctionArgTypes> {
     throw this.newError('getMoveFunctionArgTypes');
   }
 
   async getNormalizedMoveModulesByPackage(
-    _objectId: string
+    _objectId: string,
   ): Promise<SuiMoveNormalizedModules> {
     throw this.newError('getNormalizedMoveModulesByPackage');
   }
 
   async getNormalizedMoveModule(
     _objectId: string,
-    _moduleName: string
+    _moduleName: string,
   ): Promise<SuiMoveNormalizedModule> {
     throw this.newError('getNormalizedMoveModule');
   }
@@ -252,7 +252,7 @@ export class VoidProvider extends Provider {
   async getNormalizedMoveFunction(
     _objectId: string,
     _moduleName: string,
-    _functionName: string
+    _functionName: string,
   ): Promise<SuiMoveNormalizedFunction> {
     throw this.newError('getNormalizedMoveFunction');
   }
@@ -260,7 +260,7 @@ export class VoidProvider extends Provider {
   async getNormalizedMoveStruct(
     _objectId: string,
     _oduleName: string,
-    _structName: string
+    _structName: string,
   ): Promise<SuiMoveNormalizedStruct> {
     throw this.newError('getNormalizedMoveStruct');
   }
@@ -271,7 +271,7 @@ export class VoidProvider extends Provider {
 
   async subscribeEvent(
     _filter: SuiEventFilter,
-    _onMessage: (event: SuiEventEnvelope) => void
+    _onMessage: (event: SuiEventEnvelope) => void,
   ): Promise<SubscriptionId> {
     throw this.newError('subscribeEvent');
   }
@@ -288,7 +288,7 @@ export class VoidProvider extends Provider {
     _query: TransactionQuery,
     _cursor: TransactionDigest | null,
     _limit: number | null,
-    _order: Order
+    _order: Order,
   ): Promise<PaginatedTransactionDigests> {
     throw this.newError('getTransactions');
   }
@@ -297,7 +297,7 @@ export class VoidProvider extends Provider {
     _query: EventQuery,
     _cursor: EventId | null,
     _limit: number | null,
-    _order: Order
+    _order: Order,
   ): Promise<PaginatedEvents> {
     throw this.newError('getEvents');
   }
@@ -308,25 +308,25 @@ export class VoidProvider extends Provider {
   }
 
   async getCheckpointSummary(
-    _sequenceNumber: number
+    _sequenceNumber: number,
   ): Promise<CheckpointSummary> {
     throw this.newError('getCheckpointSummary');
   }
 
   async getCheckpointSummaryByDigest(
-    _digest: CheckpointDigest
+    _digest: CheckpointDigest,
   ): Promise<CheckpointSummary> {
     throw this.newError('getCheckpointSummaryByDigest');
   }
 
   async getCheckpointContents(
-    _sequenceNumber: number
+    _sequenceNumber: number,
   ): Promise<CheckpointContents> {
     throw this.newError('getCheckpointContents');
   }
 
   async getCheckpointContentsByDigest(
-    _digest: CheckPointContentsDigest
+    _digest: CheckPointContentsDigest,
   ): Promise<CheckpointContents> {
     throw this.newError('getCheckpointContentsByDigest');
   }

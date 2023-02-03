@@ -67,18 +67,18 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSecretKey(
     secretKey: Uint8Array,
-    options?: { skipValidation?: boolean }
+    options?: { skipValidation?: boolean },
   ): Ed25519Keypair {
     const secretKeyLength = secretKey.length;
-    if (secretKeyLength != 64) {
+    if (secretKeyLength !== 64) {
       // Many users actually wanted to invoke fromSeed(seed: Uint8Array), especially when reading from keystore.
-      if (secretKeyLength == 32) {
+      if (secretKeyLength === 32) {
         throw new Error(
-          'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)'
+          'Wrong secretKey size. Expected 64 bytes, got 32. Similar function exists: fromSeed(seed: Uint8Array)',
         );
       }
       throw new Error(
-        `Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`
+        `Wrong secretKey size. Expected 64 bytes, got ${secretKeyLength}.`,
       );
     }
     const keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
@@ -100,7 +100,7 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSeed(seed: Uint8Array): Ed25519Keypair {
     const seedLength = seed.length;
-    if (seedLength != 32) {
+    if (seedLength !== 32) {
       throw new Error(`Wrong seed size. Expected 32 bytes, got ${seedLength}.`);
     }
     return new Ed25519Keypair(nacl.sign.keyPair.fromSeed(seed));
@@ -116,9 +116,12 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Return the signature for the provided data using Ed25519.
    */
-  signData(data: Base64DataBuffer, _useRecoverable: boolean = false): Base64DataBuffer {
+  signData(
+    data: Base64DataBuffer,
+    _useRecoverable: boolean = false,
+  ): Base64DataBuffer {
     return new Base64DataBuffer(
-      nacl.sign.detached(data.getData(), this.keypair.secretKey)
+      nacl.sign.detached(data.getData(), this.keypair.secretKey),
     );
   }
 
