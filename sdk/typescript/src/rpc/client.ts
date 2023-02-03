@@ -56,6 +56,8 @@ export class JsonRpcClient {
   }
 
   private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
+    httpHeaders.set("client_api_version",client_version)
+    httpHeaders.set("client_type","ts_sdk")
     const client = new RpcClient(
       async (
         request: any,
