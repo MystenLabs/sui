@@ -17,14 +17,13 @@ import type { TransactionEffects, MoveEvent } from '@mysten/sui.js';
 
 type StakeTxnCardProps = {
     txnEffects: TransactionEffects;
-    amount: number;
 };
 
 const REQUEST_DELEGATION_EVENT = '0x2::validator_set::DelegationRequestEvent';
 
 // TODO: moveEvents is will be changing
 // For Staked Transaction use moveEvent Field to get the validator address, delegation amount, epoch
-export function StakeTxnCard({ txnEffects, amount }: StakeTxnCardProps) {
+export function StakeTxnCard({ txnEffects }: StakeTxnCardProps) {
     const stakingData = useMemo(() => {
         if (!txnEffects?.events) return null;
 
@@ -86,13 +85,13 @@ export function StakeTxnCard({ txnEffects, amount }: StakeTxnCardProps) {
                     <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
                 </div>
                 <Text variant="body" weight="medium" color="steel-darker">
-                    {apy > 0 ? apy + ' %' : '--'}
+                    {apy && apy > 0 ? apy + ' %' : '--'}
                 </Text>
             </div>
 
-            {amount && (
+            {stakingData?.fields.amount && (
                 <TxnAmount
-                    amount={amount}
+                    amount={stakingData.fields.amunt}
                     coinType={SUI_TYPE_ARG}
                     label="Stake"
                 />

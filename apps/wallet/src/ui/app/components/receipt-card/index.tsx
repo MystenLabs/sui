@@ -95,15 +95,12 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             <ReceiptCardBg status={isSuccessful}>
                 {isStakeTxn ? (
                     moveCallLabel === 'Staked' ? (
-                        <StakeTxnCard
-                            amount={eventsSummary[0].amount}
-                            txnEffects={effects}
-                        />
+                        <StakeTxnCard txnEffects={effects} />
                     ) : (
                         <UnStakeTxnCard
                             txn={txn}
                             activeAddress={activeAddress}
-                            amount={eventsSummary[0].amount}
+                            amount={totalSuiAmount || 0}
                         />
                     )
                 ) : (
