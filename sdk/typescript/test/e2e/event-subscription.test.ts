@@ -34,7 +34,7 @@ describe('Event Subscription API', () => {
     );
 
     await signer.payAllSui({
-      inputCoins: inputCoins.map((o) => o.objectId),
+      inputCoins: inputCoins.map((o) => o.coinObjectId),
       recipient: DEFAULT_RECIPIENT,
       gasBudget: DEFAULT_GAS_BUDGET,
     });
