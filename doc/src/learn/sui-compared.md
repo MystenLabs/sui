@@ -125,17 +125,16 @@ Sui uses the state commitment that arrives upon epoch change. Sui requires a sin
 
 ## Summary
 
-|                 **Concept**                 |                  **Sui**                  |  **Traditional blockchain** |
-|:-------------------------------------------:|:-----------------------------------------:|:---------------------------:|
-| _Unit of storage_                           | object                                    | account                     |
-| _Transaction execution_                     | parallel (for independent transactions)   | sequential                  |
-| _Transactions flow_                         | proactively talk with validators          | fire-and-forget broadcast   |
-| _Transactions validation_                   | individually                              | batching them in the blocks |
-| _Locked data during transaction validation_ | only the relevant piece of data           | the whole chain             |
-| _Transaction ordering_                      | most of them are causally ordered         | total ordered               |
-| _Machine per validator_                     | single or more                            | single                      |
-| _Consensus protocol_                        | two protocols                             | one protocol                |
-| _Consensus protocol invocation_             | for transactions involving shared objects | for all transactions        |
+|                 **Concept**                 |                                        **Sui**                                       |  **Traditional blockchain** |
+|:-------------------------------------------:|:------------------------------------------------------------------------------------:|:---------------------------:|
+| _Unit of storage_                           | object                                                                               | account                     |
+| _Transaction execution_                     | shared object - sequenced through consensus <br/> owned object - highly parallelized | sequenced                   |
+| _Transactions flow_                         | proactively talk with validators                                                     | fire-and-forget broadcast   |
+| _Transactions validation_                   | individually                                                                         | batching them in the blocks |
+| _Locked data during transaction validation_ | shared object - the whole chain <br/> owned object - only the relevant piece of data | the whole chain             |
+| _Transaction ordering_                      | shared object - total ordered <br/> owned object - causally ordered                  | total ordered               |
+| _Machine per validator_                     | single or more                                                                       | single                      |
+| _Consensus protocol_                        | two protocols                                                                        | one protocol                |
 
 ## Conclusion
 
