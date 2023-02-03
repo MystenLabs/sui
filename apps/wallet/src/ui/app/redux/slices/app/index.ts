@@ -5,10 +5,6 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
-import {
-    clearForNetworkSwitch,
-    fetchAllOwnedAndRequiredObjects,
-} from '_redux/slices/sui-objects';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '_redux/RootReducer';
@@ -19,7 +15,6 @@ import type { AppThunkConfig } from '_store/thunk-extras';
 type AppState = {
     appType: AppType;
     apiEnv: API_ENV;
-    apiEnvInitialized: boolean;
     navVisible: boolean;
     customRPC?: string | null;
     activeOrigin: string | null;
@@ -29,7 +24,6 @@ type AppState = {
 const initialState: AppState = {
     appType: AppType.unknown,
     apiEnv: DEFAULT_API_ENV,
-    apiEnvInitialized: false,
     customRPC: null,
     navVisible: true,
     activeOrigin: null,
@@ -44,18 +38,13 @@ export const changeActiveNetwork = createAsyncThunk<
     'changeRPCNetwork',
     async (
         { network, store = false },
-        { extra: { background, api }, dispatch, getState }
+        { extra: { background, api }, dispatch }
     ) => {
         if (store) {
             await background.setActiveNetworkEnv(network);
         }
-        const { apiEnvInitialized } = getState().app;
-        await dispatch(slice.actions.setActiveNetwork(network));
         api.setNewJsonRpcProvider(network.env, network.customRpcUrl);
-        if (apiEnvInitialized) {
-            await dispatch(clearForNetworkSwitch());
-            dispatch(fetchAllOwnedAndRequiredObjects());
-        }
+        await dispatch(slice.actions.setActiveNetwork(network));
     }
 );
 
@@ -71,7 +60,6 @@ const slice = createSlice({
         ) => {
             state.apiEnv = env;
             state.customRPC = customRpcUrl;
-            state.apiEnvInitialized = true;
         },
         setNavVisibility: (
             state,

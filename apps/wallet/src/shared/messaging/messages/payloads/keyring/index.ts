@@ -53,6 +53,10 @@ type MethodToPayloads = {
             pubKey: string;
         };
     };
+    switchAccount: {
+        args: { address: SuiAddress };
+        return: void;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>
