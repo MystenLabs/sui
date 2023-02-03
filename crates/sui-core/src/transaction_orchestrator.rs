@@ -234,11 +234,11 @@ where
             .write_pending_transaction_maybe(&transaction)
             .await?
         {
+            debug!(?tx_digest, "no pending request in flight, submitting.");
             self.quorum_driver()
                 .submit_transaction_no_ticket(transaction)
                 .await?;
         }
-        debug!(?tx_digest, "transaction request was already submitted");
         Ok(ticket)
     }
 
