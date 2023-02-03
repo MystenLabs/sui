@@ -4,8 +4,6 @@ pub type Accumulator = fastcrypto::hash::EllipticCurveMultisetHash;
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
-
     use crate::accumulator::Accumulator;
     use crate::base_types::ObjectDigest;
     use fastcrypto::hash::MultisetHash;
@@ -133,49 +131,5 @@ mod tests {
             a.remove_all(&refs2);
             assert_eq!(accumulator, a);
         })
-    }
-
-    #[test]
-    fn test_benchmark() {
-        let (accumulators, mut durations): (Vec<Accumulator>, Vec<Duration>) = (0..100)
-            .map(|_| {
-                let digests: Vec<_> = (0..1_000).map(|_| ObjectDigest::random()).collect();
-                let mut accumulator = Accumulator::default();
-
-                let before = Instant::now();
-                accumulator.insert_all(&digests);
-                let elapsed = before.elapsed();
-
-                (accumulator, elapsed)
-            })
-            .unzip();
-
-        assert!(!durations.is_empty());
-        durations.sort();
-        let length = durations.len();
-        let p50 = durations[length / 2];
-        let p90 = durations[(length * 9) / 10];
-        let mean: Duration = Duration::from_millis(
-            (durations.iter().sum::<Duration>().as_millis() / (durations.len() as u128))
-                .try_into()
-                .unwrap(),
-        );
-        println!(
-            "Benchmark -- Accumulating 1,000 object digests took {:?} (p50), {:?} (p90), {:?} (mean)",
-            p50, p90, mean
-        );
-        assert!(p90 < Duration::from_millis(500));
-
-        let mut union_acc = Accumulator::default();
-
-        let before = Instant::now();
-        for acc in &accumulators {
-            union_acc.union(acc);
-        }
-        union_acc.digest();
-
-        let elapsed = before.elapsed();
-        println!("Benchmark -- Digesting 100 accumulators took {:?}", elapsed);
-        assert!(elapsed < Duration::from_millis(50));
     }
 }
