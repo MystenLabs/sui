@@ -1258,7 +1258,7 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::Addresses(addresses, active_address) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
-                    if active_address.is_some() && active_address.unwrap() == *address {
+                    if *active_address == Some(*address) {
                         writeln!(writer, "{} <=", address)?;
                     } else {
                         writeln!(writer, "{}", address)?;
