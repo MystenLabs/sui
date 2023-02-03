@@ -18,7 +18,7 @@ export function useGetTransactionsByAddress(address: SuiAddress | null) {
             });
             return rpc.getTransactionWithEffectsBatch(txnIdDs.data);
         },
-        { enabled: !!address, staleTime: 10 * 1000 }
+        { enabled: !!address, staleTime: 10 * 1000, retry: 10 }
     );
     return response;
 }
