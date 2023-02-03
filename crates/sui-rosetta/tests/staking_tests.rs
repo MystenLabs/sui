@@ -61,7 +61,7 @@ async fn test_locked_sui() {
         currencies: vec![],
     };
     let response: AccountBalanceResponse = rosetta_client.call("account/balance", &request).await;
-    assert!(response.balances.is_empty());
+    assert_eq!(response.balances[0].value, 0);
 
     // Lock some sui
     let call_args = vec![
