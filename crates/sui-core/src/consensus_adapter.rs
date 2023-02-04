@@ -175,23 +175,19 @@ impl ConsensusAdapter {
     pub fn new(
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Arc<Self> {
         let num_inflight_transactions = Default::default();
-        let this = Arc::new(Self {
+        Arc::new(Self {
             consensus_client,
             authority,
             num_inflight_transactions,
             opt_metrics,
-        });
-        let recover = this.clone();
-        recover.submit_recovered(epoch_store);
-        this
+        })
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
-    fn submit_recovered(self: Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
+    pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
         // todo - get_all_pending_consensus_transactions is called twice when
         // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
@@ -216,6 +212,10 @@ impl ConsensusAdapter {
                 recovered.push(ConsensusTransaction::new_end_of_publish(self.authority));
             }
         }
+        debug!(
+            "Submitting {:?} recovered pending consensus transactions to Narwhal",
+            recovered.len()
+        );
         for transaction in recovered {
             self.submit_unchecked(transaction, epoch_store);
         }
