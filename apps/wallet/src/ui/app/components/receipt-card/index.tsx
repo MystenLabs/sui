@@ -25,8 +25,8 @@ import { TxnGasSummery } from '_components/receipt-card/TxnGasSummery';
 import { UnStakeTxnCard } from '_components/receipt-card/UnstakeTxnCard';
 import { getTxnEffectsEventID } from '_components/transactions-card';
 import { TxnImage } from '_components/transactions-card/TxnImage';
-import { getEventsSummary, checkStakingTxn } from '_helpers';
-import { useGetTxnRecipientAddress } from '_hooks';
+import { checkStakingTxn } from '_helpers';
+import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
 
 import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
@@ -42,7 +42,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const error = useMemo(() => getExecutionStatusError(txn), [txn]);
     const isSuccessful = executionStatus === 'success';
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
-    const { coins: eventsSummary } = getEventsSummary(effects, activeAddress);
+
     const recipientAddress = useGetTxnRecipientAddress({
         txn,
         address: activeAddress,
@@ -66,19 +66,18 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
         return moveCallLabel ? moveCallLabel : 'Call';
     }, [txn, txnKind]);
 
-    const transferAmount = useMemo(() => {
-        return eventsSummary.filter(
-            ({ receiverAddress }) => receiverAddress === activeAddress
-        );
-    }, [eventsSummary, activeAddress]);
+    const transferAmount = useGetTransferAmount({
+        txn,
+        activeAddress,
+    });
 
     const totalSuiAmount = useMemo(() => {
-        const amount = eventsSummary.find(
+        const amount = transferAmount.find(
             ({ receiverAddress, coinType }) =>
                 receiverAddress === activeAddress && coinType === SUI_TYPE_ARG
         )?.amount;
         return amount ? Math.abs(amount) : null;
-    }, [activeAddress, eventsSummary]);
+    }, [activeAddress, transferAmount]);
 
     const isSender = activeAddress === certificate.data.sender;
     const isStakeTxn =

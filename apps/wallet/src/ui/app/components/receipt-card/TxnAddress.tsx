@@ -31,7 +31,7 @@ export function TxnAddress({ address, label }: TxnAddressProps) {
                     type={ExplorerLinkType.address}
                     address={address}
                     title="View on Sui Explorer"
-                    className="text-sui-dark text-body font-semibold no-underline uppercase tracking-wider"
+                    className="text-sui-dark font-mono text-body font-semibold no-underline uppercase tracking-wider"
                     showIcon={false}
                 >
                     {txnAddress}

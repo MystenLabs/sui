@@ -18,8 +18,8 @@ import { TxnImage } from './TxnImage';
 import { CoinBalance } from '_app/shared/coin-balance';
 import { DateCard } from '_app/shared/date-card';
 import { Text } from '_app/shared/text';
-import { getEventsSummary, notEmpty, checkStakingTxn } from '_helpers';
-import { useGetTxnRecipientAddress } from '_hooks';
+import { notEmpty, checkStakingTxn } from '_helpers';
+import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
 
 import type {
     SuiTransactionResponse,
@@ -54,7 +54,6 @@ export function TransactionCard({
     const { certificate } = txn;
     const executionStatus = getExecutionStatusType(txn);
     const txnKind = getTransactionKindName(certificate.data.transactions[0]);
-    const { coins: eventsSummary } = getEventsSummary(txn.effects, address);
 
     const objectId = useMemo(() => {
         const transferId = getTransferObjectTransaction(
@@ -65,17 +64,22 @@ export function TransactionCard({
             : getTxnEffectsEventID(txn.effects, address)[0];
     }, [address, certificate.data.transactions, txn.effects]);
 
+    const transfer = useGetTransferAmount({
+        txn,
+        activeAddress: address,
+    });
+
     // we only show Sui Transfer amount or the first non-Sui transfer amount
     // positive amount means received, negative amount means sent
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
-        const amountTransfersSui = eventsSummary.find(
+        const amountTransfersSui = transfer.find(
             ({ receiverAddress, coinType }) =>
                 receiverAddress === address && coinType === SUI_TYPE_ARG
         );
 
         // Find non-SUI transfer amount
-        const amountTransfersNonSui = eventsSummary.find(
+        const amountTransfersNonSui = transfer.find(
             ({ receiverAddress, coinType }) =>
                 receiverAddress === address && coinType !== SUI_TYPE_ARG
         );
@@ -90,7 +94,7 @@ export function TransactionCard({
                 amountTransfersNonSui?.coinType ||
                 null,
         };
-    }, [address, eventsSummary]);
+    }, [address, transfer]);
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
@@ -160,11 +164,18 @@ export function TransactionCard({
                 <div className="flex flex-col w-full gap-1.5">
                     {error ? (
                         <div className="flex flex-col w-full gap-1.5">
-                            <Text color="gray-90" weight="semibold">
+                            <Text color="gray-90" weight="medium">
                                 Transaction Failed
                             </Text>
-                            <div className="flex break-all text-issue-dark text-subtitle">
-                                {error}
+
+                            <div className="flex break-all">
+                                <Text
+                                    variant="subtitle"
+                                    weight="medium"
+                                    color="issue-dark"
+                                >
+                                    {error}
+                                </Text>
                             </div>
                         </div>
                     ) : (

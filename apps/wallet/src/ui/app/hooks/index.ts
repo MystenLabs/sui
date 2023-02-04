@@ -22,6 +22,7 @@ export { useRpc } from './useRpc';
 export { useGetObject } from './useGetObject';
 export { useGetTxnRecipientAddress } from './useGetTxnRecipientAddress';
 export { useGetTransactionsByAddress } from './useGetTransactionsByAddress';
+export { useGetTransferAmount } from './useGetTransferAmount';
 export * from './useSigner';
 export * from './useIndividualCoinMaxBalance';
 export * from './useOriginbyteNft';

@@ -43,6 +43,7 @@ const textStyles = cva([], {
             hero: 'text-hero',
             'hero-dark': 'text-hero-dark',
             'success-dark': 'text-success-dark',
+            'issue-dark': 'text-issue-dark',
         },
         italic: {
             true: 'italic',
