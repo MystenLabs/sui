@@ -21,9 +21,19 @@ describe('String type guards', () => {
     });
 
     it('accepts base58 strings of the correct length', () => {
-      expect(isValidTransactionDigest('vQMG8nrGirX14JLfyzy15DrYD3gwRC1eUmBmBzYUsgh')).toBe(true);
-      expect(isValidTransactionDigest('7msXn7aieHy73WkRxh3Xdqh9PEoPYBmJW59iE4TVvz62')).toBe(true);
-      expect(isValidTransactionDigest('C6G8PsqwNpMqrK7ApwuQUvDgzkFcUaUy6Y5ycrAN2q3F')).toBe(true);
+      expect(
+        isValidTransactionDigest('vQMG8nrGirX14JLfyzy15DrYD3gwRC1eUmBmBzYUsgh'),
+      ).toBe(true);
+      expect(
+        isValidTransactionDigest(
+          '7msXn7aieHy73WkRxh3Xdqh9PEoPYBmJW59iE4TVvz62',
+        ),
+      ).toBe(true);
+      expect(
+        isValidTransactionDigest(
+          'C6G8PsqwNpMqrK7ApwuQUvDgzkFcUaUy6Y5ycrAN2q3F',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -35,7 +45,7 @@ describe('String type guards', () => {
           'X09wJFxwQDdTU1tzMy5NJXdSTnknPCh9J0tNUCdmIw  ',
         ],
         isValidSuiAddress,
-        false
+        false,
       );
     });
 
@@ -48,7 +58,7 @@ describe('String type guards', () => {
           '0x503ff67d9291215ffccafddbd08d86e86b3425c6356c9679',
         ],
         isValidSuiAddress,
-        false
+        false,
       );
     });
 
@@ -61,7 +71,7 @@ describe('String type guards', () => {
           '0x4288ba9932cc115784794fcfb709213f30d40a54',
         ],
         isValidSuiAddress,
-        true
+        true,
       );
     });
 
@@ -76,7 +86,7 @@ describe('String type guards', () => {
           '0X000000000000000000000000000000000000002',
         ],
         normalizeSuiAddress,
-        '0x0000000000000000000000000000000000000002'
+        '0x0000000000000000000000000000000000000002',
       );
     });
   });

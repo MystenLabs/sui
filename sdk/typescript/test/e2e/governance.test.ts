@@ -30,7 +30,7 @@ describe.each([{ useLocalTxnBuilder: false }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined
+          : undefined,
       );
     });
 
@@ -41,7 +41,7 @@ describe.each([{ useLocalTxnBuilder: false }])(
 
     it('test getDelegatedStakes', async () => {
       const stakes = await toolbox.provider.getDelegatedStakes(
-        toolbox.address()
+        toolbox.address(),
       );
       expect(stakes.length).greaterThan(0);
     });
@@ -73,12 +73,12 @@ describe.each([{ useLocalTxnBuilder: false }])(
       const moveObject = getMoveObject(data);
       superStructAssert(moveObject!.fields, MoveSuiSystemObjectFields);
     });
-  }
+  },
 );
 
 async function addDelegation(signer: RawSigner) {
   const coins = await signer.provider.getGasObjectsOwnedByAddress(
-    await signer.getAddress()
+    await signer.getAddress(),
   );
 
   const validators = await signer.provider.getValidators();
@@ -88,7 +88,7 @@ async function addDelegation(signer: RawSigner) {
       [coins[0].objectId],
       BigInt(DEFAULT_STAKED_AMOUNT),
       validators[0].sui_address,
-      DEFAULT_GAS_BUDGET
-    )
+      DEFAULT_GAS_BUDGET,
+    ),
   );
 }

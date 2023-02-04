@@ -11,7 +11,7 @@ export class FaucetRateLimitError extends Error {}
 export async function requestSuiFromFaucet(
   endpoint: string,
   recipient: SuiAddress,
-  httpHeaders?: HttpHeaders
+  httpHeaders?: HttpHeaders,
 ): Promise<FaucetResponse> {
   const res = await fetch(endpoint, {
     method: 'POST',
@@ -28,7 +28,7 @@ export async function requestSuiFromFaucet(
 
   if (res.status === 429) {
     throw new FaucetRateLimitError(
-      `Too many requests from this client have been sent to the faucet. Please retry later`
+      `Too many requests from this client have been sent to the faucet. Please retry later`,
     );
   }
   let parsed;
@@ -36,7 +36,7 @@ export async function requestSuiFromFaucet(
     parsed = await res.json();
   } catch (e) {
     throw new Error(
-      `Ecountered error when parsing response from faucet, error: ${e}, status ${res.status}, response ${res}`
+      `Ecountered error when parsing response from faucet, error: ${e}, status ${res.status}, response ${res}`,
     );
   }
   if (parsed.error) {

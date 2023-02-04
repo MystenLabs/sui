@@ -14,25 +14,25 @@ describe('Object Reading API', () => {
 
   it('Get Owned Objects', async () => {
     const gasObjects = await toolbox.provider.getObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     expect(gasObjects.length).to.greaterThan(0);
   });
 
   it('Get Object', async () => {
     const gasObjects = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
       gasObjects.map((gasObject) =>
-        toolbox.provider.getObject(gasObject['objectId'])
-      )
+        toolbox.provider.getObject(gasObject['objectId']),
+      ),
     );
     objectInfos.forEach((objectInfo) =>
       expect(getMoveObjectType(objectInfo)).to.equal(
-        '0x2::coin::Coin<0x2::sui::SUI>'
-      )
+        '0x2::coin::Coin<0x2::sui::SUI>',
+      ),
     );
   });
 });
