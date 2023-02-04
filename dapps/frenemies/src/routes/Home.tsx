@@ -12,12 +12,10 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Scoreboard } from "../components/Scoreboard";
 import { useEpoch } from "../network/queries/epoch";
-import { Goal, LEADERBOARD, Leaderboard } from "../network/types";
+import { Goal } from "../network/types";
 import { Assignment } from "../components/Assignment";
 import { useSuiSystem } from "../network/queries/sui-system";
 import { Logo } from "../components/Validators/Logo";
-import { useRawObject } from "../network/queries/use-raw";
-import { config } from "../config";
 
 /**
  * The Home page.
@@ -26,7 +24,6 @@ export function Home() {
   const navigate = useNavigate();
   const { data: epoch } = useEpoch();
   const { currentAccount } = useWalletKit();
-  const { data: leaderboard } = useRawObject<Leaderboard>(config.VITE_LEADERBOARD, LEADERBOARD);
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
   const { data: system } = useSuiSystem();
 
@@ -63,9 +60,14 @@ export function Home() {
     return () => clearInterval(interval);
   }, [epoch]);
 
+  // Whether there's an assignment for the current round (either first one
+  // or requested for the round via "Play Round X" button).
   const hasAssignment = !!scorecard
     && !!epoch
     && scorecard.data.assignment.epoch == epoch.data.epoch;
+
+  // Metadata of the currently assigned validator.
+  const validatorMeta = assignedValidator?.fields.metadata.fields;
 
   return (
     <>
@@ -77,19 +79,15 @@ export function Home() {
         </Card>
         <Card spacing="sm">
           <Stat label="Assigned Validator">
-            {assignedValidator && hasAssignment ? (
+            {validatorMeta && hasAssignment ? (
               <div className="flex items-center gap-2">
                 <Logo
-                  src={
-                    assignedValidator.fields.metadata.fields.image_url as string
-                  }
+                  src={validatorMeta.image_url as string}
                   size="md"
-                  label={
-                    assignedValidator.fields.metadata.fields.name as string
-                  }
+                  label={validatorMeta.name as string}
                   circle
                 />
-                <div>{assignedValidator.fields.metadata.fields.name}</div>
+                <div>{validatorMeta.name}</div>
               </div>
             ) : (
               "--"

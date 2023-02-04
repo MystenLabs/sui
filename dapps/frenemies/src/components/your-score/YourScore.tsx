@@ -46,7 +46,7 @@ export function YourScore() {
         <Stat variant="leaderboard" label="Rank">
           {rank === -1 ? "--" : rank + 1}
         </Stat>
-        <Stat variant="leaderboard" label="Score">
+        <Stat variant="leaderboard" label="Total Score">
           {scorecard.data.score}
         </Stat>
       </div>

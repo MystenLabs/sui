@@ -29,7 +29,7 @@ export function Setup() {
     ["create-scorecard"],
     async (username: string) => {
       if (!currentAccount) {
-        throw new Error("No Coins found, please request some from faucet");
+        throw new Error("No SUI coins found in your wallet. You need SUI to play the Frenemies game");
       }
 
       const gasPrice = epoch?.data.referenceGasPrice || 1n;
