@@ -105,9 +105,12 @@ pub const OBJ_METADATA_COST_NON_REFUNDABLE: u64 = 50;
 
 /// === Tokenomics ===
 
-// TODO: this should be changed to u64.
 /// Sender of a txn that touches an object will get 99% of the storage rebate back.
-pub const STORAGE_REBATE_RATE: f64 = 0.99;
+///
+/// STORAGE_REBATE_RATE is a pair of integers, representing a fraction of a percentage
+/// value. Use for deterministic computation with a multiplication of the first value
+/// divided by the second. Values can have any number of digits and precision.
+pub const STORAGE_REBATE_RATE: (u64, u64) = (99, 100);
 
 /// 5% of the storage fund's share of rewards are reinvested into the storage fund.
 /// In basis point.

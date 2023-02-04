@@ -670,7 +670,13 @@ impl<S> TemporaryStore<S> {
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
-        let gas_rebate = (cost_summary.storage_rebate as f64 * STORAGE_REBATE_RATE).round() as u64;
+        let gas_rebate1 = (cost_summary.storage_rebate as f64 * 0.99).round() as u64;
+        let mut gas_rebate =
+            (cost_summary.storage_rebate as u128 * STORAGE_REBATE_RATE.0 as u128) as u64;
+        gas_rebate = ((gas_rebate as u128 + (STORAGE_REBATE_RATE.1 as u128 - 1))
+            / STORAGE_REBATE_RATE.1 as u128) as u64;
+        // gas_rebate = (gas_rebate as u128 / STORAGE_REBATE_RATE.1 as u128) as u64;
+        assert_eq!(gas_rebate, gas_rebate1);
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
