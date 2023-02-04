@@ -17,6 +17,7 @@ use sui_types::{
     },
     object::{Object, Owner},
 };
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use tracing::instrument;
 
 async fn get_gas_status(
@@ -342,6 +343,15 @@ fn check_one_object(
                     return Err(SuiError::NotSharedObjectError);
                 }
             };
+        }
+        InputObjectKind::SharedMoveObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutable: true,
+        } => {
+            // Only system transactions (which don't perform input checks) can accept the Clock
+            // object as a mutable parameter.
+            return Err(SuiError::ImmutableParameterExpectedError);
         }
         InputObjectKind::SharedMoveObject {
             initial_shared_version: input_initial_shared_version,

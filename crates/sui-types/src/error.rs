@@ -229,6 +229,8 @@ pub enum SuiError {
     TransferImmutableError,
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
+    #[error("Mutable parameter provided, immutable parameter expected.")]
+    ImmutableParameterExpectedError,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
