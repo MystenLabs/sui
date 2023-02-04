@@ -21,7 +21,7 @@ export const formatPercentage = (
     const percentage = bn1
         .div(bn2)
         .multipliedBy(100)
-        .decimalPlaces(decimalPlaces, BigNumber.ROUND_DOWN)
+        .decimalPlaces(decimalPlaces)
         .toNumber();
     return percentage;
 };

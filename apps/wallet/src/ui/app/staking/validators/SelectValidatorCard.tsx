@@ -43,9 +43,10 @@ export function SelectValidatorCard() {
         return validatorsData?.validators.fields.active_validators.reduce(
             (acc, curr) =>
                 (acc +=
-                    +curr.fields.delegation_staking_pool.fields.sui_balance +
-                    +curr.fields.stake_amount),
-            0
+                    BigInt(
+                        curr.fields.delegation_staking_pool.fields.sui_balance
+                    ) + BigInt(curr.fields.stake_amount)),
+            0n
         );
     }, [validatorsData]);
 
@@ -57,9 +58,11 @@ export function SelectValidatorCard() {
                 name: getName(validator.fields.metadata.fields.name),
                 address: validator.fields.metadata.fields.sui_address,
                 stakeShare: formatPercentage(
-                    +validator.fields.delegation_staking_pool.fields
-                        .sui_balance + +validator.fields.stake_amount,
-                    BigInt(totalStake)
+                    BigInt(
+                        validator.fields.delegation_staking_pool.fields
+                            .sui_balance
+                    ) + BigInt(validator.fields.stake_amount),
+                    totalStake
                 ),
                 logo:
                     validator.fields.metadata.fields.image_url &&

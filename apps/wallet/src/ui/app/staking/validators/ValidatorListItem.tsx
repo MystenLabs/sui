@@ -87,24 +87,13 @@ export function ValidatorListItem({
                         </div>
                     </div>
                     <div className="flex gap-0.5 items-center">
-                        {typeof stakeShare !== 'string' && (
+                        <div className="flex gap-0.5 leading-none">
                             <Text
                                 variant="body"
                                 weight="semibold"
                                 color="steel-darker"
                             >
-                                {stakeShare}
-                            </Text>
-                        )}
-                        <div className="flex gap-0.5 leading-none">
-                            <Text
-                                variant="subtitleSmall"
-                                weight="medium"
-                                color="steel-dark"
-                            >
-                                {typeof stakeShare === 'string'
-                                    ? stakeShare
-                                    : '%'}
+                                {`${stakeShare}%`}
                             </Text>
                             <div
                                 className={cl(
@@ -113,7 +102,7 @@ export function ValidatorListItem({
                                 )}
                             >
                                 <IconTooltip
-                                    tip="Annual Percentage Yield"
+                                    tip="% Share of Total Stake"
                                     placement="top"
                                 />
                             </div>
