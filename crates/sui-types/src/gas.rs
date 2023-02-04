@@ -17,6 +17,7 @@ use move_core_types::{
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::{
     convert::TryFrom,
     ops::{Add, Deref, Mul},
@@ -93,6 +94,19 @@ impl GasCostSummary {
             storage_cost: storage_costs.iter().sum(),
             computation_cost: computation_costs.iter().sum(),
             storage_rebate: storage_rebates.iter().sum(),
+        }
+    }
+
+    pub fn normalize(self) -> GasCostSummary {
+        let (storage_cost, storage_rebate) = match self.storage_cost.cmp(&self.storage_rebate) {
+            Ordering::Greater => (self.storage_cost - self.storage_rebate, 0),
+            Ordering::Less => (0, self.storage_rebate - self.storage_cost),
+            Ordering::Equal => (0, 0),
+        };
+        GasCostSummary {
+            computation_cost: self.computation_cost,
+            storage_cost,
+            storage_rebate,
         }
     }
 }

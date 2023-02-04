@@ -548,7 +548,7 @@ impl<S> TemporaryStore<S> {
 
         let effects = TransactionEffects {
             status,
-            gas_used: gas_cost_summary,
+            gas_used: gas_cost_summary.normalize(),
             modified_at_versions,
             shared_objects: shared_object_refs,
             transaction_digest: *transaction_digest,
