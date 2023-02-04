@@ -1,5 +1,6 @@
 ---
 source: crates/sui-cost/tests/empirical_transaction_cost.rs
+assertion_line: 78
 expression: common_costs_actual
 ---
 {
@@ -15,8 +16,8 @@ expression: common_costs_actual
   },
   "SharedCounterAssertValue": {
     "computation_cost": 196,
-    "storage_cost": 31,
-    "storage_rebate": 15
+    "storage_cost": 16,
+    "storage_rebate": 0
   },
   "SharedCounterCreate": {
     "computation_cost": 202,
@@ -25,8 +26,8 @@ expression: common_costs_actual
   },
   "SharedCounterIncrement": {
     "computation_cost": 196,
-    "storage_cost": 31,
-    "storage_rebate": 15
+    "storage_cost": 16,
+    "storage_rebate": 0
   },
   "SplitCoin": {
     "computation_cost": 273,
