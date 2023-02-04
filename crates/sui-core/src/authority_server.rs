@@ -85,7 +85,6 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             consensus_client,
             state.name,
-            &state.epoch_store_for_testing(),
             ConsensusAdapterMetrics::new_test(),
         );
 
