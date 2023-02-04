@@ -228,6 +228,7 @@ mod test {
                 delegation_gas_configs,
             },
             reference_gas_price,
+            1000,
         )
         .await
         .unwrap();

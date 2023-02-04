@@ -42,6 +42,8 @@ pub struct Opts {
     pub primary_gas_id: String,
     #[clap(long, default_value = "5000", global = true)]
     pub primary_gas_objects: u64,
+    #[clap(long, default_value = "1000", global = true)]
+    pub gas_request_chunk_size: u64,
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
     /// genesis_blob_path, keypair_path and primary_gas_id
