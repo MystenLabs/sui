@@ -115,7 +115,7 @@ return createSignedAxelarMessage([ 'beep_boop' ], [
 }
 
 // uncomment when needed; generates test data for a simple execute test
-console.log(JSON.stringify(testExecuteInput(), null, 2)); process.exit(0);
+// console.log(JSON.stringify(testExecuteInput(), null, 2)); // process.exit(0);
 
 
 // bcs
@@ -147,25 +147,29 @@ console.log(JSON.stringify(testExecuteInput(), null, 2)); process.exit(0);
 // // verify the signature // just to make sure that everything is correct on this end
 // console.log(secp256k1.ecdsaVerify(signed_data, hashed, pubKey));
 
-// {
-//   const testData = fromHEX(hashMessage("hello world bee"));
-//   const { recid, signature } = secp256k1.ecdsaSign(testData, privKey);
+{
+  const operator = readOperators()[0];
+  const testData = fromHEX(hashMessage("hello world"));
+  const { recid, signature } = secp256k1.ecdsaSign(testData, fromHEX(operator.privKey));
 
-//   // don't forget to add '00' to the end of the signature
-//   console.log("message", hashMessage("hello world").replace("0x", ""));
-//   console.log("signature", toHEX(signature) + recid.toString(16).padStart(2, 0));
-//   console.log(secp256k1.ecdsaVerify(signature, testData, pubKey));
-//   // console.log(secp256k1.ecdsaRecover(signature, recid, testData));
-// }
+  console.log(toHEX(operator.pubKey));
+  // don't forget to add '00' to the end of the signature
+  console.log("message", hashMessage("hello world").replace("0x", ""));
+  console.log("signature", toHEX(signature) + recid.toString(16).padStart(2, 0));
+  console.log(secp256k1.ecdsaVerify(signature, testData, operator.pubKey));
+  // console.log(secp256k1.ecdsaRecover(signature, recid, testData));
+}
 
 /**
  * Add a prefix to a message.
  * Return resulting array of bytes.
  */
 function hashMessage(data) {
+  data = keccak256(data);
+
   // sorry for putting it here...
   const messagePrefix = new Uint8Array(
-    Buffer.from("\x19Sui Signed Message:\n", "ascii")
+    Buffer.from("\x19Sui Signed Message:\n32", "ascii")
   );
   let hashed = new Uint8Array(messagePrefix.length + data.length);
   hashed.set(messagePrefix);

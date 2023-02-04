@@ -69,7 +69,7 @@ module axelar::messenger {
     const OLD_KEY_RETENTION: u64 = 16;
 
     /// Prefix for Sui Messages.
-    const PREFIX: vector<u8> = b"\x19Sui Signed Message:\n";
+    const PREFIX: vector<u8> = b"\x19Sui Signed Message:\n32";
 
     // These are currently supported
     const SELECTOR_APPROVE_CONTRACT_CALL: vector<u8> = b"approveContractCall";
@@ -332,11 +332,15 @@ module axelar::messenger {
         destination_address: vector<u8>,
         payload: vector<u8>
     ) {
+        // destination: ETH / SUI / destination_address is 0xHEX encoded
         sui::event::emit(MessageSent {
             source: bcs::to_bytes(&t.id),
-            destination,
-            destination_address,
+            destination, // ...
+            destination_address, // HEX String vs vector<u8>
             payload,
+
+            // TODO: add a message sender as vector<u8>
+            // TODO: add a keccak256 of payload
         })
     }
 
@@ -430,7 +434,7 @@ module axelar::messenger {
     fun to_signed(bytes: vector<u8>): vector<u8> {
         let res = vector[];
         vec::append(&mut res, PREFIX);
-        vec::append(&mut res, bytes);
+        vec::append(&mut res, ecdsa::keccak256(&bytes));
         res
     }
 
@@ -488,7 +492,7 @@ module axelar::messenger {
     #[test_only]
     /// Test-only function to consume an Axelar object.
     public fun burn_axelar(a: Axelar) {
-        let Axelar { id, epoch: _, epoch_for_hash: _ } = a;
+        let Axelar { id, epoch: _, epoch_for_hash: _, hash_for_epoch: _ } = a;
         object::delete(id);
     }
 
@@ -528,16 +532,16 @@ module axelar::messenger {
     /// Samples for this test are generated with the `presets/` application.
     fun test_to_signed() {
         let message = b"hello world";
-        let signature = x"ef006f7a189e9ac42c5c2d4251917b333c09099d04aaffc56781e07856eb491f39a50a890351b8d554c0cbf68d936b7acbd1f8214ea8b2f5b901a99b56e4915c00";
+        let signature = x"a21990def584a283120cb5972313a00fcf5f14cef8116d69dda4b3a6893c26f472ca07ae5596432ebbaad23b3f2000e26eb3c422be7bc41ed00f2649da6d983a00";
         normalize_signature(&mut signature);
 
         let pub_key = ecdsa::ecrecover(&signature, &ecdsa::keccak256(&to_signed(message)));
 
         let _ = pub_key;
 
-        // std::debug::print(&ecdsa::keccak256(&to_signed(message)));
-        // std::debug::print(&pub_key);
+        std::debug::print(&ecdsa::keccak256(&to_signed(message)));
+        std::debug::print(&pub_key);
         // TODO: broken test
-        // assert!(pub_key == SIGNER, 0);
+        assert!(pub_key == SIGNER, 0);
     }
 }

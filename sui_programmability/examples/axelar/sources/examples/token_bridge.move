@@ -177,8 +177,8 @@ module axelar::token_bridge {
 
         messenger::send_message(
             &mut bridge.channel,
-            destination,
-            destination_address,
+            destination, // eth
+            destination_address, // 0x0
             bcs::to_bytes(&CoinSent {
                 amount,
                 symbol,
@@ -211,6 +211,6 @@ module axelar::eth {
     //      --module token_bridge \
     //      --function add_token \
     //      --args \
-    //          <token_registry> \
+    //          <bridge> \
     //          <bridge_cap_id>
 }
