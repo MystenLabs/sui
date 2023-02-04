@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import {
-    Copy16 as CopyIcon,
+    Copy12 as CopyIcon,
     Image16 as ImageIcon,
     Sender16 as SenderIcon,
     Call16 as CallIcon,
@@ -89,7 +89,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                         className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-steel"
                     >
                         <span className="sr-only">Copy</span>
-                        <CopyIcon aria-hidden="true" />
+                        <CopyIcon className="w-4.5" aria-hidden="true" />
                     </button>
                 </div>
 

@@ -245,7 +245,7 @@ export function NetworkSelect({
                                         scale: 0.95,
                                     }}
                                     transition={{ duration: 0.15 }}
-                                    className="z-10 flex w-64 flex-col gap-3 rounded-lg bg-white p-4 shadow-lg focus:outline-none"
+                                    className="z-10 flex w-50 flex-col gap-3 rounded-lg bg-white p-4 shadow-lg focus:outline-none"
                                     style={{
                                         position: strategy,
                                         top: y ?? 0,

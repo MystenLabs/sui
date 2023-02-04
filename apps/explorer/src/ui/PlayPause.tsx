@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    MediaPlay16 as PlayIcon,
-    MediaPause16 as PauseIcon,
+    AutorefreshPlay24 as PlayIcon,
+    AutorefreshPause24 as PauseIcon,
 } from '@mysten/icons';
 
 export interface PlayPauseProps {
@@ -20,7 +20,11 @@ export function PlayPause({ paused, onChange }: PlayPauseProps) {
             onClick={onChange}
             className="cursor-pointer border-none bg-transparent text-steel hover:text-steel-darker"
         >
-            {paused ? <PlayIcon /> : <PauseIcon />}
+            {paused ? (
+                <PlayIcon height="24px" width="24px" />
+            ) : (
+                <PauseIcon height="24px" width="24px" />
+            )}
         </button>
     );
 }
