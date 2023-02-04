@@ -6,6 +6,7 @@ import {
     SuiObject,
     type MoveSuiSystemObjectFields,
     type MoveActiveValidator,
+    type SuiEventEnvelope,
 } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
@@ -14,18 +15,8 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
-<<<<<<< HEAD
-<<<<<<< HEAD
-import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
-=======
-=======
 import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
->>>>>>> 969165c130 (added useGetValidatorEvent)
-import {
-    VALIDATORS_OBJECT_ID,
-    type ActiveValidator,
-} from '~/pages/validator/ValidatorDataTypes';
->>>>>>> 5c130e1e4c (update)
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -44,7 +35,11 @@ const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
+function validatorsTableData(
+    validators: MoveActiveValidator[],
+    epoch: number,
+    validatorsEvents: SuiEventEnvelope[]
+) {
     return {
         data: validators.map((validator, index) => {
             const validatorName = getName(
