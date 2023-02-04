@@ -65,7 +65,7 @@ describe('JSON-RPC Client', () => {
         ':"8dc6a6f70564e29a01c7293a9c03818fda2d049f","version":0,"digest":"CI8Sf+t3Xrt5h9' +
         'ENlmyR8bbMVfg6df3vSDc08Gbk9/g=","owner":{"AddressOwner1":"0x215592226abfec8d03fb' +
         'beb8b30eb0d2129c94b0"},"type":"moveObject","previousTransaction":"4RJfkN9SgLYdb0' +
-        'LqxBHh6lfRPicQ8FLJgzi9w2COcTo="}]'
+        'LqxBHh6lfRPicQ8FLJgzi9w2COcTo="}]',
     );
     warn.mockReset();
   });
@@ -90,7 +90,7 @@ describe('JSON-RPC Client', () => {
       'sui_getOwnedObjectsByAddress',
       [],
       GetOwnedObjectsResponse,
-      skipValidation
+      skipValidation,
     );
   }
 });

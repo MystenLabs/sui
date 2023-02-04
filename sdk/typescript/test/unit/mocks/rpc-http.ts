@@ -34,6 +34,6 @@ export const mockRpcResponse = async ({
         id: '',
         error,
         result: value,
-      })
+      }),
     );
 };

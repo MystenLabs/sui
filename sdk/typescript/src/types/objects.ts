@@ -36,7 +36,7 @@ export const SuiObjectInfo = assign(
     type: string(),
     owner: ObjectOwner,
     previousTransaction: TransactionDigest,
-  })
+  }),
 );
 export type SuiObjectInfo = Infer<typeof SuiObjectInfo>;
 
@@ -112,25 +112,25 @@ export type Order = 'ascending' | 'descending';
 /* -------------------------- GetObjectDataResponse ------------------------- */
 
 export function getObjectExistsResponse(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): SuiObject | undefined {
   return resp.status !== 'Exists' ? undefined : (resp.details as SuiObject);
 }
 
 export function getObjectDeletedResponse(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): SuiObjectRef | undefined {
   return resp.status !== 'Deleted' ? undefined : (resp.details as SuiObjectRef);
 }
 
 export function getObjectNotExistsResponse(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): ObjectId | undefined {
   return resp.status !== 'NotExists' ? undefined : (resp.details as ObjectId);
 }
 
 export function getObjectReference(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): SuiObjectRef | undefined {
   return (
     getObjectExistsResponse(resp)?.reference || getObjectDeletedResponse(resp)
@@ -140,7 +140,7 @@ export function getObjectReference(
 /* ------------------------------ SuiObjectRef ------------------------------ */
 
 export function getObjectId(
-  data: GetObjectDataResponse | SuiObjectRef
+  data: GetObjectDataResponse | SuiObjectRef,
 ): ObjectId {
   if ('objectId' in data) {
     return data.objectId;
@@ -151,7 +151,7 @@ export function getObjectId(
 }
 
 export function getObjectVersion(
-  data: GetObjectDataResponse | SuiObjectRef
+  data: GetObjectDataResponse | SuiObjectRef,
 ): number | undefined {
   if ('version' in data) {
     return data.version;
@@ -162,25 +162,25 @@ export function getObjectVersion(
 /* -------------------------------- SuiObject ------------------------------- */
 
 export function getObjectType(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): ObjectType | undefined {
   return getObjectExistsResponse(resp)?.data.dataType;
 }
 
 export function getObjectPreviousTransactionDigest(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): TransactionDigest | undefined {
   return getObjectExistsResponse(resp)?.previousTransaction;
 }
 
 export function getObjectOwner(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): ObjectOwner | undefined {
   return getObjectExistsResponse(resp)?.owner;
 }
 
 export function getSharedObjectInitialVersion(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): number | undefined {
   const owner = getObjectOwner(resp);
   if (typeof owner === 'object' && 'Shared' in owner) {
@@ -201,13 +201,13 @@ export function isImmutableObject(resp: GetObjectDataResponse): boolean {
 }
 
 export function getMoveObjectType(
-  resp: GetObjectDataResponse
+  resp: GetObjectDataResponse,
 ): string | undefined {
   return getMoveObject(resp)?.type;
 }
 
 export function getObjectFields(
-  resp: GetObjectDataResponse | SuiMoveObject
+  resp: GetObjectDataResponse | SuiMoveObject,
 ): ObjectContentFields | undefined {
   if ('fields' in resp) {
     return resp.fields;
@@ -216,7 +216,7 @@ export function getObjectFields(
 }
 
 export function getMoveObject(
-  data: GetObjectDataResponse | SuiObject
+  data: GetObjectDataResponse | SuiObject,
 ): SuiMoveObject | undefined {
   const suiObject = 'data' in data ? data : getObjectExistsResponse(data);
   if (suiObject?.data.dataType !== 'moveObject') {
@@ -226,13 +226,13 @@ export function getMoveObject(
 }
 
 export function hasPublicTransfer(
-  data: GetObjectDataResponse | SuiObject
+  data: GetObjectDataResponse | SuiObject,
 ): boolean {
   return getMoveObject(data)?.has_public_transfer ?? false;
 }
 
 export function getMovePackageContent(
-  data: GetObjectDataResponse | SuiMovePackage
+  data: GetObjectDataResponse | SuiMovePackage,
 ): MovePackageContent | undefined {
   if ('disassembled' in data) {
     return data.disassembled;
