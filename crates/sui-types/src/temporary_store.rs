@@ -635,7 +635,7 @@ impl<S> TemporaryStore<S> {
             protocol_version,
             status,
             epoch,
-            gas_cost_summary,
+            gas_cost_summary.normalize(),
             modified_at_versions,
             shared_object_refs,
             *transaction_digest,
