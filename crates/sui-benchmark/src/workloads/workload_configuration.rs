@@ -63,6 +63,7 @@ impl WorkloadConfiguration {
                         pay_coin_type_tag,
                         proxy,
                         system_state_observer,
+                        opts.gas_request_chunk_size,
                     )
                     .await
                 }
@@ -81,6 +82,7 @@ impl WorkloadConfiguration {
                         pay_coin_type_tag,
                         proxy,
                         system_state_observer,
+                        opts.gas_request_chunk_size,
                     )
                     .await
                 }
@@ -103,6 +105,7 @@ impl WorkloadConfiguration {
         coin_type_tag: TypeTag,
         proxy: Arc<dyn ValidatorProxy + Send + Sync>,
         system_state_observer: Arc<SystemStateObserver>,
+        chunk_size: u64,
     ) -> Result<Vec<WorkloadInfo>> {
         let shared_counter_ratio =
             1.0 - (std::cmp::min(shared_counter_hotness_factor as u32, 100) as f32 / 100.0);
@@ -151,6 +154,7 @@ impl WorkloadConfiguration {
                 delegation_gas_configs,
             },
             *system_state_observer.reference_gas_price.borrow(),
+            chunk_size,
         )
         .await?;
         let mut combination_workload = make_combination_workload(
@@ -185,6 +189,7 @@ impl WorkloadConfiguration {
         coin_type_tag: TypeTag,
         proxy: Arc<dyn ValidatorProxy + Send + Sync>,
         system_state_observer: Arc<SystemStateObserver>,
+        chunk_size: u64,
     ) -> Result<Vec<WorkloadInfo>> {
         let mut workloads = vec![];
         let shared_counter_weight_ratio = shared_counter_weight as f32
@@ -259,6 +264,7 @@ impl WorkloadConfiguration {
                 delegation_gas_configs,
             },
             *system_state_observer.reference_gas_price.borrow(),
+            chunk_size,
         )
         .await?;
         if let Some(mut shared_counter_workload) = make_shared_counter_workload(
