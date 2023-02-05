@@ -115,6 +115,17 @@ async function processTransactionEffects(
             (acc, { amount }) => acc + amount,
             0
         );
+        const payOrReceive = txEff.effects.events?.find(
+            (anEvent) =>
+                'coinBalanceChange' in anEvent &&
+                ['Pay', 'Receive'].includes(
+                    anEvent.coinBalanceChange.changeType
+                )
+        );
+        let coinType;
+        if (payOrReceive && 'coinBalanceChange' in payOrReceive) {
+            coinType = payOrReceive.coinBalanceChange.coinType;
+        }
 
         return {
             txId: digest,
@@ -126,6 +137,8 @@ async function processTransactionEffects(
             isSender: sender === address,
             error: getExecutionStatusError(txEff),
             timestampMs: txEff.timestamp_ms,
+            coinType,
+            coinSymbol: coinType && Coin.getCoinSymbol(coinType),
             ...(recipient && { to: recipient }),
             ...((amount || amountTransfers) && {
                 amount: Math.abs(amount || amountTransfers),
@@ -155,12 +168,6 @@ async function processTransactionEffects(
                 : null;
 
         const { details } = txnObjects || {};
-
-        const coinType =
-            txnObjects &&
-            is(details, SuiObject) &&
-            Coin.getCoinTypeArg(txnObjects);
-
         const fields =
             txnObjects && is(details, SuiObject)
                 ? getObjectFields(txnObjects)
@@ -168,8 +175,6 @@ async function processTransactionEffects(
 
         return {
             ...itm,
-            coinType,
-            coinSymbol: coinType && Coin.getCoinSymbol(coinType),
             ...(fields &&
                 fields.url && {
                     description:
