@@ -320,7 +320,7 @@ function StakingCard() {
                                     <StakeForm
                                         coinBalance={coinBalance}
                                         coinType={coinType}
-                                        epoch={validatorsData.epoch}
+                                        epoch={validatorsData?.epoch}
                                     />
                                 )}
 
