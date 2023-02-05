@@ -9,6 +9,8 @@ import {
     RawSigner,
     LocalTxnDataSerializer,
     type Keypair,
+    SuiExecuteTransactionResponse,
+    assert,
 } from '@mysten/sui.js';
 
 const addressToKeypair = new Map<string, Keypair>();
@@ -45,17 +47,7 @@ export async function mint(address: string) {
         gasBudget: 30000,
     });
 
-    if (!('certificate' in tx)) {
-        throw new Error(
-            `Missing certificate in txn ${JSON.stringify(tx, null, 2)}`
-        );
-    }
-    if (!('effects' in tx)) {
-        throw new Error(
-            `Missing effects in txn ${JSON.stringify(tx, null, 2)}`
-        );
-    }
-
+    assert(tx, SuiExecuteTransactionResponse);
     return tx;
 }
 
