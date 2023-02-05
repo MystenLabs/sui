@@ -583,6 +583,7 @@ impl SuiNode {
                 .expect("Failed to load epoch start configuration")
                 .epoch_start_timestamp_ms
                 .saturating_add(config.epoch_duration_ms),
+            metrics: checkpoint_metrics.clone(),
         });
 
         let certified_checkpoint_output = SendCheckpointToStateSync::new(state_sync_handle);

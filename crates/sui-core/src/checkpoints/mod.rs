@@ -963,6 +963,7 @@ pub struct CheckpointService {
     notify_builder: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     last_signature_index: Mutex<u64>,
+    metrics: Arc<CheckpointMetrics>,
 }
 
 impl CheckpointService {
@@ -1004,7 +1005,7 @@ impl CheckpointService {
             notify_aggregator.clone(),
             exit_rcv,
             certified_checkpoint_output,
-            metrics,
+            metrics.clone(),
         );
 
         spawn_monitored_task!(aggregator.run());
@@ -1017,6 +1018,7 @@ impl CheckpointService {
             notify_builder,
             notify_aggregator,
             last_signature_index,
+            metrics,
         });
         (service, exit_snd)
     }
@@ -1047,6 +1049,7 @@ impl CheckpointServiceNotify for CheckpointService {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult {
         let sequence = info.summary.summary.sequence_number;
+        let signer = info.summary.auth_signature.authority.concise();
         if let Some((last_certified, _)) = self
             .tables
             .certified_checkpoints
@@ -1062,8 +1065,7 @@ impl CheckpointServiceNotify for CheckpointService {
             if sequence <= last_certified {
                 debug!(
                     "Ignore signature for checkpoint sequence {} from {} - already certified",
-                    info.summary.summary.sequence_number,
-                    info.summary.auth_signature.authority.concise(),
+                    info.summary.summary.sequence_number, signer,
                 );
                 return Ok(());
             }
@@ -1072,8 +1074,12 @@ impl CheckpointServiceNotify for CheckpointService {
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
             info.summary.summary.digest(),
-            info.summary.auth_signature.authority.concise(),
+            signer,
         );
+        self.metrics
+            .last_received_checkpoint_signatures
+            .with_label_values(&[&signer.to_string()])
+            .set(sequence as i64);
         // While it can be tempting to make last_signature_index into AtomicU64, this won't work
         // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions
         let mut index = self.last_signature_index.lock();
