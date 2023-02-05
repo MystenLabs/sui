@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use either::Either;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
@@ -20,6 +21,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::IGNORED;
 use sui_types::error::SuiResult;
 use sui_types::messages::SignedTransactionEffects;
 use tokio::sync::oneshot;
@@ -185,6 +187,10 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         &self,
         digests: Vec<TransactionDigest>,
     ) -> SuiResult<Vec<SignedTransactionEffects>> {
+        if digests.iter().contains(&*IGNORED) {
+            panic!("shouldn't wait for IGNORED tx");
+        }
+
         let timer = Instant::now();
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registrations = self.effects_notify_read.register_all(digests.clone());

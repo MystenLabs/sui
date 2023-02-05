@@ -987,6 +987,7 @@ impl AuthorityState {
     /// non-transient error, e.g. the transaction input is somehow invalid, the correct
     /// locks are not held, etc. However, this is not entirely true, as a transient db read error
     /// may also cause this function to fail.
+    #[allow(clippy::match_like_matches_macro)]
     #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,

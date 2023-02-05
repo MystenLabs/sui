@@ -16,7 +16,8 @@ use sui_types::{
     },
     object::{Object, Owner},
 };
-use tracing::instrument;
+use tap::TapFallible;
+use tracing::{debug, instrument};
 
 async fn get_gas_status(
     store: &AuthorityStore,
@@ -53,8 +54,15 @@ pub async fn check_transaction_input(
     // Check for type arguements and ensure they exist
     // ignore the returned objects because all we care about is that they exist for now in order to
     // prevent more forks
-    let type_argument_packages = transaction.type_argument_packages();
-    store.check_input_objects(&type_argument_packages)?;
+    let type_arg_obj_kinds = transaction.type_argument_packages();
+    let type_arg_objs = store.check_input_objects(&type_arg_obj_kinds)?;
+
+    // This check would prevent users to submit a transaction with non-move-package
+    // as type arguments.
+    for (object_kind, object) in type_arg_obj_kinds.into_iter().zip(type_arg_objs) {
+        check_one_object(&transaction.signer(), object_kind, &object)
+            .tap_err(|e| debug!("type argument check failed: {:?}", e))?;
+    }
 
     let input_objects = transaction.input_objects()?;
     let objects = store.check_input_objects(&input_objects)?;

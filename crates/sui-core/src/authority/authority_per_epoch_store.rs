@@ -17,7 +17,9 @@ use std::sync::Arc;
 use sui_storage::default_db_options;
 use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
-use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{
+    AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest, IGNORED,
+};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, Signature};
 use sui_types::error::{SuiError, SuiResult};
@@ -443,6 +445,7 @@ impl AuthorityPerEpochStore {
             let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
             iter = iter.skip_to(&last_previous)?;
         }
+
         // skip_to lands to key the last_key or key after it
         // technically here we need to check if first item in stream has a key equal to last_previous
         // however in practice this can not happen because number of batches in certificate is
@@ -1116,8 +1119,13 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        let roots =
+        let mut roots =
             self.get_transactions_in_checkpoint_range(from_height_excluded, to_height_included)?;
+
+        roots
+            .iter()
+            .position(|&td| td == *IGNORED)
+            .map(|e| roots.remove(e));
 
         debug!(
             "Selected {} roots between narwhal commit rounds {:?} and {}",
@@ -1422,7 +1430,17 @@ impl AuthorityPerEpochStore {
         &self,
         index: &CheckpointCommitHeight,
     ) -> Result<Option<PendingCheckpoint>, TypedStoreError> {
-        self.tables.pending_checkpoints.get(index)
+        match self.tables.pending_checkpoints.get(index) {
+            Ok(Some(mut pending_checkpoint)) => {
+                pending_checkpoint
+                    .roots
+                    .iter()
+                    .position(|&td| td == *IGNORED)
+                    .map(|e| pending_checkpoint.roots.remove(e));
+                Ok(Some(pending_checkpoint))
+            }
+            other => other,
+        }
     }
 
     pub fn insert_pending_checkpoint(

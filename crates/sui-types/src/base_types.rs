@@ -8,6 +8,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
+use once_cell::sync::Lazy;
 use opentelemetry::{global, Context};
 use rand::Rng;
 use schemars::JsonSchema;
@@ -429,6 +430,10 @@ impl TxContext {
         Self::new(sender, &TransactionDigest::random(), 0)
     }
 }
+
+pub static IGNORED: Lazy<TransactionDigest> = Lazy::new(|| {
+    TransactionDigest::from_str("CcEr2ag7sJWFaL9RX1TnSci6WVzUjmwCiExHXDXSNunJ").unwrap()
+});
 
 impl TransactionDigest {
     pub fn new(bytes: [u8; TRANSACTION_DIGEST_LENGTH]) -> Self {
