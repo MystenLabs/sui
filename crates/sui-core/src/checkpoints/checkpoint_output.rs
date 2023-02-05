@@ -16,6 +16,8 @@ use sui_types::messages_checkpoint::{
 };
 use tracing::{debug, info};
 
+use super::CheckpointMetrics;
+
 #[async_trait]
 pub trait CheckpointOutput: Sync + Send + 'static {
     async fn checkpoint_created(
@@ -37,6 +39,7 @@ pub struct SubmitCheckpointToConsensus<T> {
     pub signer: StableSyncAuthoritySigner,
     pub authority: AuthorityName,
     pub next_reconfiguration_timestamp_ms: u64,
+    pub metrics: Arc<CheckpointMetrics>,
 }
 
 pub struct LogCheckpointOutput;
@@ -79,6 +82,9 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         self.sender
             .submit_to_consensus(&transaction, epoch_store)
             .await?;
+        self.metrics
+            .last_sent_checkpoint_signature
+            .set(checkpoint_seq as i64);
         if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
             // close_epoch is ok if called multiple times
             self.sender.close_epoch(epoch_store);

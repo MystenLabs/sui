@@ -234,10 +234,7 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        debug!(
-            "Scheduling checkpoint {:?} for execution",
-            checkpoint.sequence_number()
-        );
+        debug!("Executing checkpoint {:?}", checkpoint.sequence_number());
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
         let checkpoint_epoch = checkpoint.epoch();
