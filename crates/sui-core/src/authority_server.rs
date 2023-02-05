@@ -276,6 +276,8 @@ impl ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
         let certificate = request.into_inner();
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -286,8 +288,6 @@ impl ValidatorService {
                 .handle_certificate_non_consensus_latency
                 .start_timer()
         };
-
-        let epoch_store = state.load_epoch_store_one_call_per_task();
 
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();

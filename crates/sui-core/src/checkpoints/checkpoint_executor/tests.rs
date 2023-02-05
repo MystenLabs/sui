@@ -170,17 +170,19 @@ pub async fn test_checkpoint_executor_cross_epoch() {
         num_to_sync_per_epoch as u64,
     );
 
-    authority_state
-        .reconfigure(second_committee.committee().clone(), 0)
+    let new_epoch_store = authority_state
+        .reconfigure(
+            &authority_state.epoch_store_for_testing(),
+            second_committee.committee().clone(),
+            0,
+        )
         .await
         .unwrap();
 
     // checkpoint execution should resume starting at checkpoints
     // of next epoch
     timeout(Duration::from_secs(5), async {
-        executor
-            .run_epoch(authority_state.epoch_store_for_testing().clone())
-            .await;
+        executor.run_epoch(new_epoch_store).await;
     })
     .await
     .unwrap();

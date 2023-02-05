@@ -1403,13 +1403,11 @@ impl AuthorityState {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
-        self.make_transaction_info(
-            &request.transaction_digest,
-            &self.load_epoch_store_one_call_per_task(),
-        )?
-        .ok_or(SuiError::TransactionNotFound {
-            digest: request.transaction_digest,
-        })
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        self.make_transaction_info(&request.transaction_digest, &epoch_store)?
+            .ok_or(SuiError::TransactionNotFound {
+                digest: request.transaction_digest,
+            })
     }
 
     pub async fn handle_object_info_request(
@@ -1602,7 +1600,7 @@ impl AuthorityState {
             secret,
             _native_functions: native_functions,
             move_vm,
-            epoch_store: ArcSwap::new(epoch_store),
+            epoch_store: ArcSwap::new(epoch_store.clone()),
             database: store.clone(),
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
@@ -1625,7 +1623,7 @@ impl AuthorityState {
         // Process tx recovery log first, so that checkpoint recovery (below)
         // doesn't observe partially-committed txes.
         state
-            .process_tx_recovery_log(None, &state.load_epoch_store_one_call_per_task())
+            .process_tx_recovery_log(None, &epoch_store)
             .await
             .expect("Could not fully process recovery log at startup!");
 
@@ -1810,22 +1808,26 @@ impl AuthorityState {
 
     pub async fn reconfigure(
         &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
         epoch_start_timestamp_ms: u64,
-    ) -> SuiResult {
+    ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
-        self.revert_uncommitted_epoch_transactions().await?;
-        let new_epoch = new_committee.epoch;
-        self.reopen_epoch_db(new_committee, epoch_start_timestamp_ms)
+        self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        let new_epoch = new_committee.epoch;
+        let new_epoch_store = self
+            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_timestamp_ms)
+            .await?;
+        assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
-        Ok(())
+        Ok(new_epoch_store)
     }
 
     pub fn db(&self) -> Arc<AuthorityStore> {
@@ -2588,8 +2590,10 @@ impl AuthorityState {
 
     /// This function is called at the very end of the epoch.
     /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
-    async fn revert_uncommitted_epoch_transactions(&self) -> SuiResult {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
+    async fn revert_uncommitted_epoch_transactions(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> SuiResult {
         {
             let state = epoch_store.get_reconfig_state_write_lock_guard();
             if state.should_accept_user_certs() {
@@ -2625,24 +2629,22 @@ impl AuthorityState {
 
     async fn reopen_epoch_db(
         &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
         epoch_start_timestamp_ms: u64,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
         let epoch_start_configuration = EpochStartConfiguration {
             epoch_start_timestamp_ms,
         };
-        let epoch_tables = self.load_epoch_store_one_call_per_task().new_at_next_epoch(
-            self.name,
-            new_committee,
-            epoch_start_configuration,
-        );
+        let new_epoch_store =
+            cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;
-        let previous_store = self.epoch_store.swap(epoch_tables);
-        previous_store.epoch_terminated().await;
-        Ok(())
+        self.epoch_store.store(new_epoch_store.clone());
+        cur_epoch_store.epoch_terminated().await;
+        Ok(new_epoch_store)
     }
 
     #[cfg(test)]
