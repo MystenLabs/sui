@@ -65,7 +65,6 @@ export function getProvider(providerType: ProviderType): JsonRpcProvider {
 }
 
 export async function setup(providerType: ProviderType = 'rpc') {
-  console.error('My branch!!!!');
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   const provider = getProvider(providerType);
