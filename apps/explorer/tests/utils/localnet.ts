@@ -46,10 +46,14 @@ export async function mint(address: string) {
     });
 
     if (!('certificate' in tx)) {
-        throw new Error('Missing certificate');
+        throw new Error(
+            `Missing certificate in txn ${JSON.stringify(tx, null, 2)}`
+        );
     }
     if (!('effects' in tx)) {
-        throw new Error('Missing effects');
+        throw new Error(
+            `Missing effects in txn ${JSON.stringify(tx, null, 2)}`
+        );
     }
 
     return tx;
