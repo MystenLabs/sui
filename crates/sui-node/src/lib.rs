@@ -326,10 +326,7 @@ impl SuiNode {
     }
 
     // Init reconfig process by starting to reject user certs
-    // TODO: If this function is ever called in non-testing code, we need to make sure this
-    // function has no race with the passive reconfiguration.
-    pub async fn close_epoch_for_testing(&self) -> SuiResult {
-        let epoch_store = self.state.epoch_store_for_testing();
+    pub async fn close_epoch(&self, epoch_store: &Arc<AuthorityPerEpochStore>) -> SuiResult {
         info!("close_epoch (current epoch = {})", epoch_store.epoch());
         self.validator_components
             .lock()
@@ -337,8 +334,15 @@ impl SuiNode {
             .as_ref()
             .ok_or_else(|| SuiError::from("Node is not a validator"))?
             .consensus_adapter
-            .close_epoch(&epoch_store);
+            .close_epoch(epoch_store);
         Ok(())
+    }
+
+    // Testing-only API to start epoch close process.
+    // For production code, please use the non-testing version.
+    pub async fn close_epoch_for_testing(&self) -> SuiResult {
+        let epoch_store = self.state.epoch_store_for_testing();
+        self.close_epoch(&epoch_store).await
     }
 
     pub fn is_transaction_executed_in_checkpoint(
@@ -747,8 +751,18 @@ impl SuiNode {
 
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
-            let committee = checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let next_epoch = committee.epoch();
+            let next_epoch_committee = checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
+            let next_epoch = next_epoch_committee.epoch();
+            assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
+            let system_state = self
+                .state
+                .get_sui_system_state_object()
+                .expect("Read Sui System State object cannot fail");
+            // Double check that the committee in the last checkpoint is identical to what's on-chain.
+            assert_eq!(
+                system_state.get_current_epoch_committee().committee,
+                next_epoch_committee
+            );
 
             info!(
                 next_epoch,
@@ -756,7 +770,7 @@ impl SuiNode {
             );
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
-            let _ = self.end_of_epoch_channel.send(committee);
+            let _ = self.end_of_epoch_channel.send(next_epoch_committee.clone());
 
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
@@ -777,10 +791,13 @@ impl SuiNode {
 
                 narwhal_manager.shutdown().await;
 
-                self.reconfigure_state(next_epoch).await;
-
-                let new_epoch_store = self.state.load_epoch_store_one_call_per_task();
-                assert_eq!(new_epoch_store.epoch(), next_epoch);
+                let new_epoch_store = self
+                    .reconfigure_state(
+                        &cur_epoch_store,
+                        next_epoch_committee,
+                        system_state.epoch_start_timestamp_ms,
+                    )
+                    .await;
 
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -809,10 +826,13 @@ impl SuiNode {
                     None
                 }
             } else {
-                self.reconfigure_state(next_epoch).await;
-
-                let new_epoch_store = self.state.load_epoch_store_one_call_per_task();
-                assert_eq!(new_epoch_store.epoch(), next_epoch);
+                let new_epoch_store = self
+                    .reconfigure_state(
+                        &cur_epoch_store,
+                        next_epoch_committee,
+                        system_state.epoch_start_timestamp_ms,
+                    )
+                    .await;
 
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
@@ -837,21 +857,25 @@ impl SuiNode {
         }
     }
 
-    async fn reconfigure_state(&self, next_epoch: EpochId) {
-        let system_state = self
+    async fn reconfigure_state(
+        &self,
+        cur_epoch_store: &AuthorityPerEpochStore,
+        next_epoch_committee: Committee,
+        epoch_start_timestamp_ms: u64,
+    ) -> Arc<AuthorityPerEpochStore> {
+        let next_epoch = next_epoch_committee.epoch();
+        let new_epoch_store = self
             .state
-            .get_sui_system_state_object()
-            .expect("Reading Sui system state object cannot fail");
-        let new_committee = system_state.get_current_epoch_committee();
-        assert_eq!(next_epoch, new_committee.committee.epoch);
-        self.state
             .reconfigure(
-                new_committee.committee,
-                system_state.epoch_start_timestamp_ms,
+                cur_epoch_store,
+                next_epoch_committee,
+                epoch_start_timestamp_ms,
             )
             .await
             .expect("Reconfigure authority state cannot fail");
-        info!("Validator State has been reconfigured");
+        info!(next_epoch, "Validator State has been reconfigured");
+        assert_eq!(next_epoch, new_epoch_store.epoch());
+        new_epoch_store
     }
 }
 

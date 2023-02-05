@@ -66,6 +66,7 @@ pub async fn execution_process(
             return;
         };
 
+        // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();

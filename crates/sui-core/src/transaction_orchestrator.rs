@@ -249,6 +249,8 @@ where
         effects_cert: &VerifiedCertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
+        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+
         // TODO: attempt a finalized tx at most once per request.
         // Every WaitForLocalExecution request will be attempted to execute twice,
         // one from the subscriber queue, one from the proactive execution before
@@ -272,8 +274,7 @@ where
             validator_state.fullnode_execute_certificate_with_effects(
                 tx_cert,
                 effects_cert,
-                // TODO: Check whether it's safe to call epoch_store here.
-                &validator_state.load_epoch_store_one_call_per_task(),
+                &epoch_store,
             ),
         )
         .instrument(error_span!("transaction_orchestrator", ?tx_digest))
