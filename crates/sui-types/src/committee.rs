@@ -211,15 +211,15 @@ impl Committee {
         }
     }
 
+    /// 2f+1
     pub fn quorum_threshold(&self) -> StakeUnit {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
         2 * self.total_votes / 3 + 1
     }
 
+    /// f+1
     pub fn validity_threshold(&self) -> StakeUnit {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (N + 2) / 3 = f + 1 + k/3 = f + 1
         validity_threshold(self.total_votes)
     }
 

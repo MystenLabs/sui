@@ -295,8 +295,8 @@ struct ProcessTransactionState {
     // Tally of stake for good vs bad responses.
     good_stake: StakeUnit,
     bad_stake: StakeUnit,
-    // bad stake from SuiError:RpcError
-    bad_stake_rpc_error: StakeUnit,
+    // bad stake from recoverable errors
+    bad_stake_recoverable_error: StakeUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -1317,8 +1317,15 @@ where
                         if state.certificate.is_some() {
                             return Ok(ReduceOutput::End(state));
                         }
-                        // TODO: have a more generic handling of non-retryable errors
-                        if state.bad_stake - state.bad_stake_rpc_error > validity {
+                        // FIXME: have a more generic handling of non-retryable errors
+                        // Two exit criteria here:
+                        // 1. non-recoverable bad stake >= f+1, then we could confirm this tx is non-recoverable.
+                        // 2. total current stake >= 2f+1, then there must be >= f+1 honest validators
+                        //  telling the truth, regardless of good/bad stake or if bad stake is recoverable.
+                        // In either case, callsite will have sufficient information to follow up.
+                        if state.bad_stake - state.bad_stake_recoverable_error >= validity
+                            || state.good_stake + state.bad_stake >= threshold
+                        {
                             self.metrics
                                 .num_signatures
                                 .observe(state.signatures.len() as f64);
@@ -1342,7 +1349,7 @@ where
             num_unique_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
-            bad_stake_rpc_error = state.bad_stake_rpc_error,
+            bad_stake_recoverable_error = state.bad_stake_recoverable_error,
             num_signatures = state.signatures.len(),
             has_certificate = state.certificate.is_some(),
             "Received signatures response from validators handle_transaction"
@@ -1383,8 +1390,9 @@ where
             .with_label_values(&[&concise_name.to_string(), err.as_ref()])
             .inc();
 
+        // FIXME!
         if let SuiError::RpcError(..) = &err {
-            state.bad_stake_rpc_error += weight;
+            state.bad_stake_recoverable_error += weight;
         }
 
         if let SuiError::ObjectLockConflict {
@@ -1595,7 +1603,6 @@ where
             // The map here allows us to count the stake for each unique effect.
             effects_map: EffectsStakeMap,
             bad_stake: StakeUnit,
-            bad_stake_rpc_error: StakeUnit,
             errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
         }
 
@@ -1639,25 +1646,27 @@ where
                                 );
                                 // Note: here we aggregate votes by the hash of the effects structure
                                 if state.effects_map.add(signed_effects.into_inner(), weight, &self.committee) {
-                                        debug!(
-                                            ?tx_digest,
-                                            "Got quorum for validators handle_certificate."
-                                        );
-                                        return Ok(ReduceOutput::End(state));
+                                    debug!(
+                                        ?tx_digest,
+                                        "Got quorum for validators handle_certificate."
+                                    );
+                                    return Ok(ReduceOutput::End(state));
                                 }
                             }
                             Err(err) => {
                                 let concise_name = name.concise();
                                 debug!(?tx_digest, name=?name.concise(), weight, "Failed to get signed effects from validator handle_certificate: {:?}", err);
                                 self.metrics.process_cert_errors.with_label_values(&[&concise_name.to_string(), err.as_ref()]).inc();
-                                if let SuiError::RpcError(..) = &err {
-                                    state.bad_stake_rpc_error += weight;
-                                }
                                 state.errors.push((err, vec![name], weight));
                                 state.bad_stake += weight;
-                                if state.bad_stake - state.bad_stake_rpc_error > validity {
+
+                                // Unlike transaction handling, a failure in certificiate handling is always retryable.
+                                // So we exist as soon as we have >= f+1 errors.
+                                if state.bad_stake >= validity {
                                     return Ok(ReduceOutput::End(state));
                                 }
+
+
                             }
                         }
                         Ok(ReduceOutput::Continue(state))
