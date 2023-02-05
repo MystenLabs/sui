@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use either::Either;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
@@ -187,7 +186,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         &self,
         digests: Vec<TransactionDigest>,
     ) -> SuiResult<Vec<SignedTransactionEffects>> {
-        if digests.iter().contains(&*IGNORED) {
+        if digests.iter().any(|d| IGNORED.contains(d)) {
             panic!("shouldn't wait for IGNORED tx");
         }
 

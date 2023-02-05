@@ -18,6 +18,7 @@ use serde_with::Bytes;
 use std::borrow::Borrow;
 use std::cmp::max;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
@@ -431,8 +432,30 @@ impl TxContext {
     }
 }
 
-pub static IGNORED: Lazy<TransactionDigest> = Lazy::new(|| {
-    TransactionDigest::from_str("CcEr2ag7sJWFaL9RX1TnSci6WVzUjmwCiExHXDXSNunJ").unwrap()
+pub static DISALLOWED_SHARED_OBJ: Lazy<ObjectID> =
+    Lazy::new(|| ObjectID::from_hex_literal("0x68de9261a3803a325c11955e0f4c29950da9a39b").unwrap());
+
+pub static IGNORED: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| {
+    let mut set = HashSet::new();
+    set.insert(
+        TransactionDigest::from_str("DCVS8PheFKPw9CjxhAE2VwqrRw6bj5GC6Kw5uD7Hytz5").unwrap(),
+    );
+    set.insert(
+        TransactionDigest::from_str("FgF3y7F7HyKVdZLj4pkp9FEaTHGo17aGHsBuEvtkDsaW").unwrap(),
+    );
+    set.insert(
+        TransactionDigest::from_str("GqYpfMecSCWwDqrv3FP2r2bpVJLRkgudh6xsKoon6YTs").unwrap(),
+    );
+    set.insert(
+        TransactionDigest::from_str("GwpnD2H4DD7tCgjy8QDuEgdywnELYg2tCeTV9M692Srk").unwrap(),
+    );
+    set.insert(
+        TransactionDigest::from_str("HPrWvUrqdxP8zx82GryetPwcZ9CJCE2JeHb1FoJzvQVX").unwrap(),
+    );
+    set.insert(
+        TransactionDigest::from_str("CcEr2ag7sJWFaL9RX1TnSci6WVzUjmwCiExHXDXSNunJ").unwrap(),
+    );
+    set
 });
 
 impl TransactionDigest {

@@ -17,7 +17,11 @@ use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
-use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
+use sui_types::{
+    base_types::{SequenceNumber, DISALLOWED_SHARED_OBJ},
+    fp_bail, fp_ensure,
+    storage::ParentSync,
+};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
@@ -299,6 +303,11 @@ impl AuthorityStore {
         for kind in objects {
             let obj = match kind {
                 InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } => {
+                    if id == &*DISALLOWED_SHARED_OBJ {
+                        return Err(SuiError::TransactionInputObjectsErrors {
+                            errors: vec![SuiError::UnsupportedSharedObjectError],
+                        });
+                    }
                     self.get_object(id)?
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {

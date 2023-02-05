@@ -1121,12 +1121,7 @@ impl AuthorityPerEpochStore {
 
         let mut roots =
             self.get_transactions_in_checkpoint_range(from_height_excluded, to_height_included)?;
-
-        roots
-            .iter()
-            .position(|&td| td == *IGNORED)
-            .map(|e| roots.remove(e));
-
+        roots.retain(|r| !IGNORED.contains(r));
         debug!(
             "Selected {} roots between narwhal commit rounds {:?} and {}",
             roots.len(),
@@ -1432,11 +1427,7 @@ impl AuthorityPerEpochStore {
     ) -> Result<Option<PendingCheckpoint>, TypedStoreError> {
         match self.tables.pending_checkpoints.get(index) {
             Ok(Some(mut pending_checkpoint)) => {
-                pending_checkpoint
-                    .roots
-                    .iter()
-                    .position(|&td| td == *IGNORED)
-                    .map(|e| pending_checkpoint.roots.remove(e));
+                pending_checkpoint.roots.retain(|r| !IGNORED.contains(r));
                 Ok(Some(pending_checkpoint))
             }
             other => other,
