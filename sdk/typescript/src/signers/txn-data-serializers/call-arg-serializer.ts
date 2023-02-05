@@ -148,10 +148,17 @@ export class CallArgSerializer {
   async newObjectArg(objectId: string): Promise<ObjectArg> {
     const object = await this.provider.getObject(objectId);
     const initialSharedVersion = getSharedObjectInitialVersion(object);
-    if (initialSharedVersion) {
-      return { Shared: { objectId, initialSharedVersion } };
-    }
 
+    const mutable = true; // Defaulted to True to match current behavior.
+    const api = await this.provider.getRpcApiVersion();
+
+    if (initialSharedVersion) {
+      const object_args =
+        api?.major === 0 && api?.minor < 25
+          ? { Shared: { objectId, initialSharedVersion } }
+          : { Shared: { objectId, initialSharedVersion, mutable } };
+      return object_args;
+    }
     return { ImmOrOwned: getObjectReference(object)! };
   }
 

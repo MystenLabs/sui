@@ -132,6 +132,20 @@ export type SharedObjectRef = {
 
   /** The version the object was shared at */
   initialSharedVersion: number;
+
+  /** Whether reference is mutable */
+  mutable: boolean;
+};
+
+/**
+ * A reference to a shared object from 0.23.0.
+ */
+export type SharedObjectRef_23 = {
+  /** Hex code as string representing the object id */
+  objectId: string;
+
+  /** The version the object was shared at */
+  initialSharedVersion: number;
 };
 
 /**
@@ -139,7 +153,7 @@ export type SharedObjectRef = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef };
+  | { Shared: SharedObjectRef | SharedObjectRef_23 };
 
 /**
  * A pure argument.
@@ -329,6 +343,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       initialSharedVersion: 'u64',
+      mutable: 'bool',
     },
   },
 
@@ -431,6 +446,22 @@ const BCS_0_23_SPEC = {
       arguments: 'vector<CallArg>',
     },
   },
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
+    },
+  },
+};
+
+const BCS_0_24_SPEC = {
+  ...BCS_SPEC,
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
+    },
+  },
 };
 
 const bcs = new BCS(getSuiMoveConfig());
@@ -444,9 +475,17 @@ registerUTF8String(bcs_0_23);
 registerObjectDigest(bcs_0_23);
 registerTypes(bcs_0_23, BCS_0_23_SPEC);
 
+const bcs_0_24 = new BCS(getSuiMoveConfig());
+registerUTF8String(bcs_0_24);
+registerObjectDigest(bcs_0_24);
+registerTypes(bcs_0_24, BCS_0_24_SPEC);
+
 export function bcsForVersion(v?: RpcApiVersion) {
   if (v?.major === 0 && v?.minor < 24) {
     return bcs_0_23;
+  }
+  if (v?.major === 0 && v?.minor === 24) {
+    return bcs_0_24;
   } else {
     return bcs;
   }
