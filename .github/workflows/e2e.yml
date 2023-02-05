@@ -4,9 +4,10 @@ jobs:
   diff:
     runs-on: ubuntu-latest
     outputs:
-      isWallet: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-wallet')) || steps.diff.outputs.isRust }}
-      isExplorer: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-explorer')) || steps.diff.outputs.isRust }}
-      isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) || steps.diff.outputs.isRust }}
+      isWallet: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-wallet')) }}
+      isExplorer: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-explorer')) }}
+      isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) }}
+      isRust: ${{ steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
       - name: Detect Changes (turbo)
@@ -20,7 +21,7 @@ jobs:
   localnet:
     name: Localnet
     needs: diff
-    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true'
+    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
@@ -41,11 +42,12 @@ jobs:
         run: pnpm explorer playwright install --with-deps chromium
 
       - name: Run TS SDK e2e tests
-        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' }}
+        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 'RUST_LOG="consensus=off" cargo run --bin sui-test-validator' 'pnpm sdk test:e2e'
 
       - name: Run Explorer e2e tests
-        if: ${{ needs.diff.outputs.isExplorer == 'true' }}
+        # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
+        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm explorer playwright test
       - uses: actions/upload-artifact@v3
         if: always()
@@ -55,10 +57,11 @@ jobs:
           retention-days: 30
 
       - name: Build Wallet
-        if: ${{ needs.diff.outputs.isWallet == 'true' }}
+        # need to run Wallet e2e when its upstream(TS SDK and Rust) or itself is changed
+        if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
         run: pnpm wallet build
       - name: Run Wallet e2e tests
-        if: ${{ needs.diff.outputs.isWallet == 'true' }}
+        if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
       - uses: actions/upload-artifact@v3
         if: always()
@@ -109,7 +112,7 @@ jobs:
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
       - name: Run Explorer e2e tests
-        if: ${{ needs.diff.outputs.isExplorer == 'true' }}
+        if: ${{ needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
         run: pnpm explorer playwright test
 
       # TODO: add wallet e2e when available
@@ -163,7 +166,7 @@ jobs:
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
       - name: Run Explorer e2e tests
-        if: ${{ needs.diff.outputs.isExplorer == 'true' }}
+        if: ${{ needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
         run: pnpm explorer playwright test
 
       # TODO: add wallet e2e when available
