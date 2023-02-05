@@ -51,7 +51,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
   async serializeToBytes(
     signerAddress: string,
     unserializedTxn: UnserializedSignableTransaction,
-    mode: TransactionBuilderMode = 'Commit'
+    mode: TransactionBuilderMode = 'Commit',
   ): Promise<Base64DataBuffer> {
     let endpoint: string;
     let args: Array<any>;
@@ -118,7 +118,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         const moveCall = unserializedTxn.data as MoveCallTransaction;
         for (const arg of moveCall.arguments) {
           if (isPureArg(arg)) {
-            throw new Error('PureArg is not allowed as argument in RpcTxnDataSerializer. Please use LocalTxnDataSerializer instead.');
+            throw new Error(
+              'PureArg is not allowed as argument in RpcTxnDataSerializer. Please use LocalTxnDataSerializer instead.',
+            );
           }
         }
         endpoint = 'sui_moveCall';
@@ -173,7 +175,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         endpoint,
         args,
         TransactionBytes,
-        this.skipDataValidation
+        this.skipDataValidation,
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (e) {
@@ -182,8 +184,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           `address ${signerAddress} for transaction ${JSON.stringify(
             unserializedTxn,
             null,
-            2
-          )}: ${e}`
+            2,
+          )}: ${e}`,
       );
     }
   }

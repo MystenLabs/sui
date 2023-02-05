@@ -24,7 +24,7 @@ describe('ed25519-keypair', () => {
     const secretKey = fromB64(VALID_SECRET_KEY);
     const keypair = Ed25519Keypair.fromSecretKey(secretKey);
     expect(keypair.getPublicKey().toBase64()).toEqual(
-      'Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI='
+      'Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSI=',
     );
   });
 
@@ -41,27 +41,27 @@ describe('ed25519-keypair', () => {
       skipValidation: true,
     });
     expect(keypair.getPublicKey().toBase64()).toEqual(
-      'Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSA='
+      'Gy9JCW4+Xb0Pz6nAwM2S2as7IVRLNNXdSmXZi4eLmSA=',
     );
   });
 
   it('generate keypair from random seed', () => {
     const keypair = Ed25519Keypair.fromSeed(Uint8Array.from(Array(32).fill(8)));
     expect(keypair.getPublicKey().toBase64()).toEqual(
-      'E5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8o='
+      'E5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8o=',
     );
   });
 
   it('signature of data is valid', () => {
     const keypair = new Ed25519Keypair();
     const signData = new Base64DataBuffer(
-      new TextEncoder().encode('hello world')
+      new TextEncoder().encode('hello world'),
     );
     const signature = keypair.signData(signData);
     const isValid = nacl.sign.detached.verify(
       signData.getData(),
       signature.getData(),
-      keypair.getPublicKey().toBytes()
+      keypair.getPublicKey().toBytes(),
     );
     expect(isValid).toBeTruthy();
   });
@@ -70,10 +70,10 @@ describe('ed25519-keypair', () => {
     // Test case generated against rust: /sui/crates/sui/src/unit_tests/keytool_tests.rs#L149
     const keypair = Ed25519Keypair.deriveKeypair(TEST_MNEMONIC);
     expect(keypair.getPublicKey().toBase64()).toEqual(
-      'aFstb5h4TddjJJryHJL1iMob6AxAqYxVv3yRt05aweI='
+      'aFstb5h4TddjJJryHJL1iMob6AxAqYxVv3yRt05aweI=',
     );
     expect(keypair.getPublicKey().toSuiAddress()).toEqual(
-      '1a4623343cd42be47d67314fce0ad042f3c82685'
+      '1a4623343cd42be47d67314fce0ad042f3c82685',
     );
   });
 

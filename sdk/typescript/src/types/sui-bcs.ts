@@ -16,8 +16,8 @@ function registerUTF8String(bcs: BCS) {
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
       return new TextDecoder().decode(new Uint8Array(bytes));
-    }
-  )
+    },
+  );
 }
 
 function registerObjectDigest(bcs: BCS) {
@@ -30,21 +30,21 @@ function registerObjectDigest(bcs: BCS) {
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
       return encodeStr(new Uint8Array(bytes), 'base64');
-    }
+    },
   );
 }
 
 type TypeSpec =
-    { struct: { [key:string]: string } }
-  | { enum: { [key:string]: string | null } };
+  | { struct: { [key: string]: string } }
+  | { enum: { [key: string]: string | null } };
 
-function registerTypes(bcs: BCS, specs: {[key:string]: TypeSpec }) {
+function registerTypes(bcs: BCS, specs: { [key: string]: TypeSpec }) {
   for (const type in specs) {
     const spec = specs[type];
     if ('struct' in spec) {
-      bcs.registerStructType(type, spec.struct)
+      bcs.registerStructType(type, spec.struct);
     } else {
-      bcs.registerEnumType(type, spec.enum)
+      bcs.registerEnumType(type, spec.enum);
     }
   }
 }
@@ -162,7 +162,7 @@ export type PureArg = { Pure: ArrayLike<number> };
 
 export function isPureArg(arg: any): arg is PureArg {
   return (arg as PureArg).Pure !== undefined;
-}  
+}
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -226,7 +226,7 @@ export type MoveCallTx = {
   Call: {
     // TODO: restrict to just `string` once 0.24.0 is deployed in
     // devnet and testnet
-    package: (string | SuiObjectRef);
+    package: string | SuiObjectRef;
     module: string;
     function: string;
     typeArguments: TypeTag[];
@@ -270,12 +270,12 @@ export type TransactionData = {
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
-  (e) => e.charCodeAt(0)
+  (e) => e.charCodeAt(0),
 );
 
 export function deserializeTransactionBytesToTransactionData(
   bcs: BCS,
-  bytes: Base64DataBuffer
+  bytes: Base64DataBuffer,
 ): TransactionData {
   return bcs.de('TransactionData', bytes.getData());
 }
@@ -359,7 +359,7 @@ const BCS_SPEC = {
       Pure: 'vector<u8>',
       Object: 'ObjectArg',
       ObjVec: 'vector<ObjectArg>',
-    }
+    },
   },
 
   TypeTag: {
@@ -491,4 +491,4 @@ export function bcsForVersion(v?: RpcApiVersion) {
   }
 }
 
-export { bcs }
+export { bcs };

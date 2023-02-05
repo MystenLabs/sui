@@ -11,6 +11,7 @@ import {
   RawSigner,
   RpcTxnDataSerializer,
   SuiMoveObject,
+  SUI_SYSTEM_STATE_OBJECT_ID,
   UnserializedSignableTransaction,
 } from '../../src';
 import { CallArgSerializer } from '../../src/signers/txn-data-serializers/call-arg-serializer';
@@ -18,7 +19,6 @@ import {
   DEFAULT_GAS_BUDGET,
   publishPackage,
   setup,
-  SUI_SYSTEM_STATE_OBJECT_ID,
   TestToolbox,
 } from './utils/setup';
 
@@ -32,7 +32,7 @@ describe('Transaction Serialization and deserialization', () => {
     toolbox = await setup();
     localSerializer = new LocalTxnDataSerializer(toolbox.provider);
     rpcSerializer = new RpcTxnDataSerializer(
-      toolbox.provider.endpoints.fullNode
+      toolbox.provider.endpoints.fullNode,
     );
     const signer = new RawSigner(toolbox.keypair, toolbox.provider);
     const packagePath = __dirname + '/./data/serializer';
@@ -40,31 +40,31 @@ describe('Transaction Serialization and deserialization', () => {
   });
 
   async function serializeAndDeserialize(
-    moveCall: MoveCallTransaction
+    moveCall: MoveCallTransaction,
   ): Promise<MoveCallTransaction> {
     const rpcTxnBytes = await rpcSerializer.serializeToBytes(
       toolbox.address(),
-      { kind: 'moveCall', data: moveCall }
+      { kind: 'moveCall', data: moveCall },
     );
     const localTxnBytes = await localSerializer.serializeToBytes(
       toolbox.address(),
-      { kind: 'moveCall', data: moveCall }
+      { kind: 'moveCall', data: moveCall },
     );
 
     expect(rpcTxnBytes).toEqual(localTxnBytes);
 
     const deserialized =
       (await localSerializer.deserializeTransactionBytesToSignableTransaction(
-        localTxnBytes
+        localTxnBytes,
       )) as UnserializedSignableTransaction;
     expect(deserialized.kind).toEqual('moveCall');
 
     const deserializedTxnData = deserializeTransactionBytesToTransactionData(
       bcsForVersion(await toolbox.provider.getRpcApiVersion()),
-      localTxnBytes
+      localTxnBytes,
     );
     const reserialized = await localSerializer.serializeTransactionData(
-      deserializedTxnData
+      deserializedTxnData,
     );
     expect(reserialized).toEqual(localTxnBytes);
     if ('moveCall' === deserialized.kind) {
@@ -82,7 +82,7 @@ describe('Transaction Serialization and deserialization', () => {
 
   it('Move Call', async () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     const moveCall = {
       packageObjectId: '0000000000000000000000000000000000000002',
@@ -104,7 +104,7 @@ describe('Transaction Serialization and deserialization', () => {
 
   it('Move Call With Type Tags', async () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
     const moveCall = {
       packageObjectId: packageId,
@@ -119,7 +119,7 @@ describe('Transaction Serialization and deserialization', () => {
 
   it('Move Shared Object Call', async () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
 
     const validators = await toolbox.getActiveValidators();
@@ -151,9 +151,9 @@ describe('Transaction Serialization and deserialization', () => {
 
   it('Move Call with Pure Arg', async () => {
     const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
-    const moveCallExpected = { 
+    const moveCallExpected = {
       packageObjectId: '0x2',
       module: 'devnet_nft',
       function: 'mint',
@@ -167,12 +167,14 @@ describe('Transaction Serialization and deserialization', () => {
       gasPayment: coins[0].objectId,
     } as MoveCallTransaction;
     const serArgsExpected = await new CallArgSerializer(
-      toolbox.provider
+      toolbox.provider,
     ).serializeMoveCallArguments(moveCallExpected);
-    
+
     const version = await toolbox.provider.getRpcApiVersion();
-    const pureArg: PureArg = { Pure: bcsForVersion(version).ser('string', 'Example NFT').toBytes()};
-    const moveCall = { 
+    const pureArg: PureArg = {
+      Pure: bcsForVersion(version).ser('string', 'Example NFT').toBytes(),
+    };
+    const moveCall = {
       packageObjectId: '0x2',
       module: 'devnet_nft',
       function: 'mint',
@@ -186,9 +188,8 @@ describe('Transaction Serialization and deserialization', () => {
       gasPayment: coins[0].objectId,
     } as MoveCallTransaction;
     const serArgs = await new CallArgSerializer(
-      toolbox.provider
+      toolbox.provider,
     ).serializeMoveCallArguments(moveCall);
     expect(serArgs).toEqual(serArgsExpected);
-
-  })
+  });
 });

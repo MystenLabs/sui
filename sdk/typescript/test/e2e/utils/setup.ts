@@ -13,6 +13,7 @@ import {
   NETWORK_TO_API,
   ObjectId,
   RawSigner,
+  SUI_SYSTEM_STATE_OBJECT_ID,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
 import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
@@ -28,19 +29,17 @@ export const DEFAULT_RECIPIENT = '0x36096be6a0314052931babed39f53c0666a6b0df';
 export const DEFAULT_RECIPIENT_2 = '0x46096be6a0314052931babed39f53c0666a6b0da';
 export const DEFAULT_GAS_BUDGET = 10000;
 
-export const SUI_SYSTEM_STATE_OBJECT_ID =
-  '0x0000000000000000000000000000000000000005';
-
 export class TestToolbox {
   constructor(
     public keypair: Ed25519Keypair,
-    public provider: JsonRpcProvider
+    public provider: JsonRpcProvider,
   ) {}
 
   address() {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
+  // TODO: clean this up using `provider.getValidators()` method
   public async getActiveValidators(): Promise<Array<SuiMoveObject>> {
     const contents = await this.provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
     const data = (contents.details as SuiObject).data;
@@ -84,19 +83,19 @@ export async function setup(providerType: ProviderType = 'rpc') {
 export async function publishPackage(
   signer: RawSigner,
   useLocalTxnBuilder: boolean,
-  packagePath: string
+  packagePath: string,
 ): Promise<ObjectId> {
   const { execSync } = require('child_process');
   const compiledModules = JSON.parse(
     execSync(
       `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-      { encoding: 'utf-8' }
-    )
+      { encoding: 'utf-8' },
+    ),
   );
   const publishTxn = await signer.publish({
     compiledModules: useLocalTxnBuilder
       ? compiledModules.map((m: any) =>
-          Array.from(new Base64DataBuffer(m).getData())
+          Array.from(new Base64DataBuffer(m).getData()),
         )
       : compiledModules,
     gasBudget: DEFAULT_GAS_BUDGET,
@@ -104,7 +103,7 @@ export async function publishPackage(
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
   const publishEvent = getEvents(publishTxn).filter(
-    (e: any) => 'publish' in e
+    (e: any) => 'publish' in e,
   )[0];
   return publishEvent.publish.packageId.replace(/^(0x)(0+)/, '0x');
 }

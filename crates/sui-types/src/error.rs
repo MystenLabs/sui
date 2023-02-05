@@ -650,6 +650,35 @@ impl SuiError {
             errors: vec![error],
         }
     }
+
+    /// Returns if the error is retryable and if the error's retryability is
+    /// explicitly categorized.
+    /// There should be only a handful of retryable errors. For now we list common
+    /// non-retryable error below to help us find more retryable errors in logs.
+    pub fn is_retryable(&self) -> (bool, bool) {
+        match self {
+            // Network error
+            SuiError::RpcError { .. } => (true, true),
+
+            // Reconfig error
+            SuiError::ValidatorHaltedAtEpochEnd => (true, true),
+            SuiError::MissingCommitteeAtEpoch(..) => (true, true),
+            SuiError::WrongEpoch { .. } => (true, true),
+
+            // Non retryable error
+            SuiError::TransactionInputObjectsErrors { .. } => (false, true),
+            SuiError::ExecutionError(..) => (false, true),
+            SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
+            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
+                (false, true)
+            }
+            SuiError::ObjectVersionUnavailableForConsumption { .. } => (false, true),
+            SuiError::GasBudgetTooHigh { .. } => (false, true),
+            SuiError::GasBudgetTooLow { .. } => (false, true),
+            SuiError::GasBalanceTooLowToCoverGasBudget { .. } => (false, true),
+            _ => (false, false),
+        }
+    }
 }
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;

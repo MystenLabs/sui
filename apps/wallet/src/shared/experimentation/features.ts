@@ -16,6 +16,7 @@ export enum FEATURES {
     USE_TEST_NET_ENDPOINT = 'testnet-selection',
     STAKING_ENABLED = 'wallet-staking-enabled',
     WALLET_DAPPS = 'wallet-dapps',
+    WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
 }
 
 export function setAttributes(

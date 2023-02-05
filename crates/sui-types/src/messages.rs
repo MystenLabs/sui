@@ -18,7 +18,7 @@ use crate::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::Base64;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -237,8 +237,16 @@ pub enum SingleTransactionKind {
 impl MoveCall {
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
         let MoveCall {
-            arguments, package, ..
+            arguments,
+            package,
+            type_arguments,
+            ..
         } = self;
+        // using a BTreeSet so the output of `input_objects` has a stable ordering
+        let mut packages = BTreeSet::from([*package]);
+        for type_argument in type_arguments {
+            add_type_tag_packages(&mut packages, type_argument)
+        }
         arguments
             .iter()
             .filter_map(|arg| match arg {
@@ -285,8 +293,31 @@ impl MoveCall {
                 ),
             })
             .flatten()
-            .chain([InputObjectKind::MovePackage(*package)])
+            .chain(packages.into_iter().map(InputObjectKind::MovePackage))
             .collect()
+    }
+}
+
+// Add package IDs, `ObjectID`, for types defined in modules.
+fn add_type_tag_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &TypeTag) {
+    let mut stack = vec![type_argument];
+    while let Some(cur) = stack.pop() {
+        match cur {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256 => (),
+            TypeTag::Vector(inner) => stack.push(inner),
+            TypeTag::Struct(struct_tag) => {
+                packages.insert(struct_tag.address.into());
+                stack.extend(struct_tag.type_params.iter())
+            }
+        }
     }
 }
 
@@ -447,6 +478,50 @@ impl SingleTransactionKind {
         }
         Ok(input_objects)
     }
+
+    pub fn validity_check(&self, gas_payment: &ObjectRef) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
+        match self {
+            SingleTransactionKind::Pay(_)
+            | SingleTransactionKind::Call(_)
+            | SingleTransactionKind::Publish(_)
+            | SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::TransferSui(_)
+            | SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_) => (),
+            SingleTransactionKind::PaySui(p) => {
+                fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(
+                    // unwrap() is safe because coins are not empty.
+                    p.coins.first().unwrap() == gas_payment,
+                    SuiError::UnexpectedGasPaymentObject
+                );
+            }
+            SingleTransactionKind::PayAllSui(pa) => {
+                fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(
+                    // unwrap() is safe because coins are not empty.
+                    pa.coins.first().unwrap() == gas_payment,
+                    SuiError::UnexpectedGasPaymentObject
+                );
+            }
+        };
+        Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        match self {
+            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
+                call.package,
+                call.module.as_str(),
+                call.function.as_str(),
+            )),
+            _ => false,
+        }
+    }
 }
 
 impl Display for SingleTransactionKind {
@@ -459,7 +534,7 @@ impl Display for SingleTransactionKind {
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                writeln!(writer, "Object Digest : {}", digest)?;
             }
             Self::TransferSui(t) => {
                 writeln!(writer, "Transaction Kind : Transfer SUI")?;
@@ -476,7 +551,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -493,7 +568,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -510,7 +585,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipient:")?;
                 writeln!(writer, "{}", &p.recipient)?;
@@ -622,17 +697,6 @@ impl TransactionKind {
             self,
             TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
-    }
-
-    fn is_blocked_move_function(&self) -> bool {
-        self.single_transactions().any(|tx| match tx {
-            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
-                call.package,
-                call.module.as_str(),
-                call.function.as_str(),
-            )),
-            _ => false,
-        })
     }
 }
 
@@ -959,10 +1023,6 @@ impl TransactionData {
     }
 
     pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
-        fp_ensure!(
-            !kind.is_blocked_move_function(),
-            SuiError::BlockedMoveFunction
-        );
         match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
@@ -991,32 +1051,11 @@ impl TransactionData {
                             .to_string()
                     }
                 );
+                for s in b {
+                    s.validity_check(gas_payment)?
+                }
             }
-            TransactionKind::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::Genesis(_) => (),
-                SingleTransactionKind::PaySui(p) => {
-                    fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
-                    fp_ensure!(
-                        // unwrap() is safe because coins are not empty.
-                        p.coins.first().unwrap() == gas_payment,
-                        SuiError::UnexpectedGasPaymentObject
-                    );
-                }
-                SingleTransactionKind::PayAllSui(pa) => {
-                    fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
-                    fp_ensure!(
-                        // unwrap() is safe because coins are not empty.
-                        pa.coins.first().unwrap() == gas_payment,
-                        SuiError::UnexpectedGasPaymentObject
-                    );
-                }
-            },
+            TransactionKind::Single(s) => s.validity_check(gas_payment)?,
         }
         Ok(())
     }
@@ -1431,7 +1470,6 @@ pub enum ExecutionFailureStatus {
     InsufficientGas,
     InvalidGasObject,
     InvalidTransactionUpdate,
-    ModuleNotFound,
     FunctionNotFound,
     InvariantViolation,
     MoveObjectTooBig {
@@ -1541,7 +1579,6 @@ pub struct EntryTypeArgumentError {
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
 pub enum EntryTypeArgumentErrorKind {
-    ModuleNotFound,
     TypeNotFound,
     ArityMismatch,
     ConstraintNotSatisfied,
@@ -1617,7 +1654,6 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
             ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
@@ -1816,10 +1852,6 @@ impl Display for EntryTypeArgumentError {
 impl Display for EntryTypeArgumentErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            EntryTypeArgumentErrorKind::ModuleNotFound => write!(
-                f,
-                "A package (or module) in the type argument was not found"
-            ),
             EntryTypeArgumentErrorKind::TypeNotFound => {
                 write!(f, "A type was not found in the module specified",)
             }
@@ -2028,7 +2060,7 @@ impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest(sha3_hash(self))
+        TransactionEffectsDigest::new(sha3_hash(self))
     }
 
     fn verify(&self) -> SuiResult {

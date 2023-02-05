@@ -12,8 +12,6 @@ use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use serde_with::Bytes;
-use std::borrow::Borrow;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -23,13 +21,14 @@ pub use crate::committee::EpochId;
 use crate::crypto::{
     AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiPublicKey,
 };
+pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Readable;
-use fastcrypto::encoding::{Base58, Base64, Encoding, Hex};
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 
 #[cfg(test)]
@@ -275,46 +274,6 @@ impl AsRef<[u8]> for SuiAddress {
     }
 }
 
-// We use SHA3-256 hence 32 bytes here
-pub const TRANSACTION_DIGEST_LENGTH: usize = 32;
-pub const OBJECT_DIGEST_LENGTH: usize = 32;
-
-/// A transaction will have a (unique) digest.
-#[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionDigest(
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, Bytes>")]
-    [u8; TRANSACTION_DIGEST_LENGTH],
-);
-
-// Each object has a unique digest
-#[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct ObjectDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; OBJECT_DIGEST_LENGTH],
-); // We use SHA3-256 hence 32 bytes here
-
-#[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
-pub struct TransactionEffectsDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; TRANSACTION_DIGEST_LENGTH],
-);
-
-impl TransactionEffectsDigest {
-    pub const ZERO: Self = TransactionEffectsDigest([0u8; TRANSACTION_DIGEST_LENGTH]);
-
-    // for testing
-    pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; TRANSACTION_DIGEST_LENGTH]>();
-        Self(random_bytes)
-    }
-}
-
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
 )]
@@ -367,7 +326,7 @@ impl TxContext {
     pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch: EpochId) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
-            digest: digest.0.to_vec(),
+            digest: digest.into_inner().to_vec(),
             epoch,
             ids_created: 0,
         }
@@ -379,7 +338,7 @@ impl TxContext {
 
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
-        let id = self.digest().derive_id(self.ids_created);
+        let id = ObjectID::derive_id(self.digest(), self.ids_created);
 
         self.ids_created += 1;
         id
@@ -425,109 +384,6 @@ impl TxContext {
     // for testing
     pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
         Self::new(sender, &TransactionDigest::random(), 0)
-    }
-}
-
-impl TransactionDigest {
-    pub fn new(bytes: [u8; TRANSACTION_DIGEST_LENGTH]) -> Self {
-        Self(bytes)
-    }
-
-    /// A digest we use to signify the parent transaction was the genesis,
-    /// ie. for an object there is no parent digest.
-    // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
-    pub fn genesis() -> Self {
-        Self::new([0; TRANSACTION_DIGEST_LENGTH])
-    }
-
-    /// Create an ObjectID from `self` and `creation_num`.
-    /// Caller is responsible for ensuring that `creation_num` is fresh
-    pub fn derive_id(&self, creation_num: u64) -> ObjectID {
-        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
-
-        let mut hasher = Sha3_256::default();
-        hasher.update(self.0);
-        hasher.update(creation_num.to_le_bytes());
-        let hash = hasher.finalize();
-
-        // truncate into an ObjectID.
-        // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
-        ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
-    }
-
-    // for testing
-    pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; TRANSACTION_DIGEST_LENGTH]>();
-        Self::new(random_bytes)
-    }
-
-    /// Translates digest into a Vec of bytes
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-
-    pub fn into_bytes(self) -> [u8; TRANSACTION_DIGEST_LENGTH] {
-        self.0
-    }
-
-    pub fn encode(&self) -> String {
-        Base64::encode(self.0)
-    }
-
-    // TODO: de-dup this
-    pub fn base58_encode(&self) -> String {
-        Base58::encode(self.0)
-    }
-}
-
-impl AsRef<[u8]> for TransactionDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl Borrow<[u8]> for TransactionDigest {
-    fn borrow(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl Borrow<[u8]> for &TransactionDigest {
-    fn borrow(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl ObjectDigest {
-    pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; OBJECT_DIGEST_LENGTH]);
-    pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; OBJECT_DIGEST_LENGTH]);
-    pub const OBJECT_DIGEST_DELETED_BYTE_VAL: u8 = 99;
-    pub const OBJECT_DIGEST_WRAPPED_BYTE_VAL: u8 = 88;
-
-    /// A marker that signifies the object is deleted.
-    pub const OBJECT_DIGEST_DELETED: ObjectDigest =
-        ObjectDigest([Self::OBJECT_DIGEST_DELETED_BYTE_VAL; OBJECT_DIGEST_LENGTH]);
-
-    /// A marker that signifies the object is wrapped into another object.
-    pub const OBJECT_DIGEST_WRAPPED: ObjectDigest =
-        ObjectDigest([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; OBJECT_DIGEST_LENGTH]);
-
-    pub fn new(bytes: [u8; OBJECT_DIGEST_LENGTH]) -> Self {
-        Self(bytes)
-    }
-
-    pub fn is_alive(&self) -> bool {
-        *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
-    }
-
-    // for testing
-    pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
-        Self::new(random_bytes)
-    }
-
-    pub fn encode(&self) -> String {
-        Base64::encode(self.0)
     }
 }
 
@@ -595,62 +451,6 @@ pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
 }
 
-impl std::fmt::Debug for ObjectDigest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0);
-        write!(f, "o#{}", s)?;
-        Ok(())
-    }
-}
-
-impl AsRef<[u8]> for ObjectDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl fmt::Display for ObjectDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#x}", self)
-    }
-}
-
-impl fmt::LowerHex for ObjectDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{}", Hex::encode(self))
-    }
-}
-
-impl TryFrom<&[u8]> for ObjectDigest {
-    type Error = SuiError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; OBJECT_DIGEST_LENGTH] = bytes
-            .try_into()
-            .map_err(|_| SuiError::InvalidTransactionDigest)?;
-        Ok(Self(arr))
-    }
-}
-
-impl std::fmt::Debug for TransactionDigest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base58::encode(self.0);
-        write!(f, "{}", s)?;
-        Ok(())
-    }
-}
-
-impl std::fmt::Debug for TransactionEffectsDigest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = Base64::encode(self.0);
-        write!(f, "{}", s)?;
-        Ok(())
-    }
-}
-
 // TODO: rename to version
 impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
@@ -712,17 +512,6 @@ impl From<SequenceNumber> for usize {
     }
 }
 
-impl TryFrom<&[u8]> for TransactionDigest {
-    type Error = SuiError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
-            .try_into()
-            .map_err(|_| SuiError::InvalidTransactionDigest)?;
-        Ok(Self(arr))
-    }
-}
-
 impl ObjectID {
     /// The number of bytes in an address.
     pub const LENGTH: usize = AccountAddress::LENGTH;
@@ -774,6 +563,21 @@ impl ObjectID {
         } else {
             Self::from_str(&literal[2..])
         }
+    }
+
+    /// Create an ObjectID from `TransactionDigest` and `creation_num`.
+    /// Caller is responsible for ensuring that `creation_num` is fresh
+    pub fn derive_id(digest: TransactionDigest, creation_num: u64) -> Self {
+        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
+
+        let mut hasher = Sha3_256::default();
+        hasher.update(digest);
+        hasher.update(creation_num.to_le_bytes());
+        let hash = hasher.finalize();
+
+        // truncate into an ObjectID.
+        // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
+        ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
@@ -984,15 +788,5 @@ impl FromStr for ObjectID {
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
         // Try to match both the literal (0xABC..) and the normal (ABC)
         decode_bytes_hex(s).or_else(|_| Self::from_hex_literal(s))
-    }
-}
-
-impl FromStr for TransactionDigest {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow!(e))?);
-        Ok(TransactionDigest(result))
     }
 }

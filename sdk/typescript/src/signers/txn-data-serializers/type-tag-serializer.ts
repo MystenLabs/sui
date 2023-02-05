@@ -32,7 +32,7 @@ export class TypeTagSerializer {
       return {
         vector: TypeTagSerializer.parseFromStr(
           vectorMatch[1],
-          normalizeAddress
+          normalizeAddress,
         ),
       };
     }
@@ -52,14 +52,14 @@ export class TypeTagSerializer {
               ? []
               : TypeTagSerializer.parseStructTypeArgs(
                   structMatch[5],
-                  normalizeAddress
+                  normalizeAddress,
                 ),
         },
       };
     }
 
     throw new Error(
-      `Encountered unexpected token when parsing type args for ${str}`
+      `Encountered unexpected token when parsing type args for ${str}`,
     );
   }
 
@@ -87,7 +87,7 @@ export class TypeTagSerializer {
     tok.push(word.trim());
 
     return tok.map((tok) =>
-      TypeTagSerializer.parseFromStr(tok, normalizeAddress)
+      TypeTagSerializer.parseFromStr(tok, normalizeAddress),
     );
   }
 

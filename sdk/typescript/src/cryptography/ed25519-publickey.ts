@@ -32,7 +32,7 @@ export class Ed25519PublicKey {
 
     if (this.data.length !== PUBLIC_KEY_SIZE) {
       throw new Error(
-        `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`
+        `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`,
       );
     }
   }

@@ -135,6 +135,12 @@ Use the following command to install `libssl-dev`:
 sudo apt-get install libssl-dev
 ```
 
+(Optional) If you have OpenSSL it may be required to also install `pkg-config`:
+
+```shell
+sudo apt-get install pkg-config
+```
+
 ### libclang-dev
 
 Use the following command to install `libclang-dev`:

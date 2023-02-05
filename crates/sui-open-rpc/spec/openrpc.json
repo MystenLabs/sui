@@ -2977,10 +2977,15 @@
         }
       },
       "CheckpointContentsDigest": {
-        "$ref": "#/components/schemas/Base58"
+        "$ref": "#/components/schemas/Sha3Digest"
       },
       "CheckpointDigest": {
-        "$ref": "#/components/schemas/Base58"
+        "description": "Representation of a Checkpoint's digest",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Sha3Digest"
+          }
+        ]
       },
       "CheckpointSummary": {
         "type": "object",
@@ -5093,6 +5098,14 @@
         "format": "uint64",
         "minimum": 0.0
       },
+      "Sha3Digest": {
+        "description": "A representation of a SHA3-256 Digest",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base58"
+          }
+        ]
+      },
       "Signature": {
         "oneOf": [
           {
@@ -6130,7 +6143,7 @@
         "description": "A transaction will have a (unique) digest.",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Sha3Digest"
           }
         ]
       },
@@ -6209,7 +6222,7 @@
         }
       },
       "TransactionEffectsDigest": {
-        "$ref": "#/components/schemas/Base64"
+        "$ref": "#/components/schemas/Sha3Digest"
       },
       "TransactionKind": {
         "oneOf": [

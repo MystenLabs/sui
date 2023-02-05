@@ -11,7 +11,7 @@ import { useFormatCoin } from '_app/hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
-import type { ActiveValidator, DelegatedStake } from '@mysten/sui.js';
+import type { MoveActiveValidator, DelegatedStake } from '@mysten/sui.js';
 
 export enum DelegationState {
     WARM_UP = 'WARM_UP',
@@ -21,7 +21,7 @@ export enum DelegationState {
 
 interface DelegationCardProps {
     delegationObject: DelegatedStake;
-    activeValidators: ActiveValidator[];
+    activeValidators: MoveActiveValidator[];
     currentEpoch: number;
 }
 

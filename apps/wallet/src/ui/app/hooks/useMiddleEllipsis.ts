@@ -24,7 +24,7 @@ export default function useMiddleEllipsis(
             );
         }
         const endingLength = maxLength - beginningLength;
-        return `${txt.substring(0, beginningLength)}...${txt.substring(
+        return `${txt.substring(0, beginningLength)}…${txt.substring(
             txt.length - endingLength
         )}`;
     }, [txt, maxLength, maxLengthBeginning]);

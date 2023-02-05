@@ -8,7 +8,7 @@ import { useWalletKit } from "@mysten/wallet-kit";
 import { useMyType } from "../../network/queries/use-raw";
 import { GridItem } from "./GridItem";
 import { ValidatorItem } from "./Validator";
-import { ActiveValidator, normalizeSuiAddress } from "@mysten/sui.js";
+import { MoveActiveValidator, normalizeSuiAddress } from "@mysten/sui.js";
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -20,7 +20,7 @@ function Header({ children }: { children: ReactNode }) {
 
 interface Props {
   /** Set of 40 currently active validators */
-  validators: ActiveValidator[];
+  validators: MoveActiveValidator[];
 }
 
 export function Table({ validators }: Props) {
