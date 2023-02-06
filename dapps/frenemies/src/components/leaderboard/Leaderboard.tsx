@@ -22,7 +22,7 @@ export function Leaderboard() {
     <>
       <div className="flex gap-16 mt-3 mb-7">
         <Stat variant="leaderboard" label="Highest Score">
-          {leaderboard.data.topScores[0].score || 0}
+          {leaderboard.data.topScores[0]?.score || '--'}
         </Stat>
         {/* <Stat variant="leaderboard" label="Total Score">
           420

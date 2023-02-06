@@ -9,9 +9,16 @@ import provider from "../provider";
  * Generic method to fetch a RawObject from the network.
  */
 export function useRawObject<T>(objectId: string, bcsType: string) {
-  return useQuery([bcsType, objectId], async () => {
-    return getRawObjectParsedUnsafe<T>(provider, objectId, bcsType);
-  });
+  return useQuery(
+    [bcsType, objectId],
+    async () => {
+      return getRawObjectParsedUnsafe<T>(provider, objectId, bcsType);
+    },
+    {
+      // Refetch every 10 seconds:
+      refetchInterval: 10 * 1000,
+    }
+  );
 }
 
 /**
@@ -40,6 +47,7 @@ export function useMyType<T>(type: string, account?: string | null) {
     },
     {
       enabled: !!account,
+      refetchInterval: 2 * 60 * 1000,
     }
   );
 }

@@ -26,6 +26,8 @@ export function Balance() {
     },
     {
       enabled: !!currentAccount,
+      refetchOnWindowFocus: false,
+      refetchInterval: 60 * 1000,
     }
   );
 
