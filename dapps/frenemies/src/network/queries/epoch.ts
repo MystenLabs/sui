@@ -12,27 +12,35 @@ import { config } from "../../config";
  * data on the current epoch and timestamps.
  */
 export function useEpoch() {
-  return useQuery(["epoch"], async (): Promise<{ timestamp: number; prevTimestamp: number; data: SystemEpochInfo } | null> => {
-    const { data } = await provider.getEvents(
-      { MoveEvent: SYSTEM_EPOCH_INFO },
-      null,
-      2,
-      "descending"
-    );
-    const [evt, prevEvt] = data;
+  return useQuery(
+    ["epoch"],
+    async (): Promise<{
+      timestamp: number;
+      prevTimestamp: number;
+      data: SystemEpochInfo;
+    } | null> => {
+      const { data } = await provider.getEvents(
+        { MoveEvent: SYSTEM_EPOCH_INFO },
+        null,
+        2,
+        "descending"
+      );
+      const [evt, prevEvt] = data;
 
-    // should never happen; it's a platform requirement.
-    if (data.length == 0 || !("moveEvent" in evt.event)) {
-      return null;
+      // should never happen; it's a platform requirement.
+      if (data.length == 0 || !("moveEvent" in evt.event)) {
+        return null;
+      }
+
+      return {
+        timestamp: evt.timestamp,
+        prevTimestamp: prevEvt?.timestamp || 0,
+        data: bcs.de(SYSTEM_EPOCH_INFO, evt.event.moveEvent.bcs, "base64"),
+      };
+    },
+    {
+      // refetch 4 times per epoch
+      refetchInterval: (+config.VITE_EPOCH_LEN * 60000) / 4,
     }
-
-    return {
-      timestamp: evt.timestamp,
-      prevTimestamp: prevEvt?.timestamp || 0,
-      data: bcs.de(SYSTEM_EPOCH_INFO, evt.event.moveEvent.bcs, "base64"),
-    };
-  }, {
-    // refetch twice per epoch
-    refetchInterval: +config.VITE_EPOCH_LEN * 60000 / 2
-  });
+  );
 }

@@ -31,16 +31,21 @@ const Cell = ({
 export function Table({ data, round, leaderboard }: Props) {
   const { currentAccount } = useWalletKit();
   const { data: system } = useSuiSystem();
-  // const { data: scorecard } = useScorecard(currentAccount);
-  const { isLoading } = useScorecardHistory();
+  const { data: scorecard } = useScorecard(currentAccount);
+  const { isLoading } = useScorecardHistory(scorecard?.data.id);
   const activeValidators = system?.validators.fields.active_validators || [];
-  const getValidator = (addr: string) => activeValidators
-    .find((v) => v.fields.metadata.fields.sui_address.replace('0x', '') == addr)?.fields;
+  const getValidator = (addr: string) =>
+    activeValidators.find(
+      (v) => v.fields.metadata.fields.sui_address.replace("0x", "") == addr
+    )?.fields;
 
-  const dataByRound: { [key: string]: ScorecardUpdatedEvent } = data
-    .reduce((acc, row) => Object.assign(acc, {
-      [(row.assignment.epoch - leaderboard.startEpoch).toString()]: row
-    }), {});
+  const dataByRound: { [key: string]: ScorecardUpdatedEvent } = data.reduce(
+    (acc, row) =>
+      Object.assign(acc, {
+        [(row.assignment.epoch - leaderboard.startEpoch).toString()]: row,
+      }),
+    {}
+  );
 
   const firstRound = Math.min(...Object.keys(dataByRound).map((e) => +e));
   const tableData: (ScorecardUpdatedEvent | null)[] = [];
@@ -67,7 +72,10 @@ export function Table({ data, round, leaderboard }: Props) {
               const { goal, validator } = evt.assignment;
               const validatorMeta = getValidator(validator)?.metadata.fields;
               return (
-                <tr key={currRound.toString()} className="border-t border-white/20">
+                <tr
+                  key={currRound.toString()}
+                  className="border-t border-white/20"
+                >
                   <Cell>{currRound.toString()}</Cell>
                   <Cell>{formatGoal(goal)}</Cell>
                   <Cell>
@@ -80,7 +88,9 @@ export function Table({ data, round, leaderboard }: Props) {
                     {validatorMeta?.name || formatAddress(validator)}
                   </Cell>
                   <Cell>{evt.epochScore !== 0 ? "Achieved" : "Failed"}</Cell>
-                  <Cell>{(evt.epochScore !== 0 ? '+' : '') + evt.epochScore}</Cell>
+                  <Cell>
+                    {(evt.epochScore !== 0 ? "+" : "") + evt.epochScore}
+                  </Cell>
                 </tr>
               );
             } else {
@@ -89,7 +99,7 @@ export function Table({ data, round, leaderboard }: Props) {
                   <Cell>{currRound.toString()}</Cell>
                   <Cell>--</Cell>
                   <Cell>--</Cell>
-                  <Cell>{isLoading ? '--' : 'Skipped'}</Cell>
+                  <Cell>{isLoading ? "--" : "Skipped"}</Cell>
                   <Cell>--</Cell>
                 </tr>
               );
