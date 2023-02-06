@@ -355,6 +355,7 @@ async fn fetch_certificates_helper(
     committee: &Committee,
     request: FetchCertificatesRequest,
 ) -> Option<FetchCertificatesResponse> {
+    let _scope = monitored_scope("FetchingCertificatesFromPeers");
     trace!("Start sending fetch certificates requests");
     // TODO: make this a config parameter.
     let request_interval = PARALLEL_FETCH_REQUEST_INTERVAL_SECS;
@@ -443,6 +444,7 @@ async fn process_certificates_helper(
     // In PrimaryReceiverHandler, certificates already in storage are ignored.
     // The check is unnecessary here, because there is no concurrent processing of older
     // certificates. For byzantine failures, the check will not be effective anyway.
+    let verify_scope = monitored_scope("VerifyingFetchedCertificates");
     let all_certificates = response.certificates;
     let verify_tasks = all_certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
@@ -479,7 +481,10 @@ async fn process_certificates_helper(
         }
         processing_tasks.spawn(rx_done);
     }
-    // Wait for core to finish processing the certificates.
+    drop(verify_scope);
+
+    // Wait for Core to finish processing the certificates.
+    let _process_scope = monitored_scope("ProcessingFetchedCertificates");
     while let Some(result) = processing_tasks.join_next().await {
         if let Err(e) = result {
             return Err(DagError::ClosedChannel(format!(
