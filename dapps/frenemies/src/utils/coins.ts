@@ -28,7 +28,7 @@ export function getCoins(coins: CoinStruct[], amount: bigint) {
     .sort((a, b) => Number(b.balance - a.balance))
     .reverse();
 
-  let sum = 0;
+  let sum = 0n;
   let ret: CoinStruct[] = [];
   while (sum < amount) {
     const coin = sorted.pop();
@@ -36,7 +36,7 @@ export function getCoins(coins: CoinStruct[], amount: bigint) {
       throw new Error("Cannot find coins to meet amount.");
     }
     ret.push(coin);
-    sum += coin.balance;
+    sum += BigInt(coin.balance);
   }
   return ret;
 }

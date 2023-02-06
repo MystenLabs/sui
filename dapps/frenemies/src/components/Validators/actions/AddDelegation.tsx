@@ -44,7 +44,7 @@ export function AddDelegation({ validator, amount }: Props) {
       throw new Error("No coins found.");
     }
 
-    const totalBalance = coins.reduce((acc, coin) => (acc += coin.balance), 0);
+    const totalBalance = coins.reduce((acc, coin) => (acc += BigInt(coin.balance)), 0n);
 
     const mistAmount = toMist(amount);
 
