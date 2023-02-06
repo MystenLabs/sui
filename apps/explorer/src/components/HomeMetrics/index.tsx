@@ -9,6 +9,7 @@ import { MetricGroup } from './MetricGroup';
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
 import { useGetSystemObject } from '~/hooks/useGetObject';
+import { useRpc } from '~/hooks/useRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats, type StatsProps } from '~/ui/Stats';
@@ -47,6 +48,11 @@ export function HomeMetrics() {
     const request = useAppsBackend();
     const { data: systemData } = useGetSystemObject();
 
+    const rpc = useRpc();
+    const { data: gasData } = useQuery(['reference-gas-price'], () =>
+        rpc.getReferenceGasPrice()
+    );
+
     const { data: countsData } = useQuery(
         ['home', 'counts'],
         () => request<CountsResponse>('counts', { network }),
@@ -73,9 +79,7 @@ export function HomeMetrics() {
                         {tpsData?.tps ? roundFloat(tpsData.tps, 2) : null}
                     </StatsWrapper>
                     <StatsWrapper label="Gas Price" tooltip="Current gas price">
-                        {systemData?.reference_gas_price
-                            ? `${systemData?.reference_gas_price} MIST`
-                            : null}
+                        {gasData ? `${gasData} MIST` : null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
                         {systemData?.epoch}
