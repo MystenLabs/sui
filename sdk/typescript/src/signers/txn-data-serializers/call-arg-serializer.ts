@@ -330,8 +330,10 @@ export class CallArgSerializer {
       } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
         return 'address';
       } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
-        const optionToVec: SuiMoveNormalizedType = { Vector: normalizedType.Struct.type_arguments[0] };
-        return this.getPureSerializationType(optionToVec , argVal);
+        const optionToVec: SuiMoveNormalizedType = {
+          Vector: normalizedType.Struct.type_arguments[0],
+        };
+        return this.getPureSerializationType(optionToVec, argVal);
       }
     }
 
