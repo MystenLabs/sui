@@ -113,10 +113,12 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                 ) : (
                     <div className="divide-y divide-solid divide-steel/20 flex flex-col">
                         {objectId && (
-                            <TxnImage
-                                id={objectId}
-                                label={isSender ? 'Sent' : 'Received'}
-                            />
+                            <div className="py-3.5 first:pt-0">
+                                <TxnImage
+                                    id={objectId}
+                                    label={isSender ? 'Sent' : 'Received'}
+                                />
+                            </div>
                         )}
 
                         {transferAmount.length > 0
