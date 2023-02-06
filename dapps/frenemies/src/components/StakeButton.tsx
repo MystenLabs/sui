@@ -19,7 +19,7 @@ interface Props extends VariantProps<typeof buttonStyles> {
   onClick(): void;
 }
 
-export function StakeButton({ children, disabled, onClick }: Props) {
+export function StakeButton({ children, disabled = false, onClick }: Props) {
   return (
     <div className="absolute right-0 mr-2">
       <button

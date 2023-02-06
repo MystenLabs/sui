@@ -14,9 +14,6 @@ import { config } from "../config";
 import { useEpoch } from "../network/queries/epoch";
 import { useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
-import { useMyType } from "../network/queries/use-raw";
-import { Coin, SUI_COIN } from "../network/types";
-import { getGas } from "../utils/coins";
 import provider from "../network/provider";
 
 const GAS_BUDGET = 10000n;
@@ -26,13 +23,12 @@ export function Setup() {
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
-  const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
   const { data: epoch } = useEpoch();
 
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
-      if (!currentAccount || !coins || !coins.length) {
+      if (!currentAccount) {
         throw new Error("No Coins found, please request some from faucet");
       }
 
@@ -62,8 +58,11 @@ export function Setup() {
 
       const {
         Ok: [
-          [,{ // @ts-ignore // not cool
-              returnValues: [[[ exists ]]],
+          [
+            ,
+            {
+              // @ts-ignore // not cool
+              returnValues: [[[exists]]],
             },
           ],
         ],
@@ -75,14 +74,6 @@ export function Setup() {
         throw new Error(`Name: '${username}' is already taken`);
       }
 
-      const gasSearch = GAS_BUDGET * gasPrice;
-      const { gas } = getGas(coins, gasSearch);
-      if (!gas) {
-        throw new Error(
-          `Gas object with at least '${gasSearch}' MIST not found`
-        );
-      }
-
       const submitTx: UnserializedSignableTransaction = {
         kind: "moveCall",
         data: {
@@ -91,11 +82,9 @@ export function Setup() {
           function: "register",
           arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
           typeArguments: [],
-          gasPayment: gas.reference.objectId,
 
           // TODO: Fix in sui.js - add option to use bigint...
           gasBudget: Number(GAS_BUDGET),
-          gasPrice: Number(gasPrice),
         },
       };
 
