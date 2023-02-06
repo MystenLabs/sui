@@ -119,7 +119,7 @@ export default class ApiProvider {
         if (!this._signerByAddress.has(address)) {
             this._signerByAddress.set(
                 address,
-                new LedgerSigner(
+                LedgerSigner.create(
                     this._apiFullNodeProvider,
                     growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
                         ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

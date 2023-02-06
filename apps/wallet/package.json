@@ -117,6 +117,8 @@
         "@growthbook/growthbook-react": "^0.10.1",
         "@headlessui/react": "^1.7.7",
         "@ledgerhq/hw-transport": "^6.27.10",
+        "@ledgerhq/hw-transport-webhid": "^6.27.11",
+        "@ledgerhq/hw-transport-webusb": "^6.27.11",
         "@metamask/browser-passworder": "^4.0.2",
         "@mysten/core": "workspace:*",
         "@mysten/icons": "workspace:*",
