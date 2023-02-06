@@ -7,19 +7,21 @@ import { useQuery } from "@tanstack/react-query";
 import { formatBalance } from "../../utils/format";
 import provider from "../../network/provider";
 
+const DEC = 9;
+
 export function Balance() {
   const { currentAccount } = useWalletKit();
   const { data } = useQuery(
     ["account", "balance"],
     async () => {
-      const [{ decimals }, { totalBalance }] = await Promise.all([
-        provider.getCoinMetadata(SUI_TYPE_ARG),
-        provider.getBalance(currentAccount!, SUI_TYPE_ARG),
-      ]);
+      const { totalBalance } = await provider.getBalance(
+        currentAccount!,
+        SUI_TYPE_ARG
+      );
 
       return {
         balance: BigInt(totalBalance),
-        decimals,
+        decimals: DEC,
       };
     },
     {
