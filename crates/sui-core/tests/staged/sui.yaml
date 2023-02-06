@@ -93,12 +93,10 @@ EntryTypeArgumentError:
 EntryTypeArgumentErrorKind:
   ENUM:
     0:
-      ModuleNotFound: UNIT
-    1:
       TypeNotFound: UNIT
-    2:
+    1:
       ArityMismatch: UNIT
-    3:
+    2:
       ConstraintNotSatisfied: UNIT
 ExecutionFailureStatus:
   ENUM:
@@ -109,69 +107,67 @@ ExecutionFailureStatus:
     2:
       InvalidTransactionUpdate: UNIT
     3:
-      ModuleNotFound: UNIT
-    4:
       FunctionNotFound: UNIT
-    5:
+    4:
       InvariantViolation: UNIT
-    6:
+    5:
       MoveObjectTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    7:
+    6:
       MovePackageTooBig:
         STRUCT:
           - object_size: U64
           - max_object_size: U64
-    8:
+    7:
       InvalidTransferObject: UNIT
-    9:
+    8:
       InvalidTransferSui: UNIT
-    10:
+    9:
       InvalidTransferSuiInsufficientBalance: UNIT
-    11:
+    10:
       InvalidCoinObject: UNIT
-    12:
+    11:
       EmptyInputCoins: UNIT
-    13:
+    12:
       EmptyRecipients: UNIT
-    14:
+    13:
       RecipientsAmountsArityMismatch: UNIT
-    15:
+    14:
       InsufficientBalance: UNIT
-    16:
+    15:
       CoinTypeMismatch: UNIT
-    17:
+    16:
       NonEntryFunctionInvoked: UNIT
-    18:
+    17:
       EntryTypeArityMismatch: UNIT
-    19:
+    18:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    20:
+    19:
       EntryTypeArgumentError:
         NEWTYPE:
           TYPENAME: EntryTypeArgumentError
-    21:
+    20:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    22:
+    21:
       InvalidChildObjectArgument:
         NEWTYPE:
           TYPENAME: InvalidChildObjectArgument
-    23:
+    22:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    24:
+    23:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    25:
+    24:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -179,32 +175,32 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    26:
+    25:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    27:
+    26:
       PublishErrorEmptyPackage: UNIT
-    28:
+    27:
       PublishErrorNonZeroAddress: UNIT
-    29:
+    28:
       PublishErrorDuplicateModule: UNIT
-    30:
+    29:
       SuiMoveVerificationError: UNIT
-    31:
+    30:
       MovePrimitiveRuntimeError:
         NEWTYPE:
           OPTION:
             TYPENAME: MoveLocation
-    32:
+    31:
       MoveAbort:
         TUPLE:
           - TYPENAME: MoveLocation
           - U64
-    33:
+    32:
       VMVerificationOrDeserializationError: UNIT
-    34:
+    33:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -359,9 +355,9 @@ ObjectArg:
               TYPENAME: ObjectID
           - initial_shared_version:
               TYPENAME: SequenceNumber
+          - mutable: BOOL
 ObjectDigest:
-  NEWTYPESTRUCT:
-    TYPENAME: Sha3Digest
+  NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
   STRUCT:
     - include_types: BOOL

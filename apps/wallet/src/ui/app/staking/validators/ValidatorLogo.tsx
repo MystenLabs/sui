@@ -92,8 +92,8 @@ export function ValidatorLogo({
                 )}
                 {showAddress && (
                     <ExplorerLink
-                        type={ExplorerLinkType.address}
-                        address={validatorAddress}
+                        type={ExplorerLinkType.validator}
+                        validator={validatorAddress}
                         showIcon={false}
                         className="text-steel-dark no-underline text-body font-mono"
                     >

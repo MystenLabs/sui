@@ -56,7 +56,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined
+          : undefined,
       );
       const packagePath =
         __dirname +
@@ -70,7 +70,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Test regular arg mixed with object vector arg', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       const coinIDs = coins.map((coin) => coin.coinObjectId);
       const txn = await signer.executeMoveCall({
@@ -83,5 +83,5 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       });
       expect(getExecutionStatusType(txn)).toEqual('success');
     });
-  }
+  },
 );

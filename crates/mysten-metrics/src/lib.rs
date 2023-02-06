@@ -312,7 +312,8 @@ pub fn uptime_metric(version: &'static str) -> Box<dyn prometheus::core::Collect
 #[cfg(test)]
 mod tests {
     use crate::RegistryService;
-    use prometheus::{IntCounter, Registry};
+    use prometheus::IntCounter;
+    use prometheus::Registry;
 
     #[test]
     fn registry_service() {

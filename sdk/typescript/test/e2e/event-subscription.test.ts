@@ -20,17 +20,17 @@ describe('Event Subscription API', () => {
   });
 
   const mockCallback = vi.fn((_: SuiEventEnvelope) =>
-    expect(true).toBeTruthy()
+    expect(true).toBeTruthy(),
   );
 
   it('Subscribe to events', async () => {
     const subscriptionId = await toolbox.provider.subscribeEvent(
       { SenderAddress: toolbox.address() },
-      mockCallback
+      mockCallback,
     );
 
     const inputCoins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address()
+      toolbox.address(),
     );
 
     await signer.payAllSui({
@@ -40,7 +40,7 @@ describe('Event Subscription API', () => {
     });
 
     const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent(
-      subscriptionId
+      subscriptionId,
     );
     expect(subFoundAndRemoved).toBeTruthy();
     expect(mockCallback).toHaveBeenCalled();

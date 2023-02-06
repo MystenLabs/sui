@@ -1412,7 +1412,6 @@ fn convert_type_argument_error<
     use move_core_types::vm_status::StatusCode;
     use sui_types::messages::EntryTypeArgumentErrorKind;
     let kind = match error.major_status() {
-        StatusCode::LINKER_ERROR => EntryTypeArgumentErrorKind::ModuleNotFound,
         StatusCode::TYPE_RESOLUTION_FAILURE => EntryTypeArgumentErrorKind::TypeNotFound,
         StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => EntryTypeArgumentErrorKind::ArityMismatch,
         StatusCode::CONSTRAINT_NOT_SATISFIED => EntryTypeArgumentErrorKind::ConstraintNotSatisfied,

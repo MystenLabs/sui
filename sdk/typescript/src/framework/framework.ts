@@ -9,11 +9,11 @@ import {
   SuiObject,
   getMoveObjectType,
   getObjectId,
-} from './objects';
-import { normalizeSuiObjectId, ObjectId, SuiAddress } from './common';
+} from '../types/objects';
+import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 
-import { getOption, Option } from './option';
-import { StructTag } from './sui-bcs';
+import { getOption, Option } from '../types/option';
+import { StructTag } from '../types/sui-bcs';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { Infer, literal, number, object, string, union } from 'superstruct';
 
@@ -98,12 +98,13 @@ export class Coin {
   static selectCoinsWithBalanceGreaterThanOrEqual(
     coins: ObjectDataFull[],
     amount: bigint,
-    exclude: ObjectId[] = []
+    exclude: ObjectId[] = [],
   ): ObjectDataFull[] {
     return Coin.sortByBalance(
       coins.filter(
-        (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount
-      )
+        (c) =>
+          !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount,
+      ),
     );
   }
 
@@ -118,10 +119,10 @@ export class Coin {
   static selectCoinWithBalanceGreaterThanOrEqual(
     coins: ObjectDataFull[],
     amount: bigint,
-    exclude: ObjectId[] = []
+    exclude: ObjectId[] = [],
   ): ObjectDataFull | undefined {
     return coins.find(
-      (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount
+      (c) => !exclude.includes(Coin.getID(c)) && Coin.getBalance(c)! >= amount,
     );
   }
 
@@ -137,10 +138,10 @@ export class Coin {
   static selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
     coins: ObjectDataFull[],
     amount: bigint,
-    exclude: ObjectId[] = []
+    exclude: ObjectId[] = [],
   ): ObjectDataFull[] {
     const sortedCoins = Coin.sortByBalance(
-      coins.filter((c) => !exclude.includes(Coin.getID(c)))
+      coins.filter((c) => !exclude.includes(Coin.getID(c))),
     );
 
     const total = Coin.totalBalance(sortedCoins);
@@ -157,7 +158,7 @@ export class Coin {
       // prefer to add a coin with smallest sufficient balance
       const target = amount - sum;
       const coinWithSmallestSufficientBalance = sortedCoins.find(
-        (c) => Coin.getBalance(c)! >= target
+        (c) => Coin.getBalance(c)! >= target,
       );
       if (coinWithSmallestSufficientBalance) {
         ret.push(coinWithSmallestSufficientBalance);
@@ -175,7 +176,7 @@ export class Coin {
   static totalBalance(coins: ObjectDataFull[]): bigint {
     return coins.reduce(
       (partialSum, c) => partialSum + Coin.getBalance(c)!,
-      BigInt(0)
+      BigInt(0),
     );
   }
 
@@ -188,7 +189,7 @@ export class Coin {
         ? -1
         : Coin.getBalance(a)! > Coin.getBalance(b)!
         ? 1
-        : 0
+        : 0,
     );
   }
 
@@ -225,23 +226,23 @@ export class Coin {
     coinTypeArg: string,
     amountToSend: bigint,
     recipient: SuiAddress,
-    gasBudget: number
+    gasBudget: number,
   ): Promise<UnserializedSignableTransaction> {
     const isSuiTransfer = coinTypeArg === SUI_TYPE_ARG;
     const coinsOfTransferType = allCoins.filter(
-      (aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg
+      (aCoin) => Coin.getCoinTypeArg(aCoin) === coinTypeArg,
     );
     const coinsOfGas = isSuiTransfer
       ? coinsOfTransferType
       : allCoins.filter((aCoin) => Coin.isSUI(aCoin));
     const gasCoin = Coin.selectCoinWithBalanceGreaterThanOrEqual(
       coinsOfGas,
-      BigInt(gasBudget)
+      BigInt(gasBudget),
     );
     if (!gasCoin) {
       // TODO: denomination for gasBudget?
       throw new Error(
-        `Unable to find a coin to cover the gas budget ${gasBudget}`
+        `Unable to find a coin to cover the gas budget ${gasBudget}`,
       );
     }
     const totalAmountIncludingGas =
@@ -250,14 +251,14 @@ export class Coin {
         isSuiTransfer
           ? // subtract from the total the balance of the gasCoin as it's going be the first element of the inputCoins
             BigInt(gasBudget) - BigInt(Coin.getBalance(gasCoin) || 0)
-          : 0
+          : 0,
       );
     const inputCoinObjs =
       totalAmountIncludingGas > 0
         ? await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
             coinsOfTransferType,
             totalAmountIncludingGas,
-            isSuiTransfer ? [Coin.getID(gasCoin)] : []
+            isSuiTransfer ? [Coin.getID(gasCoin)] : [],
           )
         : [];
     if (totalAmountIncludingGas > 0 && !inputCoinObjs.length) {
@@ -267,7 +268,7 @@ export class Coin {
       // TODO: denomination for values?
       throw new Error(
         `Coin balance ${totalBalanceOfTransferType} is not sufficient to cover the transfer amount ` +
-          `${amountToSend}. Try reducing the transfer amount to ${suggestedAmountToSend}.`
+          `${amountToSend}. Try reducing the transfer amount to ${suggestedAmountToSend}.`,
       );
     }
     if (isSuiTransfer) {
@@ -314,7 +315,7 @@ export class Delegation {
   private suiObject: DelegationSuiObject;
 
   public static isDelegationSuiObject(
-    obj: SuiObject
+    obj: SuiObject,
   ): obj is DelegationSuiObject {
     return 'type' in obj.data && obj.data.type === Delegation.SUI_OBJECT_TYPE;
   }

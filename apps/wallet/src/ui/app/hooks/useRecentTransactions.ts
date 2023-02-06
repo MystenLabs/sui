@@ -194,7 +194,7 @@ export function useRecentTransactions() {
     const address = useAppSelector((state) => state.account.address);
 
     return useQuery(
-        ['transactions', 'recent'],
+        ['transactions', 'recent', address],
         async () => {
             if (!address) return [];
 

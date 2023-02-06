@@ -27,7 +27,7 @@ use sui_types::crypto::{AccountKeyPair, KeypairTraits};
 // for running the benchmark
 pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
-pub type UpdatedAndNewlyMintedGasCoins = (Gas, Vec<Gas>);
+pub type UpdatedAndNewlyMintedGasCoins = (Gas, Gas, Vec<Gas>);
 
 pub fn get_ed25519_keypair_from_keystore(
     keystore_path: PathBuf,
@@ -93,7 +93,7 @@ pub async fn split_coin_and_pay(
     coin: ObjectRef,
     coin_sender: SuiAddress,
     coin_type_tag: TypeTag,
-    coin_configs: Vec<GasCoinConfig>,
+    coin_configs: &[GasCoinConfig],
     gas: Gas,
     gas_price: u64,
 ) -> Result<UpdatedAndNewlyMintedGasCoins> {
@@ -120,6 +120,12 @@ pub async fn split_coin_and_pay(
         .map_err(Error::msg)?;
     let created_coins: Vec<ObjectRef> = effects.created().into_iter().map(|c| c.0).collect();
     assert_eq!(created_coins.len(), split_amounts.len());
+    let updated_coin = effects
+        .mutated()
+        .into_iter()
+        .find(|(k, _)| k.0 == coin.0)
+        .ok_or("Input gas missing in the effects")
+        .map_err(Error::msg)?;
     let recipient_addresses: Vec<SuiAddress> = coin_configs.iter().map(|g| g.address).collect();
     let verified_tx = make_pay_tx(
         created_coins,
@@ -153,7 +159,11 @@ pub async fn split_coin_and_pay(
         .find(|(k, _)| k.0 == gas.0 .0)
         .ok_or("Input gas missing in the effects")
         .map_err(Error::msg)?;
-    Ok(((updated_gas.0, updated_gas.1, gas.2), transferred_coins?))
+    Ok((
+        (updated_gas.0, updated_gas.1, gas.2.clone()),
+        (updated_coin.0, updated_coin.1, gas.2),
+        transferred_coins?,
+    ))
 }
 
 pub async fn generate_all_gas_for_test(
@@ -163,6 +173,7 @@ pub async fn generate_all_gas_for_test(
     coin_type_tag: TypeTag,
     workload_gas_config: WorkloadGasConfig,
     gas_price: u64,
+    chunk_size: u64,
 ) -> Result<(WorkloadInitGas, WorkloadPayloadGas)> {
     info!(
         "Generating gas with number of coins for shared counter init = {:?}, number of coins for \
@@ -206,18 +217,26 @@ pub async fn generate_all_gas_for_test(
             .cloned(),
     );
     coin_configs.extend(workload_gas_config.delegation_gas_configs.iter().cloned());
-
-    let (_updated_primary_gas, mut new_gas_coins) = split_coin_and_pay(
-        proxy.clone(),
-        coin.0,
-        coin.1.get_owner_address()?,
-        coin_type_tag,
-        coin_configs,
-        gas,
-        gas_price,
-    )
-    .await?;
-
+    let mut primary_gas = gas;
+    let mut pay_coin = coin;
+    let mut new_gas_coins: Vec<Gas> = vec![];
+    let chunked_coin_configs = coin_configs.chunks(chunk_size as usize);
+    eprintln!("Number of gas requests = {}", chunked_coin_configs.len());
+    for chunk in chunked_coin_configs {
+        let (updated_primary_gas, updated_coin, gas_coins) = split_coin_and_pay(
+            proxy.clone(),
+            pay_coin.0,
+            pay_coin.1.get_owner_address()?,
+            coin_type_tag.clone(),
+            chunk,
+            primary_gas,
+            gas_price,
+        )
+        .await?;
+        primary_gas = updated_primary_gas;
+        pay_coin = updated_coin;
+        new_gas_coins.extend(gas_coins);
+    }
     let transfer_tokens: Vec<Gas> = workload_gas_config
         .transfer_object_workload_tokens
         .iter()
@@ -262,8 +281,7 @@ pub async fn generate_all_gas_for_test(
             new_gas_coins.remove(index)
         })
         .collect();
-
-    let delegation_payload_gas = workload_gas_config
+    let delegation_payload_gas: Vec<Gas> = workload_gas_config
         .delegation_gas_configs
         .iter()
         .map(|c| {
@@ -274,7 +292,6 @@ pub async fn generate_all_gas_for_test(
             new_gas_coins.remove(index)
         })
         .collect();
-
     let workload_init_config = WorkloadInitGas {
         shared_counter_init_gas,
     };

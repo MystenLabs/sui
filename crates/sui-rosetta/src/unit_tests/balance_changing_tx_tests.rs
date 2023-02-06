@@ -268,6 +268,64 @@ async fn test_pay_sui() {
 }
 
 #[tokio::test]
+async fn test_delegate_sui() {
+    let network = TestClusterBuilder::new().build().await.unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
+
+    // Test Delegate Sui
+    let sender = get_random_address(&network.accounts, vec![]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
+
+    let tx = client
+        .transaction_builder()
+        .request_add_delegation(
+            sender,
+            vec![coin1.0, coin2.0],
+            Some(1000000),
+            validator,
+            None,
+            100000,
+        )
+        .await
+        .unwrap();
+    let tx = tx.kind.into_single_transactions().next().unwrap();
+
+    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+}
+
+#[tokio::test]
+async fn test_delegate_sui_with_none_amount() {
+    let network = TestClusterBuilder::new().build().await.unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let keystore = &network.wallet.config.keystore;
+
+    // Test Delegate Sui
+    let sender = get_random_address(&network.accounts, vec![]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
+
+    let tx = client
+        .transaction_builder()
+        .request_add_delegation(
+            sender,
+            vec![coin1.0, coin2.0],
+            None,
+            validator,
+            None,
+            100000,
+        )
+        .await
+        .unwrap();
+    let tx = tx.kind.into_single_transactions().next().unwrap();
+
+    test_transaction(&client, keystore, vec![], sender, tx, None).await;
+}
+
+#[tokio::test]
 async fn test_pay_all_sui() {
     let network = TestClusterBuilder::new().build().await.unwrap();
     let client = network.wallet.get_client().await.unwrap();
@@ -393,7 +451,7 @@ async fn test_transaction(
     };
 
     let ops = tx_response.try_into().unwrap();
-    let balances_from_ops = extract_balance_changes_from_ops(ops).unwrap();
+    let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction
     let mut actual_balance_change = HashMap::new();
