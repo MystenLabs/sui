@@ -275,7 +275,11 @@ function StakingCard() {
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
-    if (!coinType || !validatorAddress || !validatorsData) {
+    if (
+        !coinType ||
+        !validatorAddress ||
+        (!validatorsIsloading && !validatorsData)
+    ) {
         return <Navigate to="/" replace={true} />;
     }
     return (
@@ -316,7 +320,7 @@ function StakingCard() {
                                     <StakeForm
                                         coinBalance={coinBalance}
                                         coinType={coinType}
-                                        epoch={validatorsData.epoch}
+                                        epoch={validatorsData?.epoch}
                                     />
                                 )}
 
