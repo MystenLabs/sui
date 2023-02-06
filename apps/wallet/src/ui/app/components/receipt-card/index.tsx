@@ -111,7 +111,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         />
                     )
                 ) : (
-                    <div className="divide-y divide-solid divide-steel/20 flex flex-col">
+                    <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col">
                         {objectId && (
                             <div className="py-3.5 first:pt-0">
                                 <TxnImage
@@ -127,7 +127,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                       return (
                                           <div
                                               key={coinType + receiverAddress}
-                                              className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col"
+                                              className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col pt-3.5 first:pt-0"
                                           >
                                               <TxnAmount
                                                   amount={amount}
