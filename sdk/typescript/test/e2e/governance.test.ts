@@ -85,7 +85,7 @@ async function addDelegation(signer: RawSigner) {
 
   return await signer.signAndExecuteTransaction(
     await SuiSystemStateUtil.newRequestAddDelegationTxn(
-      [coins[0].objectId],
+      [coins[0].coinObjectId],
       BigInt(DEFAULT_STAKED_AMOUNT),
       validators[0].sui_address,
       DEFAULT_GAS_BUDGET,
