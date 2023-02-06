@@ -30,7 +30,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined,
+          : undefined
       );
       const packagePath = __dirname + '/./data/id_entry_args';
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
