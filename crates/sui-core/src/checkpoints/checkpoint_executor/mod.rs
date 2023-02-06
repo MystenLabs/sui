@@ -37,7 +37,11 @@ use sui_types::{
     messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
 };
 use tap::TapFallible;
-use tokio::{sync::broadcast, task::JoinHandle, time::timeout};
+use tokio::{
+    sync::broadcast::{self, error::RecvError},
+    task::JoinHandle,
+    time::timeout,
+};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, instrument, warn};
 use typed_store::Map;
@@ -155,17 +159,30 @@ impl CheckpointExecutor {
                     highest_executed = Some(checkpoint);
                 }
                 // Check for newly synced checkpoints from StateSync.
-                Ok(checkpoint) = self.mailbox.recv() => {
-                    debug!(
-                        sequence_number = ?checkpoint.summary.sequence_number,
-                        "received checkpoint summary from state sync"
-                    );
-                    SystemTime::now().duration_since(checkpoint.summary.timestamp())
-                        .map(|latency|
-                            self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
-                        )
-                        .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
-                        .ok();
+                received = self.mailbox.recv() => match received {
+                    Ok(checkpoint) => {
+                        debug!(
+                            sequence_number = ?checkpoint.summary.sequence_number,
+                            "received checkpoint summary from state sync"
+                        );
+                        SystemTime::now().duration_since(checkpoint.summary.timestamp())
+                            .map(|latency|
+                                self.metrics.checkpoint_contents_age_ms.report(latency.as_millis() as u64)
+                            )
+                            .tap_err(|err| warn!("unable to compute checkpoint age: {}", err))
+                            .ok();
+                    },
+                    // In this case, messages in the mailbox have been overwritten
+                    // as a result of lagging too far behind.
+                    Err(RecvError::Lagged(num_skipped)) => {
+                        debug!(
+                            "Checkpoint Execution Recv channel overflowed {:?} messages",
+                            num_skipped,
+                        );
+                    }
+                    Err(RecvError::Closed) => {
+                        panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
+                    }
                 }
             }
         }
