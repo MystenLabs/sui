@@ -318,6 +318,8 @@ pub struct PrimaryMetrics {
     pub proposed_header_round: IntGauge,
     /// The number of received votes for the proposed last round
     pub votes_received_last_round: IntGauge,
+    // total number of parent certificates included in votes.
+    pub certificates_in_votes: IntCounter,
     /// The round of the latest created certificate by our node
     pub certificate_created_round: IntGauge,
     /// count number of certificates that the node created
@@ -388,6 +390,11 @@ impl PrimaryMetrics {
             votes_received_last_round: register_int_gauge_with_registry!(
                 "votes_received_last_round",
                 "The number of received votes for the proposed last round",
+                registry
+            ).unwrap(),
+            certificates_in_votes: register_int_counter_with_registry!(
+                "certificates_in_votes",
+                "Total number of parent certificates included in votes.",
                 registry
             ).unwrap(),
             certificate_created_round: register_int_gauge_with_registry!(
