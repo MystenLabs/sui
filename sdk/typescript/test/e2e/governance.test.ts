@@ -16,7 +16,7 @@ import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
 
 const DEFAULT_STAKED_AMOUNT = 1;
 
-describe.each([{ useLocalTxnBuilder: true }])(
+describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
   'Governance API',
   ({ useLocalTxnBuilder }) => {
     let toolbox: TestToolbox;
