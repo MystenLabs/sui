@@ -16,6 +16,7 @@ building block for core collection types
 -  [Function `add`](#0x2_dynamic_field_add)
 -  [Function `borrow`](#0x2_dynamic_field_borrow)
 -  [Function `borrow_mut`](#0x2_dynamic_field_borrow_mut)
+-  [Function `borrow_mut_native`](#0x2_dynamic_field_borrow_mut_native)
 -  [Function `remove`](#0x2_dynamic_field_remove)
 -  [Function `exists_`](#0x2_dynamic_field_exists_)
 -  [Function `exists_with_type`](#0x2_dynamic_field_exists_with_type)
@@ -214,7 +215,34 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+    <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+): &<b>mut</b> Value {
+    <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut_native">borrow_mut_native</a>&lt;Name,Value,<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name,Value&gt;&gt;(<a href="object.md#0x2_object">object</a>, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_dynamic_field_borrow_mut_native"></a>
+
+## Function `borrow_mut_native`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut_native">borrow_mut_native</a>&lt;Name: <b>copy</b>, drop, store, Value: store, <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>: key&gt;(<a href="object.md#0x2_object">object</a>: &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>, name: Name): &<b>mut</b> Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut_native">borrow_mut_native</a>&lt;Name: <b>copy</b> + drop + store, Value: store, <a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>: key&gt;(
     <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): &<b>mut</b> Value;

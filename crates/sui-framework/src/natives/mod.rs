@@ -62,8 +62,8 @@ pub fn all_natives(
         ),
         (
             "dynamic_field",
-            "borrow_mut",
-            make_native!(dynamic_field::borrow_mut),
+            "borrow_mut_native",
+            make_native!(dynamic_field::borrow_mut_native),
         ),
         (
             "dynamic_field",

@@ -74,7 +74,14 @@ public fun borrow<Name: copy + drop + store, Value: store>(
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
 /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
 /// type.
-public native fun borrow_mut<Name: copy + drop + store, Value: store>(
+public fun borrow_mut<Name: copy + drop + store, Value: store>(
+    object: &mut UID,
+    name: Name,
+): &mut Value {
+    borrow_mut_native<Name,Value,Field<Name,Value>>(object, name)
+}
+
+public native fun borrow_mut_native<Name: copy + drop + store, Value: store, Field: key>(
     object: &mut UID,
     name: Name,
 ): &mut Value;

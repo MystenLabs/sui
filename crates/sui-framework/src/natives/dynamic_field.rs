@@ -25,7 +25,7 @@ use move_vm_types::{
     values::{StructRef, Value},
 };
 use smallvec::smallvec;
-use std::{collections::VecDeque, str::FromStr};
+use std::collections::VecDeque;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
@@ -183,12 +183,12 @@ pub fn borrow_child_object(
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![child_ref]))
 }
 
-pub fn borrow_mut(
+pub fn borrow_mut_native(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.len() == 2);
+    assert!(ty_args.len() == 3);
     assert!(args.len() == 2);
     let name: Value = args.pop_back().unwrap();
 
@@ -200,7 +200,9 @@ pub fn borrow_mut(
         .unwrap()
         .into();
 
-    let value_type = ty_args.pop().unwrap(); // pop here to pass single element vector to macro
+    // pop the following type args here to pass single element vector to macro
+    let field_type = ty_args.pop().unwrap();
+    ty_args.pop().unwrap(); // unused
     let hash = match compute_hash(context, ty_args[0].clone(), name, SuiAddress::from(parent)) {
         Ok(v) => v,
         Err(_) => {
@@ -210,17 +212,8 @@ pub fn borrow_mut(
             ))
         }
     };
-    let name_type = ty_args.pop().unwrap();
-    let value_tag = context.type_to_type_tag(&value_type).unwrap();
-    let name_tag = context.type_to_type_tag(&name_type).unwrap();
-    assert!(args.is_empty());
-    //    let parent_id:
-    let field_type_tag = TypeTag::from_str(
-        format!("0x2::dynamic_field::Field<{},{}>", name_tag, value_tag).as_str(),
-    )
-    .unwrap();
-    let mut field_type = vec![context.type_tag_to_type(&field_type_tag).unwrap()];
-    let global_value_result = get_or_fetch_object!(context, field_type, parent, hash);
+    let mut field_type_vec = vec![field_type];
+    let global_value_result = get_or_fetch_object!(context, field_type_vec, parent, hash);
     let global_value = match global_value_result {
         ObjectResult::MismatchedType => {
             return Ok(NativeResult::err(legacy_emit_cost(), E_FIELD_TYPE_MISMATCH))
