@@ -17,7 +17,6 @@ import { ReceiptCardBg } from './ReceiptCardBg';
 import { StatusIcon } from './StatusIcon';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { DelegationObjectCard } from '_components/receipt-card/DelegationObjectCard';
 import { StakeTxnCard } from '_components/receipt-card/StakeTxnCard';
 import { TxnAddress } from '_components/receipt-card/TxnAddress';
 import { TxnAmount } from '_components/receipt-card/TxnAmount';
@@ -112,7 +111,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                         />
                     )
                 ) : (
-                    <>
+                    <div className="divide-y divide-solid divide-steel/20 flex flex-col">
                         {objectId && (
                             <TxnImage
                                 id={objectId}
@@ -126,7 +125,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                       return (
                                           <div
                                               key={coinType + receiverAddress}
-                                              className="divide-y divide-solid divide-steel/20 divide-x-0 gap-3.5 flex flex-col"
+                                              className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col"
                                           >
                                               <TxnAmount
                                                   amount={amount}
@@ -137,6 +136,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                                   }
                                                   coinType={coinType}
                                               />
+
                                               <TxnAddress
                                                   address={recipientAddress}
                                                   label={
@@ -148,21 +148,25 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                   }
                               )
                             : null}
-                    </>
+
+                        {txnKind === 'ChangeEpoch' &&
+                            !transferAmount.length && (
+                                <TxnAddress
+                                    address={recipientAddress}
+                                    label="From"
+                                />
+                            )}
+
+                        {gasTotal && isSender ? (
+                            <TxnGasSummery
+                                totalGas={gasTotal}
+                                transferAmount={totalSuiAmount}
+                            />
+                        ) : null}
+                    </div>
                 )}
 
-                {txnKind === 'ChangeEpoch' && !transferAmount.length ? (
-                    <DelegationObjectCard senderAddress={recipientAddress} />
-                ) : null}
-
-                {gasTotal && isSender ? (
-                    <TxnGasSummery
-                        totalGas={gasTotal}
-                        transferAmount={totalSuiAmount}
-                    />
-                ) : null}
-
-                <div className="flex gap-1.5 pt-3.75 w-full">
+                <div className="flex gap-1.5 w-full py-3.5">
                     <ExplorerLink
                         type={ExplorerLinkType.transaction}
                         transactionID={certificate.transactionDigest}

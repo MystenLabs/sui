@@ -16,7 +16,7 @@ type TxnAmountProps = {
 export function TxnAmount({ amount, coinType, label }: TxnAmountProps) {
     const [formatAmount, symbol] = useFormatCoin(Math.abs(+amount), coinType);
     return +amount !== 0 ? (
-        <div className="flex justify-between w-full items-center pt-3.5">
+        <div className="flex justify-between w-full items-center py-3.5 first:pt-0">
             <Text variant="body" weight="medium" color="steel-darker">
                 {label}
             </Text>

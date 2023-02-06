@@ -21,7 +21,7 @@ export function TxnAddress({ address, label }: TxnAddressProps) {
         TRUNCATE_PREFIX_LENGTH
     );
     return (
-        <div className="flex justify-between w-full items-center pt-3.5">
+        <div className="flex justify-between w-full items-center py-3.5 first:pt-0">
             <Text variant="body" weight="medium" color="steel-darker">
                 {label}
             </Text>
