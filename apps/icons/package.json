@@ -4,10 +4,10 @@
   "private": true,
   "sideEffects": false,
   "scripts": {
-    "clean": "rimraf src/**",
+    "clean:src": "rimraf src/**",
     "clean:svgs": "rimraf svgs/**",
-    "clean:all": "pnpm clean && pnpm clean:svgs",
-    "build": "node scripts/preprocess.mjs && svgr --config-file svgrrc.config.js svgs"
+    "clean:all": "pnpm clean:src && pnpm clean:svgs",
+    "generate": "node scripts/preprocess.mjs && svgr --config-file svgrrc.config.js svgs"
   },
   "devDependencies": {
     "@svgr/cli": "^6.5.1",
