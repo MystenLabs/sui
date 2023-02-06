@@ -330,20 +330,8 @@ export class CallArgSerializer {
       } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
         return 'address';
       } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
-        if (argVal !== undefined && !Array.isArray(argVal)) {
-          throw new Error(
-            `Expect ${argVal} to be a array, received ${typeof argVal}`
-          );
-        }
-        const innerType = this.getPureSerializationType(
-          normalizedType.Struct.type_arguments[0],
-          // undefined when argVal is empty
-          argVal ? argVal[0] : undefined
-        );
-        if (innerType === undefined) {
-          return undefined;
-        }
-        return innerType;
+        const optionToVec: SuiMoveNormalizedType = { Vector: normalizedType.Struct.type_arguments[0] };
+        return this.getPureSerializationType(optionToVec , argVal);
       }
     }
 
