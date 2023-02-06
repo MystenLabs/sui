@@ -8,9 +8,11 @@ import { useParams } from 'react-router-dom';
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
 import { useGetObject } from '~/hooks/useGetObject';
+import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
+import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 
 function ValidatorDetails() {
     const { id } = useParams();
@@ -32,7 +34,27 @@ function ValidatorDetails() {
         );
     }, [id, validatorsData]);
 
-    if (isLoading) {
+    const numberOfValidators = useMemo(() => {
+        return (
+            validatorsData?.validators.fields.active_validators.length || null
+        );
+    }, [validatorsData]);
+
+    const { data: validatorEvents, isLoading: validatorsEventsLoading } =
+        useGetValidatorsEvents({
+            limit: numberOfValidators,
+            order: 'descending',
+        });
+
+    const validatorRewards = useMemo(() => {
+        if (!validatorEvents || !id) return 0;
+        return (
+            getValidatorMoveEvent(validatorEvents.data, id)?.fields
+                .stake_rewards || 0
+        );
+    }, [id, validatorEvents]);
+
+    if (isLoading || validatorsEventsLoading) {
         return (
             <div className="mt-5 mb-10 flex items-center justify-center">
                 <LoadingSpinner />
@@ -40,7 +62,7 @@ function ValidatorDetails() {
         );
     }
 
-    if (!validatorData || !validatorsData) {
+    if (!validatorData || !validatorsData || !validatorEvents) {
         return (
             <div className="mt-5 mb-10 flex items-center justify-center">
                 <Banner variant="error" spacing="lg" fullWidth>
@@ -59,9 +81,7 @@ function ValidatorDetails() {
                 <ValidatorStats
                     validatorData={validatorData}
                     epoch={validatorsData.epoch}
-                    totalValidatorStake={
-                        validatorsData.validators.fields.total_validator_stake
-                    }
+                    epochRewards={validatorRewards}
                 />
             </div>
         </div>

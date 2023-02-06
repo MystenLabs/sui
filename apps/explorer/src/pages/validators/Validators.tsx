@@ -6,6 +6,7 @@ import {
     SuiObject,
     type MoveSuiSystemObjectFields,
     type MoveActiveValidator,
+    type SuiEventEnvelope,
 } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
@@ -14,6 +15,7 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
+import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -26,13 +28,18 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { roundFloat } from '~/utils/roundFloat';
 
-const APY_DECIMALS = 4;
+const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
+function validatorsTableData(
+    validators: MoveActiveValidator[],
+    epoch: number,
+    validatorsEvents: SuiEventEnvelope[]
+) {
     return {
         data: validators.map((validator, index) => {
             const validatorName = getName(
@@ -47,6 +54,12 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 typeof validator.fields.metadata.fields.image_url === 'string'
                     ? validator.fields.metadata.fields.image_url
                     : null;
+
+            const event = getValidatorMoveEvent(
+                validatorsEvents,
+                validator.fields.metadata.fields.sui_address
+            );
+
             return {
                 name: {
                     name: validatorName,
@@ -57,9 +70,7 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 commission: +validator.fields.commission_rate / 100,
                 img: img,
                 address: validator.fields.metadata.fields.sui_address,
-                lastEpochReward:
-                    validator.fields.delegation_staking_pool.fields
-                        .rewards_pool,
+                lastReward: event?.fields.stake_rewards || 0,
             };
         }),
         columns: [
@@ -136,12 +147,12 @@ function validatorsTableData(validators: MoveActiveValidator[], epoch: number) {
                 },
             },
             {
-                header: 'Last Epoch Rewards Pool',
-                accessorKey: 'lastEpochReward',
+                header: 'Last Epoch Rewards',
+                accessorKey: 'lastReward',
                 cell: (props: any) => {
-                    const lastEpochReward = props.getValue();
-                    return lastEpochReward > 0 ? (
-                        <StakeColumn stake={lastEpochReward} hideCoinSymbol />
+                    const lastReward = props.getValue();
+                    return lastReward > 0 ? (
+                        <StakeColumn stake={lastReward} hideCoinSymbol />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
@@ -163,6 +174,21 @@ function ValidatorPageResult() {
         data.details.data.dataType === 'moveObject'
             ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
+
+    const numberOfValidators = useMemo(() => {
+        return (
+            validatorsData?.validators.fields.active_validators.length || null
+        );
+    }, [validatorsData]);
+
+    const {
+        data: validatorEvents,
+        isLoading: validatorsEventsLoading,
+        isError: validatorEventError,
+    } = useGetValidatorsEvents({
+        limit: numberOfValidators,
+        order: 'descending',
+    });
 
     const totalStaked = useMemo(() => {
         if (!validatorsData) return 0;
@@ -192,27 +218,34 @@ function ValidatorPageResult() {
     }, [validatorsData]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!validatorEvents) return 0;
+        let totalRewards = 0;
 
-        return validators.reduce(
-            (acc, cur) =>
-                acc + +cur.fields.delegation_staking_pool.fields.rewards_pool,
-            0
-        );
-    }, [validatorsData]);
+        validatorEvents.data.forEach(({ event }) => {
+            if ('moveEvent' in event) {
+                const { moveEvent } = event;
+                totalRewards += +moveEvent.fields.stake_rewards;
+            }
+        });
+
+        return totalRewards;
+    }, [validatorEvents]);
 
     const validatorsTable = useMemo(() => {
-        if (!validatorsData) return null;
+        if (!validatorsData || !validatorEvents) return null;
 
         const validators = validatorsData.validators.fields.active_validators;
 
-        return validatorsTableData(validators, +validatorsData.epoch);
-    }, [validatorsData]);
+        return validatorsTableData(
+            validators,
+            +validatorsData.epoch,
+            validatorEvents.data
+        );
+    }, [validatorEvents, validatorsData]);
 
     const defaultSorting = [{ id: 'stake', desc: false }];
 
-    if (isError || (!isLoading && !validatorsTable?.data.length)) {
+    if (isError || validatorEventError) {
         return (
             <Banner variant="error" fullWidth>
                 Validator data could not be loaded
@@ -292,7 +325,7 @@ function ValidatorPageResult() {
             <div className="mt-8">
                 <ErrorBoundary>
                     <TableHeader>All Validators</TableHeader>
-                    {isLoading && (
+                    {(isLoading || validatorsEventsLoading) && (
                         <PlaceholderTable
                             rowCount={20}
                             rowHeight="13px"
