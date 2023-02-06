@@ -63,5 +63,5 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       });
       expect(result.effects.status.status).toEqual('success');
     });
-  }
+  },
 );
