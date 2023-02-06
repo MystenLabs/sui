@@ -50,8 +50,15 @@ describe('Checkpoints Reading API', () => {
 
   it('get checkpoint contents', async () => {
     if (shouldSkip) {
+      // Test for previous versions
+      const checkpoint_resp = await toolbox.provider.getCheckpointSummary(0);
+      const digest = checkpoint_resp.content_digest;
+      expect(digest).not.toBeNull();
+      const resp = await toolbox.provider.getCheckpointContents(digest!);
+      expect(resp.transactions.length).greaterThan(0);
       return;
     }
+
     const resp = await toolbox.provider.getCheckpointContents(0);
     expect(resp.transactions.length).greaterThan(0);
   });
