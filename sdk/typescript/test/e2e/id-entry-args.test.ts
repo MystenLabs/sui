@@ -8,10 +8,15 @@ import {
   ObjectId,
   RawSigner,
 } from '../../src';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import {
+  publishPackage,
+  setup,
+  TestToolbox,
+  DEFAULT_GAS_BUDGET,
+} from './utils/setup';
 
 describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
-  'Test ID as args to entry functions',
+  'Test ID and UID as args to entry functions',
   ({ useLocalTxnBuilder }) => {
     let toolbox: TestToolbox;
     let signer: RawSigner;
@@ -40,6 +45,23 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         gasBudget: 2000,
       });
       expect(getExecutionStatusType(txn)).toEqual('success');
+    });
+
+    it('Test UID as arg to entry functions', async () => {
+      const moveCall = {
+        packageObjectId: packageId,
+        module: 'test',
+        function: 'test_uid',
+        typeArguments: [],
+        arguments: ['0xc2b5625c221264078310a084df0a3137956d20ee'],
+        gasBudget: DEFAULT_GAS_BUDGET,
+      };
+
+      const result = await signer.devInspectTransaction({
+        kind: 'moveCall',
+        data: moveCall,
+      });
+      expect(result.effects.status.status).toEqual('success');
     });
   },
 );
