@@ -16,7 +16,7 @@ export class RawSigner extends SignerWithProvider {
   constructor(
     keypair: Keypair,
     provider?: Provider,
-    serializer?: TxnDataSerializer
+    serializer?: TxnDataSerializer,
   ) {
     super(provider, serializer);
     this.keypair = keypair;
@@ -28,9 +28,10 @@ export class RawSigner extends SignerWithProvider {
 
   async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
     // Starting Sui 0.25.0, only 64-byte nonrecoverable signatures are accepted.
-    // TODO(joyqvq): Remove once 0.25.0 is released. 
+    // TODO(joyqvq): Remove once 0.25.0 is released.
     const version = await this.provider.getRpcApiVersion();
-    let useRecoverable = version && gt(versionToString(version), '0.24.0') ? false : true;
+    let useRecoverable =
+      version && gt(versionToString(version), '0.24.0') ? false : true;
 
     return {
       signatureScheme: this.keypair.getKeyScheme(),

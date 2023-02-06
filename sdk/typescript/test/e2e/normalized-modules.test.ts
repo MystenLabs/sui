@@ -21,7 +21,7 @@ describe('Normalized modules API', () => {
     const argTypes = await toolbox.provider.getMoveFunctionArgTypes(
       DEFAULT_PACKAGE,
       DEFAULT_MODULE,
-      DEFAULT_FUNCTION
+      DEFAULT_FUNCTION,
     );
     expect(argTypes).toEqual([
       {
@@ -32,7 +32,7 @@ describe('Normalized modules API', () => {
 
   it('Get Normalized Modules by packages', async () => {
     const modules = await toolbox.provider.getNormalizedMoveModulesByPackage(
-      DEFAULT_PACKAGE
+      DEFAULT_PACKAGE,
     );
     expect(Object.keys(modules)).contains(DEFAULT_MODULE);
   });
@@ -40,10 +40,10 @@ describe('Normalized modules API', () => {
   it('Get Normalized Move Module', async () => {
     const normalized = await toolbox.provider.getNormalizedMoveModule(
       DEFAULT_PACKAGE,
-      DEFAULT_MODULE
+      DEFAULT_MODULE,
     );
     expect(Object.keys(normalized.exposed_functions)).toContain(
-      DEFAULT_FUNCTION
+      DEFAULT_FUNCTION,
     );
   });
 
@@ -51,7 +51,7 @@ describe('Normalized modules API', () => {
     const normalized = await toolbox.provider.getNormalizedMoveFunction(
       DEFAULT_PACKAGE,
       DEFAULT_MODULE,
-      DEFAULT_FUNCTION
+      DEFAULT_FUNCTION,
     );
     expect(normalized.is_entry).toEqual(false);
   });
@@ -60,7 +60,7 @@ describe('Normalized modules API', () => {
     const struct = await toolbox.provider.getNormalizedMoveStruct(
       DEFAULT_PACKAGE,
       DEFAULT_MODULE,
-      DEFAULT_STRUCT
+      DEFAULT_STRUCT,
     );
     expect(struct.fields.length).toBeGreaterThan(1);
   });

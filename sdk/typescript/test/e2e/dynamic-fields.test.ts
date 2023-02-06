@@ -20,7 +20,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined
+          : undefined,
       );
       const packagePath = __dirname + '/./data/dynamic_fields';
       packageId = await publishPackage(signer, useLocalTxnBuilder, packagePath);
@@ -29,7 +29,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
         .getObjectsOwnedByAddress(toolbox.address())
         .then(function (objects) {
           const obj = objects.filter(
-            (o) => o.type === `${packageId}::dynamic_fields_test::Test`
+            (o) => o.type === `${packageId}::dynamic_fields_test::Test`,
           );
           parentObjectId = obj[0].objectId;
         });
@@ -39,7 +39,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
       const dynamicFields = await toolbox.provider.getDynamicFields(
         parentObjectId,
         null,
-        null
+        null,
       );
       expect(dynamicFields.data.length).toEqual(2);
     });
@@ -47,7 +47,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
       const dynamicFields = await toolbox.provider.getDynamicFields(
         parentObjectId,
         null,
-        1
+        1,
       );
       expect(dynamicFields.data.length).toEqual(1);
       expect(dynamicFields.nextCursor).not.toEqual(null);
@@ -61,7 +61,7 @@ describe.each([{ useLocalTxnBuilder: true }])(
           const dynamicFieldsCursor = await toolbox.provider.getDynamicFields(
             parentObjectId,
             dynamicFields.nextCursor,
-            null
+            null,
           );
           expect(dynamicFieldsCursor.data.length).greaterThanOrEqual(0);
         });
@@ -70,15 +70,15 @@ describe.each([{ useLocalTxnBuilder: true }])(
       const dynamicFields = await toolbox.provider.getDynamicFields(
         parentObjectId,
         null,
-        null
+        null,
       );
       const objDofName = dynamicFields.data[1].name;
 
       const dynamicObjectField = await toolbox.provider.getDynamicFieldObject(
         parentObjectId,
-        objDofName
+        objDofName,
       );
       expect(dynamicObjectField.status).toEqual('Exists');
     });
-  }
+  },
 );

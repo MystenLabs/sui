@@ -68,11 +68,11 @@ export abstract class SignerWithProvider implements Signer {
    * @param httpHeaders optional request headers
    */
   async requestSuiFromFaucet(
-    httpHeaders?: HttpHeaders
+    httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
     return this.provider.requestSuiFromFaucet(
       await this.getAddress(),
-      httpHeaders
+      httpHeaders,
     );
   }
 
@@ -94,7 +94,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async signAndExecuteTransaction(
     transaction: Base64DataBuffer | SignableTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     // Handle submitting raw transaction bytes:
     if (
@@ -106,7 +106,7 @@ export abstract class SignerWithProvider implements Signer {
           ? transaction
           : new Base64DataBuffer(transaction.data);
       const intentMessage = new Uint8Array(
-        INTENT_BYTES.length + txBytes.getLength()
+        INTENT_BYTES.length + txBytes.getLength(),
       );
       intentMessage.set(INTENT_BYTES);
       intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
@@ -119,21 +119,21 @@ export abstract class SignerWithProvider implements Signer {
         sig.signatureScheme,
         sig.signature,
         sig.pubKey,
-        requestType
+        requestType,
       );
     }
     return await this.signAndExecuteTransaction(
       await this.serializer.serializeToBytes(
         await this.getAddress(),
         transaction,
-        'Commit'
+        'Commit',
       ),
-      requestType
+      requestType,
     );
   }
 
   async getTransactionDigest(
-    tx: Base64DataBuffer | SignableTransaction
+    tx: Base64DataBuffer | SignableTransaction,
   ): Promise<string> {
     let txBytes: Base64DataBuffer;
     if (tx instanceof Base64DataBuffer || tx.kind === 'bytes') {
@@ -143,12 +143,12 @@ export abstract class SignerWithProvider implements Signer {
       txBytes = await this.serializer.serializeToBytes(
         await this.getAddress(),
         tx,
-        'DevInspect'
+        'DevInspect',
       );
     }
     const version = await this.provider.getRpcApiVersion();
     const intentMessage = new Uint8Array(
-      INTENT_BYTES.length + txBytes.getLength()
+      INTENT_BYTES.length + txBytes.getLength(),
     );
     intentMessage.set(INTENT_BYTES);
     intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
@@ -162,7 +162,7 @@ export abstract class SignerWithProvider implements Signer {
       sig.signatureScheme,
       sig.signature,
       sig.pubKey,
-      bcs
+      bcs,
     );
   }
 
@@ -180,7 +180,7 @@ export abstract class SignerWithProvider implements Signer {
   async devInspectTransaction(
     tx: UnserializedSignableTransaction | string | Base64DataBuffer,
     gasPrice: number | null = null,
-    epoch: number | null = null
+    epoch: number | null = null,
   ): Promise<DevInspectResults> {
     const address = await this.getAddress();
     return this.provider.devInspectTransaction(address, tx, gasPrice, epoch);
@@ -192,7 +192,7 @@ export abstract class SignerWithProvider implements Signer {
    * @returns The transaction effects
    */
   async dryRunTransaction(
-    tx: SignableTransaction | string | Base64DataBuffer
+    tx: SignableTransaction | string | Base64DataBuffer,
   ): Promise<TransactionEffects> {
     const address = await this.getAddress();
     let dryRunTxBytes: string;
@@ -222,11 +222,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async transferObject(
     transaction: TransferObjectTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'transferObject', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -237,11 +237,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async transferSui(
     transaction: TransferSuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'transferSui', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -251,11 +251,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async pay(
     transaction: PayTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'pay', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -264,11 +264,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async paySui(
     transaction: PaySuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'paySui', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -277,11 +277,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async payAllSui(
     transaction: PayAllSuiTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'payAllSui', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -292,11 +292,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async mergeCoin(
     transaction: MergeCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'mergeCoin', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -307,11 +307,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async splitCoin(
     transaction: SplitCoinTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'splitCoin', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -321,11 +321,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async executeMoveCall(
     transaction: MoveCallTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'moveCall', data: transaction },
-      requestType
+      requestType,
     );
   }
 
@@ -336,11 +336,11 @@ export abstract class SignerWithProvider implements Signer {
    */
   async publish(
     transaction: PublishTransaction,
-    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution'
+    requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     return this.signAndExecuteTransaction(
       { kind: 'publish', data: transaction },
-      requestType
+      requestType,
     );
   }
 

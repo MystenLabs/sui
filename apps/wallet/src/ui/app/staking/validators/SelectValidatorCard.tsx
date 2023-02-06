@@ -21,7 +21,7 @@ export function SelectValidatorCard() {
         null
     );
     const [sortKey, setSortKey] = useState<'name' | 'apy'>('apy');
-    const [sortAscending, setSortAscending] = useState(false);
+    const [sortAscending, setSortAscending] = useState(true);
 
     const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 

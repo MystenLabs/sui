@@ -84,7 +84,7 @@ export class Secp256k1Keypair implements Keypair {
 
   static fromSecretKey(
     secretKey: Uint8Array,
-    options?: { skipValidation?: boolean }
+    options?: { skipValidation?: boolean },
   ): Secp256k1Keypair {
     const publicKey: Uint8Array = secp.getPublicKey(secretKey, true);
     if (!options || !options.skipValidation) {
@@ -121,25 +121,25 @@ export class Secp256k1Keypair implements Keypair {
    */
   signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer {
     const msgHash = sha256(data.getData());
-    // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1. 
+    // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1.
     // TODO(joyqvq): Remove recoverable signature support after 0.25.0 is released.
     if (useRecoverable) {
       const [sig, rec_id] = secp.signSync(msgHash, this.keypair.secretKey, {
-      canonical: true,
-      recovered: true,
-    });
-    var recoverable_sig = new Uint8Array(65);
-    recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
-    recoverable_sig.set([rec_id], 64);
-    return new Base64DataBuffer(recoverable_sig);
-   } else {
-    const sig = secp.signSync(msgHash, this.keypair.secretKey, {
-      canonical: true,
-      recovered: false,
-    });
-    return new Base64DataBuffer(Signature.fromDER(sig).toCompactRawBytes());
+        canonical: true,
+        recovered: true,
+      });
+      var recoverable_sig = new Uint8Array(65);
+      recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
+      recoverable_sig.set([rec_id], 64);
+      return new Base64DataBuffer(recoverable_sig);
+    } else {
+      const sig = secp.signSync(msgHash, this.keypair.secretKey, {
+        canonical: true,
+        recovered: false,
+      });
+      return new Base64DataBuffer(Signature.fromDER(sig).toCompactRawBytes());
+    }
   }
-}
 
   /**
    * Derive Secp256k1 keypair from mnemonics and path. The mnemonics must be normalized
