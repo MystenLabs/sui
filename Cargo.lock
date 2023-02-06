@@ -1493,16 +1493,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "component"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "eyre",
- "tokio",
- "workspace-hack",
-]
-
-[[package]]
 name = "console"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
