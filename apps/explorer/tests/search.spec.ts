@@ -4,6 +4,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { faucet, mint } from './utils/localnet';
+import { getCreatedObjects, getTransactionDigest } from '@mysten/sui.js';
 
 async function search(page: Page, text: string) {
     const searchbar = page.getByRole('combobox');
@@ -23,7 +24,7 @@ test('can search for objects', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
 
-    const { objectId } = tx.effects.effects.created![0].reference;
+    const { objectId } = getCreatedObjects(tx)![0].reference;
     await page.goto('/');
     await search(page, objectId);
     await expect(page).toHaveURL(`/object/${objectId}`);
@@ -33,7 +34,7 @@ test('can search for transaction', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
 
-    const txid = tx.effects.effects.transactionDigest;
+    const txid = getTransactionDigest(tx);
     await page.goto('/');
     await search(page, txid);
     await expect(page).toHaveURL(`/transaction/${txid}`);
