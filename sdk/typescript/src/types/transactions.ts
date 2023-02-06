@@ -377,8 +377,8 @@ export function getTransactionDigest(
   if ('transactionDigest' in tx) {
     return tx.transactionDigest;
   }
-  const ctxn = getCertifiedTransaction(tx)!;
-  return ctxn.transactionDigest;
+  const effects = getTransactionEffects(tx)!;
+  return effects.transactionDigest;
 }
 
 export function getTransactionSignature(tx: CertifiedTransaction): string {

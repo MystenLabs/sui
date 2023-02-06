@@ -3,13 +3,14 @@
 
 import { test, expect } from '@playwright/test';
 
+import { getCreatedObjects } from '@mysten/sui.js';
 import { faucet, mint } from './utils/localnet';
 
 test('can be reached through URL', async ({ page }) => {
     const address = await faucet();
     const tx = await mint(address);
 
-    const { objectId } = tx.effects.effects.created![0].reference;
+    const { objectId } = getCreatedObjects(tx)![0].reference;
     await page.goto(`/object/${objectId}`);
     await expect(page.getByRole('heading', { name: objectId })).toBeVisible();
 });
@@ -19,7 +20,7 @@ test.describe('Owned Objects', () => {
         const address = await faucet();
         const tx = await mint(address);
 
-        const [nft] = tx.effects.effects.created!;
+        const [nft] = getCreatedObjects(tx)!;
         await page.goto(`/address/0x${address}`);
 
         // Find a reference to the NFT:
