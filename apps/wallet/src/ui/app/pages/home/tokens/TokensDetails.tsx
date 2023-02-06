@@ -66,12 +66,8 @@ function MyTokens({
                 </>
             ) : (
                 <div className={st.emptyWallet}>
-                    <div className={st.emptyWalletIcon} />
-                    <div className={st.emptyWalletTitle}>
-                        Your wallet contains no SUI.
-                    </div>
-                    {emptyWalletDescription}
                     <FaucetRequestButton trackEventSource="home" />
+                    {emptyWalletDescription}
                 </div>
             )}
         </Loading>
