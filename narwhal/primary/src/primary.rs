@@ -745,6 +745,9 @@ impl PrimaryReceiverHandler {
 
         // If requester has provided us with parent certificates, process them all
         // before proceeding.
+        self.metrics
+            .certificates_in_votes
+            .inc_by(request.body().parents.len() as u64);
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
             if !self.deduplicate_and_verify(&certificate)? {
