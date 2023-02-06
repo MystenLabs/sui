@@ -58,8 +58,8 @@ export function formatAddress(address: string) {
 }
 
 export function formatDigest(digest: string) {
-    // Use 6 characters prefix to match the address format
-    return `${digest.slice(0, 6)}${ELLIPSIS}${digest.slice(-4)}`;
+    // Use 10 first characters
+    return `${digest.slice(0, 10)}${ELLIPSIS}`;
 }
 
 export async function extractFileType(
