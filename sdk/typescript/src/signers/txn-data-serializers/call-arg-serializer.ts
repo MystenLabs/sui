@@ -36,6 +36,9 @@ const STD_ASCII_STRUCT_NAME = 'String';
 const STD_UTF8_MODULE_NAME = 'string';
 const STD_UTF8_STRUCT_NAME = 'String';
 
+const STD_OPTION_MODULE_NAME = 'option';
+const STD_OPTION_STRUCT_NAME = 'Option';
+
 const RESOLVED_SUI_ID = {
   address: SUI_FRAMEWORK_ADDRESS,
   module: OBJECT_MODULE_NAME,
@@ -51,6 +54,12 @@ const RESOLVED_UTF8_STR = {
   address: MOVE_STDLIB_ADDRESS,
   module: STD_UTF8_MODULE_NAME,
   name: STD_UTF8_STRUCT_NAME,
+};
+
+const RESOLVED_STD_OPTION = {
+  address: MOVE_STDLIB_ADDRESS,
+  module: STD_OPTION_MODULE_NAME,
+  name: STD_OPTION_STRUCT_NAME,
 };
 
 const isTypeFunc = (type: string) => (t: any) => typeof t === type;
@@ -320,6 +329,11 @@ export class CallArgSerializer {
         return 'utf8string';
       } else if (isSameStruct(normalizedType.Struct, RESOLVED_SUI_ID)) {
         return 'address';
+      } else if (isSameStruct(normalizedType.Struct, RESOLVED_STD_OPTION)) {
+        const optionToVec: SuiMoveNormalizedType = {
+          Vector: normalizedType.Struct.type_arguments[0],
+        };
+        return this.getPureSerializationType(optionToVec, argVal);
       }
     }
 
