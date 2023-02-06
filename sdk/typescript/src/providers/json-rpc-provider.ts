@@ -1047,8 +1047,9 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getCheckpointContents(
-    sequence_number: number,
+    sequence_number: number | CheckPointContentsDigest,
   ): Promise<CheckpointContents> {
+    //NOTE: This api takes in a digest in 0.22.0
     try {
       const resp = await this.client.requestWithType(
         'sui_getCheckpointContents',
