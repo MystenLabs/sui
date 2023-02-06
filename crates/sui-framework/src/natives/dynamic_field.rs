@@ -8,6 +8,7 @@ use crate::{
         object_runtime::{object_store::ObjectResult, ObjectRuntime},
     },
 };
+use anyhow::{bail, Result};
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -24,7 +25,7 @@ use move_vm_types::{
     values::{StructRef, Value},
 };
 use smallvec::smallvec;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, str::FromStr};
 use sui_types::base_types::{ObjectID, SuiAddress};
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
@@ -49,45 +50,25 @@ macro_rules! get_or_fetch_object {
     }};
 }
 
-// native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
-pub fn hash_type_and_key(
+fn compute_hash(
     context: &mut NativeContext,
-    mut ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.len() == 1);
-    assert!(args.len() == 2);
-    let k_ty = ty_args.pop().unwrap();
-    let k: Value = args.pop_back().unwrap();
-    let parent: SuiAddress = pop_arg!(args, AccountAddress).into();
-    let k_tag = context.type_to_type_tag(&k_ty)?;
+    k_ty: Type,
+    k: Value,
+    parent: SuiAddress,
+) -> Result<ObjectID> {
     // build bytes
+    let k_tag = context.type_to_type_tag(&k_ty)?;
     let k_tag_bytes = match bcs::to_bytes(&k_tag) {
         Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ));
-        }
+        Err(_) => bail!("serialization failure"),
     };
     let k_layout = match context.type_to_type_layout(&k_ty) {
         Ok(Some(layout)) => layout,
-        _ => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ))
-        }
+        _ => bail!("serialization failure"),
     };
     let k_bytes = match k.simple_serialize(&k_layout) {
         Some(bytes) => bytes,
-        None => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ))
-        }
+        None => bail!("serialization failure"),
     };
     // hash(parent || k || K)
     let mut hasher = Sha3_256::default();
@@ -99,8 +80,29 @@ pub fn hash_type_and_key(
 
     // truncate into an ObjectID and return
     // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
-    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+    Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
+}
 
+// native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
+pub fn hash_type_and_key(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    assert!(ty_args.len() == 1);
+    assert!(args.len() == 2);
+    let k_ty = ty_args.pop().unwrap();
+    let k: Value = args.pop_back().unwrap();
+    let parent: SuiAddress = pop_arg!(args, AccountAddress).into();
+    let id = match compute_hash(context, k_ty, k, parent) {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(NativeResult::err(
+                legacy_emit_cost(),
+                E_BCS_SERIALIZATION_FAILURE,
+            ))
+        }
+    };
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::address(id.into())],
@@ -179,6 +181,66 @@ pub fn borrow_child_object(
         err
     })?;
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![child_ref]))
+}
+
+pub fn borrow_mut(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    assert!(ty_args.len() == 2);
+    assert!(args.len() == 2);
+    let name: Value = args.pop_back().unwrap();
+
+    let parent_uid = pop_arg!(args, StructRef).read_ref().unwrap();
+    // UID { id: ID { bytes: address } }
+    let parent: ObjectID = get_nested_struct_field(parent_uid, &[0, 0])
+        .unwrap()
+        .value_as::<AccountAddress>()
+        .unwrap()
+        .into();
+
+    let value_type = ty_args.pop().unwrap(); // pop here to pass single element vector to macro
+    let hash = match compute_hash(context, ty_args[0].clone(), name, SuiAddress::from(parent)) {
+        Ok(v) => v,
+        Err(_) => {
+            return Ok(NativeResult::err(
+                legacy_emit_cost(),
+                E_BCS_SERIALIZATION_FAILURE,
+            ))
+        }
+    };
+    let name_type = ty_args.pop().unwrap();
+    let value_tag = context.type_to_type_tag(&value_type).unwrap();
+    let name_tag = context.type_to_type_tag(&name_type).unwrap();
+    assert!(args.is_empty());
+    //    let parent_id:
+    let field_type_tag = TypeTag::from_str(
+        format!("0x2::dynamic_field::Field<{},{}>", name_tag, value_tag).as_str(),
+    )
+    .unwrap();
+    let mut field_type = vec![context.type_tag_to_type(&field_type_tag).unwrap()];
+    let global_value_result = get_or_fetch_object!(context, field_type, parent, hash);
+    let global_value = match global_value_result {
+        ObjectResult::MismatchedType => {
+            return Ok(NativeResult::err(legacy_emit_cost(), E_FIELD_TYPE_MISMATCH))
+        }
+        ObjectResult::Loaded(gv) => gv,
+    };
+    if !global_value.exists()? {
+        return Ok(NativeResult::err(legacy_emit_cost(), E_KEY_DOES_NOT_EXIST));
+    }
+    let field_ref = global_value.borrow_global().map_err(|err| {
+        assert!(err.major_status() != StatusCode::MISSING_DATA);
+        err
+    })?;
+    // Field { id: UID, name: Name, value: Value }
+    let val = field_ref
+        .value_as::<StructRef>()
+        .unwrap()
+        .borrow_field(2)
+        .unwrap();
+    Ok(NativeResult::ok(legacy_emit_cost(), smallvec![val]))
 }
 
 // throws `E_KEY_DOES_NOT_EXIST` if a child does not exist with that ID at that type

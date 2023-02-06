@@ -214,15 +214,10 @@ type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="dynamic_field.md#0x2_dynamic_field_borrow_mut">borrow_mut</a>&lt;Name: <b>copy</b> + drop + store, Value: store&gt;(
     <a href="object.md#0x2_object">object</a>: &<b>mut</b> UID,
     name: Name,
-): &<b>mut</b> Value {
-    <b>let</b> object_addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>);
-    <b>let</b> <a href="">hash</a> = <a href="dynamic_field.md#0x2_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
-    <b>let</b> field = <a href="dynamic_field.md#0x2_dynamic_field_borrow_child_object_mut">borrow_child_object_mut</a>&lt;<a href="dynamic_field.md#0x2_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(<a href="object.md#0x2_object">object</a>, <a href="">hash</a>);
-    &<b>mut</b> field.value
-}
+): &<b>mut</b> Value;
 </code></pre>
 
 

@@ -74,15 +74,10 @@ public fun borrow<Name: copy + drop + store, Value: store>(
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
 /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
 /// type.
-public fun borrow_mut<Name: copy + drop + store, Value: store>(
+public native fun borrow_mut<Name: copy + drop + store, Value: store>(
     object: &mut UID,
     name: Name,
-): &mut Value {
-    let object_addr = object::uid_to_address(object);
-    let hash = hash_type_and_key(object_addr, name);
-    let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
-    &mut field.value
-}
+): &mut Value;
 
 /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
 /// bound value.
