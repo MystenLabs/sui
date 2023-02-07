@@ -71,7 +71,7 @@ export function Search({
                 autoComplete="off"
                 onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                     if (e.code === 'Enter' && !hasOptions) {
-                        e.nativeEvent.stopImmediatePropagation();
+                        e.stopPropagation();
                         e.preventDefault();
                     }
                 }}
