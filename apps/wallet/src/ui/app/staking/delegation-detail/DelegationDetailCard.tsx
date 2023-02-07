@@ -214,7 +214,7 @@ export function DelegationDetailCard({
                                 size="large"
                                 mode="outline"
                                 href={stakeByValidatorAddress}
-                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker !text-steel-dark hover:text-steel-darker"
+                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
                                 disabled={!stakingEnabled}
                             >
                                 <Icon
@@ -231,7 +231,7 @@ export function DelegationDetailCard({
                                         stakeByValidatorAddress +
                                         '&unstake=true'
                                     }
-                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker !text-steel-dark !hover:text-steel-darker"
+                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
                                 >
                                     <Icon
                                         icon={SuiIcons.Remove}
