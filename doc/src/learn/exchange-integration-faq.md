@@ -48,7 +48,7 @@ If the delete function is defined in the Move module, you can delete the object 
 
 ### What is the denomination of Sui？
 
-MIST is the smallest unit of a SUI Coin. 1 SUI equals 1 billion MISTs, and 1 MIST equals 10^-9 of a SUI.
+MIST is the smallest unit of a SUI Coin. 1 SUI equals 1 billion MIST, and 1 MIST equals 10^-9 of a SUI.
 
 ## Transactions
 
