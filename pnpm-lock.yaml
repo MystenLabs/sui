@@ -337,7 +337,7 @@ importers:
       eslint-plugin-react: 7.31.11_eslint@8.31.0
       formik: 2.2.9_react@18.2.0
       framer-motion: 8.1.9_biqbaboplfbrettd7655fr4n2y
-      hw-app-sui: github.com/obsidiansystems/hw-app-sui/0a099c7c1d83769a667288efd59f4eacd8488d14_typescript@4.9.4
+      hw-app-sui: github.com/obsidiansystems/hw-app-sui/43a98922971c31faf06ed7c18f145f3cafec55d5_typescript@4.9.4
       mitt: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -20971,11 +20971,11 @@ packages:
     resolution: {integrity: sha512-Bq0B+ixT/DMyG8kgX2xWcI5jUvCwqrMxSFam7m0lAf78nf04hv6lNCsyLYdyYTrCVMqNDY/206K7eExYCeSyUQ==}
     dev: false
 
-  github.com/obsidiansystems/hw-app-obsidian-common/1c6028286a82989b1a43d40e38a65aa1471dfbc0_typescript@4.9.4:
-    resolution: {commit: 1c6028286a82989b1a43d40e38a65aa1471dfbc0, repo: git+ssh://git@github.com/obsidiansystems/hw-app-obsidian-common.git, type: git}
-    id: github.com/obsidiansystems/hw-app-obsidian-common/1c6028286a82989b1a43d40e38a65aa1471dfbc0
+  github.com/obsidiansystems/hw-app-obsidian-common/2054ebd0e2502ff7ffa49bc56ea536095b4b729d_typescript@4.9.4:
+    resolution: {commit: 2054ebd0e2502ff7ffa49bc56ea536095b4b729d, repo: git+ssh://git@github.com/obsidiansystems/hw-app-obsidian-common.git, type: git}
+    id: github.com/obsidiansystems/hw-app-obsidian-common/2054ebd0e2502ff7ffa49bc56ea536095b4b729d
     name: hw-app-obsidian-common
-    version: 0.0.1
+    version: 0.1.0
     prepare: true
     requiresBuild: true
     dependencies:
@@ -20986,9 +20986,9 @@ packages:
       - typescript
     dev: false
 
-  github.com/obsidiansystems/hw-app-sui/0a099c7c1d83769a667288efd59f4eacd8488d14_typescript@4.9.4:
-    resolution: {tarball: https://codeload.github.com/obsidiansystems/hw-app-sui/tar.gz/0a099c7c1d83769a667288efd59f4eacd8488d14}
-    id: github.com/obsidiansystems/hw-app-sui/0a099c7c1d83769a667288efd59f4eacd8488d14
+  github.com/obsidiansystems/hw-app-sui/43a98922971c31faf06ed7c18f145f3cafec55d5_typescript@4.9.4:
+    resolution: {tarball: https://codeload.github.com/obsidiansystems/hw-app-sui/tar.gz/43a98922971c31faf06ed7c18f145f3cafec55d5}
+    id: github.com/obsidiansystems/hw-app-sui/43a98922971c31faf06ed7c18f145f3cafec55d5
     name: hw-app-sui
     version: 0.0.0
     hasBin: true
@@ -20997,7 +20997,7 @@ packages:
     dependencies:
       '@ledgerhq/hw-transport': 6.28.0
       documentation: 13.2.5
-      hw-app-obsidian-common: github.com/obsidiansystems/hw-app-obsidian-common/1c6028286a82989b1a43d40e38a65aa1471dfbc0_typescript@4.9.4
+      hw-app-obsidian-common: github.com/obsidiansystems/hw-app-obsidian-common/2054ebd0e2502ff7ffa49bc56ea536095b4b729d_typescript@4.9.4
     transitivePeerDependencies:
       - supports-color
       - typescript
