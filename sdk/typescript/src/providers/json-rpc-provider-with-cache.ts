@@ -33,12 +33,6 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
     return resp;
   }
 
-  async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
-    const resp = await super.getObjectsOwnedByObject(objectId);
-    resp.forEach((r) => this.updateObjectRefCache(r));
-    return resp;
-  }
-
   async getObject(objectId: string): Promise<GetObjectDataResponse> {
     const resp = await super.getObject(objectId);
     this.updateObjectRefCache(resp);

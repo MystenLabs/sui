@@ -207,8 +207,8 @@ export class NftClient {
     };
 
     getBagContent = async (bagId: string) => {
-        const bagObjects = await this.provider.getObjectsOwnedByObject(bagId);
-        const objectIds = bagObjects.map((bagObject) => bagObject.objectId);
+        const bagObjects = await this.provider.getDynamicFields(bagId);
+        const objectIds = bagObjects.data.map((bagObject) => bagObject.objectId);
         return this.provider.getObjectBatch(objectIds);
     };
 
