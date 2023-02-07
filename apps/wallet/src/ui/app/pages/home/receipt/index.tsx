@@ -60,7 +60,7 @@ function ReceiptPage() {
                     ? 'Sent Successfully'
                     : 'Received Successfully'
                 : stakingTxn
-                ? stakingTxn + ' Successfully'
+                ? `${stakingTxn} Successfully`
                 : 'Move Call';
 
             return `${
