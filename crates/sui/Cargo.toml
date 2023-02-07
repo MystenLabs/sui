@@ -19,6 +19,7 @@ serde_with = { version = "2.1.0", features = ["hex"] }
 tracing = "0.1.36"
 bcs = "0.1.4"
 clap = { version = "3.2.17", features = ["derive"] }
+futures = "0.3.24"
 bip32 = "0.4.0"
 prettytable-rs = "0.10.0"
 git-version = "0.3.5"
