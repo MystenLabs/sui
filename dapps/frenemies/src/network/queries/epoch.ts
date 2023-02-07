@@ -5,14 +5,14 @@ import { SystemEpochInfo, SYSTEM_EPOCH_INFO } from "../types";
 import { useQuery } from "@tanstack/react-query";
 import provider from "../provider";
 import { bcs } from "../bcs";
-import { config } from "../../config";
+import { useEffect } from "react";
 
 /**
  * Fetch the most recent SystemEpochInfo event to get the
  * data on the current epoch and timestamps.
  */
 export function useEpoch() {
-  return useQuery(
+  const ret = useQuery(
     ["epoch"],
     async (): Promise<{
       timestamp: number;
@@ -39,8 +39,32 @@ export function useEpoch() {
       };
     },
     {
-      // refetch 4 times per epoch
-      refetchInterval: (+config.VITE_EPOCH_LEN * 60000) / 4,
+      // Refetch every 10 minutes:
+      refetchInterval: 10 * 60 * 1000,
     }
   );
+
+  // This does additional refetching in the event that the epoch changes between refetches:
+  useEffect(() => {
+    if (!ret.data || !ret.data.timestamp || !ret.data.prevTimestamp) return;
+    const { timestamp, prevTimestamp } = ret.data;
+
+    const interval = setInterval(() => {
+      const prevEpochLength = timestamp - prevTimestamp;
+      const timePassed = Date.now() - timestamp;
+      const timeLeft = prevEpochLength - timePassed;
+      console.log(timeLeft);
+      // 1 minute after we think the epoch has changed,
+      if (-1 * 60 * 1000 > timeLeft) {
+        ret.refetch();
+        clearInterval(interval);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [ret.data]);
+
+  return ret;
 }

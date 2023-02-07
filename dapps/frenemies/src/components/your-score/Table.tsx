@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { ReactNode } from "react";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
 import { useSuiSystem } from "../../network/queries/sui-system";
 import { Leaderboard, ScorecardUpdatedEvent } from "../../network/types";
-import { formatGoal, formatAddress } from "../../utils/format";
+import { formatGoal } from "../../utils/format";
 import { Logo } from "../Validators/Logo";
 
 interface Props {
@@ -79,13 +80,15 @@ export function Table({ data, round, leaderboard }: Props) {
                   <Cell>{currRound.toString()}</Cell>
                   <Cell>{formatGoal(goal)}</Cell>
                   <Cell>
-                    <Logo
-                      src={validatorMeta?.image_url as string}
-                      size="sm"
-                      label={validatorMeta?.name as string}
-                      circle
-                    />
-                    {validatorMeta?.name || formatAddress(validator)}
+                    <div className="flex items-center gap-2">
+                      <Logo
+                        src={validatorMeta?.image_url as string}
+                        size="sm"
+                        label={validatorMeta?.name as string}
+                        circle
+                      />
+                      {validatorMeta?.name || formatAddress(validator)}
+                    </div>
                   </Cell>
                   <Cell>{evt.epochScore !== 0 ? "Achieved" : "Failed"}</Cell>
                   <Cell>

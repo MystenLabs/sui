@@ -2,16 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import BigNumber from "bignumber.js";
-import { SuiAddress } from "@mysten/sui.js";
 import { Goal } from "../network/types";
-
-/** Formats address as `0xXXXX...YYYY` */
-export function formatAddress(addr: SuiAddress): string {
-  if (addr.startsWith("0x")) {
-    addr = addr.slice(2);
-  }
-  return "0x" + addr.slice(0, 4) + "..." + addr.slice(-4);
-}
 
 const GOAL_TO_COPY = {
   [Goal.Enemy]: "Enemy",

@@ -12,7 +12,7 @@ const DEC = 9;
 export function Balance() {
   const { currentAccount } = useWalletKit();
   const { data } = useQuery(
-    ["account", "balance"],
+    ["account-balance"],
     async () => {
       const { totalBalance } = await provider.getBalance(
         currentAccount!,
@@ -26,7 +26,6 @@ export function Balance() {
     },
     {
       enabled: !!currentAccount,
-      refetchOnWindowFocus: false,
       refetchInterval: 60 * 1000,
     }
   );
