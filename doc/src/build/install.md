@@ -231,7 +231,7 @@ Install procedure to expect: (40min (depends on the RAM you have available for t
 - compile (~1850) dependencies
 - (replace the previous version of the 'sui' package with the new one)
 
-Throubleshooting:
+Troubleshooting:
 * make sure you have the latest version of Rust installed:
 ```
 rustup update stable
