@@ -44,25 +44,20 @@ export function useEpoch() {
     }
   );
 
-  // This does additional refetching in the event that the epoch changes between refetches:
+  // This does additional refetching one minute after we think the epoch changes:
   useEffect(() => {
     if (!ret.data || !ret.data.timestamp || !ret.data.prevTimestamp) return;
     const { timestamp, prevTimestamp } = ret.data;
+    const timePassed = Date.now() - timestamp;
+    const prevEpochLength = timestamp - prevTimestamp;
+    const timeLeft = prevEpochLength - timePassed;
 
-    const interval = setInterval(() => {
-      const prevEpochLength = timestamp - prevTimestamp;
-      const timePassed = Date.now() - timestamp;
-      const timeLeft = prevEpochLength - timePassed;
-      console.log(timeLeft);
-      // 1 minute after we think the epoch has changed,
-      if (-1 * 60 * 1000 > timeLeft) {
-        ret.refetch();
-        clearInterval(interval);
-      }
-    }, 5000);
+    const timeout = setTimeout(() => {
+      ret.refetch();
+    }, timeLeft + 60 * 1000);
 
     return () => {
-      clearInterval(interval);
+      clearTimeout(timeout);
     };
   }, [ret.data]);
 
