@@ -99,7 +99,7 @@ export function TransactionCard({
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
     // sometime sender and receiver are the same address
-    // for txn with amount determine sender or receiver by amount. negative amount means sender and positive amount means receiver
+    // for txn with amount determine sender or receiver by amount.
     // fall back to address comparison if amount is not available
     const isSender = transferAmount.amount
         ? transferAmount.amount < 0
@@ -124,13 +124,17 @@ export function TransactionCard({
         return checkStakingTxn(txn) || txnKind;
     }, [txn, txnKind]);
 
+    // display the transaction icon - depending on the transaction type and amount and label
     const txnIcon = useMemo(() => {
         if (txnKind === 'ChangeEpoch') return 'Rewards';
         if (moveCallLabel && moveCallLabel !== 'Call') return moveCallLabel;
         return isSender ? 'Send' : 'Received';
     }, [isSender, moveCallLabel, txnKind]);
 
-    // Transition label
+    // Transition label - depending on the transaction type and amount
+    // Epoch change with amount is staking rewards and without amount is delegation object
+    // Special case for staking and unstaking move call transaction,
+    // For other transaction show Sent or Received
     const txnLabel = useMemo(() => {
         // Epoch change with amount is staking rewards and without amount is delegation object
         if (txnKind === 'ChangeEpoch')
