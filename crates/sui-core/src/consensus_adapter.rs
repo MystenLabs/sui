@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use futures::future::select;
-use futures::future::Either;
 use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::TransactionProto;
@@ -19,7 +17,6 @@ use prometheus::{HistogramVec, IntCounter};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::HashMap;
-use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -317,49 +314,98 @@ impl ConsensusAdapter {
         self.num_inflight_transactions.load(Ordering::Relaxed)
     }
 
-    fn await_submit_delay(
+    /// Check when this authority should submit the certificate to consensus.
+    /// This sorts all authorities based on pseudo-random distribution derived from transaction hash.
+    ///
+    /// The function targets having 1 or 2 consensus transaction submitted per user transaction
+    /// when system operates normally.
+    ///
+    /// The function returns whether or not this authority should submit the transaction to consensus.
+    fn should_submit(
+        &self,
         committee: &Committee,
         ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
-    ) -> (impl Future<Output = ()>, usize) {
-        let (duration, position) = Self::submit_delay(committee, ourselves, transaction);
-        (tokio::time::sleep(duration), position)
+    ) -> bool {
+        let tx_digest;
+        if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
+            tx_digest = certificate.digest();
+        } else {
+            return true;
+        }
+        let positions = order_validators_for_submission(committee, tx_digest);
+
+        self.check_submission_wrt_connectivity(ourselves, positions)
     }
 
-    fn submit_delay(
-        committee: &Committee,
+    /// This function runs the following algorithm to decide whether or not to submit a transaction
+    /// to consensus.
+    ///
+    /// It takes in a deterministic list that represents positions of all the authorities.
+    /// The authority in the first position will be responsible for submitting to consensus, and
+    /// so we check if we are this validator, and if so, return true.
+    ///
+    /// If we are not in that position, we check our connectivity to the authority in that position.
+    /// If we are connected to them, we can assume that they are operational and will submit the transaction.
+    /// If we are not connected to them, we assume that they are not operational and we will not rely
+    /// on that authority to submit the transaction. So we shift them out of the first position, and
+    /// run this algorithm again on the new set of positions.
+    ///
+    /// This can possibly result in a transaction being submitted twice if an authority sees a false
+    /// negative in connectivity to another, such as in the case of a network partition.
+    fn check_submission_wrt_connectivity(
+        &self,
         ourselves: &AuthorityName,
-        transaction: &ConsensusTransaction,
-    ) -> (Duration, usize) {
-        if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
-            Self::submit_delay_certificate(committee, ourselves, certificate.digest())
-        } else {
-            (Duration::ZERO, 0)
+        positions: Vec<AuthorityName>,
+    ) -> bool {
+        let (our_position, _) = positions
+            .clone()
+            .into_iter()
+            .find_position(|a| a == ourselves)
+            .expect("Could not find ourselves in shuffled committee");
+
+        let mut i = 0;
+        loop {
+            if our_position == i {
+                // if we are the running validator in the first position
+                // we are responsible for submission
+                self.populate_position_metric(i);
+                return true;
+            }
+
+            let connection_to_first_validator = self
+                .connection_monitor_status
+                .check_connection(&positions[i])
+                .unwrap_or_else(|| {
+                    error!(
+                        "Could not find authority in status from connectivity monitor {:?}",
+                        positions[i]
+                    );
+                    &ConnectionStatus::Disconnected
+                });
+
+            if connection_to_first_validator == &ConnectionStatus::Connected {
+                // If we are connected to the validator at the first position, we assume they
+                // will submit the transaction, so we don't need to submit it ourselves
+                return false;
+            }
+
+            // if we don't have connection to the first validator, we don't expect that they are
+            // running so we shift the positions, making the next validator in the list responsible
+            // for submission, given that it is connected to by at least one other validator
+            i += 1;
+            if i >= positions.len() {
+                self.populate_position_metric(i);
+                return true;
+            }
         }
     }
 
-    /// Check when this authority should submit the certificate to consensus.
-    /// This sorts all authorities based on pseudo-random distribution derived from transaction hash.
-    /// Authorities higher in the list wait less time.
-    ///
-    /// The function targets having only 1 consensus transaction submitted per user transaction
-    /// when system operates normally.
-    ///
-    /// The function returns the delay to wait and the position of authority in the list.
-    fn submit_delay_certificate(
-        committee: &Committee,
-        ourselves: &AuthorityName,
-        tx_digest: &TransactionDigest,
-    ) -> (Duration, usize) {
-        let position = position_submit_certificate(committee, ourselves, tx_digest);
-        const MAX_DELAY_MUL: usize = 10;
-        // DELAY_STEP is chosen as 1.5 * mean consensus delay
-        // In the future we can actually use information about consensus rounds instead of this delay
-        const DELAY_STEP: Duration = Duration::from_secs(7);
-        (
-            DELAY_STEP * std::cmp::min(position, MAX_DELAY_MUL) as u32,
-            position,
-        )
+    fn populate_position_metric(&self, position: usize) {
+        // populate the position only when this authority submits the transaction
+        // to consensus
+        let mut guard = InflightDropGuard::acquire(&self);
+        guard.position = Some(position);
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -431,19 +477,7 @@ impl ConsensusAdapter {
                 transaction.key(),
             ))
             .boxed();
-        let (await_submit, position) =
-            Self::await_submit_delay(epoch_store.committee(), &self.authority, &transaction);
-        let mut guard = InflightDropGuard::acquire(&self);
 
-        // We need to wait for some delay until we submit transaction to the consensus
-        // However, if transaction is received by consensus while we wait, we don't need to wait
-        let processed_waiter = match select(processed_waiter, await_submit.boxed()).await {
-            Either::Left((processed, _await_submit)) => {
-                processed.expect("Storage error when waiting for consensus message processed");
-                None
-            }
-            Either::Right(((), processed_waiter)) => Some(processed_waiter),
-        };
         let transaction_key = transaction.key();
         let _monitor = CancelOnDrop(spawn_monitored_task!(async {
             let mut i = 0u64;
@@ -455,15 +489,13 @@ impl ConsensusAdapter {
                 warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
             }
         }));
-        if let Some(processed_waiter) = processed_waiter {
+
+        let should_submit =
+            self.should_submit(epoch_store.committee(), &self.authority, &transaction);
+
+        if should_submit {
             debug!("Submitting {transaction_key:?} to consensus");
 
-            // populate the position only when this authority submits the transaction
-            // to consensus
-            guard.position = Some(position);
-
-            // We enter this branch when in select above await_submit completed and processed_waiter is pending
-            // This means it is time for us to submit transaction to consensus
             {
                 let ack_start = Instant::now();
                 let mut retries: u32 = 0;
@@ -548,18 +580,25 @@ impl ConsensusAdapter {
     }
 }
 
+pub fn order_validators_for_submission(
+    committee: &Committee,
+    tx_digest: &TransactionDigest,
+) -> Vec<AuthorityName> {
+    // the 32 is as requirement of the default StdRng::from_seed choice
+    let digest_bytes = tx_digest.into_inner();
+
+    // permute the validators deterministically, based on the digest
+    let mut rng = StdRng::from_seed(digest_bytes);
+    committee.shuffle_by_stake_with_rng(None, None, &mut rng)
+}
+
 /// Returns a position of the current validator in ordered list of validator to submit transaction
 pub fn position_submit_certificate(
     committee: &Committee,
     ourselves: &AuthorityName,
     tx_digest: &TransactionDigest,
 ) -> usize {
-    // the 32 is as requirement of the default StdRng::from_seed choice
-    let digest_bytes = tx_digest.into_inner();
-
-    // permute the validators deterministically, based on the digest
-    let mut rng = StdRng::from_seed(digest_bytes);
-    let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+    let validators = order_validators_for_submission(committee, tx_digest);
     let (position, _) = validators
         .into_iter()
         .find_position(|a| a == ourselves)
