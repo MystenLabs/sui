@@ -66,9 +66,9 @@ export function Assignment() {
   if (!assignedValidator) return null;
 
   const name = assignedValidator.fields.metadata.fields.name as string;
+  const selfStake = BigInt(assignedValidator.fields.metadata.fields.next_epoch_stake);
   const delegatedStake =
-    +assignedValidator.fields.delegation_staking_pool.fields.sui_balance;
-  const selfStake = +assignedValidator.fields.stake_amount;
+    BigInt(assignedValidator.fields.metadata.fields.next_epoch_delegation);
   const totalStake = selfStake + delegatedStake;
 
   const isInRank = getIsInRank(assignment.goal, assignedValidatorIndex!);

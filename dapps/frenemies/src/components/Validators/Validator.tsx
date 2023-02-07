@@ -36,8 +36,8 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
   };
 
   const delegatedStake =
-    +validator.fields.delegation_staking_pool.fields.sui_balance;
-  const selfStake = +validator.fields.stake_amount;
+    BigInt(validator.fields.metadata.fields.next_epoch_delegation);
+  const selfStake = BigInt(validator.fields.metadata.fields.next_epoch_stake);
   const totalStake = selfStake + delegatedStake;
 
   return (
