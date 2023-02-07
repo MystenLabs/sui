@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Combobox } from '@headlessui/react';
 import { Search16 } from '@mysten/icons';
-import { KeyboardEvent } from 'react';
+import { type KeyboardEvent } from 'react';
 
 import { LoadingSpinner } from './LoadingSpinner';
 import { Text } from './Text';
