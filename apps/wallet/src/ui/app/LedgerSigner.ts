@@ -73,8 +73,11 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async getPublicKey(): Promise<Ed25519PublicKey> {
+        const { publicKey } = await (
+            await this.appSui
+        ).getPublicKey(this.bip32path);
         return new Ed25519PublicKey(
-            (await (await this.appSui).getPublicKey(this.bip32path)).publicKey
+            Uint8Array.from(Buffer.from(publicKey, 'hex'))
         );
     }
 
@@ -84,7 +87,9 @@ export class LedgerSigner extends SignerWithProvider {
         ).signTransaction(this.bip32path, data.getData());
         return {
             signatureScheme: 'ED25519',
-            signature: new Base64DataBuffer(signature),
+            signature: new Base64DataBuffer(
+                Uint8Array.from(Buffer.from(signature, 'hex'))
+            ),
             pubKey: await this.getPublicKey(),
         };
     }
