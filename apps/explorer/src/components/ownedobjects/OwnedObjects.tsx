@@ -62,7 +62,7 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
             : rpc.getDynamicFields(id);
 
         req.then((objects) => {
-            let ids: string[]
+            let ids: string[];
             if (objects instanceof Array) {
                 ids = objects.map(({ objectId }) => objectId);
             } else {
