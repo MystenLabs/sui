@@ -56,6 +56,7 @@ export class JsonRpcClient {
   }
 
   private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
+    const packageVersion = require('../../package.json').version;
     const client = new RpcClient(
       async (
         request: any,
@@ -66,6 +67,8 @@ export class JsonRpcClient {
           body: request,
           headers: Object.assign(
             {
+              'Version': packageVersion,
+              'Client-Type': 'ts-sdk',
               'Content-Type': 'application/json',
             },
             httpHeaders || {},
