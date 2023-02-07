@@ -54,7 +54,11 @@ pnpm sdk test:unit
 To run E2E tests against local network
 
 ```
+// For Linux and macOs
 pnpm sdk prepare:e2e
+
+// For Windows
+pnpm sdk win-prepare:e2e
 
 // This will run all e2e tests
 pnpm sdk test:e2e
