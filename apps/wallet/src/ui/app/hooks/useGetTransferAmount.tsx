@@ -21,11 +21,14 @@ export function useGetTransferAmount({
     const suiTransfer = useMemo(() => {
         const txdetails = getTransactions(certificate)[0];
         return getAmount(txdetails, effects)?.map(
-            ({ amount, coinType, recipientAddress }) => ({
-                amount: amount || 0,
-                coinType: coinType || SUI_TYPE_ARG,
-                receiverAddress: recipientAddress,
-            })
+            ({ amount, coinType, recipientAddress }) => {
+                // multiply by -1 to match the amount in the event summary, so that negative amount means sent and +ive is received 
+                return {
+                    amount: -1 * (amount || 0),
+                    coinType: coinType || SUI_TYPE_ARG,
+                    receiverAddress: recipientAddress,
+                };
+            }
         );
     }, [certificate, effects]);
 
