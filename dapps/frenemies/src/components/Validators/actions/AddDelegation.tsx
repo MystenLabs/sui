@@ -80,7 +80,7 @@ export function AddDelegation({ validator, amount }: Props) {
         },
       },
       {
-        requestType: "WaitForEffectsCert",
+        // requestType: "WaitForEffectsCert",
       }
     );
   });

@@ -39,7 +39,7 @@ export function CancelDelegation({ stake }: Props) {
         },
       },
       {
-        requestType: "WaitForEffectsCert",
+        // requestType: "WaitForEffectsCert",
       }
     );
   });

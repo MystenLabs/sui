@@ -41,7 +41,7 @@ export function WithdrawDelegation({ stake, delegation }: Props) {
         },
       },
       {
-        requestType: "WaitForEffectsCert",
+        // requestType: "WaitForEffectsCert",
       }
     );
   });
