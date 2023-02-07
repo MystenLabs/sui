@@ -4,6 +4,7 @@
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
 
+import { calculateStakeShare } from '../calculateStakeShare';
 import { STATE_OBJECT, getName } from '../usePendingDelegation';
 import { ValidatorListItem } from './ValidatorListItem';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
@@ -14,7 +15,6 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject } from '_hooks';
-import { formatPercentage } from '_src/shared/formatting';
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
@@ -57,12 +57,12 @@ export function SelectValidatorCard() {
             .map((validator) => ({
                 name: getName(validator.fields.metadata.fields.name),
                 address: validator.fields.metadata.fields.sui_address,
-                stakeShare: formatPercentage(
+                stakeShare: calculateStakeShare(
                     BigInt(
                         validator.fields.delegation_staking_pool.fields
                             .sui_balance
                     ) + BigInt(validator.fields.stake_amount),
-                    totalStake
+                    BigInt(totalStake)
                 ),
                 logo:
                     validator.fields.metadata.fields.image_url &&
