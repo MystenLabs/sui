@@ -75,14 +75,14 @@ impl CheckpointMetrics {
             .unwrap(),
             last_received_checkpoint_signatures: register_int_gauge_vec_with_registry!(
                 "last_received_checkpoint_signatures",
-                "Last received checkpoint sigantures by validator",
+                "Last received checkpoint signatures by validator",
                 &["signer"],
                 registry
             )
             .unwrap(),
             last_sent_checkpoint_signature: register_int_gauge_with_registry!(
                 "last_sent_checkpoint_signature",
-                "Last checkpoint siganture sent by myself",
+                "Last checkpoint signature sent by myself",
                 registry
             )
             .unwrap(),
