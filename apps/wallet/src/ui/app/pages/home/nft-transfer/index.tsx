@@ -66,7 +66,7 @@ function NftTransferPage() {
                     navigate(
                         `/receipt?${new URLSearchParams({
                             txdigest: resp.txId,
-                            transfer: 'nft',
+                            from: 'nft',
                         }).toString()}`
                     );
                 }

@@ -21,6 +21,7 @@ function ReceiptPage() {
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
+    const fromParam = searchParams.get('from');
     const rpc = useRpc();
 
     const { data, isLoading, isError } = useQuery(
@@ -32,9 +33,10 @@ function ReceiptPage() {
     );
 
     const navigate = useNavigate();
+    // return to previous route or from param if available
     const closeReceipt = useCallback(() => {
-        navigate(-1);
-    }, [navigate]);
+        fromParam ? navigate(`/${fromParam}`) : navigate(-1);
+    }, [fromParam, navigate]);
 
     const pageTitle = useMemo(() => {
         if (data) {
