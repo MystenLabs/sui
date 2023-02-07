@@ -11,7 +11,6 @@ function Search() {
     const [query, setQuery] = useState('');
     const debouncedQuery = useDebouncedValue(query);
     const { isLoading, data: results } = useSearch(debouncedQuery);
-
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
             setQuery(e.currentTarget.value.trim()),

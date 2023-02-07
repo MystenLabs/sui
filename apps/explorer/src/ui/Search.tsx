@@ -56,8 +56,6 @@ export function Search({
     queryValue,
 }: SearchProps) {
     const hasOptions = !!options.length;
-
-    console.log(isLoading);
     return (
         <Combobox
             nullable
