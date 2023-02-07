@@ -67,7 +67,7 @@ export class JsonRpcClient {
           body: request,
           headers: Object.assign(
             {
-              'Version': packageVersion,
+              'Client-Api-Version': String(packageVersion),
               'Client-Type': 'ts-sdk',
               'Content-Type': 'application/json',
             },
