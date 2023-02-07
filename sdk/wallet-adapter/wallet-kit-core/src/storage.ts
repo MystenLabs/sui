@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 export interface StorageAdapter {
   set(key: string, value: string): Promise<void>;
   get(key: string): Promise<string | undefined | null>;
