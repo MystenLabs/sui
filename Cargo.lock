@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0e0ef7054082a6f5a8921688e3d568761bc3be21#0e0ef7054082a6f5a8921688e3d568761bc3be21"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -155,7 +155,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0e0ef7054082a6f5a8921688e3d568761bc3be21#0e0ef7054082a6f5a8921688e3d568761bc3be21"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.49",
@@ -164,9 +164,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "anemo-cli"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
+dependencies = [
+ "anemo",
+ "anemo-tower",
+ "bytes",
+ "clap 4.1.4",
+ "dashmap",
+ "rand 0.8.5",
+ "tokio",
+ "tower",
+ "tracing",
+]
+
+[[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=0e0ef7054082a6f5a8921688e3d568761bc3be21#0e0ef7054082a6f5a8921688e3d568761bc3be21"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff#d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff"
 dependencies = [
  "anemo",
  "bytes",
@@ -1285,13 +1301,28 @@ checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive",
- "clap_lex",
+ "clap_derive 3.2.18",
+ "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
  "strsim 0.10.0",
  "termcolor",
  "textwrap 0.16.0",
+]
+
+[[package]]
+name = "clap"
+version = "4.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
+dependencies = [
+ "bitflags",
+ "clap_derive 4.1.0",
+ "clap_lex 0.3.1",
+ "is-terminal",
+ "once_cell",
+ "strsim 0.10.0",
+ "termcolor",
 ]
 
 [[package]]
@@ -1308,10 +1339,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_derive"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "684a277d672e91966334af371f1a7b5833f9aa00b07c84e92fbce95e00208ce8"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro-error",
+ "proc-macro2 1.0.49",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "clap_lex"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
+dependencies = [
+ "os_str_bytes",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "783fe232adfca04f90f56201b26d79682d4cd2625e0bc7290b95123afe558ade"
 dependencies = [
  "os_str_bytes",
 ]
@@ -7310,6 +7363,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300a51053b1cb55c80b7a9fde4120726ddf25ca241a1cbb926626f62fb136bff"
+dependencies = [
+ "base64",
+ "bitflags",
+ "serde 1.0.152",
+]
+
+[[package]]
 name = "rstest"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9278,15 +9342,18 @@ name = "sui-tool"
 version = "0.25.0"
 dependencies = [
  "anemo",
+ "anemo-cli",
  "anyhow",
- "clap 3.2.23",
+ "clap 4.1.4",
  "colored",
  "eyre",
  "futures",
  "itertools",
  "multiaddr",
  "mysten-network",
+ "narwhal-types",
  "rocksdb",
+ "ron",
  "serde 1.0.152",
  "serde_with",
  "strum",
@@ -10919,6 +10986,7 @@ dependencies = [
  "alloc-stdlib",
  "anemo",
  "anemo-build",
+ "anemo-cli",
  "anemo-tower",
  "anes",
  "ansi_term",
@@ -11023,8 +11091,11 @@ dependencies = [
  "clang-sys",
  "clap 2.34.0",
  "clap 3.2.23",
- "clap_derive",
- "clap_lex",
+ "clap 4.1.4",
+ "clap_derive 3.2.18",
+ "clap_derive 4.1.0",
+ "clap_lex 0.2.4",
+ "clap_lex 0.3.1",
  "clear_on_drop",
  "clipboard-win",
  "codespan",
@@ -11485,6 +11556,7 @@ dependencies = [
  "ripemd",
  "roaring",
  "rocksdb",
+ "ron",
  "rstest",
  "rstest_macros",
  "rust-ini",
