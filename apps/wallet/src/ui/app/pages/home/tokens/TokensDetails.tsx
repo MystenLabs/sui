@@ -4,8 +4,8 @@
 import cl from 'classnames';
 import { useMemo } from 'react';
 
+import { CoinActivities } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
-import { CoinActivities } from './coin-activities';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetRequestButton from '_app/shared/faucet/request-button';

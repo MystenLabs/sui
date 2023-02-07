@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinActivityCard } from './CoinActivityCard';
+import { useMemo } from 'react';
+
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
+import { TransactionCard } from '_components/transactions-card';
+import { getEventsSummary } from '_helpers';
 import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
@@ -15,6 +18,22 @@ export function CoinActivities({ coinType }: { coinType: string }) {
         isError,
         error,
     } = useGetTransactionsByAddress(activeAddress);
+
+    // filter txns by coinType
+    const txnByCoinType = useMemo(() => {
+        if (!txns || !activeAddress) return null;
+        return txns?.filter((txn) => {
+            const { coins: eventsSummary } = getEventsSummary(
+                txn.effects,
+                activeAddress
+            );
+
+            // find txn with coinType from eventsSummary
+            return !!eventsSummary.find(
+                ({ coinType: summaryCoinType }) => summaryCoinType === coinType
+            );
+        });
+    }, [txns, activeAddress, coinType]);
 
     if (isError) {
         return (
@@ -34,14 +53,13 @@ export function CoinActivities({ coinType }: { coinType: string }) {
                     loading={isLoading}
                     className="flex justify-center items-center h-full"
                 >
-                    {txns?.length && activeAddress
-                        ? txns.map((txn) => (
+                    {txnByCoinType?.length && activeAddress
+                        ? txnByCoinType.map((txn) => (
                               <ErrorBoundary
                                   key={txn.certificate.transactionDigest}
                               >
-                                  <CoinActivityCard
+                                  <TransactionCard
                                       txn={txn}
-                                      activeCoinType={coinType}
                                       address={activeAddress}
                                   />
                               </ErrorBoundary>
