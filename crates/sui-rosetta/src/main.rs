@@ -44,7 +44,7 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         full_node_url: String,
-        #[clap(long, default_value = "data")]
+        #[clap(long, default_value = "/data")]
         data_path: PathBuf,
     },
     StartOnlineServer {
@@ -54,7 +54,7 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         node_config: Option<PathBuf>,
-        #[clap(long, default_value = "data")]
+        #[clap(long, default_value = "/data")]
         data_path: PathBuf,
     },
     StartOfflineServer {
@@ -141,7 +141,9 @@ impl RosettaServerCommand {
                     "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
                 );
                 let sui_client = wait_for_sui_client(full_node_url).await;
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &data_path);
+                let rosetta_path = data_path.join("rosetta_db");
+                info!("Rosetta db path : {rosetta_path:?}");
+                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
                 rosetta.serve(addr).await??;
             }
 
@@ -152,20 +154,28 @@ impl RosettaServerCommand {
                 data_path,
             } => {
                 info!("Starting Rosetta Online Server with embedded Sui full node.");
+                info!("Data directory path: {data_path:?}");
 
                 let node_config = node_config.unwrap_or_else(|| {
                     let path = sui_config_dir().unwrap().join(SUI_FULLNODE_CONFIG);
                     info!("Using default node config from {path:?}");
                     path
                 });
-                let config = NodeConfig::load(&node_config)?;
+
+                let mut config = NodeConfig::load(&node_config)?;
+                config.db_path = data_path.join("sui_db");
+                info!("Overriding Sui db path to : {:?}", config.db_path);
+
                 let registry_service = metrics::start_prometheus_server(config.metrics_address);
                 // Staring a full node for the rosetta server.
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
                 let _node = SuiNode::start(&config, registry_service).await?;
 
                 let sui_client = wait_for_sui_client(rpc_address).await;
-                let rosetta = RosettaOnlineServer::new(env, sui_client, &data_path);
+
+                let rosetta_path = data_path.join("rosetta_db");
+                info!("Rosetta db path : {rosetta_path:?}");
+                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
                 rosetta.serve(addr).await??;
             }
         };
