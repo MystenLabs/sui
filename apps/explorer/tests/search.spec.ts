@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getCreatedObjects, getTransactionDigest } from '@mysten/sui.js';
 import { expect, test, type Page } from '@playwright/test';
 
 import { faucet, mint } from './utils/localnet';
-import { getCreatedObjects, getTransactionDigest } from '@mysten/sui.js';
 
 async function search(page: Page, text: string) {
     const searchbar = page.getByRole('combobox');
@@ -17,7 +17,7 @@ test('can search for an address', async ({ page }) => {
     const address = await faucet();
     await page.goto('/');
     await search(page, address);
-    await expect(page).toHaveURL(`/address/${address}`);
+    await expect(page).toHaveURL(`/address/0x${address}`);
 });
 
 test('can search for objects', async ({ page }) => {
