@@ -1,8 +1,5 @@
-// TODO: Figure out if this is needed:
-export enum Network {
-  LOCAL = 'LOCAL',
-  DEVNET = 'DEVNET',
-}
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 interface ConnectionOptions {
   fullnode: string;
@@ -32,7 +29,7 @@ export class Connection {
 
 // TODO: Maybe don't have pre-built connections, and instead just have pre-built objects that folks
 // can use with the connection?
-export const localConnection = new Connection({
+export const localnetConnection = new Connection({
   fullnode: 'http://127.0.0.1:9000',
   faucet: 'http://127.0.0.1:9123/gas',
 });
