@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Combobox } from '@headlessui/react';
 import { Search16 } from '@mysten/icons';
+import { KeyboardEvent } from 'react';
 
 import { LoadingSpinner } from './LoadingSpinner';
 import { Text } from './Text';
@@ -54,7 +55,9 @@ export function Search({
     isLoading = false,
     queryValue,
 }: SearchProps) {
-    const hasOptions = options.length;
+    const hasOptions = !!options.length;
+
+    console.log(isLoading);
     return (
         <Combobox
             nullable
@@ -64,10 +67,16 @@ export function Search({
         >
             <Combobox.Input
                 displayValue={(value: SearchResult) => value?.label}
-                className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-solid focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+                className="box-border w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-solid focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                    if (e.code === 'Enter' && !hasOptions) {
+                        e.nativeEvent.stopImmediatePropagation();
+                        e.preventDefault();
+                    }
+                }}
                 value={queryValue}
             />
 

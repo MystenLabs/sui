@@ -60,19 +60,21 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
 };
 
 const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
-    if (!isValidSuiAddress(query) || isGenesisLibAddress(query)) return null;
+    const normalized = normalizeSuiObjectId(query);
+    if (!isValidSuiAddress(normalized) || isGenesisLibAddress(normalized))
+        return null;
 
     const [from, to] = await Promise.all([
-        rpc.getTransactions({ FromAddress: query }, null, 1),
-        rpc.getTransactions({ ToAddress: query }, null, 1),
+        rpc.getTransactions({ FromAddress: normalized }, null, 1),
+        rpc.getTransactions({ ToAddress: normalized }, null, 1),
     ]);
     if (from.data?.length || to.data?.length) {
         return {
             label: 'address',
             results: [
                 {
-                    id: query,
-                    label: query,
+                    id: normalized,
+                    label: normalized,
                     type: 'address',
                 },
             ],
