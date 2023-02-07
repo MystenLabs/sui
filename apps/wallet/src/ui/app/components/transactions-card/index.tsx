@@ -98,12 +98,7 @@ export function TransactionCard({
 
     const recipientAddress = useGetTxnRecipientAddress({ txn, address });
 
-    // sometime sender and receiver are the same address
-    // for txn with amount determine sender or receiver by amount.
-    // fall back to address comparison if amount is not available
-    const isSender = transferAmount.amount
-        ? transferAmount.amount < 0
-        : address === certificate.data.sender;
+    const isSender = address === certificate.data.sender;
 
     const moveCallTxn = getMoveCallTransaction(
         certificate.data.transactions[0]

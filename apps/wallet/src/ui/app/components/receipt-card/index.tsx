@@ -75,7 +75,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             ({ receiverAddress, coinType }) =>
                 receiverAddress === activeAddress && coinType === SUI_TYPE_ARG
         )?.amount;
-        return amount ? Math.abs(amount) : null;
+        return amount || null;
     }, [activeAddress, transferAmount]);
 
     const isSender = activeAddress === certificate.data.sender;
@@ -132,9 +132,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                               <TxnAmount
                                                   amount={amount}
                                                   label={
-                                                      amount > 0
-                                                          ? 'Received'
-                                                          : 'Sent'
+                                                      isSender
+                                                          ? 'Sent'
+                                                          : 'Received'
                                                   }
                                                   coinType={coinType}
                                               />

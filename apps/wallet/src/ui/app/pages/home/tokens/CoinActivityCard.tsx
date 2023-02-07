@@ -23,13 +23,9 @@ export function CoinActivitiesCard({ coinType }: { coinType: string }) {
     const txnByCoinType = useMemo(() => {
         if (!txns || !activeAddress) return null;
         return txns?.filter((txn) => {
-            const { coins: eventsSummary } = getEventsSummary(
-                txn.effects,
-                activeAddress
-            );
-
+            const { coins } = getEventsSummary(txn.effects, activeAddress);
             // find txn with coinType from eventsSummary
-            return !!eventsSummary.find(
+            return !!coins.find(
                 ({ coinType: summaryCoinType }) => summaryCoinType === coinType
             );
         });

@@ -16,7 +16,7 @@ export function useGetTransferAmount({
     activeAddress: SuiAddress;
 }) {
     const { certificate, effects } = txn;
-    const { coins: eventsSummary } = getEventsSummary(effects, activeAddress);
+    const { coins } = getEventsSummary(effects, activeAddress);
 
     const suiTransfer = useMemo(() => {
         const txdetails = getTransactions(certificate)[0];
@@ -24,7 +24,7 @@ export function useGetTransferAmount({
             ({ amount, coinType, recipientAddress }) => {
                 // multiply by -1 to match the amount in the event summary, so that negative amount means sent and +ive is received
                 return {
-                    amount: -1 * (amount || 0),
+                    amount: amount || 0,
                     coinType: coinType || SUI_TYPE_ARG,
                     receiverAddress: recipientAddress,
                 };
@@ -35,10 +35,10 @@ export function useGetTransferAmount({
     const transferAmount = useMemo(() => {
         return suiTransfer?.length
             ? suiTransfer
-            : eventsSummary.filter(
+            : coins.filter(
                   ({ receiverAddress }) => receiverAddress === activeAddress
               );
-    }, [suiTransfer, eventsSummary, activeAddress]);
+    }, [suiTransfer, coins, activeAddress]);
 
     return suiTransfer ?? transferAmount;
 }
