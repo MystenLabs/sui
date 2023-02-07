@@ -4,7 +4,7 @@
 import cl from 'classnames';
 import { useMemo } from 'react';
 
-import { CoinActivities } from './CoinActivityCard';
+import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
@@ -162,7 +162,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             {coinSymbol} activity
                         </div>
                         <div className={st.txContent}>
-                            <CoinActivities coinType={activeCoinType} />
+                            <CoinActivitiesCard coinType={activeCoinType} />
                         </div>
                     </>
                 )}

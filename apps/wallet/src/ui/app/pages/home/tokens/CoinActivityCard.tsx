@@ -10,7 +10,7 @@ import { getEventsSummary } from '_helpers';
 import { useAppSelector, useGetTransactionsByAddress } from '_hooks';
 import Alert from '_src/ui/app/components/alert';
 
-export function CoinActivities({ coinType }: { coinType: string }) {
+export function CoinActivitiesCard({ coinType }: { coinType: string }) {
     const activeAddress = useAppSelector(({ account: { address } }) => address);
     const {
         data: txns,
