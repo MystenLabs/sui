@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cva, type VariantProps } from 'class-variance-authority';
-import cl from 'classnames';
+import { cva, type VariantProps, cx } from 'class-variance-authority';
 import { type ComponentProps, forwardRef, type ReactNode } from 'react';
 
 const styles = cva(
@@ -45,10 +44,11 @@ export const ButtonConnectedTo = forwardRef<
             <div className="flex">{iconBefore}</div>
             <span className="truncate">{text}</span>
             <div
-                className={cl(
+                className={cx(
                     'flex',
-                    bgOnHover === 'grey' &&
-                        'text-steel group-hover:text-inherit group-focus:text-inherit group-active::text-inherit'
+                    bgOnHover === 'grey'
+                        ? 'text-steel group-hover:text-inherit group-focus:text-inherit group-active::text-inherit'
+                        : null
                 )}
             >
                 {iconAfter}
