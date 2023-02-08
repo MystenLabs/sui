@@ -75,12 +75,18 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
             ({ receiverAddress, coinType }) =>
                 receiverAddress === activeAddress && coinType === SUI_TYPE_ARG
         )?.amount;
-        return amount || null;
+        return amount ? Math.abs(amount) : null;
     }, [activeAddress, transferAmount]);
 
     const isSender = activeAddress === certificate.data.sender;
     const isStakeTxn =
         moveCallLabel === 'Staked' || moveCallLabel === 'Unstaked';
+
+    const nftObjectLabel = transferAmount?.length
+        ? isSender
+            ? 'Sent'
+            : 'Received'
+        : 'Call';
 
     return (
         <div className="block relative w-full">
@@ -113,11 +119,15 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                 ) : (
                     <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col">
                         {objectId && (
-                            <div className="py-3.5 first:pt-0">
-                                <TxnImage
-                                    id={objectId}
-                                    label={isSender ? 'Sent' : 'Received'}
-                                />
+                            <div className="py-3.5 first:pt-0 flex gap-2 flex-col">
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    {nftObjectLabel}
+                                </Text>
+                                <TxnImage id={objectId} />
                             </div>
                         )}
 
