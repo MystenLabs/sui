@@ -202,33 +202,12 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
-        let tx_digest = *tx.digest();
         let tx = tx.verify()?;
-        let mut retry_cnt = 0;
-        while retry_cnt < 3 {
-            let ticket = self.qd.submit_transaction(tx.clone()).await?;
-            // The ticket only times out when QuorumDriver exceeds the retry times
-            match ticket.await {
-                Ok(resp) => {
-                    let QuorumDriverResponse {
-                        tx_cert,
-                        effects_cert,
-                    } = resp;
-                    return Ok((
-                        tx_cert.try_into().unwrap(),
-                        ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
-                    ));
-                }
-                Err(err) => {
-                    error!(
-                        ?tx_digest,
-                        retry_cnt, "Transaction failed with err: {:?}", err
-                    );
-                    retry_cnt += 1;
-                }
-            }
-        }
-        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
+        let resp = self.qd.submit_transaction_fast(tx.clone()).await?;
+        Ok((
+            resp.tx_cert.try_into().unwrap(),
+            ExecutionEffects::CertifiedTransactionEffects(resp.effects_cert.into()),
+        ))
     }
 
     fn clone_committee(&self) -> Committee {

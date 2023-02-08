@@ -83,11 +83,11 @@ pub struct TimeoutConfig {
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
-            authority_request_timeout: Duration::from_secs(60),
-            pre_quorum_timeout: Duration::from_secs(60),
-            post_quorum_timeout: Duration::from_secs(30),
-            serial_authority_request_timeout: Duration::from_secs(5),
-            serial_authority_request_interval: Duration::from_millis(1000),
+            authority_request_timeout: Duration::from_secs(120),
+            pre_quorum_timeout: Duration::from_secs(120),
+            post_quorum_timeout: Duration::from_secs(120),
+            serial_authority_request_timeout: Duration::from_secs(15),
+            serial_authority_request_interval: Duration::from_millis(10000),
         }
     }
 }
