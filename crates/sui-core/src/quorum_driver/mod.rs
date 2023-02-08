@@ -239,7 +239,7 @@ where
                 return Ok(response);
             }
             Err(err) => {
-                eprintln!("Error {:}", err);
+                error!("Error {:}", err);
                 return Err(QuorumDriverError::QuorumDriverInternalError(
                     SuiError::AuthorityInformationUnavailable,
                 ));
