@@ -3,15 +3,16 @@
 
 import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
-import { useEpoch } from "../network/queries/epoch";
 import { useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 import provider from "../network/provider";
+import { useBalance } from "../network/queries/coin";
+import { Spinner } from "../components/Spinner";
 
 const GAS_BUDGET = 20000n;
 
@@ -20,19 +21,24 @@ export function Setup() {
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
-  const { data: epoch } = useEpoch();
+  const { data: balance } = useBalance();
+  const { data: gasPrice } = useQuery(
+    ["gas-price"],
+    () => provider.getReferenceGasPrice(),
+    {
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    }
+  );
   const queryClient = useQueryClient();
 
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
       if (!currentAccount) {
-        throw new Error(
-          "No SUI coins found in your wallet. You need SUI to play the Frenemies game"
-        );
+        throw new Error("No connected wallet found");
       }
 
-      const gasPrice = epoch?.data.referenceGasPrice || 1n;
       const checkTx: UnserializedSignableTransaction = {
         kind: "moveCall",
         data: {
@@ -47,7 +53,7 @@ export function Setup() {
       const inspectRes = await provider.devInspectTransaction(
         currentAccount,
         checkTx,
-        Number(gasPrice)
+        gasPrice
       );
 
       if ("Err" in inspectRes.results) {
@@ -74,7 +80,7 @@ export function Setup() {
         throw new Error(`Name: '${username}' is already taken`);
       }
 
-      const submitTx: UnserializedSignableTransaction = {
+      await signAndExecuteTransaction({
         kind: "moveCall",
         data: {
           packageObjectId: config.VITE_PKG,
@@ -86,25 +92,11 @@ export function Setup() {
           // TODO: Fix in sui.js - add option to use bigint...
           gasBudget: Number(GAS_BUDGET),
         },
-      };
-
-      const devInspectResult = await provider.devInspectTransaction(
-        currentAccount,
-        submitTx,
-        Number(gasPrice)
-      );
-
-      if ("Err" in devInspectResult.results) {
-        throw new Error(
-          `Transaction would've failed with a reason '${devInspectResult.results.Err}'`
-        );
-      }
-
-      await signAndExecuteTransaction(submitTx);
+      });
     },
     {
       onSuccess() {
-        queryClient.invalidateQueries({ queryKey: ['scorecard'] });
+        queryClient.invalidateQueries({ queryKey: ["scorecard"] });
         navigate("/", { replace: true });
       },
     }
@@ -128,13 +120,31 @@ export function Setup() {
     createScorecard.mutate(formData.get("username") as string);
   };
 
-  // TODO: Loading UI:
+  const hasEnoughCoins =
+    gasPrice && balance
+      ? balance.balance > BigInt(gasPrice) + GAS_BUDGET
+      : false;
+
   if (!isSuccess || scorecard) {
-    return null;
+    return <Spinner />;
   }
 
   return (
-    <div className="max-w-4xl w-full mx-auto text-center">
+    <div className="max-w-4xl w-full mx-auto text-center space-y-5">
+      {balance && gasPrice && !hasEnoughCoins && (
+        <Card variant="error" spacing="md">
+          Your wallet does not have enough SUI to register for Frenemies.
+          <a
+            className="font-medium text-issue block mt-1"
+            href="https://discord.com/channels/916379725201563759/1037811694564560966"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Request Testnet SUI on Discord
+          </a>
+        </Card>
+      )}
+
       <Card spacing="xl">
         <h1 className="text-steel-darker text-2xl leading-tight font-semibold mb-5">
           Woo hoo! Just one more step before we begin.
@@ -147,6 +157,7 @@ export function Setup() {
           >
             What shall we call you in the game?
           </label>
+
           <input
             id={id}
             name="username"
@@ -167,7 +178,9 @@ export function Setup() {
             <button
               type="submit"
               className="shadow-notification bg-frenemies rounded-lg text-white disabled:text-white/50 px-5 py-3 w-56 leading-none"
-              disabled={!isSuccess || createScorecard.isLoading}
+              disabled={
+                !hasEnoughCoins || !isSuccess || createScorecard.isLoading
+              }
             >
               Continue
             </button>
