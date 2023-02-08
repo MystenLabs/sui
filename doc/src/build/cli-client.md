@@ -215,7 +215,7 @@ You can transfer mutable objects you own to another address using the command be
     sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --coin-object-id <OBJECT_ID>
+        --object-id <OBJECT_ID> 
             Object to transfer, in 20 bytes Hex string
 
         --gas <GAS>
@@ -239,7 +239,7 @@ To transfer an object to a recipient, you need the recipient's address,
 the object ID of the object to transfer, and, optionally, the ID of the coin object for the transaction fee payment. If not specified, a coin that meets the budget is picked. Gas budget sets a cap for how much gas to spend. We are still finalizing our gas metering mechanisms. For now, just set something large enough.
 
 ```shell
-sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 1000
 ```
 
 ## Create an example NFT
