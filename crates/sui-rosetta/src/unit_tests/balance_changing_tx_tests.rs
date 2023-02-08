@@ -10,6 +10,7 @@ use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
 use signature::rand_core::OsRng;
 
+use crate::operations::Operations;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
@@ -30,6 +31,7 @@ use sui_types::messages::{
 use test_utils::network::TestClusterBuilder;
 
 use crate::state::extract_balance_changes_from_ops;
+use crate::types::{ConstructionMetadata, TransactionMetadata};
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -341,6 +343,47 @@ async fn test_pay_all_sui() {
         recipient,
     });
     test_transaction(&client, keystore, vec![recipient], sender, tx, Some(coin1)).await;
+}
+
+#[tokio::test]
+async fn test_delegation_parsing() -> Result<(), anyhow::Error> {
+    let network = TestClusterBuilder::new().build().await.unwrap();
+    let client = network.wallet.get_client().await.unwrap();
+    let sender = get_random_address(&network.accounts, vec![]);
+    let coin1 = get_random_sui(&client, sender, vec![]).await;
+    let coin2 = get_random_sui(&client, sender, vec![coin1.0]).await;
+    let gas = get_random_sui(&client, sender, vec![coin1.0, coin2.0]).await;
+    let validator = client.governance_api().get_validators().await.unwrap()[0].sui_address;
+
+    let data = client
+        .transaction_builder()
+        .request_add_delegation(
+            sender,
+            vec![coin1.0, coin2.0],
+            Some(100000),
+            validator,
+            Some(gas.0),
+            10000,
+        )
+        .await?;
+
+    let ops: Operations = data.clone().try_into()?;
+    let metadata = ConstructionMetadata {
+        tx_metadata: TransactionMetadata::Delegation {
+            coins: vec![coin1, coin2],
+            locked_until_epoch: None,
+        },
+        sender,
+        gas,
+        gas_price: client.read_api().get_reference_gas_price().await?,
+        budget: 10000,
+    };
+    let parsed_data = ops
+        .into_internal(Some(metadata.tx_metadata.clone().into()))?
+        .try_into_data(metadata)?;
+    assert_eq!(data, parsed_data);
+
+    Ok(())
 }
 
 fn find_module_object(
