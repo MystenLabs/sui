@@ -27,7 +27,7 @@ export function Connect() {
           Your Objective
         </div>
         <p className="text-steel-dark text-sm max-w-xs mb-12 mx-auto">
-          The goal of the game is to stake Sui tokens to move your assigned
+          The goal of the game is to stake SUI tokens to move your assigned
           Validator to one of three designated positions: Friend (top third),
           Neutral (middle third), or Foe (bottom third).
         </p>

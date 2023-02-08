@@ -35,7 +35,6 @@ export function useSuiSystem() {
     },
     {
       refetchInterval: 60 * 1000,
-      refetchOnWindowFocus: false,
     }
   );
 
