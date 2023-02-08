@@ -297,7 +297,7 @@ impl SqlEventStore {
                 fields.insert(BALANCE_CHANGE_TYPE_KEY, (*change_type as usize).to_string());
             }
             if let Some(digest) = event.event.digest() {
-                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::base58_encode(&digest));
+                fields.insert(OBJECT_DIGEST_KEY, ObjectDigest::base64_encode(&digest));
             }
             json!(fields).to_string()
         }

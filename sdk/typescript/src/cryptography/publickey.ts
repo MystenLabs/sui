@@ -66,7 +66,7 @@ export interface PublicKey {
 
 export function publicKeyFromSerialized(
   schema: SignatureScheme,
-  pubKey: string
+  pubKey: string,
 ): PublicKey {
   if (schema === 'ED25519') {
     return new Ed25519PublicKey(pubKey);

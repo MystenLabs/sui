@@ -40,7 +40,7 @@ export class SuiSystemStateUtil {
     validatorAddress: SuiAddress,
     gasBudget?: number,
     gasPayment?: ObjectId,
-    gasPrice?: number
+    gasPrice?: number,
   ): Promise<UnserializedSignableTransaction> {
     // TODO: validate coin types and handle locked coins
     return {
@@ -76,7 +76,7 @@ export class SuiSystemStateUtil {
     stakedCoinId: ObjectId,
     gasBudget?: number,
     gasPayment?: ObjectId,
-    gasPrice?: number
+    gasPrice?: number,
   ): Promise<UnserializedSignableTransaction> {
     return {
       kind: 'moveCall',
@@ -107,7 +107,7 @@ export class SuiSystemStateUtil {
     newValidatorAddress: SuiAddress,
     gasBudget?: number,
     gasPayment?: ObjectId,
-    gasPrice?: number
+    gasPrice?: number,
   ): Promise<UnserializedSignableTransaction> {
     return {
       kind: 'moveCall',

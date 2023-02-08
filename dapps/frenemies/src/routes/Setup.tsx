@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  LocalTxnDataSerializer,
-  UnserializedSignableTransaction,
-} from "@mysten/sui.js";
+import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
@@ -14,26 +11,25 @@ import { config } from "../config";
 import { useEpoch } from "../network/queries/epoch";
 import { useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
-import { useMyType } from "../network/queries/use-raw";
-import { Coin, SUI_COIN } from "../network/types";
-import { getGas } from "../utils/coins";
 import provider from "../network/provider";
 
-const GAS_BUDGET = 10000n;
+const GAS_BUDGET = 20000n;
 
 export function Setup() {
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
-  const { data: coins } = useMyType<Coin>(SUI_COIN, currentAccount);
   const { data: epoch } = useEpoch();
+  const queryClient = useQueryClient();
 
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
-      if (!currentAccount || !coins || !coins.length) {
-        throw new Error("No Coins found, please request some from faucet");
+      if (!currentAccount) {
+        throw new Error(
+          "No SUI coins found in your wallet. You need SUI to play the Frenemies game"
+        );
       }
 
       const gasPrice = epoch?.data.referenceGasPrice || 1n;
@@ -62,8 +58,11 @@ export function Setup() {
 
       const {
         Ok: [
-          [,{ // @ts-ignore // not cool
-              returnValues: [[[ exists ]]],
+          [
+            ,
+            {
+              // @ts-ignore // not cool
+              returnValues: [[[exists]]],
             },
           ],
         ],
@@ -75,14 +74,6 @@ export function Setup() {
         throw new Error(`Name: '${username}' is already taken`);
       }
 
-      const gasSearch = GAS_BUDGET * gasPrice;
-      const { gas } = getGas(coins, gasSearch);
-      if (!gas) {
-        throw new Error(
-          `Gas object with at least '${gasSearch}' MIST not found`
-        );
-      }
-
       const submitTx: UnserializedSignableTransaction = {
         kind: "moveCall",
         data: {
@@ -91,26 +82,21 @@ export function Setup() {
           function: "register",
           arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
           typeArguments: [],
-          gasPayment: gas.reference.objectId,
 
           // TODO: Fix in sui.js - add option to use bigint...
           gasBudget: Number(GAS_BUDGET),
-          gasPrice: Number(gasPrice),
         },
       };
 
-      const serializer = new LocalTxnDataSerializer(provider);
-      const serializedTx = await serializer.serializeToBytes(
+      const devInspectResult = await provider.devInspectTransaction(
         currentAccount,
-        submitTx
-      );
-      const dryRunRes = await provider.dryRunTransaction(
-        serializedTx.toString()
+        submitTx,
+        Number(gasPrice)
       );
 
-      if (dryRunRes.status.status == "failure") {
+      if ("Err" in devInspectResult.results) {
         throw new Error(
-          `Transaction would've failed with a reason '${dryRunRes.status.error}'`
+          `Transaction would've failed with a reason '${devInspectResult.results.Err}'`
         );
       }
 
@@ -118,6 +104,7 @@ export function Setup() {
     },
     {
       onSuccess() {
+        queryClient.invalidateQueries({ queryKey: ['scorecard'] });
         navigate("/", { replace: true });
       },
     }

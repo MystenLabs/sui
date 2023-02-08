@@ -32,7 +32,7 @@ export const DEFAULT_GAS_BUDGET = 10000;
 export class TestToolbox {
   constructor(
     public keypair: Ed25519Keypair,
-    public provider: JsonRpcProvider
+    public provider: JsonRpcProvider,
   ) {}
 
   address() {
@@ -83,19 +83,19 @@ export async function setup(providerType: ProviderType = 'rpc') {
 export async function publishPackage(
   signer: RawSigner,
   useLocalTxnBuilder: boolean,
-  packagePath: string
+  packagePath: string,
 ): Promise<ObjectId> {
   const { execSync } = require('child_process');
   const compiledModules = JSON.parse(
     execSync(
       `${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-      { encoding: 'utf-8' }
-    )
+      { encoding: 'utf-8' },
+    ),
   );
   const publishTxn = await signer.publish({
     compiledModules: useLocalTxnBuilder
       ? compiledModules.map((m: any) =>
-          Array.from(new Base64DataBuffer(m).getData())
+          Array.from(new Base64DataBuffer(m).getData()),
         )
       : compiledModules,
     gasBudget: DEFAULT_GAS_BUDGET,
@@ -103,7 +103,7 @@ export async function publishPackage(
   expect(getExecutionStatusType(publishTxn)).toEqual('success');
 
   const publishEvent = getEvents(publishTxn).filter(
-    (e: any) => 'publish' in e
+    (e: any) => 'publish' in e,
   )[0];
   return publishEvent.publish.packageId.replace(/^(0x)(0+)/, '0x');
 }

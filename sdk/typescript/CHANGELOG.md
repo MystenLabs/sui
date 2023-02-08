@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.26.1
+
+### Patch Changes
+
+- 97c46ca9d: Support calling Move function with "option" parameter
+
 ## 0.26.0
 
 ### Minor Changes

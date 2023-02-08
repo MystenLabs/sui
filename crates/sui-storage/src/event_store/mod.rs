@@ -18,7 +18,7 @@ use std::usize;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
-use fastcrypto::encoding::{Base58, Encoding};
+use fastcrypto::encoding::{Base64, Encoding};
 use flexstr::SharedStr;
 use futures::prelude::stream::BoxStream;
 use move_core_types::identifier::Identifier;
@@ -344,7 +344,7 @@ impl StoredEvent {
     fn object_digest(&self) -> Result<Option<ObjectDigest>, anyhow::Error> {
         self.extract_string_field(OBJECT_DIGEST_KEY)?
             .map(|opt| {
-                Base58::decode(&opt)
+                Base64::decode(&opt)
                     .map_err(|e| anyhow!(e))
                     .and_then(|op| ObjectDigest::try_from(op.as_ref()).map_err(|e| anyhow!(e)))
             })

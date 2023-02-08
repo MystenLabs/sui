@@ -4,6 +4,7 @@
 #[cfg(msim)]
 mod test {
 
+    use itertools::Itertools;
     use rand::{thread_rng, Rng};
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
@@ -20,13 +21,19 @@ mod test {
         workloads::make_combination_workload,
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::SUI_KEYSTORE_FILENAME;
+    use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_macros::{register_fail_points, sim_test};
     use sui_simulator::{configs::*, SimConfig};
-    use sui_types::object::Owner;
+    use sui_types::object::{Object, Owner};
+    use sui_types::storage::ObjectKey;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tracing::info;
+    use typed_store::rocks::ReadWriteOptions;
+    use typed_store::{
+        rocks::{DBMap, MetricConf},
+        traits::Map,
+    };
 
     fn test_config() -> SimConfig {
         env_config(
@@ -67,6 +74,7 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    #[ignore]
     async fn test_simulated_load_restarts() {
         let test_cluster = build_test_cluster(4, 0).await;
         let node_restarter = test_cluster
@@ -137,6 +145,35 @@ mod test {
         );
 
         test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_pruning() {
+        let epoch_duration_ms = 1000;
+        let test_cluster = build_test_cluster(7, epoch_duration_ms).await;
+        test_simulated_load(test_cluster.clone(), 5).await;
+        // waiting enough time to get all transactions into checkpoints
+        tokio::time::sleep(Duration::from_millis(2 * epoch_duration_ms)).await;
+
+        let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
+        let validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
+        let db_path = validator_path.unwrap().path().join("store");
+
+        let db = typed_store::rocks::open_cf(&db_path, None, MetricConf::default(), &["objects"]);
+        let objects = DBMap::<ObjectKey, Object>::reopen(
+            &db.unwrap(),
+            Some("objects"),
+            &ReadWriteOptions {
+                ignore_range_deletions: false,
+            },
+        )
+        .unwrap();
+
+        let iter = objects.iter().skip_to_last().reverse();
+        for (_, group) in &iter.group_by(|item| item.0 .0) {
+            // assure  only last version is kept
+            assert_eq!(group.count(), 1);
+        }
     }
 
     async fn build_test_cluster(
@@ -228,6 +265,7 @@ mod test {
                 delegation_gas_configs,
             },
             reference_gas_price,
+            1000,
         )
         .await
         .unwrap();

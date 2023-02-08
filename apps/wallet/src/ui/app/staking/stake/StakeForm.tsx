@@ -23,7 +23,7 @@ const HIDE_MAX = true;
 export type StakeFromProps = {
     coinBalance: bigint;
     coinType: string;
-    epoch: string;
+    epoch?: string;
 };
 
 function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
@@ -127,7 +127,7 @@ function StakeForm({ coinBalance, coinType, epoch }: StakeFromProps) {
                             weight="medium"
                             color="steel-darker"
                         >
-                            Epoch #{+epoch + 2}
+                            {epoch ? `Epoch #${+epoch + 2}` : '--'}
                         </Text>
                     </div>
                 </Card>

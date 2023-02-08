@@ -59,13 +59,6 @@ impl ReadApi {
         Ok(self.api.http.get_objects_owned_by_address(address).await?)
     }
 
-    pub async fn get_objects_owned_by_object(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiRpcResult<Vec<SuiObjectInfo>> {
-        Ok(self.api.http.get_objects_owned_by_object(object_id).await?)
-    }
-
     pub async fn get_dynamic_fields(
         &self,
         object_id: ObjectID,

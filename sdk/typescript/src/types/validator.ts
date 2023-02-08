@@ -306,7 +306,8 @@ export const MoveValidatorsFieldsClass = object({
 export const MoveSuiSystemObjectFields = object({
   chain_id: optional(number()),
   epoch: string(),
-  epoch_start_timestamp_ms: string(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  epoch_start_timestamp_ms: optional(string()),
   safe_mode: boolean(),
   id: object({
     id: string(),

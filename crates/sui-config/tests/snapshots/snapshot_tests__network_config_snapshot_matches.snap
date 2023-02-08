@@ -67,6 +67,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -135,6 +136,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -203,6 +205,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -271,6 +274,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -339,6 +343,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -407,6 +412,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100
@@ -475,6 +481,7 @@ validator_configs:
       objects-pruning-initial-delay-secs: 3600
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
+      enable-live-pruner: false
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
       checkpoint-execution-max-concurrency: 100

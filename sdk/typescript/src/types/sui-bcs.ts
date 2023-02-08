@@ -16,8 +16,8 @@ function registerUTF8String(bcs: BCS) {
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
       return new TextDecoder().decode(new Uint8Array(bytes));
-    }
-  )
+    },
+  );
 }
 
 function registerObjectDigest(bcs: BCS) {
@@ -30,21 +30,21 @@ function registerObjectDigest(bcs: BCS) {
     (reader) => {
       let bytes = reader.readVec((reader) => reader.read8());
       return encodeStr(new Uint8Array(bytes), 'base64');
-    }
+    },
   );
 }
 
 type TypeSpec =
-    { struct: { [key:string]: string } }
-  | { enum: { [key:string]: string | null } };
+  | { struct: { [key: string]: string } }
+  | { enum: { [key: string]: string | null } };
 
-function registerTypes(bcs: BCS, specs: {[key:string]: TypeSpec }) {
+function registerTypes(bcs: BCS, specs: { [key: string]: TypeSpec }) {
   for (const type in specs) {
     const spec = specs[type];
     if ('struct' in spec) {
-      bcs.registerStructType(type, spec.struct)
+      bcs.registerStructType(type, spec.struct);
     } else {
-      bcs.registerEnumType(type, spec.enum)
+      bcs.registerEnumType(type, spec.enum);
     }
   }
 }
@@ -132,6 +132,20 @@ export type SharedObjectRef = {
 
   /** The version the object was shared at */
   initialSharedVersion: number;
+
+  /** Whether reference is mutable */
+  mutable: boolean;
+};
+
+/**
+ * A reference to a shared object from 0.23.0.
+ */
+export type SharedObjectRef_23 = {
+  /** Hex code as string representing the object id */
+  objectId: string;
+
+  /** The version the object was shared at */
+  initialSharedVersion: number;
 };
 
 /**
@@ -139,7 +153,7 @@ export type SharedObjectRef = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef };
+  | { Shared: SharedObjectRef | SharedObjectRef_23 };
 
 /**
  * A pure argument.
@@ -148,7 +162,7 @@ export type PureArg = { Pure: ArrayLike<number> };
 
 export function isPureArg(arg: any): arg is PureArg {
   return (arg as PureArg).Pure !== undefined;
-}  
+}
 
 /**
  * An argument for the transaction. It is a 'meant' enum which expects to have
@@ -212,7 +226,7 @@ export type MoveCallTx = {
   Call: {
     // TODO: restrict to just `string` once 0.24.0 is deployed in
     // devnet and testnet
-    package: (string | SuiObjectRef);
+    package: string | SuiObjectRef;
     module: string;
     function: string;
     typeArguments: TypeTag[];
@@ -256,12 +270,12 @@ export type TransactionData = {
 };
 
 export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
-  (e) => e.charCodeAt(0)
+  (e) => e.charCodeAt(0),
 );
 
 export function deserializeTransactionBytesToTransactionData(
   bcs: BCS,
-  bytes: Base64DataBuffer
+  bytes: Base64DataBuffer,
 ): TransactionData {
   return bcs.de('TransactionData', bytes.getData());
 }
@@ -329,6 +343,7 @@ const BCS_SPEC = {
     struct: {
       objectId: 'address',
       initialSharedVersion: 'u64',
+      mutable: 'bool',
     },
   },
 
@@ -344,7 +359,7 @@ const BCS_SPEC = {
       Pure: 'vector<u8>',
       Object: 'ObjectArg',
       ObjVec: 'vector<ObjectArg>',
-    }
+    },
   },
 
   TypeTag: {
@@ -431,6 +446,22 @@ const BCS_0_23_SPEC = {
       arguments: 'vector<CallArg>',
     },
   },
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
+    },
+  },
+};
+
+const BCS_0_24_SPEC = {
+  ...BCS_SPEC,
+  SharedObjectRef: {
+    struct: {
+      objectId: 'address',
+      initialSharedVersion: 'u64',
+    },
+  },
 };
 
 const bcs = new BCS(getSuiMoveConfig());
@@ -444,12 +475,20 @@ registerUTF8String(bcs_0_23);
 registerObjectDigest(bcs_0_23);
 registerTypes(bcs_0_23, BCS_0_23_SPEC);
 
+const bcs_0_24 = new BCS(getSuiMoveConfig());
+registerUTF8String(bcs_0_24);
+registerObjectDigest(bcs_0_24);
+registerTypes(bcs_0_24, BCS_0_24_SPEC);
+
 export function bcsForVersion(v?: RpcApiVersion) {
   if (v?.major === 0 && v?.minor < 24) {
     return bcs_0_23;
+  }
+  if (v?.major === 0 && v?.minor === 24) {
+    return bcs_0_24;
   } else {
     return bcs;
   }
 }
 
-export { bcs }
+export { bcs };

@@ -33,7 +33,7 @@ export class Secp256k1PublicKey implements PublicKey {
 
     if (this.data.length !== SECP256K1_PUBLIC_KEY_SIZE) {
       throw new Error(
-        `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`
+        `Invalid public key input. Expected ${SECP256K1_PUBLIC_KEY_SIZE} bytes, got ${this.data.length}`,
       );
     }
   }

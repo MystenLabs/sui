@@ -14,8 +14,6 @@ const ConfigSchema = z.object({
   VITE_REGISTRY: z.string(),
   /** Frenemies Package ID */
   VITE_PKG: z.string(),
-  /** Epoch length in minutes (24h x 60m default) */
-  VITE_EPOCH_LEN: z.string().default('1440')
 });
 
 export const config = ConfigSchema.parse(import.meta.env);

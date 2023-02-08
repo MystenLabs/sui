@@ -162,6 +162,7 @@ where
             .verify()
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *transaction.digest();
+        debug!(?tx_digest, "TO Received transaction execution request.");
 
         let _request_guard = self.metrics.request_latency.start_timer();
         let _wait_for_finality_guard = self.metrics.wait_for_finality_latency.start_timer();
@@ -226,13 +227,17 @@ where
         &self,
         transaction: VerifiedTransaction,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
-        let ticket = self.notifier.register_one(transaction.digest());
+        let tx_digest = *transaction.digest();
+        let ticket = self.notifier.register_one(&tx_digest);
         if self
             .pending_tx_log
             .write_pending_transaction_maybe(&transaction)
             .await?
         {
-            self.quorum_driver().submit_transaction(transaction).await?;
+            debug!(?tx_digest, "no pending request in flight, submitting.");
+            self.quorum_driver()
+                .submit_transaction_no_ticket(transaction)
+                .await?;
         }
         Ok(ticket)
     }

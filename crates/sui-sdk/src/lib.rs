@@ -84,6 +84,8 @@ impl SuiClientBuilder {
         let ws = if let Some(url) = self.ws_url {
             Some(
                 WsClientBuilder::default()
+                    .max_request_body_size(2 << 30)
+                    .max_concurrent_requests(self.max_concurrent_requests)
                     .set_headers(headers.clone())
                     .request_timeout(self.request_timeout)
                     .build(url)
@@ -94,9 +96,10 @@ impl SuiClientBuilder {
         };
 
         let http = HttpClientBuilder::default()
+            .max_request_body_size(2 << 30)
+            .max_concurrent_requests(self.max_concurrent_requests)
             .set_headers(headers.clone())
             .request_timeout(self.request_timeout)
-            .max_concurrent_requests(self.max_concurrent_requests)
             .build(http)?;
 
         let info = Self::get_server_info(&http, &ws).await?;
