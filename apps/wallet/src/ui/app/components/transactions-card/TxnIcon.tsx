@@ -59,7 +59,7 @@ export function TxnIcon({ txnFailed, variant }: TxnItemIconProps) {
     return (
         <div
             className={cl([
-                txnFailed ? 'bg-issue-light' : 'bg-gray-45',
+                txnFailed ? 'bg-issue-light' : 'bg-gray-40',
                 'w-7.5 h-7.5 flex justify-center items-center rounded-2lg',
             ])}
         >
