@@ -70,7 +70,6 @@ export function TransactionCard({
     });
 
     // we only show Sui Transfer amount or the first non-Sui transfer amount
-    // positive amount means received, negative amount means sent
     const transferAmount = useMemo(() => {
         // Find SUI transfer amount
         const amountTransfersSui = transfer.find(
@@ -127,11 +126,10 @@ export function TransactionCard({
     }, [isSender, moveCallLabel, txnKind]);
 
     // Transition label - depending on the transaction type and amount
-    // Epoch change with amount is staking rewards and without amount is delegation object
+    // Epoch change without amount is delegation object
     // Special case for staking and unstaking move call transaction,
     // For other transaction show Sent or Received
     const txnLabel = useMemo(() => {
-        // Epoch change with amount is staking rewards and without amount is delegation object
         if (txnKind === 'ChangeEpoch')
             return transferAmount.amount
                 ? 'Received Staking Rewards'
