@@ -131,6 +131,7 @@ pub mod authority_per_epoch_store_pruner;
 
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
+pub mod authority_store_types;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
