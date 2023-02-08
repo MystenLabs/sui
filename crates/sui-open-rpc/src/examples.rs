@@ -76,7 +76,6 @@ impl RpcExampleProvider {
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_objects_owned_by_address(),
-            self.get_objects_owned_by_object(),
             self.get_raw_object(),
             self.get_total_transaction_number(),
             self.get_transaction(),
@@ -264,28 +263,6 @@ impl RpcExampleProvider {
             vec![ExamplePairing::new(
                 "Get objects owned by an address",
                 vec![("address", json!(owner))],
-                json!(result),
-            )],
-        )
-    }
-    fn get_objects_owned_by_object(&mut self) -> Examples {
-        let owner = ObjectID::new(self.rng.gen());
-        let result = (0..4)
-            .map(|_| SuiObjectInfo {
-                object_id: ObjectID::new(self.rng.gen()),
-                version: Default::default(),
-                digest: ObjectDigest::new(self.rng.gen()),
-                type_: ObjectType::Struct(GasCoin::type_()).to_string(),
-                owner: Owner::ObjectOwner(SuiAddress::from(owner)),
-                previous_transaction: TransactionDigest::new(self.rng.gen()),
-            })
-            .collect::<Vec<_>>();
-
-        Examples::new(
-            "sui_getObjectsOwnedByObject",
-            vec![ExamplePairing::new(
-                "Get objects owned by an object",
-                vec![("object_id", json!(owner))],
                 json!(result),
             )],
         )

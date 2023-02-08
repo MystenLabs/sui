@@ -484,24 +484,6 @@ export class JsonRpcProvider extends Provider {
     )) as GetObjectDataResponse[];
   }
 
-  async getObjectsOwnedByObject(objectId: ObjectId): Promise<SuiObjectInfo[]> {
-    try {
-      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
-        throw new Error('Invalid Sui Object id');
-      }
-      return await this.client.requestWithType(
-        'sui_getObjectsOwnedByObject',
-        [objectId],
-        GetOwnedObjectsResponse,
-        this.options.skipDataValidation,
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching owned object: ${err} for objectId ${objectId}`,
-      );
-    }
-  }
-
   async getObject(objectId: ObjectId): Promise<GetObjectDataResponse> {
     try {
       if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
@@ -960,6 +942,12 @@ export class JsonRpcProvider extends Provider {
     limit: number | null = null,
   ): Promise<DynamicFieldPage> {
     try {
+      if (
+        !parent_object_id ||
+        !isValidSuiObjectId(normalizeSuiObjectId(parent_object_id))
+      ) {
+        throw new Error('Invalid Sui Object id');
+      }
       const resp = await this.client.requestWithType(
         'sui_getDynamicFields',
         [parent_object_id, cursor, limit],
