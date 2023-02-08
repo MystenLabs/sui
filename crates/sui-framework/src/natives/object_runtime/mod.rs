@@ -161,16 +161,6 @@ impl<'a> ObjectRuntime<'a> {
         tag: StructTag,
         obj: Value,
     ) -> PartialVMResult<TransferResult> {
-        if self.state.transfers.len() == (MAX_NUM_TRANSFERED_IDS as usize) {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
-                    "Transfering more than {MAX_NUM_TRANSFERED_IDS} IDs is not allowed"
-                ))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
-        }
-
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
@@ -192,6 +182,19 @@ impl<'a> ObjectRuntime<'a> {
             } else {
                 TransferResult::OwnerChanged
             };
+
+        // Todo: System objects should not be subject to such limits?
+        if (self.state.transfers.len() == (MAX_NUM_TRANSFERED_IDS as usize))
+            && (id != SUI_SYSTEM_STATE_OBJECT_ID)
+        {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Transfering more than {MAX_NUM_TRANSFERED_IDS} IDs is not allowed"
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
+        }
         self.state.transfers.insert(id, (owner, ty, tag, obj));
         Ok(transfer_result)
     }
