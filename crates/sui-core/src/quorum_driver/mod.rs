@@ -367,7 +367,7 @@ where
             .await
             .map_err(QuorumDriverInternalError::CertificateError)?;
         let response = QuorumDriverResponse {
-            tx_cert: certificate,
+            tx_cert: Some(certificate),
             effects_cert: effects,
         };
 
@@ -453,8 +453,8 @@ where
         Ok(Some((**tx_digest, is_tx_executed)))
     }
 
-    /// Returns Some(true) if the conflicting transaction is executed successfully
-    /// (or already executed), or Some(false) if it did not.
+    /// Returns Ok(true) if the conflicting transaction is executed successfully
+    /// (or already executed), or Ok(false) if it did not.
     async fn attempt_one_conflicting_transaction(
         &self,
         tx_digest: &&TransactionDigest,
@@ -473,6 +473,7 @@ where
 
         match response {
             VerifiedTransactionInfoResponse::Executed(cert, _) => {
+                let cert = cert.expect("Current implementation always returns a certificate.");
                 self.metrics
                     .total_times_conflicting_transaction_already_finalized_when_retrying
                     .inc();

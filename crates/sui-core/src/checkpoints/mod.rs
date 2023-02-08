@@ -924,12 +924,6 @@ impl CheckpointSignatureAggregator {
             return Err(());
         }
         match self.signatures.insert(signature) {
-            InsertResult::RepeatingEntry { previous, new } => {
-                if previous != new {
-                    warn!("Validator {:?} submitted two different signatures for checkpoint {}: {:?}, {:?}", author.concise(), self.summary.sequence_number, previous, new);
-                }
-                Err(())
-            }
             InsertResult::Failed { error } => {
                 warn!(
                     "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",

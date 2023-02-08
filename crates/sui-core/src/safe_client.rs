@@ -9,6 +9,7 @@ use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -212,24 +213,31 @@ impl<C> SafeClient<C> {
         digest: &TransactionDigest,
         response: TransactionInfoResponse,
     ) -> SuiResult<VerifiedTransactionInfoResponse> {
-        match response {
-            TransactionInfoResponse::Signed(signed) => {
-                fp_ensure!(
-                    digest == signed.digest(),
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Signed transaction digest does not match with expected digest"
-                            .to_string()
-                    }
-                );
-                let committee = self.get_committee(&signed.epoch())?;
+        fp_ensure!(
+            digest == &response.transaction.digest(),
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "Signed transaction digest does not match with expected digest".to_string()
+            }
+        );
+        match response.status {
+            TransactionStatus::Signed(sig) => {
+                let committee = self.get_committee(&sig.epoch)?;
                 Ok(VerifiedTransactionInfoResponse::Signed(
-                    signed.verify(&committee)?,
+                    SignedTransaction::new_from_data_and_sig(response.transaction, sig)
+                        .verify(&committee)?,
                 ))
             }
-            TransactionInfoResponse::Executed(cert, effects) => {
+            TransactionStatus::Executed(cert, effects) => {
+                let verified_cert = match cert {
+                    Some(cert) => Some(self.check_certificate(
+                        CertifiedTransaction::new_from_data_and_sig(response.transaction, cert),
+                        digest,
+                    )?),
+                    None => None,
+                };
                 Ok(VerifiedTransactionInfoResponse::Executed(
-                    self.check_certificate(cert, digest)?,
+                    verified_cert,
                     self.check_signed_effects(digest, effects, None)?,
                 ))
             }
@@ -397,11 +405,17 @@ where
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.into_inner())
+            .handle_transaction(transaction.clone().into_inner())
             .await?;
         let response = check_error!(
             self.address,
-            self.check_transaction_info(&digest, response),
+            self.check_transaction_info(
+                &digest,
+                TransactionInfoResponse {
+                    transaction: transaction.into_message(),
+                    status: response.status
+                }
+            ),
             "Client error in handle_transaction"
         )?;
         Ok(response)

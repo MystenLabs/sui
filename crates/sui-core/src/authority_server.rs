@@ -240,7 +240,7 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let transaction = request.into_inner();
 
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
@@ -398,7 +398,7 @@ impl Validator for ValidatorService {
     async fn transaction(
         &self,
         request: tonic::Request<Transaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let state = self.state.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue

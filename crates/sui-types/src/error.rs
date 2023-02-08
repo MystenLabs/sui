@@ -545,6 +545,9 @@ pub enum SuiError {
     #[error("This Move function is currently disabled and not available for call")]
     BlockedMoveFunction,
 
+    #[error("Repeating signatures from the same validator are observed")]
+    StakeAggregationRepeatingEntry { conflict_entry: bool },
+
     #[error("unknown error: {0}")]
     Unknown(String),
 }

@@ -194,11 +194,12 @@ where
                 } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        Some(tx_cert.into()),
+                        tx_cert.map(|tx_cert| tx_cert.into()),
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     ))));
                 }
+                let tx_cert = tx_cert.expect("Current implementation always returns a tx_cert.");
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
                     &tx_cert,
@@ -317,8 +318,11 @@ where
                     tx_cert,
                     effects_cert,
                 })) => {
-                    let tx_digest = tx_cert.digest();
-                    if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
+                    // TODO: Once we support executing transactions without cert, we should remove this expect.
+                    let tx_cert =
+                        tx_cert.expect("Currently validators always return cert with effects");
+                    let tx_digest = effects_cert.transaction_digest;
+                    if let Err(err) = pending_transaction_log.finish_transaction(&tx_digest) {
                         error!(
                             ?tx_digest,
                             "Failed to finish transaction in pending transaction log: {err}"

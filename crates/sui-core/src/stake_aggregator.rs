@@ -7,8 +7,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
-use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo};
-use sui_types::error::SuiError;
+use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, Signable};
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub struct StakeAggregator<S, const STRENGTH: bool> {
 /// quorum (defined based on `STRENGTH`). The generic implementation does not require `S` to be
 /// an actual signature, but just an indication that a specific validator has voted. A specialized
 /// implementation for `AuthoritySignInfo` is followed below.
-impl<S: Clone, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
+impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     pub fn new(committee: Arc<Committee>) -> Self {
         Self {
             data: Default::default(),
@@ -46,12 +46,13 @@ impl<S: Clone, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     /// A generic version of inserting arbitrary type of V (e.g. void type).
     /// If V is AuthoritySignInfo, the `insert` function should be used instead since it does extra
     /// checks and aggregations in the end.
-    pub fn insert_generic(&mut self, authority: AuthorityName, s: S) -> InsertResult<S, ()> {
+    pub fn insert_generic(&mut self, authority: AuthorityName, s: S) -> InsertResult<()> {
         match self.data.entry(authority) {
             Entry::Occupied(oc) => {
-                return InsertResult::RepeatingEntry {
-                    previous: oc.get().clone(),
-                    new: s,
+                return InsertResult::Failed {
+                    error: SuiError::StakeAggregationRepeatingEntry {
+                        conflict_entry: oc.get() == &s,
+                    },
                 };
             }
             Entry::Vacant(va) => {
@@ -89,7 +90,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     pub fn insert(
         &mut self,
         sig: AuthoritySignInfo,
-    ) -> InsertResult<AuthoritySignInfo, AuthorityQuorumSignInfo<STRENGTH>> {
+    ) -> InsertResult<AuthorityQuorumSignInfo<STRENGTH>> {
         if self.committee.epoch != sig.epoch {
             return InsertResult::Failed {
                 error: SuiError::WrongEpoch {
@@ -109,23 +110,19 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                 }
             }
             // The following is necessary to change the template type of InsertResult.
-            InsertResult::RepeatingEntry { previous, new } => {
-                InsertResult::RepeatingEntry { previous, new }
-            }
             InsertResult::Failed { error } => InsertResult::Failed { error },
             InsertResult::NotEnoughVotes => InsertResult::NotEnoughVotes,
         }
     }
 }
 
-pub enum InsertResult<V, CertT> {
+pub enum InsertResult<CertT> {
     QuorumReached(CertT),
-    RepeatingEntry { previous: V, new: V },
     Failed { error: SuiError },
     NotEnoughVotes,
 }
 
-impl<V, CertT> InsertResult<V, CertT> {
+impl<CertT> InsertResult<CertT> {
     pub fn is_quorum_reached(&self) -> bool {
         matches!(self, Self::QuorumReached(..))
     }
@@ -139,13 +136,13 @@ impl<V, CertT> InsertResult<V, CertT> {
 /// A specialized implementation is also provided for `Message` value type, so that we could create
 /// `Envelope` directly.
 #[derive(Debug)]
-pub struct MultiStakeAggregator<K, V, const STRENGTH: bool> {
+pub struct MultiStakeAggregator<K, V: Message, const STRENGTH: bool> {
     committee: Arc<Committee>,
     stake_maps: HashMap<K, (V, StakeAggregator<AuthoritySignInfo, STRENGTH>)>,
-    cert: Option<(V, AuthorityQuorumSignInfo<STRENGTH>)>,
+    cert: Option<VerifiedEnvelope<V, AuthorityQuorumSignInfo<STRENGTH>>>,
 }
 
-impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
+impl<K, V: Message, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
     pub fn new(committee: Arc<Committee>) -> Self {
         Self {
             committee,
@@ -158,7 +155,9 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
         self.stake_maps.len()
     }
 
-    pub fn get_certificate(&self) -> &Option<(V, AuthorityQuorumSignInfo<STRENGTH>)> {
+    pub fn get_certificate(
+        &self,
+    ) -> &Option<VerifiedEnvelope<V, AuthorityQuorumSignInfo<STRENGTH>>> {
         &self.cert
     }
 }
@@ -166,19 +165,31 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
 impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH>
 where
     K: Hash + Eq,
-    V: Clone,
+    V: Message + Clone + Signable<Vec<u8>>,
 {
-    pub fn add(&mut self, k: K, v: &V, sig: AuthoritySignInfo) -> bool {
+    pub fn insert(
+        &mut self,
+        k: K,
+        message: VerifiedEnvelope<V, AuthoritySignInfo>,
+    ) -> SuiResult<bool> {
+        let (data, sig) = message.into_inner().into_data_and_sig();
         let entry = self
             .stake_maps
             .entry(k)
-            .or_insert((v.clone(), StakeAggregator::new(self.committee.clone())));
-        match entry.1.insert(sig) {
-            InsertResult::QuorumReached(cert) => {
-                self.cert = Some((v.clone(), cert));
-                true
+            .or_insert((data.clone(), StakeAggregator::new(self.committee.clone())));
+        match entry.1.insert(sig.clone()) {
+            InsertResult::QuorumReached(cert_sig) => {
+                let cert = Envelope::new_from_data_and_sig(data, cert_sig);
+                match cert.verify(&self.committee) {
+                    Ok(verified_cert) => {
+                        self.cert = Some(verified_cert);
+                        Ok(true)
+                    }
+                    Err(error) => Err(error),
+                }
             }
-            _ => false,
+            InsertResult::Failed { error } => Err(error),
+            InsertResult::NotEnoughVotes => Ok(false),
         }
     }
 }
@@ -186,6 +197,7 @@ where
 impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH>
 where
     K: Clone + Ord,
+    V: Message,
 {
     pub fn get_all_unique_values(&self) -> BTreeMap<K, (Vec<AuthorityName>, StakeUnit)> {
         self.stake_maps
@@ -200,22 +212,5 @@ where
                 )
             })
             .collect()
-    }
-}
-
-impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH>
-where
-    V: Message + Clone,
-{
-    pub fn get_message_cert(
-        &self,
-    ) -> Option<VerifiedEnvelope<V, AuthorityQuorumSignInfo<STRENGTH>>> {
-        self.get_certificate().as_ref().map(|(message, sig)| {
-            // No verification is necessary since we constructed the signatures properly.
-            VerifiedEnvelope::new_unchecked(Envelope::new_from_data_and_sig(
-                message.clone(),
-                sig.clone(),
-            ))
-        })
     }
 }
