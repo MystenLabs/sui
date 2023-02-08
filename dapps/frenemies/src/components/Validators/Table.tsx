@@ -36,12 +36,11 @@ export function Table({ validators }: Props) {
     currentAccount
   );
 
-  // sort validators by their voting power in DESC order (not by stake - these are different)
-  // TODO: using `OR "0"` since voting power is an optional field;
+  // sort validators by their live stake info in DESC order
   const sorted = [...validators].sort((a, b) =>
     Number(
-      BigInt(b.fields.voting_power || "0") -
-        BigInt(a.fields.voting_power || "0")
+      BigInt(b.fields.metatadata.fields.next_epoch_stake) + BigInt(b.fields.metadata.fields.next_epoch_delegation) -
+        BigInt(a.fields.metatadata.fields.next_epoch_stake) + BigInt(a.fields.metadata.fields.next_epoch_delegation) -
     )
   );
 
