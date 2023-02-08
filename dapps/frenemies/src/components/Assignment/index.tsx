@@ -16,7 +16,7 @@ const SAD_CAPY = "/capy_cry.svg";
 const GOAL_TO_COPY = {
   [Goal.Friend]: "1-13",
   [Goal.Neutral]: "14-25",
-  [Goal.Enemy]: "26-40",
+  [Goal.Enemy]: "26-41",
 };
 
 function getIsInRank(goal: Goal, index: number) {
