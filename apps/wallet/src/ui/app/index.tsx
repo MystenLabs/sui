@@ -25,6 +25,7 @@ import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
 import CreatePage from '_pages/initialize/create';
 import ImportPage from '_pages/initialize/import';
+import LedgerPage from '_pages/initialize/ledger';
 import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
@@ -99,6 +100,7 @@ const App = () => {
                 <Route path="select" element={<SelectPage />} />
                 <Route path="create" element={<CreatePage />} />
                 <Route path="import" element={<ImportPage />} />
+                <Route path="ledger" element={<LedgerPage />} />
                 <Route path="backup" element={<BackupPage />} />
                 <Route
                     path="backup-imported"

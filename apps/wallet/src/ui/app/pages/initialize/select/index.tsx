@@ -9,17 +9,24 @@ import Icon, { SuiIcons } from '_components/icon';
 
 const selections = [
     {
-        title: 'Yes, let’s create one!',
+        title: 'Yes, let’s create software wallet!',
         desc: 'This creates a new wallet and a 12-word recovery phrase.',
         url: '../create',
         action: 'Create a New Wallet',
         icon: SuiIcons.Plus,
     },
     {
-        title: 'No, I already have one',
+        title: 'No, I already have a software one',
         desc: 'Import your existing wallet by entering the 12-word recovery phrase.',
         url: '../import',
         action: 'Import an Existing Wallet',
+        icon: SuiIcons.Download,
+    },
+    {
+        title: 'Yes, I’ll use my Ledger hardware wallet',
+        desc: 'Get my SUI address from my ledger wallet connected to this device',
+        url: '../ledger',
+        action: 'Connect to Ledger device',
         icon: SuiIcons.Download,
     },
 ];
