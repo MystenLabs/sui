@@ -17,6 +17,19 @@ function InfoItem({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+function InfoLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-frenemies font-semibold"
+    >
+      {children}
+    </a>
+  );
+}
+
 export function Connect() {
   const navigate = useNavigate();
   const { currentAccount } = useWalletKit();
@@ -45,13 +58,25 @@ export function Connect() {
         </div>
         <div className="mt-8 mb-12 grid grid-cols-1 sm:grid-cols-3 gap-x-10 gap-y-4">
           <InfoItem title="A Sui Wallet">
-            You can download Sui Wallet from Chrome store here.
+            You can download Sui Wallet from{" "}
+            <InfoLink href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil">
+              Chrome store here
+            </InfoLink>
+            .
           </InfoItem>
           <InfoItem title="Connect to Sui Testnet">
-            Frenemies game only works on Testnet network. Learn more.
+            Frenemies game only works on Testnet network.{" "}
+            <InfoLink href="https://docs.sui.io/devnet/explore/wallet-browser#change-the-active-network">
+              Learn more
+            </InfoLink>
+            .
           </InfoItem>
           <InfoItem title="SUI in your wallet">
-            You can request SUI on Discord if you don't have some already.
+            You can{" "}
+            <InfoLink href="https://discord.com/channels/916379725201563759/1037811694564560966">
+              request SUI on Discord
+            </InfoLink>{" "}
+            if you don't have some already.
           </InfoItem>
         </div>
         <ConnectButton
