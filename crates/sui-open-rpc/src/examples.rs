@@ -500,6 +500,7 @@ impl RpcExampleProvider {
                 ],
                 unwrapped: vec![],
                 deleted: vec![],
+                unwrapped_then_deleted: vec![],
                 wrapped: vec![],
                 gas_object: OwnedObjectRef {
                     owner: Owner::ObjectOwner(signer),

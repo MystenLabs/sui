@@ -1130,22 +1130,15 @@ impl AuthorityState {
 
         let mut deleted_owners = vec![];
         let mut deleted_dynamic_fields = vec![];
-        for ((id, _, _), kind) in effects.all_deleted() {
-            match kind {
-                DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
-                    let Some(old_version) = modified_at_version.get(id) else{
-                        error!("Error processing object owner index for tx [{:?}], cannot find modified at version for deleted object [{id}].", effects.transaction_digest);
-                        continue;
-                    };
-                    match self.get_owner_at_version(id, *old_version)? {
-                        Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
-                        Owner::ObjectOwner(object_id) => {
-                            deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
-                        }
-                        _ => {}
-                    }
+        for (id, _, _) in &effects.deleted {
+            let old_version = modified_at_version.get(id).unwrap();
+
+            match self.get_owner_at_version(id, *old_version)? {
+                Owner::AddressOwner(addr) => deleted_owners.push((addr, *id)),
+                Owner::ObjectOwner(object_id) => {
+                    deleted_dynamic_fields.push((ObjectID::from(object_id), *id))
                 }
-                DeleteKind::Wrap => {}
+                _ => {}
             }
         }
 

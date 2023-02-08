@@ -2400,7 +2400,7 @@ pub struct TransactionEffects {
     pub unwrapped: Vec<(ObjectRef, Owner)>,
     /// Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
-    /// Object refs of objects now wrapped in other objects.
+    /// Object refs of objects previously wrapped in other objects but now deleted.
     pub unwrapped_then_deleted: Vec<ObjectRef>,
     /// Object refs of objects now wrapped in other objects.
     pub wrapped: Vec<ObjectRef>,

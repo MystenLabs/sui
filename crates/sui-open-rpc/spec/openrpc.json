@@ -6592,6 +6592,13 @@
               "$ref": "#/components/schemas/OwnedObjectRef"
             }
           },
+          "unwrappedThenDeleted": {
+            "description": "Object refs of objects previously wrapped in other objects but now deleted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
           "wrapped": {
             "type": "array",
             "items": {
