@@ -12,8 +12,7 @@ import {
 import { ExplorerLinkType } from './ExplorerLinkType';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
-import { useAppSelector } from '_hooks';
-import { activeAccountSelector } from '_redux/slices/account';
+import { useAppSelector, useActiveAddress } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
@@ -46,7 +45,7 @@ function useAddress(props: ExplorerLinkProps) {
     const { type } = props;
     const isAddress = type === ExplorerLinkType.address;
     const isProvidedAddress = isAddress && !props.useActiveAddress;
-    const activeAddress = useAppSelector(activeAccountSelector);
+    const activeAddress = useActiveAddress();
     return isProvidedAddress ? props.address : activeAddress;
 }
 

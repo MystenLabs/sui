@@ -28,6 +28,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { getAmount, getEventsSummary, notEmpty } from '../helpers';
 import useAppSelector from './useAppSelector';
+import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useRpc } from './useRpc';
 
 export type TxResultState = {
@@ -191,7 +192,7 @@ async function processTransactionEffects(
 // performance issues in the wallet.
 export function useRecentTransactions() {
     const rpc = useRpc();
-    const address = useAppSelector((state) => state.account.address);
+    const address = useActiveAddress();
 
     return useQuery(
         ['transactions', 'recent', address],
@@ -224,7 +225,7 @@ export function useRecentTransactions() {
 
 export function useRecentTransaction(transactionDigest: string | null) {
     const rpc = useRpc();
-    const userAddress = useAppSelector((state) => state.account.address);
+    const userAddress = useActiveAddress();
     return useQuery({
         queryKey: [
             'recent transaction',

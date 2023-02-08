@@ -36,9 +36,7 @@ export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     AppThunkConfig
 >('sui-objects/fetch-all', async (_, { getState, extra: { api } }) => {
     const state = getState();
-    const {
-        account: { address },
-    } = state;
+    const address = state.account.account?.address;
     const allSuiObjects: SuiObject[] = [];
     if (address) {
         const allObjectRefs =
@@ -90,12 +88,19 @@ export const batchFetchObject = createAsyncThunk<
 
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
-    async (_, { extra: { api, background }, dispatch, getState }) => {
-        const activeAddress = activeAccountSelector(getState());
-        if (!activeAddress) {
+    async (
+        _,
+        { extra: { api, background, initAppSui }, dispatch, getState }
+    ) => {
+        const activeAccount = activeAccountSelector(getState());
+        if (!activeAccount) {
             throw new Error('Error, active address is not defined');
         }
-        const signer = api.getSignerInstance(activeAddress, background);
+        const signer = api.getSignerInstance(
+            activeAccount,
+            background,
+            initAppSui
+        );
         await ExampleNFT.mintExampleNFT(signer);
         await dispatch(fetchAllOwnedAndRequiredObjects());
     }
@@ -114,12 +119,19 @@ export const transferNFT = createAsyncThunk<
     AppThunkConfig
 >(
     'transferNFT',
-    async (data, { extra: { api, background }, dispatch, getState }) => {
-        const activeAddress = activeAccountSelector(getState());
-        if (!activeAddress) {
+    async (
+        data,
+        { extra: { api, background, initAppSui }, dispatch, getState }
+    ) => {
+        const activeAccount = activeAccountSelector(getState());
+        if (!activeAccount) {
             throw new Error('Error, active address is not defined');
         }
-        const signer = api.getSignerInstance(activeAddress, background);
+        const signer = api.getSignerInstance(
+            activeAccount,
+            background,
+            initAppSui
+        );
         const txn = await signer.transferObject(data);
         await dispatch(fetchAllOwnedAndRequiredObjects());
         const txnResp = {

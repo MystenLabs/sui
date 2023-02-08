@@ -36,6 +36,7 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import {
     useSigner,
+    useActiveAddress,
     useAppSelector,
     useCoinDecimals,
     useGetObject,
@@ -59,7 +60,7 @@ export type FormValues = typeof initialValues;
 
 function StakingCard() {
     const coinType = GAS_TYPE_ARG;
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');

@@ -13,7 +13,7 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import RecentTransactions from '_components/transactions-card/RecentTransactions';
 import { SuiIcons } from '_font-icons/output/sui-icons';
-import { useAppSelector, useObjectsState } from '_hooks';
+import { useActiveAddress, useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
@@ -77,7 +77,7 @@ function MyTokens({
 function TokenDetails({ coinType }: TokenDetailsProps) {
     const { loading, error, showError } = useObjectsState();
     const activeCoinType = coinType || GAS_TYPE_ARG;
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const balances = useAppSelector(accountAggregateBalancesSelector);
     const tokenBalance = balances[activeCoinType] || BigInt(0);
     const allCoinTypes = useMemo(() => Object.keys(balances), [balances]);

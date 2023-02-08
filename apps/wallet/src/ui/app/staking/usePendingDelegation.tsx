@@ -73,7 +73,7 @@ interface PendingDelegation {
  * Fetches the pending delegations from the system object. This is currently pretty hacky and expensive.
  */
 export function usePendingDelegation(): [PendingDelegation[], UseQueryResult] {
-    const address = useAppSelector(({ account: { address } }) => address);
+    const address = useAppSelector(({ account }) => account.account?.address);
 
     const objectQuery = useGetObject(STATE_OBJECT);
 

@@ -13,6 +13,7 @@ export { default as useOnKeyboardEvent } from './useOnKeyboardEvent';
 export { default as useFileExtensionType } from './useFileExtensionType';
 export { default as useNFTBasicData } from './useNFTBasicData';
 export { useObjectsState } from './useObjectsState';
+export { useActiveAddress } from './useActiveAddress';
 export { useWaitForElement } from './useWaitForElement';
 export { useFormatCoin, useCoinDecimals } from './useFormatCoin';
 export { useGetNFTMeta } from './useGetNFTMeta';

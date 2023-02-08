@@ -76,13 +76,20 @@ export const deserializeTxn = createAsyncThunk<
     AppThunkConfig
 >(
     'deserialize-transaction',
-    async (data, { dispatch, extra: { api, background }, getState }) => {
+    async (
+        data,
+        { dispatch, extra: { api, background, initAppSui }, getState }
+    ) => {
         const { id, serializedTxn } = data;
-        const activeAddress = activeAccountSelector(getState());
-        if (!activeAddress) {
+        const activeAccount = activeAccountSelector(getState());
+        if (!activeAccount) {
             throw new Error('Error, active address is not defined');
         }
-        const signer = api.getSignerInstance(activeAddress, background);
+        const signer = api.getSignerInstance(
+            activeAccount,
+            background,
+            initAppSui
+        );
         const localSerializer = new LocalTxnDataSerializer(signer.provider);
         const txnBytes = new Base64DataBuffer(serializedTxn);
 
@@ -134,11 +141,11 @@ export const respondToTransactionRequest = createAsyncThunk<
     'respond-to-transaction-request',
     async (
         { txRequestID, approved },
-        { extra: { background, api }, getState }
+        { extra: { background, api, initAppSui }, getState }
     ) => {
         const state = getState();
-        const activeAddress = activeAccountSelector(state);
-        if (!activeAddress) {
+        const activeAccount = activeAccountSelector(state);
+        if (!activeAccount) {
             throw new Error('Error, active address is not defined');
         }
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
@@ -148,7 +155,11 @@ export const respondToTransactionRequest = createAsyncThunk<
         let txResult: SuiTransactionResponse | undefined = undefined;
         let tsResultError: string | undefined;
         if (approved) {
-            const signer = api.getSignerInstance(activeAddress, background);
+            const signer = api.getSignerInstance(
+                activeAccount,
+                background,
+                initAppSui
+            );
             try {
                 let response: SuiExecuteTransactionResponse;
                 if (

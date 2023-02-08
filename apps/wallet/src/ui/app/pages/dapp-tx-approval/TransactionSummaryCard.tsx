@@ -12,6 +12,7 @@ import {
     useGetNFTMeta,
     useAppSelector,
     useTransactionSummary,
+    useActiveAddress,
 } from '_hooks';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
@@ -73,11 +74,11 @@ function CoinMeta({
         coinMeta.coinType
     );
 
-    const activeAccount = useAppSelector(({ account }) => account.address);
+    const activeAddress = useActiveAddress();
 
     // TODO add receiver address;
     // Currently dry_run does not return receiver address for transactions init by Move contract
-    const showAddress = receiverAddress !== activeAccount;
+    const showAddress = receiverAddress !== activeAddress;
 
     const receiverAddr = useMiddleEllipsis(
         receiverAddress,

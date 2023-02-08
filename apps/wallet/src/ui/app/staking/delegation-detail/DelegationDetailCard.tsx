@@ -19,7 +19,7 @@ import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector, useGetObject } from '_hooks';
+import { useAppSelector, useActiveAddress, useGetObject } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -37,7 +37,7 @@ export function DelegationDetailCard({
         isError: errorValidators,
     } = useGetObject(STATE_OBJECT);
 
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const {
         data: allDelegation,

@@ -10,7 +10,7 @@ import { TransactionSummaryCard } from './TransactionSummaryCard';
 import { TransactionTypeCard } from './TransactionTypeCard';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector } from '_hooks';
+import { useActiveAddress, useAppDispatch, useAppSelector } from '_hooks';
 import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
@@ -291,7 +291,7 @@ export function DappTxApprovalPage() {
         }
     }, [txRequest]);
 
-    const address = useAppSelector(({ account: { address } }) => address);
+    const address = useActiveAddress();
 
     return (
         <Loading loading={loadingState}>

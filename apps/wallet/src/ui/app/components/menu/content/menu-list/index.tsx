@@ -12,7 +12,12 @@ import { lockWallet } from '_app/wallet/actions';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import { useNextMenuUrl } from '_components/menu/hooks';
-import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
+import {
+    useActiveAddress,
+    useAppDispatch,
+    useAppSelector,
+    useMiddleEllipsis,
+} from '_hooks';
 import { ToS_LINK } from '_src/shared/constants';
 
 import st from './MenuList.module.scss';
@@ -20,7 +25,7 @@ import st from './MenuList.module.scss';
 function MenuList() {
     const accountUrl = useNextMenuUrl(true, '/account');
     const networkUrl = useNextMenuUrl(true, '/network');
-    const address = useAppSelector(({ account }) => account.address);
+    const address = useActiveAddress();
     const shortenAddress = useMiddleEllipsis(address, 10, 7);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;

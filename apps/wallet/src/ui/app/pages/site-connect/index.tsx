@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector } from '_hooks';
+import { useAppDispatch, useActiveAddress, useAppSelector } from '_hooks';
 import {
     permissionsSelectors,
     respondToPermissionRequest,
@@ -38,7 +38,7 @@ function SiteConnectPage() {
     );
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
-    const activeAccount = useAppSelector(({ account }) => account.address);
+    const activeAccount = useActiveAddress();
     const handleOnSubmit = useCallback(
         (allowed: boolean) => {
             if (requestID && activeAccount) {

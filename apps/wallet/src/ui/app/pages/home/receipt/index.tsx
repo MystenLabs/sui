@@ -12,12 +12,12 @@ import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
 import { checkStakingTxn } from '_helpers';
-import { useRpc, useAppSelector } from '_hooks';
+import { useRpc, useActiveAddress, useAppSelector } from '_hooks';
 
 function ReceiptPage() {
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useActiveAddress();
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');

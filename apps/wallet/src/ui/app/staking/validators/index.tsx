@@ -11,11 +11,11 @@ import Alert from '_components/alert';
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
-import { useAppSelector } from '_hooks';
+import { useActiveAddress } from '_hooks';
 
 export function Validators() {
     const [showModal, setShowModal] = useState(true);
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
     const {
         data: stakedValidators,
         isLoading,

@@ -17,7 +17,6 @@ import type { ObjectId, SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction, Reducer } from '@reduxjs/toolkit';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { RootState } from '_redux/RootReducer';
-import type { AccountSerialized } from '_src/background/keyring/Account';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export const createVault = createAsyncThunk<
@@ -53,6 +52,21 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
+// Extended version of the background proc's AccountSerialized also supporting
+// ledger.
+export type AccountType = 'derived' | 'imported' | 'ledger';
+export type AccountSerialized =
+    | {
+          type: 'derived' | 'ledger';
+          address: SuiAddress;
+          derivationPath: string;
+      }
+    | {
+          type: 'imported';
+          address: SuiAddress;
+          derivationPath: null;
+      };
+
 const accountsAdapter = createEntityAdapter<AccountSerialized>({
     selectId: ({ address }) => address,
     sortComparer: (a, b) => {
@@ -73,14 +87,14 @@ const accountsAdapter = createEntityAdapter<AccountSerialized>({
 
 type AccountState = {
     creating: boolean;
-    address: SuiAddress | null;
+    account: AccountSerialized | null;
     isLocked: boolean | null;
     isInitialized: boolean | null;
 };
 
 const initialState = accountsAdapter.getInitialState<AccountState>({
     creating: false,
-    address: null,
+    account: null,
     isLocked: null,
     isInitialized: null,
 });
@@ -89,9 +103,6 @@ const accountSlice = createSlice({
     name: 'account',
     initialState,
     reducers: {
-        setAddress: (state, action: PayloadAction<string | null>) => {
-            state.address = action.payload;
-        },
         setKeyringStatus: (
             state,
             {
@@ -102,8 +113,22 @@ const accountSlice = createSlice({
         ) => {
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
-            state.address = payload.activeAddress || null; // is already normalized
+            state.account =
+                payload.accounts.find(
+                    (a) => a.address == payload.activeAddress
+                ) || null; // is already normalized
             accountsAdapter.setAll(state, payload.accounts);
+        },
+        setLedgerAccount: (
+            state,
+            {
+                payload,
+            }: PayloadAction<{ address: SuiAddress; derivationPath: string }>
+        ) => {
+            state.isLocked = false;
+            state.isInitialized = true;
+            state.account = { type: 'ledger', ...payload };
+            accountsAdapter.setAll(state, [state.account]);
         },
     },
     extraReducers: (builder) =>
@@ -120,7 +145,7 @@ const accountSlice = createSlice({
             }),
 });
 
-export const { setAddress, setKeyringStatus } = accountSlice.actions;
+export const { setKeyringStatus, setLedgerAccount } = accountSlice.actions;
 
 export const accountsAdapterSelectors = accountsAdapter.getSelectors(
     (state: RootState) => state.account
@@ -130,11 +155,14 @@ const reducer: Reducer<typeof initialState> = accountSlice.reducer;
 export default reducer;
 
 export const activeAccountSelector = ({ account }: RootState) =>
-    account.address;
+    account.account;
+
+export const activeAddressSelector = ({ account }: RootState) =>
+    account.account?.address || null;
 
 export const ownedObjects = createSelector(
     suiObjectsAdapterSelectors.selectAll,
-    activeAccountSelector,
+    activeAddressSelector,
     (objects, address) => {
         if (address) {
             return objects.filter(

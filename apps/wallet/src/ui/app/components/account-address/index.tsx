@@ -6,7 +6,7 @@ import cl from 'classnames';
 import CopyToClipboard from '_components/copy-to-clipboard';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useAppSelector, useMiddleEllipsis } from '_hooks';
+import { useActiveAddress, useAppSelector, useMiddleEllipsis } from '_hooks';
 import { API_ENV } from '_src/shared/api-env';
 
 import st from './AccountAddress.module.scss';
@@ -29,7 +29,7 @@ function AccountAddress({
     const network = useAppSelector(({ app }) => app.apiEnv);
     const showExplorerLink = API_ENV.customRPC !== network;
 
-    const address = useAppSelector(({ account: { address } }) => address);
+    const address = useActiveAddress();
     const shortenAddress = useMiddleEllipsis(address, 10, 6);
     const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
 

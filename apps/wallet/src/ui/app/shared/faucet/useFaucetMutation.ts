@@ -8,7 +8,7 @@ import { useRpc } from '../../hooks/useRpc';
 
 export function useFaucetMutation() {
     const api = useRpc();
-    const address = useAppSelector(({ account: { address } }) => address);
+    const address = useAppSelector(({ account }) => account.account?.address);
     const mutationKey = ['faucet-request-tokens', address];
     const mutation = useMutation({
         mutationKey,

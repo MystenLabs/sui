@@ -12,7 +12,12 @@ import { createValidationSchema } from './validation';
 import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
-import { useAppSelector, useAppDispatch, useObjectsState } from '_hooks';
+import {
+    useActiveAddress,
+    useAppSelector,
+    useAppDispatch,
+    useObjectsState,
+} from '_hooks';
 import { createAccountNftByIdSelector } from '_redux/slices/account';
 import { transferNFT } from '_redux/slices/sui-objects';
 import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
@@ -36,7 +41,7 @@ function NftTransferPage() {
     );
     const selectedNft = useAppSelector(nftSelector);
     const objectId = selectedNft ? getObjectId(selectedNft.reference) : null;
-    const address = useAppSelector(({ account: { address } }) => address);
+    const address = useActiveAddress();
     const dispatch = useAppDispatch();
     const [sendError, setSendError] = useState<string | null>(null);
     const validationSchema = useMemo(

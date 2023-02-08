@@ -38,15 +38,19 @@ export const sendTokens = createAsyncThunk<
     'sui-objects/send-tokens',
     async (
         { tokenTypeArg, amount, recipientAddress, gasBudget },
-        { getState, extra: { api, background }, dispatch }
+        { getState, extra: { api, background, initAppSui }, dispatch }
     ) => {
         const state = getState();
-        const activeAddress = activeAccountSelector(state);
-        if (!activeAddress) {
+        const activeAccount = activeAccountSelector(state);
+        if (!activeAccount) {
             throw new Error('Error, active address is not defined');
         }
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
-        const signer = api.getSignerInstance(activeAddress, background);
+        const signer = api.getSignerInstance(
+            activeAccount,
+            background,
+            initAppSui
+        );
         const response = await signer.signAndExecuteTransaction(
             await CoinAPI.newPayTransaction(
                 coins,

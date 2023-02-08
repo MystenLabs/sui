@@ -3,14 +3,16 @@
 
 import { JsonRpcProvider, LocalTxnDataSerializer } from '@mysten/sui.js';
 
+import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
 import { LedgerSigner } from './LedgerSigner';
 import { queryClient } from './helpers/queryClient';
 import { growthbook } from '_app/experimentation/feature-gating';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
-
+import type { AccountSerialized } from '_redux/slices/account';
 import type { BackgroundClient } from './background-client';
 import type { SuiAddress, SignerWithProvider } from '@mysten/sui.js';
+import type AppSui from 'hw-app-sui';
 
 type EnvInfo = {
     name: string;
@@ -110,25 +112,49 @@ export default class ApiProvider {
     }
 
     public getSignerInstance(
-        address: SuiAddress,
-        backgroundClient: BackgroundClient
+        account: AccountSerialized,
+        backgroundClient: BackgroundClient,
+        initAppSui: () => Promise<AppSui>
     ): SignerWithProvider {
         if (!this._apiFullNodeProvider) {
             this.setNewJsonRpcProvider();
         }
-        if (!this._signerByAddress.has(address)) {
-            this._signerByAddress.set(
-                address,
-                LedgerSigner.create(
-                    this._apiFullNodeProvider,
-                    growthbook.isOn(FEATURES.USE_LOCAL_TXN_SERIALIZER)
-                        ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                          new LocalTxnDataSerializer(this._apiFullNodeProvider!)
-                        : undefined
-                )
-            );
+        if (!this._signerByAddress.has(account.address)) {
+            const provider = this._apiFullNodeProvider;
+            const serializer = growthbook.isOn(
+                FEATURES.USE_LOCAL_TXN_SERIALIZER
+            )
+                ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                  new LocalTxnDataSerializer(this._apiFullNodeProvider!)
+                : undefined;
+            switch (account.type) {
+                case 'derived':
+                case 'imported':
+                    this._signerByAddress.set(
+                        account.address,
+                        new BackgroundServiceSigner(
+                            account.address,
+                            backgroundClient,
+                            provider,
+                            serializer
+                        )
+                    );
+                    break;
+
+                case 'ledger':
+                    this._signerByAddress.set(
+                        account.address,
+                        new LedgerSigner(
+                            initAppSui(),
+                            account.derivationPath,
+                            provider,
+                            serializer
+                        )
+                    );
+                    break;
+            }
         }
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return this._signerByAddress.get(address)!;
+        return this._signerByAddress.get(account.address)!;
     }
 }
