@@ -39,8 +39,8 @@ export function Table({ validators }: Props) {
   // sort validators by their live stake info in DESC order
   const sorted = [...validators].sort((a, b) =>
     Number(
-      BigInt(b.fields.metatadata.fields.next_epoch_stake) + BigInt(b.fields.metadata.fields.next_epoch_delegation) -
-        BigInt(a.fields.metatadata.fields.next_epoch_stake) + BigInt(a.fields.metadata.fields.next_epoch_delegation) -
+      BigInt(b.fields.metadata.fields.next_epoch_stake) + BigInt(b.fields.metadata.fields.next_epoch_delegation) -
+        BigInt(a.fields.metadata.fields.next_epoch_stake) + BigInt(a.fields.metadata.fields.next_epoch_delegation) -
     )
   );
 
