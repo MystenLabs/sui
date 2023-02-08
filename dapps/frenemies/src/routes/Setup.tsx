@@ -104,10 +104,8 @@ export function Setup() {
     },
     {
       onSuccess() {
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['scorecard'] });
-          navigate("/", { replace: true });
-        }, 1000);
+        queryClient.invalidateQueries({ queryKey: ['scorecard'] });
+        navigate("/", { replace: true });
       },
     }
   );
