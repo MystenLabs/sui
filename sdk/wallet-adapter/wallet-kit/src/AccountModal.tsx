@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Dialog } from '@headlessui/react';
+import { formatAddress } from '@mysten/sui.js';
 import { styled } from "./stitches";
 import { Content, Overlay, Body, CloseButton } from "./utils/Dialog";
 import { Button } from "./utils/ui";
@@ -40,7 +41,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
         <Content>
           <Body css={{ padding: "$4", minWidth: "320px" }}>
             <Account title={account}>
-              {account.slice(0, 4)}...{account.slice(-4)}
+              {formatAddress(account)}
             </Account>
 
             <ButtonGroup>

@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  LocalTxnDataSerializer,
-  UnserializedSignableTransaction,
-} from "@mysten/sui.js";
+import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
@@ -16,7 +13,7 @@ import { useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 import provider from "../network/provider";
 
-const GAS_BUDGET = 10000n;
+const GAS_BUDGET = 20000n;
 
 export function Setup() {
   const id = useId();
@@ -24,12 +21,15 @@ export function Setup() {
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
   const { data: epoch } = useEpoch();
+  const queryClient = useQueryClient();
 
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
       if (!currentAccount) {
-        throw new Error("No SUI coins found in your wallet. You need SUI to play the Frenemies game");
+        throw new Error(
+          "No SUI coins found in your wallet. You need SUI to play the Frenemies game"
+        );
       }
 
       const gasPrice = epoch?.data.referenceGasPrice || 1n;
@@ -88,18 +88,15 @@ export function Setup() {
         },
       };
 
-      const serializer = new LocalTxnDataSerializer(provider);
-      const serializedTx = await serializer.serializeToBytes(
+      const devInspectResult = await provider.devInspectTransaction(
         currentAccount,
-        submitTx
-      );
-      const dryRunRes = await provider.dryRunTransaction(
-        serializedTx.toString()
+        submitTx,
+        Number(gasPrice)
       );
 
-      if (dryRunRes.status.status == "failure") {
+      if ("Err" in devInspectResult.results) {
         throw new Error(
-          `Transaction would've failed with a reason '${dryRunRes.status.error}'`
+          `Transaction would've failed with a reason '${devInspectResult.results.Err}'`
         );
       }
 
@@ -107,7 +104,10 @@ export function Setup() {
     },
     {
       onSuccess() {
-        navigate("/", { replace: true });
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['scorecard'] });
+          navigate("/", { replace: true });
+        }, 1000);
       },
     }
   );
