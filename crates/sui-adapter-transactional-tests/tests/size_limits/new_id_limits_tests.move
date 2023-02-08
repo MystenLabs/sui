@@ -34,11 +34,14 @@ module Test::M1 {
 // create below create count limit should succeed
 //# run Test::M1::create_n_ids --args 1
 
-// create at create count limit should succeed
+// create below create count limit should succeed
 //# run Test::M1::create_n_ids --args 256
 
-// create above create count limit should fail
-//# run Test::M1::create_n_ids --args 257
+// create at create count limit should succeed
+//# run Test::M1::create_n_ids --args 1024
 
 // create above create count limit should fail
-//# run Test::M1::create_n_ids --args 300
+//# run Test::M1::create_n_ids --args 1025
+
+// create above create count limit should fail
+//# run Test::M1::create_n_ids --args 2048

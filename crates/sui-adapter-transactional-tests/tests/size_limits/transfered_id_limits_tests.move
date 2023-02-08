@@ -35,5 +35,15 @@ module Test::M1 {
 // transfer below transfer count limit should succeed
 //# run Test::M1::transfer_n_ids --args 1
 
-// transfer at transfer count limit should succeed
+// transfer below transfer count limit should succeed
 //# run Test::M1::transfer_n_ids --args 256
+
+// run at run count limit should succeed
+//# run Test::M1::transfer_n_ids --args 1024
+
+// run above run count limit should fail
+//# run Test::M1::transfer_n_ids --args 1025
+
+// run above run count limit should fail
+//# run Test::M1::transfer_n_ids --args 2048
+
