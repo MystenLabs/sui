@@ -8477,6 +8477,7 @@ dependencies = [
  "sui-macros",
  "sui-network",
  "sui-node",
+ "sui-protocol-constants",
  "sui-sdk",
  "sui-simulator",
  "sui-types",
