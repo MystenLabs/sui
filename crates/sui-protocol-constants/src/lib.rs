@@ -56,6 +56,12 @@ pub const MAX_DEPENDENCY_DEPTH: usize = 100;
 // a function that emits 255 events in a loop?
 pub const MAX_NUM_EVENT_EMIT: u64 = 256;
 
+pub const MAX_NUM_NEW_IDS: u64 = 256;
+
+pub const MAX_NUM_DELETED_IDS: u64 = 256;
+
+pub const MAX_NUM_TRANSFERED_IDS: u64 = 256;
+
 // === Execution gas costs ====
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
 
