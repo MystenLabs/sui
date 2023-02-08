@@ -1,34 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SUI_TYPE_ARG } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useQuery } from "@tanstack/react-query";
 import { formatBalance } from "../../utils/format";
-import provider from "../../network/provider";
-
-const DEC = 9;
+import { useBalance } from "../../network/queries/coin";
 
 export function Balance() {
-  const { currentAccount } = useWalletKit();
-  const { data } = useQuery(
-    ["account-balance"],
-    async () => {
-      const { totalBalance } = await provider.getBalance(
-        currentAccount!,
-        SUI_TYPE_ARG
-      );
-
-      return {
-        balance: BigInt(totalBalance),
-        decimals: DEC,
-      };
-    },
-    {
-      enabled: !!currentAccount,
-      refetchInterval: 60 * 1000,
-    }
-  );
+  const { data } = useBalance();
 
   return (
     <div className="rounded-full shadow-notification bg-white px-4 py-1 flex items-center gap-11">
