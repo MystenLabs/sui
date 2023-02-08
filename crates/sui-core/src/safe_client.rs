@@ -508,19 +508,11 @@ where
         requested_epoch: Option<EpochId>,
         committee_info: &CommitteeInfoResponse,
     ) -> SuiResult {
-        match requested_epoch {
-            Some(epoch) => {
-                fp_ensure!(
-                    committee_info.epoch == epoch,
-                    SuiError::from("Committee info response epoch doesn't match requested epoch")
-                );
-            }
-            None => {
-                fp_ensure!(
-                    committee_info.committee_info.is_some(),
-                    SuiError::from("A valid latest committee must exist")
-                );
-            }
+        if let Some(epoch) = requested_epoch {
+            fp_ensure!(
+                committee_info.epoch == epoch,
+                SuiError::from("Committee info response epoch doesn't match requested epoch")
+            );
         }
         Ok(())
     }

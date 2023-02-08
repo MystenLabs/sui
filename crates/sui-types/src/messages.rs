@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
-use crate::committee::{EpochId, StakeUnit};
+use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
     Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
@@ -172,6 +172,8 @@ pub struct Pay {
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
+    /// The protocol version in effect in the new epoch.
+    pub protocol_version: ProtocolVersion,
     /// The total amount of gas charged for storage during the epoch.
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
@@ -1165,6 +1167,7 @@ impl Transaction {
 impl VerifiedTransaction {
     pub fn new_change_epoch(
         next_epoch: EpochId,
+        protocol_version: ProtocolVersion,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
@@ -1172,6 +1175,7 @@ impl VerifiedTransaction {
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
+            protocol_version,
             storage_charge,
             computation_charge,
             storage_rebate,
@@ -2508,7 +2512,8 @@ pub struct CommitteeInfoRequest {
 #[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
-    pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,
+    pub protocol_version: ProtocolVersion,
+    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
 }
@@ -2524,6 +2529,7 @@ impl CommitteeInfoResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitteeInfo {
     pub epoch: EpochId,
+    pub protocol_version: ProtocolVersion,
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.

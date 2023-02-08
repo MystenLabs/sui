@@ -382,6 +382,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             vec![
                 system_object_arg,
                 CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
             ],
             gas_status.create_move_gas_status(),
             tx_ctx,

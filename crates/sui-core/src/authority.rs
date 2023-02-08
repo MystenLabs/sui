@@ -57,7 +57,7 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard},
     IndexStore,
 };
-use sui_types::committee::EpochId;
+use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{sha3_hash, AuthorityKeyPair, NetworkKeyPair};
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::event::{Event, EventID};
@@ -1538,15 +1538,21 @@ impl AuthorityState {
         request: &CommitteeInfoRequest,
     ) -> SuiResult<CommitteeInfoResponse> {
         let (epoch, committee) = match request.epoch {
-            Some(epoch) => (epoch, self.committee_store.get_committee(&epoch)?),
+            Some(epoch) => (
+                epoch,
+                self.committee_store
+                    .get_committee(&epoch)?
+                    .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))?,
+            ),
             None => {
                 let committee = self.committee_store.get_latest_committee();
-                (committee.epoch, Some(committee))
+                (committee.epoch, committee)
             }
         };
         Ok(CommitteeInfoResponse {
             epoch,
-            committee_info: committee.map(|c| c.voting_rights),
+            protocol_version: committee.protocol_version,
+            committee_info: committee.voting_rights,
         })
     }
 
@@ -2571,6 +2577,8 @@ impl AuthorityState {
         );
         let tx = VerifiedTransaction::new_change_epoch(
             next_epoch,
+            // Protocol version cannot advance yet.
+            ProtocolVersion::MIN,
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,

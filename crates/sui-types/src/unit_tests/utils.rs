@@ -6,7 +6,7 @@ use signature::Signer;
 
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
-    committee::Committee,
+    committee::{Committee, ProtocolVersion},
     crypto::{
         get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         AuthorityPublicKeyBytes, Signature,
@@ -44,7 +44,7 @@ where
         keys.push(inner_authority_key);
     }
 
-    let committee = Committee::new(0, authorities).unwrap();
+    let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
     (keys, committee)
 }
 

@@ -62,6 +62,7 @@ module sui::governance_test_utils {
             1024, // max_validator_candidate_count
             0, // min_validator_stake
             0, // stake subsidy
+            1, // protocol version
             0, // epoch_start_timestamp_ms
         )
     }

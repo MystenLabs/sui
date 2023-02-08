@@ -14,6 +14,7 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::EndOfEpochData;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::storage::ReadStore;
 use sui_types::storage::WriteStore;
@@ -126,10 +127,18 @@ impl ReadStore for RocksDbStore {
 
 impl WriteStore for RocksDbStore {
     fn insert_checkpoint(&self, checkpoint: VerifiedCheckpoint) -> Result<(), Self::Error> {
-        if let Some(next_committee) = checkpoint.next_epoch_committee() {
-            let next_committee = next_committee.iter().cloned().collect();
-            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
-                .expect("new committee from consensus should be constructable");
+        if let Some(EndOfEpochData {
+            next_epoch_committee,
+            next_epoch_protocol_version,
+        }) = checkpoint.summary.end_of_epoch_data.as_ref()
+        {
+            let next_committee = next_epoch_committee.iter().cloned().collect();
+            let committee = Committee::new(
+                checkpoint.epoch().saturating_add(1),
+                *next_epoch_protocol_version,
+                next_committee,
+            )
+            .expect("new committee from consensus should be constructable");
             self.insert_committee(committee)?;
         }
 
