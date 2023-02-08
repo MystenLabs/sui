@@ -62,7 +62,7 @@ module frenemies::leaderboard {
     }
 
     /// Number of scores kept in the leaderboard
-    const LEADERBOARD_SIZE: u64 = 100;
+    const LEADERBOARD_SIZE: u64 = 2_000;
 
     /// Number of points a player receives for successfully completing an epoch goal.
     /// Additional points are awarded according to the difficulty of the goal (i.e.,
