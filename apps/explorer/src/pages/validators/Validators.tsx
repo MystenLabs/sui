@@ -89,6 +89,13 @@ function validatorsTableData(
                 header: 'Name',
                 accessorKey: 'name',
                 enableSorting: true,
+                sortingFn: (a: any, b: any, colId: string) =>
+                    a
+                        .getValue(colId)
+                        .name.localeCompare(b.getValue(colId).name, 'en', {
+                            sensitivity: 'base',
+                            numeric: true,
+                        }),
                 cell: (props: any) => {
                     const { name, logo } = props.getValue();
                     return (
