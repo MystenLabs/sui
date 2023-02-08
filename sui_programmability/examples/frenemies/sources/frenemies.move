@@ -39,8 +39,15 @@ module frenemies::frenemies {
         epoch_score: u16,
     }
 
+    /// Emitted in `confirm_address` call.
+    struct ParticipationProofCommitted has copy, drop {
+        commitment_hash: vector<u8>
+    }
+
     /// Attempting to call `update` with an epoch N assignment during epoch N
     const EScoreNotYetAvailable: u64 = 0;
+    /// Attempting to submit a proof hash that is not 32 bytes long.
+    const EHashExpected: u64 = 1;
 
     /// Register the transaction sender for the frenemies game by sending them a 0 scorecard with
     /// an initial assignment
@@ -94,6 +101,18 @@ module frenemies::frenemies {
         };
         // TODO: move into update_scorecard by making get_assignment work off of `state`
         scorecard.assignment = assignment::get(state, ctx);
+    }
+
+    /// To prove participation offchain, participants need to hash some information and
+    /// call this function to prove that they own the address in the leaderboard.
+    ///
+    /// Aborts if the value submitted is not a hash (based on the length - 32 bytes).
+    /// Dummy check to prevent unnecessary spam and mistakes on the caller end.
+    public entry fun prove_participation(commitment_hash: vector<u8>) {
+        assert!(std::vector::length(&commitment_hash) == 32, EHashExpected);
+        event::emit(ParticipationProofCommitted {
+            commitment_hash
+        })
     }
 
     /// Return the name associated with this scorecard
