@@ -1260,6 +1260,25 @@ where
         Ok((object_map, certificates))
     }
 
+    // pub async fn batch_process_transactions(
+    //     &self,
+    //     transactions: Vec<VerifiedTransaction>,
+    // ) -> Vec<Result<ProcessTransactionResult, QuorumSignTransactionError>> {
+    //     // Now broadcast the transaction to all authorities.
+    //     let threshold = self.committee.quorum_threshold();
+    //     let validity = self.committee.validity_threshold();
+    //     let state = ProcessTransactionState::default();
+    //
+    //     let mut state = self
+    //         .quorum_map_then_reduce_with_timeout(
+    //             state,
+    //             |_name, client| {
+    //                 Box::pin(
+    //                     async move { client.handle_transaction(transaction_ref.clone()).await },
+    //                 )
+    //             },
+    // }
+
     /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(
         &self,
