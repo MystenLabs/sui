@@ -131,9 +131,7 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectsOwnedByAddress');
   }
 
-  async getGasObjectsOwnedByAddress(
-    _address: string,
-  ): Promise<CoinStruct[]> {
+  async getGasObjectsOwnedByAddress(_address: string): Promise<CoinStruct[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 

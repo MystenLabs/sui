@@ -146,9 +146,7 @@ export abstract class Provider {
   /**
    * Convenience method for getting all gas objects(SUI Tokens) owned by an address
    */
-  abstract getGasObjectsOwnedByAddress(
-    _address: string,
-  ): Promise<CoinStruct[]>;
+  abstract getGasObjectsOwnedByAddress(_address: string): Promise<CoinStruct[]>;
 
   /**
    * @deprecated The method should not be used

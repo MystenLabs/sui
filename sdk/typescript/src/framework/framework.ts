@@ -103,8 +103,7 @@ export class Coin {
   ): CoinStruct[] {
     return Coin.sortByBalance(
       coins.filter(
-        (c) =>
-          !exclude.includes(c.coinObjectId) && c.balance >= amount,
+        (c) => !exclude.includes(c.coinObjectId) && c.balance >= amount,
       ),
     );
   }
@@ -186,11 +185,7 @@ export class Coin {
    */
   static sortByBalance(coins: CoinStruct[]): CoinStruct[] {
     return [...coins].sort((a, b) =>
-      a.balance < b.balance
-        ? -1
-        : a.balance > b.balance
-        ? 1
-        : 0,
+      a.balance < b.balance ? -1 : a.balance > b.balance ? 1 : 0,
     );
   }
 
