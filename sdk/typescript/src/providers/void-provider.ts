@@ -47,6 +47,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  CoinStruct,
 } from '../types';
 import { Provider } from './provider';
 
@@ -132,7 +133,7 @@ export class VoidProvider extends Provider {
 
   async getGasObjectsOwnedByAddress(
     _address: string,
-  ): Promise<SuiObjectInfo[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('getGasObjectsOwnedByAddress');
   }
 
@@ -151,7 +152,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinsWithBalanceGreaterThanOrEqual');
   }
 
@@ -160,7 +161,7 @@ export class VoidProvider extends Provider {
     _amount: bigint,
     _typeArg: string,
     _exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]> {
+  ): Promise<CoinStruct[]> {
     throw this.newError('selectCoinSetWithCombinedBalanceGreaterThanOrEqual');
   }
 

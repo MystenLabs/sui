@@ -3,7 +3,6 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-  Coin,
   getCreatedObjects,
   getExecutionStatusType,
   LocalTxnDataSerializer,
@@ -73,7 +72,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
         toolbox.address(),
       );
-      const coinIDs = coins.map((coin) => Coin.getID(coin));
+      const coinIDs = coins.map((coin) => coin.coinObjectId);
       const txn = await signer.executeMoveCall({
         packageObjectId: SUI_FRAMEWORK_ADDRESS,
         module: 'pay',

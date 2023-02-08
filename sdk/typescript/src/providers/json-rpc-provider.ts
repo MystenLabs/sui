@@ -58,6 +58,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  CoinStruct,
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -428,9 +429,9 @@ export class JsonRpcProvider extends Provider {
 
   async getGasObjectsOwnedByAddress(
     address: SuiAddress,
-  ): Promise<SuiObjectInfo[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
+  ): Promise<CoinStruct[]> {
+    const objects = await this.getCoins(address);
+    return objects.data;
   }
 
   /**
@@ -457,15 +458,13 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
-    const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds);
+  ): Promise<CoinStruct[]> {
+    const coins = await this.getCoins(address, typeArg);
     return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coins,
+      coins.data,
       amount,
       exclude,
-    )) as GetObjectDataResponse[];
+    )) as CoinStruct[];
   }
 
   async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
@@ -473,15 +472,13 @@ export class JsonRpcProvider extends Provider {
     amount: bigint,
     typeArg: string = SUI_TYPE_ARG,
     exclude: ObjectId[] = [],
-  ): Promise<GetObjectDataResponse[]> {
-    const coinsStruct = await this.getCoins(address, typeArg);
-    const coinIds = coinsStruct.data.map((c) => c.coinObjectId);
-    const coins = await this.getObjectBatch(coinIds);
+  ): Promise<CoinStruct[]> {
+    const coins = await this.getCoins(address, typeArg);
     return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-      coins,
+      coins.data,
       amount,
       exclude,
-    )) as GetObjectDataResponse[];
+    )) as CoinStruct[];
   }
 
   async getObjectsOwnedByObject(objectId: ObjectId): Promise<SuiObjectInfo[]> {

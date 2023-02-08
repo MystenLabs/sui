@@ -45,7 +45,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       await validateTransaction(signer, {
         kind: 'splitCoin',
         data: {
-          coinObjectId: coins[0].objectId,
+          coinObjectId: coins[0].coinObjectId,
           splitAmounts: [DEFAULT_GAS_BUDGET * 2],
           gasBudget: DEFAULT_GAS_BUDGET,
         },
@@ -59,8 +59,8 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       await validateTransaction(signer, {
         kind: 'mergeCoin',
         data: {
-          primaryCoin: coins[0].objectId,
-          coinToMerge: coins[1].objectId,
+          primaryCoin: coins[0].coinObjectId,
+          coinToMerge: coins[1].coinObjectId,
           gasBudget: DEFAULT_GAS_BUDGET,
         },
       });
@@ -83,7 +83,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
             'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
           ],
           gasBudget: DEFAULT_GAS_BUDGET,
-          gasPayment: coins[0].objectId,
+          gasPayment: coins[0].coinObjectId,
         },
       });
     });
@@ -108,11 +108,11 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           typeArguments: [],
           arguments: [
             SUI_SYSTEM_STATE_OBJECT_ID,
-            coins[2].objectId,
+            coins[2].coinObjectId,
             validator_address,
           ],
           gasBudget: DEFAULT_GAS_BUDGET,
-          gasPayment: coins[3].objectId,
+          gasPayment: coins[3].coinObjectId,
         },
       });
     });
@@ -124,7 +124,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       await validateTransaction(signer, {
         kind: 'transferSui',
         data: {
-          suiObjectId: coins[0].objectId,
+          suiObjectId: coins[0].coinObjectId,
           gasBudget: DEFAULT_GAS_BUDGET,
           recipient: DEFAULT_RECIPIENT,
           amount: 100,
@@ -139,10 +139,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       await validateTransaction(signer, {
         kind: 'transferObject',
         data: {
-          objectId: coins[0].objectId,
+          objectId: coins[0].coinObjectId,
           gasBudget: DEFAULT_GAS_BUDGET,
           recipient: DEFAULT_RECIPIENT,
-          gasPayment: coins[1].objectId,
+          gasPayment: coins[1].coinObjectId,
         },
       });
     });
@@ -156,10 +156,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
       // get some new coins with small amount
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [1, 2, 3],
         gasBudget: DEFAULT_GAS_BUDGET,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -173,7 +173,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
           gasBudget: DEFAULT_GAS_BUDGET,
           recipients: [DEFAULT_RECIPIENT, DEFAULT_RECIPIENT_2],
           amounts: [4, 2],
-          gasPayment: getObjectId(coins[2]),
+          gasPayment: coins[2].coinObjectId,
         },
       });
     });
@@ -187,10 +187,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         );
 
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -216,10 +216,10 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         );
 
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),

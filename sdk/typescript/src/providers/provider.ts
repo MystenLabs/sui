@@ -46,6 +46,7 @@ import {
   CheckpointDigest,
   CheckPointContentsDigest,
   CommitteeInfo,
+  CoinStruct,
 } from '../types';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
@@ -147,7 +148,7 @@ export abstract class Provider {
    */
   abstract getGasObjectsOwnedByAddress(
     _address: string,
-  ): Promise<SuiObjectInfo[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * @deprecated The method should not be used
@@ -170,7 +171,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * Convenience method for select a minimal set of coin objects that has a balance greater than
@@ -187,7 +188,7 @@ export abstract class Provider {
     amount: bigint,
     typeArg: string,
     exclude: ObjectId[],
-  ): Promise<GetObjectDataResponse[]>;
+  ): Promise<CoinStruct[]>;
 
   /**
    * Get details about an object

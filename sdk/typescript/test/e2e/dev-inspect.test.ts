@@ -47,10 +47,10 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         );
 
       const splitTxn = await signer.splitCoin({
-        coinObjectId: getObjectId(coins[0]),
+        coinObjectId: coins[0].coinObjectId,
         splitAmounts: [2000, 2000, 2000],
         gasBudget: gasBudget,
-        gasPayment: getObjectId(coins[1]),
+        gasPayment: coins[1].coinObjectId,
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
         getObjectId(c),
@@ -80,7 +80,7 @@ describe.each([{ useLocalTxnBuilder: false }, { useLocalTxnBuilder: true }])(
         module: 'serializer_tests',
         function: 'return_struct',
         typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-        arguments: [coins[0].objectId],
+        arguments: [coins[0].coinObjectId],
         gasBudget: DEFAULT_GAS_BUDGET,
       };
 

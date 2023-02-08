@@ -26,7 +26,7 @@ describe('Object Reading API', () => {
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
       gasObjects.map((gasObject) =>
-        toolbox.provider.getObject(gasObject['objectId']),
+        toolbox.provider.getObject(gasObject.coinObjectId),
       ),
     );
     objectInfos.forEach((objectInfo) =>
