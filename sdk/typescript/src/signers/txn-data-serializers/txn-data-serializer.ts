@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer } from '../../serialization/base64';
-import { ObjectId, SuiAddress, SuiJsonValue, TypeTag } from '../../types';
+import {
+  ObjectId,
+  PureArg,
+  SuiAddress,
+  SuiJsonValue,
+  TypeTag,
+} from '../../types';
 
 ///////////////////////////////
 // Exported Types
@@ -90,8 +96,16 @@ export interface MoveCallTransaction extends TransactionCommon {
   module: string;
   function: string;
   typeArguments: string[] | TypeTag[];
-  arguments: SuiJsonValue[];
+  arguments: (SuiJsonValue | PureArg)[];
   gasPayment?: ObjectId;
+}
+
+export interface RawMoveCall {
+  packageObjectId: ObjectId;
+  module: string;
+  function: string;
+  typeArguments: string[];
+  arguments: SuiJsonValue[];
 }
 
 export type UnserializedSignableTransaction =
@@ -180,6 +194,6 @@ export interface TxnDataSerializer {
   serializeToBytes(
     signerAddress: SuiAddress,
     txn: UnserializedSignableTransaction,
-    mode: TransactionBuilderMode
+    mode: TransactionBuilderMode,
   ): Promise<Base64DataBuffer>;
 }

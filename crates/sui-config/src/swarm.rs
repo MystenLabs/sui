@@ -3,7 +3,7 @@
 
 use crate::node::AuthorityStorePruningConfig;
 use crate::node::{
-    default_checkpoints_per_epoch, default_end_of_epoch_broadcast_channel_capacity,
+    default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
 use crate::p2p::{P2pConfig, SeedPeer};
@@ -85,6 +85,7 @@ pub struct FullnodeConfigBuilder<'a> {
     rpc_port: Option<u16>,
     // port for admin interface
     admin_port: Option<u16>,
+    enable_pruner: bool,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -98,6 +99,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             p2p_port: None,
             rpc_port: None,
             admin_port: None,
+            enable_pruner: true,
         }
     }
 
@@ -153,6 +155,11 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
     pub fn with_random_dir(mut self) -> Self {
         self.dir = None;
+        self
+    }
+
+    pub fn set_enable_pruner(mut self, status: bool) -> Self {
+        self.enable_pruner = status;
         self
     }
 
@@ -216,6 +223,8 @@ impl<'a> FullnodeConfigBuilder<'a> {
         let rpc_port = self.rpc_port.unwrap_or_else(|| get_available_port(9000));
         let jsonrpc_server_url = format!("{}:{}", listen_ip, rpc_port);
         let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
+        let mut authority_store_pruning_config = AuthorityStorePruningConfig::fullnode_config();
+        authority_store_pruning_config.enable_live_pruner = self.enable_pruner;
 
         Ok(NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(protocol_key_pair),
@@ -232,12 +241,12 @@ impl<'a> FullnodeConfigBuilder<'a> {
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
-            checkpoints_per_epoch: default_checkpoints_per_epoch(),
+            epoch_duration_ms: default_epoch_duration_ms(),
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
-            authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            authority_store_pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),

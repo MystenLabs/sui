@@ -105,4 +105,6 @@ module examples::object_basics {
             tx_context::sender(ctx),
         );
     }
+
+    public entry fun generic_test<T>() {}
 }

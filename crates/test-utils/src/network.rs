@@ -172,7 +172,8 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    checkpoints_per_epoch: Option<u64>,
+    epoch_duration_ms: Option<u64>,
+    enable_pruning: bool,
 }
 
 impl TestClusterBuilder {
@@ -182,7 +183,8 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            checkpoints_per_epoch: None,
+            epoch_duration_ms: None,
+            enable_pruning: true,
         }
     }
 
@@ -206,8 +208,13 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
-        self.checkpoints_per_epoch = Some(ckpts);
+    pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
+        self.epoch_duration_ms = Some(epoch_duration_ms);
+        self
+    }
+
+    pub fn disable_pruning(mut self) -> Self {
+        self.enable_pruning = false;
         self
     }
 
@@ -230,6 +237,7 @@ impl TestClusterBuilder {
             .fullnode_config_builder()
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
+            .set_enable_pruner(self.enable_pruning)
             .build()
             .unwrap();
 
@@ -269,8 +277,8 @@ impl TestClusterBuilder {
             builder = builder.initial_accounts_config(genesis_config);
         }
 
-        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
-            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
+        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
+            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         let mut swarm = builder.build();

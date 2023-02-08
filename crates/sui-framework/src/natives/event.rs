@@ -24,7 +24,6 @@ pub fn emit(
     let ty = ty_args.pop().unwrap();
     let event = args.pop_back().unwrap();
 
-    // gas cost is proportional to size of event
     let cost = legacy_emit_cost();
     let tag = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => s,
@@ -37,6 +36,6 @@ pub fn emit(
     };
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.emit_event(ty, *tag, event);
+    obj_runtime.emit_event(ty, *tag, event)?;
     Ok(NativeResult::ok(cost, smallvec![]))
 }

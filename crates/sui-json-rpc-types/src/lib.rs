@@ -43,11 +43,12 @@ use sui_types::event::{EventEnvelope, EventType};
 use sui_types::filter::{EventFilter, TransactionFilter};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
-    ExecutionStatus, GenesisObject, InputObjectKind, MoveModulePublish, ObjectArg, Pay, PayAllSui,
-    PaySui, SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
-    VerifiedCertificate,
+    CallArg, CertifiedTransaction, EffectsFinalityInfo, ExecuteTransactionResponse,
+    ExecutionStatus, FinalizedEffects, GenesisObject, InputObjectKind, MoveModulePublish,
+    ObjectArg, Pay, PayAllSui, PaySui, SingleTransactionKind, TransactionData, TransactionEffects,
+    TransactionKind, VerifiedCertificate,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{disassemble_modules, MovePackage};
@@ -402,7 +403,7 @@ pub enum SuiTBlsSignObjectCommitmentType {
     /// Check that the object is committed by the consensus.
     ConsensusCommitted,
     /// Check that the object is committed using the effects certificate.
-    FastPathCommitted(SuiCertifiedTransactionEffects),
+    FastPathCommitted(SuiFinalizedEffects),
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -412,15 +413,14 @@ pub struct SuiTBlsSignRandomnessObjectResponse {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub enum SuiExecuteTransactionResponse {
-    // TODO: Change to CertifiedTransactionEffects eventually.
-    EffectsCert {
-        certificate: SuiCertifiedTransaction,
-        effects: SuiCertifiedTransactionEffects,
-        // If the transaction is confirmed to be executed locally
-        // before this response.
-        confirmed_local_execution: bool,
-    },
+pub struct SuiExecuteTransactionResponse {
+    // If this transaction was already finalized previously, there is no guarantee that a
+    // certificate is still available.
+    pub certificate: Option<SuiCertifiedTransaction>,
+    pub effects: SuiFinalizedEffects,
+    // If the transaction is confirmed to be executed locally
+    // before this response.
+    pub confirmed_local_execution: bool,
 }
 
 impl SuiExecuteTransactionResponse {
@@ -431,10 +431,13 @@ impl SuiExecuteTransactionResponse {
         Ok(match resp {
             ExecuteTransactionResponse::EffectsCert(cert) => {
                 let (certificate, effects, is_executed_locally) = *cert;
-                let certificate: SuiCertifiedTransaction = certificate.try_into()?;
-                let effects: SuiCertifiedTransactionEffects =
-                    SuiCertifiedTransactionEffects::try_from(effects, resolver)?;
-                SuiExecuteTransactionResponse::EffectsCert {
+                let certificate: Option<SuiCertifiedTransaction> = match certificate {
+                    Some(c) => Some(c.try_into()?),
+                    None => None,
+                };
+                let effects: SuiFinalizedEffects =
+                    SuiFinalizedEffects::try_from(effects, resolver)?;
+                SuiExecuteTransactionResponse {
                     certificate,
                     effects,
                     confirmed_local_execution: is_executed_locally,
@@ -1439,13 +1442,12 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
-impl TryFrom<MoveModulePublish> for SuiMovePackage {
-    type Error = anyhow::Error;
-
-    fn try_from(m: MoveModulePublish) -> Result<Self, Self::Error> {
-        Ok(Self {
-            disassembled: disassemble_modules(m.modules.iter())?,
-        })
+impl From<MoveModulePublish> for SuiMovePackage {
+    fn from(m: MoveModulePublish) -> Self {
+        Self {
+            // In case of failed publish transaction, disassemble can fail, we can only return empty module map in that case.
+            disassembled: disassemble_modules(m.modules.iter()).unwrap_or_default(),
+        }
     }
 }
 
@@ -1719,7 +1721,7 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
             SingleTransactionKind::Pay(p) => Self::Pay(p.into()),
             SingleTransactionKind::PaySui(p) => Self::PaySui(p.into()),
             SingleTransactionKind::PayAllSui(p) => Self::PayAllSui(p.into()),
-            SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
+            SingleTransactionKind::Publish(p) => Self::Publish(p.into()),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
                 package: c.package,
                 module: c.module.to_string(),
@@ -1832,17 +1834,35 @@ impl TryFrom<VerifiedCertificate> for SuiCertifiedTransaction {
     }
 }
 
-/// The certified Transaction Effects which has signatures from >= 2/3 of validators
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "CertifiedTransactionEffects", rename_all = "camelCase")]
-pub struct SuiCertifiedTransactionEffects {
-    pub transaction_effects_digest: TransactionEffectsDigest,
-    pub effects: SuiTransactionEffects,
-    /// authority signature information signed by the quorum of the validators.
-    pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
+#[serde(rename = "EffectsFinalityInfo", rename_all = "camelCase")]
+pub enum SuiEffectsFinalityInfo {
+    Certified(SuiAuthorityStrongQuorumSignInfo),
+    Checkpointed(EpochId, CheckpointSequenceNumber),
 }
 
-impl Display for SuiCertifiedTransactionEffects {
+impl From<EffectsFinalityInfo> for SuiEffectsFinalityInfo {
+    fn from(info: EffectsFinalityInfo) -> Self {
+        match info {
+            EffectsFinalityInfo::Certified(cert) => {
+                Self::Certified(SuiAuthorityStrongQuorumSignInfo::from(&cert))
+            }
+            EffectsFinalityInfo::Checkpointed(epoch, checkpoint) => {
+                Self::Checkpointed(epoch, checkpoint)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "FinalizedEffects", rename_all = "camelCase")]
+pub struct SuiFinalizedEffects {
+    pub transaction_effects_digest: TransactionEffectsDigest,
+    pub effects: SuiTransactionEffects,
+    pub finality_info: SuiEffectsFinalityInfo,
+}
+
+impl Display for SuiFinalizedEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         writeln!(
@@ -1851,30 +1871,34 @@ impl Display for SuiCertifiedTransactionEffects {
             self.transaction_effects_digest
         )?;
         writeln!(writer, "Transaction Effects: {:?}", self.effects)?;
-        writeln!(
-            writer,
-            "Signed Authorities Bitmap: {:?}",
-            self.auth_sign_info.signers_map
-        )?;
+        match &self.finality_info {
+            SuiEffectsFinalityInfo::Certified(cert) => {
+                writeln!(writer, "Signed Authorities Bitmap: {:?}", cert.signers_map)?;
+            }
+            SuiEffectsFinalityInfo::Checkpointed(epoch, checkpoint) => {
+                writeln!(
+                    writer,
+                    "Finalized at epoch {:?}, checkpoint {:?}",
+                    epoch, checkpoint
+                )?;
+            }
+        }
+
         write!(f, "{}", writer)
     }
 }
 
-impl SuiCertifiedTransactionEffects {
+impl SuiFinalizedEffects {
     fn try_from(
-        cert: CertifiedTransactionEffects,
+        effects: FinalizedEffects,
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
-        let digest = *cert.digest();
-        let (effects, auth_sign_info) = cert.into_data_and_sig();
+        let digest = effects.effects.digest();
         // We should always have a signature here.
-        if auth_sign_info.signature.sig.is_none() {
-            return Err(anyhow::anyhow!("No quorum signature."));
-        }
         Ok(Self {
             transaction_effects_digest: digest,
-            effects: SuiTransactionEffects::try_from(effects, resolver)?,
-            auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&auth_sign_info),
+            effects: SuiTransactionEffects::try_from(effects.effects, resolver)?,
+            finality_info: effects.finality_info.into(),
         })
     }
 }

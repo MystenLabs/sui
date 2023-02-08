@@ -5,7 +5,8 @@ use crate::authority::authority_store::EffectsStore;
 use crate::authority::AuthorityStore;
 use async_trait::async_trait;
 use either::Either;
-use futures::future::join_all;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
@@ -22,6 +23,8 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
 use sui_types::messages::VerifiedSignedTransactionEffects;
 use tokio::sync::oneshot;
+use tokio::time::Instant;
+use tracing::debug;
 
 #[async_trait]
 pub trait EffectsNotifyRead: Send + Sync + 'static {
@@ -182,20 +185,42 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         &self,
         digests: Vec<TransactionDigest>,
     ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
+        let timer = Instant::now();
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registrations = self.effects_notify_read.register_all(digests.clone());
         let effects = EffectsStore::get_effects(self, digests.iter())?;
-        // Zipping together registrations and effects ensures returned order is the same as order of digests
-        let results = effects
+        let mut needs_wait = false;
+        let mut results: FuturesUnordered<_> = effects
             .into_iter()
             .zip(registrations.into_iter())
             .map(|(e, r)| match e {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
-            });
-
-        Ok(join_all(results).await)
+                None => {
+                    needs_wait = true;
+                    Either::Right(r)
+                }
+            })
+            .collect();
+        let mut effects_map = HashMap::new();
+        let mut last_finished = None;
+        while let Some(finished) = results.next().await {
+            last_finished = Some(finished.transaction_digest);
+            effects_map.insert(finished.transaction_digest, finished);
+        }
+        if needs_wait {
+            // Only log the duration if we ended up waiting.
+            debug!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
+        }
+        // Map from digests to ensures returned order is the same as order of digests
+        Ok(digests
+            .iter()
+            .map(|d| {
+                effects_map
+                    .remove(d)
+                    .expect("Every effect must have been added after each task finishes above")
+            })
+            .collect())
     }
 
     fn get_effects(
@@ -209,6 +234,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::future::join_all;
 
     #[tokio::test]
     pub async fn test_notify_read() {

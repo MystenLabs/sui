@@ -68,8 +68,7 @@ impl WritePathPendingTransactionLog {
     }
 
     // This function does not need to be behind a lock because:
-    // 1. there is supposed to be only one callsite; Even when there are
-    //    several, the deletion is idempotent.
+    // 1. there could be more than one callsite but the deletion is idempotent.
     // 2. it does not race with the insert (`write_pending_transaction_maybe`)
     //    in a way that we care.
     //    2.a. for one transaction, `finish_transaction` shouldn't predate

@@ -1,25 +1,80 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
+import { useEpoch } from "../network/queries/epoch";
 import { useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
+import provider from "../network/provider";
+
+const GAS_BUDGET = 20000n;
 
 export function Setup() {
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const { data: scorecard, isSuccess } = useScorecard(currentAccount);
+  const { data: epoch } = useEpoch();
+  const queryClient = useQueryClient();
 
   const createScorecard = useMutation(
     ["create-scorecard"],
     async (username: string) => {
-      await signAndExecuteTransaction({
+      if (!currentAccount) {
+        throw new Error(
+          "No SUI coins found in your wallet. You need SUI to play the Frenemies game"
+        );
+      }
+
+      const gasPrice = epoch?.data.referenceGasPrice || 1n;
+      const checkTx: UnserializedSignableTransaction = {
+        kind: "moveCall",
+        data: {
+          packageObjectId: config.VITE_PKG,
+          module: "registry",
+          function: "is_registered",
+          typeArguments: [],
+          arguments: [config.VITE_REGISTRY, username],
+        },
+      };
+
+      const inspectRes = await provider.devInspectTransaction(
+        currentAccount,
+        checkTx,
+        Number(gasPrice)
+      );
+
+      if ("Err" in inspectRes.results) {
+        throw new Error(
+          `Error happened while checking for uniqueness: ${inspectRes.results.Err}`
+        );
+      }
+
+      const {
+        Ok: [
+          [
+            ,
+            {
+              // @ts-ignore // not cool
+              returnValues: [[[exists]]],
+            },
+          ],
+        ],
+      } = inspectRes.results;
+
+      // Add a warning saying that the name is already taken.
+      // Depending on the the `exists` result: 0 or 1;
+      if (exists == 1) {
+        throw new Error(`Name: '${username}' is already taken`);
+      }
+
+      const submitTx: UnserializedSignableTransaction = {
         kind: "moveCall",
         data: {
           packageObjectId: config.VITE_PKG,
@@ -27,12 +82,29 @@ export function Setup() {
           function: "register",
           arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
           typeArguments: [],
-          gasBudget: 10000,
+
+          // TODO: Fix in sui.js - add option to use bigint...
+          gasBudget: Number(GAS_BUDGET),
         },
-      });
+      };
+
+      const devInspectResult = await provider.devInspectTransaction(
+        currentAccount,
+        submitTx,
+        Number(gasPrice)
+      );
+
+      if ("Err" in devInspectResult.results) {
+        throw new Error(
+          `Transaction would've failed with a reason '${devInspectResult.results.Err}'`
+        );
+      }
+
+      await signAndExecuteTransaction(submitTx);
     },
     {
       onSuccess() {
+        queryClient.invalidateQueries({ queryKey: ['scorecard'] });
         navigate("/", { replace: true });
       },
     }

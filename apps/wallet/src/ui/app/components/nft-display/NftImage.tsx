@@ -19,8 +19,10 @@ const nftImageStyles = cva('overflow-hidden', {
         borderRadius: {
             md: 'rounded-md',
             xl: 'rounded-xl',
+            sm: 'rounded',
         },
         size: {
+            xs: 'w-10 h-10',
             sm: 'w-12 h-12',
             md: 'w-36 h-36',
             lg: 'w-44 h-44',
@@ -45,6 +47,7 @@ export interface NftImageProps extends VariantProps<typeof nftImageStyles> {
     showLabel?: boolean;
 }
 
+//TODO: create a fallback image for broken images urls
 export function NftImage({
     src,
     name,
@@ -63,7 +66,7 @@ export function NftImage({
             {src ? (
                 <img
                     className={imgCls}
-                    src={src}
+                    src={src.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')}
                     alt={name || 'NFT'}
                     title={title}
                 />

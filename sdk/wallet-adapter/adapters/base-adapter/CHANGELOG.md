@@ -1,5 +1,30 @@
 # @mysten/wallet-adapter-base
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [97c46ca9d]
+  - @mysten/sui.js@0.26.1
+
+## 0.5.0
+
+### Minor Changes
+
+- 96e883fc1: Update wallet adapter and wallet standard to support passing through the desired request type.
+
+### Patch Changes
+
+- a8746d4e9: update SuiExecuteTransactionResponse
+- Updated dependencies [034158656]
+- Updated dependencies [a8746d4e9]
+- Updated dependencies [57fc4dedd]
+- Updated dependencies [e6a71882f]
+- Updated dependencies [e6a71882f]
+- Updated dependencies [21781ba52]
+- Updated dependencies [b3ba6dfbc]
+  - @mysten/sui.js@0.26.0
+
 ## 0.4.2
 
 ### Patch Changes

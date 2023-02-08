@@ -134,10 +134,6 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: u64,
 
-        /// (Deprecated) This flag is deprecated, dependency verification is on by default.
-        #[clap(long)]
-        verify_dependencies: bool,
-
         /// Publish the package without checking whether compiling dependencies from source results
         /// in bytecode matching the dependencies found on-chain.
         #[clap(long)]
@@ -467,7 +463,6 @@ impl SuiClientCommands {
                 gas,
                 build_config,
                 gas_budget,
-                verify_dependencies,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
             } => {
@@ -499,16 +494,6 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
-
-                if verify_dependencies {
-                    eprintln!(
-                        "{}",
-                        "Dependency verification is on by default. --verify-dependencies is \
-                         deprecated and will be removed in the next release."
-                            .bold()
-                            .yellow(),
-                    );
-                }
 
                 if !skip_dependency_verification {
                     BytecodeSourceVerifier::new(client.read_api(), false)

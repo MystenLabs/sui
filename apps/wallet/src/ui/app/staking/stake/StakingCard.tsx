@@ -9,9 +9,12 @@ import {
 } from '@mysten/sui.js';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
+import Alert from '../../components/alert';
+import { useReferenceGasPrice } from '../../hooks/useReferenceGasPrice';
 import { getStakingRewards } from '../getStakingRewards';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { STATE_OBJECT } from '../usePendingDelegation';
@@ -35,36 +38,28 @@ import {
     useSigner,
     useAppSelector,
     useCoinDecimals,
-    useIndividualCoinMaxBalance,
     useGetObject,
 } from '_hooks';
 import {
     accountAggregateBalancesSelector,
-    accountItemizedBalancesSelector,
     createCoinsForTypeSelector,
 } from '_redux/slices/account';
-import {
-    Coin,
-    GAS_TYPE_ARG,
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-} from '_redux/slices/sui-objects/Coin';
+import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 import { Text } from '_src/ui/app/shared/text';
 
-import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 const initialValues = {
     amount: '',
+    gasBudget: '',
 };
 
 export type FormValues = typeof initialValues;
 
 function StakingCard() {
     const coinType = GAS_TYPE_ARG;
-    const [sendError, setSendError] = useState<string | null>(null);
     const accountAddress = useAppSelector(({ account }) => account.address);
-    const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const [searchParams] = useSearchParams();
     const validatorAddress = searchParams.get('address');
@@ -79,12 +74,6 @@ function StakingCard() {
         useGetObject(STATE_OBJECT);
 
     const validatorsData = validators && validatorsFields(validators);
-
-    // TODO: this is a hack to get the total amount of gas coins
-    const totalGasCoins = useMemo(
-        () => (unstake ? 2 : balances[GAS_TYPE_ARG]?.length || 0),
-        [balances, unstake]
-    );
 
     const totalTokenBalance = useMemo(() => {
         if (!allDelegation) return 0n;
@@ -102,16 +91,7 @@ function StakingCard() {
             0n
         );
     }, [allDelegation, stakeIdParams]);
-
-    // For requesting withdrawal of tokens the coinBalance is the total amount of tokens staked for the specific stakeId
-    const coinBalance = useMemo(
-        () =>
-            unstake
-                ? totalTokenBalance
-                : (coinType && aggregateBalances[coinType]) || 0n,
-        [unstake, totalTokenBalance, coinType, aggregateBalances]
-    );
-
+    const coinBalance = (coinType && aggregateBalances[coinType]) || 0n;
     const delegationData = useMemo(() => {
         if (!allDelegation) return null;
 
@@ -134,41 +114,16 @@ function StakingCard() {
     }, [delegationData, validatorsData]);
 
     const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-    const maxSuiSingleCoinBalance = useIndividualCoinMaxBalance(SUI_TYPE_ARG);
-
-    //TODO: this is a hack to get the total amount of gas coins
-    // for unstake add gas
-    const gasAggregateBalance = useMemo(
-        () =>
-            unstake
-                ? coinBalance + BigInt(DEFAULT_GAS_BUDGET_FOR_STAKE)
-                : aggregateBalances[GAS_TYPE_ARG] || 0n,
-        [aggregateBalances, coinBalance, unstake]
-    );
 
     const validationSchema = useMemo(
         () =>
             createValidationSchema(
-                coinType || '',
                 coinBalance,
                 coinSymbol,
-                gasAggregateBalance,
-                totalGasCoins,
                 coinDecimals,
-                gasDecimals,
-                maxSuiSingleCoinBalance
+                unstake
             ),
-        [
-            coinType,
-            coinBalance,
-            coinSymbol,
-            gasAggregateBalance,
-            totalGasCoins,
-            coinDecimals,
-            gasDecimals,
-            maxSuiSingleCoinBalance,
-        ]
+        [coinBalance, coinSymbol, coinDecimals, unstake]
     );
 
     const queryClient = useQueryClient();
@@ -178,13 +133,9 @@ function StakingCard() {
         return delegationData.delegation_status.Active.id.id;
     }, [delegationData]);
 
+    const gasPrice = useReferenceGasPrice();
     const navigate = useNavigate();
     const signer = useSigner();
-    const allCoinsForStakeSelector = useMemo(
-        () => createCoinsForTypeSelector(coinType),
-        [coinType]
-    );
-    const allCoinsForStake = useAppSelector(allCoinsForStakeSelector);
     const allSuiCoinsSelector = useMemo(
         () => createCoinsForTypeSelector(SUI_TYPE_ARG),
         []
@@ -208,10 +159,10 @@ function StakingCard() {
             });
             const response = await Coin.stakeCoin(
                 signer,
-                allCoinsForStake,
                 allSuiCoins,
                 amount,
-                validatorAddress
+                validatorAddress,
+                gasPrice.data!
             );
             return response;
         },
@@ -249,7 +200,6 @@ function StakingCard() {
             if (coinType === null || validatorAddress === null) {
                 return;
             }
-            setSendError(null);
             try {
                 const bigIntAmount = parseAmount(amount, coinDecimals);
                 let response;
@@ -296,7 +246,17 @@ function StakingCard() {
                     }).toString()}`
                 );
             } catch (e) {
-                setSendError((e as SerializedError).message || null);
+                const msg = (e as Error)?.message;
+                toast.error(
+                    <div className="max-w-xs overflow-hidden flex flex-col">
+                        <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
+                        {msg ? (
+                            <small className="text-ellipsis overflow-hidden">
+                                {msg}
+                            </small>
+                        ) : null}
+                    </div>
+                );
             }
         },
         [
@@ -312,31 +272,34 @@ function StakingCard() {
             stakeToken,
         ]
     );
-
-    const handleOnClearSubmitError = useCallback(() => {
-        setSendError(null);
-    }, []);
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
-
-    if (!coinType || !validatorAddress || !validatorsData) {
+    if (
+        !coinType ||
+        !validatorAddress ||
+        (!validatorsIsloading && !validatorsData)
+    ) {
         return <Navigate to="/" replace={true} />;
     }
-
     return (
         <div className="flex flex-col flex-nowrap flex-grow w-full">
             <Loading
                 loading={loadingBalance || isLoading || validatorsIsloading}
-                className="flex justify-center w-full h-full items-center "
+                className="flex justify-center w-full h-full items-center"
             >
                 <Formik
                     initialValues={initialValues}
-                    validateOnMount={!unstake}
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
-                    {({ isSubmitting, isValid, submitForm }) => (
+                    {({
+                        isSubmitting,
+                        isValid,
+                        submitForm,
+                        errors,
+                        touched,
+                    }) => (
                         <BottomMenuLayout>
                             <Content>
                                 <div className="mb-4">
@@ -349,25 +312,29 @@ function StakingCard() {
 
                                 {unstake ? (
                                     <UnStakeForm
-                                        submitError={sendError}
-                                        coinBalance={coinBalance}
+                                        coinBalance={totalTokenBalance}
                                         coinType={coinType}
                                         stakingReward={suiEarned}
-                                        onClearSubmitError={
-                                            handleOnClearSubmitError
-                                        }
                                     />
                                 ) : (
                                     <StakeForm
-                                        submitError={sendError}
                                         coinBalance={coinBalance}
                                         coinType={coinType}
-                                        epoch={validatorsData.epoch}
-                                        onClearSubmitError={
-                                            handleOnClearSubmitError
-                                        }
+                                        epoch={validatorsData?.epoch}
                                     />
                                 )}
+
+                                {(unstake || touched.amount) &&
+                                (errors.amount || errors.gasBudget) ? (
+                                    <div className="mt-2 flex flex-col flex-nowrap">
+                                        <Alert
+                                            mode="warning"
+                                            className="text-body"
+                                        >
+                                            {errors.amount || errors.gasBudget}
+                                        </Alert>
+                                    </div>
+                                ) : null}
 
                                 {!unstake && (
                                     <div className="flex-1 mt-7.5">
@@ -424,7 +391,8 @@ function StakingCard() {
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
-                                        (unstake && !delegationId)
+                                        (unstake && !delegationId) ||
+                                        gasPrice.isLoading
                                     }
                                 >
                                     {isSubmitting ? (

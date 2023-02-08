@@ -504,7 +504,7 @@ pub fn verify_and_link<
     // run the Sui verifier
     for module in modules.iter() {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
-        verifier::verify_module(module)?;
+        verifier::verify_module(module, &BTreeMap::new())?;
     }
     Ok(vm)
 }
@@ -1412,7 +1412,6 @@ fn convert_type_argument_error<
     use move_core_types::vm_status::StatusCode;
     use sui_types::messages::EntryTypeArgumentErrorKind;
     let kind = match error.major_status() {
-        StatusCode::LINKER_ERROR => EntryTypeArgumentErrorKind::ModuleNotFound,
         StatusCode::TYPE_RESOLUTION_FAILURE => EntryTypeArgumentErrorKind::TypeNotFound,
         StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => EntryTypeArgumentErrorKind::ArityMismatch,
         StatusCode::CONSTRAINT_NOT_SATISFIED => EntryTypeArgumentErrorKind::ConstraintNotSatisfied,

@@ -6,11 +6,15 @@ use crate::keytool::read_keypair_from_file;
 
 use super::write_keypair_to_file;
 use super::KeyToolCommand;
+use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
+use sui_types::base_types::ObjectDigest;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -24,6 +28,8 @@ use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use sui_types::intent::Intent;
+use sui_types::intent::IntentScope;
+use sui_types::messages::TransactionData;
 use tempfile::TempDir;
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
@@ -298,6 +304,46 @@ fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
     KeyToolCommand::Generate {
         key_scheme: SignatureScheme::BLS12381,
         derivation_path: None,
+    }
+    .execute(&mut keystore)?;
+    Ok(())
+}
+
+#[test]
+fn test_sign_command() -> Result<(), anyhow::Error> {
+    // Add a keypair
+    let mut keystore = Keystore::from(InMemKeystore::new(1));
+    let binding = keystore.addresses();
+    let sender = binding.first().unwrap();
+
+    // Create a dummy TransactionData
+    let gas = (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::random(),
+    );
+    let tx_data = TransactionData::new_pay_sui_with_dummy_gas_price(
+        *sender,
+        vec![gas],
+        vec![SuiAddress::random_for_testing_only()],
+        vec![10000],
+        gas,
+        1000,
+    );
+
+    // Sign an intent message for the transaction data and a passed-in intent with scope as PersonalMessage.
+    KeyToolCommand::Sign {
+        address: *sender,
+        data: Base64::encode(bcs::to_bytes(&tx_data)?),
+        intent: Some(Intent::default().with_scope(IntentScope::PersonalMessage)),
+    }
+    .execute(&mut keystore)?;
+
+    // Sign an intent message for the transaction data without intent passed in, so default is used.
+    KeyToolCommand::Sign {
+        address: *sender,
+        data: Base64::encode(bcs::to_bytes(&tx_data)?),
+        intent: None,
     }
     .execute(&mut keystore)?;
     Ok(())

@@ -38,7 +38,6 @@ mockall = "0.11.2"
 
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
@@ -51,3 +50,4 @@ primary = { path = "../primary", package = "narwhal-primary" }
 node = { path = "../node", package = "narwhal-node" }
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 types = { path = "../types", package = "narwhal-types" }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}

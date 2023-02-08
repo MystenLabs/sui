@@ -4,16 +4,16 @@
 import {
     is,
     SuiObject,
-    type ValidatorsFields,
+    type MoveSuiSystemObjectFields,
     type GetObjectDataResponse,
 } from '@mysten/sui.js';
 
 export function validatorsFields(
     data?: GetObjectDataResponse
-): ValidatorsFields | null {
+): MoveSuiSystemObjectFields | null {
     return data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-        ? (data.details.data.fields as ValidatorsFields)
+        ? (data.details.data.fields as MoveSuiSystemObjectFields)
         : null;
 }

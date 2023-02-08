@@ -146,7 +146,7 @@ const slice = createSlice({
     name: 'sui-objects',
     initialState: initialState,
     reducers: {
-        clearForNetworkSwitch: (state) => {
+        clearSuiObjects: (state) => {
             state.error = false;
             state.lastSync = null;
             objectsAdapter.removeAll(state);
@@ -181,7 +181,7 @@ const slice = createSlice({
 
 export default slice.reducer;
 
-export const { clearForNetworkSwitch } = slice.actions;
+export const { clearSuiObjects } = slice.actions;
 
 export const suiObjectsAdapterSelectors = objectsAdapter.getSelectors(
     (state: RootState) => state.suiObjects

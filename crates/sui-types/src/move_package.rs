@@ -9,7 +9,7 @@ use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
-use move_core_types::identifier::Identifier;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,23 @@ use sui_protocol_constants::*;
 // #[cfg(test)]
 // #[path = "unit_tests/move_package.rs"]
 // mod base_types_tests;
+
+#[derive(Clone, Debug)]
+/// Additional information about a function
+pub struct FnInfo {
+    /// If true, it's a function involved in testing (`[test]`, `[test_only]`, `[expected_failure]`)
+    pub is_test: bool,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Uniquely identifies a function in a module
+pub struct FnInfoKey {
+    pub fn_name: String,
+    pub mod_addr: AccountAddress,
+}
+
+/// A map from function info keys to function info
+pub type FnInfoMap = BTreeMap<FnInfoKey, FnInfo>;
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[serde_as]

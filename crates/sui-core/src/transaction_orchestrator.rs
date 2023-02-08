@@ -10,10 +10,10 @@ use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use crate::histogram::Histogram;
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
+use mysten_metrics::histogram::Histogram;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
@@ -29,7 +29,8 @@ use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverResponse, VerifiedCertificate, VerifiedCertifiedTransactionEffects,
+    FinalizedEffects, QuorumDriverResponse, VerifiedCertificate,
+    VerifiedCertifiedTransactionEffects,
 };
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
@@ -161,6 +162,7 @@ where
             .verify()
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let tx_digest = *transaction.digest();
+        debug!(?tx_digest, "TO Received transaction execution request.");
 
         let _request_guard = self.metrics.request_latency.start_timer();
         let _wait_for_finality_guard = self.metrics.wait_for_finality_latency.start_timer();
@@ -192,8 +194,8 @@ where
                 } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
-                        effects_cert.into(),
+                        Some(tx_cert.into()),
+                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     ))));
                 }
@@ -206,13 +208,13 @@ where
                 .await
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
-                        effects_cert.into(),
+                        Some(tx_cert.into()),
+                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                        tx_cert.into(),
-                        effects_cert.into(),
+                        Some(tx_cert.into()),
+                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         false,
                     )))),
                 }
@@ -225,13 +227,17 @@ where
         &self,
         transaction: VerifiedTransaction,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
-        let ticket = self.notifier.register_one(transaction.digest());
+        let tx_digest = *transaction.digest();
+        let ticket = self.notifier.register_one(&tx_digest);
         if self
             .pending_tx_log
             .write_pending_transaction_maybe(&transaction)
             .await?
         {
-            self.quorum_driver().submit_transaction(transaction).await?;
+            debug!(?tx_digest, "no pending request in flight, submitting.");
+            self.quorum_driver()
+                .submit_transaction_no_ticket(transaction)
+                .await?;
         }
         Ok(ticket)
     }

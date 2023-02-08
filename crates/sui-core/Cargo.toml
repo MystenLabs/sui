@@ -58,7 +58,6 @@ narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
-narwhal-test-utils = { path = "../../narwhal/test-utils" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
@@ -72,7 +71,6 @@ num_cpus = "1.14.0"
 
 sui-simulator = { path = "../sui-simulator" }
 sui-macros = { path = "../sui-macros" }
-reqwest = { version = "0.11.13", features = ["json"] }
 
 [dev-dependencies]
 clap = { version = "3.2.17", features = ["derive"] }
@@ -81,6 +79,7 @@ more-asserts="0.3.1"
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
+narwhal-test-utils = { path = "../../narwhal/test-utils" }
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }

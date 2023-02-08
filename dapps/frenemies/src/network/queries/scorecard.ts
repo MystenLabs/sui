@@ -35,6 +35,7 @@ export function useScorecard(account?: string | null) {
     },
     {
       enabled: !!account,
+      refetchInterval: 60 * 1000,
     }
   );
 }

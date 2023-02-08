@@ -9,7 +9,6 @@ import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
 import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
-import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import RecentTransactions from '_components/transactions-card/RecentTransactions';
@@ -17,6 +16,7 @@ import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
+import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 
 import st from './TokensPage.module.scss';
 
@@ -66,12 +66,8 @@ function MyTokens({
                 </>
             ) : (
                 <div className={st.emptyWallet}>
-                    <div className={st.emptyWalletIcon} />
-                    <div className={st.emptyWalletTitle}>
-                        Your wallet contains no SUI.
-                    </div>
-                    {emptyWalletDescription}
                     <FaucetRequestButton trackEventSource="home" />
+                    {emptyWalletDescription}
                 </div>
             )}
         </Loading>
@@ -112,9 +108,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                         <small>{error.message}</small>
                     </Alert>
                 ) : null}
-                {!coinType && (
-                    <AccountAddress showLink={false} copyable mode="faded" />
-                )}
+                {!coinType && <AccountSelector />}
                 <div className={st.balanceContainer}>
                     <Loading loading={loading}>
                         <CoinBalance

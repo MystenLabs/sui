@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ActiveValidator } from '@mysten/sui.js';
+import type { MoveActiveValidator } from '@mysten/sui.js';
 
 import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 4;
 
-export function calculateAPY(validators: ActiveValidator, epoch: number) {
+export function calculateAPY(validators: MoveActiveValidator, epoch: number) {
     const { sui_balance, starting_epoch, delegation_token_supply } =
         validators.fields.delegation_staking_pool.fields;
 

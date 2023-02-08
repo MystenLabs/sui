@@ -39,7 +39,7 @@ describe('Secp256k1PublicKey', () => {
 
     expect(() => {
       const invalid_pubkey_buffer = new Uint8Array(
-        INVALID_SECP256K1_PUBLIC_KEY
+        INVALID_SECP256K1_PUBLIC_KEY,
       );
       let invalid_pubkey_base64 = toB64(invalid_pubkey_buffer);
       new Secp256k1PublicKey(invalid_pubkey_base64);

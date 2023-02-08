@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 
 use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
+use move_core_types::language_storage::StructTag;
 use roaring::RoaringBitmap;
+use test_utils::messages::MAX_GAS;
 
 use crate::base_types::random_object_ref;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
@@ -749,4 +751,95 @@ fn test_change_epoch_transaction() {
             .len(),
         1
     );
+}
+
+#[test]
+fn test_move_input_objects() {
+    let package = ObjectID::random();
+    let p1 = ObjectID::random();
+    let p2 = ObjectID::random();
+    let p3 = ObjectID::random();
+    let p4 = ObjectID::random();
+    let p5 = ObjectID::random();
+    let o1 = random_object_ref();
+    let o2 = random_object_ref();
+    let o3 = random_object_ref();
+    let shared = random_object_ref();
+
+    let gas_object_ref = random_object_ref();
+    let mk_st = |package: ObjectID, type_args| {
+        TypeTag::Struct(Box::new(StructTag {
+            address: package.into(),
+            module: Identifier::new("foo").unwrap(),
+            name: Identifier::new("bar").unwrap(),
+            type_params: type_args,
+        }))
+    };
+    let t1 = mk_st(p1, vec![]);
+    let t2 = mk_st(p2, vec![mk_st(p3, vec![]), mk_st(p4, vec![])]);
+    let t3 = TypeTag::Vector(Box::new(mk_st(p5, vec![])));
+    let type_args = vec![t1, t2, t3];
+    let args = vec![
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(o1)),
+        CallArg::ObjVec(vec![
+            ObjectArg::ImmOrOwnedObject(o2),
+            ObjectArg::ImmOrOwnedObject(o3),
+        ]),
+        CallArg::Object(ObjectArg::SharedObject {
+            id: shared.0,
+            initial_shared_version: shared.1,
+            mutable: true,
+        }),
+    ];
+
+    let data = dummy_move_call(package, "foo", "bar", type_args, gas_object_ref, args);
+    let mut input_objects = data.input_objects().unwrap();
+    macro_rules! rem {
+        ($exp:expr) => {{
+            let idx = input_objects
+                .iter()
+                .position(|x| x == &$exp)
+                .expect(std::concat!(
+                    "Unbound input object: ",
+                    std::stringify!($exp)
+                ));
+            input_objects.swap_remove(idx);
+        }};
+    }
+    rem!(InputObjectKind::MovePackage(package));
+    rem!(InputObjectKind::MovePackage(p1));
+    rem!(InputObjectKind::MovePackage(p2));
+    rem!(InputObjectKind::MovePackage(p3));
+    rem!(InputObjectKind::MovePackage(p4));
+    rem!(InputObjectKind::MovePackage(p5));
+    rem!(InputObjectKind::ImmOrOwnedMoveObject(o1));
+    rem!(InputObjectKind::ImmOrOwnedMoveObject(o2));
+    rem!(InputObjectKind::ImmOrOwnedMoveObject(o3));
+    rem!(InputObjectKind::SharedMoveObject {
+        id: shared.0,
+        initial_shared_version: shared.1,
+        mutable: true,
+    });
+    rem!(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
+    assert!(input_objects.is_empty());
+}
+
+fn dummy_move_call(
+    package: ObjectID,
+    module: &str,
+    function: &str,
+    type_args: Vec<TypeTag>,
+    gas_object_ref: ObjectRef,
+    args: Vec<CallArg>,
+) -> TransactionData {
+    TransactionData::new_move_call_with_dummy_gas_price(
+        SuiAddress::random_for_testing_only(),
+        package,
+        Identifier::new(module).unwrap(),
+        Identifier::new(function).unwrap(),
+        type_args,
+        gas_object_ref,
+        args,
+        MAX_GAS,
+    )
 }

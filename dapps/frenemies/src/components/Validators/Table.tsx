@@ -3,12 +3,17 @@
 
 import { ReactNode } from "react";
 import { ObjectData } from "../../network/rawObject";
-import { DELEGATION, Delegation, StakedSui, STAKED_SUI } from "../../network/types";
+import {
+  DELEGATION,
+  Delegation,
+  StakedSui,
+  STAKED_SUI,
+} from "../../network/types";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMyType } from "../../network/queries/use-raw";
 import { GridItem } from "./GridItem";
 import { ValidatorItem } from "./Validator";
-import { ActiveValidator, normalizeSuiAddress } from "@mysten/sui.js";
+import { MoveActiveValidator, normalizeSuiAddress } from "@mysten/sui.js";
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -20,7 +25,7 @@ function Header({ children }: { children: ReactNode }) {
 
 interface Props {
   /** Set of 40 currently active validators */
-  validators: ActiveValidator[];
+  validators: MoveActiveValidator[];
 }
 
 export function Table({ validators }: Props) {
@@ -31,13 +36,19 @@ export function Table({ validators }: Props) {
     currentAccount
   );
 
-  // sort validators by their voting power in DESC order (not by stake - these are different)
-  // TODO: using `OR "0"` since voting power is an optional field;
+  // sort validators by their live stake info in DESC order
   const sorted = [...validators].sort((a, b) =>
-    Number(BigInt(b.fields.voting_power || "0") - BigInt(a.fields.voting_power || "0"))
+    Number(
+      BigInt(b.fields.metadata.fields.next_epoch_stake) +
+        BigInt(b.fields.metadata.fields.next_epoch_delegation) -
+        (BigInt(a.fields.metadata.fields.next_epoch_stake) +
+          BigInt(a.fields.metadata.fields.next_epoch_delegation))
+    )
   );
 
-  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (stakes || []).reduce(
+  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (
+    stakes || []
+  ).reduce(
     (acc, stake) =>
       Object.assign(acc, {
         [normalizeSuiAddress(stake.data.validatorAddress)]: stake,

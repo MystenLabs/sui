@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
+    io::Write,
     path::PathBuf,
 };
 
@@ -13,18 +14,29 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
-use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
+use move_compiler::{
+    compiled_unit::{
+        AnnotatedCompiledModule, AnnotatedCompiledScript, CompiledUnitEnum, NamedCompiledModule,
+    },
+    diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
+    expansion::ast::{AttributeName_, Attributes},
+    shared::known_attributes::KnownAttribute,
+};
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
 use move_package::{
-    compilation::compiled_package::CompiledPackage as MoveCompiledPackage,
+    compilation::{
+        build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
+    },
+    resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
 };
 use serde_reflection::Registry;
 use sui_types::{
     error::{SuiError, SuiResult},
+    move_package::{FnInfo, FnInfoKey, FnInfoMap},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
@@ -48,25 +60,96 @@ pub struct BuildConfig {
 }
 
 impl BuildConfig {
+    pub fn new_for_testing() -> Self {
+        let mut build_config: Self = Default::default();
+        build_config.config.install_dir = Some(tempfile::TempDir::new().unwrap().into_path());
+        build_config
+    }
+
+    fn is_test(attributes: &Attributes) -> bool {
+        attributes
+            .iter()
+            .any(|(_, name, _)| matches!(name, AttributeName_::Known(KnownAttribute::Testing(_))))
+    }
+
+    fn fn_info(
+        units: &[CompiledUnitEnum<AnnotatedCompiledModule, AnnotatedCompiledScript>],
+    ) -> FnInfoMap {
+        let mut fn_info_map = BTreeMap::new();
+        for u in units {
+            match u {
+                CompiledUnitEnum::Module(m) => {
+                    let mod_addr = m.named_module.address.into_inner();
+                    for (_, s, info) in &m.function_infos {
+                        let fn_name = s.as_str().to_string();
+                        let is_test = Self::is_test(&info.attributes);
+                        fn_info_map.insert(FnInfoKey { fn_name, mod_addr }, FnInfo { is_test });
+                    }
+                }
+                CompiledUnitEnum::Script(_) => continue,
+            }
+        }
+
+        fn_info_map
+    }
+
+    fn compile_package<W: Write>(
+        resolution_graph: ResolvedGraph,
+        writer: &mut W,
+    ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
+        let build_plan = BuildPlan::create(resolution_graph)?;
+        let mut fn_info = None;
+        let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
+            let (files, units_res) = compiler.build()?;
+            match units_res {
+                Ok((units, warning_diags)) => {
+                    report_warnings(&files, warning_diags);
+                    fn_info = Some(Self::fn_info(&units));
+                    Ok((files, units))
+                }
+                Err(error_diags) => {
+                    assert!(!error_diags.is_empty());
+                    let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
+                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
+                        anyhow::bail!("Cannot output compiler diagnostics: {}", err);
+                    }
+                    anyhow::bail!("Compilation error");
+                }
+            }
+        })?;
+        Ok((compiled_pkg, fn_info.unwrap()))
+    }
+
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
         let res = if self.print_diags_to_stderr {
-            self.config
-                .compile_package_no_exit(&path, &mut std::io::stderr())
+            let resolution_graph = self
+                .config
+                .resolution_graph_for_package(&path, &mut std::io::stderr())
+                .map_err(|err| SuiError::ModuleBuildFailure {
+                    error: format!("{:?}", err),
+                })?;
+            Self::compile_package(resolution_graph, &mut std::io::stderr())
         } else {
-            self.config.compile_package_no_exit(&path, &mut Vec::new())
+            let resolution_graph = self
+                .config
+                .resolution_graph_for_package(&path, &mut Vec::new())
+                .map_err(|err| SuiError::ModuleBuildFailure {
+                    error: format!("{:?}", err),
+                })?;
+            Self::compile_package(resolution_graph, &mut Vec::new())
         };
 
         // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
         // format to include anyhow's error context chain.
-        let package = match res {
+        let (package, fn_info) = match res {
             Err(error) => {
                 return Err(SuiError::ModuleBuildFailure {
                     error: format!("{:?}", error),
                 })
             }
-            Ok(package) => package,
+            Ok((package, fn_info)) => (package, fn_info),
         };
         let compiled_modules = package.root_modules_map();
         if self.run_bytecode_verifier {
@@ -76,7 +159,7 @@ impl BuildConfig {
                         error: err.to_string(),
                     }
                 })?;
-                sui_bytecode_verifier::verify_module(m)?;
+                sui_bytecode_verifier::verify_module(m, &fn_info)?;
             }
             // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
         }

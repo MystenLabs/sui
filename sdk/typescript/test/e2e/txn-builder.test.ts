@@ -11,11 +11,11 @@ import {
   RawSigner,
   SignableTransaction,
   SuiMoveObject,
+  SUI_SYSTEM_STATE_OBJECT_ID,
 } from '../../src';
 import {
   DEFAULT_RECIPIENT,
   DEFAULT_GAS_BUDGET,
-  SUI_SYSTEM_STATE_OBJECT_ID,
   setup,
   TestToolbox,
   DEFAULT_RECIPIENT_2,
@@ -34,13 +34,13 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined
+          : undefined,
       );
     });
 
     it('Split coin', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       await validateTransaction(signer, {
         kind: 'splitCoin',
@@ -54,7 +54,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Merge coin', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       await validateTransaction(signer, {
         kind: 'mergeCoin',
@@ -68,7 +68,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Move Call', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       await validateTransaction(signer, {
         kind: 'moveCall',
@@ -90,7 +90,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Move Shared Object Call', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
 
       const validators = await toolbox.getActiveValidators();
@@ -119,7 +119,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Transfer Sui', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       await validateTransaction(signer, {
         kind: 'transferSui',
@@ -134,7 +134,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
 
     it('Transfer Object', async () => {
       const coins = await toolbox.provider.getGasObjectsOwnedByAddress(
-        toolbox.address()
+        toolbox.address(),
       );
       await validateTransaction(signer, {
         kind: 'transferObject',
@@ -151,7 +151,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins =
         await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
           toolbox.address(),
-          BigInt(DEFAULT_GAS_BUDGET)
+          BigInt(DEFAULT_GAS_BUDGET),
         );
 
       // get some new coins with small amount
@@ -162,7 +162,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         gasPayment: getObjectId(coins[1]),
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-        getObjectId(c)
+        getObjectId(c),
       );
 
       // use the newly created coins as the input coins for the pay transaction
@@ -183,7 +183,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins =
         await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
           toolbox.address(),
-          BigInt(DEFAULT_GAS_BUDGET)
+          BigInt(DEFAULT_GAS_BUDGET),
         );
 
       const splitTxn = await signer.splitCoin({
@@ -193,7 +193,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         gasPayment: getObjectId(coins[1]),
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-        getObjectId(c)
+        getObjectId(c),
       );
 
       await validateTransaction(signer, {
@@ -212,7 +212,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
       const coins =
         await toolbox.provider.selectCoinsWithBalanceGreaterThanOrEqual(
           toolbox.address(),
-          BigInt(DEFAULT_GAS_BUDGET)
+          BigInt(DEFAULT_GAS_BUDGET),
         );
 
       const splitTxn = await signer.splitCoin({
@@ -222,7 +222,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         gasPayment: getObjectId(coins[1]),
       });
       const splitCoins = getNewlyCreatedCoinRefsAfterSplit(splitTxn)!.map((c) =>
-        getObjectId(c)
+        getObjectId(c),
       );
       await validateTransaction(signer, {
         kind: 'payAllSui',
@@ -233,12 +233,12 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         },
       });
     });
-  }
+  },
 );
 
 async function validateTransaction(
   signer: RawSigner,
-  txn: SignableTransaction
+  txn: SignableTransaction,
 ) {
   const localDigest = await signer.getTransactionDigest(txn);
   const result = await signer.signAndExecuteTransaction(txn);

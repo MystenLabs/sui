@@ -14,7 +14,6 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::stake_aggregator::{InsertResult, StakeAggregator};
-use fastcrypto::encoding::{Encoding, Hex};
 use futures::future::{select, Either};
 use futures::FutureExt;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
@@ -29,14 +28,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{EpochId, TransactionDigest};
-use sui_types::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
+use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{TransactionEffects, VerifiedSignedTransactionEffects};
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
-    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp,
-    VerifiedCheckpoint,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::time::Instant;
@@ -101,18 +100,38 @@ impl CheckpointStore {
         contents: CheckpointContents,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        if epoch_store.epoch() == checkpoint.summary.epoch {
-            epoch_store
-                .put_genesis_checkpoint_in_builder(&checkpoint.summary, &contents)
-                .unwrap();
-        } else {
-            debug!("Not inserting checkpoint builder data for genesis checkpoint, validator epoch {}, genesis epoch {}",
-                epoch_store.epoch(), checkpoint.summary.epoch,
-            );
+        assert_eq!(
+            checkpoint.epoch(),
+            0,
+            "can't call insert_genesis_checkpoint with a checkpoint not in epoch 0"
+        );
+        assert_eq!(
+            checkpoint.sequence_number(),
+            0,
+            "can't call insert_genesis_checkpoint with a checkpoint that doesn't have a sequence number of 0"
+        );
+
+        // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
+        if self
+            .get_checkpoint_by_digest(&checkpoint.digest())
+            .unwrap()
+            .is_none()
+        {
+            if epoch_store.epoch() == checkpoint.summary.epoch {
+                epoch_store
+                    .put_genesis_checkpoint_in_builder(&checkpoint.summary, &contents)
+                    .unwrap();
+            } else {
+                debug!(
+                    validator_epoch =% epoch_store.epoch(),
+                    genesis_epoch =% checkpoint.epoch(),
+                    "Not inserting checkpoint builder data for genesis checkpoint",
+                );
+            }
+            self.insert_checkpoint_contents(contents).unwrap();
+            self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
+            self.update_highest_synced_checkpoint(&checkpoint).unwrap();
         }
-        self.insert_verified_checkpoint(checkpoint.clone()).unwrap();
-        self.insert_checkpoint_contents(contents).unwrap();
-        self.update_highest_synced_checkpoint(&checkpoint).unwrap();
     }
 
     pub fn get_checkpoint_by_digest(
@@ -374,7 +393,7 @@ pub struct CheckpointSignatureAggregator {
     next_index: u64,
     summary: CheckpointSummary,
     digest: CheckpointDigest,
-    signatures: StakeAggregator<AuthoritySignInfo, false>,
+    signatures: StakeAggregator<AuthoritySignInfo, true>,
 }
 
 impl CheckpointBuilder {
@@ -408,7 +427,7 @@ impl CheckpointBuilder {
 
     async fn run(mut self) {
         info!("Starting CheckpointBuilder");
-        loop {
+        'main: loop {
             // Check whether an exit signal has been received, if so we break the loop.
             // This gives us a chance to exit, in case checkpoint making keeps failing.
             match self.exit.has_changed() {
@@ -425,7 +444,7 @@ impl CheckpointBuilder {
                     error!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
-                    continue;
+                    continue 'main;
                 }
             }
             debug!("Waiting for more checkpoints from consensus after processing {last_processed_height:?}");
@@ -455,7 +474,10 @@ impl CheckpointBuilder {
             .await?;
         let _scope = monitored_scope("CheckpointBuilder");
         let unsorted = self.complete_checkpoint_effects(roots)?;
-        let sorted = CasualOrder::casual_sort(unsorted);
+        let sorted = {
+            let _scope = monitored_scope("CheckpointBuilder::casual_sort");
+            CasualOrder::casual_sort(unsorted)
+        };
         let new_checkpoint = self.create_checkpoints(sorted, pending.details).await?;
         self.write_checkpoints(height, new_checkpoint).await?;
         Ok(())
@@ -466,6 +488,7 @@ impl CheckpointBuilder {
         height: CheckpointCommitHeight,
         new_checkpoint: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
+        let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
         let mut batch = self.tables.checkpoint_content.batch();
         for (summary, contents) in &new_checkpoint {
             debug!(
@@ -501,6 +524,7 @@ impl CheckpointBuilder {
         all_effects: Vec<TransactionEffects>,
         details: PendingCheckpointInfo,
     ) -> anyhow::Result<Vec<(CheckpointSummary, CheckpointContents)>> {
+        let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
         let total = all_effects.len();
         let mut last_checkpoint = self.epoch_store.last_built_checkpoint_summary()?;
         if last_checkpoint.is_none() {
@@ -557,6 +581,7 @@ impl CheckpointBuilder {
             let signatures = self
                 .epoch_store
                 .user_signatures_for_checkpoint(&digests_without_epoch_augment)
+                .in_monitored_scope("CheckpointBuilder::wait_user_signatures")
                 .await?;
             debug!(
                 "Received {} checkpoint user signatures from consensus",
@@ -705,6 +730,7 @@ impl CheckpointBuilder {
         &self,
         mut roots: Vec<VerifiedSignedTransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
+        let _scope = monitored_scope("CheckpointBuilder::complete_checkpoint_effects");
         let mut results = vec![];
         let mut seen = HashSet::new();
         loop {
@@ -814,7 +840,9 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: StakeAggregator::new(self.epoch_store.committee().clone()),
+                    signatures: StakeAggregator::new(Arc::new(
+                        self.epoch_store.committee().clone(),
+                    )),
                 });
                 self.current.as_mut().unwrap()
             };
@@ -880,7 +908,7 @@ impl CheckpointSignatureAggregator {
     pub fn try_aggregate(
         &mut self,
         data: CheckpointSignatureMessage,
-    ) -> Result<AuthorityWeakQuorumSignInfo, ()> {
+    ) -> Result<AuthorityStrongQuorumSignInfo, ()> {
         let their_digest = data.summary.summary.digest();
         let author = data.summary.auth_signature.authority;
         let signature = data.summary.auth_signature;
@@ -889,9 +917,9 @@ impl CheckpointSignatureAggregator {
             warn!(
                 "Validator {:?} has mismatching checkpoint digest {} at seq {}, we have digest {}",
                 author.concise(),
-                Hex::encode(their_digest),
+                their_digest,
                 self.summary.sequence_number,
-                Hex::encode(self.digest)
+                self.digest
             );
             return Err(());
         }
@@ -937,6 +965,7 @@ pub struct CheckpointService {
     notify_builder: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
     last_signature_index: Mutex<u64>,
+    metrics: Arc<CheckpointMetrics>,
 }
 
 impl CheckpointService {
@@ -978,7 +1007,7 @@ impl CheckpointService {
             notify_aggregator.clone(),
             exit_rcv,
             certified_checkpoint_output,
-            metrics,
+            metrics.clone(),
         );
 
         spawn_monitored_task!(aggregator.run());
@@ -991,6 +1020,7 @@ impl CheckpointService {
             notify_builder,
             notify_aggregator,
             last_signature_index,
+            metrics,
         });
         (service, exit_snd)
     }
@@ -1021,6 +1051,7 @@ impl CheckpointServiceNotify for CheckpointService {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult {
         let sequence = info.summary.summary.sequence_number;
+        let signer = info.summary.auth_signature.authority.concise();
         if let Some((last_certified, _)) = self
             .tables
             .certified_checkpoints
@@ -1036,8 +1067,7 @@ impl CheckpointServiceNotify for CheckpointService {
             if sequence <= last_certified {
                 debug!(
                     "Ignore signature for checkpoint sequence {} from {} - already certified",
-                    info.summary.summary.sequence_number,
-                    info.summary.auth_signature.authority.concise(),
+                    info.summary.summary.sequence_number, signer,
                 );
                 return Ok(());
             }
@@ -1045,9 +1075,13 @@ impl CheckpointServiceNotify for CheckpointService {
         debug!(
             "Received signature for checkpoint sequence {}, digest {} from {}",
             sequence,
-            Hex::encode(info.summary.summary.digest()),
-            info.summary.auth_signature.authority.concise(),
+            info.summary.summary.digest(),
+            signer,
         );
+        self.metrics
+            .last_received_checkpoint_signatures
+            .with_label_values(&[&signer.to_string()])
+            .set(sequence as i64);
         // While it can be tempting to make last_signature_index into AtomicU64, this won't work
         // We need to make sure we write to `pending_signatures` and trigger `notify_aggregator` without race conditions
         let mut index = self.last_signature_index.lock();
@@ -1326,12 +1360,7 @@ mod tests {
         ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
             Ok(digests
                 .into_iter()
-                .map(|d| {
-                    self.get(d.as_ref())
-                        .expect("effects not found")
-                        .clone()
-                        .into()
-                })
+                .map(|d| self.get(&d).expect("effects not found").clone().into())
                 .collect())
         }
 
@@ -1341,7 +1370,7 @@ mod tests {
         ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
             Ok(digests
                 .iter()
-                .map(|d| self.get(d.as_ref()).cloned().map(|e_opt| e_opt.into()))
+                .map(|d| self.get(d).cloned().map(|e_opt| e_opt.into()))
                 .collect())
         }
     }

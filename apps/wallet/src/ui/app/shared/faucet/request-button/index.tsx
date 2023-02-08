@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 
 import FaucetMessageInfo from '../message-info';
 import { useFaucetMutation } from '../useFaucetMutation';
+import { FaucetDiscordLink } from './FaucetDiscordLink';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import Button from '_app/shared/button';
 import Icon, { SuiIcons } from '_components/icon';
@@ -28,6 +29,17 @@ function FaucetRequestButton({
     const network = useAppSelector(({ app }) => app.apiEnv);
     const networkName = API_ENV_TO_INFO[network].name.replace(/sui\s*/gi, '');
     const mutation = useFaucetMutation();
+
+    //TODO: remove this TestNet check after testnet
+    if (network === 'testNet') {
+        return (
+            <FaucetDiscordLink
+                mode={mode}
+                trackEventSource={trackEventSource}
+            />
+        );
+    }
+
     return mutation.enabled ? (
         <Button
             mode={mode}
