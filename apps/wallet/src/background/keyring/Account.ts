@@ -11,11 +11,17 @@ import type {
 } from '@mysten/sui.js';
 
 export type AccountType = 'derived' | 'imported';
-export type AccountSerialized = {
-    type: AccountType;
-    address: SuiAddress;
-    derivationPath: string | null;
-};
+export type AccountSerialized =
+    | {
+          type: 'derived';
+          address: SuiAddress;
+          derivationPath: string;
+      }
+    | {
+          type: 'imported';
+          address: SuiAddress;
+          derivationPath: null;
+      };
 
 export class Account {
     #keypair: Keypair;
@@ -52,10 +58,31 @@ export class Account {
     }
 
     toJSON(): AccountSerialized {
-        return {
-            type: this.type,
-            address: this.address,
-            derivationPath: this.derivationPath,
-        };
+        switch (this.type) {
+            case 'derived':
+                if (this.derivationPath === null) {
+                    throw new Error(
+                        'Error, derived path account missing derived path'
+                    );
+                }
+                return {
+                    type: 'derived',
+                    address: this.address,
+                    derivationPath: this.derivationPath,
+                };
+            case 'imported':
+                if (this.derivationPath !== null) {
+                    throw new Error(
+                        'Error, imported path account has derived path'
+                    );
+                }
+                return {
+                    type: 'imported',
+                    address: this.address,
+                    derivationPath: this.derivationPath,
+                };
+            default:
+                throw new Error('Error, unknown account type');
+        }
     }
 }
