@@ -68,7 +68,9 @@ export function NftImage({
         'w-full h-full object-cover',
         animateHover && 'group-hover:scale-110 duration-500 ease-ease-out-cubic'
     );
-
+    const imgSrc = src
+        ? src.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')
+        : '';
     return (
         <div
             className={nftImageStyles({
@@ -97,7 +99,7 @@ export function NftImage({
             ) : (
                 <img
                     className={imgCls}
-                    src={src?.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')}
+                    src={imgSrc}
                     alt={name || 'NFT'}
                     title={title}
                     onError={() => setError(true)}
