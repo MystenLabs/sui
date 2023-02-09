@@ -171,7 +171,7 @@ module frenemies::leaderboard {
     // - if there is such an entry, new_score.score > v[_].score. this is because we only call `score_insertion_sort` when the player's score increases
     fun score_insertion_sort(v: &mut vector<Score>, new_score: Score) {
         let len = vector::length(v);
-        let at_capacity = len == LEADERBOARD_SIZE;
+        let at_capacity = len == LEADERBOARD_SIZE || len > LEADERBOARD_SIZE;
         let new_high_score = len == 0 || gt(&new_score, vector::borrow(v, len - 1));
         if (!new_high_score) {
             if (!at_capacity) {
