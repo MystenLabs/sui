@@ -33,7 +33,6 @@ export interface AppThunkConfig {
 }
 
 const getTransport = async () => {
-    let transport = null;
     let error;
     //try {
     //    return await WebHIDTransport.request();
