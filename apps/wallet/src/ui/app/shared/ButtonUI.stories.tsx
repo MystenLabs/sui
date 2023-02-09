@@ -3,19 +3,11 @@
 
 import { Add16, StakeAdd16 } from '@mysten/icons';
 import { type Meta, type StoryObj } from '@storybook/react';
-import { MemoryRouter } from 'react-router-dom';
 
 import { Button } from './ButtonUI';
 
 export default {
     component: Button,
-    decorators: [
-        (Story) => (
-            <MemoryRouter>
-                <Story />
-            </MemoryRouter>
-        ),
-    ],
 } as Meta<typeof Button>;
 
 export const Default: StoryObj<typeof Button> = {
