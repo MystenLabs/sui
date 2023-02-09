@@ -139,7 +139,8 @@ function getTransactionsAmountForCallTxn(
     });
 
     // TODO: revisit this - show absolute value of the transfer amount
-    return Object.values(coinsMeta).map(({ amount, coinType, address }) => ({
+    // TODO: Epoch change txn has a lot of coinBalanceChange events, limit coin balance change to 15
+    return Object.values(coinsMeta).slice(0, 15).map(({ amount, coinType, address }) => ({
         amount: amount ? Math.abs(amount) : null,
         coinType,
         address,
