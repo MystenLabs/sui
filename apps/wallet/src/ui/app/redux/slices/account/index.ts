@@ -114,10 +114,10 @@ const accountSlice = createSlice({
                 Required<KeyringPayload<'walletStatusUpdate'>>['return']
             >
         ) => {
-            if (state.account?.type === 'ledger') {
-                // TODO hack so BG process doesn't interfere
-                return;
-            }
+            // TODO hack so BG process doesn't interfere
+            state.isInitialized ||= payload.isInitialized;
+            return;
+
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
             state.account =
