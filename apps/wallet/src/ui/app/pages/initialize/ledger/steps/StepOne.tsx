@@ -10,12 +10,12 @@ import FieldLabel from '_app/shared/field-label';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import { mnemonicValidation } from '_pages/initialize/import/validation';
+import { derivationPathValidation } from '_pages/initialize/ledger/validation';
 
 import type { StepProps } from '.';
 
 const validationSchema = Yup.object({
-    mnemonic: mnemonicValidation,
+    derivationPath: derivationPathValidation,
 });
 
 export default function StepOne({ next, data, mode }: StepProps) {
@@ -34,35 +34,34 @@ export default function StepOne({ next, data, mode }: StepProps) {
                 isSubmitting,
                 touched,
                 errors,
-                values: {},
+                values: { derivationPath },
                 isValid,
                 handleChange,
                 setFieldValue,
                 handleBlur,
             }) => (
                 <Form className="flex flex-col flex-nowrap items-stretch flex-1 flex-grow justify-between">
-                    <FieldLabel txt="Enter Recovery Phrase">
+                    <FieldLabel txt="Enter Derivation Path">
                         <textarea
                             id="importMnemonicTxt"
                             onChange={handleChange}
-                            value={'foo'}
+                            value={derivationPath}
                             onBlur={async (e) => {
-                                //const adjMnemonic =
-                                //    await validationSchema.fields.mnemonic.cast(
-                                //        mnemonic
-                                //    );
-                                //await setFieldValue(
-                                //    'mnemonic',
-                                //    adjMnemonic,
-                                //    false
-                                //);
+                                await setFieldValue(
+                                    'derivationPath',
+                                    (x: string) => x,
+                                    false
+                                );
                                 handleBlur(e);
                             }}
                             className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-15 bg-white border border-solid border-gray-45 shadow-button leading-snug resize-none min-h-[100px] placeholder:text-steel-dark"
                             placeholder="Enter your 12-word recovery phrase"
-                            name="mnemonic"
+                            name="derivationPath"
                             disabled={isSubmitting}
                         />
+                        {touched.derivationPath && errors?.derivationPath && (
+                            <Alert>{errors?.derivationPath}</Alert>
+                        )}
                     </FieldLabel>
 
                     <div className="flex flex-nowrap items-center mt-5 gap-2.5">

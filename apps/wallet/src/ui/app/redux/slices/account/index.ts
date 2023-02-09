@@ -54,8 +54,8 @@ export const logout = createAsyncThunk<void, void, AppThunkConfig>(
 
 // Extended version of the background proc's AccountSerialized also supporting
 // ledger.
-export type AccountType = 'derived' | 'imported' | 'ledger';
-export type AccountSerialized =
+export type FullAccountType = 'derived' | 'imported' | 'ledger';
+export type FullAccountSerialized =
     | {
           type: 'derived' | 'ledger';
           address: SuiAddress;
@@ -67,14 +67,17 @@ export type AccountSerialized =
           derivationPath: null;
       };
 
-const accountsAdapter = createEntityAdapter<AccountSerialized>({
+const accountsAdapter = createEntityAdapter<FullAccountSerialized>({
     selectId: ({ address }) => address,
     sortComparer: (a, b) => {
         if (a.type !== b.type) {
             // first derived accounts
-            return a.type === 'derived' ? -1 : 1;
-        } else if (a.type === 'derived') {
-            // sort derived accounts by derivation path
+            return a.type === 'derived' ? -1 : a.type === 'imported' ? -1 : 1;
+        } else if (
+            a.type !== 'imported' &&
+            a.derivationPath !== b.derivationPath
+        ) {
+            // sort non-imported accounts by derivation path
             return (a.derivationPath || '').localeCompare(
                 b.derivationPath || ''
             );
@@ -87,7 +90,7 @@ const accountsAdapter = createEntityAdapter<AccountSerialized>({
 
 type AccountState = {
     creating: boolean;
-    account: AccountSerialized | null;
+    account: FullAccountSerialized | null;
     isLocked: boolean | null;
     isInitialized: boolean | null;
 };
@@ -111,6 +114,10 @@ const accountSlice = createSlice({
                 Required<KeyringPayload<'walletStatusUpdate'>>['return']
             >
         ) => {
+            if (state.account?.type === 'ledger') {
+                // TODO hack so BG process doesn't interfere
+                return;
+            }
             state.isLocked = payload.isLocked;
             state.isInitialized = payload.isInitialized;
             state.account =

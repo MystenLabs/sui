@@ -3,14 +3,16 @@
 
 import * as Yup from 'yup';
 
-import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
-
-export const mnemonicValidation = Yup.string()
+export const derivationPathValidation = Yup.string()
     .ensure()
     .required()
     .trim()
-    .transform((mnemonic) => normalizeMnemonics(mnemonic))
-    .test('mnemonic-valid', 'Recovery Passphrase is invalid', (mnemonic) =>
-        validateMnemonics(mnemonic)
+    //.transform((derivationPath) => normalizeMnemonics(derivationPath))
+    .test(
+        'derivationPath-valid',
+        'Derivation Path is invalid',
+        (derivationPath) =>
+            //validateMnemonics(derivationPath)
+            true
     )
-    .label('Recovery Passphrase');
+    .label('Derivation Path');
