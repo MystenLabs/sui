@@ -41,7 +41,7 @@ type FormattedBalance = {
     address: string;
 };
 
-// For TransferObject, TransferSui, Pay, PaySui, transactions parse the amount from the transfer data
+// For TransferObject, TransferSui, Pay, PaySui, transactions get the amount from the transfer data
 export function getTransfersAmount(
     txnData: SuiTransactionKind,
     txnEffect?: TransactionEffects
