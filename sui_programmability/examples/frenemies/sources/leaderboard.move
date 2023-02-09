@@ -197,7 +197,8 @@ module frenemies::leaderboard {
             };
         };
         // new top score!
-        vector::insert(v, new_score, 0)
+        vector::insert(v, new_score, 0);
+        vector::pop_back(v)
     }
 
     fun gt(s1: &Score, s2: &Score): bool {
