@@ -73,8 +73,6 @@
 
 .itemviewcontent {
     @apply mb-2 mt-2;
-
-    box-sizing: border-box;
 }
 
 .itemviewcontent .itemviewcontentitem {
@@ -87,7 +85,6 @@
     @apply inline-flex content-center items-baseline text-sm text-gray-90 md:block;
 
     line-break: anywhere;
-    box-sizing: border-box;
 }
 
 .itemviewcontent .itemviewcontentitem a,
