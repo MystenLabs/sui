@@ -3,7 +3,8 @@
 
 # Module `0x2::hash`
 
-Module which defines hash functions.
+Module which defines hash functions. Note that Sha-256 and Sha3-256 is available in the std::hash module in the
+standard library.
 
 
 -  [Function `blake2b256`](#0x2_hash_blake2b256)
