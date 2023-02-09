@@ -4,7 +4,6 @@
 use super::authority_store_pruner::AuthorityStorePruner;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -19,7 +18,7 @@ use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use tokio::sync::{mpsc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
@@ -61,7 +60,6 @@ impl AuthorityStore {
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
         pruning_config: &AuthorityStorePruningConfig,
-        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
@@ -71,14 +69,7 @@ impl AuthorityStore {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        Self::open_inner(
-            genesis,
-            perpetual_tables,
-            committee,
-            pruning_config,
-            checkpoint_stream,
-        )
-        .await
+        Self::open_inner(genesis, perpetual_tables, committee, pruning_config).await
     }
 
     pub async fn open_with_committee_for_testing(
@@ -92,14 +83,7 @@ impl AuthorityStore {
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
-        Self::open_inner(
-            genesis,
-            perpetual_tables,
-            committee.clone(),
-            pruning_config,
-            mpsc::channel(1).1,
-        )
-        .await
+        Self::open_inner(genesis, perpetual_tables, committee.clone(), pruning_config).await
     }
 
     async fn open_inner(
@@ -107,12 +91,10 @@ impl AuthorityStore {
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: Committee,
         pruning_config: &AuthorityStorePruningConfig,
-        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
 
-        let _store_pruner =
-            AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config, checkpoint_stream);
+        let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
 
         let store = Self {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
