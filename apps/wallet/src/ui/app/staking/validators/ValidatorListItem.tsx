@@ -101,12 +101,7 @@ export function ValidatorListItem({
                                     selected && '!opacity-100',
                                     'text-steel items-baseline text-subtitle h-3 flex opacity-0 group-hover:opacity-100'
                                 )}
-                            >
-                                <IconTooltip
-                                    tip="% Share of Total Stake"
-                                    placement="top"
-                                />
-                            </div>
+                            ></div>
                         </div>
                     </div>
                 </div>
