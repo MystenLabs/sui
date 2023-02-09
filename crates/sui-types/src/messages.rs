@@ -346,16 +346,9 @@ impl SingleTransactionKind {
     /// Returns a tuple of (# mutable, # immutable) shared input objects
     /// Currently used to charge for the RW Locks
     pub fn shared_input_objects_counts(&self) -> (usize, usize) {
-        let (mut mutable_count, mut immutable_count) = (0, 0);
-
-        for s in self.shared_input_objects() {
-            if s.mutable {
-                mutable_count += 1;
-            } else {
-                immutable_count += 1;
-            }
-        }
-        (mutable_count, immutable_count)
+        let (mutable, immutable): (Vec<_>, Vec<_>) =
+            self.shared_input_objects().partition(|s| s.mutable);
+        (mutable.len(), immutable.len())
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
