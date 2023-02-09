@@ -2,10 +2,9 @@
 BLS12381AggregateSignature:
   STRUCT:
     - sig:
-        OPTION:
-          TUPLEARRAY:
-            CONTENT: U8
-            SIZE: 48
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
 BLS12381Signature:
   STRUCT:
     - sig:
