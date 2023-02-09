@@ -35,12 +35,12 @@ export interface AppThunkConfig {
 const getTransport = async () => {
     let transport = null;
     let error;
-    try {
-        return await WebHIDTransport.request();
-    } catch (e) {
-        console.error(`HID Transport is not supported: ${e}`);
-        error = e;
-    }
+    //try {
+    //    return await WebHIDTransport.request();
+    //} catch (e) {
+    //    console.error(`HID Transport is not supported: ${e}`);
+    //    error = e;
+    //}
 
     if ((window as any).USB) {
         try {
