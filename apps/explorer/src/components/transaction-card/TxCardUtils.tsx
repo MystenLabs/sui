@@ -201,7 +201,6 @@ export const getDataOnTxDigests = (
                         getTransferObjectTransaction(txn)?.recipient ||
                         getTransferSuiTransaction(txn)?.recipient;
 
-                    // for SUICoin only, there is only one transfer
                     const coinTransfer = getAmount({
                         txnData: txEff,
                         suiCoinOnly: true,

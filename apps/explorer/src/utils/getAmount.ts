@@ -107,8 +107,7 @@ export function getTransfersAmount(
     return amountByRecipient ? Object.values(amountByRecipient) : null;
 }
 
-// For Call transactions, the amount is in the coinBalanceChange event
-// Get transaction amount from coinBalanceChange event
+// Get transaction amount from coinBalanceChange event for Call Txn
 // Aggregate coinBalanceChange by coinType and address
 function getTransactionsAmountForCallTxn(
     txEffects: TransactionEffects,
@@ -139,7 +138,7 @@ function getTransactionsAmountForCallTxn(
         }
     });
 
-    // TODO: verify if we only need the absolute value of the amount
+    // TODO: revisit this - show absolute value of the transfer amount
     return Object.values(coinsMeta).map(({ amount, coinType, address }) => ({
         amount: amount ? Math.abs(amount) : null,
         coinType,
