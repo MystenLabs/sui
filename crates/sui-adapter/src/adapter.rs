@@ -305,7 +305,7 @@ fn execute_internal<
         .map_err(|e| convert_vm_error(e, vm, state_view))?;
     let user_events = user_events
         .into_iter()
-        .map(|(_ty, tag, value)| {
+        .map(|(tag, value)| {
             let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             Ok((tag, bytes))

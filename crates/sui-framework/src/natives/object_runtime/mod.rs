@@ -59,7 +59,7 @@ pub(crate) struct TestInventories {
 pub struct RuntimeResults {
     pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, StructTag, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
-    pub user_events: Vec<(Type, StructTag, Value)>,
+    pub user_events: Vec<(StructTag, Value)>,
     // loaded child objects and their versions
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
 }
@@ -74,7 +74,7 @@ pub(crate) struct ObjectRuntimeState {
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
     transfers: LinkedHashMap<ObjectID, (Owner, Type, StructTag, Value)>,
-    events: Vec<(Type, StructTag, Value)>,
+    events: Vec<(StructTag, Value)>,
 }
 
 #[derive(Tid)]
@@ -207,7 +207,7 @@ impl<'a> ObjectRuntime<'a> {
         Ok(transfer_result)
     }
 
-    pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
+    pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() == (MAX_NUM_EVENT_EMIT as usize) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
@@ -217,7 +217,7 @@ impl<'a> ObjectRuntime<'a> {
                     VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64,
                 ));
         }
-        self.state.events.push((ty, tag, event));
+        self.state.events.push((tag, event));
         Ok(())
     }
 

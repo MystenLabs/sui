@@ -36,6 +36,6 @@ pub fn emit(
     };
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.emit_event(ty, *tag, event)?;
+    obj_runtime.emit_event(*tag, event)?;
     Ok(NativeResult::ok(cost, smallvec![]))
 }
