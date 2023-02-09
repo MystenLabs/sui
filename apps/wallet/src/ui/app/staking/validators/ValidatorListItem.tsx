@@ -17,8 +17,8 @@ const TRUNCATE_PREFIX_LENGTH = 6;
 
 type ValidatorListItemProp = {
     selected?: boolean;
-    // APY can be N/A
-    stakeShare: number;
+    label: string;
+    value: string | number | null;
     validatorName: string;
     validatorAddress: string;
     logo: string | null;
@@ -26,7 +26,8 @@ type ValidatorListItemProp = {
 export function ValidatorListItem({
     selected,
     validatorName,
-    stakeShare,
+    label,
+    value,
     logo,
     validatorAddress,
 }: ValidatorListItemProp) {
@@ -93,7 +94,7 @@ export function ValidatorListItem({
                                 weight="semibold"
                                 color="steel-darker"
                             >
-                                {`${stakeShare}%`}
+                                {value}
                             </Text>
                             <div
                                 className={cl(
