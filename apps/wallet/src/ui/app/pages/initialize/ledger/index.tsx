@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import StepOne from './steps/StepOne';
 import CardLayout from '_app/shared/card-layout';
+import Alert from '_components/alert';
 import { useAppDispatch } from '_hooks';
 import { setLedgerAccount, logout } from '_redux/slices/account';
 import { MAIN_UI_URL } from '_shared/utils';
@@ -24,7 +25,7 @@ export type ImportPageProps = {
     mode?: 'import' | 'forgot';
 };
 const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
-    const [sendError, setSendError] = useState<string | null>(null);
+    const [error, setError] = useState<Error | null>(null);
 
     const [data, setData] = useState<LedgerValuesType>(initialValues);
     const [step, setStep] = useState(0);
@@ -47,11 +48,14 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
                 );
                 navigate('../backup-imported');
             } catch (e) {
-                setSendError((e as string).toString());
+                setError(e as Error);
             }
         },
         [dispatch, navigate, mode]
     );
+    if (error && step !== 0) {
+        setStep(0);
+    }
     const totalSteps = allSteps.length;
     const StepForm = step < totalSteps ? allSteps[step] : null;
     return (
@@ -77,6 +81,11 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
                         data={data}
                         mode={mode}
                     />
+                </div>
+            ) : null}
+            {error ? (
+                <div className="mt-3">
+                    <Alert>{error?.message}</Alert>
                 </div>
             ) : null}
         </CardLayout>
