@@ -109,7 +109,7 @@ export function getTransfersAmount(
 
 // Get transaction amount from coinBalanceChange event for Call Txn
 // Aggregate coinBalanceChange by coinType and address
-function getTransactionsAmountForCallTxn(
+function getTxnAmountFromCoinBalanceEvent(
     txEffects: TransactionEffects,
     address: string
 ): FormattedBalance[] {
@@ -162,7 +162,7 @@ export function getAmount({
     const txnDetails = getTransactions(certificate)[0];
     const sender = getTransactionSender(certificate);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
-    const coinBalanceChange = getTransactionsAmountForCallTxn(effects, sender);
+    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(effects, sender);
 
     const transfers = suiTransfer || coinBalanceChange;
     if (suiCoinOnly) {
