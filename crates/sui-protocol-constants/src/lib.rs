@@ -93,6 +93,14 @@ pub const OBJ_ACCESS_COST_DELETE_PER_BYTE: u64 = 40;
 // entire object, just consulting an ID -> tx digest map
 pub const OBJ_ACCESS_COST_VERIFY_PER_BYTE: u64 = 200;
 
+/// Per object cost to lock shared objects in mutable mode
+/// TODO: change from 0 cost once we decide what's reasonable
+pub const SHARED_OBJ_LOCK_COST_MUTABLE: u64 = 0;
+
+/// Per object cost to lock shared objects in immutable mode
+/// TODO: change from 0 cost once we decide what's reasonable
+pub const SHARED_OBJ_LOCK_COST_IMMUTABLE: u64 = 0;
+
 /// === Storage gas costs ===
 
 /// Per-byte cost of storing an object in the Sui global object store. Some of this cost may be refundable if the object is later freed

@@ -10,6 +10,7 @@ use crate::{
     object::{Object, Owner},
 };
 use itertools::MultiUnzip;
+use move_core_types::gas_algebra::{InternalGasPerArg, NumArgs};
 use move_core_types::{
     gas_algebra::{GasQuantity, InternalGas, InternalGasPerByte, NumBytes, UnitDiv},
     vm_status::StatusCode,
@@ -152,6 +153,22 @@ impl StorageCostPerByte {
     }
 }
 
+pub struct ComputationCostPerArg(InternalGasPerArg);
+
+impl Deref for ComputationCostPerArg {
+    type Target = InternalGasPerArg;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ComputationCostPerArg {
+    pub fn new(x: u64) -> Self {
+        ComputationCostPerArg(InternalGasPerArg::new(x))
+    }
+}
+
 /// A list of constant costs of various operations in Sui.
 pub struct SuiCostTable {
     /// A flat fee charged for every transaction. This is also the mimmum amount of
@@ -167,6 +184,15 @@ pub struct SuiCostTable {
     /// Per byte cost to write objects to the store. This is computation cost instead of
     /// storage cost because it does not change the amount of data stored on the db.
     pub object_mutation_per_byte_cost: ComputationCostPerByte,
+
+    /// Per object cost to write-lock a shared object from the store. This is computation cost instead of
+    /// storage cost because it does not change the amount of data stored on the db.
+    pub shared_object_lock_cost_mutable: ComputationCostPerArg,
+
+    /// Per object cost to read-lock a shared object from the store. This is computation cost instead of
+    /// storage cost because it does not change the amount of data stored on the db.
+    pub shared_object_lock_cost_immutable: ComputationCostPerArg,
+
     /// Unit cost of a byte in the storage. This will be used both for charging for
     /// new storage as well as rebating for deleting storage. That is, we expect users to
     /// get full refund on the object storage when it's deleted.
@@ -182,6 +208,8 @@ pub static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     package_publish_per_byte_cost: ComputationCostPerByte::new(PACKAGE_PUBLISH_COST_PER_BYTE),
     object_read_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_READ_PER_BYTE),
     object_mutation_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_MUTATE_PER_BYTE),
+    shared_object_lock_cost_mutable: ComputationCostPerArg::new(SHARED_OBJ_LOCK_COST_MUTABLE),
+    shared_object_lock_cost_immutable: ComputationCostPerArg::new(SHARED_OBJ_LOCK_COST_IMMUTABLE),
     storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
@@ -262,6 +290,19 @@ impl<'a> SuiGasStatus<'a> {
 
     pub fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
         let cost = NumBytes::new(size as u64).mul(*INIT_SUI_COST_TABLE.object_read_per_byte_cost);
+        self.deduct_computation_cost(&cost)
+    }
+
+    pub fn charge_shared_object_locking(
+        &mut self,
+        mutable_count: usize,
+        immutable_count: usize,
+    ) -> Result<(), ExecutionError> {
+        let mutable_cost = NumArgs::new(mutable_count as u64)
+            .mul(*INIT_SUI_COST_TABLE.shared_object_lock_cost_mutable);
+        let immutable_cost = NumArgs::new(immutable_count as u64)
+            .mul(*INIT_SUI_COST_TABLE.shared_object_lock_cost_immutable);
+        let cost = mutable_cost.add(immutable_cost);
         self.deduct_computation_cost(&cost)
     }
 

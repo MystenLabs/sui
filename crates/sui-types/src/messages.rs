@@ -343,6 +343,21 @@ impl SingleTransactionKind {
         self.shared_input_objects().next().is_some()
     }
 
+    /// Returns a tuple of (# mutable, # immutable) shared input objects
+    /// Currently used to charge for the RW Locks
+    pub fn shared_input_objects_counts(&self) -> (usize, usize) {
+        let (mut mutable_count, mut immutable_count) = (0, 0);
+
+        for s in self.shared_input_objects() {
+            if s.mutable {
+                mutable_count += 1;
+            } else {
+                immutable_count += 1;
+            }
+        }
+        (mutable_count, immutable_count)
+    }
+
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
             Self::Call(_) | Self::ChangeEpoch(_) => {
@@ -659,6 +674,18 @@ impl TransactionKind {
             TransactionKind::Batch(b) => {
                 Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
             }
+        }
+    }
+
+    /// Returns a tuple of (# mutable, # immutable) shared input objects
+    /// Currently used to charge for the RW Locks
+    pub fn shared_input_objects_counts(&self) -> (usize, usize) {
+        match &self {
+            TransactionKind::Single(s) => s.shared_input_objects_counts(),
+            TransactionKind::Batch(b) => b.iter().fold((0, 0), |sm, x| {
+                let counts = x.shared_input_objects_counts();
+                (sm.0 + counts.0, sm.1 + counts.1)
+            }),
         }
     }
 

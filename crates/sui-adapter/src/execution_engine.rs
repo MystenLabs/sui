@@ -128,6 +128,15 @@ fn charge_gas_for_object_read<S>(
     gas_status.charge_storage_read(total_size)
 }
 
+fn charge_gas_for_shared_object_locking(
+    transaction_kind: &TransactionKind,
+    gas_status: &mut SuiGasStatus,
+) -> Result<(), ExecutionError> {
+    // Charge gas for locking shared objects.
+    let (mutable_count, immutable_count) = transaction_kind.shared_input_objects_counts();
+    gas_status.charge_shared_object_locking(mutable_count, immutable_count)
+}
+
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<
     Mode: ExecutionMode,
@@ -144,25 +153,26 @@ fn execute_transaction<
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    // We must charge object read gas inside here during transaction execution, because if this fails
+    // We must charge shared object locking, and object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
-    let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
-    let mut result = result.and_then(|()| {
-        let execution_result = execution_loop::<Mode, _>(
-            temporary_store,
-            transaction_kind,
-            gas_object_id,
-            tx_ctx,
-            move_vm,
-            native_functions,
-            &mut gas_status,
-        );
-        if execution_result.is_err() {
-            // Roll back the temporary store if execution failed.
-            temporary_store.reset();
-        }
-        execution_result
-    });
+    let mut result = charge_gas_for_shared_object_locking(&transaction_kind, &mut gas_status)
+        .and_then(|()| charge_gas_for_object_read(temporary_store, &mut gas_status))
+        .and_then(|()| {
+            let execution_result = execution_loop::<Mode, _>(
+                temporary_store,
+                transaction_kind,
+                gas_object_id,
+                tx_ctx,
+                move_vm,
+                native_functions,
+                &mut gas_status,
+            );
+            if execution_result.is_err() {
+                // Roll back the temporary store if execution failed.
+                temporary_store.reset();
+            }
+            execution_result
+        });
 
     // Make sure every mutable object's version number is incremented.
     // This needs to happen before `charge_gas_for_storage_changes` so that it
