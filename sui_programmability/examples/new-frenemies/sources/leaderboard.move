@@ -178,6 +178,7 @@ module frenemies::leaderboard {
             let s = vector::borrow(v, i);
             let r = vector::borrow(v, i + 1);
 
+            // ensure that `v` has at most one entry per player
             if (s.name == r.name) {
                 vector::remove(v, i);
             } else if (gt(r, s)) {
@@ -186,9 +187,7 @@ module frenemies::leaderboard {
         };
 
         // Make sure the leaderboard size stays at or below capacity
-        let len = vector::length(v);
-        if (len > LEADERBOARD_SIZE) {
-            assert!(len == LEADERBOARD_SIZE + 1, 0);
+        while (vector::length(v) > LEADERBOARD_SIZE) {
             vector::pop_back(v);
         }
     }
