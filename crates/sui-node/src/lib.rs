@@ -550,7 +550,11 @@ impl SuiNode {
                     committee.clone(),
                     SharedWorkerCache::from(worker_cache),
                     consensus_handler,
-                    SuiTxValidator::new(epoch_store, sui_tx_validator_metrics.clone()),
+                    SuiTxValidator::new(
+                        epoch_store,
+                        state.transaction_manager().clone(),
+                        sui_tx_validator_metrics.clone(),
+                    ),
                 )
                 .await;
         } else {
