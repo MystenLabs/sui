@@ -76,7 +76,6 @@ module frenemies::registry {
         init(ctx)
     }
 
-    #[test_only]
     public fun name_for_testing(name: String): Name {
         Name { name }
     }
