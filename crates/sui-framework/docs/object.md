@@ -592,6 +592,19 @@ restrictable in the object's module.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_object_new_uid_from_hash"></a>
 
 ## Function `new_uid_from_hash`
@@ -670,6 +683,19 @@ Generate a new UID specifically used for creating a UID from a hash
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_record_new_uid">record_new_uid</a>(id: <b>address</b>);
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

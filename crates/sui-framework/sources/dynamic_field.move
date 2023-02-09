@@ -181,20 +181,70 @@ public(friend) fun field_info_mut<Name: copy + drop + store>(
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
+spec hash_type_and_key {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun add_child_object<Child: key>(parent: address, child: Child);
+
+spec add_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match
 /// we need two versions to return a reference or a mutable reference
 public(friend) native fun borrow_child_object<Child: key>(object: &UID, id: address): &Child;
+
+spec borrow_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun borrow_child_object_mut<Child: key>(object: &mut UID, id: address): &mut Child;
+
+spec borrow_child_object_mut {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match
 public(friend) native fun remove_child_object<Child: key>(parent: address, id: address): Child;
 
+spec remove_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun has_child_object(parent: address, id: address): bool;
 
+spec has_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
+
+spec has_child_object_with_ty {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
 
 }

@@ -141,6 +141,13 @@ module sui::object {
     /// restrictable in the object's module.
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
+    spec borrow_uid {
+        pragma opaque;
+        // TODO: stub to be replaced by actual abort conditions if any
+        aborts_if [abstract] true;
+        // TODO: specify actual function behavior
+     }
+
     /// Generate a new UID specifically used for creating a UID from a hash
     public(friend) fun new_uid_from_hash(bytes: address): UID {
         record_new_uid(bytes);
@@ -152,7 +159,6 @@ module sui::object {
     // helper for delete
     native fun delete_impl(id: address);
 
-
     spec delete_impl {
         pragma opaque;
         aborts_if [abstract] false;
@@ -161,6 +167,13 @@ module sui::object {
 
     // marks newly created UIDs from hash
     native fun record_new_uid(id: address);
+
+    spec record_new_uid {
+        pragma opaque;
+        // TODO: stub to be replaced by actual abort conditions if any
+        aborts_if [abstract] true;
+        // TODO: specify actual function behavior
+     }
 
     // Cost calibration functions
     #[test_only]
