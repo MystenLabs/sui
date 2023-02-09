@@ -1,15 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoints::checkpoint_executor::{
+    CheckpointExecutionMessage, CheckpointExecutionState,
+};
+use mysten_metrics::monitored_scope;
+use std::cmp::max;
+use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
+use sui_types::base_types::SequenceNumber;
 use sui_types::object::Object;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     storage::ObjectKey,
 };
 use tokio::{
-    sync::oneshot::{self, Sender},
+    sync::{
+        mpsc,
+        oneshot::{self, Sender},
+    },
     time::{self, Instant},
 };
 use tracing::log::{error, info};
@@ -19,6 +29,7 @@ use typed_store::Map;
 use super::authority_store_tables::AuthorityPerpetualTables;
 
 const MAX_OPS_IN_ONE_WRITE_BATCH: u64 = 10000;
+const ENABLE_LIVE_PRUNER: bool = cfg!(test) || cfg!(msim);
 
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
@@ -122,17 +133,46 @@ impl AuthorityStorePruner {
         total_pruned
     }
 
+    fn handle_checkpoint(
+        checkpoint_execution_state: CheckpointExecutionState,
+        objects: &DBMap<ObjectKey, Object>,
+    ) -> anyhow::Result<usize> {
+        let _scope = monitored_scope("ObjectsLivePruner");
+        let mut pruned = 0;
+        let mut wb = objects.batch();
+        let mut updates = HashMap::new();
+
+        for effects in checkpoint_execution_state.effects {
+            for (object_id, seq_number) in effects.modified_at_versions {
+                updates
+                    .entry(object_id)
+                    .and_modify(|version| *version = max(*version, seq_number))
+                    .or_insert(seq_number);
+            }
+        }
+        for (object_id, version) in updates {
+            let object_key = ObjectKey(object_id, version);
+            let iter = objects.iter().skip_prior_to(&object_key)?.reverse();
+            let mut start_range = object_key;
+            let end_range = ObjectKey(object_key.0, SequenceNumber::from(object_key.1.value() + 1));
+            for (key, _) in iter.take_while(|(key, _)| key.0 == object_key.0) {
+                start_range = key;
+                pruned += 1;
+            }
+            wb = wb.delete_range(objects, &start_range, &end_range)?;
+        }
+        wb.write()?;
+        Ok(pruned)
+    }
+
     fn setup_objects_pruning(
         num_versions_to_retain: u64,
         pruning_timeperiod: Duration,
         pruning_initial_delay: Duration,
         perpetual_db: Arc<AuthorityPerpetualTables>,
+        mut checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
-        if num_versions_to_retain == u64::MAX {
-            info!("Skipping pruning of objects table as we want to retain all versions");
-            return sender;
-        }
         info!(
             "Starting object pruning service with num_versions_to_retain={num_versions_to_retain}"
         );
@@ -142,7 +182,7 @@ impl AuthorityStorePruner {
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {
-                    _ = prune_interval.tick() => {
+                    _ = prune_interval.tick(), if num_versions_to_retain != u64::MAX => {
                         info!("Starting pruning of objects table");
                         let num_pruned = Self::prune_objects(num_versions_to_retain, &perpetual_db.objects);
                         info!("Finished pruning with total object versions pruned = {}", num_pruned);
@@ -151,7 +191,26 @@ impl AuthorityStorePruner {
                         } else {
                             error!("Failed to flush objects table");
                         }
-                    }
+                    },
+                    Some((state, callback)) = checkpoint_stream.recv() => {
+                        if !ENABLE_LIVE_PRUNER {
+                            callback.send(()).expect("failed to notify checkpoint executor");
+                            continue;
+                        }
+                        loop {
+                            match Self::handle_checkpoint(state.clone(), &perpetual_db.objects) {
+                                Ok(pruned) => {
+                                    info!("Pruned {} objects", pruned);
+                                    callback.send(()).expect("failed to notify checkpoint executor");
+                                    break;
+                                }
+                                Err(err) => {
+                                    error!("Failed to prune objects: {:?}, blocking checkpoint execution", err);
+                                    tokio::time::sleep(Duration::from_millis(50)).await;
+                                }
+                            }
+                        }
+                    },
                     _ = &mut recv => break,
                 }
             }
@@ -161,6 +220,7 @@ impl AuthorityStorePruner {
     pub fn new(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         pruning_config: &AuthorityStorePruningConfig,
+        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> Self {
         AuthorityStorePruner {
             _objects_pruner_cancel_handle: Self::setup_objects_pruning(
@@ -168,6 +228,7 @@ impl AuthorityStorePruner {
                 Duration::from_secs(pruning_config.objects_pruning_period_secs),
                 Duration::from_secs(pruning_config.objects_pruning_initial_delay_secs),
                 perpetual_db,
+                checkpoint_stream,
             ),
         }
     }
@@ -183,9 +244,11 @@ mod tests {
     use tracing::log::{error, info};
 
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+    use crate::checkpoints::checkpoint_executor::CheckpointExecutionState;
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
     use sui_types::base_types::VersionNumber;
+    use sui_types::messages::TransactionEffects;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
@@ -254,46 +317,92 @@ mod tests {
         Ok(())
     }
 
+    fn generate_test_data(
+        db: Arc<AuthorityPerpetualTables>,
+        num_versions_per_object: u64,
+        num_object_versions_to_retain: u64,
+        total_unique_object_ids: u32,
+    ) -> Result<(Vec<ObjectKey>, Vec<ObjectKey>), anyhow::Error> {
+        let (mut to_keep, mut to_delete) = (vec![], vec![]);
+
+        let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids.into())?;
+        for id in ids {
+            for (counter, i) in (0..num_versions_per_object).rev().enumerate() {
+                let object_key = ObjectKey(id, SequenceNumber::from_u64(i));
+                if counter < num_object_versions_to_retain.try_into().unwrap() {
+                    // latest `num_object_versions_to_retain` should not have been pruned
+                    to_keep.push(object_key);
+                } else {
+                    to_delete.push(object_key);
+                }
+                db.objects.insert(
+                    &ObjectKey(id, SequenceNumber::from(i)),
+                    &Object::immutable_with_id_for_testing(id),
+                )?;
+            }
+        }
+        assert_eq!(
+            to_keep.len() as u64,
+            std::cmp::min(num_object_versions_to_retain, num_versions_per_object)
+                * total_unique_object_ids as u64
+        );
+        Ok((to_keep, to_delete))
+    }
+
+    #[tokio::test]
+    async fn test_live_pruning() {
+        let path = tempfile::tempdir().unwrap().into_path();
+
+        let to_keep = {
+            let db = Arc::new(AuthorityPerpetualTables::open(&path, None));
+            let (to_keep, to_delete) = generate_test_data(db.clone(), 3, 2, 1000).unwrap();
+            let effects = TransactionEffects {
+                modified_at_versions: to_delete.into_iter().map(|o| (o.0, o.1)).collect(),
+                ..Default::default()
+            };
+            let checkpoint_state = CheckpointExecutionState {
+                effects: vec![effects],
+                checkpoint_sequence_number: 0,
+            };
+            let pruned =
+                AuthorityStorePruner::handle_checkpoint(checkpoint_state, &db.objects).unwrap();
+            assert_eq!(pruned, 1000);
+            to_keep
+        };
+
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        assert_eq!(
+            HashSet::from_iter(to_keep),
+            get_keys_after_pruning(path).unwrap()
+        );
+    }
+
     async fn test_pruning(
         primary_path: PathBuf,
         num_versions_per_object: u64,
         num_object_versions_to_retain: u64,
         total_unique_object_ids: u32,
     ) -> Result<u64, anyhow::Error> {
-        let mut expected = HashSet::new();
-        let total_pruned = {
+        let (total_pruned, expected) = {
             // create db
-            // let primary_path = tempfile::tempdir()?.into_path();
             let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&primary_path, None));
             // this contains the set of keys that should not have been pruned
+            let (expected, _) = generate_test_data(
+                perpetual_db.clone(),
+                num_versions_per_object,
+                num_object_versions_to_retain,
+                total_unique_object_ids,
+            )?;
 
-            let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids.into())?;
-            for id in ids {
-                for (counter, i) in (0..num_versions_per_object).rev().enumerate() {
-                    let object_key = ObjectKey(id, SequenceNumber::from_u64(i));
-                    if counter < num_object_versions_to_retain.try_into().unwrap() {
-                        // latest `num_object_versions_to_retain` should not have been pruned
-                        expected.insert(object_key);
-                    }
-                    perpetual_db.objects.insert(
-                        &ObjectKey(id, SequenceNumber::from(i)),
-                        &Object::immutable_with_id_for_testing(id),
-                    )?;
-                }
-            }
-            assert_eq!(
-                expected.len() as u64,
-                std::cmp::min(num_object_versions_to_retain, num_versions_per_object)
-                    * total_unique_object_ids as u64
-            );
-            AuthorityStorePruner::prune_objects(
+            let total_pruned = AuthorityStorePruner::prune_objects(
                 num_object_versions_to_retain,
                 &perpetual_db.objects,
-            )
+            );
+            (total_pruned, expected)
         };
         tokio::time::sleep(Duration::from_secs(3)).await;
         let after_pruning = get_keys_after_pruning(primary_path)?;
-        assert_eq!(expected, after_pruning);
+        assert_eq!(HashSet::from_iter(expected), after_pruning);
         Ok(total_pruned)
     }
 
