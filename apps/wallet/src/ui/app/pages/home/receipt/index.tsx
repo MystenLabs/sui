@@ -81,10 +81,7 @@ function ReceiptPage() {
     }
 
     return (
-        <Loading
-            loading={isLoading}
-            className="flex items-center justify-center"
-        >
+        <Loading loading={isLoading}>
             <Overlay
                 showModal={showModal}
                 setShowModal={setShowModal}

@@ -44,7 +44,7 @@ function MyTokens({
     loading,
 }: TokensProps) {
     return (
-        <Loading loading={loading} className={st.othersLoader}>
+        <Loading loading={loading}>
             {allCoinTypes.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>

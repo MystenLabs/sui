@@ -8,8 +8,6 @@ import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import TransactionCard from '_components/transactions-card';
 
-import st from './TransactionsCard.module.scss';
-
 type Props = {
     coinType?: string;
 };
@@ -24,7 +22,7 @@ function RecentTransactions({ coinType }: Props) {
 
     return (
         <>
-            <Loading loading={isLoading} className={st.centerLoading}>
+            <Loading loading={isLoading}>
                 {txByAddress.map((txn) => (
                     <ErrorBoundary key={txn.txId}>
                         <TransactionCard txn={txn} />
