@@ -45,8 +45,7 @@ const ImportPage = ({ mode = 'import' }: ImportPageProps) => {
                         derivationPath,
                     })
                 );
-                // refresh the page to re-initialize the store
-                window.location.href = MAIN_UI_URL;
+                navigate('../backup-imported');
             } catch (e) {
                 setSendError((e as string).toString());
             }
