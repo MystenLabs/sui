@@ -288,7 +288,7 @@ impl Default for AuthorityStorePruningConfig {
             objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
-            enable_live_pruner: cfg!(test) || cfg!(msim),
+            enable_live_pruner: true,
         }
     }
 }
@@ -303,7 +303,7 @@ impl AuthorityStorePruningConfig {
             objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            enable_live_pruner: cfg!(test) || cfg!(msim),
+            enable_live_pruner: true,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -313,7 +313,7 @@ impl AuthorityStorePruningConfig {
             objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            enable_live_pruner: cfg!(test) || cfg!(msim),
+            enable_live_pruner: true,
         }
     }
 }
