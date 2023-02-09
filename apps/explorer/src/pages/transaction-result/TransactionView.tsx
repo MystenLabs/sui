@@ -17,7 +17,7 @@ import {
     type SuiTransactionResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
@@ -290,33 +290,27 @@ function TransactionView({
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const txdetails = getTransactions(transaction.certificate)[0];
-    const txKindName = getTransactionKindName(txdetails);
+    const txnDetails = getTransactions(transaction.certificate)[0];
+    const txKindName = getTransactionKindName(txnDetails);
     const sender = getTransactionSender(transaction.certificate);
     const gasUsed = transaction?.effects.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
-    const txnTransfer = getAmount(txdetails, transaction?.effects);
-    const sendReceiveRecipients = txnTransfer?.map((item) => ({
-        address: item.recipientAddress,
-        ...(item?.amount
-            ? {
-                  coin: {
-                      amount: item.amount,
-                      coinType: item?.coinType || null,
-                  },
-              }
-            : {}),
-    }));
-
-    const [formattedAmount, symbol] = useFormatCoin(
-        txnTransfer?.[0].amount,
-        txnTransfer?.[0].coinType
+    const coinTransfer = useMemo(
+        () =>
+            getAmount({
+                txnData: transaction,
+            }),
+        [transaction]
     );
 
-    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
+    const [formattedAmount, symbol] = useFormatCoin(
+        coinTransfer?.[0]?.amount,
+        coinTransfer?.[0]?.coinType
+    );
 
+    const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
     const txEventData = transaction.effects.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
@@ -477,7 +471,8 @@ function TransactionView({
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {txnTransfer?.[0].amount ? (
+                                {coinTransfer.length === 1 &&
+                                formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={formattedAmount}
@@ -496,8 +491,8 @@ function TransactionView({
                                 )}
                                 <SenderRecipient
                                     sender={sender}
-                                    transferCoin={txnTransfer?.[0].isCoin}
-                                    recipients={sendReceiveRecipients}
+                                    transferCoin={!!coinTransfer}
+                                    recipients={coinTransfer}
                                 />
                             </section>
 

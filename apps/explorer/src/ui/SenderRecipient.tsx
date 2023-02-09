@@ -8,10 +8,8 @@ import { SenderRecipientAddress } from '~/ui/SenderRecipientAddress';
 
 type Recipient = {
     address: string;
-    coin?: {
-        amount: number | string | bigint;
-        coinType?: string | null;
-    };
+    amount?: number | null;
+    coinType?: string | null;
 };
 
 export interface SenderRecipientProps {
@@ -75,17 +73,15 @@ export function SenderRecipient({
                                     <SenderRecipientAddress
                                         address={recipient?.address}
                                     />
-                                    {recipient?.coin && (
+                                    {recipient?.amount ? (
                                         <div className="ml-6">
                                             <CoinBalance
-                                                amount={recipient.coin.amount}
-                                                coinType={
-                                                    recipient.coin?.coinType
-                                                }
+                                                amount={recipient.amount}
+                                                coinType={recipient.coinType}
                                                 format={CoinFormat.FULL}
                                             />
                                         </div>
-                                    )}
+                                    ) : null}
                                 </div>
                             ))}
                         </div>
