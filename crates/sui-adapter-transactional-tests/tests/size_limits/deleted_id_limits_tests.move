@@ -39,10 +39,10 @@ module Test::M1 {
 //# run Test::M1::delete_n_ids --args 256
 
 // run at run count limit should succeed
-//# run Test::M1::delete_n_ids --args 1024
-
-// run above run count limit should fail
-//# run Test::M1::delete_n_ids --args 1025
-
-// run above run count limit should fail
 //# run Test::M1::delete_n_ids --args 2048
+
+// run above run count limit should fail
+//# run Test::M1::delete_n_ids --args 2049
+
+// run above run count limit should fail
+//# run Test::M1::delete_n_ids --args 4096
