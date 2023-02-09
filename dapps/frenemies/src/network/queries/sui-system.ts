@@ -1,12 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-  is,
-  normalizeSuiAddress,
-  SuiObject,
-  MoveSuiSystemObjectFields,
-} from "@mysten/sui.js";
+import { normalizeSuiAddress } from "@mysten/sui.js";
 import { useQuery } from "@tanstack/react-query";
 import provider from "../provider";
 
@@ -16,28 +11,19 @@ import provider from "../provider";
  */
 export const SUI_SYSTEM_ID: string = normalizeSuiAddress("0x5");
 
-/**
- * Read the SuiSystem object.
- */
-export function useSuiSystem() {
-  return useQuery(
-    ["object", SUI_SYSTEM_ID],
-    async () => {
-      const data = await provider.getObject(SUI_SYSTEM_ID);
-      const systemObject =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === "moveObject"
-          ? (data.details.data.fields as MoveSuiSystemObjectFields)
-          : null;
+export function convertToString(raw?: number[] | null) {
+  if (!raw) return null;
+  return String.fromCharCode(...raw);
+}
 
-      return systemObject;
+export function useValidators() {
+  return useQuery(
+    ["validators"],
+    async () => {
+      return provider.getValidators();
     },
     {
       refetchInterval: 60 * 1000,
     }
   );
-
-  // TODO: Fix raw version when there is delegated stake:
-  // return useRawObject<SuiSystem>(SUI_SYSTEM_ID, SUI_SYSTEM_TYPE);
 }

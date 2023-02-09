@@ -48,7 +48,7 @@ export function Connect() {
         </h1>
         <img src="/capy_cowboy.svg" className="mb-5 h-64 w-64 mx-auto" />
         <p className="text-steel-darker text-sm max-w-md mx-auto">
-          The goal of the game is to stake Sui tokens to move your assigned
+          The goal of the game is to stake SUI tokens to move your assigned
           Validator to one of three designated positions: Friend (top third),
           Neutral (middle third), or Enemy (bottom third).
         </p>

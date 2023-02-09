@@ -1,53 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMutation } from "@tanstack/react-query";
+import { ReactNode } from "react";
 import { config } from "../../config";
 import { useEpoch } from "../../network/queries/epoch";
-import { SUI_SYSTEM_ID } from "../../network/queries/sui-system";
+import {
+  useRefreshScorecard,
+  useScorecard,
+} from "../../network/queries/scorecard";
 import { useRawObject } from "../../network/queries/use-raw";
-import { ObjectData } from "../../network/rawObject";
-import { Leaderboard, LEADERBOARD, Scorecard } from "../../network/types";
-
-const GAS_BUDGET = 100000n;
+import { Leaderboard, LEADERBOARD } from "../../network/types";
 
 interface Props {
-  scorecard: ObjectData<Scorecard>;
-  leaderboardID: string;
-  round: bigint;
+  fallback?: ReactNode;
 }
 
-export function Refresh({ scorecard, round, leaderboardID }: Props) {
-  const { signAndExecuteTransaction } = useWalletKit();
+export function Refresh({ fallback = null }: Props) {
+  const { currentAccount } = useWalletKit();
+  const { data: scorecard } = useScorecard(currentAccount);
   const { data: epoch } = useEpoch();
   const { data: leaderboard } = useRawObject<Leaderboard>(
     config.VITE_LEADERBOARD,
     LEADERBOARD
   );
 
-  const refreshScorecard = useMutation(["refresh-scorecard"], async () => {
-    await signAndExecuteTransaction({
-      kind: "moveCall",
-      data: {
-        packageObjectId: config.VITE_PKG,
-        module: "frenemies",
-        function: "update",
-        typeArguments: [],
-        gasBudget: Number(GAS_BUDGET),
-        arguments: [
-          normalizeSuiAddress(scorecard.reference.objectId),
-          SUI_SYSTEM_ID,
-          normalizeSuiAddress(leaderboardID),
-        ],
-      },
-    });
-  });
+  const refreshScorecard = useRefreshScorecard();
 
-  if (scorecard.data.assignment.epoch == epoch?.data.epoch || !leaderboard) {
-    return null;
+  if (
+    !scorecard ||
+    scorecard.data.assignment.epoch == epoch?.data.epoch ||
+    !leaderboard
+  ) {
+    return <>{fallback}</>;
   }
+
+  const round = BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch || 0n;
 
   return (
     <div className="absolute top-0 right-0">

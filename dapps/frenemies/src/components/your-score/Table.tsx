@@ -6,7 +6,10 @@ import { useWalletKit } from "@mysten/wallet-kit";
 import { ReactNode } from "react";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
-import { useSuiSystem } from "../../network/queries/sui-system";
+import {
+  convertToString,
+  useValidators,
+} from "../../network/queries/sui-system";
 import { Leaderboard, ScorecardUpdatedEvent } from "../../network/types";
 import { formatGoal } from "../../utils/format";
 import { Logo } from "../Validators/Logo";
@@ -31,14 +34,12 @@ const Cell = ({
 
 export function Table({ data, round, leaderboard }: Props) {
   const { currentAccount } = useWalletKit();
-  const { data: system } = useSuiSystem();
+  const { data: validators } = useValidators();
   const { data: scorecard } = useScorecard(currentAccount);
   const { isLoading } = useScorecardHistory(scorecard?.data.id);
-  const activeValidators = system?.validators.fields.active_validators || [];
+  const activeValidators = validators || [];
   const getValidator = (addr: string) =>
-    activeValidators.find(
-      (v) => v.fields.metadata.fields.sui_address.replace("0x", "") == addr
-    )?.fields;
+    activeValidators.find((v) => v.sui_address.replace("0x", "") == addr);
 
   const dataByRound: { [key: string]: ScorecardUpdatedEvent } = data.reduce(
     (acc, row) =>
@@ -71,7 +72,7 @@ export function Table({ data, round, leaderboard }: Props) {
             const currRound = firstRound + arr.length - round - 1;
             if (evt) {
               const { goal, validator } = evt.assignment;
-              const validatorMeta = getValidator(validator)?.metadata.fields;
+              const validatorMeta = getValidator(validator);
               return (
                 <tr
                   key={currRound.toString()}
@@ -82,12 +83,13 @@ export function Table({ data, round, leaderboard }: Props) {
                   <Cell>
                     <div className="flex items-center gap-2">
                       <Logo
-                        src={validatorMeta?.image_url as string}
+                        src={convertToString(validatorMeta?.image_url)}
                         size="sm"
-                        label={validatorMeta?.name as string}
+                        label={convertToString(validatorMeta?.name) || ""}
                         circle
                       />
-                      {validatorMeta?.name || formatAddress(validator)}
+                      {convertToString(validatorMeta?.name) ||
+                        formatAddress(validator)}
                     </div>
                   </Cell>
                   <Cell>{evt.epochScore !== 0 ? "Achieved" : "Failed"}</Cell>
