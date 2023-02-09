@@ -170,34 +170,27 @@ module frenemies::leaderboard {
     // - v has at most one entry such that v[_].name == new_score.name. we enforce this below.
     // - if there is such an entry, new_score.score > v[_].score. this is because we only call `score_insertion_sort` when the player's score increases
     fun score_insertion_sort(v: &mut vector<Score>, new_score: Score) {
-        let len = vector::length(v);
-        let at_capacity = len == LEADERBOARD_SIZE;
-        let new_high_score = len == 0 || gt(&new_score, vector::borrow(v, len - 1));
-        if (!new_high_score) {
-            if (!at_capacity) {
-                vector::push_back(v, new_score)
-            };
-            return
-        };
-        // we know `new_score` is greater than an existing score. walk backward to find its place
-        let i = len;
+        vector::push_back(v, new_score);
+
+        let i = vector::length(v) - 1;
         while (i > 0) {
             i = i - 1;
-            let s = vector::borrow_mut(v, i);
-             // ensure that `v` has at most one entry per player
-            if (s.name == new_score.name) {
+            let s = vector::borrow(v, i);
+            let r = vector::borrow(v, i + 1);
+
+            if (s.name == r.name) {
                 vector::remove(v, i);
-            } else if (gt(s, &new_score)) {
-                vector::insert(v, new_score, i + 1);
-                if (vector::length(v) > LEADERBOARD_SIZE) {
-                    // pop off a low score to make room
-                    vector::pop_back(v);
-                };
-                return
-            };
+            } else if (gt(r, s)) {
+                vector::swap(v, i, i + 1);
+            }
         };
-        // new top score!
-        vector::insert(v, new_score, 0)
+
+        // Make sure the leaderboard size stays at or below capacity
+        let len = vector::length(v);
+        if (len > LEADERBOARD_SIZE) {
+            assert!(len == LEADERBOARD_SIZE + 1, 0);
+            vector::pop_back(v);
+        }
     }
 
     fun gt(s1: &Score, s2: &Score): bool {
@@ -327,5 +320,34 @@ module frenemies::leaderboard {
             i = i + 1;
         };
         assert!(sorted == vector[v1, v2, v3, v4], 0)
+    }
+
+    #[test_only]
+    public fun to_string(value: u128): std::string::String {
+        use std::string;
+        if (value == 0) {
+            return string::utf8(b"0")
+	};
+        let buffer = vector::empty<u8>();
+        while (value != 0) {
+            vector::push_back(&mut buffer, ((48 + value % 10) as u8));
+            value = value / 10;
+       	};
+        vector::reverse(&mut buffer);
+        string::utf8(buffer)
+    }
+
+    #[test]
+    fun test_max_size() {
+        use frenemies::registry;
+        let i = 0;
+        let sorted = vector[];
+        while (i < LEADERBOARD_SIZE + 10) {
+            let name = registry::name_for_testing(to_string((i as u128)));
+            let new_top_score = Score { name, score: (i as u16), participation: 2 };
+            score_insertion_sort(&mut sorted, new_top_score);
+            assert!(vector::length(&sorted) <= LEADERBOARD_SIZE, 0);
+            i = i + 1
+        };
     }
 }
