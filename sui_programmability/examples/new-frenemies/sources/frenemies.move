@@ -5,10 +5,12 @@ module frenemies::frenemies {
     use frenemies::assignment::{Self, Assignment};
     use frenemies::registry::{Self, Name, Registry};
     use frenemies::leaderboard::{Self, Leaderboard};
-    use std::string::String;
+    use std::bcs;
+    use std::string::{Self, String};
     use sui::event;
     use sui::object::{Self, ID, UID};
     use sui::sui_system::SuiSystemState;
+    use sui::table::{Self, Table};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -39,13 +41,29 @@ module frenemies::frenemies {
         epoch_score: u16,
     }
 
+    /// Tracks which scorecards have been migrated between frenemies instances
+    struct Migration has key {
+        id: UID,
+        migrated: Table<ID, bool>
+    }
+
     /// Attempting to call `update` with an epoch N assignment during epoch N
     const EScoreNotYetAvailable: u64 = 0;
 
+    const EAlreadyMigrated: u64 = 1;
+
+    fun init(ctx: &mut TxContext) {
+        transfer::share_object(Migration { id: object::new(ctx), migrated: table::new(ctx) })
+    }
+
     /// Register the transaction sender for the frenemies game by sending them a 0 scorecard with
     /// an initial assignment
-    public entry fun register(name: String, registry: &mut Registry, state: &SuiSystemState, ctx: &mut TxContext) {
+    public entry fun register(
+        name: String, registry: &mut Registry, old_registry: &mut old_frenemies::registry::Registry, state: &SuiSystemState, ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
+        // have to register in old contract to prevent duplicate names. can't call registry directly because of encapsulation issue
+        old_frenemies::frenemies::register(name, old_registry, state, ctx);
+
         transfer::transfer(
              Scorecard {
                 id: object::new(ctx),
@@ -56,6 +74,38 @@ module frenemies::frenemies {
                 epoch: tx_context::epoch(ctx),
             },
             sender
+        )
+    }
+
+    fun name_to_string(name: &old_frenemies::registry::Name): String {
+        let name_bcs = sui::bcs::new(bcs::to_bytes(name));
+        let old_name = sui::bcs::peel_vec_u8(&mut name_bcs);
+        string::utf8(old_name)
+    }
+
+    public fun migrate(old_scorecard: &old_frenemies::frenemies::Scorecard, migration: &mut Migration, ctx: &mut TxContext) {
+        let old_assignment = old_frenemies::frenemies::assignment(old_scorecard);
+        let assignment = assignment::new_for_testing(
+            old_frenemies::assignment::validator(old_assignment),
+            old_frenemies::assignment::goal(old_assignment),
+            old_frenemies::assignment::epoch(old_assignment)
+        );
+        let old_id = object::id(old_scorecard);
+        assert!(!table::contains(&mut migration.migrated, old_id), EAlreadyMigrated);
+        table::add(&mut migration.migrated, old_id, true);
+        let old_name = name_to_string(old_frenemies::frenemies::name(old_scorecard));
+        let name = registry::name_for_testing(old_name);
+
+        transfer::transfer(
+             Scorecard {
+                id: object::new(ctx),
+                name,
+                assignment,
+                score: old_frenemies::frenemies::score(old_scorecard),
+                participation: old_frenemies::frenemies::participation(old_scorecard),
+                epoch: tx_context::epoch(ctx),
+            },
+            tx_context::sender(ctx)
         )
     }
 
