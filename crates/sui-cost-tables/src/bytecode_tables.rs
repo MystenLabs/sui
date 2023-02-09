@@ -68,7 +68,7 @@ impl<'a> GasStatus<'a> {
         }
     }
 
-    pub fn metered(&self) -> bool {
+    pub fn is_metered(&self) -> bool {
         self.charge
     }
 

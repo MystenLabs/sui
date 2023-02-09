@@ -90,13 +90,13 @@ pub fn new_session<
     vm: &'v MoveVM,
     state_view: &'r S,
     input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
-    metered: bool,
+    is_metered: bool,
 ) -> Session<'r, 'v, S> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
         Box::new(state_view),
         input_objects,
-        metered,
+        is_metered,
     ));
     vm.new_session_with_extensions(state_view, extensions)
 }
@@ -213,7 +213,7 @@ fn execute_internal<
         .iter()
         .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
         .collect();
-    let mut session = new_session(vm, state_view, input_objects, gas_status.metered());
+    let mut session = new_session(vm, state_view, input_objects, gas_status.is_metered());
     // check type arguments separately for error conversion
     for (idx, ty) in type_args.iter().enumerate() {
         session
@@ -292,7 +292,7 @@ fn execute_internal<
         user_events,
         loaded_child_objects,
     } = object_runtime.finish()?;
-    let session = new_session(vm, &*state_view, BTreeMap::new(), gas_status.metered());
+    let session = new_session(vm, &*state_view, BTreeMap::new(), gas_status.is_metered());
     let writes = writes
         .into_iter()
         .map(|(id, (write_kind, owner, ty, tag, value))| {
@@ -486,7 +486,7 @@ pub fn verify_and_link<
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
-    let mut session = new_session(&vm, state_view, BTreeMap::new(), gas_status.metered());
+    let mut session = new_session(&vm, state_view, BTreeMap::new(), gas_status.is_metered());
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()

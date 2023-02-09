@@ -85,7 +85,7 @@ pub struct ObjectRuntime<'a> {
     // the internal state
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
-    metered: bool,
+    is_metered: bool,
 }
 
 pub enum TransferResult {
@@ -104,7 +104,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: Box<dyn ChildObjectResolver + 'a>,
         input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
-        metered: bool,
+        is_metered: bool,
     ) -> Self {
         Self {
             object_store: ObjectStore::new(object_resolver),
@@ -116,13 +116,13 @@ impl<'a> ObjectRuntime<'a> {
                 transfers: LinkedHashMap::new(),
                 events: vec![],
             },
-            metered,
+            is_metered,
         }
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // Metered transactions don't have limits for now
-        if self.metered && (self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS) {
+        if self.is_metered && (self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
@@ -144,7 +144,7 @@ impl<'a> ObjectRuntime<'a> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
         // Metered transactions don't have limits for now
-        if self.metered && (self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
+        if self.is_metered && (self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Deleting more than {MAX_NUM_DELETED_MOVE_OBJECT_IDS} IDs is not allowed"
@@ -191,7 +191,7 @@ impl<'a> ObjectRuntime<'a> {
             };
 
         // Metered transactions don't have limits for now
-        if self.metered
+        if self.is_metered
             && (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
             && (id != SUI_SYSTEM_STATE_OBJECT_ID)
         {
