@@ -11,6 +11,7 @@ const cardStyles = cva(["rounded-2xl", "shadow-notification"], {
       leaderboard: "bg-gradient-to-b from-[#76B9F7] to-[#A2D0FB] text-white",
       default: "bg-white/90",
       white: "bg-white",
+      error: 'bg-issue-light text-gray-90'
     },
     spacing: {
       sm: "p-6",

@@ -35,8 +35,9 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
     setAmount(evt.currentTarget.value);
   };
 
-  const delegatedStake =
-    BigInt(validator.fields.metadata.fields.next_epoch_delegation);
+  const delegatedStake = BigInt(
+    validator.fields.metadata.fields.next_epoch_delegation
+  );
   const selfStake = BigInt(validator.fields.metadata.fields.next_epoch_stake);
   const totalStake = selfStake + delegatedStake;
 
@@ -64,8 +65,13 @@ export function ValidatorItem({ index, validator, stake, delegation }: Props) {
           <div className="text-gray-90 text-body font-semibold">
             {metadata.name}
           </div>
-          <div className="text-frenemies text-body font-medium">
-            {formatBalance(totalStake, DEC)} SUI staked
+          <div>
+            <span className="text-gray-90 font-semibold text-body">
+              {formatBalance(totalStake, DEC)}
+            </span>{" "}
+            <span className="text-steel-dark font-medium text-body">
+              SUI staked
+            </span>
           </div>
         </div>
       </div>

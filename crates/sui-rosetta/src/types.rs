@@ -581,6 +581,7 @@ pub struct ConstructionMetadata {
     pub tx_metadata: TransactionMetadata,
     pub sender: SuiAddress,
     pub gas: ObjectRef,
+    pub gas_price: u64,
     pub budget: u64,
 }
 
@@ -912,11 +913,12 @@ impl InternalOperation {
             }
         };
 
-        Ok(TransactionData::new_with_dummy_gas_price(
+        Ok(TransactionData::new(
             TransactionKind::Single(single_tx),
             metadata.sender,
             metadata.gas,
             metadata.budget,
+            metadata.gas_price,
         ))
     }
 }

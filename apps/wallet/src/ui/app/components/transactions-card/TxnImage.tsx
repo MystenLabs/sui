@@ -23,6 +23,7 @@ export function TxnImage({ id, label }: { id: string; label?: string }) {
                     size="xs"
                     name={nftMeta.name}
                     src={nftMeta.url}
+                    backgroundColor="gray-40"
                 />
 
                 <div className="flex flex-col gap-1 justify-center break-all w-56">
