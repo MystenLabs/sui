@@ -33,11 +33,16 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async getAddress(): Promise<string> {
-        return new Buffer(
-            (
-                await (await this.#appSui).getPublicKey(this.#derivationPath)
-            ).address
-        ).toString('hex');
+        return (
+            '0x' +
+            new Buffer(
+                (
+                    await (
+                        await this.#appSui
+                    ).getPublicKey(this.#derivationPath)
+                ).address
+            ).toString('hex')
+        );
     }
 
     async getPublicKey(): Promise<Ed25519PublicKey> {
