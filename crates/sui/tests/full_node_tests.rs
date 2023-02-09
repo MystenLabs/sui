@@ -1084,7 +1084,7 @@ async fn get_past_obj_read_from_node(
 #[ignore]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().disable_pruning().build().await?;
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
     let node = test_cluster.fullnode_handle.sui_node.clone();
     let context = &mut test_cluster.wallet;
 
