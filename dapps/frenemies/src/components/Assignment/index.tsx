@@ -3,7 +3,7 @@
 
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useScorecard } from "../../network/queries/scorecard";
-import { useSuiSystem } from "../../network/queries/sui-system";
+import { convertToString, useValidators } from "../../network/queries/sui-system";
 import { Goal } from "../../network/types";
 import { formatBalance } from "../../utils/format";
 import { Card } from "../Card";
@@ -33,16 +33,15 @@ function getIsInRank(goal: Goal, index: number) {
 
 export function Assignment() {
   const { currentAccount } = useWalletKit();
-  const { data: system } = useSuiSystem();
+  const { data: validators } = useValidators();
   const { data: scorecard } = useScorecard(currentAccount);
 
-  const unsortedValidators = system?.validators.fields.active_validators;
-
-  const sortedValidators = unsortedValidators
-    ? [...unsortedValidators].sort((a, b) =>
+  const sortedValidators = validators
+    ? [...validators].sort((a, b) =>
         Number(
-          BigInt(b.fields.voting_power || "0") -
-            BigInt(a.fields.voting_power || "0")
+          BigInt(b.next_epoch_stake) +
+            BigInt(b.next_epoch_delegation) -
+            (BigInt(a.next_epoch_stake) + BigInt(a.next_epoch_delegation))
         )
       )
     : null;
@@ -52,10 +51,7 @@ export function Assignment() {
   if (!assignment) return null;
 
   const assignedValidatorIndex = sortedValidators?.findIndex((validator) => {
-    return (
-      validator.fields.metadata.fields.sui_address.replace("0x", "") ===
-      assignment.validator
-    );
+    return validator.sui_address.replace("0x", "") === assignment.validator;
   });
 
   const assignedValidator =
@@ -65,10 +61,9 @@ export function Assignment() {
 
   if (!assignedValidator) return null;
 
-  const name = assignedValidator.fields.metadata.fields.name as string;
-  const selfStake = BigInt(assignedValidator.fields.metadata.fields.next_epoch_stake);
-  const delegatedStake =
-    BigInt(assignedValidator.fields.metadata.fields.next_epoch_delegation);
+  const name = convertToString(assignedValidator.name);
+  const selfStake = BigInt(assignedValidator.next_epoch_stake);
+  const delegatedStake = BigInt(assignedValidator.next_epoch_delegation);
   const totalStake = selfStake + delegatedStake;
 
   const isInRank = getIsInRank(assignment.goal, assignedValidatorIndex!);
@@ -108,7 +103,7 @@ export function Assignment() {
 
               {/* TODO: Validate copy states: */}
               <div className="mt-1 max-w-xs text-steel-dark text-p1">
-                Move your Validator to the assigned rank by allocating Sui Stake
+                Move your Validator to the assigned rank by allocating SUI Stake
                 to them.
               </div>
             </div>

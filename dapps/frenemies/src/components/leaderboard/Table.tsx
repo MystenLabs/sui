@@ -21,6 +21,7 @@ const Cell = ({
 );
 
 export function Table({ data }: Props) {
+  console.log(data.topScores);
   return (
     <div className="overflow-y-scroll max-h-60">
       <table className="table-fixed w-full">
