@@ -94,7 +94,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, 0, 0, 0, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0, 0, ctx);
         test_scenario::return_shared(system_state);
     }
 
@@ -107,7 +107,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, 0, stake_subsidy_rate, 0, ctx);
+        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, stake_subsidy_rate, 0, ctx);
         test_scenario::return_shared(system_state);
     }
 
@@ -124,7 +124,7 @@ module sui::governance_test_utils {
         let ctx = test_scenario::ctx(scenario);
 
         sui_system::advance_epoch(
-            &mut system_state, new_epoch, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 0, ctx
+            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 0, ctx
         );
         test_scenario::return_shared(system_state);
     }

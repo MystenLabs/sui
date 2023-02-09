@@ -441,6 +441,7 @@ module sui::sui_system {
     public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
+        next_protocol_version: u64,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
@@ -509,6 +510,9 @@ module sui::sui_system {
             reward_slashing_rate,
             ctx,
         );
+
+        self.protocol_version = next_protocol_version;
+
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
