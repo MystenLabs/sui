@@ -36,7 +36,7 @@ const getTransport = async () => {
     let transport = null;
     let error;
     try {
-        transport = await WebHIDTransport.request();
+        return await WebHIDTransport.request();
     } catch (e) {
         console.error(`HID Transport is not supported: ${e}`);
         error = e;
@@ -44,17 +44,14 @@ const getTransport = async () => {
 
     if ((window as any).USB) {
         try {
-            transport = await WebUSBTransport.request();
+            return await WebUSBTransport.request();
         } catch (e) {
             console.error(`WebUSB Transport is not supported: ${e}`);
             error = e;
         }
     }
-    if (transport != null) {
-        return transport;
-    } else {
-        throw error;
-    }
+
+    throw error;
 };
 
 async function initAppSui(): Promise<AppSui> {

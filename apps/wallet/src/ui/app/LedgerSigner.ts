@@ -7,8 +7,6 @@ import {
     Base64DataBuffer,
 } from '@mysten/sui.js';
 
-import WebHIDTransport from '@ledgerhq/hw-transport-webhid';
-import WebUSBTransport from '@ledgerhq/hw-transport-webusb';
 import type Transport from '@ledgerhq/hw-transport';
 import type AppSui from 'hw-app-sui';
 import type {
