@@ -55,7 +55,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                 handleBlur(e);
                             }}
                             className="text-steel-dark flex flex-col flex-nowrap gap-2 self-stretch font-semibold text-heading5 p-3.5 rounded-15 bg-white border border-solid border-gray-45 shadow-button leading-snug resize-none min-h-[100px] placeholder:text-steel-dark"
-                            placeholder="Enter your 12-word recovery phrase"
+                            placeholder="Enter your derivation path (m/44'/784'/0'/0'/0' is fine default)"
                             name="derivationPath"
                             disabled={isSubmitting}
                         />
