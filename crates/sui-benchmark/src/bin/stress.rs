@@ -10,7 +10,7 @@ use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
-use sui_protocol_constants::{MAX_NUM_NEW_IDS, MAX_NUM_TRANSFERED_IDS};
+use sui_protocol_constants::{MAX_NUM_NEW_MOVE_OBJECT_IDS, MAX_NUM_TRANSFERED_OBJECT_IDS};
 
 use sui_node::metrics;
 
@@ -51,11 +51,11 @@ use tokio::sync::Barrier;
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
 
-    if (opts.gas_request_chunk_size > MAX_NUM_NEW_IDS)
-        || (opts.gas_request_chunk_size > MAX_NUM_TRANSFERED_IDS)
+    if (opts.gas_request_chunk_size > MAX_NUM_NEW_MOVE_OBJECT_IDS)
+        || (opts.gas_request_chunk_size > MAX_NUM_TRANSFERED_OBJECT_IDS)
     {
         eprintln!(
-            "`gas-request-chunk-size` must be less than the maximum number of new IDs {MAX_NUM_NEW_IDS} and the maximum number of transferred IDs {MAX_NUM_TRANSFERED_IDS}",
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {MAX_NUM_NEW_MOVE_OBJECT_IDS} and the maximum number of transferred IDs {MAX_NUM_TRANSFERED_OBJECT_IDS}",
         );
     }
 

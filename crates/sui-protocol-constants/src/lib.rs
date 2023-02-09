@@ -55,13 +55,13 @@ pub const MAX_DEPENDENCY_DEPTH: usize = 100;
 pub const MAX_NUM_EVENT_EMIT: u64 = 256;
 
 /// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
-pub const MAX_NUM_NEW_IDS: u64 = 1024;
+pub const MAX_NUM_NEW_MOVE_OBJECT_IDS: usize = 1024;
 
 /// Maximum number of IDs that a single transaction can delete. Enforced by the VM during execution.
-pub const MAX_NUM_DELETED_IDS: u64 = 1024;
+pub const MAX_NUM_DELETED_OBJECT_IDS: usize = 1024;
 
 /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
-pub const MAX_NUM_TRANSFERED_IDS: u64 = 1024;
+pub const MAX_NUM_TRANSFERED_OBJECT_IDS: usize = 1024;
 
 // === Execution gas costs ====
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate

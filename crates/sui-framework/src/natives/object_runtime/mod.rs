@@ -14,7 +14,8 @@ use move_vm_types::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use sui_protocol_constants::{
-    MAX_NUM_DELETED_IDS, MAX_NUM_EVENT_EMIT, MAX_NUM_NEW_IDS, MAX_NUM_TRANSFERED_IDS,
+    MAX_NUM_DELETED_OBJECT_IDS, MAX_NUM_EVENT_EMIT, MAX_NUM_NEW_MOVE_OBJECT_IDS,
+    MAX_NUM_TRANSFERED_OBJECT_IDS,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -116,10 +117,10 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
-        if self.state.new_ids.len() == (MAX_NUM_NEW_IDS as usize) {
+        if self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Creating more than {MAX_NUM_NEW_IDS} IDs is not allowed"
+                    "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -137,10 +138,10 @@ impl<'a> ObjectRuntime<'a> {
     pub fn delete_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
-        if self.state.deleted_ids.len() == (MAX_NUM_DELETED_IDS as usize) {
+        if self.state.deleted_ids.len() == MAX_NUM_DELETED_OBJECT_IDS {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Deleting more than {MAX_NUM_DELETED_IDS} IDs is not allowed"
+                    "Deleting more than {MAX_NUM_DELETED_OBJECT_IDS} IDs is not allowed"
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
@@ -184,12 +185,12 @@ impl<'a> ObjectRuntime<'a> {
             };
 
         // Todo: System objects should not be subject to such limits?
-        if (self.state.transfers.len() == (MAX_NUM_TRANSFERED_IDS as usize))
+        if (self.state.transfers.len() == MAX_NUM_TRANSFERED_OBJECT_IDS)
             && (id != SUI_SYSTEM_STATE_OBJECT_ID)
         {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
-                    "Transfering more than {MAX_NUM_TRANSFERED_IDS} IDs is not allowed"
+                    "Transfering more than {MAX_NUM_TRANSFERED_OBJECT_IDS} IDs is not allowed"
                 ))
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
