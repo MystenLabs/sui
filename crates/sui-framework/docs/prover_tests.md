@@ -9,6 +9,7 @@
 -  [Function `simple_transfer`](#0x2_prover_tests_simple_transfer)
 -  [Function `simple_share`](#0x2_prover_tests_simple_share)
 -  [Function `simple_freeze`](#0x2_prover_tests_simple_freeze)
+-  [Function `simple_delete`](#0x2_prover_tests_simple_delete)
 -  [Function `simple_field_add`](#0x2_prover_tests_simple_field_add)
 -  [Function `simple_field_remove`](#0x2_prover_tests_simple_field_remove)
 
@@ -151,7 +152,45 @@
 
 
 <pre><code><b>ensures</b> sui::prover::immutable(o);
-<b>aborts_if</b> sui::prover::owned(o);
+<b>aborts_if</b> <b>false</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_prover_tests_simple_delete"></a>
+
+## Function `simple_delete`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_delete">simple_delete</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">prover_tests::Obj</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_delete">simple_delete</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a>) {
+    <b>let</b> <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a> { id } = o;
+    sui::object::delete(id);
+}
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>aborts_if</b> <b>false</b>;
+<b>ensures</b> !sui::prover::owned(o) && !sui::prover::shared(o) && !sui::prover::immutable(o);
 </code></pre>
 
 

@@ -90,7 +90,7 @@ longer be transferred or mutated.
 
 
 <pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] sui::prover::owned(obj);
+<b>aborts_if</b> [abstract] <b>false</b>;
 <b>modifies</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
 <b>ensures</b> [abstract] <b>exists</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
 <b>ensures</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes).status == 3 /* IMMUTABLE */;

@@ -36,7 +36,7 @@ module sui::prover_tests {
 
     spec simple_freeze {
         ensures sui::prover::immutable(o);
-        aborts_if sui::prover::owned(o);
+        aborts_if false;
     }
 
     public fun simple_delete(o: Obj) {
