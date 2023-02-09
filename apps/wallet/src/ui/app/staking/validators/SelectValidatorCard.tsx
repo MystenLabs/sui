@@ -17,15 +17,18 @@ import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useGetObject } from '_hooks';
 
-type SortBy = 'name' | 'stakeShare' | 'apy';
-const sortKeys: SortBy[] = ['name', 'stakeShare', 'apy'];
-const labels = { name: 'Name', stakeShare: 'Stake Share', apy: 'APY' };
+type SortKeys = 'name' | 'stakeShare' | 'apy';
+const sortKeys: Record<SortKeys, string> = {
+    name: 'Name',
+    stakeShare: 'Stake Share',
+    apy: 'APY',
+};
 
 export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
-    const [sortKey, setSortKey] = useState<SortBy>('stakeShare');
+    const [sortKey, setSortKey] = useState<SortKeys>('stakeShare');
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useGetObject(STATE_OBJECT);
 
@@ -35,7 +38,7 @@ export function SelectValidatorCard() {
         setSelectedValidator((state) => (state !== address ? address : null));
     };
 
-    const handleSortByKey = (key: SortBy) => {
+    const handleSortByKey = (key: SortKeys) => {
         if (key === sortKey) {
             setSortAscending(!sortAscending);
         }
@@ -121,36 +124,40 @@ export function SelectValidatorCard() {
                             Sort by:
                         </Text>
                         <div className="flex items-center ml-2 gap-1.5">
-                            {sortKeys.map((key) => (
-                                <button
-                                    key={key}
-                                    className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
-                                    onClick={() => handleSortByKey(key)}
-                                >
-                                    <Text
-                                        variant="caption"
-                                        weight="medium"
-                                        color={
-                                            sortKey === key
-                                                ? 'hero'
-                                                : 'steel-darker'
+                            {Object.entries(sortKeys).map(([key, value]) => {
+                                return (
+                                    <button
+                                        key={key}
+                                        className="bg-transparent border-0 p-0 flex gap-1 cursor-pointer"
+                                        onClick={() =>
+                                            handleSortByKey(key as SortKeys)
                                         }
                                     >
-                                        {labels[key]}
-                                    </Text>
-                                    {sortKey === key && (
-                                        <Icon
-                                            icon={SuiIcons.ArrowLeft}
-                                            className={cl(
-                                                'text-captionSmall font-thin  text-hero',
-                                                sortAscending
-                                                    ? 'rotate-90'
-                                                    : '-rotate-90'
-                                            )}
-                                        />
-                                    )}
-                                </button>
-                            ))}
+                                        <Text
+                                            variant="caption"
+                                            weight="medium"
+                                            color={
+                                                sortKey === key
+                                                    ? 'hero'
+                                                    : 'steel-darker'
+                                            }
+                                        >
+                                            {value}
+                                        </Text>
+                                        {sortKey === key && (
+                                            <Icon
+                                                icon={SuiIcons.ArrowLeft}
+                                                className={cl(
+                                                    'text-captionSmall font-thin  text-hero',
+                                                    sortAscending
+                                                        ? 'rotate-90'
+                                                        : '-rotate-90'
+                                                )}
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                     <div className="flex items-start w-full">

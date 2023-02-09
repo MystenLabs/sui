@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
-import { IconTooltip } from '_app/shared/tooltip';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
@@ -18,7 +17,7 @@ const TRUNCATE_PREFIX_LENGTH = 6;
 type ValidatorListItemProp = {
     selected?: boolean;
     label: string;
-    value: string | number | null;
+    value: string | number;
     validatorName: string;
     validatorAddress: string;
     logo: string | null;
