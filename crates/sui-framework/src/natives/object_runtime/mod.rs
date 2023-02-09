@@ -84,6 +84,8 @@ pub struct ObjectRuntime<'a> {
     pub(crate) test_inventories: TestInventories,
     // the internal state
     pub(crate) state: ObjectRuntimeState,
+    // whether or not this TX is gas metered
+    is_metered: bool,
 }
 
 pub enum TransferResult {
@@ -102,6 +104,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: Box<dyn ChildObjectResolver + 'a>,
         input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
+        is_metered: bool,
     ) -> Self {
         Self {
             object_store: ObjectStore::new(object_resolver),
@@ -113,11 +116,13 @@ impl<'a> ObjectRuntime<'a> {
                 transfers: LinkedHashMap::new(),
                 events: vec![],
             },
+            is_metered,
         }
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
-        if self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS {
+        // Metered transactions don't have limits for now
+        if self.is_metered && (self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
@@ -138,7 +143,8 @@ impl<'a> ObjectRuntime<'a> {
     pub fn delete_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
         // This is defensive because `self.state.deleted_ids` may not indeed
         // be called based on the `was_new` flag
-        if self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS {
+        // Metered transactions don't have limits for now
+        if self.is_metered && (self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
                     "Deleting more than {MAX_NUM_DELETED_MOVE_OBJECT_IDS} IDs is not allowed"
@@ -184,8 +190,9 @@ impl<'a> ObjectRuntime<'a> {
                 TransferResult::OwnerChanged
             };
 
-        // Todo: System objects should not be subject to such limits?
-        if (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
+        // Metered transactions don't have limits for now
+        if self.is_metered
+            && (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
             && (id != SUI_SYSTEM_STATE_OBJECT_ID)
         {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)

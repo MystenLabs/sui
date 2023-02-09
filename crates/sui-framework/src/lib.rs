@@ -79,7 +79,11 @@ fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
         InputObjects::new(vec![]),
         TransactionDigest::random(),
     );
-    ext.add(ObjectRuntime::new(Box::new(state_view), BTreeMap::new()))
+    ext.add(ObjectRuntime::new(
+        Box::new(state_view),
+        BTreeMap::new(),
+        false,
+    ))
 }
 
 pub fn get_sui_framework() -> Vec<CompiledModule> {
