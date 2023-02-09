@@ -16,6 +16,8 @@ import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version';
 import { RequestParamsLike } from 'jayson';
 import { RPCError, RPCValidationError } from '../utils/errors';
 
+import fetch, { Response } from 'node-fetch';
+
 /**
  * An object defining headers to be passed to the RPC server
  */

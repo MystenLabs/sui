@@ -1,5 +1,5 @@
 {
-  "name": "@mysten/sui.js",
+  "name": "@sentio/sui.js",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "description": "Sui TypeScript API(Work in Progress)",
   "version": "0.34.0",
@@ -87,7 +87,8 @@
     "typescript": "^5.0.4",
     "vite": "^4.2.1",
     "vitest": "^0.30.1",
-    "wait-on": "^7.0.1"
+    "wait-on": "^7.0.1",
+    "node-fetch": "^3.3.1"
   },
   "dependencies": {
     "@mysten/bcs": "workspace:*",
