@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useEffect, useState } from "react";
 import { useEpoch } from "../network/queries/epoch";
 import { formatTimeRemaining } from "../utils/format";
