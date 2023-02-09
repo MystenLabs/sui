@@ -243,6 +243,7 @@ function StakingCard() {
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: txDigest,
+                        from: 'stake',
                     }).toString()}`
                 );
             } catch (e) {
