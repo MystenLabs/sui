@@ -899,7 +899,7 @@ impl InternalOperation {
                         CallArg::ObjVec(
                             coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
                         ),
-                        CallArg::Pure(bcs::to_bytes(&amount)?),
+                        CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
                         CallArg::Pure(bcs::to_bytes(&validator)?),
                     ],
                 })
