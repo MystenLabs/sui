@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::legacy_empty_cost;
 use fastcrypto::{
-    hash::{HashFunction, Keccak256},
     secp256k1::{
         recoverable::{Secp256k1RecoverablePublicKey, Secp256k1RecoverableSignature},
         Secp256k1PublicKey, Secp256k1Signature,
@@ -92,25 +91,6 @@ pub fn decompress_pubkey(
         }
         Err(_) => Ok(NativeResult::err(cost, INVALID_PUBKEY)),
     }
-}
-
-pub fn keccak256(
-    _context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
-
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = legacy_empty_cost();
-    let msg = pop_arg!(args, VectorRef);
-    let msg_ref = msg.as_bytes_ref();
-
-    Ok(NativeResult::ok(
-        cost,
-        smallvec![Value::vector_u8(Keccak256::digest(&*msg_ref).to_vec())],
-    ))
 }
 
 pub fn secp256k1_verify(

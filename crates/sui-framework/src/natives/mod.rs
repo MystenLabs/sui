@@ -24,7 +24,7 @@ use move_vm_types::{
 use std::sync::Arc;
 
 use self::crypto::{
-    bls12381, bulletproofs, ecdsa_k1, ecvrf, ed25519, elliptic_curve, groth16, hmac, tbls,
+    bls12381, bulletproofs, ecdsa_k1, ecvrf, ed25519, elliptic_curve, groth16, hash, hmac, tbls,
 };
 
 pub fn all_natives(
@@ -35,6 +35,7 @@ pub fn all_natives(
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
+        ("hash", "blake2b256", make_native!(hash::blake2b256)),
         (
             "bls12381",
             "bls12381_min_sig_verify",
@@ -91,7 +92,6 @@ pub fn all_natives(
             "decompress_pubkey",
             make_native!(ecdsa_k1::decompress_pubkey),
         ),
-        ("ecdsa_k1", "keccak256", make_native!(ecdsa_k1::keccak256)),
         (
             "ecdsa_k1",
             "secp256k1_verify",
@@ -149,6 +149,7 @@ pub fn all_natives(
             "native_hmac_sha3_256",
             make_native!(hmac::hmac_sha3_256),
         ),
+        ("hash", "keccak256", make_native!(hash::keccak256)),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
