@@ -48,7 +48,7 @@ pub fn delete_impl(
     let cost = legacy_emit_cost();
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.delete_id(uid_bytes.into());
+    obj_runtime.delete_id(uid_bytes.into())?;
     Ok(NativeResult::ok(cost, smallvec![]))
 }
 
@@ -67,6 +67,6 @@ pub fn record_new_uid(
     let cost = legacy_emit_cost();
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.new_id(uid_bytes.into());
+    obj_runtime.new_id(uid_bytes.into())?;
     Ok(NativeResult::ok(cost, smallvec![]))
 }

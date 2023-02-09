@@ -13,7 +13,10 @@ use move_vm_types::{
     values::{GlobalValue, Value},
 };
 use std::collections::{BTreeMap, BTreeSet};
-use sui_protocol_constants::MAX_NUM_EVENT_EMIT;
+use sui_protocol_constants::{
+    MAX_NUM_DELETED_MOVE_OBJECT_IDS, MAX_NUM_EVENT_EMIT, MAX_NUM_NEW_MOVE_OBJECT_IDS,
+    MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS,
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
@@ -113,19 +116,43 @@ impl<'a> ObjectRuntime<'a> {
         }
     }
 
-    pub fn new_id(&mut self, id: ObjectID) {
+    pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
+        if self.state.new_ids.len() == MAX_NUM_NEW_MOVE_OBJECT_IDS {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Creating more than {MAX_NUM_NEW_MOVE_OBJECT_IDS} IDs is not allowed"
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
+        }
+
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction
         self.state.deleted_ids.remove(&id);
         // mark the id as new
         self.state.new_ids.insert(id, ());
+        Ok(())
     }
 
-    pub fn delete_id(&mut self, id: ObjectID) {
+    pub fn delete_id(&mut self, id: ObjectID) -> PartialVMResult<()> {
+        // This is defensive because `self.state.deleted_ids` may not indeed
+        // be called based on the `was_new` flag
+        if self.state.deleted_ids.len() == MAX_NUM_DELETED_MOVE_OBJECT_IDS {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Deleting more than {MAX_NUM_DELETED_MOVE_OBJECT_IDS} IDs is not allowed"
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
+        }
+
         let was_new = self.state.new_ids.remove(&id).is_some();
         if !was_new {
             self.state.deleted_ids.insert(id, ());
         }
+        Ok(())
     }
 
     pub fn transfer(
@@ -156,6 +183,19 @@ impl<'a> ObjectRuntime<'a> {
             } else {
                 TransferResult::OwnerChanged
             };
+
+        // Todo: System objects should not be subject to such limits?
+        if (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
+            && (id != SUI_SYSTEM_STATE_OBJECT_ID)
+        {
+            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+                .with_message(format!(
+                    "Transfering more than {MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS} IDs is not allowed"
+                ))
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
+                ));
+        }
         self.state.transfers.insert(id, (owner, ty, tag, obj));
         Ok(transfer_result)
     }
