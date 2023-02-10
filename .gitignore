@@ -51,3 +51,4 @@ yarn-error.log*
 # misc
 *.key
 .env
+sdk/typescript/src/version.ts
