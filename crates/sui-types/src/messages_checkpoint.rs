@@ -11,6 +11,7 @@ use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::intent::{Intent, IntentScope};
 use crate::signature::GenericSignature;
 use crate::{
     base_types::AuthorityName,
@@ -232,7 +233,13 @@ impl SignedCheckpointSummary {
         signer: &dyn Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
         let epoch = checkpoint.epoch;
-        let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
+        let auth_signature = AuthoritySignInfo::new(
+            epoch,
+            &checkpoint,
+            Intent::default().with_scope(IntentScope::CheckpointSummary),
+            authority,
+            signer,
+        );
         SignedCheckpointSummary {
             summary: checkpoint,
             auth_signature,
@@ -254,8 +261,11 @@ impl SignedCheckpointSummary {
             self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
-
-        self.auth_signature.verify(&self.summary, committee)?;
+        self.auth_signature.verify_secure(
+            &self.summary,
+            Intent::default().with_scope(IntentScope::CheckpointSummary),
+            committee,
+        )?;
 
         if let Some(contents) = contents {
             let content_digest = contents.digest();
@@ -329,7 +339,11 @@ impl CertifiedCheckpointSummary {
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
         let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(&self.summary, self.auth_signature.epoch);
+        let idx = obligation.add_message(
+            &self.summary,
+            self.auth_signature.epoch,
+            Intent::default().with_scope(IntentScope::CheckpointSummary),
+        );
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 

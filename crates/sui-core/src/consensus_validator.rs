@@ -5,6 +5,7 @@ use eyre::WrapErr;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
+use sui_types::intent::{Intent, IntentScope};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::transaction_manager::TransactionManager;
@@ -71,7 +72,11 @@ impl TransactionValidator for SuiTxValidator {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     self.metrics.certificate_signatures_verified.inc();
                     certificate.data().verify()?;
-                    let idx = obligation.add_message(certificate.data(), certificate.epoch());
+                    let idx = obligation.add_message(
+                        certificate.data(),
+                        certificate.epoch(),
+                        Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                    );
                     certificate.auth_sig().add_to_verification_obligation(
                         self.epoch_store.committee(),
                         &mut obligation,
@@ -87,7 +92,11 @@ impl TransactionValidator for SuiTxValidator {
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
                     self.metrics.checkpoint_signatures_verified.inc();
                     let summary = signature.summary.summary;
-                    let idx = obligation.add_message(&summary, summary.epoch);
+                    let idx = obligation.add_message(
+                        &summary,
+                        summary.epoch,
+                        Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    );
                     signature
                         .summary
                         .auth_signature

@@ -31,6 +31,8 @@ use std::{collections::HashMap, pin::Pin};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::UserInputError;
+use sui_types::intent::Intent;
+use sui_types::intent::IntentScope;
 use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
@@ -2462,6 +2464,7 @@ impl AuthorityState {
             Some(AuthoritySignInfo::new(
                 epoch_store.epoch(),
                 effects,
+                Intent::default().with_scope(IntentScope::TransactionEffects),
                 self.name,
                 &*self.secret,
             ))
