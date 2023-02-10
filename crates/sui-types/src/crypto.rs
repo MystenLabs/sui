@@ -963,7 +963,7 @@ pub trait SuiSignatureInner: Sized + ToFromBytes + PartialEq + Eq + Hash {
     }
 
     fn new(kp: &Self::KeyPair, message: &[u8]) -> SuiResult<Self> {
-        let sig = SuiSigner::sign(kp, message);
+        let sig = SuiSigner::try_sign(kp, message)?;
 
         let mut signature_bytes: Vec<u8> = Vec::new();
         signature_bytes
