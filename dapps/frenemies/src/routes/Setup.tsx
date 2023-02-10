@@ -63,46 +63,50 @@ export function Setup() {
         throw new Error("No connected wallet found");
       }
 
-      const checkTx: UnserializedSignableTransaction = {
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_PKG,
-          module: "registry",
-          function: "is_registered",
-          typeArguments: [],
-          arguments: [config.VITE_REGISTRY, username],
-        },
-      };
-
-      const inspectRes = await provider.devInspectTransaction(
-        currentAccount,
-        checkTx,
-        gasPrice
+      const inspectResults = await Promise.all(
+        [config.VITE_OLD_REGISTRY, config.VITE_REGISTRY].map((registry) =>
+          provider.devInspectTransaction(
+            currentAccount,
+            {
+              kind: "moveCall",
+              data: {
+                packageObjectId: config.VITE_PKG,
+                module: "registry",
+                function: "is_registered",
+                typeArguments: [],
+                arguments: [registry, username],
+              },
+            },
+            gasPrice
+          )
+        )
       );
 
-      if ("Err" in inspectRes.results) {
-        throw new Error(
-          `Error happened while checking for uniqueness: ${inspectRes.results.Err}`
-        );
-      }
+      inspectResults.forEach(({ results }) => {
+        if ("Err" in results) {
+          throw new Error(
+            `Error happened while checking for uniqueness: ${results.Err}`
+          );
+        }
 
-      const {
-        Ok: [
-          [
-            ,
-            {
-              // @ts-ignore // not cool
-              returnValues: [[[exists]]],
-            },
+        const {
+          Ok: [
+            [
+              ,
+              {
+                // @ts-ignore // not cool
+                returnValues: [[[exists]]],
+              },
+            ],
           ],
-        ],
-      } = inspectRes.results;
+        } = results;
 
-      // Add a warning saying that the name is already taken.
-      // Depending on the the `exists` result: 0 or 1;
-      if (exists == 1) {
-        throw new Error(`Name: '${username}' is already taken`);
-      }
+        // Add a warning saying that the name is already taken.
+        // Depending on the the `exists` result: 0 or 1;
+        if (exists == 1) {
+          throw new Error(`Name: '${username}' is already taken`);
+        }
+      });
 
       await signAndExecuteTransaction({
         kind: "moveCall",
