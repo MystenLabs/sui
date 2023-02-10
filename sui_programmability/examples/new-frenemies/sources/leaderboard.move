@@ -68,7 +68,7 @@ module frenemies::leaderboard {
     }
 
     /// Number of scores kept in the leaderboard
-    const LEADERBOARD_SIZE: u64 = 2_000;
+    const LEADERBOARD_SIZE: u64 = 2000;
 
     /// Number of points a player receives for successfully completing an epoch goal.
     /// Additional points are awarded according to the difficulty of the goal (i.e.,
@@ -92,13 +92,22 @@ module frenemies::leaderboard {
         )
     }
 
-    /// admin-only function for adding scores from the old leaderboard
-    public(friend) fun old_leaderboard_insert(
-        name: String, points: u16, participation: u16, new_leaderboard: &mut Leaderboard, _cap: &AdminCap
+    public(friend) fun admin_leaderboard_insert(
+        names: vector<String>, points: vector<u16>, participation: vector<u16>, new_leaderboard: &mut Leaderboard, _cap: &AdminCap
     ) {
+        let len = vector::length(&names);
+        // make sure they all have the same length
+        assert!(len == vector::length(&points) && len == vector::length(&participation), 0);
+
         let new_scores = &mut new_leaderboard.top_scores;
-        let score = Score { name: registry::name_for_testing(name), score: points, participation };
-        score_insertion_sort(new_scores, score)
+
+        while (!vector::is_empty(&names)) {
+            let name = vector::pop_back(&mut names);
+            let score_points = vector::pop_back(&mut points);
+            let participation_points = vector::pop_back(&mut participation);
+            let score = Score { name: registry::name_for_testing(name), score: score_points, participation: participation_points };
+            vector::push_back(new_scores, score);
+        };
     }
 
     /// Sort active validators in `state` by stake and add to `leaderboard prev_epoch_stakes` so we can score
@@ -123,6 +132,12 @@ module frenemies::leaderboard {
         // stake info in `state` is the result of the *previous* epoch
         table::add(&mut self.prev_epoch_stakes, cur_epoch - 1, validators);
         self.epoch = cur_epoch
+    }
+
+    public(friend) fun emit_new_score_event(name: Name, score: u16, participation: u16, epoch: u64) {
+         event::emit(NewScoreEvent { name, score: Score {
+             name, score, participation
+         }, epoch });
     }
 
     public(friend) fun update(

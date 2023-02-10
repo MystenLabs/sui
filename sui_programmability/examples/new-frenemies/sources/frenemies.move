@@ -83,7 +83,7 @@ module frenemies::frenemies {
         string::utf8(old_name)
     }
 
-    public fun migrate(old_scorecard: &old_frenemies::frenemies::Scorecard, migration: &mut Migration, ctx: &mut TxContext) {
+    public entry fun migrate(old_scorecard: &old_frenemies::frenemies::Scorecard, migration: &mut Migration, ctx: &mut TxContext) {
         let old_assignment = old_frenemies::frenemies::assignment(old_scorecard);
         let assignment = assignment::new_for_testing(
             old_frenemies::assignment::validator(old_assignment),
@@ -96,17 +96,24 @@ module frenemies::frenemies {
         let old_name = name_to_string(old_frenemies::frenemies::name(old_scorecard));
         let name = registry::name_for_testing(old_name);
 
+        let score = old_frenemies::frenemies::score(old_scorecard);
+        let epoch = tx_context::epoch(ctx);
+        let participation = old_frenemies::frenemies::participation(old_scorecard);
+
+        if (score > 0) leaderboard::emit_new_score_event(name, score, participation, epoch);
+
         transfer::transfer(
              Scorecard {
                 id: object::new(ctx),
                 name,
                 assignment,
-                score: old_frenemies::frenemies::score(old_scorecard),
-                participation: old_frenemies::frenemies::participation(old_scorecard),
-                epoch: tx_context::epoch(ctx),
+                score,
+                participation,
+                epoch,
             },
             tx_context::sender(ctx)
-        )
+        );
+
     }
 
     /// Update `scorecard` with the results from the last epoch, update `leaderboard` if this is a high score, update

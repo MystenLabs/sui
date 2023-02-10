@@ -28,6 +28,7 @@ module frenemies::frenemies_tests {
         let scenario = ts::begin(@0x0);
         gtu::set_up_sui_system_state(validators, &mut scenario);
         frenemies::init_for_testing(ts::ctx(&mut scenario));
+        old_frenemies::registry::init_for_testing(ts::ctx(&mut scenario));
 
         // each player registers for the game
         let i = 0;
@@ -37,10 +38,13 @@ module frenemies::frenemies_tests {
             {
                 let system_state = ts::take_shared<SuiSystemState>(&mut scenario);
                 let registry = ts::take_shared<Registry>(&mut scenario);
-                frenemies::register(address::to_string(player), &mut registry, &mut system_state, ts::ctx(&mut scenario));
+                let old_registry = ts::take_shared<old_frenemies::registry::Registry>(&mut scenario);
+                let tx_context = ts::ctx(&mut scenario);
+                frenemies::register(address::to_string(player), &mut registry, &mut old_registry, &mut system_state, tx_context);
                 assert!(registry::num_players(&registry) == i + 1, 0);
                 ts::return_shared(system_state);
-                ts::return_shared(registry)
+                ts::return_shared(registry);
+                ts::return_shared(old_registry);
             };
             i = i + 1
         };
@@ -58,16 +62,19 @@ module frenemies::frenemies_tests {
         {
             let system_state = ts::take_shared<SuiSystemState>(scenario);
             let registry = ts::take_shared<Registry>(scenario);
-            frenemies::register(string::utf8(b"bob"), &mut registry, &mut system_state, ts::ctx(scenario));
-            frenemies::register(string::utf8(b"alice"), &mut registry, &mut system_state, ts::ctx(scenario));
+            let old_registry = ts::take_shared<old_frenemies::registry::Registry>(scenario);
+            let tx_context = ts::ctx(scenario);
+            frenemies::register(string::utf8(b"bob"), &mut registry, &mut old_registry, &mut system_state, tx_context);
+            frenemies::register(string::utf8(b"alice"), &mut registry, &mut old_registry, &mut system_state, tx_context);
             ts::return_shared(system_state);
-            ts::return_shared(registry)
+            ts::return_shared(registry);
+            ts::return_shared(old_registry);
         };
         let effects = ts::next_tx(scenario, @0xb0b);
         let created = ts::created(&effects);
-        assert!(vector::length(&created) == 2, 0);
-        let card1 = ts::take_from_sender_by_id<Scorecard>(scenario, *vector::borrow(&created, 0));
-        let card2 = ts::take_from_sender_by_id<Scorecard>(scenario, *vector::borrow(&created, 1));
+        assert!(vector::length(&created) == 4, 0);
+        let card1 = ts::take_from_sender_by_id<Scorecard>(scenario, *vector::borrow(&created, 1));
+        let card2 = ts::take_from_sender_by_id<Scorecard>(scenario, *vector::borrow(&created, 3));
         assert!(frenemies::assignment(&card1) == frenemies::assignment(&card2), 0);
         ts::return_to_sender(scenario, card1);
         ts::return_to_sender(scenario, card2);
