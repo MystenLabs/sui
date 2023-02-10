@@ -55,7 +55,7 @@ button.gone {
 }
 
 .rhs > select {
-    @apply ml-[1vw] hidden cursor-pointer overflow-visible rounded-[6px] border-0 border-r-[12px] border-transparent sm:block;
+    @apply ml-[1vw] hidden cursor-pointer overflow-visible rounded-[6px] border-r-[12px] border-transparent sm:block;
 
     outline: 1px solid #e9eaeb !important;
 }

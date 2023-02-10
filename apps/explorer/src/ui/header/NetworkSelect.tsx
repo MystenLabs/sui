@@ -66,7 +66,7 @@ function SelectableNetwork({
             onClick={onClick}
             className={clsx(
                 // CSS Reset:
-                'cursor-pointer border-0 bg-transparent text-left',
+                'cursor-pointer bg-transparent text-left',
                 'flex items-start gap-4 rounded-md px-2 py-3 text-body font-semibold hover:bg-gray-40 hover:text-gray-90 ui-active:bg-gray-40 ui-active:text-gray-90',
                 state !== NetworkState.UNSELECTED
                     ? 'text-gray-90'
@@ -129,7 +129,7 @@ function CustomRPCInput({
                 <button
                     disabled={!isDirty || !isValid}
                     type="submit"
-                    className="flex items-center justify-center rounded-full border-0 bg-gray-90 px-2 py-1 text-captionSmall font-semibold uppercase text-white transition disabled:bg-gray-45 disabled:text-gray-65"
+                    className="flex items-center justify-center rounded-full bg-gray-90 px-2 py-1 text-captionSmall font-semibold uppercase text-white transition disabled:bg-gray-45 disabled:text-gray-65"
                 >
                     Save
                 </button>

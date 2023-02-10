@@ -39,7 +39,7 @@ div.imageandcross {
 }
 
 img.largeimage {
-    @apply z-50 max-h-[80vh] max-w-[80vw] self-start border-0;
+    @apply z-50 max-h-[80vh] max-w-[80vw] self-start;
 
     border-radius: 6px !important;
 }
@@ -71,7 +71,7 @@ div.detailsbg {
 }
 
 .automod {
-    @apply w-1/2 border-0 border-b-2 border-solid border-gray-45;
+    @apply w-1/2 border-b-2 border-solid border-gray-45;
 
     background-color: #d8e5ea;
     position: relative;

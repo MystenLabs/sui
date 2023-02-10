@@ -10,7 +10,7 @@ import { Text } from '~/ui/Text';
 function Footer() {
     return (
         <footer className="bg-gray-75 p-5 md:p-14">
-            <nav className="mx-auto grid grid-cols-1 justify-center text-left lg:grid-cols-2">
+            <nav className="mx-auto grid grid-cols-1 items-center justify-center text-left xl:grid-cols-2">
                 <div className="grid grid-cols-4 md:grid-cols-5">
                     <div className="hidden h-full flex-col md:flex">
                         <SuiLogoIcon />
