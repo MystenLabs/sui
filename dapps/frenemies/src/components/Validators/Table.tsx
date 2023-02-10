@@ -9,7 +9,6 @@ import {
   StakedSui,
   STAKED_SUI,
 } from "../../network/types";
-import { useWalletKit } from "@mysten/wallet-kit";
 import { useMyType } from "../../network/queries/use-raw";
 import { GridItem } from "./GridItem";
 import { ValidatorItem } from "./Validator";
@@ -25,12 +24,8 @@ function Header({ children }: { children: ReactNode }) {
 }
 
 export function Table() {
-  const { currentAccount } = useWalletKit();
-  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI, currentAccount);
-  const { data: delegations } = useMyType<Delegation>(
-    DELEGATION,
-    currentAccount
-  );
+  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI);
+  const { data: delegations } = useMyType<Delegation>(DELEGATION);
 
   const { data: validators } = useValidators();
 
@@ -71,9 +66,7 @@ export function Table() {
 
       <div className="flex flex-col gap-1">
         {sorted.map((validator, index) => {
-          const address = normalizeSuiAddress(
-            validator.sui_address
-          );
+          const address = normalizeSuiAddress(validator.sui_address);
 
           return (
             <ValidatorItem

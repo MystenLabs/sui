@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRawObjectParsedUnsafe } from "../rawObject";
 import provider from "../provider";
+import { useWalletKit } from "@mysten/wallet-kit";
 
 /**
  * Generic method to fetch a RawObject from the network.
@@ -21,19 +22,28 @@ export function useRawObject<T>(objectId: string, bcsType: string) {
   );
 }
 
+function useObjectsOwnedByAddress() {
+  const { currentAccount } = useWalletKit();
+  return useQuery(
+    ["owned", currentAccount],
+    async () => provider.getObjectsOwnedByAddress(currentAccount!),
+    {
+      enabled: !!currentAccount,
+      refetchInterval: 2 * 60 * 1000,
+    }
+  );
+}
+
 /**
  * Get all objects by type.
  */
-export function useMyType<T>(type: string, account?: string | null) {
+export function useMyType<T>(type: string) {
+  const { currentAccount } = useWalletKit();
+  const owned = useObjectsOwnedByAddress();
   return useQuery(
-    [type, account],
+    [type, currentAccount, owned.data?.length],
     async () => {
-      if (!account) {
-        return null;
-      }
-
-      const objects = await provider.getObjectsOwnedByAddress(account);
-      const search = objects.filter((v) => v.type.includes(type));
+      const search = owned.data!.filter((v) => v.type.includes(type));
 
       if (!search.length) {
         return null;
@@ -46,7 +56,7 @@ export function useMyType<T>(type: string, account?: string | null) {
       );
     },
     {
-      enabled: !!account,
+      enabled: !!currentAccount && owned.isSuccess,
       refetchInterval: 2 * 60 * 1000,
     }
   );

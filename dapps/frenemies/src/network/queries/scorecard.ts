@@ -16,8 +16,7 @@ import { SUI_SYSTEM_ID } from "./sui-system";
 import { useMyType, useRawObject } from "./use-raw";
 
 export function useLegacyScorecard() {
-  const { currentAccount } = useWalletKit();
-  const res = useMyType<Scorecard>(LEGACY_SCORECARD, currentAccount);
+  const res = useMyType<Scorecard>(LEGACY_SCORECARD);
 
   return {
     ...res,
@@ -26,8 +25,7 @@ export function useLegacyScorecard() {
 }
 
 export function useScorecard() {
-  const { currentAccount } = useWalletKit();
-  const res = useMyType<Scorecard>(SCORECARD, currentAccount);
+  const res = useMyType<Scorecard>(SCORECARD);
 
   return {
     ...res,
