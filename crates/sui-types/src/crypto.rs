@@ -15,7 +15,6 @@ pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
-use fastcrypto::Verifier;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;
@@ -23,7 +22,6 @@ use schemars::JsonSchema;
 use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
-use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -41,6 +39,7 @@ use std::fmt::Debug;
 
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::error::FastCryptoError;
+use fastcrypto::traits::Signer;
 
 #[cfg(test)]
 #[path = "unit_tests/crypto_tests.rs"]
@@ -106,6 +105,27 @@ pub enum PublicKey {
     Secp256r1(Secp256r1PublicKey),
 }
 
+/// This trait is a copy of the signature::Signer trait. This adds a `try_sign` method
+/// which, contrary to `fastcrypto::traits::Signer`, allows a signing to fail.
+pub trait SuiSigner<Sig> {
+    /// Attempt to sign the given message, returning a digital signature on
+    /// success, or an error if something went wrong.
+    fn try_sign(&self, msg: &[u8]) -> SuiResult<Sig>;
+
+    /// Sign the given message and return a digital signature.
+    fn sign(&self, msg: &[u8]) -> Sig {
+        // This use of `expect` is as in signature::Signer (https://docs.rs/signature/1.2.2/src/signature/signer.rs.html#13-25)
+        // which has been used as the signer trait so far, so we continue this usage.
+        self.try_sign(msg).expect("Signature operation failed")
+    }
+}
+
+impl<Sig, FastCryptoSigner: Signer<Sig>> SuiSigner<Sig> for FastCryptoSigner {
+    fn try_sign(&self, msg: &[u8]) -> SuiResult<Sig> {
+        Ok(self.sign(msg))
+    }
+}
+
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
         match self {
@@ -116,8 +136,8 @@ impl SuiKeyPair {
     }
 }
 
-impl Signer<Signature> for SuiKeyPair {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
+impl SuiSigner<Signature> for SuiKeyPair {
+    fn try_sign(&self, msg: &[u8]) -> SuiResult<Signature> {
         match self {
             SuiKeyPair::Ed25519(kp) => kp.try_sign(msg),
             SuiKeyPair::Secp256k1(kp) => kp.try_sign(msg),
@@ -353,10 +373,10 @@ impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
 }
 
 impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
-    type Error = signature::Error;
+    type Error = FastCryptoError;
 
     fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
-        AuthorityPublicKey::from_bytes(bytes.as_ref()).map_err(|_| signature::Error::new())
+        AuthorityPublicKey::from_bytes(bytes.as_ref())
     }
 }
 
@@ -424,7 +444,7 @@ impl FromStr for AuthorityPublicKeyBytes {
 //
 
 pub trait SuiAuthoritySignature {
-    fn new<T>(value: &T, epoch_id: EpochId, secret: &dyn Signer<Self>) -> Self
+    fn new<T>(value: &T, epoch_id: EpochId, secret: &dyn SuiSigner<Self>) -> Self
     where
         T: Signable<Vec<u8>>;
 
@@ -445,20 +465,21 @@ pub trait SuiAuthoritySignature {
     where
         T: Serialize;
 
-    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn signature::Signer<Self>) -> Self
+    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn SuiSigner<Self>) -> Self
     where
         T: Serialize;
 }
 
 impl SuiAuthoritySignature for AuthoritySignature {
-    fn new<T>(value: &T, epoch_id: EpochId, secret: &dyn Signer<Self>) -> Self
+    fn new<T>(value: &T, epoch_id: EpochId, secret: &dyn SuiSigner<Self>) -> Self
     where
         T: Signable<Vec<u8>>,
     {
         let mut message = Vec::new();
         value.write(&mut message);
         epoch_id.write(&mut message);
-        secret.sign(&message)
+        // This unwrap is exactly what signature::Signer used to do, so it's safe to do here.
+        SuiSigner::sign(secret, &message)
     }
 
     fn verify<T>(
@@ -489,11 +510,14 @@ impl SuiAuthoritySignature for AuthoritySignature {
             })
     }
 
-    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn signature::Signer<Self>) -> Self
+    fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn SuiSigner<Self>) -> Self
     where
         T: Serialize,
     {
-        secret.sign(&bcs::to_bytes(&value).expect("Message serialization should not fail"))
+        SuiSigner::sign(
+            secret,
+            &bcs::to_bytes(&value).expect("Message serialization should not fail"),
+        )
     }
 
     fn verify_secure<T>(
@@ -512,8 +536,8 @@ impl SuiAuthoritySignature for AuthoritySignature {
         })?;
         public_key
             .verify(&message[..], self)
-            .map_err(|e| SuiError::InvalidSignature {
-                error: format!("{}", e),
+            .map_err(|_| SuiError::InvalidSignature {
+                error: format!("{}", "Invalid signature"),
             })
     }
 }
@@ -662,23 +686,23 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl Signature {
     #[warn(deprecated)]
-    pub fn new<T>(value: &T, secret: &dyn Signer<Signature>) -> Signature
+    pub fn new<T>(value: &T, secret: &dyn SuiSigner<Signature>) -> Signature
     where
         T: Signable<Vec<u8>>,
     {
         let mut message = Vec::new();
         value.write(&mut message);
-        secret.sign(&message)
+        SuiSigner::sign(secret, &message)
     }
 
-    pub fn new_secure<T>(
-        value: &IntentMessage<T>,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self
+    pub fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn SuiSigner<Signature>) -> Self
     where
         T: Serialize,
     {
-        secret.sign(&bcs::to_bytes(&value).expect("Message serialization should not fail"))
+        SuiSigner::sign(
+            secret,
+            &bcs::to_bytes(&value).expect("Message serialization should not fail"),
+        )
     }
 }
 
@@ -701,8 +725,8 @@ impl AsMut<[u8]> for Signature {
     }
 }
 
-impl signature::Signature for Signature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
+impl ToFromBytes for Signature {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
@@ -718,10 +742,10 @@ impl signature::Signature for Signature {
                         .map_err(|_| signature::Error::new())?
                         .into())
                 } else {
-                    Err(signature::Error::new())
+                    Err(FastCryptoError::InvalidInput)
                 }
             }
-            _ => Err(signature::Error::new()),
+            _ => Err(FastCryptoError::InvalidInput),
         }
     }
 }
@@ -786,10 +810,10 @@ impl AsMut<[u8]> for Ed25519SuiSignature {
     }
 }
 
-impl signature::Signature for Ed25519SuiSignature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
+impl ToFromBytes for Ed25519SuiSignature {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         if bytes.len() != Self::LENGTH {
-            return Err(signature::Error::new());
+            return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
         }
         let mut sig_bytes = [0; Self::LENGTH];
         sig_bytes.copy_from_slice(bytes);
@@ -797,11 +821,9 @@ impl signature::Signature for Ed25519SuiSignature {
     }
 }
 
-impl Signer<Signature> for Ed25519KeyPair {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        Ok(Ed25519SuiSignature::new(self, msg)
-            .map_err(|_| signature::Error::new())?
-            .into())
+impl SuiSigner<Signature> for Ed25519KeyPair {
+    fn try_sign(&self, msg: &[u8]) -> SuiResult<Signature> {
+        Ok(Ed25519SuiSignature::new(self, msg)?.into())
     }
 }
 
@@ -839,10 +861,10 @@ impl AsMut<[u8]> for Secp256k1SuiSignature {
     }
 }
 
-impl signature::Signature for Secp256k1SuiSignature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
+impl ToFromBytes for Secp256k1SuiSignature {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         if bytes.len() != Self::LENGTH {
-            return Err(signature::Error::new());
+            return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
         }
         let mut sig_bytes = [0; Self::LENGTH];
         sig_bytes.copy_from_slice(bytes);
@@ -850,11 +872,9 @@ impl signature::Signature for Secp256k1SuiSignature {
     }
 }
 
-impl Signer<Signature> for Secp256k1KeyPair {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        Ok(Secp256k1SuiSignature::new(self, msg)
-            .map_err(|_| signature::Error::new())?
-            .into())
+impl SuiSigner<Signature> for Secp256k1KeyPair {
+    fn try_sign(&self, msg: &[u8]) -> SuiResult<Signature> {
+        Ok(Secp256k1SuiSignature::new(self, msg)?.into())
     }
 }
 
@@ -892,10 +912,10 @@ impl AsMut<[u8]> for Secp256r1SuiSignature {
     }
 }
 
-impl signature::Signature for Secp256r1SuiSignature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
+impl ToFromBytes for Secp256r1SuiSignature {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         if bytes.len() != Self::LENGTH {
-            return Err(signature::Error::new());
+            return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
         }
         let mut sig_bytes = [0; Self::LENGTH];
         sig_bytes.copy_from_slice(bytes);
@@ -903,18 +923,16 @@ impl signature::Signature for Secp256r1SuiSignature {
     }
 }
 
-impl Signer<Signature> for Secp256r1KeyPair {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        Ok(Secp256r1SuiSignature::new(self, msg)
-            .map_err(|_| signature::Error::new())?
-            .into())
+impl SuiSigner<Signature> for Secp256r1KeyPair {
+    fn try_sign(&self, msg: &[u8]) -> SuiResult<Signature> {
+        Ok(Secp256r1SuiSignature::new(self, msg)?.into())
     }
 }
 
 //
 // This struct exists due to the limitations of the `enum_dispatch` library.
 //
-pub trait SuiSignatureInner: Sized + signature::Signature + PartialEq + Eq + Hash {
+pub trait SuiSignatureInner: Sized + ToFromBytes + PartialEq + Eq + Hash {
     type Sig: Authenticator<PubKey = Self::PubKey>;
     type PubKey: VerifyingKey<Sig = Self::Sig> + SuiPublicKey;
     type KeyPair: KeypairTraits<PubKey = Self::PubKey, Sig = Self::Sig>;
@@ -946,11 +964,7 @@ pub trait SuiSignatureInner: Sized + signature::Signature + PartialEq + Eq + Has
     }
 
     fn new(kp: &Self::KeyPair, message: &[u8]) -> SuiResult<Self> {
-        let sig = kp
-            .try_sign(message)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Failed to sign valid message with keypair".to_string(),
-            })?;
+        let sig = SuiSigner::sign(kp, message);
 
         let mut signature_bytes: Vec<u8> = Vec::new();
         signature_bytes
@@ -968,7 +982,7 @@ pub trait SuiPublicKey: VerifyingKey {
 }
 
 #[enum_dispatch(Signature)]
-pub trait SuiSignature: Sized + signature::Signature {
+pub trait SuiSignature: Sized + ToFromBytes {
     fn signature_bytes(&self) -> &[u8];
     fn public_key_bytes(&self) -> &[u8];
     fn scheme(&self) -> SignatureScheme;
@@ -1132,7 +1146,7 @@ impl AuthoritySignInfo {
         epoch: EpochId,
         value: &T,
         name: AuthorityName,
-        secret: &dyn Signer<AuthoritySignature>,
+        secret: &dyn SuiSigner<AuthoritySignature>,
     ) -> Self
     where
         T: Signable<Vec<u8>>,

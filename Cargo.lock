@@ -2621,7 +2621,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=b2c77ad4aff173462a1270b4ce0be63ef37db06b#b2c77ad4aff173462a1270b4ce0be63ef37db06b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a34cb40d94be6db964db98dc49fe020cf3ed1c91#a34cb40d94be6db964db98dc49fe020cf3ed1c91"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2669,7 +2669,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=b2c77ad4aff173462a1270b4ce0be63ef37db06b#b2c77ad4aff173462a1270b4ce0be63ef37db06b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a34cb40d94be6db964db98dc49fe020cf3ed1c91#a34cb40d94be6db964db98dc49fe020cf3ed1c91"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.51",
@@ -2680,7 +2680,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=b2c77ad4aff173462a1270b4ce0be63ef37db06b#b2c77ad4aff173462a1270b4ce0be63ef37db06b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a34cb40d94be6db964db98dc49fe020cf3ed1c91#a34cb40d94be6db964db98dc49fe020cf3ed1c91"
 dependencies = [
  "bincode",
  "digest 0.10.6",
@@ -2696,7 +2696,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=b2c77ad4aff173462a1270b4ce0be63ef37db06b#b2c77ad4aff173462a1270b4ce0be63ef37db06b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a34cb40d94be6db964db98dc49fe020cf3ed1c91#a34cb40d94be6db964db98dc49fe020cf3ed1c91"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -7656,9 +7656,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.2"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9512ffd81e3a3503ed401f79c33168b9148c75038956039166cd750eaa037c3"
+checksum = "4124a35fe33ae14259c490fd70fa199a32b9ce9502f2ee6bc4f81ec06fa65894"
 dependencies = [
  "bitcoin_hashes",
  "rand 0.8.5",
@@ -7667,9 +7667,9 @@ dependencies = [
 
 [[package]]
 name = "secp256k1-sys"
-version = "0.6.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83080e2c2fc1006e625be82e5d1eb6a43b7fd9578b617fcc55814daf286bba4b"
+checksum = "642a62736682fdd8c71da0eb273e453c8ac74e33b9fb310e22ba5b03ec7651ff"
 dependencies = [
  "cc",
 ]

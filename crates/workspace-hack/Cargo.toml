@@ -201,9 +201,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", features = ["copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", features = ["copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -499,8 +499,8 @@ schemars = { version = "0.8", features = ["either"] }
 scopeguard = { version = "1" }
 sct = { version = "0.7", default-features = false }
 sec1 = { version = "0.3", features = ["alloc", "subtle"] }
-secp256k1 = { version = "0.24", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
-secp256k1-sys = { version = "0.6", default-features = false, features = ["recovery", "std"] }
+secp256k1 = { version = "0.26", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
+secp256k1-sys = { version = "0.8", default-features = false, features = ["recovery", "std"] }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
 send_wrapper = { version = "0.4", default-features = false }
 serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8" }
@@ -875,10 +875,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a34cb40d94be6db964db98dc49fe020cf3ed1c91", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1221,8 +1221,8 @@ schemars_derive = { version = "0.8", default-features = false }
 scopeguard = { version = "1" }
 sct = { version = "0.7", default-features = false }
 sec1 = { version = "0.3", features = ["alloc", "subtle"] }
-secp256k1 = { version = "0.24", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
-secp256k1-sys = { version = "0.6", default-features = false, features = ["recovery", "std"] }
+secp256k1 = { version = "0.26", features = ["bitcoin_hashes", "global-context", "rand-std", "recovery"] }
+secp256k1-sys = { version = "0.8", default-features = false, features = ["recovery", "std"] }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde"] }
 semver-parser = { version = "0.10", default-features = false }

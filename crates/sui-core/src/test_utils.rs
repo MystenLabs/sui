@@ -7,7 +7,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use signature::Signer;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,11 +15,11 @@ use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
 use sui_types::base_types::ObjectID;
-use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
+use sui_types::crypto::{AuthorityKeyPair, SuiSigner};
 use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -96,7 +95,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
     signers: impl Iterator<
         Item = (
             &'a AuthorityName,
-            &'a (dyn Signer<AuthoritySignature> + Send + Sync),
+            &'a (dyn SuiSigner<AuthoritySignature> + Send + Sync),
         ),
     >,
     committee: &Committee,

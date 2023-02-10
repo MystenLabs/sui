@@ -6,7 +6,8 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, SuiSigner,
+    ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -1142,7 +1143,7 @@ impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
         intent: Intent,
-        signer: &dyn signature::Signer<Signature>,
+        signer: &dyn SuiSigner<Signature>,
     ) -> Self {
         let data1 = data.clone();
         let intent1 = intent.clone();
@@ -1219,7 +1220,7 @@ impl VerifiedSignedTransaction {
         epoch: EpochId,
         transaction: VerifiedTransaction,
         authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
+        secret: &dyn SuiSigner<AuthoritySignature>,
     ) -> Self {
         Self::new_from_verified(SignedTransaction::new(
             epoch,
