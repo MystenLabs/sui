@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { config } from "../../config";
+import { config, ROUND_OFFSET } from "../../config";
 import { useEpoch } from "../../network/queries/epoch";
 import { useRawObject } from "../../network/queries/use-raw";
 import { LEADERBOARD, Leaderboard } from "../../network/types";
@@ -23,7 +23,8 @@ export function Round() {
     return null;
   }
 
-  const round = BigInt(epoch.epoch) - leaderboard.data.startEpoch;
+  const round =
+    BigInt(epoch.epoch) - leaderboard.data.startEpoch + ROUND_OFFSET;
 
   return (
     <h2 className="uppercase text-steel-dark font-thin text-6xl sm:text-8xl md:text-9xl lg:text-9xl xl:text-[160px] leading-tight text-center tracking-widest">

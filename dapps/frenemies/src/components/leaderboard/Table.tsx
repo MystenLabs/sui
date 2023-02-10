@@ -22,10 +22,10 @@ const Cell = ({
 
 const ELLIPSIS = '\u{2026}';
 function formatName(name: string) {
-  if (name.length <= 6) {
+  if (name.length <= 4) {
     return name;
   }
-  return `${name.slice(0, 3)}${ELLIPSIS}${name.slice(-3)}`
+  return `${name.slice(0, 4)}${ELLIPSIS}`
 }
 
 export function Table({ data }: Props) {

@@ -3,6 +3,7 @@
 
 import { formatAddress } from "@mysten/sui.js";
 import { ReactNode } from "react";
+import { ROUND_OFFSET } from "../../config";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
 import {

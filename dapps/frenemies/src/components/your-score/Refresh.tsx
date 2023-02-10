@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactNode } from "react";
-import { config } from "../../config";
+import { config, ROUND_OFFSET } from "../../config";
 import { useEpoch } from "../../network/queries/epoch";
 import {
   useRefreshScorecard,
@@ -33,7 +33,9 @@ export function Refresh({ fallback = null }: Props) {
     return <>{fallback}</>;
   }
 
-  const round = BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch || 0n;
+  const round =
+    BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch + ROUND_OFFSET ||
+    0n;
 
   return (
     <div className="absolute top-0 right-0">
