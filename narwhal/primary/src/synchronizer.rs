@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{CommitteeS, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
@@ -46,7 +46,7 @@ pub struct Synchronizer {
 impl Synchronizer {
     pub fn new(
         name: PublicKey,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,

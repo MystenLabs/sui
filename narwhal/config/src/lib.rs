@@ -644,20 +644,12 @@ pub struct Authority {
     pub network_key: NetworkPublicKey,
 }
 
-pub type SharedCommittee = Arc<ArcSwap<Committee>>;
-
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Committee {
     /// The authorities of epoch.
     pub authorities: BTreeMap<PublicKey, Authority>,
     /// The epoch number of this committee
     pub epoch: Epoch,
-}
-
-impl From<Committee> for SharedCommittee {
-    fn from(committee: Committee) -> Self {
-        Arc::new(ArcSwap::from_pointee(committee))
-    }
 }
 
 impl std::fmt::Display for Committee {

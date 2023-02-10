@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
-use config::{Parameters, SharedCommittee, SharedWorkerCache};
+use config::{Parameters, Committee, SharedWorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::dag::Dag;
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
@@ -55,7 +55,7 @@ impl PrimaryNodeInner {
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
         // The committee information.
-        committee: SharedCommittee,
+        committee: Committee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
@@ -167,7 +167,7 @@ impl PrimaryNodeInner {
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
         // The committee information.
-        committee: SharedCommittee,
+        committee: Committee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
         // The node's storage.
@@ -281,7 +281,7 @@ impl PrimaryNodeInner {
         name: PublicKey,
         rx_executor_network: oneshot::Receiver<anemo::Network>,
         worker_cache: SharedWorkerCache,
-        committee: SharedCommittee,
+        committee: Committee,
         store: &NodeStorage,
         parameters: Parameters,
         execution_state: State,
@@ -391,7 +391,7 @@ impl PrimaryNode {
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
         // The committee information.
-        committee: SharedCommittee,
+        committee: Committee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage

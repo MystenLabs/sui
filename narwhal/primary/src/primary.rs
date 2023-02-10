@@ -26,7 +26,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
+use config::{Parameters, Committee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::{
@@ -95,7 +95,7 @@ impl Primary {
         name: PublicKey,
         signer: KeyPair,
         network_signer: NetworkKeyPair,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header>,
@@ -639,7 +639,7 @@ impl Primary {
 struct PrimaryReceiverHandler {
     /// The public key of this primary.
     name: PublicKey,
-    committee: SharedCommittee,
+    committee: Committee,
     worker_cache: SharedWorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.

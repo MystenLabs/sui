@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::SharedCommittee;
+use config::Committee;
 use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::traits::ToFromBytes;
@@ -16,11 +16,11 @@ pub struct NarwhalProposer {
     dag: Option<Arc<Dag>>,
 
     /// The committee
-    committee: SharedCommittee,
+    committee: Committee,
 }
 
 impl NarwhalProposer {
-    pub fn new(dag: Option<Arc<Dag>>, committee: SharedCommittee) -> Self {
+    pub fn new(dag: Option<Arc<Dag>>, committee: Committee) -> Self {
         Self { dag, committee }
     }
 

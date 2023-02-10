@@ -7,7 +7,7 @@ use crate::{
     grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
     BlockRemover, BlockWaiter,
 };
-use config::SharedCommittee;
+use config::Committee;
 use consensus::dag::Dag;
 
 use crypto::PublicKey;
@@ -34,7 +34,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
     dag: Option<Arc<Dag>>,
-    committee: SharedCommittee,
+    committee: Committee,
     endpoints_metrics: EndpointMetrics,
     rx_shutdown: ConditionalBroadcastReceiver,
 }
@@ -50,7 +50,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
         dag: Option<Arc<Dag>>,
-        committee: SharedCommittee,
+        committee: Committee,
         endpoints_metrics: EndpointMetrics,
         rx_shutdown: ConditionalBroadcastReceiver,
     ) -> JoinHandle<()> {

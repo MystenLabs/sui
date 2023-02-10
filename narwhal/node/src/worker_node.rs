@@ -4,7 +4,7 @@
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use arc_swap::{ArcSwap, ArcSwapOption};
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Parameters, Committee, SharedWorkerCache, WorkerId};
 use crypto::{NetworkKeyPair, PublicKey};
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
@@ -45,7 +45,7 @@ impl WorkerNodeInner {
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
         // The committee information.
-        committee: SharedCommittee,
+        committee: Committee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
@@ -186,7 +186,7 @@ impl WorkerNode {
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
         // The committee information.
-        committee: SharedCommittee,
+        committee: Committee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
@@ -251,7 +251,7 @@ impl WorkerNodes {
         // The ids & keypairs of the workers to spawn.
         ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
         // The committee information.
-        committee: SharedCommittee,
+        committee: Committee,
         // The worker information cache.
         worker_cache: SharedWorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage

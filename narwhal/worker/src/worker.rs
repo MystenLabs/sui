@@ -18,7 +18,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Parameters, Committee, SharedWorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
 use multiaddr::{Multiaddr, Protocol};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -57,7 +57,7 @@ pub struct Worker {
     /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
     /// The committee information.
-    committee: SharedCommittee,
+    committee: Committee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// The configuration parameters
@@ -71,7 +71,7 @@ impl Worker {
         primary_name: PublicKey,
         keypair: NetworkKeyPair,
         id: WorkerId,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{temp_dir, CommitteeFixture};
 use arc_swap::ArcSwap;
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use config::{Parameters, Committee, SharedWorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
@@ -33,7 +33,7 @@ pub struct Cluster {
     #[allow(unused)]
     fixture: CommitteeFixture,
     authorities: HashMap<usize, AuthorityDetails>,
-    pub committee_shared: SharedCommittee,
+    pub committee_shared: Committee,
     pub worker_cache_shared: SharedWorkerCache,
     #[allow(dead_code)]
     parameters: Parameters,
@@ -280,7 +280,7 @@ pub struct PrimaryNodeDetails {
     node: PrimaryNode,
     store_path: PathBuf,
     parameters: Parameters,
-    committee: SharedCommittee,
+    committee: Committee,
     worker_cache: SharedWorkerCache,
     handlers: Rc<RefCell<Vec<JoinHandle<()>>>>,
     internal_consensus_enabled: bool,
@@ -292,7 +292,7 @@ impl PrimaryNodeDetails {
         key_pair: KeyPair,
         network_key_pair: NetworkKeyPair,
         parameters: Parameters,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
@@ -408,7 +408,7 @@ pub struct WorkerNodeDetails {
     pub registry: Registry,
     name: PublicKey,
     node: WorkerNode,
-    committee: SharedCommittee,
+    committee: Committee,
     worker_cache: SharedWorkerCache,
     store_path: PathBuf,
 }
@@ -419,7 +419,7 @@ impl WorkerNodeDetails {
         name: PublicKey,
         parameters: Parameters,
         transactions_address: Multiaddr,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
@@ -515,7 +515,7 @@ impl AuthorityDetails {
         network_key_pair: NetworkKeyPair,
         worker_keypairs: Vec<NetworkKeyPair>,
         parameters: Parameters,
-        committee: SharedCommittee,
+        committee: Committee,
         worker_cache: SharedWorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
