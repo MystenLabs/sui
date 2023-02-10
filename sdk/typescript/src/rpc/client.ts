@@ -13,6 +13,8 @@ import {
   string,
   Struct,
 } from 'superstruct';
+import {version} from '../version'
+
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -56,7 +58,6 @@ export class JsonRpcClient {
   }
 
   private createRpcClient(url: string, httpHeaders?: HttpHeaders): RpcClient {
-    const packageVersion = require('../../package.json').version;
     const client = new RpcClient(
       async (
         request: any,
@@ -67,9 +68,9 @@ export class JsonRpcClient {
           body: request,
           headers: Object.assign(
             {
-              'Client-Api-Version': String(packageVersion),
-              'Client-Type': 'ts-sdk',
               'Content-Type': 'application/json',
+              'Client-Type': 'ts-sdk',
+              'Client-Api-Version': version,
             },
             httpHeaders || {},
           ),
