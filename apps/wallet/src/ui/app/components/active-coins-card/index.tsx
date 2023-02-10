@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -8,7 +9,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector, useFormatCoin } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
-import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 
 import st from './ActiveCoinsCard.module.scss';
 
@@ -90,10 +91,10 @@ function SelectedCoinCard({
 }
 
 // Get all the coins that are available in the account.
-// default coin type is GAS_TYPE_ARG unless specified in props
+// default coin type is GSUI_TYPE_ARG unless specified in props
 // create a list of coins that are available in the account
 function ActiveCoinsCard({
-    activeCoinType = GAS_TYPE_ARG,
+    activeCoinType = SUI_TYPE_ARG,
     showActiveCoin = true,
 }: {
     activeCoinType: string;
@@ -111,7 +112,7 @@ function ActiveCoinsCard({
                     coinType: aType[0],
                     //TODO: default coin icon switch to on chain metadata
                     coinIconName:
-                        GAS_TYPE_ARG === aType[0]
+                        SUI_TYPE_ARG === aType[0]
                             ? SuiIcons.SuiLogoIcon
                             : SuiIcons.Tokens,
                     balance: aType[1],
@@ -125,7 +126,7 @@ function ActiveCoinsCard({
     }, [activeCoinType, coins]);
 
     const defaultIconClass =
-        GAS_TYPE_ARG !== activeCoin?.coinSymbol ? st.defaultCoin : '';
+        SUI_TYPE_ARG !== activeCoin?.coinSymbol ? st.defaultCoin : '';
 
     const navigate = useNavigate();
 
