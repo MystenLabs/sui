@@ -10,14 +10,15 @@ use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::{anyhow, ensure};
+use futures::try_join;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_json_rpc_types::SuiObjectInfo;
+use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObject, SuiRawData};
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiData, SuiTypeTag};
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
 use sui_types::coin::{Coin, LockedCoin};
@@ -110,8 +111,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> anyhow::Result<TransactionData> {
-        let single_transfer = self.single_transfer_object(object_id, recipient).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let (single_transfer, gas_price) = try_join!(
+            self.single_transfer_object(object_id, recipient),
+            self.0.get_reference_gas_price()
+        )?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![object_id], gas_price)
             .await?;
@@ -144,8 +147,10 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         recipient: SuiAddress,
         amount: Option<u64>,
     ) -> anyhow::Result<TransactionData> {
-        let object = self.get_object_ref(sui_object_id).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let (object, gas_price) = try_join!(
+            self.get_object_ref(sui_object_id),
+            self.0.get_reference_gas_price()
+        )?;
         Ok(TransactionData::new_transfer_sui(
             recipient, signer, amount, object, gas_budget, gas_price,
         ))
@@ -424,11 +429,14 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let coin = self.0.get_object(coin_object_id).await?.into_object()?;
+        let (coin, gas_price) = try_join!(
+            self.0.get_object(coin_object_id),
+            self.0.get_reference_gas_price()
+        )?;
+        let coin: SuiObject<SuiRawData> = coin.into_object()?;
         let coin_object_ref = coin.reference.to_object_ref();
         let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
             .await?;
@@ -458,11 +466,14 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let coin = self.0.get_object(coin_object_id).await?.into_object()?;
+        let (coin, gas_price) = try_join!(
+            self.0.get_object(coin_object_id),
+            self.0.get_reference_gas_price()
+        )?;
+        let coin: SuiObject<SuiRawData> = coin.into_object()?;
         let coin_object_ref = coin.reference.to_object_ref();
         let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![coin_object_id], gas_price)
             .await?;
@@ -492,12 +503,15 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let coin = self.0.get_object(primary_coin).await?.into_object()?;
+        let (coin, coin_to_merge_ref, gas_price) = try_join!(
+            self.0.get_object(primary_coin),
+            self.get_object_ref(coin_to_merge),
+            self.0.get_reference_gas_price()
+        )?;
+        let coin: SuiObject<SuiRawData> = coin.into_object()?;
         let primary_coin_ref = coin.reference.to_object_ref();
-        let coin_to_merge_ref = self.get_object_ref(coin_to_merge).await?;
         let coin: Object = coin.try_into()?;
         let type_args = vec![coin.get_move_template_type()?];
-        let gas_price = self.0.get_reference_gas_price().await?;
         let gas = self
             .select_gas(
                 signer,
@@ -662,9 +676,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let delegation = self.get_object_ref(delegation).await?;
-        let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let (delegation, staked_sui, gas_price) = try_join!(
+            self.get_object_ref(delegation),
+            self.get_object_ref(staked_sui),
+            self.0.get_reference_gas_price()
+        )?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![], gas_price)
             .await?;
@@ -698,9 +714,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
-        let delegation = self.get_object_ref(delegation).await?;
-        let staked_sui = self.get_object_ref(staked_sui).await?;
-        let gas_price = self.0.get_reference_gas_price().await?;
+        let (delegation, staked_sui, gas_price) = try_join!(
+            self.get_object_ref(delegation),
+            self.get_object_ref(staked_sui),
+            self.0.get_reference_gas_price()
+        )?;
         let gas = self
             .select_gas(signer, gas, gas_budget, vec![], gas_price)
             .await?;
