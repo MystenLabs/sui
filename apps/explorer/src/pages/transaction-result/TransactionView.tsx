@@ -322,12 +322,12 @@ function TransactionView({
     // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
     // use absolute value
     const totalRecipientsCount = coinTransfer.length;
-    const tranferAmount = coinTransfer?.[0]?.amount
+    const transferAmount = coinTransfer?.[0]?.amount
         ? Math.abs(coinTransfer[0].amount)
         : null;
 
     const [formattedAmount, symbol] = useFormatCoin(
-        tranferAmount,
+        transferAmount,
         coinTransfer?.[0]?.coinType
     );
 
