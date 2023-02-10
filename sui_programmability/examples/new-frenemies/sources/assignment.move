@@ -77,7 +77,6 @@ module frenemies::assignment {
         self.epoch
     }
 
-    #[test_only]
     public fun new_for_testing(validator: address, goal: u8, epoch: u64): Assignment {
         Assignment { validator, goal, epoch }
     }

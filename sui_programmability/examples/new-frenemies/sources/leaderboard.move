@@ -3,7 +3,8 @@
 
 module frenemies::leaderboard {
     use frenemies::assignment::{Self, Assignment};
-    use frenemies::registry::Name;
+    use frenemies::registry::{Self, Name};
+    use std::string::String;
     use std::vector;
     use sui::event;
     use sui::math;
@@ -16,6 +17,7 @@ module frenemies::leaderboard {
     use sui::validator;
 
     friend frenemies::frenemies;
+    friend frenemies::migrate;
 
     /// Singleton struct scoring staking information for recent epochs,
     /// start epoch, and a leaderborad with top scorers
@@ -61,8 +63,12 @@ module frenemies::leaderboard {
         epoch: u64
     }
 
+    struct AdminCap has key {
+        id: UID,
+    }
+
     /// Number of scores kept in the leaderboard
-    const LEADERBOARD_SIZE: u64 = 2_000;
+    const LEADERBOARD_SIZE: u64 = 2000;
 
     /// Number of points a player receives for successfully completing an epoch goal.
     /// Additional points are awarded according to the difficulty of the goal (i.e.,
@@ -79,7 +85,29 @@ module frenemies::leaderboard {
                 epoch,
                 start_epoch: epoch,
             }
+        );
+        transfer::transfer(
+            AdminCap { id: object::new(ctx) },
+            tx_context::sender(ctx)
         )
+    }
+
+    public(friend) fun admin_leaderboard_insert(
+        names: vector<String>, points: vector<u16>, participation: vector<u16>, new_leaderboard: &mut Leaderboard, _cap: &AdminCap
+    ) {
+        let len = vector::length(&names);
+        // make sure they all have the same length
+        assert!(len == vector::length(&points) && len == vector::length(&participation), 0);
+
+        let new_scores = &mut new_leaderboard.top_scores;
+
+        while (!vector::is_empty(&names)) {
+            let name = vector::pop_back(&mut names);
+            let score_points = vector::pop_back(&mut points);
+            let participation_points = vector::pop_back(&mut participation);
+            let score = Score { name: registry::name_for_testing(name), score: score_points, participation: participation_points };
+            vector::push_back(new_scores, score);
+        };
     }
 
     /// Sort active validators in `state` by stake and add to `leaderboard prev_epoch_stakes` so we can score
@@ -104,6 +132,12 @@ module frenemies::leaderboard {
         // stake info in `state` is the result of the *previous* epoch
         table::add(&mut self.prev_epoch_stakes, cur_epoch - 1, validators);
         self.epoch = cur_epoch
+    }
+
+    public(friend) fun emit_new_score_event(name: Name, score: u16, participation: u16, epoch: u64) {
+         event::emit(NewScoreEvent { name, score: Score {
+             name, score, participation
+         }, epoch });
     }
 
     public(friend) fun update(
@@ -302,6 +336,37 @@ module frenemies::leaderboard {
         assert!(sorted == vector[new_top_score, new_middle_score, new_bottom_score], 0);
     }
 
+    #[test_only]
+    public fun to_string(value: u128): std::string::String {
+        use std::string;
+
+        if (value == 0) {
+            return string::utf8(b"0")
+        };
+        let buffer = vector::empty<u8>();
+        while (value != 0) {
+            vector::push_back(&mut buffer, ((48 + value % 10) as u8));
+            value = value / 10;
+        };
+        vector::reverse(&mut buffer);
+        string::utf8(buffer)
+    }
+
+    #[test]
+    fun test_max_size() {
+        use frenemies::registry;
+
+        let i = 0;
+        let sorted = vector[];
+        while (i < LEADERBOARD_SIZE + 10) {
+            let name = registry::name_for_testing(to_string((i as u128)));
+            let new_top_score = Score { name, score: (i as u16), participation: 2 };
+            score_insertion_sort(&mut sorted, new_top_score);
+            assert!(vector::length(&sorted) <= LEADERBOARD_SIZE, 0);
+            i = i + 1
+        };
+    }
+
     #[test]
     fun test_validator_sort() {
         let v1 = Validator { addr: @0x1, stake: 100 };
@@ -319,34 +384,5 @@ module frenemies::leaderboard {
             i = i + 1;
         };
         assert!(sorted == vector[v1, v2, v3, v4], 0)
-    }
-
-    #[test_only]
-    public fun to_string(value: u128): std::string::String {
-        use std::string;
-        if (value == 0) {
-            return string::utf8(b"0")
-	};
-        let buffer = vector::empty<u8>();
-        while (value != 0) {
-            vector::push_back(&mut buffer, ((48 + value % 10) as u8));
-            value = value / 10;
-       	};
-        vector::reverse(&mut buffer);
-        string::utf8(buffer)
-    }
-
-    #[test]
-    fun test_max_size() {
-        use frenemies::registry;
-        let i = 0;
-        let sorted = vector[];
-        while (i < LEADERBOARD_SIZE + 10) {
-            let name = registry::name_for_testing(to_string((i as u128)));
-            let new_top_score = Score { name, score: (i as u16), participation: 2 };
-            score_insertion_sort(&mut sorted, new_top_score);
-            assert!(vector::length(&sorted) <= LEADERBOARD_SIZE, 0);
-            i = i + 1
-        };
     }
 }
