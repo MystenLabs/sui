@@ -398,7 +398,7 @@ impl AuthorityMetrics {
     }
 }
 
-/// a Trait object for `fastcrypto::traits::Signer` that is:
+/// a Trait object for `SuiSigner` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
 /// - Sync, i.e. can be safely shared between threads.
 ///

@@ -537,7 +537,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
         public_key
             .verify(&message[..], self)
             .map_err(|_| SuiError::InvalidSignature {
-                error: format!("{}", "Invalid signature"),
+                error: "Invalid signature".to_string(),
             })
     }
 }
