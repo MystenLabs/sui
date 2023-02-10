@@ -11,7 +11,7 @@
     }
 
     .desktopfooter .basecontainer {
-        @apply mx-[4px] px-2 py-2;
+        @apply mx-1 px-2 py-2 text-sm;
     }
 
     .under6footer .basecontainer {
@@ -76,7 +76,7 @@ button.gone {
 /* Desktop */
 
 .desktopfooter {
-    @apply hidden text-center sm:mt-2 sm:block sm:grid-cols-12 sm:text-left;
+    @apply hidden text-center sm:mt-2 sm:grid sm:grid-cols-12 sm:text-left;
 }
 
 .desktopfooter > div:first-child {
@@ -90,11 +90,11 @@ button.gone {
 /* Mobile */
 
 .mobilefooter {
-    @apply block w-[85vw] sm:hidden;
+    @apply block w-[85vw] text-sm sm:hidden;
 }
 
 .mobiletoprow {
-    @apply my-2 block grid grid-cols-6 sm:hidden;
+    @apply my-2 grid grid-cols-6 sm:hidden;
 }
 
 .mobiletoprow > button:nth-child(1),
