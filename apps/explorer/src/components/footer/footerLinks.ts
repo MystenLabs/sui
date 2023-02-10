@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-type NavLink = {
+type FooterItem = {
     category: string;
     items: { title: string; href: string }[];
 };
-export type NavLinks = NavLink[];
+export type FooterItems = FooterItem[];
 export const navLinks = [
     {
         category: 'Read',
