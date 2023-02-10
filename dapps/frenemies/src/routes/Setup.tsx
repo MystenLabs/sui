@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
@@ -64,13 +63,16 @@ export function Setup() {
       }
 
       const inspectResults = await Promise.all(
-        [config.VITE_OLD_REGISTRY, config.VITE_REGISTRY].map((registry) =>
+        [
+          { pkg: config.VITE_OLD_PKG, registry: config.VITE_OLD_REGISTRY },
+          { pkg: config.VITE_PKG, registry: config.VITE_REGISTRY },
+        ].map(({ pkg, registry }) =>
           provider.devInspectTransaction(
             currentAccount,
             {
               kind: "moveCall",
               data: {
-                packageObjectId: config.VITE_PKG,
+                packageObjectId: pkg,
                 module: "registry",
                 function: "is_registered",
                 typeArguments: [],
