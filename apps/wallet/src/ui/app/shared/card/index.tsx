@@ -35,7 +35,7 @@ export function Card({ header, footer, children, ...styleProps }: CardProps) {
     return (
         <div
             className={
-                'rounded-2xl border border-solid border-gray-45 overflow-hidden flex flex-col outline-1 w-full'
+                'rounded-2xl border border-solid border-gray-45 box-border overflow-hidden flex flex-col outline-1 w-full'
             }
         >
             {header && (
