@@ -764,6 +764,10 @@ impl SuiNode {
                 next_epoch_committee
             );
 
+            // If we eventually add tests that exercise safe mode, we will need a configurable way of
+            // guarding against unexpected safe_mode.
+            debug_assert!(!system_state.safe_mode);
+
             info!(
                 next_epoch,
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
