@@ -76,7 +76,7 @@ button.gone {
 /* Desktop */
 
 .desktopfooter {
-    @apply hidden text-center sm:mt-2 sm:block  sm:grid-cols-12 sm:text-left;
+    @apply hidden text-center sm:mt-2 sm:block sm:grid-cols-12 sm:text-left;
 }
 
 .desktopfooter > div:first-child {
