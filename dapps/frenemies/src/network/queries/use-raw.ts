@@ -16,8 +16,8 @@ export function useRawObject<T>(objectId: string, bcsType: string) {
       return getRawObjectParsedUnsafe<T>(provider, objectId, bcsType);
     },
     {
-      // Refetch every 10 seconds:
-      refetchInterval: 10 * 1000,
+      // Refetch every 60 seconds:
+      refetchInterval: 60 * 1000,
     }
   );
 }
