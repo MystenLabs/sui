@@ -86,15 +86,15 @@ impl JsonRpcServerBuilder {
         };
         info!(?acl);
 
-        const CLIENT_TYPE: HeaderName = HeaderName::from_static("client-type");
-        const CLIENT_API_VERSION: HeaderName = HeaderName::from_static("client-api-version");
+        let client_type: HeaderName = HeaderName::from_static("client-type");
+        let client_api_version: HeaderName = HeaderName::from_static("client-api-version");
 
         let cors = CorsLayer::new()
             // Allow `POST` when accessing the resource
             .allow_methods([Method::POST])
             // Allow requests from any origin
             .allow_origin(acl)
-            .allow_headers([hyper::header::CONTENT_TYPE, CLIENT_TYPE, CLIENT_API_VERSION]);
+            .allow_headers([hyper::header::CONTENT_TYPE, client_type, client_api_version]);
 
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
