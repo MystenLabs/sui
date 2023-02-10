@@ -10,7 +10,7 @@
     }
 
     .textdetails > tbody > tr > td:first-child {
-        @apply w-[150px]  pr-6 font-medium text-gray-80;
+        @apply w-[220px]  pr-6 font-medium text-gray-80;
     }
 
     .textdetails > tbody > tr > td:nth-child(2) {
