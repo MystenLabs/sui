@@ -59,7 +59,7 @@ export function DelegationCard({
                 validator: address,
                 staked: stakedId,
             }).toString()}`}
-            className="flex no-underline flex-col p-3 box-border h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/30 bg-transparent"
+            className="flex no-underline flex-col p-3 h-36 w-full rounded-2xl border hover:bg-sui/10 group border-solid border-gray-45 hover:border-sui/30 bg-transparent"
         >
             <div className="flex justify-between items-start mb-1">
                 <ValidatorLogo
