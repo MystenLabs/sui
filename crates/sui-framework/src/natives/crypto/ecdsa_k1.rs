@@ -31,15 +31,15 @@ pub fn ecrecover(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let msg = pop_arg!(args, VectorRef);
+    let hashed_msg = pop_arg!(args, VectorRef);
     let signature = pop_arg!(args, VectorRef);
 
-    let msg_ref = msg.as_bytes_ref();
+    let hashed_msg_ref = hashed_msg.as_bytes_ref();
     let signature_ref = signature.as_bytes_ref();
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
-    match recover_pubkey(&signature_ref, &msg_ref) {
+    match recover_pubkey(&signature_ref, &hashed_msg_ref) {
         Ok(pubkey) => Ok(NativeResult::ok(
             cost,
             smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
@@ -51,7 +51,10 @@ pub fn ecrecover(
     }
 }
 
-fn recover_pubkey(signature: &[u8], hashed_msg: &[u8]) -> Result<Secp256k1PublicKey, SuiError> {
+fn recover_pubkey(
+    signature: &[u8],
+    hashed_msg: &[u8],
+) -> Result<Secp256k1RecoverablePublicKey, SuiError> {
     match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(signature) {
         Ok(signature) => match signature.recover_hashed(hashed_msg) {
             Ok(pubkey) => Ok(pubkey),
