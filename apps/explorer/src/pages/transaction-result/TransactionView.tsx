@@ -312,11 +312,9 @@ function TransactionView({
     );
 
     const recipients = useMemo(() => {
-        return coinTransfer.filter(
-            (_, index) =>
-                index >= (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE &&
-                index < recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE
-        );
+        const startAt = (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE;
+        const endAt = recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE;
+        return coinTransfer.slice(startAt, endAt);
     }, [coinTransfer, recipientsPageNumber]);
 
     // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
