@@ -201,17 +201,22 @@ export const getDataOnTxDigests = (
                         getTransferObjectTransaction(txn)?.recipient ||
                         getTransferSuiTransaction(txn)?.recipient;
 
-                    const coinTransfer = getAmount({
+                    const transfer = getAmount({
                         txnData: txEff,
                         suiCoinOnly: true,
                     })[0];
+
+                    // use only absolute value of sui amount
+                    const suiAmount = transfer?.amount
+                        ? Math.abs(transfer.amount)
+                        : null;
 
                     return {
                         txId: digest,
                         status: getExecutionStatusType(txEff)!,
                         txGas: getTotalGasUsed(txEff),
-                        suiAmount: coinTransfer?.amount,
-                        coinType: coinTransfer?.coinType || null,
+                        suiAmount,
+                        coinType: transfer?.coinType || null,
                         kind: txKind,
                         From: res.data.sender,
                         timestamp_ms: txEff.timestamp_ms,

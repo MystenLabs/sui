@@ -26,6 +26,8 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
+// TODO: (Jibz) Create a new pagination component
+import Pagination from '../../components/pagination/Pagination';
 import {
     type LinkObj,
     TxAddresses,
@@ -53,6 +55,8 @@ import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+
+const MAX_RECIPIENTS_PER_PAGE = 10;
 
 function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
@@ -297,6 +301,8 @@ function TransactionView({
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
+    const [recipientsPageNumber, setRecipientsPageNumber] = useState(1);
+
     const coinTransfer = useMemo(
         () =>
             getAmount({
@@ -304,6 +310,7 @@ function TransactionView({
             }),
         [transaction]
     );
+    const totalRecipientsCount = coinTransfer.length;
 
     const [formattedAmount, symbol] = useFormatCoin(
         coinTransfer?.[0]?.amount,
@@ -489,11 +496,35 @@ function TransactionView({
                                         </div>
                                     )
                                 )}
+
                                 <SenderRecipient
                                     sender={sender}
                                     transferCoin={!!coinTransfer}
-                                    recipients={coinTransfer}
+                                    recipients={coinTransfer.filter(
+                                        (_, index) =>
+                                            index >=
+                                                (recipientsPageNumber - 1) *
+                                                    MAX_RECIPIENTS_PER_PAGE &&
+                                            index <
+                                                recipientsPageNumber *
+                                                    MAX_RECIPIENTS_PER_PAGE
+                                    )}
                                 />
+                                <div className="mt-5 flex w-full max-w-lg">
+                                    {totalRecipientsCount >
+                                        MAX_RECIPIENTS_PER_PAGE && (
+                                        <Pagination
+                                            totalItems={totalRecipientsCount}
+                                            itemsPerPage={
+                                                MAX_RECIPIENTS_PER_PAGE
+                                            }
+                                            currentPage={recipientsPageNumber}
+                                            onPagiChangeFn={
+                                                setRecipientsPageNumber
+                                            }
+                                        />
+                                    )}
+                                </div>
                             </section>
 
                             <section
