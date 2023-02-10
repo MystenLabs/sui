@@ -2,97 +2,70 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-
-import styles from './Footer.module.css';
+import { type NavLinks, navLinks } from './navLinks';
 
 import { Link } from '~/ui/Link';
+import { Text } from '~/ui/Text';
 
 function Footer() {
     return (
-        <footer>
-            <nav className={styles.links}>
-                <div className={styles.logodesktop}>
-                    <SuiLogoIcon />
-                    <div className={styles.copyright}>
-                        <div>&copy;2022 Sui</div>
-                        <div>All rights reserved</div>
+        <footer className="bg-gray-75 p-5 md:p-14">
+            <nav className="mx-auto grid grid-cols-1 justify-center text-left lg:grid-cols-2">
+                <div className="grid grid-cols-4 md:grid-cols-5">
+                    <div className="hidden h-full flex-col md:flex">
+                        <SuiLogoIcon />
+                        <div className="mt-7.5">
+                            <Text color="white" variant="p4/semibold">
+                                &copy;{`${new Date().getFullYear()} Sui`}
+                            </Text>
+                            <Text color="white" variant="p4/semibold">
+                                All rights reserved
+                            </Text>
+                        </div>
                     </div>
-                </div>
 
-                <div>
-                    <h6>Read</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://medium.com/mysten-labs">
-                                Blog
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf">
-                                Whitepaper
-                            </Link>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <h6>Build</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://docs.sui.io/">Docs</Link>
-                        </li>
-                        <li>
-                            <Link href="https://github.com/MystenLabs">
-                                GitHub
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://discord.gg/sui">Discord</Link>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <h6>Follow</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://mystenlabs.com/#community">
-                                Press
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://twitter.com/SuiNetwork">
-                                Twitter
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://www.linkedin.com/company/mysten-labs/">
-                                LinkedIn
-                            </Link>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <h6>Legal</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://mystenlabs.com/legal?content=terms">
-                                Terms & Conditions
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://mystenlabs.com/legal?content=privacy">
-                                Privacy Policy
-                            </Link>
-                        </li>
-                    </ul>
+                    <FooterLinks links={navLinks} />
                 </div>
             </nav>
-            <div className={styles.logomobile}>
-                <SuiLogoIcon />
-                <div className={styles.copyright}>
-                    <div>&copy;2022 Sui. All rights reserved.</div>
-                </div>
-            </div>
         </footer>
+    );
+}
+
+function FooterLinks({ links }: { links: NavLinks }) {
+    return (
+        <>
+            {links.map(({ category, items }) => (
+                <div
+                    key={category}
+                    className="flex flex-col gap-y-3.5 text-left"
+                >
+                    <Text variant="captionSmall/bold" color="gray-60">
+                        {category}
+                    </Text>
+
+                    <ul className="flex flex-col gap-y-3.5">
+                        {items.map(({ title, href }) => {
+                            return (
+                                <li key={href}>
+                                    <Link
+                                        color="white"
+                                        variant="text"
+                                        href={href}
+                                    >
+                                        <Text
+                                            variant="body/medium"
+                                            color="white"
+                                        >
+                                            {title}
+                                        </Text>
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            ))}
+        </>
     );
 }
 

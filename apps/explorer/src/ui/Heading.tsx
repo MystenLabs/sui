@@ -32,6 +32,7 @@ const headingStyles = cva(
                 'gray-75': 'text-gray-75',
                 'gray-70': 'text-gray-70',
                 'gray-65': 'text-gray-65',
+                'gray-35': 'text-gray-35',
                 'sui-dark': 'text-sui-dark',
                 sui: 'text-sui',
                 'sui-light': 'text-sui-light',
