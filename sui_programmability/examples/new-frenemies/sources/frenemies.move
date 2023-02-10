@@ -82,7 +82,9 @@ module frenemies::frenemies {
         let old_name = sui::bcs::peel_vec_u8(&mut name_bcs);
         string::utf8(old_name)
     }
-
+    
+    const ECheatedDuringDownTime: u64 = 1337;
+    
     public entry fun migrate(old_scorecard: &old_frenemies::frenemies::Scorecard, migration: &mut Migration, ctx: &mut TxContext) {
         let old_assignment = old_frenemies::frenemies::assignment(old_scorecard);
         let assignment = assignment::new_for_testing(
@@ -97,6 +99,9 @@ module frenemies::frenemies {
         let name = registry::name_for_testing(old_name);
 
         let score = old_frenemies::frenemies::score(old_scorecard);
+        let old_epoch = old_frenemies::frenemies::epoch(old_scorecard);
+        assert!( old_epoch < 23, ECheatedDuringDownTime);
+
         let epoch = tx_context::epoch(ctx);
         let participation = old_frenemies::frenemies::participation(old_scorecard);
 
