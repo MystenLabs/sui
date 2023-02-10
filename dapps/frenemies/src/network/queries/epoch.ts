@@ -20,7 +20,6 @@ export function useEpoch() {
       prevTimestamp: number;
       data: SystemEpochInfo;
     } | null> => {
-      const { epoch } = await provider.getCommitteeInfo();
       const { data } = await provider.getEvents(
         { MoveEvent: SYSTEM_EPOCH_INFO },
         null,
@@ -34,11 +33,17 @@ export function useEpoch() {
         return null;
       }
 
+      const eventData = bcs.de(
+        SYSTEM_EPOCH_INFO,
+        evt.event.moveEvent.bcs,
+        "base64"
+      ) as SystemEpochInfo;
+
       return {
-        epoch,
+        data: eventData,
+        epoch: Number(eventData.epoch),
         timestamp: evt.timestamp,
         prevTimestamp: prevEvt?.timestamp || 0,
-        data: bcs.de(SYSTEM_EPOCH_INFO, evt.event.moveEvent.bcs, "base64"),
       };
     },
     {
