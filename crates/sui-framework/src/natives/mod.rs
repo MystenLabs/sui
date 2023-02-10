@@ -97,6 +97,11 @@ pub fn all_natives(
             "secp256k1_verify",
             make_native!(ecdsa_k1::secp256k1_verify),
         ),
+        (
+            "ecdsa_k1",
+            "secp256k1_verify_recoverable",
+            make_native!(ecdsa_k1::secp256k1_verify_recoverable),
+        ),
         ("ecvrf", "ecvrf_verify", make_native!(ecvrf::ecvrf_verify)),
         (
             "ed25519",

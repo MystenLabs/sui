@@ -123,3 +123,40 @@ pub fn secp256k1_verify(
         .is_ok();
     Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
 }
+
+pub fn secp256k1_verify_recoverable(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    let hashed_msg = pop_arg!(args, VectorRef);
+    let public_key_bytes = pop_arg!(args, VectorRef);
+    let signature_bytes = pop_arg!(args, VectorRef);
+
+    let hashed_msg_ref = hashed_msg.as_bytes_ref();
+    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = signature_bytes.as_bytes_ref();
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/4086
+    let cost = legacy_empty_cost();
+
+    let signature =
+        match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
+            Ok(signature) => signature,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
+
+    let public_key =
+        match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+            Ok(public_key) => public_key,
+            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+        };
+
+    let result = public_key
+        .verify_recoverable_hashed(&hashed_msg_ref, &signature)
+        .is_ok();
+    Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
+}
