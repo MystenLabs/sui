@@ -33,7 +33,7 @@ export function Migrate() {
       navigate("/", { replace: true });
     }
 
-    if (!scorecard.data && !legacyScorecard.data) {
+    if (!legacyScorecard.data) {
       navigate("/setup", { replace: true });
     }
   }, [scorecard, legacyScorecard]);
@@ -45,10 +45,13 @@ export function Migrate() {
         kind: "moveCall",
         data: {
           packageObjectId: config.VITE_PKG,
-          module: "registry",
-          function: "is_registered",
+          module: "frenemies",
+          function: "migrate",
           typeArguments: [],
-          arguments: [config.VITE_REGISTRY],
+          arguments: [
+            legacyScorecard.data!.reference.objectId,
+            config.VITE_MIGRATION,
+          ],
           gasBudget: GAS_BUDGET,
         },
       });

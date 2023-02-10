@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import {
   LEADERBOARD,
   Leaderboard,
-  LEGACY_SCORECARD,
+  OLD_SCORECARD,
   SCORECARD,
   Scorecard,
 } from "../types";
@@ -16,7 +16,7 @@ import { SUI_SYSTEM_ID } from "./sui-system";
 import { useMyType, useRawObject } from "./use-raw";
 
 export function useLegacyScorecard() {
-  const res = useMyType<Scorecard>(LEGACY_SCORECARD);
+  const res = useMyType<Scorecard>(OLD_SCORECARD);
 
   return {
     ...res,

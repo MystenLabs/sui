@@ -5,7 +5,7 @@ import { SuiAddress, SUI_TYPE_ARG } from "@mysten/sui.js";
 import { config } from "../config";
 
 export const PKG = config.VITE_PKG;
-export const LEGACY_PKG = config.VITE_LEGACY_PKG;
+export const OLD_PKG = config.VITE_OLD_PKG;
 
 /**
  * Generic Coin type.
@@ -73,7 +73,7 @@ export type Scorecard = {
 };
 
 export const SCORECARD = `${PKG}::frenemies::Scorecard`;
-export const LEGACY_SCORECARD = `${LEGACY_PKG}::frenemies::Scorecard`;
+export const OLD_SCORECARD = `${OLD_PKG}::frenemies::Scorecard`;
 
 /**
  * An event emitted when Scorecard was updated.

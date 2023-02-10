@@ -110,7 +110,12 @@ export function Setup() {
           packageObjectId: config.VITE_PKG,
           module: "frenemies",
           function: "register",
-          arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
+          arguments: [
+            username,
+            config.VITE_REGISTRY,
+            config.VITE_OLD_REGISTRY,
+            SUI_SYSTEM_ID,
+          ],
           typeArguments: [],
 
           // TODO: Fix in sui.js - add option to use bigint...

@@ -7,7 +7,7 @@ import {
   DELEGATION,
   GENERIC_COIN,
   LEADERBOARD,
-  LEGACY_SCORECARD,
+  OLD_SCORECARD,
   SCORECARD,
   SCORECARD_UPDATED,
   STAKED_SUI,
@@ -29,7 +29,7 @@ export const bcs = suiBcs
     participation: "u16",
     epoch: "u64",
   })
-  .registerStructType(LEGACY_SCORECARD, {
+  .registerStructType(OLD_SCORECARD, {
     id: "address",
     name: "string",
     assignment: ASSIGNMENT,

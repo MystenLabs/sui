@@ -14,10 +14,11 @@ const ConfigSchema = z.object({
   VITE_REGISTRY: z.string(),
   /** Frenemies Package ID */
   VITE_PKG: z.string(),
+  VITE_MIGRATION: z.string(),
   /** Package for the previous version of frenemies: */
-  VITE_LEGACY_PKG: z.string(),
+  VITE_OLD_PKG: z.string(),
   /** Registry for the previous version of frenemies: */
-  VITE_LEGACY_REGISTRY: z.string(),
+  VITE_OLD_REGISTRY: z.string(),
 });
 
 export const config = ConfigSchema.parse(import.meta.env);
