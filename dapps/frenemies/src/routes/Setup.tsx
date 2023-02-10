@@ -8,7 +8,7 @@ import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
-import { useScorecard } from "../network/queries/scorecard";
+import { useLegacyScorecard, useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 import provider from "../network/provider";
 import { useBalance } from "../network/queries/coin";
@@ -20,7 +20,8 @@ export function Setup() {
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
-  const { data: scorecard, isSuccess } = useScorecard(currentAccount);
+  const { data: scorecard, isSuccess } = useScorecard();
+  const legacyScorecard = useLegacyScorecard();
   const { data: balance } = useBalance();
   const { data: gasPrice } = useQuery(
     ["gas-price"],
@@ -31,6 +32,29 @@ export function Setup() {
     }
   );
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (
+      isSuccess &&
+      legacyScorecard.isSuccess &&
+      !scorecard &&
+      legacyScorecard.data
+    ) {
+      navigate("/migrate", { replace: true });
+    }
+  }, [isSuccess, scorecard, legacyScorecard]);
+
+  useEffect(() => {
+    if (!currentAccount) {
+      navigate("/connect", { replace: true });
+    }
+  }, [currentAccount]);
+
+  useEffect(() => {
+    if (isSuccess && scorecard) {
+      navigate("/", { replace: true });
+    }
+  }, [scorecard, isSuccess]);
 
   const createScorecard = useMutation(
     ["create-scorecard"],
@@ -102,18 +126,6 @@ export function Setup() {
     }
   );
 
-  useEffect(() => {
-    if (!currentAccount) {
-      navigate("/connect", { replace: true });
-    }
-  }, [currentAccount]);
-
-  useEffect(() => {
-    if (isSuccess && scorecard) {
-      navigate("/", { replace: true });
-    }
-  }, [scorecard, isSuccess]);
-
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -125,7 +137,7 @@ export function Setup() {
       ? balance.balance > BigInt(gasPrice) + GAS_BUDGET
       : false;
 
-  if (!isSuccess || scorecard) {
+  if (!isSuccess || scorecard || legacyScorecard.isLoading) {
     return <Spinner />;
   }
 

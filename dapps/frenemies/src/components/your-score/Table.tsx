@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAddress } from "@mysten/sui.js";
-import { useWalletKit } from "@mysten/wallet-kit";
 import { ReactNode } from "react";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
@@ -33,9 +32,8 @@ const Cell = ({
 );
 
 export function Table({ data, round, leaderboard }: Props) {
-  const { currentAccount } = useWalletKit();
   const { data: validators } = useValidators();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
   const { isLoading } = useScorecardHistory(scorecard?.data.id);
   const activeValidators = validators || [];
   const getValidator = (addr: string) =>

@@ -15,7 +15,7 @@ import { useEpoch } from "../../network/queries/epoch";
 export function YourScore() {
   const { currentAccount } = useWalletKit();
   const { data: epoch } = useEpoch();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
   const { data: history } = useScorecardHistory(scorecard && scorecard.data.id);
   const { data: leaderboard } = useRawObject<Leaderboard>(
     config.VITE_LEADERBOARD,

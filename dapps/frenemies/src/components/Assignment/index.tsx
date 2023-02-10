@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWalletKit } from "@mysten/wallet-kit";
 import { useScorecard } from "../../network/queries/scorecard";
 import { convertToString, useValidators } from "../../network/queries/sui-system";
 import { Goal } from "../../network/types";
@@ -32,9 +31,8 @@ function getIsInRank(goal: Goal, index: number) {
 }
 
 export function Assignment() {
-  const { currentAccount } = useWalletKit();
   const { data: validators } = useValidators();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
 
   const sortedValidators = validators
     ? [...validators].sort((a, b) =>
