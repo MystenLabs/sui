@@ -42,7 +42,7 @@ export class SuiSystemStateUtil {
     gasPayment?: ObjectId,
     gasPrice?: number,
   ): Promise<UnserializedSignableTransaction> {
-    // TODO: validate coin types and handle locked coins
+    // TODO: validate coin types and handle
     return {
       kind: 'moveCall',
       data: {
