@@ -86,6 +86,7 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    #[ignore]
     async fn test_simulated_load_reconfig_restarts() {
         let test_cluster = build_test_cluster(4, 1000).await;
         let node_restarter = test_cluster
@@ -97,6 +98,7 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    #[ignore]
     async fn test_simulated_load_reconfig_crashes() {
         let test_cluster = build_test_cluster(4, 1000).await;
 

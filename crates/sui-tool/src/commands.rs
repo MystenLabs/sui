@@ -18,7 +18,7 @@ use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 
-#[derive(Parser, Clone, ArgEnum)]
+#[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {
     Grouped,
     Concise,
@@ -64,7 +64,7 @@ pub enum ToolCommand {
         ///      --history --verbosity concise --concise-no-header
         /// ```
         #[clap(
-            arg_enum,
+            value_enum,
             long = "verbosity",
             default_value = "grouped",
             ignore_case = true
@@ -86,6 +86,7 @@ pub enum ToolCommand {
         #[clap(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
     },
+
     /// Tool to read validator & node db.
     #[clap(name = "db-tool")]
     DbTool {
@@ -113,6 +114,7 @@ pub enum ToolCommand {
         #[clap(long = "genesis")]
         genesis: PathBuf,
     },
+
     /// Fetch authenticated checkpoint information at a specific sequence number.
     /// If sequence number is not specified, get the latest authenticated checkpoint.
     #[clap(name = "fetch-checkpoint")]
@@ -121,6 +123,12 @@ pub enum ToolCommand {
         genesis: PathBuf,
         #[clap(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
+    },
+
+    #[clap(name = "anemo")]
+    Anemo {
+        #[clap(next_help_heading = "foo", flatten)]
+        args: anemo_cli::Args,
     },
 }
 
@@ -260,6 +268,10 @@ impl ToolCommand {
                     println!("Checkpoint: {:?}\n", checkpoint);
                     println!("Content: {:?}\n", contents);
                 }
+            }
+            ToolCommand::Anemo { args } => {
+                let config = crate::make_anemo_config();
+                anemo_cli::run(config, args).await
             }
         };
         Ok(())

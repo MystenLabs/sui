@@ -166,6 +166,8 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionAuthSignersResponse> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+
         let (cert, _effects) = self
             .state
             .get_transaction(digest)
@@ -173,7 +175,6 @@ impl RpcReadApiServer for ReadApi {
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
 
         let mut signers = Vec::new();
-        let epoch_store = self.state.epoch_store();
         for authority_index in cert.auth_sig().signers_map.iter() {
             let authority = epoch_store
                 .committee()

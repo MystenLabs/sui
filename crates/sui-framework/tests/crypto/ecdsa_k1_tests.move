@@ -5,7 +5,8 @@
 module sui::ecdsa_tests {
     use sui::ecdsa_k1;
     use std::vector;
-    
+    use sui::hash;
+
     #[test]
     fun test_ecrecover_pubkey() {
         // test case generated against https://docs.rs/secp256k1/latest/secp256k1/
@@ -135,14 +136,6 @@ module sui::ecdsa_tests {
         assert!(addr == addr1, 0);
     }
 
-    #[test]
-    fun test_keccak256_hash() {
-        let msg = b"hello world!";
-        let hashed_msg_bytes = x"57caa176af1ac0433c5df30e8dabcd2ec1af1e92a26eced5f719b88458777cd6";
-        let hashed_msg = ecdsa_k1::keccak256(&msg);
-        assert!(hashed_msg == hashed_msg_bytes, 0);
-    }
-
     // Helper Move function to recover signature directly to an ETH address.
     fun ecrecover_eth_address(sig: vector<u8>, hashed_msg: vector<u8>): vector<u8> {
         // Normalize the last byte of the signature to be 0 or 1.
@@ -168,7 +161,7 @@ module sui::ecdsa_tests {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = ecdsa_k1::keccak256(&uncompressed_64);
+        let hashed = hash::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {

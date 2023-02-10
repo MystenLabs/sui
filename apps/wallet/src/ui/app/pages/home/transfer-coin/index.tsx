@@ -143,7 +143,7 @@ function TransferCoinPage() {
                 const txDigest = getTransactionDigest(response);
                 const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
                     txDigest
-                )}&transfer=coin`;
+                )}&from=transactions`;
 
                 navigate(receiptUrl);
             } catch (e) {

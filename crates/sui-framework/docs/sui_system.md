@@ -125,6 +125,12 @@ The top-level object containing all information of the Sui system.
  The current epoch ID, starting from 0.
 </dd>
 <dt>
+<code>protocol_version: u64</code>
+</dt>
+<dd>
+ The current protocol version, starting from 1.
+</dd>
+<dt>
 <code>validators: <a href="validator_set.md#0x2_validator_set_ValidatorSet">validator_set::ValidatorSet</a></code>
 </dt>
 <dd>
@@ -211,6 +217,12 @@ the epoch advancement transaction.
 <dl>
 <dt>
 <code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>protocol_version: u64</code>
 </dt>
 <dd>
 
@@ -353,7 +365,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, epoch_start_timestamp_ms: u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, sui_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, max_validator_candidate_count: u64, min_validator_stake: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, epoch_start_timestamp_ms: u64)
 </code></pre>
 
 
@@ -369,6 +381,7 @@ This function will be called only once in genesis.
     max_validator_candidate_count: u64,
     min_validator_stake: u64,
     initial_stake_subsidy_amount: u64,
+    protocol_version: u64,
     epoch_start_timestamp_ms: u64,
 ) {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators);
@@ -377,6 +390,7 @@ This function will be called only once in genesis.
         // Use a hardcoded ID.
         id: <a href="object.md#0x2_object_sui_system_state">object::sui_system_state</a>(),
         epoch: 0,
+        protocol_version,
         validators,
         sui_supply,
         storage_fund,
@@ -1014,7 +1028,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, stake_subsidy_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, stake_subsidy_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1026,6 +1040,7 @@ gas coins.
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(
     self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
     new_epoch: u64,
+    next_protocol_version: u64,
     storage_charge: u64,
     computation_charge: u64,
     storage_rebate: u64,
@@ -1094,6 +1109,9 @@ gas coins.
         reward_slashing_rate,
         ctx,
     );
+
+    self.protocol_version = next_protocol_version;
+
     // Derive the reference gas price for the new epoch
     self.reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&self.validators);
     // Because of precision issues <b>with</b> integer divisions, we expect that there will be some
@@ -1117,6 +1135,7 @@ gas coins.
     <a href="event.md#0x2_event_emit">event::emit</a>(
         <a href="sui_system.md#0x2_sui_system_SystemEpochInfo">SystemEpochInfo</a> {
             epoch: self.epoch,
+            protocol_version: self.protocol_version,
             reference_gas_price: self.reference_gas_price,
             total_stake: new_total_stake,
             storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount <b>as</b> u64),
@@ -1141,11 +1160,14 @@ gas coins.
 ## Function `advance_epoch_safe_mode`
 
 An extremely simple version of advance_epoch.
-This is only called when the call to advance_epoch failed due to a bug, and we want to be able to keep the system
-running and continue making epoch changes.
+This is called in two situations:
+- When the call to advance_epoch failed due to a bug, and we want to be able to keep the
+system running and continue making epoch changes.
+- When advancing to a new protocol version, we want to be able to change the protocol
+version
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1157,12 +1179,14 @@ running and continue making epoch changes.
 <pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
     self: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
     new_epoch: u64,
+    next_protocol_version: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
 
     self.epoch = new_epoch;
+    self.protocol_version = next_protocol_version;
     self.safe_mode = <b>true</b>;
 }
 </code></pre>

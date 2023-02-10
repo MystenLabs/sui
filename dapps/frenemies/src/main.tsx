@@ -6,7 +6,11 @@ import "./index.css";
 import Plausible from "plausible-tracker";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Navigate,
+  RouterProvider,
+} from "react-router-dom";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 
 import { Root } from "./routes/Root";
@@ -14,6 +18,7 @@ import { Home } from "./routes/Home";
 import { Connect } from "./routes/Connect";
 import { Setup } from "./routes/Setup";
 import { toast } from "react-hot-toast";
+import { Migrate } from "./routes/Migrate";
 
 const plausible = Plausible({});
 plausible.enableAutoPageviews();
@@ -44,6 +49,14 @@ const router = createBrowserRouter([
       {
         path: "setup",
         element: <Setup />,
+      },
+      {
+        path: "migrate",
+        element: <Migrate />,
+      },
+      {
+        path: "*",
+        element: <Navigate to="/" replace />,
       },
     ],
   },

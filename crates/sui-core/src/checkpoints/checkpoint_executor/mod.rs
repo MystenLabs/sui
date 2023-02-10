@@ -34,7 +34,7 @@ use sui_types::error::SuiError;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     messages::{TransactionEffects, VerifiedCertificate},
-    messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
+    messages_checkpoint::{CheckpointSequenceNumber, EndOfEpochData, VerifiedCheckpoint},
 };
 use tap::TapFallible;
 use tokio::{
@@ -343,16 +343,25 @@ fn check_epoch_last_checkpoint(
 ) -> Option<Committee> {
     if let Some(checkpoint) = checkpoint {
         if checkpoint.epoch() == cur_epoch {
-            if let Some(next_committee) = checkpoint.summary.next_epoch_committee.clone() {
+            if let Some(EndOfEpochData {
+                next_epoch_committee,
+                next_epoch_protocol_version,
+            }) = &checkpoint.summary.end_of_epoch_data
+            {
                 info!(
                     ended_epoch = cur_epoch,
+                    ?next_epoch_protocol_version,
                     last_checkpoint = checkpoint.sequence_number(),
                     "Reached end of epoch",
                 );
                 let next_epoch = cur_epoch + 1;
                 return Some(
-                    Committee::new(next_epoch, next_committee.into_iter().collect())
-                        .expect("Creating new committee object cannot fail"),
+                    Committee::new(
+                        next_epoch,
+                        *next_epoch_protocol_version,
+                        next_epoch_committee.iter().cloned().collect(),
+                    )
+                    .expect("Creating new committee object cannot fail"),
                 );
             }
         }

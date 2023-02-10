@@ -388,10 +388,18 @@ impl InMemoryStore {
         let digest = checkpoint.digest();
         let sequence_number = checkpoint.sequence_number();
 
-        if let Some(next_committee) = checkpoint.next_epoch_committee() {
-            let next_committee = next_committee.iter().cloned().collect();
-            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee)
-                .expect("new committee from consensus should be constructable");
+        if let Some(end_of_epoch_data) = &checkpoint.summary.end_of_epoch_data {
+            let next_committee = end_of_epoch_data
+                .next_epoch_committee
+                .iter()
+                .cloned()
+                .collect();
+            let committee = Committee::new(
+                checkpoint.epoch().saturating_add(1),
+                end_of_epoch_data.next_epoch_protocol_version,
+                next_committee,
+            )
+            .expect("new committee from consensus should be constructable");
             self.insert_committee(committee);
         }
 

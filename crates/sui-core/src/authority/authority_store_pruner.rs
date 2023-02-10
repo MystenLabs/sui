@@ -29,6 +29,7 @@ use typed_store::Map;
 use super::authority_store_tables::AuthorityPerpetualTables;
 
 const MAX_OPS_IN_ONE_WRITE_BATCH: u64 = 10000;
+const ENABLE_LIVE_PRUNER: bool = cfg!(test) || cfg!(msim);
 
 pub struct AuthorityStorePruner {
     _objects_pruner_cancel_handle: oneshot::Sender<()>,
@@ -169,7 +170,6 @@ impl AuthorityStorePruner {
         pruning_timeperiod: Duration,
         pruning_initial_delay: Duration,
         perpetual_db: Arc<AuthorityPerpetualTables>,
-        enable_live_pruner: bool,
         mut checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
@@ -192,7 +192,11 @@ impl AuthorityStorePruner {
                             error!("Failed to flush objects table");
                         }
                     },
-                    Some((state, callback)) = checkpoint_stream.recv(), if enable_live_pruner => {
+                    Some((state, callback)) = checkpoint_stream.recv() => {
+                        if !ENABLE_LIVE_PRUNER {
+                            callback.send(()).expect("failed to notify checkpoint executor");
+                            continue;
+                        }
                         loop {
                             match Self::handle_checkpoint(state.clone(), &perpetual_db.objects) {
                                 Ok(pruned) => {
@@ -201,7 +205,7 @@ impl AuthorityStorePruner {
                                     break;
                                 }
                                 Err(err) => {
-                                    error!("Failed to prune objects {:?}", err);
+                                    error!("Failed to prune objects: {:?}, blocking checkpoint execution", err);
                                     tokio::time::sleep(Duration::from_millis(50)).await;
                                 }
                             }
@@ -224,7 +228,6 @@ impl AuthorityStorePruner {
                 Duration::from_secs(pruning_config.objects_pruning_period_secs),
                 Duration::from_secs(pruning_config.objects_pruning_initial_delay_secs),
                 perpetual_db,
-                pruning_config.enable_live_pruner,
                 checkpoint_stream,
             ),
         }

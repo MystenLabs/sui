@@ -185,13 +185,9 @@ impl Operations {
                     let amount = amount.to_json_value().as_array().and_then(|v| {
                         // value is a byte array
                         let bytes = v.iter().flat_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>();
-
-                        if let Ok(option) = bcs::from_bytes::<Vec<u64>>(&bytes){
-                            if let Some(amount) = option.first() {
-                                return Some(*amount as u128)
-                            }
-                        }
-                        None
+                        if let Ok(Some(amount)) = bcs::from_bytes::<Option<u64>>(&bytes) {
+                            Some(amount as u128)
+                        } else { None }
                     });
                     let validator = validator
                         .to_json_value()

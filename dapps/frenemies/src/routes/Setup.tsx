@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { UnserializedSignableTransaction } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useId } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { config } from "../config";
-import { useEpoch } from "../network/queries/epoch";
-import { useScorecard } from "../network/queries/scorecard";
+import { useLegacyScorecard, useScorecard } from "../network/queries/scorecard";
 import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 import provider from "../network/provider";
+import { useBalance } from "../network/queries/coin";
+import { Spinner } from "../components/Spinner";
 
 const GAS_BUDGET = 20000n;
 
@@ -19,96 +19,29 @@ export function Setup() {
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
-  const { data: scorecard, isSuccess } = useScorecard(currentAccount);
-  const { data: epoch } = useEpoch();
-  const queryClient = useQueryClient();
-
-  const createScorecard = useMutation(
-    ["create-scorecard"],
-    async (username: string) => {
-      if (!currentAccount) {
-        throw new Error(
-          "No SUI coins found in your wallet. You need SUI to play the Frenemies game"
-        );
-      }
-
-      const gasPrice = epoch?.data.referenceGasPrice || 1n;
-      const checkTx: UnserializedSignableTransaction = {
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_PKG,
-          module: "registry",
-          function: "is_registered",
-          typeArguments: [],
-          arguments: [config.VITE_REGISTRY, username],
-        },
-      };
-
-      const inspectRes = await provider.devInspectTransaction(
-        currentAccount,
-        checkTx,
-        Number(gasPrice)
-      );
-
-      if ("Err" in inspectRes.results) {
-        throw new Error(
-          `Error happened while checking for uniqueness: ${inspectRes.results.Err}`
-        );
-      }
-
-      const {
-        Ok: [
-          [
-            ,
-            {
-              // @ts-ignore // not cool
-              returnValues: [[[exists]]],
-            },
-          ],
-        ],
-      } = inspectRes.results;
-
-      // Add a warning saying that the name is already taken.
-      // Depending on the the `exists` result: 0 or 1;
-      if (exists == 1) {
-        throw new Error(`Name: '${username}' is already taken`);
-      }
-
-      const submitTx: UnserializedSignableTransaction = {
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_PKG,
-          module: "frenemies",
-          function: "register",
-          arguments: [username, config.VITE_REGISTRY, SUI_SYSTEM_ID],
-          typeArguments: [],
-
-          // TODO: Fix in sui.js - add option to use bigint...
-          gasBudget: Number(GAS_BUDGET),
-        },
-      };
-
-      const devInspectResult = await provider.devInspectTransaction(
-        currentAccount,
-        submitTx,
-        Number(gasPrice)
-      );
-
-      if ("Err" in devInspectResult.results) {
-        throw new Error(
-          `Transaction would've failed with a reason '${devInspectResult.results.Err}'`
-        );
-      }
-
-      await signAndExecuteTransaction(submitTx);
-    },
+  const { data: scorecard, isSuccess } = useScorecard();
+  const legacyScorecard = useLegacyScorecard();
+  const { data: balance } = useBalance();
+  const { data: gasPrice } = useQuery(
+    ["gas-price"],
+    () => provider.getReferenceGasPrice(),
     {
-      onSuccess() {
-        queryClient.invalidateQueries({ queryKey: ['scorecard'] });
-        navigate("/", { replace: true });
-      },
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
     }
   );
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (
+      isSuccess &&
+      legacyScorecard.isSuccess &&
+      !scorecard &&
+      legacyScorecard.data
+    ) {
+      navigate("/migrate", { replace: true });
+    }
+  }, [isSuccess, scorecard, legacyScorecard]);
 
   useEffect(() => {
     if (!currentAccount) {
@@ -122,19 +55,119 @@ export function Setup() {
     }
   }, [scorecard, isSuccess]);
 
+  const createScorecard = useMutation(
+    ["create-scorecard"],
+    async (username: string) => {
+      if (!currentAccount) {
+        throw new Error("No connected wallet found");
+      }
+
+      const inspectResults = await Promise.all(
+        [
+          { pkg: config.VITE_OLD_PKG, registry: config.VITE_OLD_REGISTRY },
+          { pkg: config.VITE_PKG, registry: config.VITE_REGISTRY },
+        ].map(({ pkg, registry }) =>
+          provider.devInspectTransaction(
+            currentAccount,
+            {
+              kind: "moveCall",
+              data: {
+                packageObjectId: pkg,
+                module: "registry",
+                function: "is_registered",
+                typeArguments: [],
+                arguments: [registry, username],
+              },
+            },
+            gasPrice
+          )
+        )
+      );
+
+      inspectResults.forEach(({ results }) => {
+        if ("Err" in results) {
+          throw new Error(
+            `Error happened while checking for uniqueness: ${results.Err}`
+          );
+        }
+
+        const {
+          Ok: [
+            [
+              ,
+              {
+                // @ts-ignore // not cool
+                returnValues: [[[exists]]],
+              },
+            ],
+          ],
+        } = results;
+
+        // Add a warning saying that the name is already taken.
+        // Depending on the the `exists` result: 0 or 1;
+        if (exists == 1) {
+          throw new Error(`Name: '${username}' is already taken`);
+        }
+      });
+
+      await signAndExecuteTransaction({
+        kind: "moveCall",
+        data: {
+          packageObjectId: config.VITE_PKG,
+          module: "frenemies",
+          function: "register",
+          arguments: [
+            username,
+            config.VITE_REGISTRY,
+            config.VITE_OLD_REGISTRY,
+            SUI_SYSTEM_ID,
+          ],
+          typeArguments: [],
+
+          // TODO: Fix in sui.js - add option to use bigint...
+          gasBudget: Number(GAS_BUDGET),
+        },
+      });
+    },
+    {
+      onSuccess() {
+        queryClient.invalidateQueries({ queryKey: ["scorecard"] });
+        navigate("/", { replace: true });
+      },
+    }
+  );
+
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     createScorecard.mutate(formData.get("username") as string);
   };
 
-  // TODO: Loading UI:
-  if (!isSuccess || scorecard) {
-    return null;
+  const hasEnoughCoins =
+    gasPrice && balance
+      ? balance.balance > BigInt(gasPrice) + GAS_BUDGET
+      : false;
+
+  if (!isSuccess || scorecard || legacyScorecard.isLoading) {
+    return <Spinner />;
   }
 
   return (
-    <div className="max-w-4xl w-full mx-auto text-center">
+    <div className="max-w-4xl w-full mx-auto text-center space-y-5">
+      {balance && gasPrice && !hasEnoughCoins && (
+        <Card variant="error" spacing="md">
+          Your wallet does not have enough SUI to register for Frenemies.
+          <a
+            className="font-medium text-issue block mt-1"
+            href="https://discord.com/channels/916379725201563759/1037811694564560966"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Request Testnet SUI on Discord
+          </a>
+        </Card>
+      )}
+
       <Card spacing="xl">
         <h1 className="text-steel-darker text-2xl leading-tight font-semibold mb-5">
           Woo hoo! Just one more step before we begin.
@@ -147,6 +180,7 @@ export function Setup() {
           >
             What shall we call you in the game?
           </label>
+
           <input
             id={id}
             name="username"
@@ -167,7 +201,9 @@ export function Setup() {
             <button
               type="submit"
               className="shadow-notification bg-frenemies rounded-lg text-white disabled:text-white/50 px-5 py-3 w-56 leading-none"
-              disabled={!isSuccess || createScorecard.isLoading}
+              disabled={
+                !hasEnoughCoins || !isSuccess || createScorecard.isLoading
+              }
             >
               Continue
             </button>

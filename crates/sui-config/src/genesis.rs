@@ -40,7 +40,7 @@ use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
-    committee::{Committee, EpochId},
+    committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
     sui_serde::AuthSignature,
@@ -733,8 +733,9 @@ fn create_genesis_checkpoint(
         content_digest: contents.digest(),
         previous_digest: None,
         epoch_rolling_gas_cost_summary: Default::default(),
-        next_epoch_committee: None,
+        end_of_epoch_data: None,
         timestamp_ms: parameters.timestamp_ms,
+        version_specific_data: Vec::new(),
     };
 
     (checkpoint, contents)
@@ -1009,6 +1010,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&ProtocolVersion::MIN.0).unwrap()),
             CallArg::Pure(bcs::to_bytes(&epoch_start_timestamp_ms).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),

@@ -15,6 +15,7 @@ export function useEpoch() {
   const ret = useQuery(
     ["epoch"],
     async (): Promise<{
+      epoch: number;
       timestamp: number;
       prevTimestamp: number;
       data: SystemEpochInfo;
@@ -32,10 +33,17 @@ export function useEpoch() {
         return null;
       }
 
+      const eventData = bcs.de(
+        SYSTEM_EPOCH_INFO,
+        evt.event.moveEvent.bcs,
+        "base64"
+      ) as SystemEpochInfo;
+
       return {
+        data: eventData,
+        epoch: Number(eventData.epoch),
         timestamp: evt.timestamp,
         prevTimestamp: prevEvt?.timestamp || 0,
-        data: bcs.de(SYSTEM_EPOCH_INFO, evt.event.moveEvent.bcs, "base64"),
       };
     },
     {

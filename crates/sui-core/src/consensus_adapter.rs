@@ -591,7 +591,7 @@ mod adapter_tests {
     use rand::{rngs::StdRng, Rng, SeedableRng};
     use sui_types::{
         base_types::TransactionDigest,
-        committee::Committee,
+        committee::{Committee, ProtocolVersion},
         crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes},
     };
 
@@ -612,7 +612,12 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(0, authorities.iter().cloned().collect()).unwrap();
+        let committee = Committee::new(
+            0,
+            ProtocolVersion::MIN,
+            authorities.iter().cloned().collect(),
+        )
+        .unwrap();
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;

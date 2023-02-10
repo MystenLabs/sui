@@ -25,8 +25,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -92,7 +93,7 @@ bstr-6f8ce4dd05d13bba = { package = "bstr", version = "0.2", features = ["serde1
 bstr-dff4ba8e3ae991db = { package = "bstr", version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
+bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
@@ -113,7 +114,9 @@ ciborium-ll = { version = "0.2", default-features = false }
 cipher = { version = "0.4", default-features = false, features = ["block-padding", "std"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
-clap_lex = { version = "0.2", default-features = false }
+clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
+clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
+clap_lex-468e82937335b1c9 = { package = "clap_lex", version = "0.3", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
@@ -198,9 +201,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", features = ["copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", features = ["copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -326,41 +329,41 @@ miniz_oxide = { version = "0.6", default-features = false, features = ["with-all
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-borrow-graph = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-bytecode-viewer = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-cli = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-compiler = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-core-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", features = ["address20"] }
-move-coverage = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-docgen = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-errmapgen = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-ir-compiler = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-model = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-package = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-prover = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-resource-viewer = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-stackless-bytecode-interpreter = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false, features = ["testing"] }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-table-extension = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", features = ["debugging", "testing"] }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
+move-abigen = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-borrow-graph = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-bytecode-viewer = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-cli = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-compiler = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-core-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", features = ["address20"] }
+move-coverage = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-docgen = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-errmapgen = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-ir-compiler = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-model = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-package = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-prover = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-resource-viewer = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-stackless-bytecode-interpreter = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false, features = ["testing"] }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-table-extension = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", features = ["debugging", "testing"] }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
@@ -462,8 +465,8 @@ rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
 rcgen-93f6ce9d446188ac = { package = "rcgen", version = "0.10", features = ["x509-parser"] }
 rcgen-274715c4dabd11b0 = { package = "rcgen", version = "0.9" }
-read-write-set = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
+read-write-set = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
 ref-cast = { version = "1", default-features = false }
 regex = { version = "1" }
 regex-automata = { version = "0.1" }
@@ -476,6 +479,7 @@ ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["multi-threaded-cf"] }
+ron = { version = "0.8" }
 rstest = { version = "0.16" }
 rust-ini = { version = "0.13", default-features = false }
 rust_decimal = { version = "1", default-features = false }
@@ -662,9 +666,10 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0e0ef7054082a6f5a8921688e3d568761bc3be21", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "d4017b6cefad7ebc5e84b5c6b8eeff4668f719ff", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -742,7 +747,7 @@ bstr-dff4ba8e3ae991db = { package = "bstr", version = "1" }
 bulletproofs = { version = "4" }
 bumpalo = { version = "3" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
+bytecode-interpreter-crypto = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
@@ -767,8 +772,11 @@ cipher = { version = "0.4", default-features = false, features = ["block-padding
 clang-sys = { version = "1", default-features = false, features = ["clang_6_0", "runtime"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2" }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["derive"] }
-clap_derive = { version = "3" }
-clap_lex = { version = "0.2", default-features = false }
+clap-164d15cefe24d7eb = { package = "clap", version = "4", features = ["derive"] }
+clap_derive-7b89eefb6aaa9bf3 = { package = "clap_derive", version = "3" }
+clap_derive-164d15cefe24d7eb = { package = "clap_derive", version = "4" }
+clap_lex-6f8ce4dd05d13bba = { package = "clap_lex", version = "0.2", default-features = false }
+clap_lex-468e82937335b1c9 = { package = "clap_lex", version = "0.3", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
@@ -867,10 +875,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail-9fbad63c4bcf4a8f = { package = "fail", version = "0.4", default-features = false }
 fail-d8f496e17d97b5cb = { package = "fail", version = "0.5", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b2c77ad4aff173462a1270b4ce0be63ef37db06b", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -1010,41 +1018,41 @@ mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "o
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-borrow-graph = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-bytecode-viewer = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-cli = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-compiler = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-core-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", features = ["address20"] }
-move-coverage = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-docgen = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-errmapgen = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-ir-compiler = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-model = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-package = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-prover = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-resource-viewer = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-stackless-bytecode-interpreter = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false, features = ["testing"] }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-table-extension = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", features = ["debugging", "testing"] }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8" }
+move-abigen = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-borrow-graph = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-bytecode-source-map = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-bytecode-viewer = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-cli = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-compiler = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-core-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", features = ["address20"] }
+move-coverage = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-docgen = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-errmapgen = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-ir-compiler = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-ir-to-bytecode = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-ir-to-bytecode-syntax = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-model = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-package = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-prover = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-read-write-set-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-resource-viewer = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-stackless-bytecode-interpreter = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false, features = ["testing"] }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-table-extension = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", features = ["debugging", "testing"] }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
@@ -1171,8 +1179,8 @@ rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
 rcgen-93f6ce9d446188ac = { package = "rcgen", version = "0.10", features = ["x509-parser"] }
 rcgen-274715c4dabd11b0 = { package = "rcgen", version = "0.9" }
-read-write-set = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
-read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "13b95be39d2b9a08905b1786301b331a7dbb7fb8", default-features = false }
+read-write-set = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
+read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "9b2bbcc14958f37c9adeab933f1e1d6b0db81691", default-features = false }
 readonly = { version = "0.2", default-features = false }
 ref-cast = { version = "1", default-features = false }
 ref-cast-impl = { version = "1", default-features = false }
@@ -1187,6 +1195,7 @@ ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
 rocksdb = { version = "0.19", features = ["multi-threaded-cf"] }
+ron = { version = "0.8" }
 rstest = { version = "0.16" }
 rstest_macros = { version = "0.16", default-features = false, features = ["async-timeout"] }
 rust-ini = { version = "0.13", default-features = false }

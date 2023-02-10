@@ -21,8 +21,7 @@ function ReceiptPage() {
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
-    // get Return route from URL params
-    const fromRoute = searchParams.get('from');
+    const fromParam = searchParams.get('from');
     const rpc = useRpc();
 
     const { data, isLoading, isError } = useQuery(
@@ -33,13 +32,11 @@ function ReceiptPage() {
         { enabled: !!transactionId, retry: 8 }
     );
 
-    // return route or default to transactions
-    const linkTo = fromRoute ? `/${fromRoute}` : '/transactions';
-
     const navigate = useNavigate();
+    // return to previous route or from param if available
     const closeReceipt = useCallback(() => {
-        navigate(linkTo);
-    }, [linkTo, navigate]);
+        fromParam ? navigate(`/${fromParam}`) : navigate(-1);
+    }, [fromParam, navigate]);
 
     const pageTitle = useMemo(() => {
         if (data) {
@@ -63,7 +60,7 @@ function ReceiptPage() {
                     ? 'Sent Successfully'
                     : 'Received Successfully'
                 : stakingTxn
-                ? stakingTxn + ' Successfully'
+                ? `${stakingTxn} Successfully`
                 : 'Move Call';
 
             return `${
@@ -77,14 +74,11 @@ function ReceiptPage() {
     }, [activeAddress, data]);
 
     if (!transactionId || !activeAddress) {
-        return <Navigate to={linkTo} replace={true} />;
+        return <Navigate to="/transactions" replace={true} />;
     }
 
     return (
-        <Loading
-            loading={isLoading}
-            className="flex items-center justify-center"
-        >
+        <Loading loading={isLoading}>
             <Overlay
                 showModal={showModal}
                 setShowModal={setShowModal}

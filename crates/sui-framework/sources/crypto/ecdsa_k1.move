@@ -26,10 +26,6 @@ module sui::ecdsa_k1 {
     /// otherwise throw error.
     public native fun decompress_pubkey(pubkey: &vector<u8>): vector<u8>;
 
-    /// @param data: arbitrary bytes data to hash
-    /// Hash the input bytes using keccak256 and returns 32 bytes.
-    public native fun keccak256(data: &vector<u8>): vector<u8>;
-
     /// @param signature: A 64-bytes signature in form (r, s) that is signed using
     /// Secp256k1. This is an non-recoverable signature without recovery id.
     /// Reference implementation on signature generation using RFC6979:

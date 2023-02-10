@@ -3,10 +3,18 @@
 
 use sui_config::ValidatorInfo;
 use sui_types::{
-    committee::{Committee, EpochId},
+    committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
 };
 
-pub fn make_committee(epoch: EpochId, validator_set: &[ValidatorInfo]) -> SuiResult<Committee> {
-    Committee::new(epoch, ValidatorInfo::voting_rights(validator_set))
+pub fn make_committee(
+    epoch: EpochId,
+    protocol_version: ProtocolVersion,
+    validator_set: &[ValidatorInfo],
+) -> SuiResult<Committee> {
+    Committee::new(
+        epoch,
+        protocol_version,
+        ValidatorInfo::voting_rights(validator_set),
+    )
 }

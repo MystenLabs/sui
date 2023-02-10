@@ -4,6 +4,7 @@
 import cl from 'classnames';
 import { useMemo } from 'react';
 
+import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
@@ -11,7 +12,6 @@ import FaucetRequestButton from '_app/shared/faucet/request-button';
 import PageTitle from '_app/shared/page-title';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import RecentTransactions from '_components/transactions-card/RecentTransactions';
 import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useActiveAddress, useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
@@ -44,7 +44,7 @@ function MyTokens({
     loading,
 }: TokensProps) {
     return (
-        <Loading loading={loading} className={st.othersLoader}>
+        <Loading loading={loading}>
             {allCoinTypes.length ? (
                 <>
                     <div className={st.title}>MY COINS</div>
@@ -162,7 +162,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
                             {coinSymbol} activity
                         </div>
                         <div className={st.txContent}>
-                            <RecentTransactions coinType={activeCoinType} />
+                            <CoinActivitiesCard coinType={activeCoinType} />
                         </div>
                     </>
                 )}

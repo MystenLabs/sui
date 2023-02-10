@@ -55,8 +55,9 @@ pub fn commit_checkpoint(
         - checkpoint_summary
             .epoch_rolling_gas_cost_summary
             .storage_rebate;
-    let next_committee_json = checkpoint_summary.next_epoch_committee.map(|c| {
-        serde_json::to_string(&c).expect("Failed to serialize next_epoch_committee to JSON")
+    let next_committee_json = checkpoint_summary.end_of_epoch_data.map(|e| {
+        serde_json::to_string(&e.next_epoch_committee)
+            .expect("Failed to serialize next_epoch_committee to JSON")
     });
 
     let checkpoint = NewCheckpoint {

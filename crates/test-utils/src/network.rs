@@ -173,7 +173,6 @@ pub struct TestClusterBuilder {
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     epoch_duration_ms: Option<u64>,
-    enable_pruning: bool,
 }
 
 impl TestClusterBuilder {
@@ -184,7 +183,6 @@ impl TestClusterBuilder {
             num_validators: None,
             enable_fullnode_events: false,
             epoch_duration_ms: None,
-            enable_pruning: true,
         }
     }
 
@@ -213,11 +211,6 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn disable_pruning(mut self) -> Self {
-        self.enable_pruning = false;
-        self
-    }
-
     pub async fn build(self) -> anyhow::Result<TestCluster> {
         let cluster = self.start_test_network_with_customized_ports().await?;
         Ok(cluster)
@@ -237,7 +230,6 @@ impl TestClusterBuilder {
             .fullnode_config_builder()
             .set_event_store(self.enable_fullnode_events)
             .set_rpc_port(self.fullnode_rpc_port)
-            .set_enable_pruner(self.enable_pruning)
             .build()
             .unwrap();
 
@@ -352,7 +344,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
         .map(|handle| {
             handle.with_async(|node| async move {
                 let mut rx = node.subscribe_to_epoch_change();
-                let epoch = node.current_epoch();
+                let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
                     let committee = rx.recv().await.unwrap();
                     assert_eq!(committee.epoch, expected_epoch);

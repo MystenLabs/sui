@@ -655,7 +655,7 @@ fn get_agg<A>(
     clients: BTreeMap<AuthorityName, A>,
     epoch: EpochId,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(epoch, authorities).unwrap();
+    let committee = Committee::new(epoch, ProtocolVersion::MIN, authorities).unwrap();
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -869,7 +869,8 @@ async fn test_get_committee_info() {
     let (authorities, authorities_vec, mut clients) = get_authorities(count.clone(), 4);
     let good_result = Ok(CommitteeInfoResponse {
         epoch: 0,
-        committee_info: Some(authorities_vec.clone()),
+        protocol_version: ProtocolVersion::MIN,
+        committee_info: authorities_vec.clone(),
     });
     for client in clients.values_mut() {
         client.set_handle_committee_info_request_result(good_result.clone());
@@ -918,30 +919,6 @@ async fn test_get_committee_info() {
         }
     }
     let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
-        other => panic!(
-            "expect to get SuiError::TooManyIncorrectAuthorities but got {:?}",
-            other
-        ),
-    };
-
-    // 2 out 4 gives empty committee info
-    let mut clone_clients = clients.clone();
-    let empty_result = Ok(CommitteeInfoResponse {
-        epoch: 0,
-        committee_info: None,
-    });
-    let mut i = 0;
-    for client in clone_clients.values_mut() {
-        client.set_handle_committee_info_request_result(empty_result.clone());
-        i += 1;
-        if i >= 2 {
-            break;
-        }
-    }
-    let agg = get_agg(authorities, clone_clients, 0);
     let res = agg.get_committee_info(Some(0)).await;
     match res {
         Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
@@ -1014,7 +991,7 @@ async fn test_handle_transaction_response() {
     // Case 2
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1062,7 +1039,7 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, authorities.clone()).unwrap();
+    let committee_1 = Committee::new(1, ProtocolVersion::MIN, authorities.clone()).unwrap();
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();

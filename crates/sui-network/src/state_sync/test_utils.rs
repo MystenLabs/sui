@@ -5,14 +5,14 @@ use std::collections::HashMap;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::{
     base_types::AuthorityName,
-    committee::{Committee, EpochId, StakeUnit},
+    committee::{Committee, EpochId, ProtocolVersion, StakeUnit},
     crypto::{
-        AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
-        KeypairTraits, SuiAuthoritySignature,
+        AuthorityKeyPair, AuthoritySignInfo, AuthoritySignature, KeypairTraits,
+        SuiAuthoritySignature,
     },
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest, CheckpointSequenceNumber,
-        CheckpointSummary, VerifiedCheckpoint,
+        CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
     },
 };
 
@@ -35,6 +35,7 @@ impl CommitteeFixture {
 
         let committee = Committee::new(
             epoch,
+            ProtocolVersion::MIN,
             validators
                 .iter()
                 .map(|(name, (_, stake))| (*name, *stake))
@@ -62,8 +63,9 @@ impl CommitteeFixture {
             content_digest: empty_contents().digest(),
             previous_digest: None,
             epoch_rolling_gas_cost_summary: Default::default(),
-            next_epoch_committee: None,
+            end_of_epoch_data: None,
             timestamp_ms: 0,
+            version_specific_data: Vec::new(),
         };
 
         self.create_certified_checkpoint(checkpoint)
@@ -118,8 +120,9 @@ impl CommitteeFixture {
                 content_digest: empty_contents().digest(),
                 previous_digest: Some(prev.summary.digest()),
                 epoch_rolling_gas_cost_summary: Default::default(),
-                next_epoch_committee: None,
+                end_of_epoch_data: None,
                 timestamp_ms: 0,
+                version_specific_data: Vec::new(),
             };
 
             let checkpoint = self.create_certified_checkpoint(summary);
@@ -148,7 +151,7 @@ impl CommitteeFixture {
     pub fn make_end_of_epoch_checkpoint(
         &self,
         previous_checkpoint: VerifiedCheckpoint,
-        next_epoch_committee: Vec<(AuthorityPublicKeyBytes, u64)>,
+        end_of_epoch_data: Option<EndOfEpochData>,
     ) -> (
         CheckpointSequenceNumber,
         CheckpointDigest,
@@ -161,8 +164,9 @@ impl CommitteeFixture {
             content_digest: empty_contents().digest(),
             previous_digest: Some(previous_checkpoint.summary.digest()),
             epoch_rolling_gas_cost_summary: Default::default(),
-            next_epoch_committee: Some(next_epoch_committee),
+            end_of_epoch_data,
             timestamp_ms: 0,
+            version_specific_data: Vec::new(),
         };
 
         let checkpoint = self.create_certified_checkpoint(summary);

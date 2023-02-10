@@ -41,10 +41,7 @@ export function Validators() {
             closeOverlay={close}
         >
             <div className="w-full flex flex-col flex-nowrap">
-                <Loading
-                    loading={isLoading}
-                    className="flex justify-center w-full items-center h-full"
-                >
+                <Loading loading={isLoading}>
                     {isError ? (
                         <Alert className="mb-2">
                             <strong>{error?.message}</strong>

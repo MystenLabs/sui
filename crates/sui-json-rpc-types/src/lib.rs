@@ -1813,10 +1813,6 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
     fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
         let digest = *cert.digest();
         let (data, sig) = cert.into_data_and_sig();
-        // We should always have a signature here.
-        if sig.signature.sig.is_none() {
-            return Err(anyhow::anyhow!("Certified transaction is not signed"));
-        }
         Ok(Self {
             transaction_digest: digest,
             data: data.intent_message.value.try_into()?,

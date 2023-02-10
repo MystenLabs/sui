@@ -26,7 +26,7 @@ use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     base_types::*,
-    committee::Committee,
+    committee::{Committee, ProtocolVersion},
     error::{SuiError, SuiResult},
     messages::*,
 };
@@ -871,25 +871,16 @@ where
                         match result {
                             Ok(resp) => {
                                 let resp_digest = resp.digest();
-                                if let Some(info) = resp.committee_info {
-                                    let total_stake =
-                                        state.responses.entry(resp_digest).or_default();
-                                    *total_stake += weight;
-                                    if *total_stake >= threshold {
-                                        state.committee_info = Some(CommitteeInfo {
-                                            epoch: resp.epoch,
-                                            committee_info: info,
-                                        });
-                                        return Ok(ReduceOutput::End(state));
-                                    }
-                                } else {
-                                    // This is technically unreachable because SafeClient
-                                    // does the sanity check in `verify_committee_info_response`
-                                    state.bad_weight += weight;
-                                    state.errors.push((
-                                        name,
-                                        SuiError::from("Validator returns empty committee info."),
-                                    ));
+                                let info = resp.committee_info;
+                                let total_stake = state.responses.entry(resp_digest).or_default();
+                                *total_stake += weight;
+                                if *total_stake >= threshold {
+                                    state.committee_info = Some(CommitteeInfo {
+                                        epoch: resp.epoch,
+                                        protocol_version: resp.protocol_version,
+                                        committee_info: info,
+                                    });
+                                    return Ok(ReduceOutput::End(state));
                                 }
                             }
                             Err(err) => {
@@ -1755,6 +1746,7 @@ pub struct AuthorityAggregatorBuilder<'a> {
     genesis: Option<&'a Genesis>,
     committee_store: Option<Arc<CommitteeStore>>,
     registry: Option<&'a Registry>,
+    protocol_version: ProtocolVersion,
 }
 
 impl<'a> AuthorityAggregatorBuilder<'a> {
@@ -1764,6 +1756,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             genesis: None,
             committee_store: None,
             registry: None,
+            protocol_version: ProtocolVersion::MIN,
         }
     }
 
@@ -1773,7 +1766,13 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             genesis: Some(genesis),
             committee_store: None,
             registry: None,
+            protocol_version: ProtocolVersion::MIN,
         }
+    }
+
+    pub fn with_protocol_version(mut self, new_version: ProtocolVersion) -> Self {
+        self.protocol_version = new_version;
+        self
     }
 
     pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
@@ -1799,7 +1798,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         } else {
             anyhow::bail!("need either NetworkConfig or Genesis.");
         };
-        let committee = make_committee(0, validator_info)?;
+        let committee = make_committee(0, self.protocol_version, validator_info)?;
         let mut registry = &prometheus::Registry::new();
         if self.registry.is_some() {
             registry = self.registry.unwrap();

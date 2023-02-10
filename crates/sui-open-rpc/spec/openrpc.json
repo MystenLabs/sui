@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.25.0"
+    "version": "0.26.0"
   },
   "methods": [
     {
@@ -317,7 +317,7 @@
                 "txSignature": "APTKkXWW1T8Vmz5xofVuEEo336IFluv69ByMuPwfvwTrU749/fOtpBw4Kffd0809C+EP/7+GNLWNIbZHH5eRnwUgZe9Z6CbTODIzbq3ZFq53AzRXBmnyBDiKgDwkZI8sdA==",
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": "AaCQESRLSxMntCxHAXuRk66nmlID2DZn3gU64vkZ7iHSjE2Nbhfr21Ovri7AMdAl4Q==",
+                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                   "signers_map": [
                     58,
                     48,
@@ -1526,7 +1526,7 @@
                 "txSignature": "ABR/DtRSEtwJxHYihyjRE8ukXGkkPHcusVx+EECSiHTuGUaIKZOtaYl172/e7+ejKmGeKEwD48in3TAlGF+90wS6hmV5ZkKODtgnokS0vmNHVDWXWuuoOmN18GDl2YAdDg==",
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": "AaCQESRLSxMntCxHAXuRk66nmlID2DZn3gU64vkZ7iHSjE2Nbhfr21Ovri7AMdAl4Q==",
+                  "signature": "wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                   "signers_map": [
                     58,
                     48,
@@ -2910,11 +2910,23 @@
           "epoch_rolling_gas_cost_summary",
           "network_total_transactions",
           "sequence_number",
-          "timestamp_ms"
+          "timestamp_ms",
+          "version_specific_data"
         ],
         "properties": {
           "content_digest": {
             "$ref": "#/components/schemas/CheckpointContentsDigest"
+          },
+          "end_of_epoch_data": {
+            "description": "Present only on the final checkpoint of the epoch.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndOfEpochData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "epoch": {
             "type": "integer",
@@ -2934,28 +2946,6 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "next_epoch_committee": {
-            "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/AuthorityPublicKeyBytes"
-                },
-                {
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
-            }
           },
           "previous_digest": {
             "anyOf": [
@@ -2977,6 +2967,15 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "version_specific_data": {
+            "description": "CheckpointSummary is not an evolvable structure - it must be readable by any version of the code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow opaque data to be added to checkpoints which can be deserialized based on the current protocol version.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
           }
         }
       },
@@ -3024,14 +3023,13 @@
       "CommitteeInfoResponse": {
         "type": "object",
         "required": [
-          "epoch"
+          "committee_info",
+          "epoch",
+          "protocol_version"
         ],
         "properties": {
           "committee_info": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": "array",
             "items": {
               "type": "array",
               "items": [
@@ -3052,6 +3050,9 @@
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
+          },
+          "protocol_version": {
+            "$ref": "#/components/schemas/ProtocolVersion"
           }
         }
       },
@@ -3284,6 +3285,42 @@
             "additionalProperties": false
           }
         ]
+      },
+      "EndOfEpochData": {
+        "type": "object",
+        "required": [
+          "next_epoch_committee",
+          "next_epoch_protocol_version"
+        ],
+        "properties": {
+          "next_epoch_committee": {
+            "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/AuthorityPublicKeyBytes"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "next_epoch_protocol_version": {
+            "description": "The protocol version that is in effect during the epoch that starts immediately after this checkpoint.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProtocolVersion"
+              }
+            ]
+          }
+        }
       },
       "Entry_for_SuiAddress_and_VecSet_for_SuiAddress": {
         "description": "Rust version of the Move sui::vec_map::Entry type",
@@ -4933,6 +4970,11 @@
           }
         }
       },
+      "ProtocolVersion": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
       "RPCTransactionRequestParams": {
         "oneOf": [
           {
@@ -5774,6 +5816,7 @@
           "epoch_start_timestamp_ms",
           "info",
           "parameters",
+          "protocol_version",
           "reference_gas_price",
           "safe_mode",
           "stake_subsidy",
@@ -5798,6 +5841,11 @@
           },
           "parameters": {
             "$ref": "#/components/schemas/SystemParameters"
+          },
+          "protocol_version": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "reference_gas_price": {
             "type": "integer",

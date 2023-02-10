@@ -6,7 +6,7 @@ use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::base_types::ExecutionDigests;
-use crate::committee::{EpochId, StakeUnit};
+use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, Signature,
 };
@@ -48,6 +48,22 @@ pub struct CheckpointResponse {
 // The constituent parts of checkpoints, signed and certified
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct EndOfEpochData {
+    /// next_epoch_committee is `Some` if and only if the current checkpoint is
+    /// the last checkpoint of an epoch.
+    /// Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch,
+    /// which is often useful to get epoch level summary stats like total gas cost of an epoch,
+    /// or the total number of transactions from genesis to the end of an epoch.
+    /// The committee is stored as a vector of validator pub key and stake pairs. The vector
+    /// should be sorted based on the Committee data structure.
+    pub next_epoch_committee: Vec<(AuthorityName, StakeUnit)>,
+
+    /// The protocol version that is in effect during the epoch that starts immediately after this
+    /// checkpoint.
+    pub next_epoch_protocol_version: ProtocolVersion,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
@@ -59,18 +75,19 @@ pub struct CheckpointSummary {
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     pub epoch_rolling_gas_cost_summary: GasCostSummary,
-    /// next_epoch_committee is `Some` if and only if the current checkpoint is
-    /// the last checkpoint of an epoch.
-    /// Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch,
-    /// which is often useful to get epoch level summary stats like total gas cost of an epoch,
-    /// or the total number of transactions from genesis to the end of an epoch.
-    /// The committee is stored as a vector of validator pub key and stake pairs. The vector
-    /// should be sorted based on the Committee data structure.
-    pub next_epoch_committee: Option<Vec<(AuthorityName, StakeUnit)>>,
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
     pub timestamp_ms: CheckpointTimestamp,
+
+    /// Present only on the final checkpoint of the epoch.
+    pub end_of_epoch_data: Option<EndOfEpochData>,
+
+    /// CheckpointSummary is not an evolvable structure - it must be readable by any version of the
+    /// code. Therefore, in order to allow extensions to be added to CheckpointSummary, we allow
+    /// opaque data to be added to checkpoints which can be deserialized based on the current
+    /// protocol version.
+    pub version_specific_data: Vec<u8>,
 }
 
 impl CheckpointSummary {
@@ -93,8 +110,12 @@ impl CheckpointSummary {
             content_digest,
             previous_digest,
             epoch_rolling_gas_cost_summary,
-            next_epoch_committee: next_epoch_committee.map(|c| c.voting_rights),
+            end_of_epoch_data: next_epoch_committee.map(|c| EndOfEpochData {
+                next_epoch_committee: c.voting_rights,
+                next_epoch_protocol_version: c.protocol_version,
+            }),
             timestamp_ms,
+            version_specific_data: Vec::new(),
         }
     }
 
@@ -157,7 +178,10 @@ impl<S> CheckpointSummaryEnvelope<S> {
     }
 
     pub fn next_epoch_committee(&self) -> Option<&[(AuthorityName, StakeUnit)]> {
-        self.summary.next_epoch_committee.as_deref()
+        self.summary
+            .end_of_epoch_data
+            .as_ref()
+            .map(|e| e.next_epoch_committee.as_slice())
     }
 }
 
