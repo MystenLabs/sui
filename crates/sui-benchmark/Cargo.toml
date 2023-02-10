@@ -56,6 +56,7 @@ sysinfo = "0.27.5"
 [target.'cfg(msim)'.dependencies]
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
+typed-store = { path = "../typed-store" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]

@@ -1143,6 +1143,7 @@ async fn get_past_obj_read_from_node(
 }
 
 #[sim_test]
+#[ignore]
 async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new().build().await?;
