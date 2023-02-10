@@ -4,6 +4,9 @@
 import { z } from "zod";
 import { Network } from "@mysten/sui.js";
 
+// Oops, we need to bump the round.
+export const ROUND_OFFSET = 5n;
+
 const ConfigSchema = z.object({
   VITE_NETWORK: z
     .union([z.nativeEnum(Network), z.string()])
@@ -14,6 +17,11 @@ const ConfigSchema = z.object({
   VITE_REGISTRY: z.string(),
   /** Frenemies Package ID */
   VITE_PKG: z.string(),
+  VITE_MIGRATION: z.string(),
+  /** Package for the previous version of frenemies: */
+  VITE_OLD_PKG: z.string(),
+  /** Registry for the previous version of frenemies: */
+  VITE_OLD_REGISTRY: z.string(),
 });
 
 export const config = ConfigSchema.parse(import.meta.env);

@@ -14,11 +14,11 @@ import {
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 
 import { Root } from "./routes/Root";
-// import { Home } from "./routes/Home";
-// import { Connect } from "./routes/Connect";
-// import { Setup } from "./routes/Setup";
+import { Home } from "./routes/Home";
+import { Connect } from "./routes/Connect";
+import { Setup } from "./routes/Setup";
 import { toast } from "react-hot-toast";
-import { Offline } from "./routes/Offline";
+import { Migrate } from "./routes/Migrate";
 
 const plausible = Plausible({});
 plausible.enableAutoPageviews();
@@ -38,19 +38,22 @@ const router = createBrowserRouter([
     path: "/",
     element: <Root />,
     children: [
-      { path: '', element: <Offline />},
-      // {
-      //   path: "",
-      //   element: <Home />,
-      // },
-      // {
-      //   path: "connect",
-      //   element: <Connect />,
-      // },
-      // {
-      //   path: "setup",
-      //   element: <Setup />,
-      // },
+      {
+        path: "",
+        element: <Home />,
+      },
+      {
+        path: "connect",
+        element: <Connect />,
+      },
+      {
+        path: "setup",
+        element: <Setup />,
+      },
+      {
+        path: "migrate",
+        element: <Migrate />,
+      },
       {
         path: "*",
         element: <Navigate to="/" replace />,

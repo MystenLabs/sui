@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useWalletKit } from "@mysten/wallet-kit";
-import { config } from "../../config";
+import { config, ROUND_OFFSET } from "../../config";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
 import { Table } from "./Table";
@@ -15,7 +15,7 @@ import { useEpoch } from "../../network/queries/epoch";
 export function YourScore() {
   const { currentAccount } = useWalletKit();
   const { data: epoch } = useEpoch();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
   const { data: history } = useScorecardHistory(scorecard && scorecard.data.id);
   const { data: leaderboard } = useRawObject<Leaderboard>(
     config.VITE_LEADERBOARD,
@@ -27,7 +27,9 @@ export function YourScore() {
     return null;
   }
 
-  const round = BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch || 0n;
+  const round =
+    BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch + ROUND_OFFSET ||
+    0n;
   const rank =
     (leaderboard &&
       leaderboard.data.topScores.findIndex(

@@ -26,7 +26,7 @@ export function Home() {
   const navigate = useNavigate();
   const { data: epoch } = useEpoch();
   const { currentAccount } = useWalletKit();
-  const { data: scorecard, isSuccess } = useScorecard(currentAccount);
+  const { data: scorecard, isSuccess } = useScorecard();
   const { data: validators } = useValidators();
 
   const { goal, validator } = scorecard?.data.assignment || {

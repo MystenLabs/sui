@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ValidatorMetaData } from "@mysten/sui.js";
-import { useWalletKit } from "@mysten/wallet-kit";
 import clsx from "clsx";
 import { FormEvent, useState } from "react";
 import { useScorecard } from "../../network/queries/scorecard";
@@ -27,8 +26,7 @@ interface Props {
 const DEC = 9;
 
 export function ValidatorItem({ index, validator, stake, delegation }: Props) {
-  const { currentAccount } = useWalletKit();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
   const [amount, setAmount] = useState("");
 
   const onInputAmount = (evt: FormEvent<HTMLInputElement>) => {

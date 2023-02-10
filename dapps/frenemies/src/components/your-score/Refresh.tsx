@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWalletKit } from "@mysten/wallet-kit";
 import { ReactNode } from "react";
-import { config } from "../../config";
+import { config, ROUND_OFFSET } from "../../config";
 import { useEpoch } from "../../network/queries/epoch";
 import {
   useRefreshScorecard,
@@ -17,8 +16,7 @@ interface Props {
 }
 
 export function Refresh({ fallback = null }: Props) {
-  const { currentAccount } = useWalletKit();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
   const { data: epoch } = useEpoch();
   const { data: leaderboard } = useRawObject<Leaderboard>(
     config.VITE_LEADERBOARD,
@@ -35,7 +33,9 @@ export function Refresh({ fallback = null }: Props) {
     return <>{fallback}</>;
   }
 
-  const round = BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch || 0n;
+  const round =
+    BigInt(epoch?.epoch || 0) - leaderboard.data.startEpoch + ROUND_OFFSET ||
+    0n;
 
   return (
     <div className="absolute top-0 right-0">

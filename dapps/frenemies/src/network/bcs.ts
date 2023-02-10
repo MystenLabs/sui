@@ -7,6 +7,7 @@ import {
   DELEGATION,
   GENERIC_COIN,
   LEADERBOARD,
+  OLD_SCORECARD,
   SCORECARD,
   SCORECARD_UPDATED,
   STAKED_SUI,
@@ -21,6 +22,14 @@ export const bcs = suiBcs
     epoch: "u64",
   })
   .registerStructType(SCORECARD, {
+    id: "address",
+    name: "string",
+    assignment: ASSIGNMENT,
+    score: "u16",
+    participation: "u16",
+    epoch: "u64",
+  })
+  .registerStructType(OLD_SCORECARD, {
     id: "address",
     name: "string",
     assignment: ASSIGNMENT,
@@ -55,7 +64,7 @@ export const bcs = suiBcs
   // Sui System + Validators schema
   .registerStructType(GENERIC_COIN, {
     id: "address",
-    value: "u64"
+    value: "u64",
   })
   .registerStructType(STAKED_SUI, {
     id: "address",

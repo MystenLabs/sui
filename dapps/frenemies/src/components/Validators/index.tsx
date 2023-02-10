@@ -11,7 +11,7 @@ import { Card } from "../Card";
 
 export function Validators({ hasAssignment }: { hasAssignment: boolean }) {
   const { currentAccount } = useWalletKit();
-  const { data: scorecard } = useScorecard(currentAccount);
+  const { data: scorecard } = useScorecard();
 
   // At this point there's no way it errors out.
   if (!currentAccount) {
