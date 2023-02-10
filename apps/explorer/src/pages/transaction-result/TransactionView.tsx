@@ -311,6 +311,18 @@ function TransactionView({
         [transaction]
     );
 
+    const recipients = useMemo(() => {
+        return coinTransfer.filter(
+            (_, index) =>
+                index >=
+                    (recipientsPageNumber - 1) *
+                        MAX_RECIPIENTS_PER_PAGE &&
+                index <
+                    recipientsPageNumber *
+                        MAX_RECIPIENTS_PER_PAGE
+        );
+    }, [coinTransfer, recipientsPageNumber]);
+
     // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
     // use absolute value
     const totalRecipientsCount = coinTransfer.length;
@@ -506,15 +518,7 @@ function TransactionView({
                                 <SenderRecipient
                                     sender={sender}
                                     transferCoin={!!coinTransfer}
-                                    recipients={coinTransfer.filter(
-                                        (_, index) =>
-                                            index >=
-                                                (recipientsPageNumber - 1) *
-                                                    MAX_RECIPIENTS_PER_PAGE &&
-                                            index <
-                                                recipientsPageNumber *
-                                                    MAX_RECIPIENTS_PER_PAGE
-                                    )}
+                                    recipients={recipients}
                                 />
                                 <div className="mt-5 flex w-full max-w-lg">
                                     {totalRecipientsCount >
