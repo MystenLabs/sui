@@ -8,6 +8,7 @@ use tempfile::tempdir;
 use std::{sync::Arc, time::Duration};
 
 use broadcast::{Receiver, Sender};
+use sui_types::committee::ProtocolVersion;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use tokio::{sync::broadcast, time::timeout};
 
@@ -355,7 +356,10 @@ fn sync_end_of_epoch_checkpoint(
         CommitteeFixture::generate(rand::rngs::OsRng, committee.committee().epoch + 1, 4);
     let (_sequence_number, _digest, checkpoint) = committee.make_end_of_epoch_checkpoint(
         previous_checkpoint,
-        new_committee.committee().voting_rights.clone(),
+        Some(EndOfEpochData {
+            next_epoch_committee: new_committee.committee().voting_rights.clone(),
+            next_epoch_protocol_version: ProtocolVersion::MIN,
+        }),
     );
     sync_checkpoint(&checkpoint, checkpoint_store, sender);
 

@@ -5,6 +5,7 @@ expression: genesis.sui_system_object()
 info:
   id: "0x0000000000000000000000000000000000000005"
 epoch: 0
+protocol_version: 1
 validators:
   validator_stake: 1
   delegation_stake: 0
@@ -507,3 +508,4 @@ stake_subsidy:
   current_epoch_amount: 1000000
 safe_mode: false
 epoch_start_timestamp_ms: 10
+

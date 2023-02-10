@@ -3,7 +3,7 @@
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::collection_types::{VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetAddresses, StakeUnit};
+use crate::committee::{Committee, CommitteeWithNetAddresses, ProtocolVersion, StakeUnit};
 use crate::crypto::{AuthorityPublicKeyBytes, NetworkPublicKey};
 use crate::{
     balance::{Balance, Supply},
@@ -194,6 +194,7 @@ pub struct ValidatorSet {
 pub struct SuiSystemState {
     pub info: UID,
     pub epoch: u64,
+    pub protocol_version: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,
     pub storage_fund: Balance,
@@ -233,10 +234,14 @@ impl SuiSystemState {
             net_addresses.insert(name, net_address);
         }
         CommitteeWithNetAddresses {
-            committee: Committee::new(self.epoch, voting_rights)
-                // unwrap is safe because we should have verified the committee on-chain.
-                // TODO: Make sure we actually verify it.
-                .unwrap(),
+            committee: Committee::new(
+                self.epoch,
+                ProtocolVersion(self.protocol_version),
+                voting_rights,
+            )
+            // unwrap is safe because we should have verified the committee on-chain.
+            // TODO: Make sure we actually verify it.
+            .unwrap(),
             net_addresses,
         }
     }

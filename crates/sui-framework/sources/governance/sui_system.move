@@ -48,6 +48,8 @@ module sui::sui_system {
         id: UID,
         /// The current epoch ID, starting from 0.
         epoch: u64,
+        /// The current protocol version, starting from 1.
+        protocol_version: u64,
         /// Contains all information about the validators.
         validators: ValidatorSet,
         /// The SUI treasury capability needed to mint SUI.
@@ -81,6 +83,7 @@ module sui::sui_system {
     /// the epoch advancement transaction.
     struct SystemEpochInfo has copy, drop {
         epoch: u64,
+        protocol_version: u64,
         reference_gas_price: u64,
         total_stake: u64,
         storage_fund_inflows: u64,
@@ -113,6 +116,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         initial_stake_subsidy_amount: u64,
+        protocol_version: u64,
         epoch_start_timestamp_ms: u64,
     ) {
         let validators = validator_set::new(validators);
@@ -121,6 +125,7 @@ module sui::sui_system {
             // Use a hardcoded ID.
             id: object::sui_system_state(),
             epoch: 0,
+            protocol_version,
             validators,
             sui_supply,
             storage_fund,
@@ -436,6 +441,7 @@ module sui::sui_system {
     public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
+        next_protocol_version: u64,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
@@ -504,6 +510,9 @@ module sui::sui_system {
             reward_slashing_rate,
             ctx,
         );
+
+        self.protocol_version = next_protocol_version;
+
         // Derive the reference gas price for the new epoch
         self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
@@ -527,6 +536,7 @@ module sui::sui_system {
         event::emit(
             SystemEpochInfo {
                 epoch: self.epoch,
+                protocol_version: self.protocol_version,
                 reference_gas_price: self.reference_gas_price,
                 total_stake: new_total_stake,
                 storage_fund_inflows: storage_charge + (storage_fund_reinvestment_amount as u64),
@@ -542,17 +552,22 @@ module sui::sui_system {
     }
 
     /// An extremely simple version of advance_epoch.
-    /// This is only called when the call to advance_epoch failed due to a bug, and we want to be able to keep the system
-    /// running and continue making epoch changes.
+    /// This is called in two situations:
+    ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
+    ///     system running and continue making epoch changes.
+    ///   - When advancing to a new protocol version, we want to be able to change the protocol
+    ///     version
     public entry fun advance_epoch_safe_mode(
         self: &mut SuiSystemState,
         new_epoch: u64,
+        next_protocol_version: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
 
         self.epoch = new_epoch;
+        self.protocol_version = next_protocol_version;
         self.safe_mode = true;
     }
 

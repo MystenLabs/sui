@@ -3,6 +3,10 @@
 
 // Constants that change the behavior of the protocol
 
+/// The minimum and maximum protocol versions supported by this build.
+pub const MIN_PROTOCOL_VERSION: u64 = 1;
+pub const MAX_PROTOCOL_VERSION: u64 = 1;
+
 // ==== Move VM, Move bytecode verifier, and execution limits ===
 
 /// Maximum Move bytecode version the VM understands. All older versions are accepted.

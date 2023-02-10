@@ -276,16 +276,11 @@ impl FullNodeProxy {
 
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
-        let committee = if let Some(committee_vec) = resp.committee_info {
-            let committee_map =
-                BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-            Committee::new(epoch, committee_map)?
-        } else {
-            bail!(
-                "Get empty committee info from fullnode for epoch {:?}",
-                epoch
-            )
-        };
+        let protocol_version = resp.protocol_version;
+        let committee_vec = resp.committee_info;
+        let committee_map =
+            BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
+        let committee = Committee::new(epoch, protocol_version, committee_map)?;
 
         Ok(Self {
             sui_client,

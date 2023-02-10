@@ -38,6 +38,8 @@ CallArg:
 ChangeEpoch:
   STRUCT:
     - epoch: U64
+    - protocol_version:
+        TYPENAME: ProtocolVersion
     - storage_charge: U64
     - computation_charge: U64
     - storage_rebate: U64
@@ -434,6 +436,8 @@ PaySui:
           TYPENAME: SuiAddress
     - amounts:
         SEQ: U64
+ProtocolVersion:
+  NEWTYPESTRUCT: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
 Sha3Digest:
