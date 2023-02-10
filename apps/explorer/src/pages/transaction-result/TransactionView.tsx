@@ -314,12 +314,8 @@ function TransactionView({
     const recipients = useMemo(() => {
         return coinTransfer.filter(
             (_, index) =>
-                index >=
-                    (recipientsPageNumber - 1) *
-                        MAX_RECIPIENTS_PER_PAGE &&
-                index <
-                    recipientsPageNumber *
-                        MAX_RECIPIENTS_PER_PAGE
+                index >= (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE &&
+                index < recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE
         );
     }, [coinTransfer, recipientsPageNumber]);
 
