@@ -7,6 +7,7 @@ import { Base64DataBuffer } from '../serialization/base64';
 ///////////////////////////////
 // Exported Types
 
+// TODO: Make a version of this that is easily serialized:
 /**
  * Pair of signature and corresponding public key
  */

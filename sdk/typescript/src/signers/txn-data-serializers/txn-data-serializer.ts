@@ -9,6 +9,7 @@ import {
   SuiJsonValue,
   TypeTag,
 } from '../../types';
+import { SignaturePubkeyPair } from '../signer';
 
 ///////////////////////////////
 // Exported Types
@@ -106,6 +107,11 @@ export interface RawMoveCall {
   function: string;
   typeArguments: string[];
   arguments: SuiJsonValue[];
+}
+
+export interface SignedTransaction {
+  transactionBytes: Base64DataBuffer;
+  signature: SignaturePubkeyPair;
 }
 
 export type UnserializedSignableTransaction =

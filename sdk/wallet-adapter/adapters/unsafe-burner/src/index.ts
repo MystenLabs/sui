@@ -49,6 +49,15 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     return [this.#keypair.getPublicKey().toSuiAddress()];
   }
 
+  async signTransaction(transaction: SignableTransaction) {
+    const response = await this.#signer.signTransaction(transaction);
+
+    return {
+      transactionBytes: response.transactionBytes.toString(),
+      signature: response.signature,
+    };
+  }
+
   async signAndExecuteTransaction(
     transaction: SignableTransaction,
     options?: { requestType?: ExecuteTransactionRequestType }

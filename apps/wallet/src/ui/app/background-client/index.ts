@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, publicKeyFromSerialized } from '@mysten/sui.js';
+import {
+    Base64DataBuffer,
+    publicKeyFromSerialized,
+    SignedTransaction,
+} from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -96,7 +100,8 @@ export class BackgroundClient {
         txID: string,
         approved: boolean,
         txResult: SuiTransactionResponse | undefined,
-        tsResultError: string | undefined
+        tsResultError: string | undefined,
+        txSigned: SignedTransaction | undefined
     ) {
         this.sendMessage(
             createMessage<TransactionRequestResponse>({
@@ -105,6 +110,7 @@ export class BackgroundClient {
                 txID,
                 txResult,
                 tsResultError,
+                txSigned,
             })
         );
     }

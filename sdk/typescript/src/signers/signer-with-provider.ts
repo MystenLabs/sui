@@ -33,6 +33,7 @@ import {
   PublishTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
+  SignedTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
 // See: sui/crates/sui-types/src/intent.rs
@@ -88,6 +89,41 @@ export abstract class SignerWithProvider implements Signer {
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
+  async signTransaction(
+    transaction: Base64DataBuffer | SignableTransaction,
+  ): Promise<SignedTransaction> {
+    let transactionBytes;
+    if (
+      transaction instanceof Base64DataBuffer ||
+      transaction.kind === 'bytes'
+    ) {
+      transactionBytes =
+        transaction instanceof Base64DataBuffer
+          ? transaction
+          : new Base64DataBuffer(transaction.data);
+    } else {
+      transactionBytes = await this.serializer.serializeToBytes(
+        await this.getAddress(),
+        transaction,
+        'Commit',
+      );
+    }
+
+    const intentMessage = new Uint8Array(
+      INTENT_BYTES.length + transactionBytes.getLength(),
+    );
+    intentMessage.set(INTENT_BYTES);
+    intentMessage.set(transactionBytes.getData(), INTENT_BYTES.length);
+
+    const dataToSign = new Base64DataBuffer(intentMessage);
+    const signature = await this.signData(dataToSign);
+
+    return {
+      transactionBytes,
+      signature,
+    };
+  }
+
   /**
    * Sign a transaction and submit to the Fullnode for execution. Only exists
    * on Fullnode
@@ -96,38 +132,15 @@ export abstract class SignerWithProvider implements Signer {
     transaction: Base64DataBuffer | SignableTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
-    // Handle submitting raw transaction bytes:
-    if (
-      transaction instanceof Base64DataBuffer ||
-      transaction.kind === 'bytes'
-    ) {
-      const txBytes =
-        transaction instanceof Base64DataBuffer
-          ? transaction
-          : new Base64DataBuffer(transaction.data);
-      const intentMessage = new Uint8Array(
-        INTENT_BYTES.length + txBytes.getLength(),
-      );
-      intentMessage.set(INTENT_BYTES);
-      intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+    const { signature, transactionBytes } = await this.signTransaction(
+      transaction,
+    );
 
-      const dataToSign = new Base64DataBuffer(intentMessage);
-      const txBytesToSubmit = txBytes;
-      const sig = await this.signData(dataToSign);
-      return await this.provider.executeTransaction(
-        txBytesToSubmit,
-        sig.signatureScheme,
-        sig.signature,
-        sig.pubKey,
-        requestType,
-      );
-    }
-    return await this.signAndExecuteTransaction(
-      await this.serializer.serializeToBytes(
-        await this.getAddress(),
-        transaction,
-        'Commit',
-      ),
+    return await this.provider.executeTransaction(
+      transactionBytes,
+      signature.signatureScheme,
+      signature.signature,
+      signature.pubKey,
       requestType,
     );
   }
