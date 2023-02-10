@@ -43,7 +43,11 @@ export function Table({ data, round, leaderboard }: Props) {
   const dataByRound: { [key: string]: ScorecardUpdatedEvent } = data.reduce(
     (acc, row) =>
       Object.assign(acc, {
-        [(row.assignment.epoch - leaderboard.startEpoch).toString()]: row,
+        [(
+          row.assignment.epoch -
+          leaderboard.startEpoch +
+          ROUND_OFFSET
+        ).toString()]: row,
       }),
     {}
   );
