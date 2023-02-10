@@ -35,8 +35,6 @@ export function TabGroup({ size, ...props }: TabGroupProps) {
 const tabStyles = cva(
     [
         'border-b border-transparent ui-selected:border-gray-65 font-semibold text-steel-dark hover:text-steel-darker active:text-steel pb-2 -mb-px',
-        // TODO: remove once we have a CSS reset:
-        'bg-transparent border-0 border-solid outline-none px-0 cursor-pointer',
     ],
     {
         variants: {

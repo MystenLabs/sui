@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-import { type NavLinks, navLinks } from './navLinks';
+import { type NavLinks, navLinks } from './footerLinks';
 
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
@@ -23,7 +23,6 @@ function Footer() {
                             </Text>
                         </div>
                     </div>
-
                     <FooterLinks links={navLinks} />
                 </div>
             </nav>
@@ -42,16 +41,11 @@ function FooterLinks({ links }: { links: NavLinks }) {
                     <Text variant="captionSmall/bold" color="gray-60">
                         {category}
                     </Text>
-
                     <ul className="flex flex-col gap-y-3.5">
                         {items.map(({ title, href }) => {
                             return (
                                 <li key={href}>
-                                    <Link
-                                        color="white"
-                                        variant="text"
-                                        href={href}
-                                    >
+                                    <Link variant="text" href={href}>
                                         <Text
                                             variant="body/medium"
                                             color="white"
