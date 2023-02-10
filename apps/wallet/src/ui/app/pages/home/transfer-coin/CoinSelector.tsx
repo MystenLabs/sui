@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
+import {
+    WalletActionStake24,
+    ArrowRight16,
+    Info16,
+    Swap16,
+} from '@mysten/icons';
 import { useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
