@@ -5,6 +5,7 @@ import {
   createContext,
   ReactNode,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -12,20 +13,19 @@ import {
 import {
   createWalletKitCore,
   WalletKitCore,
+  WalletKitCoreOptions,
   WalletKitCoreState,
 } from "@mysten/wallet-kit-core";
 import { WalletStandardAdapterProvider } from "@mysten/wallet-adapter-wallet-standard";
 import { UnsafeBurnerWalletAdapter } from "@mysten/wallet-adapter-unsafe-burner";
-import { WalletAdapterList } from "@mysten/wallet-adapter-base";
 
 export const WalletKitContext = createContext<WalletKitCore | null>(null);
 
-interface WalletKitProviderProps {
-  adapters?: WalletAdapterList;
-  preferredWallets?: string[];
+interface WalletKitProviderProps extends Partial<WalletKitCoreOptions> {
   /** Enable the development-only unsafe burner wallet, which is can be useful for testing. */
   enableUnsafeBurner?: boolean;
   children: ReactNode;
+  disableAutoConnect?: boolean;
 }
 
 export function WalletKitProvider({
@@ -33,6 +33,9 @@ export function WalletKitProvider({
   preferredWallets,
   children,
   enableUnsafeBurner,
+  storageAdapter,
+  storageKey,
+  disableAutoConnect,
 }: WalletKitProviderProps) {
   const adapters = useMemo(
     () =>
@@ -45,8 +48,24 @@ export function WalletKitProvider({
 
   const walletKitRef = useRef<WalletKitCore | null>(null);
   if (!walletKitRef.current) {
-    walletKitRef.current = createWalletKitCore({ adapters, preferredWallets });
+    walletKitRef.current = createWalletKitCore({
+      adapters,
+      preferredWallets,
+      storageAdapter,
+      storageKey,
+    });
   }
+
+  // Automatically trigger the autoconnect logic when we mount, and whenever wallets change:
+  const { wallets } = useSyncExternalStore(
+    walletKitRef.current.subscribe,
+    walletKitRef.current.getState
+  );
+  useEffect(() => {
+    if (!disableAutoConnect) {
+      walletKitRef.current?.autoconnect();
+    }
+  }, [wallets]);
 
   return (
     <WalletKitContext.Provider value={walletKitRef.current}>

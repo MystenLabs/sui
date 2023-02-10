@@ -13,10 +13,15 @@ import {
   WalletAdapter,
   isWalletProvider,
 } from "@mysten/wallet-adapter-base";
+import { localStorageAdapter, StorageAdapter } from "./storage";
+
+export * from "./storage";
 
 export interface WalletKitCoreOptions {
   adapters: WalletAdapterList;
   preferredWallets?: string[];
+  storageAdapter?: StorageAdapter;
+  storageKey?: string;
 }
 
 export enum WalletKitCoreConnectionStatus {
@@ -42,6 +47,7 @@ export interface WalletKitCoreState extends InternalWalletKitCoreState {
 }
 
 export interface WalletKitCore {
+  autoconnect(): Promise<void>;
   getState(): WalletKitCoreState;
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
@@ -57,6 +63,8 @@ export type Unsubscribe = () => void;
 
 const SUI_WALLET_NAME = "Sui Wallet";
 
+const RECENT_WALLET_STORAGE = "wallet-kit:last-wallet";
+
 function sortWallets(wallets: WalletAdapter[], preferredWallets: string[]) {
   return [
     // Preferred wallets, in order:
@@ -69,13 +77,14 @@ function sortWallets(wallets: WalletAdapter[], preferredWallets: string[]) {
   ];
 }
 
-// TODO: Support autoconnect.
 // TODO: Support lazy loaded adapters, where we'll resolve the adapters only once we attempt to use them.
 // That should allow us to have effective code-splitting practices. We should also allow lazy loading of _many_
 // wallet adapters in one bag so that we can split _all_ of the adapters from the core.
 export function createWalletKitCore({
   adapters,
   preferredWallets = [SUI_WALLET_NAME],
+  storageAdapter = localStorageAdapter,
+  storageKey = RECENT_WALLET_STORAGE,
 }: WalletKitCoreOptions): WalletKitCore {
   const subscriptions: Set<(state: WalletKitCoreState) => void> = new Set();
   let walletEventUnsubscribe: (() => void) | null = null;
@@ -137,7 +146,18 @@ export function createWalletKitCore({
     );
   }
 
-  return {
+  const walletKit: WalletKitCore = {
+    async autoconnect() {
+      if (state.currentWallet) return;
+
+      try {
+        const lastWalletName = await storageAdapter.get(storageKey);
+        if (lastWalletName) {
+          walletKit.connect(lastWalletName);
+        }
+      } catch {}
+    },
+
     getState() {
       return state;
     },
@@ -176,6 +196,9 @@ export function createWalletKitCore({
           setState({ status: WalletKitCoreConnectionStatus.CONNECTING });
           await currentWallet.connect();
           setState({ status: WalletKitCoreConnectionStatus.CONNECTED });
+          try {
+            await storageAdapter.set(storageKey, currentWallet.name);
+          } catch {}
           // TODO: Rather than using this method, we should just standardize the wallet properties on the adapter itself:
           const accounts = await currentWallet.getAccounts();
           // TODO: Implement account selection:
@@ -196,6 +219,9 @@ export function createWalletKitCore({
         console.warn("Attempted to `disconnect` but no wallet was connected.");
         return;
       }
+      try {
+        await storageAdapter.del(storageKey);
+      } catch {}
       await internalState.currentWallet.disconnect();
       disconnected();
     },
@@ -213,4 +239,6 @@ export function createWalletKitCore({
       );
     },
   };
+
+  return walletKit;
 }
