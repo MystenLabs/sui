@@ -478,7 +478,6 @@ impl SuiAuthoritySignature for AuthoritySignature {
         let mut message = Vec::new();
         value.write(&mut message);
         epoch_id.write(&mut message);
-        // This unwrap is exactly what signature::Signer used to do, so it's safe to do here.
         SuiSigner::sign(secret, &message)
     }
 
