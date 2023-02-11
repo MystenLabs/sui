@@ -32,7 +32,7 @@
 }
 
 .ownedobjectheader {
-    @apply pb-1;
+    @apply my-4;
 }
 
 .ownedobjectheader > h2 {

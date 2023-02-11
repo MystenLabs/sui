@@ -4,14 +4,14 @@
     .basecontainer {
         @apply inline-block h-[2.3rem]
         items-center rounded border-[1px] border-solid
-        border-gray-50 bg-inherit
-        stroke-gray-75 font-sans text-gray-75;
+        border-gray-50 bg-inherit stroke-gray-75
+        font-sans text-sm text-gray-75;
 
         box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
     }
 
     .desktopfooter .basecontainer {
-        @apply mx-1 px-2 py-2 text-sm;
+        @apply mx-1 px-2 py-2;
     }
 
     .under6footer .basecontainer {
