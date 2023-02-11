@@ -8,34 +8,33 @@ use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    GetRawObjectDataResponse, SuiObjectInfo, SuiTransactionBuilderMode, SuiTypeTag,
-    TransactionBytes,
+    GetRawObjectDataResponse, SuiInputObjectKind, SuiObjectInfo, SuiTransactionBuilderMode,
+    SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    messages::TransactionData,
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    digests::ObjectDigest,
+    messages::SingleTransactionKind,
 };
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
-use sui_adapter::execution_mode::{DevInspect, Normal};
+use sui_adapter::execution_mode;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::RPCTransactionRequestParams;
 
 pub struct TransactionBuilderApi {
-    builder: TransactionBuilder<Normal>,
-    dev_inspect_builder: TransactionBuilder<DevInspect>,
+    builder: TransactionBuilder,
 }
 
 impl TransactionBuilderApi {
     pub fn new(state: Arc<AuthorityState>) -> Self {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self {
-            builder: TransactionBuilder::new(reader.clone()),
-            dev_inspect_builder: TransactionBuilder::new(reader),
+            builder: TransactionBuilder::new(reader),
         }
     }
 }
@@ -225,27 +224,48 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
-        gas_budget: u64,
+        gas_budget: Option<u64>,
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
-        let data: TransactionData = match mode {
+        match mode {
             SuiTransactionBuilderMode::DevInspect => {
-                self.dev_inspect_builder
-                    .move_call(
-                        signer,
+                let move_call = self
+                    .builder
+                    .single_move_call::<execution_mode::DevInspect>(
                         package_object_id,
                         &module,
                         &function,
                         type_arguments,
                         rpc_arguments,
-                        gas,
-                        gas_budget,
                     )
-                    .await?
+                    .await?;
+                let kind = SingleTransactionKind::Call(move_call);
+                let input_objects = kind
+                    .input_objects()
+                    .map_err(anyhow::Error::from)?
+                    .into_iter()
+                    .map(SuiInputObjectKind::from)
+                    .collect();
+                let tx_bytes = Base64::from_bytes(
+                    bcs::to_bytes(&kind)
+                        .map_err(anyhow::Error::from)?
+                        .as_slice(),
+                );
+                Ok(TransactionBytes {
+                    tx_bytes,
+                    gas: (ObjectID::ZERO, SequenceNumber::MIN, ObjectDigest::MIN).into(),
+                    input_objects,
+                })
             }
             SuiTransactionBuilderMode::Commit => {
-                self.builder
+                let Some(gas_budget) = gas_budget else {
+                    return Err(
+                        anyhow::anyhow!("gas_budget must be specified in Commit mode").into()
+                    )
+                };
+                let data = self
+                    .builder
                     .move_call(
                         signer,
                         package_object_id,
@@ -256,10 +276,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                         gas,
                         gas_budget,
                     )
-                    .await?
+                    .await?;
+                Ok(TransactionBytes::from_data(data)?)
             }
-        };
-        Ok(TransactionBytes::from_data(data)?)
+        }
     }
 
     async fn batch_transaction(
@@ -268,21 +288,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
-        let data = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
-                self.dev_inspect_builder
-                    .batch_transaction(signer, params, gas, gas_budget)
-                    .await?
-            }
-            SuiTransactionBuilderMode::Commit => {
-                self.builder
-                    .batch_transaction(signer, params, gas, gas_budget)
-                    .await?
-            }
-        };
+        let data = self
+            .builder
+            .batch_transaction::<execution_mode::Normal>(signer, params, gas, gas_budget)
+            .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
 
