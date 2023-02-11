@@ -415,6 +415,16 @@ impl Proposer {
         debug!("Dag starting at round {}", self.round);
         let mut advance = true;
 
+        let position = self
+            .committee
+            .authorities()
+            .position(|(name, _authority)| name.clone() == self.name)
+            .unwrap();
+
+        if position == 0 {
+            debug!("Node will switch between should_send modes");
+        }
+
         let timer_start = Instant::now();
         let max_delay_timer = sleep_until(timer_start + self.max_header_delay);
         let min_delay_timer = sleep_until(timer_start + self.min_header_delay);
@@ -424,6 +434,7 @@ impl Proposer {
             .unwrap_or(DEFAULT_HEADER_RESEND_TIMEOUT);
         let mut header_repeat_timer = Box::pin(sleep(header_resend_timeout));
         let mut opt_latest_header = None;
+        let mut should_send = true;
 
         tokio::pin!(max_delay_timer);
         tokio::pin!(min_delay_timer);
@@ -463,27 +474,35 @@ impl Proposer {
                 self.metrics.current_round.set(self.round as i64);
                 debug!("Dag moved to round {}", self.round);
 
-                // Make a new header.
-                match self.make_header().await {
-                    Err(e @ DagError::ShuttingDown) => debug!("{e}"),
-                    Err(e) => panic!("Unexpected error: {e}"),
-                    Ok((header, digests)) => {
-                        let reason = if max_delay_timed_out {
-                            "max_timeout"
-                        } else if enough_digests {
-                            "threshold_size_reached"
-                        } else {
-                            "min_timeout"
-                        };
+                // we want anyone else except the first validator to produce headers normally.
+                // we flip a bit every 240 rounds and we either send headers, or we don't
+                if self.round % 240 == 0 {
+                    should_send = !should_send;
+                    debug!("Switched mode for should_send to {}", should_send);
+                }
+                if position > 0 || should_send {
+                    // Make a new header.
+                    match self.make_header().await {
+                        Err(e @ DagError::ShuttingDown) => debug!("{e}"),
+                        Err(e) => panic!("Unexpected error: {e}"),
+                        Ok((header, digests)) => {
+                            let reason = if max_delay_timed_out {
+                                "max_timeout"
+                            } else if enough_digests {
+                                "threshold_size_reached"
+                            } else {
+                                "min_timeout"
+                            };
 
-                        // Save the header
-                        opt_latest_header = Some(header);
-                        header_repeat_timer = Box::pin(sleep(header_resend_timeout));
+                            // Save the header
+                            opt_latest_header = Some(header);
+                            header_repeat_timer = Box::pin(sleep(header_resend_timeout));
 
-                        self.metrics
-                            .num_of_batch_digests_in_header
-                            .with_label_values(&[reason])
-                            .observe(digests as f64);
+                            self.metrics
+                                .num_of_batch_digests_in_header
+                                .with_label_values(&[reason])
+                                .observe(digests as f64);
+                        }
                     }
                 }
 
