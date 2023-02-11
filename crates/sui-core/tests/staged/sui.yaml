@@ -363,29 +363,17 @@ ObjectArg:
           - mutable: BOOL
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
-ObjectFormatOptions:
-  STRUCT:
-    - include_types: BOOL
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
 ObjectInfoRequestKind:
   ENUM:
     0:
-      LatestObjectInfo:
-        NEWTYPE:
-          OPTION:
-            TYPENAME: ObjectFormatOptions
+      LatestObjectInfo: UNIT
     1:
-      PastObjectInfo:
+      PastObjectInfoDebug:
         NEWTYPE:
           TYPENAME: SequenceNumber
-    2:
-      PastObjectInfoDebug:
-        TUPLE:
-          - TYPENAME: SequenceNumber
-          - OPTION:
-              TYPENAME: ObjectFormatOptions
 Owner:
   ENUM:
     0:

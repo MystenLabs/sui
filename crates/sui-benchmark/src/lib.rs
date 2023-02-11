@@ -17,18 +17,15 @@ use sui_core::{
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::SuiAddress;
-use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{
-    base_types::ObjectID,
-    committee::{Committee, EpochId},
-    messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
-    object::{Object, ObjectRead},
-    SUI_SYSTEM_STATE_OBJECT_ID,
-};
+use sui_types::{base_types::ObjectID, sui_system_state::SuiSystemState};
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
+};
+use sui_types::{base_types::SuiAddress, object::Object};
+use sui_types::{
+    committee::{Committee, EpochId},
+    messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
 };
 use tracing::{error, info};
 
@@ -104,6 +101,8 @@ impl ExecutionEffects {
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
 
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error>;
+
     async fn execute_transaction(
         &self,
         tx: Transaction,
@@ -118,6 +117,7 @@ pub trait ValidatorProxy {
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error>;
 }
 
+// TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
 pub struct LocalValidatorAggregatorProxy {
     _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
@@ -192,10 +192,14 @@ impl LocalValidatorAggregatorProxy {
 impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         let auth_agg = self.qd.authority_aggregator().load();
-        match auth_agg.get_object_info_execute(object_id).await? {
-            ObjectRead::Exists(_, object, _) => Ok(object),
-            other => bail!("object {object_id} does not exist: {:?}", other),
-        }
+        Ok(auth_agg
+            .get_latest_object_version_for_testing(object_id)
+            .await?)
+    }
+
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
+        let auth_agg = self.qd.authority_aggregator().load();
+        auth_agg.get_latest_system_state_object_for_testing().await
     }
 
     async fn execute_transaction(
@@ -249,10 +253,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error> {
-        let system_state = self.get_object(SUI_SYSTEM_STATE_OBJECT_ID).await?;
-        let move_obj = system_state.data.try_as_move().unwrap();
-        let result = bcs::from_bytes::<SuiSystemState>(move_obj.contents())?;
-        Ok(result
+        let system_state = self.get_latest_system_state_object().await?;
+        Ok(system_state
             .validators
             .active_validators
             .into_iter()
@@ -293,9 +295,13 @@ impl FullNodeProxy {
 impl ValidatorProxy for FullNodeProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         match self.sui_client.read_api().get_object(object_id).await? {
-            SuiObjectRead::Exists(sui_obj) => sui_obj.try_into(),
-            other => bail!("object {object_id} does not exist: {:?}", other),
+            SuiObjectRead::Exists(sui_object) => sui_object.try_into(),
+            _ => bail!("Object {:?} not found", object_id),
         }
+    }
+
+    async fn get_latest_system_state_object(&self) -> Result<SuiSystemState, anyhow::Error> {
+        Ok(self.sui_client.read_api().get_sui_system_state().await?)
     }
 
     async fn execute_transaction(

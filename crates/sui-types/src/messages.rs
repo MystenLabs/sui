@@ -1285,16 +1285,13 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
-    /// Request the latest object state, if a format option is provided,
-    /// return the layout of the object in the given format.
-    LatestObjectInfo(Option<ObjectFormatOptions>),
-    /// Request the object state at a specific version
-    PastObjectInfo(SequenceNumber),
-    /// Similar to PastObjectInfo, except that it will also return the object content.
-    /// This is used only for debugging purpose and will not work in the long run when
-    /// we stop storing all historic versions of every object.
+    /// Request the latest object state.
+    LatestObjectInfo,
+    /// Request a specific version of the object.
+    /// This is used only for debugging purpose and will not work as a generic solution
+    /// since we don't keep around all historic object versions.
     /// No production code should depend on this kind.
-    PastObjectInfoDebug(SequenceNumber, Option<ObjectFormatOptions>),
+    PastObjectInfoDebug(SequenceNumber),
 }
 
 /// A request for information about an object and optionally its
@@ -1303,15 +1300,22 @@ pub enum ObjectInfoRequestKind {
 pub struct ObjectInfoRequest {
     /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
+    /// if a format option is provided, return the layout of the object in the given format.
+    pub object_format_options: Option<ObjectFormatOptions>,
     /// The type of request, either latest object info or the past.
     pub request_kind: ObjectInfoRequestKind,
 }
 
 impl ObjectInfoRequest {
-    pub fn past_object_info_request(object_id: ObjectID, version: SequenceNumber) -> Self {
+    pub fn past_object_info_debug_request(
+        object_id: ObjectID,
+        version: SequenceNumber,
+        layout: Option<ObjectFormatOptions>,
+    ) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_kind: ObjectInfoRequestKind::PastObjectInfo(version),
+            object_format_options: layout,
+            request_kind: ObjectInfoRequestKind::PastObjectInfoDebug(version),
         }
     }
 
@@ -1321,82 +1325,33 @@ impl ObjectInfoRequest {
     ) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(layout),
+            object_format_options: layout,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         }
     }
 }
 
+/// This message provides information about the latest object and its lock.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectResponse<T = SignedTransaction> {
+pub struct ObjectInfoResponse {
     /// Value of the requested object in this authority
     pub object: Object,
-    /// Transaction the object is locked on in this authority.
-    /// None if the object is not currently locked by this authority.
-    pub lock: Option<T>,
     /// Schema of the Move value inside this object.
     /// None if the object is a Move package, or the request did not ask for the layout
     pub layout: Option<MoveStructLayout>,
+    /// Transaction the object is locked on in this authority.
+    /// None if the object is not currently locked by this authority.
+    /// This should be only used for debugging purpose, such as from sui-tool. No prod clients should
+    /// rely on it.
+    pub lock_for_debugging: Option<SignedTransaction>,
 }
 
-impl From<ObjectResponse<VerifiedSignedTransaction>> for ObjectResponse {
-    fn from(o: ObjectResponse<VerifiedSignedTransaction>) -> Self {
-        let ObjectResponse {
-            object,
-            lock,
-            layout,
-        } = o;
-
-        Self {
-            object,
-            lock: lock.map(|l| l.into()),
-            layout,
-        }
-    }
-}
-
-/// This message provides information about the latest object and its lock
-/// as well as the parent certificate of the object at a specific version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
-    /// The certificate that created or mutated the object at a given version.
-    /// If no parent certificate was requested the latest certificate concerning
-    /// this object is sent. If the parent was requested and not found a error
-    /// (ParentNotfound or CertificateNotfound) will be returned.
-    pub parent_certificate: Option<CertT>,
-    /// The full reference created by the above certificate
-    pub requested_object_reference: Option<ObjectRef>,
-
-    /// The object and its current lock, returned only if we are requesting
-    /// the latest state of an object.
-    /// If the object does not exist this is also None.
-    pub object_and_lock: Option<ObjectResponse<TxnT>>,
-}
-
-pub type VerifiedObjectInfoResponse =
-    ObjectInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
-
-impl ObjectInfoResponse {
-    pub fn object(&self) -> Option<&Object> {
-        match &self.object_and_lock {
-            Some(ObjectResponse { object, .. }) => Some(object),
-            _ => None,
-        }
-    }
-}
-
-impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
-    fn from(o: VerifiedObjectInfoResponse) -> Self {
-        let ObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
-        } = o;
-        Self {
-            parent_certificate: parent_certificate.map(|p| p.into()),
-            requested_object_reference,
-            object_and_lock: object_and_lock.map(|o| o.into()),
-        }
-    }
+/// Verified version of `ObjectInfoResponse`. `layout` and `lock_for_debugging` are skipped because they
+/// are not needed and we don't want to verify them.
+#[derive(Debug, Clone)]
+pub struct VerifiedObjectInfoResponse {
+    /// Value of the requested object in this authority
+    pub object: Object,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
