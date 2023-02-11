@@ -523,7 +523,7 @@ pub async fn get_framework_object(configs: &[ValidatorInfo]) -> Object {
 pub fn extract_obj(replies: Vec<ObjectInfoResponse>) -> Object {
     let mut all_objects = HashSet::new();
     for reply in replies {
-        all_objects.insert(reply.object_and_lock.unwrap().object);
+        all_objects.insert(reply.object);
     }
     assert_eq!(all_objects.len(), 1);
     all_objects.into_iter().next().unwrap()

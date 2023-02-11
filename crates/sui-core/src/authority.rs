@@ -1413,98 +1413,50 @@ impl AuthorityState {
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> Result<VerifiedObjectInfoResponse, SuiError> {
+    ) -> Result<ObjectInfoResponse, SuiError> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        let ref_and_digest = match request.request_kind {
-            ObjectInfoRequestKind::PastObjectInfo(seq)
-            | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
-                // Get the Transaction Digest that created the object
-                self.get_parent_iterator(request.object_id, Some(seq))
+
+        let requested_object_seq = match request.request_kind {
+            ObjectInfoRequestKind::LatestObjectInfo => {
+                let (_, seq, _) = self
+                    .get_latest_parent_entry(request.object_id)
                     .await?
-                    .next()
+                    .ok_or(SuiError::ObjectNotFound {
+                        object_id: request.object_id,
+                        version: None,
+                    })?
+                    .0;
+                seq
             }
-            ObjectInfoRequestKind::LatestObjectInfo(_) => {
-                // Or get the latest object_reference and transaction entry.
-                self.get_latest_parent_entry(request.object_id).await?
-            }
+            ObjectInfoRequestKind::PastObjectInfoDebug(seq) => seq,
         };
 
-        let (requested_object_reference, parent_certificate) = match ref_and_digest {
-            Some((object_ref, transaction_digest)) => (
-                Some(object_ref),
-                if transaction_digest == TransactionDigest::genesis() {
-                    None
-                } else {
-                    // Get the cert from the transaction digest
-                    Some(self.read_certificate(&transaction_digest).await?.ok_or(
-                        SuiError::CertificateNotfound {
-                            certificate_digest: transaction_digest,
-                        },
-                    )?)
-                },
-            ),
-            None => (None, None),
+        let object = self
+            .database
+            .get_object_by_key(&request.object_id, requested_object_seq)?
+            .ok_or(SuiError::ObjectNotFound {
+                object_id: request.object_id,
+                version: Some(requested_object_seq),
+            })?;
+
+        let layout = match request.object_format_options {
+            Some(format) => object.get_layout(format, self.module_cache.as_ref())?,
+            None => None,
         };
 
-        // Return the latest version of the object and the current lock if any, if requested.
-        let object_and_lock = match request.request_kind {
-            ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
-                match self.get_object(&request.object_id).await {
-                    Ok(Some(object)) => {
-                        let lock = if !object.is_address_owned() {
-                            // Only address owned objects have locks.
-                            None
-                        } else {
-                            self.get_transaction_lock(
-                                &object.compute_object_reference(),
-                                &epoch_store,
-                            )
-                            .await?
-                        };
-                        let layout = match request_layout {
-                            Some(format) => {
-                                object.get_layout(format, self.module_cache.as_ref())?
-                            }
-                            None => None,
-                        };
-
-                        Some(ObjectResponse {
-                            object,
-                            lock,
-                            layout,
-                        })
-                    }
-                    Err(e) => return Err(e),
-                    _ => None,
-                }
-            }
-            ObjectInfoRequestKind::PastObjectInfoDebug(seq, request_layout) => {
-                match self.database.get_object_by_key(&request.object_id, seq) {
-                    Ok(Some(object)) => {
-                        let layout = match request_layout {
-                            Some(format) => {
-                                object.get_layout(format, self.module_cache.as_ref())?
-                            }
-                            None => None,
-                        };
-
-                        Some(ObjectResponse {
-                            object,
-                            lock: None,
-                            layout,
-                        })
-                    }
-                    Err(e) => return Err(e),
-                    _ => None,
-                }
-            }
-            ObjectInfoRequestKind::PastObjectInfo(_) => None,
+        let lock = if !object.is_address_owned() {
+            // Only address owned objects have locks.
+            None
+        } else {
+            self.get_transaction_lock(&object.compute_object_reference(), &epoch_store)
+                .await?
+                .map(|s| s.into_inner())
         };
 
         Ok(ObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
+            object,
+            layout,
+            lock_for_debugging: lock,
         })
     }
 

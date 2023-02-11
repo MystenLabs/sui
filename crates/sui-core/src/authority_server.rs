@@ -437,7 +437,7 @@ impl Validator for ValidatorService {
 
         let response = self.state.handle_object_info_request(request).await?;
 
-        Ok(tonic::Response::new(response.into()))
+        Ok(tonic::Response::new(response))
     }
 
     async fn transaction_info(

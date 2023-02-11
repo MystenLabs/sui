@@ -79,10 +79,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        state
-            .handle_object_info_request(request)
-            .await
-            .map(|r| r.into())
+        state.handle_object_info_request(request).await
     }
 
     /// Handle Object information requests for this account.

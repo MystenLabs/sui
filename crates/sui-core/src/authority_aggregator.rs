@@ -11,8 +11,6 @@ use crate::test_authority_clients::LocalAuthorityClient;
 use crate::validator_info::make_committee;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use itertools::Itertools;
-use move_core_types::value::MoveStructLayout;
 use mysten_metrics::monitored_future;
 use mysten_network::config::Config;
 use std::convert::AsRef;
@@ -22,7 +20,7 @@ use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
 };
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfo};
-use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
+use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     base_types::*,
@@ -843,58 +841,49 @@ where
         }
     }
 
-    /// Query validators for committee information for `epoch` (None indicates
-    /// latest epoch) and try to form a CommitteeInfo if we can get a quorum.
-    pub async fn get_committee_info(&self, epoch: Option<EpochId>) -> SuiResult<CommitteeInfo> {
-        #[derive(Default)]
-        struct GetCommitteeRequestState {
-            bad_weight: StakeUnit,
-            responses: BTreeMap<CommitteeInfoResponseDigest, StakeUnit>,
-            errors: Vec<(AuthorityName, SuiError)>,
-            committee_info: Option<CommitteeInfo>,
+    /// Query the object with highest version number from the authorities.
+    /// We stop after receiving responses from 2f+1 validators.
+    /// This function is untrusted because we simply assume each response is valid and there are no
+    /// byzantine validators.
+    /// Because of this, this function should only be used for testing or benchmarking.
+    pub async fn get_latest_object_version_for_testing(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Object> {
+        #[derive(Debug, Default)]
+        struct State {
+            latest_object_version: Option<Object>,
+            total_weight: StakeUnit,
         }
-        let initial_state = GetCommitteeRequestState::default();
-        let threshold = self.committee.quorum_threshold();
-        let validity = self.committee.validity_threshold();
+        let initial_state = State::default();
         let final_state = self
             .quorum_map_then_reduce_with_timeout(
                 initial_state,
                 |_name, client| {
                     Box::pin(async move {
-                        client
-                            .handle_committee_info_request(CommitteeInfoRequest { epoch })
-                            .await
+                        let request =
+                            ObjectInfoRequest::latest_object_info_request(object_id, None);
+                        client.handle_object_info_request(request).await
                     })
                 },
                 |mut state, name, weight, result| {
                     Box::pin(async move {
+                        state.total_weight += weight;
                         match result {
-                            Ok(resp) => {
-                                let resp_digest = resp.digest();
-                                let info = resp.committee_info;
-                                let total_stake = state.responses.entry(resp_digest).or_default();
-                                *total_stake += weight;
-                                if *total_stake >= threshold {
-                                    state.committee_info = Some(CommitteeInfo {
-                                        epoch: resp.epoch,
-                                        protocol_version: resp.protocol_version,
-                                        committee_info: info,
-                                    });
-                                    return Ok(ReduceOutput::End(state));
+                            Ok(object_info) => {
+                                debug!("Received object info response from validator {:?} with version: {:?}", name.concise(), object_info.object.version());
+                                if state.latest_object_version.as_ref().map_or(true, |latest| {
+                                    object_info.object.version() > latest.version()
+                                }) {
+                                    state.latest_object_version = Some(object_info.object);
                                 }
                             }
                             Err(err) => {
-                                state.bad_weight += weight;
-                                state.errors.push((name, err));
+                                debug!("Received error from validator {:?}: {:?}", name.concise(), err);
                             }
                         };
-
-                        // Return all errors if a quorum is not possible.
-                        if state.bad_weight > validity {
-                            return Err(SuiError::TooManyIncorrectAuthorities {
-                                errors: state.errors,
-                                action: "get_committee_info".to_string(),
-                            });
+                        if state.total_weight >= self.committee.quorum_threshold() {
+                            return Ok(ReduceOutput::End(state));
                         }
                         Ok(ReduceOutput::Continue(state))
                     })
@@ -903,263 +892,33 @@ where
                 self.timeouts.pre_quorum_timeout,
             )
             .await?;
-
-        if let Some(committee_info) = final_state.committee_info {
-            Ok(committee_info)
-        } else {
-            Err(SuiError::TooManyIncorrectAuthorities {
-                errors: final_state.errors,
-                action: "get_committee_info".to_string(),
+        final_state
+            .latest_object_version
+            .ok_or(SuiError::ObjectNotFound {
+                object_id,
+                version: None,
             })
-        }
     }
 
-    /// Query validators for latest SuiSystemState and try to form
-    /// CommitteeWithNetworkAddress. Only return Some(CommitteeWithNetAddresses)
-    /// when there is quorum. This function tolerates uninteresting
-    /// differences in SuiSystemState as long as they all link to the same
-    /// CommitteeWithNetAddresses.
-    /// This function ignores SuiSystemState that has older epoch than
-    /// `minimal_epoch`.
-    /// Usually, the caller should pass in the local incumbent epoch id
-    /// as `minimal_epoch`, to avoid getting confused by byzantine
-    /// validators.
-    pub async fn get_committee_with_net_addresses(
+    /// Get the latest system state object from the authorities.
+    /// This function assumes all validators are honest.
+    /// It should only be used for testing or benchmarking.
+    pub async fn get_latest_system_state_object_for_testing(
         &self,
-        minimal_epoch: EpochId,
-    ) -> SuiResult<CommitteeWithNetAddresses> {
-        let (aggregate_object_info, _certificates) =
-            // Skip committee check because this call usually happens when there's a potential new epoch
-            self.get_object_by_id(SUI_SYSTEM_STATE_OBJECT_ID, true).await?;
-
-        let mut committee_and_sigs = aggregate_object_info
-            .into_iter()
-            .filter_map(
-                |(
-                    (_object_ref, _transaction_digest),
-                    (object_option, _layout_option, object_authorities),
-                )| {
-                    if let Some(object) = object_option {
-                        let system_state = object.data.try_as_move().and_then(|move_object| {
-                            bcs::from_bytes::<SuiSystemState>(move_object.contents()).ok()
-                        })?;
-                        if system_state.epoch < minimal_epoch {
-                            None
-                        } else {
-                            let committee = system_state.get_current_epoch_committee();
-                            Some((committee, object_authorities))
-                        }
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect::<Vec<_>>();
-        // Need to be sorted before applying `group_by`
-        committee_and_sigs
-            .sort_by(|lhs, rhs| Ord::cmp(&lhs.0.committee.epoch, &rhs.0.committee.epoch));
-        let mut committee_and_votes = committee_and_sigs
-            .iter()
-            .group_by(|(committee, _votes)| committee.digest())
-            .into_iter()
-            .map(|(_committee_digest, groups)| {
-                let groups = groups.collect::<Vec<_>>();
-                let votes: StakeUnit = groups
-                    .iter()
-                    .map(|(_committee, object_authorities)| {
-                        object_authorities
-                            .iter()
-                            .map(|(name, _)| self.committee.weight(name))
-                            .sum::<StakeUnit>()
-                    })
-                    .sum();
-                // Due to the nature of `group_by`, `groups` has at least one item
-                let committee = groups[0].0.clone();
-                (committee, votes)
-            })
-            .collect::<Vec<_>>();
-        // Sort by votes. The last item is the one with the most votes, we will examine it.
-        // We don't order by epoch to prevent it from being stuck when some byzantine validators
-        // give wrong results. At the end of day, we need quorum to be certain.
-        committee_and_votes.sort_by(|lhs, rhs| Ord::cmp(&lhs.1, &rhs.1));
-        let (committee, votes) = committee_and_votes
-            .pop()
-            .ok_or(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch })?;
-        // TODO: we could try to detect byzantine behavior here, e.g. for the same epoch
-        // there are conflicting committee information.
-        // If supermajority agrees on the committee state, we are good.
-        if votes >= self.committee.quorum_threshold() {
-            Ok(committee)
-        } else {
-            Err(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch })
-        }
-    }
-
-    /// Return all the information in the network regarding the latest state of a specific object.
-    /// For each authority queried, we obtain the latest object state along with the certificate that
-    /// lead up to that state. The results from each authority are aggregated for the return.
-    /// The first part of the return value is a map from each unique (ObjectRef, TransactionDigest)
-    /// pair to the content of the object as well as a list of authorities that responded this
-    /// pair.
-    /// The second part of the return value is a map from transaction digest to the cert.
-    async fn get_object_by_id(
-        &self,
-        object_id: ObjectID,
-        skip_committee_check_during_reconfig: bool,
-    ) -> Result<
-        (
-            BTreeMap<
-                (ObjectRef, TransactionDigest),
-                (
-                    Option<Object>,
-                    Option<MoveStructLayout>,
-                    Vec<(AuthorityName, Option<VerifiedSignedTransaction>)>,
-                ),
-            >,
-            HashMap<TransactionDigest, VerifiedCertificate>,
-        ),
-        SuiError,
-    > {
-        #[derive(Default)]
-        struct GetObjectByIDRequestState {
-            good_weight: StakeUnit,
-            bad_weight: StakeUnit,
-            responses: Vec<(AuthorityName, SuiResult<VerifiedObjectInfoResponse>)>,
-        }
-        let initial_state = GetObjectByIDRequestState::default();
-        let threshold = self.committee.quorum_threshold();
-        let validity = self.committee.validity_threshold();
-        let final_state = self
-            .quorum_map_then_reduce_with_timeout(
-                initial_state,
-                |_name, client| {
-                    Box::pin(async move {
-                        // Request and return an error if any
-                        // TODO: Expose layout format option.
-                        let request = ObjectInfoRequest::latest_object_info_request(
-                            object_id,
-                            Some(ObjectFormatOptions::default()),
-                        );
-                        client
-                            .handle_object_info_request(
-                                request,
-                                skip_committee_check_during_reconfig,
-                            )
-                            .await
-                    })
-                },
-                |mut state, name, weight, result| {
-                    Box::pin(async move {
-                        // Here we increase the stake counter no matter if we got an error or not. The idea is that a
-                        // call to ObjectInfoRequest should succeed for correct authorities no matter what. Therefore
-                        // if there is an error it means that we are accessing an incorrect authority. However, an
-                        // object is final if it is on 2f+1 good nodes, and any set of 2f+1 intersects with this, so
-                        // after we have 2f+1 of stake (good or bad) we should get a response with the object.
-                        state.good_weight += weight;
-                        let is_err = result.is_err();
-                        state.responses.push((name, result));
-
-                        if is_err {
-                            // We also keep an error stake counter, and if it is larger than f+1 we return an error,
-                            // since either there are too many faulty authorities or we are not connected to the network.
-                            state.bad_weight += weight;
-                            if state.bad_weight > validity {
-                                return Err(SuiError::TooManyIncorrectAuthorities {
-                                    errors: state
-                                        .responses
-                                        .into_iter()
-                                        .filter_map(|(name, response)| {
-                                            response.err().map(|err| (name, err))
-                                        })
-                                        .collect(),
-                                    action: "get_object_by_id".to_string(),
-                                });
-                            }
-                        }
-
-                        if state.good_weight < threshold {
-                            // While we are under the threshold we wait for a longer time
-                            Ok(ReduceOutput::Continue(state))
-                        } else {
-                            // After we reach threshold we wait for potentially less time.
-                            Ok(ReduceOutput::ContinueWithTimeout(
-                                state,
-                                self.timeouts.post_quorum_timeout,
-                            ))
-                        }
-                    })
-                },
-                // A long timeout before we hear back from a quorum
-                self.timeouts.pre_quorum_timeout,
-            )
+    ) -> anyhow::Result<SuiSystemState> {
+        let object = self
+            .get_latest_object_version_for_testing(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
-
-        let mut error_list = Vec::new();
-        let mut object_map = BTreeMap::<
-            (ObjectRef, TransactionDigest),
-            (
-                Option<Object>,
-                Option<MoveStructLayout>,
-                Vec<(AuthorityName, Option<VerifiedSignedTransaction>)>,
-            ),
-        >::new();
-        let mut certificates = HashMap::new();
-
-        for (name, result) in final_state.responses {
-            if let Ok(ObjectInfoResponse {
-                parent_certificate,
-                requested_object_reference,
-                object_and_lock,
-            }) = result
-            {
-                // Extract the object_ref and transaction digest that will be used as keys
-                let object_ref = if let Some(object_ref) = requested_object_reference {
-                    object_ref
-                } else {
-                    // The object has never been seen on this authority, so we skip
-                    continue;
-                };
-
-                let (transaction_digest, cert_option) = if let Some(cert) = parent_certificate {
-                    (*cert.digest(), Some(cert))
-                } else {
-                    (TransactionDigest::genesis(), None)
-                };
-
-                // Extract an optional object to be used in the value, note that the object can be
-                // None if the object was deleted at this authority
-                //
-                // NOTE: here we could also be gathering the locked transactions to see if we could make a cert.
-                let (object_option, signed_transaction_option, layout_option) =
-                    if let Some(ObjectResponse {
-                        object,
-                        lock,
-                        layout,
-                    }) = object_and_lock
-                    {
-                        (Some(object), lock, layout)
-                    } else {
-                        (None, None, None)
-                    };
-
-                // Update the map with the information from this authority
-                // TODO: if `(object_ref, transaction_digest)` is already seen, need to verify
-                // the existing value matches the old value.
-                let entry = object_map
-                    .entry((object_ref, transaction_digest))
-                    .or_insert((object_option, layout_option, Vec::new()));
-                entry.2.push((name, signed_transaction_option));
-
-                if let Some(cert) = cert_option {
-                    certificates.insert(*cert.digest(), cert);
-                }
-            } else {
-                error_list.push((name, result));
-            }
-        }
-
-        // TODO: return the errors too
-        Ok((object_map, certificates))
+        let system_state_object = bcs::from_bytes::<SuiSystemState>(
+            object
+                .data
+                .try_as_move()
+                .ok_or(SuiError::MovePackageAsObject {
+                    object_id: object.id(),
+                })?
+                .contents(),
+        )?;
+        Ok(system_state_object)
     }
 
     /// Submits the transaction to a quorum of validators to make a certificate.
@@ -1606,36 +1365,6 @@ where
         Ok((cert, response))
     }
 
-    pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
-        let (object_map, _cert_map) = self.get_object_by_id(object_id, false).await?;
-        let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
-
-        while let Some(((obj_ref, _tx_digest), (obj_option, layout_option, authorities))) =
-            object_ref_stack.pop()
-        {
-            let stake: StakeUnit = authorities
-                .iter()
-                .map(|(name, _)| self.committee.weight(name))
-                .sum();
-
-            // If we have f+1 stake telling us of the latest version of the object, we just accept
-            // it.
-            if stake >= self.committee.validity_threshold() {
-                match obj_option {
-                    Some(obj) => {
-                        return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
-                    }
-                    None => {
-                        // TODO: Figure out how to find out object being wrapped instead of deleted.
-                        return Ok(ObjectRead::Deleted(obj_ref));
-                    }
-                };
-            }
-        }
-
-        Ok(ObjectRead::NotExists(object_id))
-    }
-
     /// This function tries to get SignedTransaction OR CertifiedTransaction from
     /// an given list of validators who are supposed to know about it.
     pub async fn handle_transaction_info_request_from_some_validators(
@@ -1705,42 +1434,6 @@ where
         }
     }
 }
-
-/// Given an AuthorityAggregator on genesis (epoch 0), catch up to the latest epoch and fill in
-/// all past epochs' committee information.
-/// Note: this function assumes >= 2/3 validators on genesis are still serving the network.
-pub async fn reconfig_from_genesis(
-    mut aggregator: AuthorityAggregator<NetworkAuthorityClient>,
-) -> SuiResult<AuthorityAggregator<NetworkAuthorityClient>> {
-    fp_ensure!(
-        aggregator.committee.epoch == 0,
-        SuiError::from("reconfig_from_genesis entails an authority aggregator with epoch 0")
-    );
-    let latest_committee = aggregator.get_committee_with_net_addresses(0).await?;
-    let latest_epoch = latest_committee.committee.epoch;
-    if latest_epoch == 0 {
-        // If still at epoch 0, no need to reconfig
-        return Ok(aggregator);
-    }
-    // First we fill in the committee store from 1 to latest_epoch - 1
-    let mut cur_epoch = 1;
-    let network_config = default_mysten_network_config();
-    loop {
-        if cur_epoch >= latest_epoch {
-            break;
-        }
-        let committee = Committee::try_from(aggregator.get_committee_info(Some(cur_epoch)).await?)?;
-        aggregator
-            .committee_store
-            .insert_new_committee(&committee)?;
-        aggregator.committee = committee;
-        cur_epoch += 1;
-        info!(epoch = cur_epoch, "Inserted committee");
-    }
-    // Now transit from latest_epoch - 1 to latest_epoch
-    aggregator.recreate_with_net_addresses(latest_committee, &network_config, true)
-}
-
 pub struct AuthorityAggregatorBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     genesis: Option<&'a Genesis>,

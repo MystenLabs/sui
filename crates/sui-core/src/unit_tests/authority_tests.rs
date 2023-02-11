@@ -1507,9 +1507,7 @@ async fn test_conflicting_transactions() {
         assert_eq!(
             ok.clone().into_signed_for_testing().digest(),
             object_info
-                .object_and_lock
-                .expect("object should exist")
-                .lock
+                .lock_for_debugging
                 .expect("object should be locked")
                 .digest()
         );
@@ -1517,9 +1515,7 @@ async fn test_conflicting_transactions() {
         assert_eq!(
             ok.into_signed_for_testing().digest(),
             gas_info
-                .object_and_lock
-                .expect("gas should exist")
-                .lock
+                .lock_for_debugging
                 .expect("gas should be locked")
                 .digest()
         );

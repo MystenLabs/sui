@@ -121,19 +121,13 @@ impl std::fmt::Display for GroupedObjectOutput {
             writeln!(f, "seq num: {}", seq_num.opt_debug("latest-seq-num"))?;
             let cur_version_resp = group.group_by(|(_, _, _, r, _)| match r {
                 Ok(result) => {
-                    let parent_tx_digest = result.parent_certificate.as_ref().map(|tx| tx.digest());
-                    let obj_digest = result
-                        .requested_object_reference
-                        .as_ref()
-                        .map(|(_, _, digest)| digest);
+                    let parent_tx_digest = result.object.previous_transaction;
+                    let obj_digest = result.object.compute_object_reference().2;
                     let lock = result
-                        .object_and_lock
+                        .lock_for_debugging
                         .as_ref()
-                        .map(|obj_n_lock| obj_n_lock.lock.as_ref().map(|lock| *lock.digest()));
-                    let owner = result
-                        .object_and_lock
-                        .as_ref()
-                        .map(|obj_n_lock| obj_n_lock.object.owner);
+                        .map(|lock| *lock.digest());
+                    let owner = result.object.owner;
                     Some((parent_tx_digest, obj_digest, lock, owner))
                 }
                 Err(_) => None,
@@ -141,12 +135,9 @@ impl std::fmt::Display for GroupedObjectOutput {
             for (result, group) in &cur_version_resp {
                 match result {
                     Some((parent_tx_digest, obj_digest, lock, owner)) => {
-                        let objref = obj_digest.opt_debug("objref-not-available");
-                        let parent_cert = parent_tx_digest.opt_debug("<genesis>");
-                        let owner = owner.opt_display("no-owner-available");
                         let lock = lock.opt_debug("no-known-lock");
-                        writeln!(f, "obj ref: {objref}")?;
-                        writeln!(f, "parent cert: {parent_cert}")?;
+                        writeln!(f, "obj ref: {obj_digest}")?;
+                        writeln!(f, "parent tx: {parent_tx_digest}")?;
                         writeln!(f, "owner: {owner}")?;
                         writeln!(f, "lock: {lock}")?;
                         for (i, (name, multiaddr, _, _, timespent)) in group.enumerate() {
@@ -209,21 +200,10 @@ impl std::fmt::Display for ConciseObjectOutput {
                         "object-fetch-failed", "no-cert-available", "no-owner-available"
                     )?,
                     Ok(resp) => {
-                        let objref = resp
-                            .requested_object_reference
-                            .map(|(_, _, digest)| digest)
-                            .opt_debug("objref-not-available");
-                        let cert = resp
-                            .parent_certificate
-                            .as_ref()
-                            .map(|c| *c.digest())
-                            .opt_debug("<genesis>");
-                        let owner = resp
-                            .object_and_lock
-                            .as_ref()
-                            .map(|o| OwnerOutput(o.object.owner))
-                            .opt_display("no-owner-available");
-                        write!(f, " {:<66} {:<45} {:<51}", objref, cert, owner)?;
+                        let obj_digest = resp.object.compute_object_reference().2;
+                        let parent = resp.object.previous_transaction;
+                        let owner = resp.object.owner;
+                        write!(f, " {:<66} {:<45} {:<51}", obj_digest, parent, owner)?;
                     }
                 }
                 writeln!(f)?;
@@ -253,42 +233,31 @@ impl std::fmt::Display for VerboseObjectOutput {
                 match resp {
                     Err(e) => writeln!(f, "Error fetching object: {}", e)?,
                     Ok(resp) => {
-                        let objref = resp.requested_object_reference.opt_debug("<no object>");
-                        writeln!(f, "  -- ref: {}", objref)?;
-
-                        write!(f, "  -- cert:")?;
-                        match &resp.parent_certificate {
-                            None => writeln!(f, " <genesis>")?,
-                            Some(cert) => {
-                                let cert = format!("{}", cert);
-                                let cert = textwrap::indent(&cert, "     | ");
-                                write!(f, "\n{}", cert)?;
-                            }
+                        writeln!(
+                            f,
+                            "  -- object digest: {}",
+                            resp.object.compute_object_reference().2
+                        )?;
+                        if resp.object.is_package() {
+                            writeln!(f, "  -- object: <Move Package>")?;
+                        } else if let Some(layout) = &resp.layout {
+                            writeln!(
+                                f,
+                                "  -- object: Move Object: {}",
+                                resp.object
+                                    .data
+                                    .try_as_move()
+                                    .unwrap()
+                                    .to_move_struct(layout)
+                                    .unwrap()
+                            )?;
                         }
-
-                        if let Some(ObjectResponse {
-                            lock,
-                            object,
-                            layout,
-                        }) = &resp.object_and_lock
-                        {
-                            if object.is_package() {
-                                writeln!(f, "  -- object: <Move Package>")?;
-                            } else if let Some(layout) = layout {
-                                writeln!(
-                                    f,
-                                    "  -- object: Move Object: {}",
-                                    object
-                                        .data
-                                        .try_as_move()
-                                        .unwrap()
-                                        .to_move_struct(layout)
-                                        .unwrap()
-                                )?;
-                            }
-                            writeln!(f, "  -- owner: {}", object.owner)?;
-                            writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
-                        }
+                        writeln!(f, "  -- owner: {}", resp.object.owner)?;
+                        writeln!(
+                            f,
+                            "  -- locked by: {}",
+                            resp.lock_for_debugging.opt_debug("<not locked>")
+                        )?;
                     }
                 }
             }
@@ -419,25 +388,19 @@ async fn get_object_impl(
         let resp = client
             .handle_object_info_request(ObjectInfoRequest {
                 object_id: id,
+                object_format_options: Some(ObjectFormatOptions::default()),
                 request_kind: match version {
-                    None => ObjectInfoRequestKind::LatestObjectInfo(Some(
-                        ObjectFormatOptions::default(),
-                    )),
-                    Some(v) => ObjectInfoRequestKind::PastObjectInfoDebug(
-                        SequenceNumber::from_u64(v),
-                        Some(ObjectFormatOptions::default()),
-                    ),
+                    None => ObjectInfoRequestKind::LatestObjectInfo,
+                    Some(v) => {
+                        ObjectInfoRequestKind::PastObjectInfoDebug(SequenceNumber::from_u64(v))
+                    }
                 },
             })
             .await
             .map_err(anyhow::Error::from);
         let elapsed = start.elapsed().as_secs_f64();
 
-        let resp_version = resp
-            .as_ref()
-            .ok()
-            .and_then(|r| r.requested_object_reference)
-            .map(|(_, v, _)| v.value());
+        let resp_version = resp.as_ref().ok().map(|r| r.object.version().value());
         ret.push((resp_version.map(SequenceNumber::from), resp, elapsed));
 
         version = match (version, resp_version) {
@@ -445,6 +408,7 @@ async fn get_object_impl(
                 if v == 1 || !full_history {
                     break;
                 } else {
+                    // TODO: With lamport versioning, this is very inefficient.
                     Some(v - 1)
                 }
             }
