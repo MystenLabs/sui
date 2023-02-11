@@ -9,6 +9,7 @@ import {
   SuiJsonValue,
   TypeTag,
 } from '../../types';
+import { SignaturePubkeyPair, SignaturePubkeyPairSerialized } from '../signer';
 
 ///////////////////////////////
 // Exported Types
@@ -145,6 +146,17 @@ export type UnserializedSignableTransaction =
       kind: 'publish';
       data: PublishTransaction;
     };
+
+export interface SignedTransaction {
+  transactionBytes: Base64DataBuffer;
+  signature: SignaturePubkeyPair;
+}
+
+/** A variant of the SignedTransaction, suitable for transferring over JSON */
+export interface SignedTransactionSerialized {
+  transactionBytes: string;
+  signature: SignaturePubkeyPairSerialized;
+}
 
 /** A type that represents the possible transactions that can be signed: */
 export type SignableTransaction =

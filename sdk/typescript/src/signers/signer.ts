@@ -16,6 +16,12 @@ export type SignaturePubkeyPair = {
   pubKey: PublicKey;
 };
 
+export interface SignaturePubkeyPairSerialized {
+  signatureScheme: SignatureScheme;
+  signature: string;
+  pubKey: string;
+}
+
 ///////////////////////////////
 // Exported Abstracts
 /**

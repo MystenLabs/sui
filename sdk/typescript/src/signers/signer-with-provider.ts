@@ -33,11 +33,34 @@ import {
   PublishTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
+  SignedTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
 // See: sui/crates/sui-types/src/intent.rs
-// This is currently hardcoded with [IntentScope::TransactionData = 0, Version::V0 = 0, AppId::Sui = 0]
-const INTENT_BYTES = [0, 0, 0];
+enum AppId {
+  Sui = 0,
+}
+
+enum IntentVersion {
+  V0 = 0,
+}
+
+enum IntentScope {
+  TransactionData = 0,
+  TransactionEffects = 1,
+  CheckpointSummary = 2,
+  PersonalMessage = 3,
+}
+
+function intentWithScope(scope: IntentScope) {
+  return [scope, IntentVersion.V0, AppId.Sui];
+}
+
+export enum SignedTransactionFormat {
+  BUFFER = 'BUFFER',
+  STRING = 'STRING',
+}
+
 ///////////////////////////////
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
@@ -88,6 +111,57 @@ export abstract class SignerWithProvider implements Signer {
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
+  async signMessage(
+    // TODO: Accept string here as well:
+    message: Uint8Array | Base64DataBuffer,
+  ): Promise<SignaturePubkeyPair> {
+    const signBytes =
+      message instanceof Base64DataBuffer
+        ? message
+        : new Base64DataBuffer(message);
+
+    const intent = intentWithScope(IntentScope.PersonalMessage);
+    const intentMessage = new Uint8Array(intent.length + signBytes.getLength());
+    intentMessage.set(intent);
+    intentMessage.set(signBytes.getData(), intent.length);
+    const dataToSign = new Base64DataBuffer(intentMessage);
+    return await this.signData(dataToSign);
+  }
+
+  async signTransaction(
+    transaction: Base64DataBuffer | SignableTransaction,
+  ): Promise<SignedTransaction> {
+    let transactionBytes;
+    if (
+      transaction instanceof Base64DataBuffer ||
+      transaction.kind === 'bytes'
+    ) {
+      transactionBytes =
+        transaction instanceof Base64DataBuffer
+          ? transaction
+          : new Base64DataBuffer(transaction.data);
+    } else {
+      transactionBytes = await this.serializer.serializeToBytes(
+        await this.getAddress(),
+        transaction,
+        'Commit',
+      );
+    }
+
+    const intent = intentWithScope(IntentScope.TransactionData);
+    const intentMessage = new Uint8Array(
+      intent.length + transactionBytes.getLength(),
+    );
+    intentMessage.set(intent);
+    intentMessage.set(transactionBytes.getData(), intent.length);
+    const dataToSign = new Base64DataBuffer(intentMessage);
+    const signature = await this.signData(dataToSign);
+
+    return {
+      transactionBytes,
+      signature,
+    };
+  }
   /**
    * Sign a transaction and submit to the Fullnode for execution. Only exists
    * on Fullnode
@@ -96,38 +170,15 @@ export abstract class SignerWithProvider implements Signer {
     transaction: Base64DataBuffer | SignableTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
-    // Handle submitting raw transaction bytes:
-    if (
-      transaction instanceof Base64DataBuffer ||
-      transaction.kind === 'bytes'
-    ) {
-      const txBytes =
-        transaction instanceof Base64DataBuffer
-          ? transaction
-          : new Base64DataBuffer(transaction.data);
-      const intentMessage = new Uint8Array(
-        INTENT_BYTES.length + txBytes.getLength(),
-      );
-      intentMessage.set(INTENT_BYTES);
-      intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+    const { transactionBytes, signature } = await this.signTransaction(
+      transaction,
+    );
 
-      const dataToSign = new Base64DataBuffer(intentMessage);
-      const txBytesToSubmit = txBytes;
-      const sig = await this.signData(dataToSign);
-      return await this.provider.executeTransaction(
-        txBytesToSubmit,
-        sig.signatureScheme,
-        sig.signature,
-        sig.pubKey,
-        requestType,
-      );
-    }
-    return await this.signAndExecuteTransaction(
-      await this.serializer.serializeToBytes(
-        await this.getAddress(),
-        transaction,
-        'Commit',
-      ),
+    return await this.provider.executeTransaction(
+      transactionBytes,
+      signature.signatureScheme,
+      signature.signature,
+      signature.pubKey,
       requestType,
     );
   }
@@ -147,11 +198,10 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
     const version = await this.provider.getRpcApiVersion();
-    const intentMessage = new Uint8Array(
-      INTENT_BYTES.length + txBytes.getLength(),
-    );
-    intentMessage.set(INTENT_BYTES);
-    intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+    const intent = intentWithScope(IntentScope.TransactionData);
+    const intentMessage = new Uint8Array(intent.length + txBytes.getLength());
+    intentMessage.set(intent);
+    intentMessage.set(txBytes.getData(), intent.length);
     const dataToSign = new Base64DataBuffer(intentMessage);
 
     const bcs = bcsForVersion(version);
