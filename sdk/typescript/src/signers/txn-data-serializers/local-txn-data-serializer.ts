@@ -509,6 +509,23 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           gasPrice,
         },
       };
+    } else if ('PaySui' in tx) {
+      return {
+        kind: 'paySui',
+        data: {
+          inputCoins: tx.PaySui.coins.map((c) => c.objectId),
+          recipients: tx.PaySui.recipients,
+          amounts: tx.PaySui.amounts,
+        },
+      };
+    } else if ('PayAllSui' in tx) {
+      return {
+        kind: 'payAllSui',
+        data: {
+          inputCoins: tx.PayAllSui.coins.map((c) => c.objectId),
+          recipient: tx.PayAllSui.recipient,
+        },
+      };
     }
     throw new Error(`Unsupported transaction type ${tx}`);
   }
