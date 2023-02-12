@@ -319,7 +319,7 @@ const provider = new JsonRpcProvider();
 
 const devnetNftFilter = {
   All: [
-    { EventType: 'MoveEvent' },
+    { EventType: <EventType>'MoveEvent' },
     { Package: '0x2' },
     { Module: 'devnet_nft' },
   ],
