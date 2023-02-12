@@ -168,6 +168,7 @@ where
     K: Hash + Eq,
     V: Clone,
 {
+    // TODO: Change this to return the certificate instead.
     pub fn add(&mut self, k: K, v: &V, sig: AuthoritySignInfo) -> bool {
         let entry = self
             .stake_maps
@@ -211,7 +212,7 @@ where
         &self,
     ) -> Option<VerifiedEnvelope<V, AuthorityQuorumSignInfo<STRENGTH>>> {
         self.get_certificate().as_ref().map(|(message, sig)| {
-            // No verification is necessary since we constructed the signatures properly.
+            // TODO: This is in fact error prone, and we may want to verify the signature.
             VerifiedEnvelope::new_unchecked(Envelope::new_from_data_and_sig(
                 message.clone(),
                 sig.clone(),
