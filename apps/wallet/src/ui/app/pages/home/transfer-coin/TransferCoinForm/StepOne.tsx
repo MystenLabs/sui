@@ -7,7 +7,7 @@ import { useEffect, useRef, memo } from 'react';
 
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import ActiveCoinsCard from '_components/active-coins-card';
+import { ActiveCoinsCard } from '_components/active-coins-card';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import NumberInput from '_components/number-input';
