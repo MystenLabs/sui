@@ -76,10 +76,6 @@ jobs:
       - name: cargo test
         run: |
           cargo nextest run --profile ci
-      - name: benchmark (smoke)
-        run: |
-          cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
-          pushd narwhal/benchmark && fab smoke && popd
       - name: doctests
         run: |
           cargo test --doc
