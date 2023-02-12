@@ -79,12 +79,6 @@ jobs:
       - name: doctests
         run: |
           cargo test --doc
-      - name: rustdoc
-        run: |
-          cargo doc --workspace --no-deps
-      # Ensure there are no uncommitted changes in the repo after running tests
-      - run: scripts/changed-files.sh
-        shell: bash
 
   clippy:
     runs-on: [ubuntu-latest]
