@@ -6,7 +6,6 @@ members = [
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
-    "crates/rccheck",
     "crates/sui-cost-tables",
     "crates/sui-keys",
     "crates/sui-macros",

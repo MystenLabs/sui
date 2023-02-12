@@ -114,7 +114,6 @@ crunchy = { version = "0.2", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
 ctr = { version = "0.9", default-features = false }
-curve25519-dalek = { version = "3", default-features = false, features = ["std", "u64_backend"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
@@ -140,7 +139,6 @@ ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features
 ecdsa-3575ec1268b04181 = { package = "ecdsa", version = "0.15", features = ["pkcs8", "signing", "std", "verifying"] }
 ed25519 = { version = "1", features = ["alloc", "zeroize"] }
 ed25519-consensus = { version = "2" }
-ed25519-dalek = { version = "1" }
 either = { version = "1" }
 elliptic-curve = { version = "0.12", features = ["hash2curve", "hazmat", "pkcs8", "std"] }
 ethnum = { version = "1", default-features = false }
@@ -324,8 +322,7 @@ rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-f
 rand_xorshift = { version = "0.3", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
-rcgen-93f6ce9d446188ac = { package = "rcgen", version = "0.10", features = ["x509-parser"] }
-rcgen-274715c4dabd11b0 = { package = "rcgen", version = "0.9" }
+rcgen = { version = "0.9" }
 ref-cast = { version = "1", default-features = false }
 regex = { version = "1" }
 regex-automata = { version = "0.1" }
@@ -385,7 +382,7 @@ strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-featur
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
 structopt = { version = "0.3" }
 strum = { version = "0.24", features = ["derive"] }
-subtle = { version = "2", default-features = false, features = ["i128", "std"] }
+subtle = { version = "2", default-features = false, features = ["i128"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
@@ -448,7 +445,7 @@ walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
-x509-parser = { version = "0.14", features = ["verify"] }
+x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
@@ -572,7 +569,6 @@ crunchy = { version = "0.2", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
 crypto-common = { version = "0.1", default-features = false, features = ["getrandom", "std"] }
 ctr = { version = "0.9", default-features = false }
-curve25519-dalek = { version = "3", default-features = false, features = ["std", "u64_backend"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 darling = { version = "0.14" }
 darling_core = { version = "0.14", default-features = false, features = ["suggestions"] }
@@ -607,7 +603,6 @@ ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features
 ecdsa-3575ec1268b04181 = { package = "ecdsa", version = "0.15", features = ["pkcs8", "signing", "std", "verifying"] }
 ed25519 = { version = "1", features = ["alloc", "zeroize"] }
 ed25519-consensus = { version = "2" }
-ed25519-dalek = { version = "1" }
 either = { version = "1" }
 elliptic-curve = { version = "0.12", features = ["hash2curve", "hazmat", "pkcs8", "std"] }
 enum_dispatch = { version = "0.3", default-features = false }
@@ -823,8 +818,7 @@ rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-f
 rand_xorshift = { version = "0.3", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
-rcgen-93f6ce9d446188ac = { package = "rcgen", version = "0.10", features = ["x509-parser"] }
-rcgen-274715c4dabd11b0 = { package = "rcgen", version = "0.9" }
+rcgen = { version = "0.9" }
 readonly = { version = "0.2", default-features = false }
 ref-cast = { version = "1", default-features = false }
 ref-cast-impl = { version = "1", default-features = false }
@@ -900,7 +894,7 @@ structopt = { version = "0.3" }
 structopt-derive = { version = "0.4", default-features = false }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = { version = "0.24", default-features = false }
-subtle = { version = "2", default-features = false, features = ["i128", "std"] }
+subtle = { version = "2", default-features = false, features = ["i128"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -979,7 +973,7 @@ want = { version = "0.3", default-features = false }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 which = { version = "4", default-features = false }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
-x509-parser = { version = "0.14", features = ["verify"] }
+x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
