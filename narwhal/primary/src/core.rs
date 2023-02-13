@@ -479,8 +479,10 @@ impl Core {
 
         // NOTE: This log entry is used to compute performance.
         debug!(
-            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            "Header {:?} with {} batches, round {}, took {} seconds to be materialized to a certificate {:?}",
             certificate.header.digest(),
+            certificate.header.payload.len(),
+            certificate.header.round,
             header_to_certificate_duration,
             certificate.digest()
         );
