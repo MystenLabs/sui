@@ -19,7 +19,7 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::crypto::{AuthorityKeyPair, SuiSigner};
+use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -95,7 +95,7 @@ pub fn create_fake_cert_and_effect_digest<'a>(
     signers: impl Iterator<
         Item = (
             &'a AuthorityName,
-            &'a (dyn SuiSigner<AuthoritySignature> + Send + Sync),
+            &'a (dyn Signer<AuthoritySignature> + Send + Sync),
         ),
     >,
     committee: &Committee,

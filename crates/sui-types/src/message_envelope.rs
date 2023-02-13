@@ -6,7 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, SuiSigner,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signer,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -112,7 +112,7 @@ where
     pub fn new(
         epoch: EpochId,
         data: T,
-        secret: &dyn SuiSigner<AuthoritySignature>,
+        secret: &dyn Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> Self {
         let auth_signature = AuthoritySignInfo::new(epoch, &data, authority, secret);

@@ -10,7 +10,7 @@ use move_core_types::{
 use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
-use sui_types::crypto::SuiSigner;
+use sui_types::crypto::Signer;
 use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
     crypto::{
@@ -49,11 +49,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &s_kp)?;
 
     // We have two signature types: one for Authority Signatures, which don't include the PubKey ...
-    let sig: AuthoritySignature = SuiSigner::sign(&kp, b"hello world");
+    let sig: AuthoritySignature = Signer::sign(&kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
     // ... and the user signature which does
 
-    let sig: Signature = SuiSigner::sign(&s_kp, b"hello world");
+    let sig: Signature = Signer::sign(&s_kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
 
     // ObjectID and SuiAddress are the same length

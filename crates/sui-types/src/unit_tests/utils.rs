@@ -3,7 +3,7 @@
 
 use fastcrypto::traits::KeyPair as KeypairTraits;
 
-use crate::crypto::SuiSigner;
+use crate::crypto::Signer;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::{Committee, ProtocolVersion},
@@ -68,7 +68,7 @@ pub fn create_fake_transaction() -> VerifiedTransaction {
 // This is used to sign transaction with signer using default Intent.
 pub fn to_sender_signed_transaction(
     data: TransactionData,
-    signer: &dyn SuiSigner<Signature>,
+    signer: &dyn Signer<Signature>,
 ) -> VerifiedTransaction {
     VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         data,

@@ -13,7 +13,7 @@ use sui_framework_build::compiled_package::BuildConfig;
 use sui_types::crypto::{
     get_authority_key_pair, get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
 };
-use sui_types::crypto::{AuthoritySignature, SuiSigner};
+use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
 use test_utils::sui_system_state::{test_sui_system_state, test_validator};
 
@@ -50,7 +50,7 @@ pub fn get_local_client(
 
 pub fn transfer_coin_transaction(
     src: SuiAddress,
-    secret: &dyn SuiSigner<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -69,7 +69,7 @@ pub fn transfer_coin_transaction(
 
 pub fn transfer_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn SuiSigner<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
@@ -97,7 +97,7 @@ pub fn transfer_object_move_transaction(
 
 pub fn create_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn SuiSigner<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     value: u64,
     package_id: ObjectID,
@@ -126,7 +126,7 @@ pub fn create_object_move_transaction(
 
 pub fn delete_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn SuiSigner<Signature>,
+    secret: &dyn Signer<Signature>,
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
@@ -148,7 +148,7 @@ pub fn delete_object_move_transaction(
 
 pub fn set_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn SuiSigner<Signature>,
+    secret: &dyn Signer<Signature>,
     object_ref: ObjectRef,
     value: u64,
     framework_obj_id: ObjectID,
@@ -933,7 +933,7 @@ fn sign_tx(
     tx: VerifiedTransaction,
     epoch: EpochId,
     authority: AuthorityName,
-    secret: &dyn SuiSigner<AuthoritySignature>,
+    secret: &dyn Signer<AuthoritySignature>,
 ) -> SignedTransaction {
     SignedTransaction::new(epoch, tx.into_inner().into_data(), secret, authority)
 }
@@ -942,7 +942,7 @@ fn sign_tx_effects(
     effects: TransactionEffects,
     epoch: EpochId,
     authority: AuthorityName,
-    secret: &dyn SuiSigner<AuthoritySignature>,
+    secret: &dyn Signer<AuthoritySignature>,
 ) -> SignedTransactionEffects {
     SignedTransactionEffects::new(epoch, effects, secret, authority)
 }

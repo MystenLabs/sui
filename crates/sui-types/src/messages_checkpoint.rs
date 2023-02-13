@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, Signature, SuiSigner,
+    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, Signature, Signer,
 };
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
@@ -202,7 +202,7 @@ impl SignedCheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         network_total_transactions: u64,
         authority: AuthorityName,
-        signer: &dyn SuiSigner<AuthoritySignature>,
+        signer: &dyn Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
@@ -225,7 +225,7 @@ impl SignedCheckpointSummary {
     pub fn new_from_summary(
         checkpoint: CheckpointSummary,
         authority: AuthorityName,
-        signer: &dyn SuiSigner<AuthoritySignature>,
+        signer: &dyn Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
         let epoch = checkpoint.epoch;
         let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
