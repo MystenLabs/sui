@@ -12,10 +12,12 @@ import { SUI_SYSTEM_ID } from "../network/queries/sui-system";
 import provider from "../network/provider";
 import { useBalance } from "../network/queries/coin";
 import { Spinner } from "../components/Spinner";
+import { GameEnding, useGameOverRedirect } from "../components/GameEnding";
 
 const GAS_BUDGET = 20000n;
 
 export function Setup() {
+  useGameOverRedirect();
   const id = useId();
   const navigate = useNavigate();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
@@ -26,6 +28,7 @@ export function Setup() {
     ["gas-price"],
     () => provider.getReferenceGasPrice(),
     {
+      staleTime: 5 * 60 * 1000,
       refetchInterval: false,
       refetchOnWindowFocus: false,
     }
@@ -154,6 +157,8 @@ export function Setup() {
 
   return (
     <div className="max-w-4xl w-full mx-auto text-center space-y-5">
+      <GameEnding />
+
       {balance && gasPrice && !hasEnoughCoins && (
         <Card variant="error" spacing="md">
           Your wallet does not have enough SUI to register for Frenemies.

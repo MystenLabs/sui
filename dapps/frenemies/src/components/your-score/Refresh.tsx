@@ -38,16 +38,14 @@ export function Refresh({ fallback = null }: Props) {
     0n;
 
   return (
-    <div className="absolute top-0 right-0">
-      <button
-        className="bg-white shadow-button text-body font-semibold text-frenemies py-3 px-4 rounded-lg inline-flex items-center gap-2"
-        onClick={() => {
-          refreshScorecard.mutate();
-        }}
-      >
-        <img src="/refresh.svg" alt="refresh" />
-        Play Round {(round || 0).toString()}
-      </button>
-    </div>
+    <button
+      className="bg-white shadow-button text-body font-semibold text-frenemies py-3 px-4 rounded-lg inline-flex items-center gap-2"
+      onClick={() => {
+        refreshScorecard.mutate();
+      }}
+    >
+      <img src="/refresh.svg" alt="refresh" />
+      Play Round {(round || 0).toString()}
+    </button>
   );
 }

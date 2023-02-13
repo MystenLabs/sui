@@ -19,6 +19,7 @@ import { Connect } from "./routes/Connect";
 import { Setup } from "./routes/Setup";
 import { toast } from "react-hot-toast";
 import { Migrate } from "./routes/Migrate";
+import { Claim } from "./routes/Claim";
 
 const plausible = Plausible({});
 plausible.enableAutoPageviews();
@@ -53,6 +54,10 @@ const router = createBrowserRouter([
       {
         path: "migrate",
         element: <Migrate />,
+      },
+      {
+        path: "Claim",
+        element: <Claim />,
       },
       {
         path: "*",
