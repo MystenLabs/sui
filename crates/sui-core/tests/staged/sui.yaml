@@ -48,6 +48,9 @@ CircularObjectOwnership:
   STRUCT:
     - object:
         TYPENAME: ObjectID
+ConsensusCommitPrologue:
+  STRUCT:
+    - checkpoint_start_timestamp_ms: U64
 Data:
   ENUM:
     0:
@@ -480,6 +483,10 @@ SingleTransactionKind:
       Genesis:
         NEWTYPE:
           TYPENAME: GenesisTransaction
+    9:
+      ConsensusCommitPrologue:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologue
 StructTag:
   STRUCT:
     - address:

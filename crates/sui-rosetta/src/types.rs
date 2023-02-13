@@ -388,6 +388,7 @@ pub enum OperationType {
     MoveCall,
     EpochChange,
     Genesis,
+    ConsensusCommitPrologue,
 }
 
 impl From<&SuiTransactionKind> for OperationType {
@@ -402,6 +403,9 @@ impl From<&SuiTransactionKind> for OperationType {
             SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
             SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionKind::Genesis(_) => OperationType::Genesis,
+            SuiTransactionKind::ConsensusCommitPrologue(_) => {
+                OperationType::ConsensusCommitPrologue
+            }
         }
     }
 }

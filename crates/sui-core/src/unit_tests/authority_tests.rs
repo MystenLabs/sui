@@ -2633,6 +2633,36 @@ async fn test_idempotent_reversed_confirmation() {
 }
 
 #[tokio::test]
+async fn test_refusal_to_sign_consensus_commit_prologue() {
+    // The system should refuse to handle sender-signed system transactions
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let gas_ref = gas_object.compute_object_reference();
+    let tx_data = TransactionData::new_with_dummy_gas_price(
+        TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(
+            ConsensusCommitPrologue {
+                checkpoint_start_timestamp_ms: 42,
+            },
+        )),
+        sender,
+        gas_ref,
+        MAX_GAS,
+    );
+
+    // Sender is able to sign it.
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+
+    // But the authority should refuse to handle it.
+    assert!(matches!(
+        authority_state.handle_transaction(transaction).await,
+        Err(SuiError::InvalidSystemTransaction),
+    ));
+}
+
+#[tokio::test]
 async fn test_genesis_sui_system_state_object() {
     // This test verifies that we can read the genesis SuiSystemState object.
     // And its Move layout matches the definition in Rust (so that we can deserialize it).

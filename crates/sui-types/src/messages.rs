@@ -16,7 +16,8 @@ use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMe
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::Base64;
@@ -198,6 +199,12 @@ pub enum GenesisObject {
     },
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologue {
+    /// Unix timestamp from consensus
+    pub checkpoint_start_timestamp_ms: u64,
+}
+
 impl GenesisObject {
     pub fn id(&self) -> ObjectID {
         match self {
@@ -234,6 +241,7 @@ pub enum SingleTransactionKind {
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
+    ConsensusCommitPrologue(ConsensusCommitPrologue),
     // .. more transaction types go here
 }
 
@@ -348,7 +356,7 @@ impl SingleTransactionKind {
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
-            Self::Call(_) | Self::ChangeEpoch(_) => {
+            Self::Call(_) | Self::ChangeEpoch(_) | Self::ConsensusCommitPrologue(_) => {
                 Either::Left(self.all_move_call_shared_input_objects())
             }
             _ => Either::Right(iter::empty()),
@@ -401,6 +409,11 @@ impl SingleTransactionKind {
             Self::ChangeEpoch(_) => Either::Right(iter::once(SharedInputObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            })),
+            Self::ConsensusCommitPrologue(_) => Either::Right(iter::once(SharedInputObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             })),
             _ => unreachable!(),
@@ -467,6 +480,13 @@ impl SingleTransactionKind {
             Self::Genesis(_) => {
                 vec![]
             }
+            Self::ConsensusCommitPrologue(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -494,7 +514,8 @@ impl SingleTransactionKind {
             | SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
             | SingleTransactionKind::ChangeEpoch(_)
-            | SingleTransactionKind::Genesis(_) => (),
+            | SingleTransactionKind::Genesis(_)
+            | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
             SingleTransactionKind::PaySui(p) => {
                 fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
                 fp_ensure!(
@@ -605,14 +626,19 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind: Epoch Change")?;
-                writeln!(writer, "New epoch ID: {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
-                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
+                writeln!(writer, "Transaction Kind : Epoch Change")?;
+                writeln!(writer, "New epoch ID : {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind: Genesis")?;
+                writeln!(writer, "Transaction Kind : Genesis")?;
+            }
+            Self::ConsensusCommitPrologue(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
             }
         }
         write!(f, "{}", writer)
@@ -683,8 +709,11 @@ impl TransactionKind {
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
-            TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
-                | TransactionKind::Single(SingleTransactionKind::Genesis(_))
+            TransactionKind::Single(
+                SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_)
+            )
         )
     }
 
@@ -1044,7 +1073,8 @@ impl TransactionData {
                     | SingleTransactionKind::PayAllSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_) => false,
+                    | SingleTransactionKind::Publish(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_) => false,
                 });
                 fp_ensure!(
                     valid,
@@ -1190,6 +1220,14 @@ impl VerifiedTransaction {
         GenesisTransaction { objects }
             .pipe(SingleTransactionKind::Genesis)
             .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_consensus_commit_prologue(checkpoint_start_timestamp_ms: u64) -> Self {
+        ConsensusCommitPrologue {
+            checkpoint_start_timestamp_ms,
+        }
+        .pipe(SingleTransactionKind::ConsensusCommitPrologue)
+        .pipe(Self::new_system_transaction)
     }
 
     fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {

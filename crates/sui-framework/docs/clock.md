@@ -10,6 +10,7 @@ shared object that is created at 0x6 during genesis.
 -  [Resource `Clock`](#0x2_clock_Clock)
 -  [Function `timestamp_ms`](#0x2_clock_timestamp_ms)
 -  [Function `create`](#0x2_clock_create)
+-  [Function `set_timestamp`](#0x2_clock_set_timestamp)
 
 
 <pre><code><b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -113,6 +114,32 @@ called exactly once, during genesis.
         // call.
         timestamp_ms: 0,
     })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_clock_set_timestamp"></a>
+
+## Function `set_timestamp`
+
+Set the Clock's timestamp -- this function should only be called by
+<code>sui::system_state::consensus_commit_prologue</code>.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock_set_timestamp">set_timestamp</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clock.md#0x2_clock_set_timestamp">set_timestamp</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">Clock</a>, timestamp_ms: u64) {
+    <a href="clock.md#0x2_clock">clock</a>.timestamp_ms = timestamp_ms
 }
 </code></pre>
 
