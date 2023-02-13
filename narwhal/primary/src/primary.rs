@@ -197,6 +197,7 @@ impl Primary {
             name.clone(),
             committee.clone(),
             worker_cache.clone(),
+            parameters.gc_depth,
             certificate_store.clone(),
             payload_store.clone(),
             tx_certificate_fetcher,

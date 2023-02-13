@@ -146,6 +146,7 @@ async fn fetch_certificates_basic() {
     let signature_service = SignatureService::new(primary.keypair().copy());
     let fake_primary = fixture.authorities().nth(1).unwrap();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let gc_depth: Round = 50;
 
     // kept empty
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -180,6 +181,7 @@ async fn fetch_certificates_basic() {
         name.clone(),
         fixture.committee().into(),
         worker_cache.clone(),
+        gc_depth,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -204,8 +206,6 @@ async fn fetch_certificates_basic() {
         .connect_with_peer_id(fake_primary_addr, fake_server_network.peer_id())
         .await
         .unwrap();
-
-    let gc_depth: Round = 50;
 
     // Make a certificate fetcher
     let _certificate_fetcher_handle = CertificateFetcher::spawn(

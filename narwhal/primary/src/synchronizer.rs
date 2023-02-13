@@ -10,7 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::sync::watch;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -30,8 +30,12 @@ pub mod synchronizer_tests;
 pub struct Synchronizer {
     /// The public key of this primary.
     name: PublicKey,
+    /// Committee of the current epoch.
+    committee: Committee,
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
+    /// The depth of the garbage collector.
+    gc_depth: Round,
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -52,6 +56,7 @@ impl Synchronizer {
         name: PublicKey,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
+        gc_depth: Round,
         certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_certificate_fetcher: Sender<Certificate>,
@@ -59,10 +64,13 @@ impl Synchronizer {
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {
-        let genesis = Self::make_genesis(&committee.load());
+        let committee: &Committee = &committee.load();
+        let genesis = Self::make_genesis(committee);
         Self {
             name,
+            committee: committee.clone(),
             worker_cache,
+            gc_depth,
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
@@ -121,6 +129,47 @@ impl Synchronizer {
     //         }
     //     }
     // }
+
+    async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
+        ensure!(
+            self.committee.epoch() == certificate.epoch(),
+            DagError::InvalidEpoch {
+                expected: self.committee.epoch(),
+                received: certificate.epoch()
+            }
+        );
+        // Ok to drop old certificate, because it will never be included into the consensus dag.
+        let gc_round = *self.rx_consensus_round_updates.borrow() - self.gc_depth;
+        ensure!(
+            gc_round < certificate.round(),
+            DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
+        );
+        // Verify the certificate (and the embedded header).
+        certificate
+            .verify(&self.committee, self.worker_cache.clone())
+            .map_err(DagError::from)
+    }
+
+    // Logs Core errors as appropriate.
+    fn process_result(result: &DagResult<()>) {
+        match result {
+            Ok(()) => (),
+            Err(DagError::StoreError(e)) => {
+                error!("{e}");
+                panic!("Storage failure: killing node.");
+            }
+            Err(
+                e @ DagError::TooOld(..)
+                | e @ DagError::VoteTooOld(..)
+                | e @ DagError::InvalidEpoch { .. },
+            ) => debug!("{e}"),
+            Err(e) => warn!("{e}"),
+        }
+    }
+
+    async fn process_own_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+        Ok(())
+    }
 
     /// Synchronizes batches in the given header with other nodes (through our workers).
     /// Blocks until either synchronization is complete, or the current consensus rounds advances
