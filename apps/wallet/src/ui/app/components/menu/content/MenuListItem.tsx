@@ -16,7 +16,7 @@ function MenuListItem({ icon, title, subtitle, to }: ItemProps) {
     return (
         <Link
             to={to}
-            className="flex flex-nowrap items-center px-1 py-3 gap-5 no-underline overflow-hidden"
+            className="flex flex-nowrap items-center px-1 py-4.5 first:pt-3 last:pb-3 gap-5 no-underline overflow-hidden"
         >
             <div className="flex flex-nowrap flex-1 gap-2 items-center overflow-hidden basis-3/5">
                 <div className="flex text-steel text-2xl flex-none">{icon}</div>
@@ -30,7 +30,7 @@ function MenuListItem({ icon, title, subtitle, to }: ItemProps) {
                         {subtitle}
                     </div>
                 ) : null}
-                <ChevronRight16 className="text-steel flex-none" />
+                <ChevronRight16 className="text-steel flex-none text-base" />
             </div>
         </Link>
     );

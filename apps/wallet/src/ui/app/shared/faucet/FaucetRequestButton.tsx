@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowUpRight16, Download16 } from '@mysten/icons';
+import { ArrowUpRight16 } from '@mysten/icons';
 import { toast } from 'react-hot-toast';
 
 import FaucetMessageInfo from './FaucetMessageInfo';
@@ -59,7 +59,6 @@ function FaucetRequestButton({
                 });
             }}
             loading={mutation.isMutating}
-            before={<Download16 />}
             text={`Request ${networkName} SUI Tokens`}
         />
     ) : null;
