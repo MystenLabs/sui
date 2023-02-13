@@ -24,10 +24,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
     const validatorName = useMemo(() => getName(metadata.name), [metadata]);
 
     const validatorPublicKey = useMemo(
-        () =>
-            toB64(
-                new Uint8Array(metadata.pubkey_bytes)
-            ),
+        () => toB64(new Uint8Array(metadata.pubkey_bytes)),
         [metadata]
     );
 

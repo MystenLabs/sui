@@ -3,11 +3,7 @@
 
 import { normalizeSuiAddress } from '@mysten/sui.js';
 
-import type {
-    SignaturePubkeyPair,
-    Keypair,
-    SuiAddress,
-} from '@mysten/sui.js';
+import type { SignaturePubkeyPair, Keypair, SuiAddress } from '@mysten/sui.js';
 
 export type AccountType = 'derived' | 'imported';
 export type AccountSerialized = {

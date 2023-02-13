@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64 } from '@mysten/bcs';
-import { fromB64 } from '@mysten/bcs';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
@@ -100,14 +99,12 @@ export abstract class SignerWithProvider implements Signer {
     // Handle submitting raw transaction bytes:
     if (transaction instanceof Uint8Array || transaction.kind === 'bytes') {
       const txBytes =
-        transaction instanceof Uint8Array
-          ? transaction
-          : fromB64(transaction.data);
+        transaction instanceof Uint8Array ? transaction : transaction.data;
       const intentMessage = new Uint8Array(
-        INTENT_BYTES.length + txBytes.getLength(),
+        INTENT_BYTES.length + txBytes.length,
       );
       intentMessage.set(INTENT_BYTES);
-      intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
+      intentMessage.set(txBytes, INTENT_BYTES.length);
 
       const dataToSign = intentMessage;
       const txBytesToSubmit = txBytes;
@@ -135,7 +132,7 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<string> {
     let txBytes: Uint8Array;
     if (tx instanceof Uint8Array || tx.kind === 'bytes') {
-      txBytes = tx instanceof Uint8Array ? tx : fromB64(tx.data);
+      txBytes = tx instanceof Uint8Array ? tx : tx.data;
     } else {
       txBytes = await this.serializer.serializeToBytes(
         await this.getAddress(),
