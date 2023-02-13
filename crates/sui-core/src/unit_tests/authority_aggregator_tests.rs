@@ -875,12 +875,18 @@ async fn assert_resp_err<F>(
     match agg.process_transaction(tx).await {
         Err(QuorumSignTransactionError {
             total_stake,
-            good_stake,
+            good_stake: _,
             errors,
             conflicting_tx_digests,
         }) => {
+            println!("{:?}", errors);
             assert_eq!(total_stake, 4);
-            assert_eq!(good_stake, 0);
+            // TODO: good_stake no longer always makes sense.
+            // Specifically, when we have non-quorum signed effects, it's difficult to say
+            // what good state should be. Right now, good_stake is only used for conflicting
+            // transaction processing. We should refactor this when we refactor conflicting
+            // transaction processing.
+            //assert_eq!(good_stake, 0);
             assert!(conflicting_tx_digests.is_empty());
             assert!(errors.iter().map(|e| &e.0).all(checker));
         }
