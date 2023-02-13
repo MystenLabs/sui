@@ -55,7 +55,7 @@ impl Cluster {
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let c = fixture.committee();
         let shared_worker_cache = fixture.shared_worker_cache();
-        let shared_committee = Arc::new(ArcSwap::from_pointee(c));
+        let committee: Committee = c;
         let params = parameters.unwrap_or_else(Self::parameters);
 
         info!("###### Creating new cluster ######");
@@ -71,7 +71,7 @@ impl Cluster {
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
                 params.with_available_ports(),
-                shared_committee.clone(),
+                committee.clone(),
                 shared_worker_cache.clone(),
                 internal_consensus_enabled,
             );
@@ -81,7 +81,7 @@ impl Cluster {
         Self {
             fixture,
             authorities: nodes,
-            committee_shared: shared_committee,
+            committee_shared: committee,
             worker_cache_shared: shared_worker_cache,
             parameters: params,
         }
@@ -106,7 +106,7 @@ impl Cluster {
         workers_per_authority: Option<usize>,
         boot_wait_time: Option<Duration>,
     ) {
-        let max_authorities = self.committee_shared.load().authorities.len();
+        let max_authorities = self.committee_shared.authorities.len();
         let authorities = authorities_number.unwrap_or(max_authorities);
 
         if authorities > max_authorities {

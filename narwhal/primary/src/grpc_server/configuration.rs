@@ -37,7 +37,7 @@ impl NarwhalConfiguration {
             .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
 
         // ensure provided key is part of the committee
-        if self.committee.load().primary(&key).is_err() {
+        if self.committee.primary(&key).is_err() {
             return Err(Status::invalid_argument(
                 "Invalid public key: unknown authority",
             ));
@@ -79,6 +79,7 @@ impl Configuration for NarwhalConfiguration {
         //     "Not Implemented! But parsed input - epoch_number: {:?} & validator_data: {:?}",
         //     epoch_number, parsed_input
         // )))
+        Ok(Response::new(Empty {}))
     }
 
     #[allow(clippy::mutable_key_type)]

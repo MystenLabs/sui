@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{CommitteeS, SharedWorkerCache, WorkerId};
+use config::{Committee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
@@ -54,7 +54,7 @@ impl Synchronizer {
         rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
     ) -> Self {
-        let genesis = Self::make_genesis(&committee.load());
+        let genesis = Self::make_genesis(&committee);
         Self {
             name,
             worker_cache,

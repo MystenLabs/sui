@@ -164,11 +164,10 @@ impl Worker {
             .unwrap();
         let addr = network::multiaddr_to_address(&address).unwrap();
 
-        let epoch_string: String = committee.load().epoch.to_string();
+        let epoch_string: String = committee.epoch.to_string();
 
         // Set up anemo Network.
         let our_primary_peer_id = committee
-            .load()
             .network_key(&primary_name)
             .map(|public_key| PeerId(public_key.0.to_bytes()))
             .unwrap();
@@ -294,12 +293,10 @@ impl Worker {
 
         // Connect worker to its corresponding primary.
         let primary_address = committee
-            .load()
             .primary(&primary_name)
             .expect("Our primary is not in the committee");
 
         let primary_network_key = committee
-            .load()
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
 
@@ -314,7 +311,7 @@ impl Worker {
         // update the peer_types with the "other_primary". We do not add them in the Network
         // struct, otherwise the networking library will try to connect to it
         let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
-            committee.load().others_primaries(&primary_name);
+            committee.others_primaries(&primary_name);
         for (_, _, network_key) in other_primaries {
             peer_types.insert(
                 PeerId(network_key.0.to_bytes()),
@@ -494,7 +491,7 @@ impl Worker {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
+            self.committee.clone(),
             self.worker_cache.clone(),
             shutdown_receivers.pop().unwrap(),
             /* rx_message */ rx_quorum_waiter,

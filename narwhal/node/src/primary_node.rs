@@ -217,7 +217,7 @@ impl PrimaryNodeInner {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
             let (handle, dag) = Dag::new(
-                &committee.load(),
+                &committee,
                 rx_new_certificates,
                 consensus_metrics,
                 tx_shutdown.subscribe(),
@@ -321,13 +321,13 @@ impl PrimaryNodeInner {
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
-            (**committee.load()).clone(),
+            committee.clone(),
             store.consensus_store.clone(),
             parameters.gc_depth,
             consensus_metrics.clone(),
         );
         let consensus_handles = Consensus::spawn(
-            (**committee.load()).clone(),
+            committee.clone(),
             store.consensus_store.clone(),
             store.certificate_store.clone(),
             shutdown_receivers.pop().unwrap(),
@@ -345,7 +345,7 @@ impl PrimaryNodeInner {
             name,
             rx_executor_network,
             worker_cache,
-            (**committee.load()).clone(),
+            committee.clone(),
             execution_state,
             shutdown_receivers,
             rx_sequence,

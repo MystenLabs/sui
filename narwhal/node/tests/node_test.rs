@@ -31,7 +31,6 @@ async fn simple_primary_worker_node_start_stop() {
         .build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let shared_committee = Arc::new(ArcSwap::from_pointee(committee));
 
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
@@ -48,7 +47,7 @@ async fn simple_primary_worker_node_start_stop() {
         .start(
             key_pair.copy(),
             network_key_pair.copy(),
-            shared_committee.clone(),
+            committee.clone(),
             worker_cache.clone(),
             &store,
             execution_state,
@@ -63,7 +62,7 @@ async fn simple_primary_worker_node_start_stop() {
         .start(
             key_pair.public().clone(),
             vec![(0, authority.worker(0).keypair().copy())],
-            shared_committee,
+            committee,
             worker_cache,
             &store,
             TrivialTransactionValidator::default(),
@@ -111,7 +110,6 @@ async fn primary_node_restart() {
         .build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let shared_committee = Arc::new(ArcSwap::from_pointee(committee));
 
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
@@ -128,7 +126,7 @@ async fn primary_node_restart() {
         .start(
             key_pair.copy(),
             network_key_pair.copy(),
-            shared_committee.clone(),
+            committee.clone(),
             worker_cache.clone(),
             &store,
             execution_state.clone(),
@@ -148,7 +146,7 @@ async fn primary_node_restart() {
         .start(
             key_pair.copy(),
             network_key_pair.copy(),
-            shared_committee.clone(),
+            committee.clone(),
             worker_cache.clone(),
             &store,
             execution_state,

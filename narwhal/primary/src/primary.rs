@@ -216,7 +216,6 @@ impl Primary {
 
         // Spawn the network receiver listening to messages from the other primaries.
         let address = committee
-            .load()
             .primary(&name)
             .expect("Our public key or worker id is not in the committee");
         let address = address
@@ -281,7 +280,7 @@ impl Primary {
 
         let addr = network::multiaddr_to_address(&address).unwrap();
 
-        let epoch_string: String = committee.load().epoch.to_string();
+        let epoch_string: String = committee.epoch.to_string();
 
         let our_worker_peer_ids = worker_cache
             .load()
@@ -416,7 +415,6 @@ impl Primary {
 
         // Add other primaries
         let primaries = committee
-            .load()
             .others_primaries(&name)
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
@@ -461,7 +459,7 @@ impl Primary {
 
         let core_handle = Core::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            committee.clone(),
             header_store.clone(),
             certificate_store.clone(),
             synchronizer,
@@ -483,7 +481,7 @@ impl Primary {
         // `Core` for further processing.
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            committee.clone(),
             worker_cache.clone(),
             network.clone(),
             certificate_store.clone(),
@@ -499,7 +497,7 @@ impl Primary {
         // digests from our workers and sends it back to the `Core`.
         let proposer_handle = Proposer::spawn(
             name.clone(),
-            (**committee.load()).clone(),
+            committee.clone(),
             signature_service,
             proposer_store,
             parameters.header_num_of_batches_threshold,
@@ -542,7 +540,7 @@ impl Primary {
             // them from the primary peers by synchronizing also their batches.
             let block_synchronizer_handle = BlockSynchronizer::spawn(
                 name.clone(),
-                (**committee.load()).clone(),
+                committee.clone(),
                 worker_cache.clone(),
                 tx_shutdown.subscribe(),
                 rx_block_synchronizer_commands,
@@ -608,7 +606,6 @@ impl Primary {
             "Primary {} successfully booted on {}",
             name.encode_base64(),
             committee
-                .load()
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
         );
@@ -684,7 +681,7 @@ impl PrimaryReceiverHandler {
             self.metrics.duplicate_certificates_processed.inc();
             return Ok(false);
         }
-        certificate.verify(&self.committee.load(), self.worker_cache.clone())?;
+        certificate.verify(&self.committee, self.worker_cache.clone())?;
         Ok(true)
     }
 
@@ -702,8 +699,8 @@ impl PrimaryReceiverHandler {
             })?;
 
         let header = &request.body().header;
-        let committee = self.committee.load();
-        header.verify(&committee, self.worker_cache.clone())?;
+        let committee = &self.committee;
+        header.verify(committee, self.worker_cache.clone())?;
 
         // Vote request must come from the Header's author.
         let peer_id = request

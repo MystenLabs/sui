@@ -89,13 +89,12 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
             self.dag.clone(),
         );
 
-        let narwhal_proposer = NarwhalProposer::new(self.dag, Arc::clone(&self.committee));
+        let narwhal_proposer = NarwhalProposer::new(self.dag, self.committee.clone());
         let narwhal_configuration = NarwhalConfiguration::new(
             self.committee
-                .load()
                 .primary(&self.name)
                 .expect("Our public key is not in the committee"),
-            Arc::clone(&self.committee),
+            self.committee.clone(),
         );
 
         let config = mysten_network::config::Config::default();
