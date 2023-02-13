@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{common::create_db_stores, synchronizer::Synchronizer, NUM_SHUTDOWN_RECEIVERS};
+use crate::{
+    common::create_db_stores, metrics::PrimaryMetrics, synchronizer::Synchronizer,
+    NUM_SHUTDOWN_RECEIVERS,
+};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use prometheus::Registry;
@@ -20,6 +23,7 @@ async fn deliver_certificate_using_dag() {
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -47,6 +51,7 @@ async fn deliver_certificate_using_dag() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         Some(dag.clone()),
+        metrics.clone(),
     );
 
     // create some certificates in a complete DAG form
@@ -83,6 +88,7 @@ async fn deliver_certificate_using_store() {
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -97,6 +103,7 @@ async fn deliver_certificate_using_store() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     );
 
     // create some certificates in a complete DAG form
@@ -133,6 +140,7 @@ async fn deliver_certificate_not_found_parents() {
     let name = fixture.authorities().next().unwrap().public_key();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, mut rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -147,6 +155,7 @@ async fn deliver_certificate_not_found_parents() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     );
 
     // create some certificates in a complete DAG form
@@ -186,6 +195,7 @@ async fn sync_batches_drops_old() {
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
     let worker_cache = fixture.shared_worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -204,6 +214,7 @@ async fn sync_batches_drops_old() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
 
     let mut certificates = HashMap::new();

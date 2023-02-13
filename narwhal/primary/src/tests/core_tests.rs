@@ -98,6 +98,7 @@ async fn propose_header() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
     let _core_handle = Core::spawn(
         name,
@@ -194,6 +195,7 @@ async fn propose_header_failure() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
     let _core_handle = Core::spawn(
         name,
@@ -231,6 +233,7 @@ async fn process_certificates() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -255,6 +258,7 @@ async fn process_certificates() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -342,6 +346,7 @@ async fn recover_core() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -366,6 +371,7 @@ async fn recover_core() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -478,6 +484,7 @@ async fn recover_core_partial_certs() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -502,6 +509,7 @@ async fn recover_core_partial_certs() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -610,6 +618,7 @@ async fn recover_core_expecting_header_of_previous_round() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -634,6 +643,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -742,6 +752,7 @@ async fn shutdown_core() {
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -766,6 +777,7 @@ async fn shutdown_core() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));

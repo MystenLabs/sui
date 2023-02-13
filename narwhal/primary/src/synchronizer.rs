@@ -10,7 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::sync::watch;
-use tracing::debug;
+use tracing::{debug, trace};
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -18,6 +18,8 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, Header, PrimaryToWorkerClient, Round,
     WorkerSynchronizeMessage,
 };
+
+use crate::metrics::PrimaryMetrics;
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
@@ -41,6 +43,8 @@ pub struct Synchronizer {
     genesis: HashMap<CertificateDigest, Certificate>,
     /// The dag used for the external consensus
     dag: Option<Arc<Dag>>,
+    /// Contains Synchronizer specific metrics among other Primary metrics.
+    metrics: Arc<PrimaryMetrics>,
 }
 
 impl Synchronizer {
@@ -53,6 +57,7 @@ impl Synchronizer {
         tx_certificate_fetcher: Sender<Certificate>,
         rx_consensus_round_updates: watch::Receiver<Round>,
         dag: Option<Arc<Dag>>,
+        metrics: Arc<PrimaryMetrics>,
     ) -> Self {
         let genesis = Self::make_genesis(&committee.load());
         Self {
@@ -64,6 +69,7 @@ impl Synchronizer {
             rx_consensus_round_updates,
             genesis,
             dag,
+            metrics,
         }
     }
 
@@ -73,6 +79,48 @@ impl Synchronizer {
             .map(|x| (x.digest(), x))
             .collect()
     }
+
+    // async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+    //     let digest = certificate.digest();
+    //     if self.certificate_store.read(digest)?.is_some() {
+    //         trace!("Certificate {digest:?} has already been processed. Skip processing.");
+    //         self.metrics.duplicate_certificates_processed.inc();
+    //         if let Some(notify) = notify {
+    //             let _ = notify.send(Ok(())); // no problem if remote side isn't listening
+    //         }
+    //         return Ok(());
+    //     }
+
+    //     if let Err(e) = self.sanitize_certificate(&certificate).await {
+    //         if let Some(notify) = notify {
+    //             let _ = notify.send(Err(e.clone())); // no problem if remote side isn't listening
+    //         }
+    //         return Err(e);
+    //     }
+
+    //     match self.process_certificate_internal(certificate).await {
+    //         Err(DagError::Suspended) => {
+    //             if let Some(notify) = notify {
+    //                 self.pending_certificates
+    //                     .entry(digest)
+    //                     .or_insert_with(Vec::new)
+    //                     .push(notify);
+    //             }
+    //             Ok(())
+    //         }
+    //         result => {
+    //             if let Some(notify) = notify {
+    //                 let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+    //             }
+    //             if let Some(notifies) = self.pending_certificates.remove(&digest) {
+    //                 for notify in notifies {
+    //                     let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+    //                 }
+    //             }
+    //             result
+    //         }
+    //     }
+    // }
 
     /// Synchronizes batches in the given header with other nodes (through our workers).
     /// Blocks until either synchronization is complete, or the current consensus rounds advances

@@ -316,6 +316,7 @@ async fn test_request_vote_missing_parents() {
         tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name,
@@ -482,6 +483,7 @@ async fn test_request_vote_missing_batches() {
         tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name: name.clone(),
@@ -600,6 +602,7 @@ async fn test_request_vote_already_voted() {
         tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name: name.clone(),
@@ -751,6 +754,7 @@ async fn test_fetch_certificates_handler() {
         tx_certificate_fetcher,
         rx_consensus_round_updates.clone(),
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name,
@@ -912,6 +916,7 @@ async fn test_process_payload_availability_success() {
         tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name,
@@ -1056,6 +1061,7 @@ async fn test_process_payload_availability_when_failures() {
         tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name,
@@ -1148,6 +1154,7 @@ async fn test_request_vote_created_at_in_future() {
         tx_certificate_fetcher,
         rx_consensus_round_updates,
         None,
+        metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
         name: name.clone(),

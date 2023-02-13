@@ -202,6 +202,7 @@ impl Primary {
             tx_certificate_fetcher,
             rx_consensus_round_updates.clone(),
             dag.clone(),
+            node_metrics.clone(),
         ));
 
         let signature_service = SignatureService::new(signer);
