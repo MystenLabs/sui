@@ -6,7 +6,7 @@ import {
     SUI_TYPE_ARG,
     getTransactionDigest,
 } from '@mysten/sui.js';
-import { Formik } from 'formik';
+import { Field, Form, useFormikContext, Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -17,9 +17,13 @@ import {
     createValidationSchemaStepTwo,
 } from './validation';
 import { Content } from '_app/shared/bottom-menu-layout';
-import PageTitle from '_app/shared/page-title';
+import { Text } from '_app/shared/text';
+import { ActiveCoinsCard } from '_components/active-coins-card';
+import AddressInput from '_components/address-input';
+import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import ProgressBar from '_components/progress-bar';
+import NumberInput from '_components/number-input';
+import Overlay from '_components/overlay';
 import { parseAmount } from '_helpers';
 import {
     useAppSelector,
@@ -72,6 +76,7 @@ function TransferCoinPage() {
         () => allCoins.filter((aCoin) => aCoin.type === coinType),
         [allCoins, coinType]
     );
+    const [showModal, setShowModal] = useState(true);
     const [sendError, setSendError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
     const [formData] = useState<FormValues>(initialValues);
@@ -161,6 +166,10 @@ function TransferCoinPage() {
         []
     );
 
+    const closeSendToken = useCallback(() => {
+        navigate('/');
+    }, [navigate]);
+
     const handleBackStep = useCallback(() => {
         setCurrentStep(DEFAULT_FORM_STEP);
     }, []);
@@ -215,26 +224,85 @@ function TransferCoinPage() {
 
     const SendCoin = (
         <div className={st.container}>
-            <PageTitle
-                title="Send Coins"
-                backLink={'/'}
-                className={st.pageTitle}
-                {...(currentStep > 1 && { onClick: handleBackStep })}
-            />
-
             <Content className={st.content}>
                 <Loading loading={loadingBalance}>
-                    <ProgressBar
-                        currentStep={currentStep}
-                        stepsName={['Amount', 'Address']}
-                    />
                     {steps[currentStep - 1]}
                 </Loading>
             </Content>
         </div>
     );
 
-    return <>{SendCoin}</>;
+    return (
+        <Overlay
+            showModal={showModal}
+            setShowModal={setShowModal}
+            title="Send Coins"
+            closeOverlay={closeSendToken}
+            closeIcon={SuiIcons.Close}
+        >
+            <div className="flex flex-col gap-7.5 mt-3.75">
+                <ActiveCoinsCard activeCoinType={coinType} />
+
+                <Formik
+                    initialValues={formData}
+                    validateOnMount={true}
+                    validationSchema={validationSchemaStepOne}
+                    onSubmit={onHandleSubmit}
+                >
+                    <Form autoComplete="off" noValidate>
+                        <div className="w-full flex gap-2.5 flex-col">
+                            <div className="px-2">
+                                <Text
+                                    variant="captionSmall"
+                                    color="steel-dark"
+                                    weight="semibold"
+                                >
+                                    Select SUI Amount to Send
+                                </Text>
+                            </div>
+                            <div className="w-full flex relative items-center">
+                                <Field
+                                    component={NumberInput}
+                                    allowNegative={false}
+                                    name="amount"
+                                    placeholder="0.00"
+                                    suffix={coinSymbol}
+                                    className="w-full py-3.5 px-3 pr-14 flex items-center rounded-2lg text-steel-dark text-body font-semibold bg-white placeholder:text-steel placeholder:font-semibold border border-solid border-gray-45 box-border focus:border-steel transition-all"
+                                    decimals
+                                />
+                                <button
+                                    className="absolute right-3 bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
+                                    type="button"
+                                >
+                                    Max
+                                </button>
+                            </div>
+                            <div className="w-full flex relative items-center">
+                                <Field
+                                    component={AddressInput}
+                                    allowNegative={false}
+                                    name="to"
+                                    className="w-full py-3.5 px-3  flex items-center rounded-2lg text-steel-dark text-body font-semibold bg-white placeholder:text-steel placeholder:font-semibold border border-solid border-gray-45 box-border focus:border-steel transition-all"
+                                />
+                            </div>
+                            <StepTwo
+                                submitError={sendError}
+                                coinSymbol={coinSymbol}
+                                coinType={coinType}
+                                gasBudgetEstimation={
+                                    gasBudgetEstimation || null
+                                }
+                                gasCostEstimation={gasBudgetEstimation || null}
+                                gasEstimationLoading={isLoading}
+                                onClearSubmitError={handleOnClearSubmitError}
+                            />
+                        </div>
+                    </Form>
+                </Formik>
+                {StepOneForm}
+            </div>
+        </Overlay>
+    );
 }
 
 export default TransferCoinPage;
