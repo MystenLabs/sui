@@ -10,7 +10,6 @@ import {
 import { useMemo } from 'react';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
-import { StakeColumn } from './StakeColumn';
 
 import { useGetObject } from '~/hooks/useGetObject';
 import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
@@ -22,20 +21,25 @@ import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getStakedPercent } from '~/utils/getStakedPercent';
+import { getTotalValidatorsStake } from '~/utils/getTotalValidatorsStake';
 
 const NUMBER_OF_VALIDATORS = 10;
 
 export function processValidators(set: MoveActiveValidator[]) {
+    const totalValidatorsStake = getTotalValidatorsStake(set);
     return set.map((av) => {
         const rawName = av.fields.metadata.fields.name;
-        const delegatedStake =
-            +av.fields.delegation_staking_pool.fields.sui_balance;
-        const selfStake = +av.fields.stake_amount;
-        const totalValidatorStake = selfStake + delegatedStake;
+        const delegatedStake = BigInt(
+            av.fields.delegation_staking_pool.fields.sui_balance
+        );
+        const selfStake = BigInt(av.fields.stake_amount);
+        const totalStake = selfStake + delegatedStake;
+
         return {
             name: getName(rawName),
             address: av.fields.metadata.fields.sui_address,
-            stake: totalValidatorStake,
+            stakeShare: getStakedPercent(totalStake, totalValidatorsStake),
             logo:
                 typeof av.fields.metadata.fields.image_url === 'string'
                     ? av.fields.metadata.fields.image_url
@@ -56,7 +60,7 @@ const validatorsTable = (
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
     return {
-        data: validatorsItems.map(({ name, stake, address, logo }) => ({
+        data: validatorsItems.map(({ name, stakeShare, address, logo }) => ({
             name: (
                 <div className="flex items-center gap-2.5">
                     {showIcon && (
@@ -74,10 +78,9 @@ const validatorsTable = (
                     </Link>
                 </div>
             ),
-            stake: <StakeColumn stake={stake} />,
-            delegation: (
+            stakeShare: (
                 <Text variant="bodySmall/medium" color="steel-darker">
-                    {stake.toString()}
+                    {stakeShare}%
                 </Text>
             ),
             address: <ValidatorLink address={address} noTruncate={!limit} />,
@@ -92,8 +95,8 @@ const validatorsTable = (
                 accessorKey: 'address',
             },
             {
-                header: 'Stake',
-                accessorKey: 'stake',
+                header: 'Stake Share',
+                accessorKey: 'stakeShare',
             },
         ],
     };

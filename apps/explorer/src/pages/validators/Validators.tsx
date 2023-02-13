@@ -28,6 +28,8 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getStakedPercent } from '~/utils/getStakedPercent';
+import { getTotalValidatorsStake } from '~/utils/getTotalValidatorsStake';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { roundFloat } from '~/utils/roundFloat';
 
@@ -40,15 +42,21 @@ function validatorsTableData(
     epoch: number,
     validatorsEvents: SuiEventEnvelope[]
 ) {
+    const totalValidatorsStake = getTotalValidatorsStake(validators);
     return {
         data: validators.map((validator, index) => {
             const validatorName = getName(
                 validator.fields.metadata.fields.name
             );
-            const delegatedStake =
-                +validator.fields.delegation_staking_pool.fields.sui_balance;
-            const selfStake = +validator.fields.stake_amount;
+            const delegatedStake = BigInt(
+                validator.fields.delegation_staking_pool.fields.sui_balance
+            );
+            const selfStake = BigInt(validator.fields.stake_amount);
             const totalStake = selfStake + delegatedStake;
+            const stakeShare = getStakedPercent(
+                totalStake,
+                totalValidatorsStake
+            );
             const img =
                 validator.fields.metadata.fields.image_url &&
                 typeof validator.fields.metadata.fields.image_url === 'string'
@@ -65,6 +73,7 @@ function validatorsTableData(
                     name: validatorName,
                     logo: validator.fields.metadata.fields.image_url,
                 },
+                stakeShare,
                 stake: totalStake,
                 apy: calculateAPY(validator, epoch),
                 commission: +validator.fields.commission_rate / 100,
@@ -122,6 +131,16 @@ function validatorsTableData(
                         </Link>
                     );
                 },
+            },
+            {
+                header: 'Stake Share',
+                accessorKey: 'stakeShare',
+                enableSorting: true,
+                cell: (props: any) => (
+                    <Text variant="bodySmall/medium" color="steel-darker">
+                        {props.getValue()}%
+                    </Text>
+                ),
             },
             {
                 header: 'Stake',
@@ -204,9 +223,9 @@ function ValidatorPageResult() {
         return validators.reduce(
             (acc, cur) =>
                 acc +
-                +cur.fields.delegation_staking_pool.fields.sui_balance +
-                +cur.fields.stake_amount,
-            0
+                BigInt(cur.fields.delegation_staking_pool.fields.sui_balance) +
+                BigInt(cur.fields.stake_amount),
+            0n
         );
     }, [validatorsData]);
 
@@ -250,7 +269,7 @@ function ValidatorPageResult() {
         );
     }, [validatorEvents, validatorsData]);
 
-    const defaultSorting = [{ id: 'stake', desc: false }];
+    const defaultSorting = [{ id: 'stakeShare', desc: false }];
 
     if (isError || validatorEventError) {
         return (
@@ -336,7 +355,7 @@ function ValidatorPageResult() {
                         <PlaceholderTable
                             rowCount={20}
                             rowHeight="13px"
-                            colHeadings={['Name', 'Address', 'Stake']}
+                            colHeadings={['Name', 'Address', 'Stake Share']}
                             colWidths={['220px', '220px', '220px']}
                         />
                     )}
