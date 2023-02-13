@@ -201,6 +201,8 @@ impl Primary {
             certificate_store.clone(),
             payload_store.clone(),
             tx_certificate_fetcher,
+            tx_new_certificates.clone(),
+            tx_parents.clone(),
             rx_consensus_round_updates.clone(),
             dag.clone(),
             node_metrics.clone(),

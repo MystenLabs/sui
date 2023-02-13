@@ -158,9 +158,8 @@ async fn fetch_certificates_basic() {
     let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1000);
     // proposer back to the core
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1000);
-    // core -> consensus, we store the output of process_certificate here, a small channel limit may backpressure the test into failure
     let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1000);
-    // core -> proposers, byproduct of certificate processing, a small channel limit could backpressure the test into failure
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(1000);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1000);
     // FetchCertificateProxy -> test
     let (tx_fetch_req, mut rx_fetch_req) = mpsc::channel(1000);
@@ -185,6 +184,8 @@ async fn fetch_certificates_basic() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),

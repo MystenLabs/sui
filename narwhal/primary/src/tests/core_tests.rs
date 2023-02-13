@@ -30,7 +30,7 @@ async fn propose_header() {
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, mut rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -97,6 +97,8 @@ async fn propose_header() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -115,7 +117,7 @@ async fn propose_header() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network,
@@ -125,7 +127,7 @@ async fn propose_header() {
     // consensus channel.
     let proposed_digest = proposed_header.digest();
     tx_headers.send(proposed_header).await.unwrap();
-    let certificate = rx_consensus.recv().await.unwrap();
+    let certificate = rx_new_certificates.recv().await.unwrap();
     assert_eq!(certificate.header.digest(), proposed_digest);
 }
 
@@ -145,7 +147,7 @@ async fn propose_header_failure() {
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, mut rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -195,6 +197,8 @@ async fn propose_header_failure() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -213,7 +217,7 @@ async fn propose_header_failure() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network,
@@ -221,7 +225,9 @@ async fn propose_header_failure() {
 
     // Propose header and verify we get no certificate back.
     tx_headers.send(proposed_header).await.unwrap();
-    if let Ok(result) = tokio::time::timeout(Duration::from_secs(5), rx_consensus.recv()).await {
+    if let Ok(result) =
+        tokio::time::timeout(Duration::from_secs(5), rx_new_certificates.recv()).await
+    {
         panic!("expected no certificate to form; got {result:?}");
     }
 }
@@ -242,7 +248,7 @@ async fn process_certificates() {
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, mut rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -259,6 +265,8 @@ async fn process_certificates() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -287,7 +295,7 @@ async fn process_certificates() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network,
@@ -318,7 +326,7 @@ async fn process_certificates() {
 
     // Ensure the core sends the certificates to the consensus.
     for x in certificates.clone() {
-        let received = rx_consensus.recv().await.unwrap();
+        let received = rx_new_certificates.recv().await.unwrap();
         assert_eq!(received, x);
     }
 
@@ -356,7 +364,7 @@ async fn recover_core() {
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -373,6 +381,8 @@ async fn recover_core() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -401,7 +411,7 @@ async fn recover_core() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network.clone(),
@@ -427,7 +437,7 @@ async fn recover_core() {
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
 
     let _core_handle = Core::spawn(
@@ -444,7 +454,7 @@ async fn recover_core() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network,
@@ -495,7 +505,7 @@ async fn recover_core_partial_certs() {
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -512,6 +522,8 @@ async fn recover_core_partial_certs() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -541,7 +553,7 @@ async fn recover_core_partial_certs() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network.clone(),
@@ -568,7 +580,7 @@ async fn recover_core_partial_certs() {
     let (tx_certificates_restored, rx_certificates_restored) = test_utils::test_channel!(2);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -586,7 +598,7 @@ async fn recover_core_partial_certs() {
         rx_certificates_restored,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network.clone(),
@@ -630,7 +642,7 @@ async fn recover_core_expecting_header_of_previous_round() {
     let (tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -647,6 +659,8 @@ async fn recover_core_expecting_header_of_previous_round() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -675,7 +689,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network.clone(),
@@ -713,7 +727,7 @@ async fn recover_core_expecting_header_of_previous_round() {
     let (_tx_certificates_restored, rx_certificates_restored) = test_utils::test_channel!(2);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(3);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(3);
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(3);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -731,7 +745,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         rx_certificates_restored,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network.clone(),
@@ -765,7 +779,7 @@ async fn shutdown_core() {
     let (_tx_certificates, rx_certificates) = test_utils::test_channel!(3);
     let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(1);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
@@ -782,6 +796,8 @@ async fn shutdown_core() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates.clone(),
+        tx_parents.clone(),
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -811,7 +827,7 @@ async fn shutdown_core() {
         rx_certificates,
         rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
+        tx_new_certificates,
         tx_parents,
         metrics.clone(),
         network.clone(),

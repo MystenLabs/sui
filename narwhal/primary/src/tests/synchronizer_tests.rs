@@ -27,6 +27,8 @@ async fn deliver_certificate_using_dag() {
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -50,6 +52,8 @@ async fn deliver_certificate_using_dag() {
         certificates_store,
         payload_store,
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
         Some(dag.clone()),
         metrics.clone(),
@@ -93,6 +97,8 @@ async fn deliver_certificate_using_store() {
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     let synchronizer = Synchronizer::new(
@@ -103,6 +109,8 @@ async fn deliver_certificate_using_store() {
         certificates_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -146,6 +154,8 @@ async fn deliver_certificate_not_found_parents() {
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, mut rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     let synchronizer = Synchronizer::new(
@@ -156,6 +166,8 @@ async fn deliver_certificate_not_found_parents() {
         certificates_store,
         payload_store,
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
@@ -206,6 +218,8 @@ async fn sync_batches_drops_old() {
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
 
     let synchronizer = Arc::new(Synchronizer::new(
@@ -216,6 +230,8 @@ async fn sync_batches_drops_old() {
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
         rx_consensus_round_updates.clone(),
         None,
         metrics.clone(),
