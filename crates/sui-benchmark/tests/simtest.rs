@@ -11,7 +11,7 @@ mod test {
     use std::time::{Duration, Instant};
     use sui_benchmark::benchmark_setup::ProxyGasAndCoin;
     use sui_benchmark::system_state_observer::SystemStateObserver;
-    use sui_benchmark::workloads::workload_configuration::configure_combined_mode_helper;
+    use sui_benchmark::workloads::workload_configuration::configure_combined_mode;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
@@ -252,16 +252,16 @@ mod test {
         let delegation_weight = 1;
         let shared_counter_hotness_factor = 50;
 
-        let proxy_workloads = configure_combined_mode_helper(
+        let proxy_workloads = configure_combined_mode(
+            num_workers,
+            num_transfer_accounts,
+            shared_counter_weight,
+            transfer_object_weight,
+            delegation_weight,
             shared_counter_hotness_factor,
             target_qps,
             in_flight_ratio,
-            shared_counter_weight,
-            transfer_object_weight,
-            num_transfer_accounts,
-            delegation_weight,
             proxy_gas_and_coins,
-            num_workers,
             system_state_observer.clone(),
             1000,
         )

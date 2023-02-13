@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::*;
 
 use prometheus::Registry;
+use rand::seq::SliceRandom;
 
 use std::sync::Arc;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
@@ -80,8 +81,13 @@ async fn main() -> Result<()> {
     let system_state_observer = {
         // Only need to get system state from one proxy as it is shared for the
         // whole network.
-        let mut system_state_observer =
-            SystemStateObserver::new(proxy_gas_and_coins[0].proxy.clone());
+        let mut system_state_observer = SystemStateObserver::new(
+            proxy_gas_and_coins
+                .choose(&mut rand::thread_rng())
+                .context("Failed to get proxy for system state observer")?
+                .proxy
+                .clone(),
+        );
         system_state_observer.reference_gas_price.changed().await?;
         eprintln!(
             "Found reference gas price from system state object = {:?}",

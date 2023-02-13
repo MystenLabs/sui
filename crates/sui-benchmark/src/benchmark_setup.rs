@@ -207,15 +207,14 @@ impl Env {
             fullnodes
         } else {
             info!("Using LocalValidatorAggregatorProxy");
-            let reconfig_fullnode_rpc_url =
-                if use_fullnode_for_reconfig {
-                    // Only need to use one full node for reconfiguration.
-                    Some(fullnode_rpc_urls.get(0).expect(
-                        "fullnode-rpc-url is required when use-fullnode-for-reconfig is true",
-                    ))
-                } else {
-                    None
-                };
+            let reconfig_fullnode_rpc_url = if use_fullnode_for_reconfig {
+                // Only need to use one full node for reconfiguration.
+                Some(fullnode_rpc_urls.choose(&mut rand::thread_rng()).context(
+                    "Failed to get fullnode-rpc-url which is required when use-fullnode-for-reconfig is true",
+                )?)
+            } else {
+                None
+            };
             let genesis = sui_config::node::Genesis::new_from_file(genesis_blob_path);
             let genesis = genesis.genesis()?;
             vec![Arc::new(
@@ -229,21 +228,37 @@ impl Env {
         };
         info!(
             "Reconfiguration - Reconfiguration to epoch {} is done",
-            proxies[0].get_current_epoch(),
+            proxies
+                .choose(&mut rand::thread_rng())
+                .context("Failed to get proxy for reconfiguration")?
+                .get_current_epoch(),
         );
 
         let mut proxy_gas_and_coins = vec![];
+        let mut used_ids = vec![];
 
         for proxy in proxies.iter() {
             let offset = ObjectID::from_hex_literal(primary_gas_id)?;
             let ids = ObjectID::in_range(offset, primary_gas_objects)?;
-            let primary_gas_id = ids
+            let mut primary_gas_id = ids
                 .choose(&mut rand::thread_rng())
                 .context("Failed to choose a random primary gas id")?;
+            while used_ids.contains(primary_gas_id) {
+                primary_gas_id = ids
+                    .choose(&mut rand::thread_rng())
+                    .context("Failed to choose a random primary gas id")?;
+            }
+            used_ids.push(*primary_gas_id);
             let primary_gas = proxy.get_object(*primary_gas_id).await?;
-            let pay_coin_id = ids
+            let mut pay_coin_id = ids
                 .choose(&mut rand::thread_rng())
                 .context("Failed to choose a random pay coin")?;
+            while used_ids.contains(pay_coin_id) {
+                pay_coin_id = ids
+                    .choose(&mut rand::thread_rng())
+                    .context("Failed to choose a random primary gas id")?;
+            }
+            used_ids.push(*pay_coin_id);
             let pay_coin = proxy.get_object(*pay_coin_id).await?;
             let primary_gas_account = primary_gas.owner.get_owner_address()?;
             let keystore_path = Some(&keystore_path)

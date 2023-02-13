@@ -42,7 +42,7 @@ impl WorkloadConfiguration {
                 ..
             } => match self {
                 WorkloadConfiguration::Combined => {
-                    self.configure_combined_mode(
+                    configure_combined_mode(
                         num_workers,
                         opts.num_transfer_accounts,
                         shared_counter,
@@ -75,36 +75,6 @@ impl WorkloadConfiguration {
                 }
             },
         }
-    }
-
-    async fn configure_combined_mode(
-        &self,
-        num_workers: u64,
-        num_transfer_accounts: u64,
-        shared_counter_weight: u32,
-        transfer_object_weight: u32,
-        delegation_weight: u32,
-        shared_counter_hotness_factor: u32,
-        target_qps: u64,
-        in_flight_ratio: u64,
-        proxy_gas_and_coins: Vec<ProxyGasAndCoin>,
-        system_state_observer: Arc<SystemStateObserver>,
-        chunk_size: u64,
-    ) -> Result<Vec<(Arc<dyn ValidatorProxy + Send + Sync>, Vec<WorkloadInfo>)>> {
-        configure_combined_mode_helper(
-            shared_counter_hotness_factor,
-            target_qps,
-            in_flight_ratio,
-            shared_counter_weight,
-            transfer_object_weight,
-            num_transfer_accounts,
-            delegation_weight,
-            proxy_gas_and_coins,
-            num_workers,
-            system_state_observer,
-            chunk_size,
-        )
-        .await
     }
 
     async fn configure_disjoint_mode(
@@ -288,16 +258,16 @@ impl WorkloadConfiguration {
     }
 }
 
-pub async fn configure_combined_mode_helper(
+pub async fn configure_combined_mode(
+    num_workers: u64,
+    num_transfer_accounts: u64,
+    shared_counter_weight: u32,
+    transfer_object_weight: u32,
+    delegation_weight: u32,
     shared_counter_hotness_factor: u32,
     target_qps: u64,
     in_flight_ratio: u64,
-    shared_counter_weight: u32,
-    transfer_object_weight: u32,
-    num_transfer_accounts: u64,
-    delegation_weight: u32,
     proxy_gas_and_coins: Vec<ProxyGasAndCoin>,
-    num_workers: u64,
     system_state_observer: Arc<SystemStateObserver>,
     chunk_size: u64,
 ) -> std::result::Result<
