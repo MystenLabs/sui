@@ -17,5 +17,6 @@ export function createValidationSchemaStepOne(
 ) {
     return Yup.object({
         amount: createTokenValidation(...args),
+        to: SUI_ADDRESS_VALIDATION,
     });
 }

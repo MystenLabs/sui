@@ -17,12 +17,9 @@ import {
     createValidationSchemaStepTwo,
 } from './validation';
 import { Content } from '_app/shared/bottom-menu-layout';
-import { Text } from '_app/shared/text';
 import { ActiveCoinsCard } from '_components/active-coins-card';
-import AddressInput from '_components/address-input';
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import NumberInput from '_components/number-input';
 import Overlay from '_components/overlay';
 import { parseAmount } from '_helpers';
 import {
@@ -190,11 +187,16 @@ function TransferCoinPage() {
             initialValues={formData}
             validateOnMount={true}
             validationSchema={validationSchemaStepOne}
-            onSubmit={handleNextStep}
+            onSubmit={onHandleSubmit}
         >
             <StepOne
                 coinSymbol={coinSymbol}
+                submitError={sendError}
                 coinType={coinType}
+                balance={coinBalance}
+                gasBudgetEstimation={gasBudgetEstimation || null}
+                gasCostEstimation={gasBudgetEstimation || null}
+                gasEstimationLoading={isLoading}
                 onClearSubmitError={handleOnClearSubmitError}
                 onAmountChanged={(anAmount) => setAmountToSend(anAmount)}
             />
@@ -240,66 +242,11 @@ function TransferCoinPage() {
             closeOverlay={closeSendToken}
             closeIcon={SuiIcons.Close}
         >
-            <div className="flex flex-col gap-7.5 mt-3.75">
+            <div className="flex flex-col gap-7.5 mt-3.75 w-full">
                 <ActiveCoinsCard activeCoinType={coinType} />
 
-                <Formik
-                    initialValues={formData}
-                    validateOnMount={true}
-                    validationSchema={validationSchemaStepOne}
-                    onSubmit={onHandleSubmit}
-                >
-                    <Form autoComplete="off" noValidate>
-                        <div className="w-full flex gap-2.5 flex-col">
-                            <div className="px-2">
-                                <Text
-                                    variant="captionSmall"
-                                    color="steel-dark"
-                                    weight="semibold"
-                                >
-                                    Select SUI Amount to Send
-                                </Text>
-                            </div>
-                            <div className="w-full flex relative items-center">
-                                <Field
-                                    component={NumberInput}
-                                    allowNegative={false}
-                                    name="amount"
-                                    placeholder="0.00"
-                                    suffix={coinSymbol}
-                                    className="w-full py-3.5 px-3 pr-14 flex items-center rounded-2lg text-steel-dark text-body font-semibold bg-white placeholder:text-steel placeholder:font-semibold border border-solid border-gray-45 box-border focus:border-steel transition-all"
-                                    decimals
-                                />
-                                <button
-                                    className="absolute right-3 bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
-                                    type="button"
-                                >
-                                    Max
-                                </button>
-                            </div>
-                            <div className="w-full flex relative items-center">
-                                <Field
-                                    component={AddressInput}
-                                    allowNegative={false}
-                                    name="to"
-                                    className="w-full py-3.5 px-3  flex items-center rounded-2lg text-steel-dark text-body font-semibold bg-white placeholder:text-steel placeholder:font-semibold border border-solid border-gray-45 box-border focus:border-steel transition-all"
-                                />
-                            </div>
-                            <StepTwo
-                                submitError={sendError}
-                                coinSymbol={coinSymbol}
-                                coinType={coinType}
-                                gasBudgetEstimation={
-                                    gasBudgetEstimation || null
-                                }
-                                gasCostEstimation={gasBudgetEstimation || null}
-                                gasEstimationLoading={isLoading}
-                                onClearSubmitError={handleOnClearSubmitError}
-                            />
-                        </div>
-                    </Form>
-                </Formik>
                 {StepOneForm}
+                {StepTwoForm}
             </div>
         </Overlay>
     );
