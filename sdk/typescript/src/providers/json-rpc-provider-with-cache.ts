@@ -14,7 +14,6 @@ import {
   getTransactionEffects,
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
-import { Base64DataBuffer } from '../serialization/base64';
 import { is } from 'superstruct';
 
 export class JsonRpcProviderWithCache extends JsonRpcProvider {
@@ -62,9 +61,9 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
   // Transactions
 
   async executeTransaction(
-    txnBytes: Base64DataBuffer,
+    txnBytes: Uint8Array,
     signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
+    signature: Uint8Array,
     pubkey: PublicKey,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {

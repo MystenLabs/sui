@@ -5,7 +5,6 @@ import { SignerWithProvider } from '@mysten/sui.js';
 
 import type { BackgroundClient } from '.';
 import type {
-    Base64DataBuffer,
     Provider,
     SignaturePubkeyPair,
     SuiAddress,
@@ -31,7 +30,7 @@ export class BackgroundServiceSigner extends SignerWithProvider {
         return this.#address;
     }
 
-    signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+    signData(data: Uint8Array): Promise<SignaturePubkeyPair> {
         return this.#backgroundClient.signData(this.#address, data);
     }
 

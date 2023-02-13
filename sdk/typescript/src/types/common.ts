@@ -21,8 +21,7 @@ import {
 import { sha256Hash } from '../cryptography/hash';
 import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
 import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
-import { Base64DataBuffer } from '../serialization/base64';
-import { BCS } from '@mysten/bcs';
+import { BCS, fromB64 } from '@mysten/bcs';
 
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
@@ -135,13 +134,12 @@ export function normalizeSuiObjectId(
 export function generateTransactionDigest(
   data: TransactionData,
   signatureScheme: SignatureScheme,
-  signature: string | Base64DataBuffer,
+  signature: string | Uint8Array,
   publicKey: PublicKeyInitData | PublicKey,
   bcs: BCS,
 ): string {
-  const signatureBytes = (
-    typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
-  ).getData();
+  const signatureBytes =
+    typeof signature === 'string' ? fromB64(signature) : signature;
 
   let pk: PublicKey;
   switch (signatureScheme) {

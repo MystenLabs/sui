@@ -12,9 +12,6 @@ export * from './providers/provider';
 export * from './providers/json-rpc-provider';
 export * from './providers/json-rpc-provider-with-cache';
 
-export * from './serialization/base64';
-export * from './serialization/hex';
-
 export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
 export * from './signers/txn-data-serializers/txn-data-serializer';
 export * from './signers/txn-data-serializers/local-txn-data-serializer';
@@ -29,5 +26,7 @@ export * from './utils/api-endpoints';
 export * from './utils/format';
 
 export * from './framework';
+
+export { fromB64, toB64 } from '@mysten/bcs';
 
 export { is, assert } from 'superstruct';

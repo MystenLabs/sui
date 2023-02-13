@@ -7,7 +7,6 @@ import type {
     SignaturePubkeyPair,
     Keypair,
     SuiAddress,
-    Base64DataBuffer,
 } from '@mysten/sui.js';
 
 export type AccountType = 'derived' | 'imported';
@@ -41,7 +40,7 @@ export class Account {
         return this.#keypair.export();
     }
 
-    async sign(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+    async sign(data: Uint8Array): Promise<SignaturePubkeyPair> {
         return {
             signatureScheme: this.#keypair.getKeyScheme(),
             // TODO(joyqvq): Remove once 0.25.0 is released.

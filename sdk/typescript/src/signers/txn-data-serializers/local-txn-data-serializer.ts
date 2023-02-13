@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../../serialization/base64';
 import {
   Coin,
   PAY_JOIN_COIN_FUNC_NAME,
@@ -50,7 +49,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     signerAddress: string,
     txn: UnserializedSignableTransaction,
     _mode: TransactionBuilderMode = 'Commit',
-  ): Promise<Base64DataBuffer> {
+  ): Promise<Uint8Array> {
     try {
       return await this.serializeTransactionData(
         await this.constructTransactionData(signerAddress, txn),
@@ -74,7 +73,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   async serializeToBytesWithoutGasInfo(
     signerAddress: string,
     txn: UnserializedSignableTransaction,
-  ): Promise<Base64DataBuffer> {
+  ): Promise<Uint8Array> {
     try {
       return await this.serializeTransactionKind(
         (
@@ -373,10 +372,10 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     tx: TransactionData,
     // TODO: derive the buffer size automatically
     size: number = 8192,
-  ): Promise<Base64DataBuffer> {
+  ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
-    return new Base64DataBuffer(dataBytes);
+    return dataBytes;
   }
 
   /**
@@ -386,17 +385,17 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     tx: TransactionKind,
     // TODO: derive the buffer size automatically
     size: number = 8192,
-  ): Promise<Base64DataBuffer> {
+  ): Promise<Uint8Array> {
     const bcs = bcsForVersion(await this.provider.getRpcApiVersion());
     const dataBytes = bcs.ser('TransactionKind', tx, size).toBytes();
-    return new Base64DataBuffer(dataBytes);
+    return dataBytes;
   }
 
   /**
    * Deserialize BCS encoded bytes into `SignableTransaction`
    */
   public async deserializeTransactionBytesToSignableTransaction(
-    bytes: Base64DataBuffer,
+    bytes: Uint8Array,
   ): Promise<
     UnserializedSignableTransaction | UnserializedSignableTransaction[]
   > {

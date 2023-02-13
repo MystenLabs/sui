@@ -3,7 +3,6 @@
 
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,
@@ -233,9 +232,9 @@ export abstract class Provider {
    * Gateway
    */
   abstract executeTransaction(
-    txnBytes: Base64DataBuffer,
+    txnBytes: Uint8Array,
     signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
+    signature: Uint8Array,
     pubkey: PublicKey,
     requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse>;
@@ -328,7 +327,7 @@ export abstract class Provider {
    */
   abstract devInspectTransaction(
     sender: SuiAddress,
-    txn: UnserializedSignableTransaction | string | Base64DataBuffer,
+    txn: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null,
     epoch: number | null,
   ): Promise<DevInspectResults>;

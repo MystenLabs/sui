@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import { Base64DataBuffer } from '../serialization/base64';
 import type { ExportedKeypair, Keypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { SignatureScheme } from './publickey';
@@ -116,13 +115,8 @@ export class Ed25519Keypair implements Keypair {
   /**
    * Return the signature for the provided data using Ed25519.
    */
-  signData(
-    data: Base64DataBuffer,
-    _useRecoverable: boolean = false,
-  ): Base64DataBuffer {
-    return new Base64DataBuffer(
-      nacl.sign.detached(data.getData(), this.keypair.secretKey),
-    );
+  signData(data: Uint8Array, _useRecoverable: boolean = false): Uint8Array {
+    return nacl.sign.detached(data, this.keypair.secretKey);
   }
 
   /**

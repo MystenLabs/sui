@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/bcs';
+import { fromB64 } from '@mysten/bcs';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import {
   deserializeTransactionBytesToTransactionData,
   ExecuteTransactionRequestType,
@@ -53,7 +54,7 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  abstract signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  abstract signData(data: Uint8Array): Promise<SignaturePubkeyPair>;
 
   // Returns a new instance of the Signer, connected to provider.
   // This MAY throw if changing providers is not supported.
@@ -93,25 +94,22 @@ export abstract class SignerWithProvider implements Signer {
    * on Fullnode
    */
   async signAndExecuteTransaction(
-    transaction: Base64DataBuffer | SignableTransaction,
+    transaction: Uint8Array | SignableTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
     // Handle submitting raw transaction bytes:
-    if (
-      transaction instanceof Base64DataBuffer ||
-      transaction.kind === 'bytes'
-    ) {
+    if (transaction instanceof Uint8Array || transaction.kind === 'bytes') {
       const txBytes =
-        transaction instanceof Base64DataBuffer
+        transaction instanceof Uint8Array
           ? transaction
-          : new Base64DataBuffer(transaction.data);
+          : fromB64(transaction.data);
       const intentMessage = new Uint8Array(
         INTENT_BYTES.length + txBytes.getLength(),
       );
       intentMessage.set(INTENT_BYTES);
       intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
 
-      const dataToSign = new Base64DataBuffer(intentMessage);
+      const dataToSign = intentMessage;
       const txBytesToSubmit = txBytes;
       const sig = await this.signData(dataToSign);
       return await this.provider.executeTransaction(
@@ -133,12 +131,11 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   async getTransactionDigest(
-    tx: Base64DataBuffer | SignableTransaction,
+    tx: Uint8Array | SignableTransaction,
   ): Promise<string> {
-    let txBytes: Base64DataBuffer;
-    if (tx instanceof Base64DataBuffer || tx.kind === 'bytes') {
-      txBytes =
-        tx instanceof Base64DataBuffer ? tx : new Base64DataBuffer(tx.data);
+    let txBytes: Uint8Array;
+    if (tx instanceof Uint8Array || tx.kind === 'bytes') {
+      txBytes = tx instanceof Uint8Array ? tx : fromB64(tx.data);
     } else {
       txBytes = await this.serializer.serializeToBytes(
         await this.getAddress(),
@@ -147,12 +144,10 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
     const version = await this.provider.getRpcApiVersion();
-    const intentMessage = new Uint8Array(
-      INTENT_BYTES.length + txBytes.getLength(),
-    );
+    const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.length);
     intentMessage.set(INTENT_BYTES);
-    intentMessage.set(txBytes.getData(), INTENT_BYTES.length);
-    const dataToSign = new Base64DataBuffer(intentMessage);
+    intentMessage.set(txBytes, INTENT_BYTES.length);
+    const dataToSign = intentMessage;
 
     const bcs = bcsForVersion(version);
     const sig = await this.signData(dataToSign);
@@ -178,7 +173,7 @@ export abstract class SignerWithProvider implements Signer {
    * in the Sui System State object
    */
   async devInspectTransaction(
-    tx: UnserializedSignableTransaction | string | Base64DataBuffer,
+    tx: UnserializedSignableTransaction | string | Uint8Array,
     gasPrice: number | null = null,
     epoch: number | null = null,
   ): Promise<DevInspectResults> {
@@ -192,18 +187,18 @@ export abstract class SignerWithProvider implements Signer {
    * @returns The transaction effects
    */
   async dryRunTransaction(
-    tx: SignableTransaction | string | Base64DataBuffer,
+    tx: SignableTransaction | string | Uint8Array,
   ): Promise<TransactionEffects> {
     const address = await this.getAddress();
     let dryRunTxBytes: string;
     if (typeof tx === 'string') {
       dryRunTxBytes = tx;
-    } else if (tx instanceof Base64DataBuffer) {
+    } else if (tx instanceof Uint8Array) {
       dryRunTxBytes = tx.toString();
     } else {
       switch (tx.kind) {
         case 'bytes':
-          dryRunTxBytes = new Base64DataBuffer(tx.data).toString();
+          dryRunTxBytes = toB64(tx.data);
           break;
         default:
           dryRunTxBytes = (

@@ -4,7 +4,6 @@
 import { gt } from '@suchipi/femver';
 import { Keypair } from '../cryptography/keypair';
 import { Provider } from '../providers/provider';
-import { Base64DataBuffer } from '../serialization/base64';
 import { SuiAddress, versionToString } from '../types';
 import { SignaturePubkeyPair } from './signer';
 import { SignerWithProvider } from './signer-with-provider';
@@ -26,7 +25,7 @@ export class RawSigner extends SignerWithProvider {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
-  async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
+  async signData(data: Uint8Array): Promise<SignaturePubkeyPair> {
     // Starting Sui 0.25.0, only 64-byte nonrecoverable signatures are accepted.
     // TODO(joyqvq): Remove once 0.25.0 is released.
     const version = await this.provider.getRpcApiVersion();

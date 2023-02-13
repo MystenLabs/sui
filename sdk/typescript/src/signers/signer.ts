@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
-import { Base64DataBuffer } from '../serialization/base64';
 
 ///////////////////////////////
 // Exported Types
@@ -12,7 +11,7 @@ import { Base64DataBuffer } from '../serialization/base64';
  */
 export type SignaturePubkeyPair = {
   signatureScheme: SignatureScheme;
-  signature: Base64DataBuffer;
+  signature: Uint8Array;
   pubKey: PublicKey;
 };
 
@@ -28,5 +27,5 @@ export interface Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  signData(data: Uint8Array): Promise<SignaturePubkeyPair>;
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { Base64DataBuffer, type MoveActiveValidator } from '@mysten/sui.js';
+import { toB64, type MoveActiveValidator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { StakeButton } from './StakeButton';
@@ -25,9 +25,9 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 
     const validatorPublicKey = useMemo(
         () =>
-            new Base64DataBuffer(
+            toB64(
                 new Uint8Array(metadata.pubkey_bytes)
-            ).toString(),
+            ),
         [metadata]
     );
 
