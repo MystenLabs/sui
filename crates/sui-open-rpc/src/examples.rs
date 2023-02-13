@@ -481,7 +481,6 @@ impl RpcExampleProvider {
                 dependencies: vec![],
             },
             timestamp_ms: None,
-            parsed_data: None,
         };
 
         (data2, signature, recipient, obj_id, result, events)

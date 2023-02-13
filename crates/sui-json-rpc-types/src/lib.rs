@@ -351,7 +351,6 @@ pub struct SuiTransactionResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
     pub timestamp_ms: Option<u64>,
-    pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]

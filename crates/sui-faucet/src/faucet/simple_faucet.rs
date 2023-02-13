@@ -419,7 +419,6 @@ impl SimpleFaucet {
             certificate: tx_cert,
             effects,
             timestamp_ms: None,
-            parsed_data: None,
         })
     }
 

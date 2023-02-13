@@ -1191,12 +1191,10 @@ impl WalletContext {
                 effects,
                 confirmed_local_execution: _,
                 timestamp_ms,
-                parsed_data,
             }) => Ok(SuiTransactionResponse {
                 certificate: tx_cert.unwrap(), // check is done in execute_transaction, safe to unwrap
                 effects: effects.unwrap(), // check is done in execute_transaction, safe to unwrap
                 timestamp_ms,
-                parsed_data,
             }),
             Err(err) => Err(anyhow!(
                 "Failed to execute transaction {tx_digest:?} with error {err:?}"
@@ -1215,9 +1213,6 @@ impl Display for SuiClientCommandResult {
                     "{}",
                     write_cert_and_effects(&response.certificate, &response.effects)?
                 )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
             }
             SuiClientCommandResult::Object(object_read, bcs) => {
                 let object = if *bcs {
@@ -1346,9 +1341,6 @@ impl Display for SuiClientCommandResult {
                     "{}",
                     write_cert_and_effects(&response.certificate, &response.effects)?
                 )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
             }
             SuiClientCommandResult::MergeCoin(response) => {
                 write!(
@@ -1356,9 +1348,6 @@ impl Display for SuiClientCommandResult {
                     "{}",
                     write_cert_and_effects(&response.certificate, &response.effects)?
                 )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
             }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
@@ -1381,9 +1370,6 @@ impl Display for SuiClientCommandResult {
                     "{}",
                     write_cert_and_effects(&response.certificate, &response.effects)?
                 )?;
-                if let Some(parsed_resp) = &response.parsed_data {
-                    writeln!(writer, "{}", parsed_resp)?;
-                }
             }
             SuiClientCommandResult::SerializeTransferSui(data_to_sign, data_to_execute) => {
                 writeln!(writer, "Intent message to sign: {}", data_to_sign)?;

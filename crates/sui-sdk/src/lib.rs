@@ -13,7 +13,7 @@ use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 use crate::error::{Error, SuiRpcResult};
-use rpc_types::{SuiCertifiedTransaction, SuiParsedTransactionResponse, SuiTransactionEffects};
+use rpc_types::{SuiCertifiedTransaction, SuiTransactionEffects};
 use serde_json::Value;
 use sui_adapter::execution_mode::Normal;
 pub use sui_json as json;
@@ -37,7 +37,6 @@ pub struct TransactionExecutionResult {
     pub effects: Option<SuiTransactionEffects>,
     pub confirmed_local_execution: bool,
     pub timestamp_ms: Option<u64>,
-    pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
 pub struct SuiClientBuilder {

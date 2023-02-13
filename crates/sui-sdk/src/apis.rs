@@ -494,7 +494,6 @@ impl QuorumDriver {
                 effects: Some(effects.effects),
                 confirmed_local_execution,
                 timestamp_ms: None,
-                parsed_data: None,
             },
             ExecuteTransactionRequestType::WaitForLocalExecution => {
                 if !confirmed_local_execution {
@@ -506,7 +505,6 @@ impl QuorumDriver {
                     effects: Some(effects.effects),
                     confirmed_local_execution,
                     timestamp_ms: None,
-                    parsed_data: None,
                 }
             }
         })
