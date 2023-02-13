@@ -2015,6 +2015,12 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         std::mem::drop(g);
 
         // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
+        // Must manually enqueue the cert to transaction manager because send_consensus_no_execution
+        // explicitly doesn't do so.
+        authority_state
+            .transaction_manager()
+            .enqueue(vec![shared_object_cert.clone()], &epoch_store)
+            .unwrap();
         authority_state
             .execute_certificate(
                 &shared_object_cert,
