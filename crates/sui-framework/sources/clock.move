@@ -9,12 +9,25 @@ module sui::clock {
 
     friend sui::genesis;
 
+    /// Singleton shared object that exposes time to Move calls.  This
+    /// object is found at address 0x6, and can only be read (accessed
+    /// via an immutable reference) by entry functions.
+    ///
+    /// Entry Functions that attempt to accept `Clock` by mutable
+    /// reference or value will fail to verify, and honest validators
+    /// will not sign or execute transactions that use `Clock` as an
+    /// input parameter, unless it is passed by immutable reference.
     struct Clock has key {
         id: UID,
+        /// The clock's timestamp, which is set automatically by a
+        /// system transaction every time consensus commits a
+        /// schedule, or by `sui::clock::increment_for_testing` during
+        /// testing.
         timestamp_ms: u64,
     }
 
-    /// The `clock`'s current timestamp, in milliseconds.
+    /// The `clock`'s current timestamp as a running total of
+    /// milliseconds since an arbitrary point in the past.
     public fun timestamp_ms(clock: &Clock): u64 {
         clock.timestamp_ms
     }

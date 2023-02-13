@@ -22,6 +22,14 @@ shared object that is created at 0x6 during genesis.
 
 ## Resource `Clock`
 
+Singleton shared object that exposes time to Move calls.  This
+object is found at address 0x6, and can only be read (accessed
+via an immutable reference) by entry functions.
+
+Entry Functions that attempt to accept <code><a href="clock.md#0x2_clock_Clock">Clock</a></code> by mutable
+reference or value will fail to verify, and honest validators
+will not sign or execute transactions that use <code><a href="clock.md#0x2_clock_Clock">Clock</a></code> as an
+input parameter, unless it is passed by immutable reference.
 
 
 <pre><code><b>struct</b> <a href="clock.md#0x2_clock_Clock">Clock</a> <b>has</b> key
@@ -44,7 +52,10 @@ shared object that is created at 0x6 during genesis.
 <code>timestamp_ms: u64</code>
 </dt>
 <dd>
-
+ The clock's timestamp, which is set automatically by a
+ system transaction every time consensus commits a
+ schedule, or by <code>sui::clock::increment_for_testing</code> during
+ testing.
 </dd>
 </dl>
 
@@ -55,7 +66,8 @@ shared object that is created at 0x6 during genesis.
 
 ## Function `timestamp_ms`
 
-The <code><a href="clock.md#0x2_clock">clock</a></code>'s current timestamp, in milliseconds.
+The <code><a href="clock.md#0x2_clock">clock</a></code>'s current timestamp as a running total of
+milliseconds since an arbitrary point in the past.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="clock.md#0x2_clock_timestamp_ms">timestamp_ms</a>(<a href="clock.md#0x2_clock">clock</a>: &<a href="clock.md#0x2_clock_Clock">clock::Clock</a>): u64
