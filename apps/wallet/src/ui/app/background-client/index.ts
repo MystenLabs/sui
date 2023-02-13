@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, publicKeyFromSerialized } from '@mysten/sui.js';
+import { fromB64, publicKeyFromSerialized, toB64 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -220,7 +220,7 @@ export class BackgroundClient {
                 createMessage<KeyringPayload<'signData'>>({
                     type: 'keyring',
                     method: 'signData',
-                    args: { data: data.toString(), address },
+                    args: { data: toB64(data), address },
                 })
             ).pipe(
                 take(1),

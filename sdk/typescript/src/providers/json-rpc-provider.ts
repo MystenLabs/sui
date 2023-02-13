@@ -851,12 +851,12 @@ export class JsonRpcProvider extends Provider {
       } else if (tx instanceof Uint8Array) {
         devInspectTxBytes = toB64(tx);
       } else {
-        devInspectTxBytes = (
+        devInspectTxBytes = toB64(
           await new LocalTxnDataSerializer(this).serializeToBytesWithoutGasInfo(
             sender,
             tx,
-          )
-        ).toString();
+          ),
+        );
       }
 
       const resp = await this.client.requestWithType(
@@ -901,9 +901,9 @@ export class JsonRpcProvider extends Provider {
         );
         return resp;
       }
-      devInspectTxBytes = (
-        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx)
-      ).toString();
+      devInspectTxBytes = toB64(
+        await new LocalTxnDataSerializer(this).serializeToBytes(sender, tx),
+      );
     }
 
     const resp = await this.client.requestWithType(
@@ -915,11 +915,11 @@ export class JsonRpcProvider extends Provider {
     return resp;
   }
 
-  async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
+  async dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects> {
     try {
       const resp = await this.client.requestWithType(
         'sui_dryRunTransaction',
-        [txBytes],
+        [toB64(txBytes)],
         TransactionEffects,
         this.options.skipDataValidation,
       );

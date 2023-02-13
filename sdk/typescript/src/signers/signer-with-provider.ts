@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
+import { fromB64, toB64 } from '@mysten/bcs';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
@@ -187,20 +187,22 @@ export abstract class SignerWithProvider implements Signer {
     tx: SignableTransaction | string | Uint8Array,
   ): Promise<TransactionEffects> {
     const address = await this.getAddress();
-    let dryRunTxBytes: string;
+    let dryRunTxBytes: Uint8Array;
     if (typeof tx === 'string') {
-      dryRunTxBytes = tx;
+      dryRunTxBytes = fromB64(tx);
     } else if (tx instanceof Uint8Array) {
-      dryRunTxBytes = tx.toString();
+      dryRunTxBytes = tx;
     } else {
       switch (tx.kind) {
         case 'bytes':
-          dryRunTxBytes = toB64(tx.data);
+          dryRunTxBytes = tx.data;
           break;
         default:
-          dryRunTxBytes = (
-            await this.serializer.serializeToBytes(address, tx, 'Commit')
-          ).toString();
+          dryRunTxBytes = await this.serializer.serializeToBytes(
+            address,
+            tx,
+            'Commit',
+          );
           break;
       }
     }

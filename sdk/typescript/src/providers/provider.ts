@@ -337,7 +337,7 @@ export abstract class Provider {
    * gas budget and the transaction effects
    * @param txBytes
    */
-  abstract dryRunTransaction(txBytes: string): Promise<TransactionEffects>;
+  abstract dryRunTransaction(txBytes: Uint8Array): Promise<TransactionEffects>;
 
   /**
    * Return the list of dynamic field objects owned by an object

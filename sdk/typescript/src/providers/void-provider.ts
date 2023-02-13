@@ -197,7 +197,7 @@ export class VoidProvider extends Provider {
     throw this.newError('devInspectTransaction');
   }
 
-  dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
+  dryRunTransaction(_txBytes: Uint8Array): Promise<TransactionEffects> {
     throw this.newError('dryRunTransaction');
   }
 
