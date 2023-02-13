@@ -292,7 +292,7 @@ impl ValidatorService {
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
         if let Some(signed_effects) =
-            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+            state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
@@ -379,8 +379,8 @@ impl ValidatorService {
         // the execution results if it contains shared objects.
         let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: signed_effects.into_inner(),
+            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects: effects.into_inner(),
             })),
             Err(e) => Err(tonic::Status::from(e)),
         }

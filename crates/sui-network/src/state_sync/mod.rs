@@ -1179,6 +1179,8 @@ where
                 store
                     .insert_transaction_effects(effects)
                     .expect("store operation should not fail");
+                // TODO: If the transaction has already been executed, we should check that the executed
+                // effects match. If they don't, it's a bug and we should panic.
                 return Ok(());
             }
         }

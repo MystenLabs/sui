@@ -56,14 +56,22 @@ pub struct AuthorityPerpetualTables {
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
     pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
-    /// A map between the transaction digest of a certificate that was successfully processed
-    /// (ie in `certificates`) and the effects its execution has on the authority state. This
-    /// structure is used to ensure we do not double process a certificate, and that we can return
-    /// the same response for any call after the first (ie. make certificate processing idempotent).
+    /// A map between the transaction digest of a certificate to the effects of its execution.
+    /// We store effects into this table in two different cases:
+    /// 1. When a transaction is synced through state_sync, we store the effects here. These effects
+    /// are known to be final in the network, but may not have been executed locally yet.
+    /// 2. When the transaction is executed locally on this node, we store the effects here. This means that
+    /// it's possible to store the same effects twice (once for the synced transaction, and once for the executed).
+    /// It's also possible for the effects to be reverted if the transaction didn't make it into the epoch.
     #[default_options_override_fn = "effects_table_default_config"]
-    pub(crate) executed_effects: DBMap<TransactionDigest, TrustedSignedTransactionEffects>,
-
     pub(crate) effects: DBMap<TransactionEffectsDigest, TransactionEffects>,
+
+    /// Transactions that have been executed locally on this node. We need this table since the `effects` table
+    /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
+    /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
+    /// tables.
+    pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
+
     pub(crate) synced_transactions: DBMap<TransactionDigest, TrustedCertificate>,
 
     /// When transaction is executed via checkpoint executor, we store association here
