@@ -22,7 +22,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
     object::{MoveObject, Owner},
     storage::{ChildObjectResolver, DeleteKind, WriteKind},
-    SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
@@ -171,29 +171,29 @@ impl<'a> ObjectRuntime<'a> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
             .into();
-        // - an object is new if it is contained in the new ids or if it is the
-        //   SUI_SYSTEM_STATE_OBJECT_ID which is only transferred in genesis
+        // - An object is new if it is contained in the new ids or if it is one of the objects
+        //   created during genesis (the system state object or clock).
         // - Otherwise, check the input objects for the previous owner
         // - If it was not in the input objects, it must have been wrapped or must have been a
         //   child object
-        let transfer_result =
-            if self.state.new_ids.contains_key(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID {
-                TransferResult::New
-            } else if let Some((_, prev_owner)) = self.state.input_objects.get(&id) {
-                match (&owner, prev_owner) {
-                    // don't use == for dummy values in Shared owner
-                    (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
-                    (new, old) if new == old => TransferResult::SameOwner,
-                    _ => TransferResult::OwnerChanged,
-                }
-            } else {
-                TransferResult::OwnerChanged
-            };
+        let is_framework_obj = [SUI_SYSTEM_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID].contains(&id);
+        let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
+            TransferResult::New
+        } else if let Some((_, prev_owner)) = self.state.input_objects.get(&id) {
+            match (&owner, prev_owner) {
+                // don't use == for dummy values in Shared owner
+                (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
+                (new, old) if new == old => TransferResult::SameOwner,
+                _ => TransferResult::OwnerChanged,
+            }
+        } else {
+            TransferResult::OwnerChanged
+        };
 
         // Metered transactions don't have limits for now
         if self.is_metered
             && (self.state.transfers.len() == MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS)
-            && (id != SUI_SYSTEM_STATE_OBJECT_ID)
+            && !is_framework_obj
         {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!(
