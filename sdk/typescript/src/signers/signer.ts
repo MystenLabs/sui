@@ -34,5 +34,16 @@ export interface Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  signData(
+    data: Base64DataBuffer,
+    format: 'string',
+  ): Promise<SignaturePubkeyPairSerialized>;
+  signData(
+    data: Base64DataBuffer,
+    format?: 'buffer',
+  ): Promise<SignaturePubkeyPair>;
+  signData(
+    data: Base64DataBuffer,
+    format?: 'string' | 'buffer',
+  ): Promise<SignaturePubkeyPair | SignaturePubkeyPairSerialized>;
 }

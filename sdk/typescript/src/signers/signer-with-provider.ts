@@ -18,7 +18,11 @@ import {
   DevInspectResults,
   bcsForVersion,
 } from '../types';
-import { SignaturePubkeyPair, Signer } from './signer';
+import {
+  SignaturePubkeyPair,
+  SignaturePubkeyPairSerialized,
+  Signer,
+} from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
   MoveCallTransaction,
@@ -34,6 +38,7 @@ import {
   SignableTransaction,
   UnserializedSignableTransaction,
   SignedTransaction,
+  SignedTransactionSerialized,
 } from './txn-data-serializers/txn-data-serializer';
 
 // See: sui/crates/sui-types/src/intent.rs
@@ -56,11 +61,6 @@ function intentWithScope(scope: IntentScope) {
   return [scope, IntentVersion.V0, AppId.Sui];
 }
 
-export enum SignedTransactionFormat {
-  BUFFER = 'BUFFER',
-  STRING = 'STRING',
-}
-
 ///////////////////////////////
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
@@ -76,7 +76,18 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  abstract signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair>;
+  abstract signData(
+    data: Base64DataBuffer,
+    format: 'string',
+  ): Promise<SignaturePubkeyPairSerialized>;
+  abstract signData(
+    data: Base64DataBuffer,
+    format?: 'buffer',
+  ): Promise<SignaturePubkeyPair>;
+  abstract signData(
+    data: Base64DataBuffer,
+    format?: 'string' | 'buffer',
+  ): Promise<SignaturePubkeyPair | SignaturePubkeyPairSerialized>;
 
   // Returns a new instance of the Signer, connected to provider.
   // This MAY throw if changing providers is not supported.
@@ -111,10 +122,23 @@ export abstract class SignerWithProvider implements Signer {
       serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
+  /**
+   * Sign a message using the keypair, with the `PersonalMessage` intent.
+   * If the `format` argument is set to "buffer", then a Base64DataBuffer will be used to represent the data.
+   * If the `format` argument is set to "string", then a JSON-friendly representation will be used instead.
+   */
   async signMessage(
-    // TODO: Accept string here as well:
     message: Uint8Array | Base64DataBuffer,
-  ): Promise<SignaturePubkeyPair> {
+    format: 'string',
+  ): Promise<SignaturePubkeyPairSerialized>;
+  async signMessage(
+    message: Uint8Array | Base64DataBuffer,
+    format: 'buffer',
+  ): Promise<SignaturePubkeyPair>;
+  async signMessage(
+    message: Uint8Array | Base64DataBuffer,
+    format?: 'buffer' | 'string',
+  ): Promise<SignaturePubkeyPair | SignaturePubkeyPairSerialized> {
     const signBytes =
       message instanceof Base64DataBuffer
         ? message
@@ -125,12 +149,26 @@ export abstract class SignerWithProvider implements Signer {
     intentMessage.set(intent);
     intentMessage.set(signBytes.getData(), intent.length);
     const dataToSign = new Base64DataBuffer(intentMessage);
-    return await this.signData(dataToSign);
+    return await this.signData(dataToSign, format);
   }
 
+  /**
+   * Sign a transaction using the keypair.
+   * If the `format` argument is set to "buffer", then a Base64DataBuffer will be used to represent the data.
+   * If the `format` argument is set to "string", then a JSON-friendly representation will be used instead.
+   */
   async signTransaction(
     transaction: Base64DataBuffer | SignableTransaction,
-  ): Promise<SignedTransaction> {
+    format: 'string',
+  ): Promise<SignedTransactionSerialized>;
+  async signTransaction(
+    transaction: Base64DataBuffer | SignableTransaction,
+    format?: 'buffer',
+  ): Promise<SignedTransaction>;
+  async signTransaction(
+    transaction: Base64DataBuffer | SignableTransaction,
+    format?: 'string' | 'buffer',
+  ): Promise<SignedTransaction | SignedTransactionSerialized> {
     let transactionBytes;
     if (
       transaction instanceof Base64DataBuffer ||
@@ -155,12 +193,13 @@ export abstract class SignerWithProvider implements Signer {
     intentMessage.set(intent);
     intentMessage.set(transactionBytes.getData(), intent.length);
     const dataToSign = new Base64DataBuffer(intentMessage);
-    const signature = await this.signData(dataToSign);
+    const signature = await this.signData(dataToSign, format);
 
     return {
-      transactionBytes,
+      transactionBytes:
+        format === 'string' ? transactionBytes.toString() : transactionBytes,
       signature,
-    };
+    } as SignedTransaction;
   }
   /**
    * Sign a transaction and submit to the Fullnode for execution. Only exists
