@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{SuiAddress, TransactionDigest, TransactionEffectsDigest, VersionNumber};
+use crate::base_types::{SuiAddress, TransactionDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
-use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
+use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest};
 use crate::message_envelope::Message;
 use crate::messages::InputObjectKind::{ImmOrOwnedMoveObject, MovePackage, SharedMoveObject};
 use crate::messages::{SenderSignedData, TransactionEffects, VerifiedCertificate};
