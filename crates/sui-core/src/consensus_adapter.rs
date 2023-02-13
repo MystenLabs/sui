@@ -81,25 +81,25 @@ impl ConsensusAdapterMetrics {
                 "Counts the number of certificates the validator attempts to sequence.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_success: register_int_counter_with_registry!(
                 "sequencing_certificate_success",
                 "Counts the number of successfully sequenced certificates.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_failures: register_int_counter_with_registry!(
                 "sequencing_certificate_failures",
                 "Counts the number of sequenced certificates that failed other than by timeout.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_inflight: register_int_gauge_with_registry!(
                 "sequencing_certificate_inflight",
                 "The inflight requests to sequence certificates.",
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_acknowledge_latency: register_histogram_vec_with_registry!(
                 "sequencing_acknowledge_latency",
                 "The latency for acknowledgement from sequencing engine. The overall sequencing latency is measured by the sequencing_certificate_latency metric",
@@ -107,7 +107,7 @@ impl ConsensusAdapterMetrics {
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
@@ -115,7 +115,7 @@ impl ConsensusAdapterMetrics {
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
-            .unwrap(),
+                .unwrap(),
             sequencing_certificate_authority_position: register_histogram_with_registry!(
                 "sequencing_certificate_authority_position",
                 "The position of the authority when submitted a certificate to consensus.",
@@ -224,15 +224,8 @@ impl ConnectionMonitorListener {
         loop {
             match self.receiver.recv().await {
                 Some((peer_id, connection_status)) => {
-                    let current_connection_statuses = match Arc::get_mut(
-                        &mut self.current_connection_statuses,
-                    ) {
-                        Some(c) => c,
-                        None => {
-                            error!("Consensus monitor failed to get current connection statuses for update");
-                            continue;
-                        }
-                    };
+                    let current_connection_statuses =
+                        Arc::make_mut(&mut self.current_connection_statuses);
                     let authority_name = self
                         .peer_id_to_authority_names
                         .get(&peer_id)
@@ -370,6 +363,10 @@ impl ConsensusAdapter {
 
         let mut i = 0;
         loop {
+            if exclusions.contains(&i) {
+                // this authority was responsible for submission but did not submit after a long time
+                continue;
+            }
             if our_position == i {
                 // if we are the running validator in the first position
                 // we are responsible for submission
@@ -408,7 +405,7 @@ impl ConsensusAdapter {
     fn populate_position_metric(&self, position: usize) {
         // populate the position only when this authority submits the transaction
         // to consensus
-        let mut guard = InflightDropGuard::acquire(&self);
+        let mut guard = InflightDropGuard::acquire(self);
         guard.position = Some(position);
     }
 
@@ -493,13 +490,16 @@ impl ConsensusAdapter {
         }));
 
         let mut tx_submitted = false;
+        let mut exclusions = vec![];
         while !tx_submitted {
             let (should_submit, position) = self.should_submit(
                 epoch_store.committee(),
                 &self.authority,
                 &transaction,
-                vec![],
+                exclusions.clone(),
             );
+            exclusions.push(position);
+
             if should_submit {
                 self.submit_after_selected(transaction.clone(), epoch_store)
                     .await;
@@ -509,16 +509,19 @@ impl ConsensusAdapter {
 
             // We need to wait for some delay until we submit transaction to the consensus
             // However, if transaction is received by consensus while we wait, we don't need to wait
-            let sleep_timer = tokio::time::sleep(Duration::from_secs(7));
+            let sleep_timer = tokio::time::sleep(Duration::from_secs(5));
             let processed_waiter = epoch_store
                 .consensus_message_processed_notify(transaction_key)
                 .boxed();
             match select(processed_waiter, Box::pin(sleep_timer)).await {
-                Either::Left((processed, _await_submit)) => {
+                Either::Left((processed, _)) => {
                     processed.expect("Storage error when waiting for consensus message processed");
+                    break;
                 }
-                Either::Right(((), processed_waiter)) => {
-                    todo!();
+                Either::Right(((), _timer)) => {
+                    // we timed out
+                    // try again with exclusion of the validator that was selected to submit
+                    continue;
                 }
             };
         }
@@ -584,9 +587,9 @@ impl ConsensusAdapter {
                         e
                     );
                 }
-                self.opt_metrics.as_ref().map(|metrics| {
+                if let Some(metrics) = self.opt_metrics.as_ref() {
                     metrics.sequencing_certificate_failures.inc();
-                });
+                }
                 retries += 1;
                 time::sleep(Duration::from_secs(10)).await;
             }
@@ -602,12 +605,12 @@ impl ConsensusAdapter {
                 _ => "over_100".to_string(),
             };
 
-            self.opt_metrics.as_ref().map(|metrics| {
+            if let Some(metrics) = self.opt_metrics.as_ref() {
                 metrics
                     .sequencing_acknowledge_latency
                     .with_label_values(&[&bucket])
                     .observe(ack_start.elapsed().as_secs_f64());
-            });
+            }
         }
         debug!("Submitted {transaction_key:?} to consensus");
     }

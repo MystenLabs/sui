@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tracing::error;
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum ConnectionStatus {
     Connected,
     Disconnected,
