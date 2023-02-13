@@ -2,24 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Field, Formik, Form } from 'formik';
-import { useEffect, useState } from 'react';
-import Browser from 'webextension-polyfill';
+import { toast } from 'react-hot-toast';
 import * as Yup from 'yup';
 
-import Button from '_app/shared/button';
 import InputWithAction from '_app/shared/input-with-action';
 import { setKeyringLockTimeout } from '_app/wallet/actions';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import {
-    AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
-    AUTO_LOCK_TIMER_STORAGE_KEY,
     AUTO_LOCK_TIMER_MIN_MINUTES,
     AUTO_LOCK_TIMER_MAX_MINUTES,
 } from '_src/shared/constants';
-
-import st from './AutoLockTimerSelector.module.scss';
+import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
+import { Pill } from '_src/ui/app/shared/Pill';
 
 const validation = Yup.object({
     timer: Yup.number()
@@ -31,22 +27,12 @@ const validation = Yup.object({
 });
 
 export default function AutoLockTimerSelector() {
-    const [timerMinutes, setTimerMinutes] = useState<number | null>(null);
-    useEffect(() => {
-        Browser.storage.local
-            .get({
-                [AUTO_LOCK_TIMER_STORAGE_KEY]:
-                    AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
-            })
-            .then(({ [AUTO_LOCK_TIMER_STORAGE_KEY]: storedTimer }) =>
-                setTimerMinutes(storedTimer)
-            );
-    }, []);
     const dispatch = useAppDispatch();
+    const autoLockInterval = useAutoLockInterval();
     return (
-        <Loading loading={timerMinutes === null}>
+        <Loading loading={autoLockInterval === null}>
             <Formik
-                initialValues={{ timer: timerMinutes }}
+                initialValues={{ timer: autoLockInterval }}
                 validationSchema={validation}
                 onSubmit={async ({ timer }) => {
                     if (timer !== null) {
@@ -54,11 +40,11 @@ export default function AutoLockTimerSelector() {
                             await dispatch(
                                 setKeyringLockTimeout({ timeout: timer })
                             ).unwrap();
+                            toast.success('Auto lock updated');
                         } catch (e) {
                             // log it?
                         }
                     }
-                    setTimerMinutes(timer);
                 }}
                 enableReinitialize={true}
             >
@@ -72,17 +58,17 @@ export default function AutoLockTimerSelector() {
                             step="1"
                             disabled={isSubmitting}
                         >
-                            <Button
+                            <Pill
+                                text="Save"
                                 type="submit"
-                                disabled={!dirty || isSubmitting || !isValid}
-                                size="mini"
-                                className={st.action}
-                            >
-                                Save
-                            </Button>
+                                disabled={!dirty || !isValid}
+                                loading={isSubmitting}
+                            />
                         </Field>
                         {touched.timer && errors.timer ? (
-                            <Alert className={st.error}>{errors.timer}</Alert>
+                            <div className="mt-1.25">
+                                <Alert>{errors.timer}</Alert>
+                            </div>
                         ) : null}
                     </Form>
                 )}

@@ -8,7 +8,6 @@ import { CoinActivitiesCard } from './CoinActivityCard';
 import { TokenIconLink } from './TokenIconLink';
 import CoinBalance from './coin-balance';
 import IconLink from './icon-link';
-import FaucetRequestButton from '_app/shared/faucet/request-button';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import { SuiIcons } from '_font-icons/output/sui-icons';
@@ -17,6 +16,7 @@ import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG, Coin } from '_redux/slices/sui-objects/Coin';
 import { AccountSelector } from '_src/ui/app/components/AccountSelector';
 import PageTitle from '_src/ui/app/shared/PageTitle';
+import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 
 import st from './TokensPage.module.scss';
 
