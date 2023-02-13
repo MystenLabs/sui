@@ -3,8 +3,7 @@
 use crate::legacy_empty_cost;
 use fastcrypto::{
     secp256k1::{
-        recoverable::{Secp256k1RecoverablePublicKey, Secp256k1RecoverableSignature},
-        Secp256k1PublicKey, Secp256k1Signature,
+        recoverable::Secp256k1RecoverableSignature, Secp256k1PublicKey, Secp256k1Signature,
     },
     traits::ToFromBytes,
 };
@@ -52,10 +51,7 @@ pub fn ecrecover(
     }
 }
 
-fn recover_pubkey(
-    signature: &[u8],
-    hashed_msg: &[u8],
-) -> Result<Secp256k1RecoverablePublicKey, SuiError> {
+fn recover_pubkey(signature: &[u8], hashed_msg: &[u8]) -> Result<Secp256k1PublicKey, SuiError> {
     match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(signature) {
         Ok(signature) => match signature.recover_hashed(hashed_msg) {
             Ok(pubkey) => Ok(pubkey),
@@ -153,14 +149,13 @@ pub fn secp256k1_verify_recoverable(
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 
-    let public_key =
-        match <Secp256k1RecoverablePublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-            Ok(public_key) => public_key,
-            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-        };
+    let public_key = match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
+        Ok(public_key) => public_key,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
 
     let result = public_key
-        .verify_hashed(&hashed_msg_ref, &signature)
+        .verify_recoverable_hashed(&hashed_msg_ref, &signature)
         .is_ok();
     Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
 }

@@ -15,7 +15,6 @@ use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    Verifier,
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -185,9 +184,7 @@ impl HeaderBuilder {
         h.digest.set(Hash::digest(&h)).unwrap();
 
         Ok(Header {
-            signature: signer
-                .try_sign(Digest::from(Hash::digest(&h)).as_ref())
-                .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
+            signature: signer.sign(Digest::from(Hash::digest(&h)).as_ref()),
             ..h
         })
     }
