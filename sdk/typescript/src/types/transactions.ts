@@ -53,7 +53,9 @@ export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
 export const SuiConsensusCommitPrologue = object({
   checkpoint_start_timestamp_ms: number(),
 });
-export type SuiConsensusCommitPrologue = Infer<typeof SuiConsensusCommitPrologue>;
+export type SuiConsensusCommitPrologue = Infer<
+  typeof SuiConsensusCommitPrologue
+>;
 
 export const Pay = object({
   coins: array(SuiObjectRef),
@@ -474,9 +476,11 @@ export function getChangeEpochTransaction(
 }
 
 export function getConsensusCommitPrologueTransaction(
-  data: SuiTransactionKind
+  data: SuiTransactionKind,
 ): SuiConsensusCommitPrologue | undefined {
-  return 'ConsensusCommitPrologue' in data ? data.ConsensusCommitPrologue : undefined;
+  return 'ConsensusCommitPrologue' in data
+    ? data.ConsensusCommitPrologue
+    : undefined;
 }
 
 export function getTransactions(
