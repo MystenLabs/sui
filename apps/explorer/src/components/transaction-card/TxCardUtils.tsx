@@ -54,10 +54,10 @@ export function SuiAmount({
 }: {
     amount: bigint | number | string | undefined | null;
 }) {
-    const [formattedAmount] = useFormatCoin(amount, SUI_TYPE_ARG);
+    const [formattedAmount, coinType] = useFormatCoin(amount, SUI_TYPE_ARG);
 
     if (amount) {
-        const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
+        const SuiSuffix = <abbr className={styles.suisuffix}>{coinType}</abbr>;
 
         return (
             <section>
@@ -201,14 +201,22 @@ export const getDataOnTxDigests = (
                         getTransferObjectTransaction(txn)?.recipient ||
                         getTransferSuiTransaction(txn)?.recipient;
 
-                    const txnTransfer = getAmount(txn, txEff.effects)?.[0];
+                    const transfer = getAmount({
+                        txnData: txEff,
+                        suiCoinOnly: true,
+                    })[0];
+
+                    // use only absolute value of sui amount
+                    const suiAmount = transfer?.amount
+                        ? Math.abs(transfer.amount)
+                        : null;
 
                     return {
                         txId: digest,
                         status: getExecutionStatusType(txEff)!,
                         txGas: getTotalGasUsed(txEff),
-                        suiAmount: txnTransfer?.amount || null,
-                        coinType: txnTransfer?.coinType || null,
+                        suiAmount,
+                        coinType: transfer?.coinType || null,
                         kind: txKind,
                         From: res.data.sender,
                         timestamp_ms: txEff.timestamp_ms,
