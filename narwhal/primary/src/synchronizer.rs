@@ -6,10 +6,14 @@ use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
 use network::{anemo_ext::NetworkExt, RetryConfig};
-use std::{collections::HashMap, sync::Arc};
+use parking_lot::Mutex;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use tracing::{debug, error, trace, warn};
 use types::{
     ensure,
@@ -25,8 +29,19 @@ use crate::metrics::PrimaryMetrics;
 #[path = "tests/synchronizer_tests.rs"]
 pub mod synchronizer_tests;
 
+struct SuspendedCertificate {
+    certificate: Option<Certificate>,
+    missing_parents: HashSet<CertificateDigest>,
+    accepted: broadcast::Sender<()>,
+}
+
+#[derive(Default)]
+struct Inner {
+    suspened: HashMap<CertificateDigest, SuspendedCertificate>,
+    missing: HashMap<CertificateDigest, HashSet<CertificateDigest>>,
+}
+
 /// The `Synchronizer` provides functions for retrieving missing certificates and batches.
-#[derive(Clone)]
 pub struct Synchronizer {
     /// The public key of this primary.
     name: PublicKey,
@@ -36,6 +51,8 @@ pub struct Synchronizer {
     worker_cache: SharedWorkerCache,
     /// The depth of the garbage collector.
     gc_depth: Round,
+    /// Temporary storage for certificates that cannot be accepted yet.
+    inner: Mutex<Inner>,
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -71,6 +88,7 @@ impl Synchronizer {
             committee: committee.clone(),
             worker_cache,
             gc_depth,
+            inner: Default::default(),
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
@@ -88,47 +106,36 @@ impl Synchronizer {
             .collect()
     }
 
-    // async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
-    //     let digest = certificate.digest();
-    //     if self.certificate_store.read(digest)?.is_some() {
-    //         trace!("Certificate {digest:?} has already been processed. Skip processing.");
-    //         self.metrics.duplicate_certificates_processed.inc();
-    //         if let Some(notify) = notify {
-    //             let _ = notify.send(Ok(())); // no problem if remote side isn't listening
-    //         }
-    //         return Ok(());
-    //     }
+    async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+        let digest = certificate.digest();
+        if self.certificate_store.read(digest)?.is_some() {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.metrics.duplicate_certificates_processed.inc();
+            return Ok(());
+        }
 
-    //     if let Err(e) = self.sanitize_certificate(&certificate).await {
-    //         if let Some(notify) = notify {
-    //             let _ = notify.send(Err(e.clone())); // no problem if remote side isn't listening
-    //         }
-    //         return Err(e);
-    //     }
-
-    //     match self.process_certificate_internal(certificate).await {
-    //         Err(DagError::Suspended) => {
-    //             if let Some(notify) = notify {
-    //                 self.pending_certificates
-    //                     .entry(digest)
-    //                     .or_insert_with(Vec::new)
-    //                     .push(notify);
-    //             }
-    //             Ok(())
-    //         }
-    //         result => {
-    //             if let Some(notify) = notify {
-    //                 let _ = notify.send(result.clone()); // no problem if remote side isn't listening
-    //             }
-    //             if let Some(notifies) = self.pending_certificates.remove(&digest) {
-    //                 for notify in notifies {
-    //                     let _ = notify.send(result.clone()); // no problem if remote side isn't listening
-    //                 }
-    //             }
-    //             result
-    //         }
-    //     }
-    // }
+        self.sanitize_certificate(&certificate).await?;
+        let result = self.process_certificate_internal(certificate).await;
+        match result {
+            Err(DagError::Suspended) => {
+                // if let Some(notify) = notify {
+                //     self.pending_certificates
+                //         .entry(digest)
+                //         .or_insert_with(Vec::new)
+                //         .push(notify);
+                // }
+                Ok(())
+            }
+            result => {
+                // if let Some(notifies) = self.pending_certificates.remove(&digest) {
+                //     for notify in notifies {
+                //         let _ = notify.send(result.clone()); // no problem if remote side isn't listening
+                //     }
+                // }
+                result
+            }
+        }
+    }
 
     async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
         ensure!(
@@ -167,7 +174,7 @@ impl Synchronizer {
         }
     }
 
-    async fn process_own_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+    async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
         Ok(())
     }
 
