@@ -37,8 +37,19 @@ struct SuspendedCertificate {
 
 #[derive(Default)]
 struct Inner {
+    highest_accepted_round: Round,
+    highest_received_round: Round,
     suspened: HashMap<CertificateDigest, SuspendedCertificate>,
     missing: HashMap<CertificateDigest, HashSet<CertificateDigest>>,
+}
+
+impl Inner {
+    fn new(highest_accepted_round: Round) -> Self {
+        Self {
+            highest_accepted_round,
+            ..Default::default()
+        }
+    }
 }
 
 /// The `Synchronizer` provides functions for retrieving missing certificates and batches.
@@ -83,12 +94,13 @@ impl Synchronizer {
     ) -> Self {
         let committee: &Committee = &committee.load();
         let genesis = Self::make_genesis(committee);
+        let highest_accepted_round = certificate_store.highest_round_number();
         Self {
             name,
             committee: committee.clone(),
             worker_cache,
             gc_depth,
-            inner: Default::default(),
+            inner: Mutex::new(Inner::new(highest_accepted_round)),
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
@@ -177,6 +189,102 @@ impl Synchronizer {
     async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
         Ok(())
     }
+
+    // async fn process_certificate_internal(&mut self, certificate: Certificate) -> DagResult<()> {
+    //     debug!(
+    //         "Processing certificate {:?} round:{:?}",
+    //         certificate,
+    //         certificate.round()
+    //     );
+
+    //     let certificate_source = if self.name.eq(&certificate.header.author) {
+    //         "own"
+    //     } else {
+    //         "other"
+    //     };
+    //     self.highest_received_round = self.highest_received_round.max(certificate.round());
+    //     self.metrics
+    //         .highest_received_round
+    //         .with_label_values(&[certificate_source])
+    //         .set(self.highest_received_round as i64);
+
+    //     // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
+    //     // parents or payload (which we may not have yet).
+    //     //
+    //     // Since our certificate is well-signed, it shows a majority of honest signers stand at round r,
+    //     // so to make a successful proposal, our proposer must use parents at least at round r-1.
+    //     //
+    //     // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
+    //     let minimal_round_for_parents = certificate.round().saturating_sub(1);
+    //     self.tx_parents
+    //         .send((vec![], minimal_round_for_parents, certificate.epoch()))
+    //         .await
+    //         .map_err(|_| DagError::ShuttingDown)?;
+
+    //     // Instruct workers to download any missing batches referenced in this certificate.
+    //     // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
+    //     // We can thus continue the processing of the certificate without blocking on batch synchronization.
+    //     let header = certificate.header.clone();
+    //     let network = self.network.clone();
+    //     let max_age = self.gc_depth.saturating_sub(1);
+    //     self.background_tasks
+    //         .spawn(async move { self.sync_batches(&header, network, max_age).await });
+
+    //     // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
+    //     // If we don't, the synchronizer will start fetching missing certificates.
+    //     if certificate.round() > self.gc_round + 1 && !self.check_parents(&certificate).await? {
+    //         debug!(
+    //             "Processing certificate {:?} suspended: missing ancestors",
+    //             certificate
+    //         );
+    //         self.metrics
+    //             .certificates_suspended
+    //             .with_label_values(&["missing_parents"])
+    //             .inc();
+    //         return Err(DagError::Suspended);
+    //     }
+
+    //     // Store the certificate. Afterwards, the certificate must be sent to consensus
+    //     // or Narwhal needs to shutdown, to avoid insistencies certificate store and
+    //     // consensus dag.
+    //     self.certificate_store.write(certificate.clone())?;
+
+    //     // Update metrics for processed certificates.
+    //     self.highest_processed_round = self.highest_processed_round.max(certificate.round());
+    //     self.metrics
+    //         .highest_processed_round
+    //         .with_label_values(&[certificate_source])
+    //         .set(self.highest_processed_round as i64);
+    //     self.metrics
+    //         .certificates_processed
+    //         .with_label_values(&[certificate_source])
+    //         .inc();
+
+    //     // Append the certificate to the aggregator of the
+    //     // corresponding round.
+    //     let digest = certificate.digest();
+    //     if let Err(e) = self
+    //         .append_certificate_in_aggregator(certificate.clone())
+    //         .await
+    //     {
+    //         warn!(
+    //             "Failed to aggregate certificate {} for header: {}",
+    //             digest, e
+    //         );
+    //         return Err(DagError::ShuttingDown);
+    //     }
+
+    //     // Send it to the consensus layer.
+    //     if let Err(e) = self.tx_new_certificates.send(certificate).await {
+    //         warn!(
+    //             "Failed to deliver certificate {} to the consensus: {}",
+    //             digest, e
+    //         );
+    //         return Err(DagError::ShuttingDown);
+    //     }
+
+    //     Ok(())
+    // }
 
     /// Synchronizes batches in the given header with other nodes (through our workers).
     /// Blocks until either synchronization is complete, or the current consensus rounds advances

@@ -375,6 +375,22 @@ impl CertificateStore {
         Ok(certificates)
     }
 
+    /// Retrieves the highest round number in the store.
+    /// Returns 0 if there is no certificate in the store.
+    pub fn highest_round_number(&self) -> Round {
+        if let Some(((round, _), _)) = self
+            .certificate_id_by_round
+            .iter()
+            .skip_to_last()
+            .reverse()
+            .next()
+        {
+            round
+        } else {
+            0
+        }
+    }
+
     /// Retrieves the last round number of the given origin.
     /// Returns None if there is no certificate for the origin.
     pub fn last_round_number(&self, origin: &PublicKey) -> StoreResult<Option<Round>> {
@@ -609,10 +625,12 @@ mod test {
         let last_round_number_not_exist = store
             .last_round_number(&PublicKey::insecure_default())
             .unwrap();
+        let highest_round_number = store.highest_round_number();
 
         // THEN
         assert_eq!(result.len(), 8);
         assert_eq!(last_round_number, 50);
+        assert_eq!(highest_round_number, 50);
         for certificate in result {
             assert!(
                 (certificate.round() == last_round_number)
@@ -632,10 +650,12 @@ mod test {
         let last_round_number = store
             .last_round_number(&PublicKey::insecure_default())
             .unwrap();
+        let highest_round_number = store.highest_round_number();
 
         // THEN
         assert!(result.is_empty());
         assert!(last_round_number.is_none());
+        assert_eq!(highest_round_number, 0);
     }
 
     #[tokio::test]
