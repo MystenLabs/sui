@@ -15,8 +15,8 @@ use sui_json_rpc_types::{
     SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
     SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse,
-    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionFilter, SuiTransactionResponse,
-    SuiTypeTag, TransactionBytes, TransactionsPage,
+    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
+    TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -180,7 +180,7 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
-    /// Runs the transaction in dev-inpsect mode. Which allows for nearly any
+    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
     /// transaction (or Move call) with any arguments. Detailed results are
     /// provided, including both the transaction effects and any return values.
     #[method(name = "devInspectTransaction")]
@@ -597,18 +597,6 @@ pub trait RpcBcsApi {
         /// the id of the object
         object_id: ObjectID,
     ) -> RpcResult<GetRawObjectDataResponse>;
-}
-
-#[open_rpc(namespace = "sui", tag = "Transaction Subscription")]
-#[rpc(server, client, namespace = "sui")]
-pub trait TransactionStreamingApi {
-    /// Subscribe to a stream of Sui event
-    #[subscription(name = "subscribeTransaction", item = SuiTransactionResponse)]
-    fn subscribe_transaction(
-        &self,
-        /// the filter criteria of the transaction stream.
-        filter: SuiTransactionFilter,
-    );
 }
 
 #[open_rpc(namespace = "sui", tag = "Event Subscription")]

@@ -1,12 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::fmt::Display;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::{StreamExt, TryStream};
+
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
+use mysten_metrics::spawn_monitored_task;
+use serde::Serialize;
 use tracing::{debug, warn};
 
 use sui_core::authority::AuthorityState;
@@ -18,7 +24,6 @@ use sui_types::query::EventQuery;
 
 use crate::api::EventReadApiServer;
 use crate::api::{cap_page_limit, EventStreamingApiServer};
-use crate::streaming_api::spawn_subscription;
 use crate::SuiRpcModule;
 
 pub struct EventStreamingApiImpl {
@@ -33,6 +38,26 @@ impl EventStreamingApiImpl {
             event_handler,
         }
     }
+}
+
+fn spawn_subscription<S, T, E>(mut sink: SubscriptionSink, rx: S)
+where
+    S: TryStream<Ok = T, Error = E> + Unpin + Send + 'static,
+    T: Serialize,
+    E: Display,
+{
+    spawn_monitored_task!(async move {
+        match sink.pipe_from_try_stream(rx).await {
+            SubscriptionClosed::Success => {
+                sink.close(SubscriptionClosed::Success);
+            }
+            SubscriptionClosed::RemotePeerAborted => (),
+            SubscriptionClosed::Failed(err) => {
+                warn!(error = ?err, "Event subscription closed.");
+                sink.close(err);
+            }
+        };
+    });
 }
 
 #[async_trait]

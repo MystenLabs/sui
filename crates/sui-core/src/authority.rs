@@ -98,8 +98,7 @@ use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::execution_driver::execution_process;
 use crate::module_cache_gauge::ModuleCacheGauge;
 use crate::{
-    event_handler::EventHandler, transaction_input_checker,
-    transaction_manager::TransactionManager, transaction_streamer::TransactionStreamer,
+    event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
 };
 use sui_adapter::execution_engine;
 
@@ -182,7 +181,6 @@ pub struct AuthorityMetrics {
     /// Post processing metrics
     post_processing_total_events_emitted: IntCounter,
     post_processing_total_tx_indexed: IntCounter,
-    post_processing_total_tx_added_to_streamer: IntCounter,
     post_processing_total_tx_had_event_processed: IntCounter,
 
     pending_notify_read: IntGauge,
@@ -366,12 +364,6 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            post_processing_total_tx_added_to_streamer: register_int_counter_with_registry!(
-                "post_processing_total_tx_added_to_streamer",
-                "Total number of txes added to tx streamer in post processing",
-                registry,
-            )
-            .unwrap(),
             post_processing_total_tx_had_event_processed: register_int_counter_with_registry!(
                 "post_processing_total_tx_had_event_processed",
                 "Total number of txes finished event processing in post processing",
@@ -428,7 +420,6 @@ pub struct AuthorityState {
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
-    pub transaction_streamer: Option<Arc<TransactionStreamer>>,
     checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
@@ -1337,10 +1328,7 @@ impl AuthorityState {
 
     #[instrument(level = "debug", skip_all, err)]
     async fn post_process_one_tx(&self, digest: &TransactionDigest) -> SuiResult {
-        if self.indexes.is_none()
-            && self.transaction_streamer.is_none()
-            && self.event_handler.is_none()
-        {
+        if self.indexes.is_none() && self.event_handler.is_none() {
             return Ok(());
         }
 
@@ -1380,16 +1368,6 @@ impl AuthorityState {
                     .inc_by(effects.data().events.len() as u64);
             }
         };
-
-        // Stream transaction
-        if let Some(transaction_streamer) = &self.transaction_streamer {
-            transaction_streamer
-                .enqueue((cert.into(), effects.clone()))
-                .await;
-            self.metrics
-                .post_processing_total_tx_added_to_streamer
-                .inc();
-        }
 
         Ok(())
     }
@@ -1565,7 +1543,6 @@ impl AuthorityState {
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
-        transaction_streamer: Option<Arc<TransactionStreamer>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         pruning_config: &AuthorityStorePruningConfig,
@@ -1607,7 +1584,6 @@ impl AuthorityState {
             // this is because they largely deal with different types of MoveStructs
             module_cache,
             event_handler,
-            transaction_streamer,
             checkpoint_store,
             committee_store,
             transaction_manager,
@@ -1700,7 +1676,6 @@ impl AuthorityState {
             epoch_store,
             epochs,
             index_store,
-            None,
             None,
             checkpoint_store,
             &registry,

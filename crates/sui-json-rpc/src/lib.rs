@@ -27,7 +27,6 @@ pub mod event_api;
 pub mod governance_api;
 mod metrics;
 pub mod read_api;
-pub mod streaming_api;
 pub mod threshold_bls_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;

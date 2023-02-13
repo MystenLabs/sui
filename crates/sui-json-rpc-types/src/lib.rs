@@ -40,7 +40,7 @@ use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
-use sui_types::filter::{EventFilter, TransactionFilter};
+use sui_types::filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::message_envelope::Message;
@@ -2888,21 +2888,6 @@ pub struct MoveCallParams {
     #[serde(default)]
     pub type_arguments: Vec<SuiTypeTag>,
     pub arguments: Vec<SuiJsonValue>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
-#[serde(rename = "SuiTransactionFilter")]
-pub enum SuiTransactionFilter {
-    Any,
-}
-
-impl From<SuiTransactionFilter> for TransactionFilter {
-    fn from(filter: SuiTransactionFilter) -> Self {
-        use SuiTransactionFilter::*;
-        match filter {
-            Any => TransactionFilter::Any,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
