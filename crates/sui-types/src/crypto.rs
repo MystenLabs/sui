@@ -949,7 +949,8 @@ pub trait SuiSignatureInner: Sized + ToFromBytes + PartialEq + Eq + Hash {
             .extend_from_slice(&[<Self::PubKey as SuiPublicKey>::SIGNATURE_SCHEME.flag()]);
         signature_bytes.extend_from_slice(sig.as_ref());
         signature_bytes.extend_from_slice(kp.public().as_ref());
-        Self::from_bytes(&signature_bytes[..]).expect("Serialized signature did not have expected size")
+        Self::from_bytes(&signature_bytes[..])
+            .expect("Serialized signature did not have expected size")
     }
 }
 

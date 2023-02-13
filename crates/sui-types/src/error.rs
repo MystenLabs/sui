@@ -9,6 +9,7 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
+use fastcrypto::error::FastCryptoError;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     errors::{Location, PartialVMError, VMError},
@@ -21,7 +22,6 @@ use move_core_types::{
 pub use move_vm_runtime::move_vm::MoveVM;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
-use fastcrypto::error::FastCryptoError;
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
@@ -625,7 +625,9 @@ impl From<&str> for SuiError {
 impl From<FastCryptoError> for SuiError {
     fn from(kind: FastCryptoError) -> Self {
         match kind {
-            FastCryptoError::InvalidSignature => SuiError::InvalidSignature { error: "Invalid signature".to_string() },
+            FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
+                error: "Invalid signature".to_string(),
+            },
             _ => SuiError::Unknown("Unknown cryptography error".to_string()),
         }
     }

@@ -8,7 +8,7 @@ use fastcrypto::{hash::Sha3_256, hmac::hkdf_generate_from_ikm, traits::KeyPair a
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
-use crate::crypto::{Signable, Signature, SuiPublicKey, Signer};
+use crate::crypto::{Signable, Signature, Signer, SuiPublicKey};
 use crate::error::SuiError;
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, Signer,
+    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignature, SuiSignatureInner,
     ToFromBytes,
 };
 use crate::gas::GasCostSummary;
