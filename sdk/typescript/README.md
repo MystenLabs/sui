@@ -317,19 +317,19 @@ Subscribe to all events created by the `devnet_nft` module
 import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 
-const devnetNftFilter = {
-  All: [
-    { EventType: <EventType>'MoveEvent' },
-    { Package: '0x2' },
-    { Module: 'devnet_nft' },
-  ],
-};
 const devNftSub = await provider.subscribeEvent(
-  devnetNftFilter,
-  (event: SuiEventEnvelope) => {
+  {
+    All: [
+      { EventType: 'MoveEvent' },
+      { Package: '0x2' },
+      { Module: 'devnet_nft' },
+    ],
+  },
+  (event) => {
     // handle subscription notification message here
   },
 );
+
 ```
 
 To publish a package:
