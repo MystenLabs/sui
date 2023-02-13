@@ -29,7 +29,6 @@ pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
-pub mod transaction_streamer;
 pub mod validator_info;
 
 #[cfg(test)]

@@ -2515,7 +2515,6 @@ async fn test_authority_persist() {
             committee_store,
             None,
             None,
-            None,
             checkpoint_store,
             &registry,
             &AuthorityStorePruningConfig::default(),
