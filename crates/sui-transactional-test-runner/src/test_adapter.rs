@@ -144,6 +144,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
         let mut objects = genesis::clone_genesis_packages();
+        objects.extend(genesis::clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
         for (account, (addr, _)) in &accounts {
             let obj = Object::with_id_owner_for_testing(ObjectID::new(rng.gen()), *addr);

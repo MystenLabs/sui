@@ -4,12 +4,12 @@ init:
 A: object(100)
 
 task 1 'publish'. lines 10-31:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 33-33:
-created: object(106), object(107), object(108)
-written: object(105)
+created: object(107), object(108), object(109)
+written: object(106)
 
 task 3 'run'. lines 35-35:
 Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::add (function index 0) at offset 15, Abort Code: 0

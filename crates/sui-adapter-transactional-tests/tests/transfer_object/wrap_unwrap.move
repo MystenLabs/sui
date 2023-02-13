@@ -42,12 +42,12 @@ module a::m {
 
 //# run a::m::mint --sender A
 
-//# view-object 106
+//# view-object 107
 
-//# run a::m::wrap --sender A --args object(106)
+//# run a::m::wrap --sender A --args object(107)
 
-//# view-object 108
+//# view-object 109
 
-//# run a::m::unwrap --sender A --args object(108)
+//# run a::m::unwrap --sender A --args object(109)
 
-//# view-object 106
+//# view-object 107
