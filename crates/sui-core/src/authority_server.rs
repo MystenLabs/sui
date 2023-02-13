@@ -377,13 +377,7 @@ impl ValidatorService {
 
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
-        let res = if certificate.contains_shared_object() {
-            // The transaction needs sequencing by Narwhal before it can be sent for execution.
-            // So rely on the submission to consensus above to execute the certificate.
-            state.notify_read_effects(&certificate).await
-        } else {
-            state.execute_certificate(&certificate, &epoch_store).await
-        };
+        let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
             Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),

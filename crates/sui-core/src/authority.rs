@@ -635,15 +635,14 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if certificate.contains_shared_object()
-            && !epoch_store.is_tx_cert_consensus_message_processed(certificate)?
-        {
-            return Err(SuiError::CertificateNotSequencedError {
-                digest: *certificate.digest(),
-            });
+        if !certificate.contains_shared_object() {
+            // Shared object transactions need to be sequenced by Narwhal before enqueueing
+            // for execution.
+            // They are done in AuthorityPerEpochStore::handle_consensus_transaction(),
+            // which will enqueue this certificate for execution.
+            // For owned object transactions, we can enqueue the certificate for execution immediately.
+            self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
-
-        self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
 
         self.notify_read_effects(certificate).await
     }
