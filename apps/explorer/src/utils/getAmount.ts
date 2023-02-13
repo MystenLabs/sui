@@ -154,7 +154,6 @@ export function getAmount({
     const sender = getTransactionSender(certificate);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
     const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(effects, sender);
-
     const transfers = suiTransfer || coinBalanceChange;
     if (suiCoinOnly) {
         return transfers?.filter(({ coinType }) => coinType === SUI_TYPE_ARG);
