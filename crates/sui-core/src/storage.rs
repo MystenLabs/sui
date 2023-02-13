@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use sui_types::base_types::TransactionDigest;
-use sui_types::base_types::TransactionEffectsDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
+use sui_types::digests::TransactionEffectsDigest;
 use sui_types::message_envelope::Message;
 use sui_types::messages::TransactionEffects;
 use sui_types::messages::VerifiedCertificate;

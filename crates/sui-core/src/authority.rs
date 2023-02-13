@@ -25,10 +25,12 @@ use prometheus::{
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 use sui_config::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use sui_protocol_constants::{MAX_TX_GAS, STORAGE_GAS_PRICE};
+use sui_types::message_envelope::Message;
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
@@ -604,20 +606,19 @@ impl AuthorityState {
 
         let observed_effects = self
             .database
-            .notify_read_effects(vec![digest])
+            .notify_read_executed_effects(vec![digest])
             .instrument(tracing::debug_span!(
                 "notify_read_effects_in_execute_certificate_with_effects"
             ))
             .await?
             .pop()
-            .expect("notify_read_effects should return exactly 1 element")
-            .into_inner();
+            .expect("notify_read_effects should return exactly 1 element");
 
         let observed_effects_digest = observed_effects.digest();
-        if observed_effects_digest != expected_effects_digest {
+        if &observed_effects_digest != expected_effects_digest {
             panic!(
                 "Locally executed effects do not match canonical effects! expected_effects_digest={:?} observed_effects_digest={:?} expected_effects={:?} observed_effects={:?} input_objects={:?}",
-                expected_effects_digest, observed_effects_digest, effects.data(), observed_effects.data(), certificate.data().intent_message.value.input_objects()
+                expected_effects_digest, observed_effects_digest, effects.data(), observed_effects, certificate.data().intent_message.value.input_objects()
             );
         }
         Ok(())
@@ -644,7 +645,8 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
 
-        self.notify_read_effects(certificate).await
+        let effects = self.notify_read_effects(certificate).await?;
+        self.sign_effects(effects, epoch_store)
     }
 
     /// Internal logic to execute a certificate.
@@ -698,11 +700,11 @@ impl AuthorityState {
     pub async fn notify_read_effects(
         &self,
         certificate: &VerifiedCertificate,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+    ) -> SuiResult<TransactionEffects> {
         let tx_digest = *certificate.digest();
         Ok(self
             .database
-            .notify_read_effects(vec![tx_digest])
+            .notify_read_executed_effects(vec![tx_digest])
             .await?
             .pop()
             .expect("notify_read_effects should return exactly 1 element"))
@@ -783,7 +785,7 @@ impl AuthorityState {
         // If the cert is finalized in a previous epoch, it will be re-signed
         // with current epoch info and returned.
         if let Some(signed_effects) =
-            self.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &digest)?
+            self.get_signed_effects_and_maybe_resign(&digest, epoch_store)?
         {
             tx_guard.release();
             return Ok(signed_effects);
@@ -886,7 +888,6 @@ impl AuthorityState {
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let digest = *certificate.digest();
         let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.inner().data().shared_objects.len();
 
@@ -898,8 +899,13 @@ impl AuthorityState {
             .map(|(_, ((id, seq, _), _, _))| ObjectKey(*id, *seq))
             .collect();
 
-        self.commit_certificate(inner_temporary_store, certificate, signed_effects)
-            .await?;
+        self.commit_certificate(
+            inner_temporary_store,
+            certificate,
+            signed_effects,
+            epoch_store,
+        )
+        .await?;
 
         // Notifies transaction manager about available input objects. This allows the transaction
         // manager to schedule ready transactions.
@@ -918,7 +924,7 @@ impl AuthorityState {
 
         // index certificate
         let _ = self
-            .post_process_one_tx(&digest)
+            .post_process_one_tx(certificate, signed_effects.data())
             .await
             .tap_err(|e| error!("tx post processing failed: {e}"));
 
@@ -1135,7 +1141,7 @@ impl AuthorityState {
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        self.database.effects_exists(digest)
+        self.database.is_tx_already_executed(digest)
     }
 
     #[instrument(level = "debug", skip_all, err)]
@@ -1143,8 +1149,8 @@ impl AuthorityState {
         &self,
         indexes: &IndexStore,
         digest: &TransactionDigest,
-        cert: &VerifiedCertificate,
-        effects: &SignedTransactionEffects,
+        cert: &CertifiedTransaction,
+        effects: &TransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult<u64> {
         let changes = self
@@ -1160,7 +1166,6 @@ impl AuthorityState {
                 .iter()
                 .map(|o| o.object_id()),
             effects
-                .data()
                 .all_mutated()
                 .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.data()
@@ -1177,7 +1182,7 @@ impl AuthorityState {
 
     fn process_object_index(
         &self,
-        effects: &SignedTransactionEffects,
+        effects: &TransactionEffects,
     ) -> Result<ObjectIndexChanges, SuiError> {
         let modified_at_version = effects
             .modified_at_versions
@@ -1326,45 +1331,51 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    async fn post_process_one_tx(&self, digest: &TransactionDigest) -> SuiResult {
+    async fn post_process_one_tx(
+        &self,
+        certificate: &CertifiedTransaction,
+        effects: &TransactionEffects,
+    ) -> SuiResult {
         if self.indexes.is_none() && self.event_handler.is_none() {
             return Ok(());
         }
 
-        // Load cert and effects.
-        let info = (
-            self.database.get_certified_transaction(digest)?,
-            self.database.get_signed_effects(digest)?,
-        );
-        let (cert, effects) = match info {
-            (Some(cert), Some(effects)) => (cert, effects.into_inner()),
-            _ => {
-                return Err(SuiError::CertificateNotfound {
-                    certificate_digest: *digest,
-                })
-            }
-        };
-
+        let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();
 
         // Index tx
         if let Some(indexes) = &self.indexes {
             let res = self
-                .index_tx(indexes.as_ref(), digest, &cert, &effects, timestamp_ms)
+                .index_tx(
+                    indexes.as_ref(),
+                    tx_digest,
+                    certificate,
+                    effects,
+                    timestamp_ms,
+                )
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
-                .tap_err(|e| error!(tx_digest=?digest, "Post processing - Couldn't index tx: {e}"));
+                .tap_err(|e| error!(?tx_digest, "Post processing - Couldn't index tx: {e}"));
 
             // Emit events
             if let (Some(event_handler), Ok(seq)) = (&self.event_handler, res) {
                 event_handler
-                    .process_events(effects.data(), timestamp_ms, seq)
+                    .process_events(effects, timestamp_ms, seq)
                     .await
-                    .tap_ok(|_| self.metrics.post_processing_total_tx_had_event_processed.inc())
-                    .tap_err(|e| warn!(tx_digest=?digest, "Post processing - Couldn't process events for tx: {}", e))?;
+                    .tap_ok(|_| {
+                        self.metrics
+                            .post_processing_total_tx_had_event_processed
+                            .inc()
+                    })
+                    .tap_err(|e| {
+                        warn!(
+                            ?tx_digest,
+                            "Post processing - Couldn't process events for tx: {}", e
+                        )
+                    })?;
 
                 self.metrics
                     .post_processing_total_events_emitted
-                    .inc_by(effects.data().events.len() as u64);
+                    .inc_by(effects.events.len() as u64);
             }
         };
 
@@ -2029,13 +2040,11 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<(VerifiedCertificate, TransactionEffects), anyhow::Error> {
-        let opt = self.database.get_certified_transaction(&digest)?;
-        match opt {
-            Some(certificate) => Ok((
-                certificate,
-                AuthorityStore::get_effects(&self.database, &digest)?,
-            )),
-            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+        let cert = self.database.get_certified_transaction(&digest)?;
+        let effects = self.database.get_executed_effects(&digest)?;
+        match (cert, effects) {
+            (Some(certificate), Some(effects)) => Ok((certificate, effects)),
+            _ => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }
     }
 
@@ -2247,7 +2256,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> Result<Option<VerifiedTransactionInfoResponse>, SuiError> {
         if let Some(effects) =
-            self.get_signed_effects_and_maybe_resign(epoch_store.epoch(), transaction_digest)?
+            self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
             if let Some(cert) = self
                 .database
@@ -2275,56 +2284,71 @@ impl AuthorityState {
     /// epoch.
     pub fn get_signed_effects_and_maybe_resign(
         &self,
-        cur_epoch: EpochId,
         transaction_digest: &TransactionDigest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Option<VerifiedSignedTransactionEffects>> {
-        let effects = self.database.get_signed_effects(transaction_digest)?;
-        // If the transaction was executed in previous epochs, the validator will
-        // re-sign the effects with new current epoch so that a client is always able to
-        // obtain an effects certificate at the current epoch.
-        //
-        // Why is this necessary? Consider the following case:
-        // - assume there are 4 validators
-        // - Quorum driver gets 2 signed effects before reconfig halt
-        // - The tx makes it into final checkpoint.
-        // - 2 validators go away and are replaced in the new epoch.
-        // - The new epoch begins.
-        // - The quorum driver cannot complete the partial effects cert from the previous epoch,
-        //   because it may not be able to reach either of the 2 former validators.
-        // - But, if the 2 validators that stayed are willing to re-sign the effects in the new
-        //   epoch, the QD can make a new effects cert and return it to the client.
-        //
-        // This is a considered a short-term workaround. Eventually, Quorum Driver should be able
-        // to return either an effects certificate, -or- a proof of inclusion in a checkpoint. In
-        // the case above, the Quorum Driver would return a proof of inclusion in the final
-        // checkpoint, and this code would no longer be necessary.
-        //
-        // Alternatively, some of the confusion around re-signing could be resolved if
-        // CertifiedTransactionEffects included both the epoch in which the transaction became
-        // final, as well as the epoch at which the effects were certified. In this case, there
-        // would be nothing terribly odd about the validators from epoch N certifying that a
-        // given TX became final in epoch N - 1. The confusion currently arises from the fact that
-        // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
-        // the authority's signature, as well as to identify in which epoch the transaction was
-        // executed.
-        Ok(effects.map(|effects| {
-            let effects: VerifiedSignedTransactionEffects = effects.into();
-            if effects.epoch() < cur_epoch {
+        let effects = self.database.get_executed_effects(transaction_digest)?;
+        match effects {
+            Some(effects) => Ok(Some(self.sign_effects(effects, epoch_store)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn sign_effects(
+        &self,
+        effects: TransactionEffects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Result<VerifiedSignedTransactionEffects, SuiError> {
+        let tx_digest = effects.transaction_digest;
+        let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
+            Some(sig) if sig.epoch == epoch_store.epoch() => {
+                SignedTransactionEffects::new_from_data_and_sig(effects, sig)
+            }
+            _ => {
+                // If the transaction was executed in previous epochs, the validator will
+                // re-sign the effects with new current epoch so that a client is always able to
+                // obtain an effects certificate at the current epoch.
+                //
+                // Why is this necessary? Consider the following case:
+                // - assume there are 4 validators
+                // - Quorum driver gets 2 signed effects before reconfig halt
+                // - The tx makes it into final checkpoint.
+                // - 2 validators go away and are replaced in the new epoch.
+                // - The new epoch begins.
+                // - The quorum driver cannot complete the partial effects cert from the previous epoch,
+                //   because it may not be able to reach either of the 2 former validators.
+                // - But, if the 2 validators that stayed are willing to re-sign the effects in the new
+                //   epoch, the QD can make a new effects cert and return it to the client.
+                //
+                // This is a considered a short-term workaround. Eventually, Quorum Driver should be able
+                // to return either an effects certificate, -or- a proof of inclusion in a checkpoint. In
+                // the case above, the Quorum Driver would return a proof of inclusion in the final
+                // checkpoint, and this code would no longer be necessary.
+                //
+                // Alternatively, some of the confusion around re-signing could be resolved if
+                // CertifiedTransactionEffects included both the epoch in which the transaction became
+                // final, as well as the epoch at which the effects were certified. In this case, there
+                // would be nothing terribly odd about the validators from epoch N certifying that a
+                // given TX became final in epoch N - 1. The confusion currently arises from the fact that
+                // the epoch field in AuthoritySignInfo is overloaded both to identify the provenance of
+                // the authority's signature, as well as to identify in which epoch the transaction was
+                // executed.
                 debug!(
-                    effects_epoch=?effects.epoch(),
-                    ?cur_epoch,
+                    ?tx_digest,
+                    epoch=?epoch_store.epoch(),
                     "Re-signing the effects with the current epoch"
                 );
-                VerifiedSignedTransactionEffects::new_unchecked(SignedTransactionEffects::new(
-                    cur_epoch,
-                    effects.into_message(),
+                SignedTransactionEffects::new(
+                    epoch_store.epoch(),
+                    effects,
                     &*self.secret,
                     self.name,
-                ))
-            } else {
-                effects
+                )
             }
-        }))
+        };
+        Ok(VerifiedSignedTransactionEffects::new_unchecked(
+            signed_effects,
+        ))
     }
 
     // Helper function to manage transaction_locks
@@ -2373,17 +2397,17 @@ impl AuthorityState {
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
         signed_effects: &VerifiedSignedTransactionEffects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
-        let effects_digest = signed_effects.inner().digest();
+        // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
+        // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
+        epoch_store.insert_effects_signature(certificate.digest(), signed_effects.auth_sig())?;
+
+        let effects_digest = signed_effects.digest();
         self.database
-            .update_state(
-                inner_temporary_store,
-                certificate,
-                signed_effects,
-                effects_digest,
-            )
+            .update_state(inner_temporary_store, certificate, signed_effects.data())
             .await
             .tap_ok(|_| {
                 debug!(?effects_digest, "commit_certificate finished");
@@ -2392,7 +2416,7 @@ impl AuthorityState {
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
         self.metrics
             .pending_notify_read
-            .set(self.database.effects_notify_read.num_pending() as i64);
+            .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
         Ok(())
     }

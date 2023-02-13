@@ -144,7 +144,7 @@ impl LocalAuthorityClient {
         let tx_digest = *certificate.digest();
         let epoch_store = state.epoch_store_for_testing();
         let signed_effects =
-            match state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest) {
+            match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
                 Ok(Some(effects)) => effects,
                 _ => {
                     let certificate = { certificate.verify(epoch_store.committee())? };

@@ -64,7 +64,7 @@ where
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_effects(vec![digest]),
+        state.database.notify_read_executed_effects(vec![digest]),
     )
     .await
     {
@@ -79,7 +79,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_effects(digests.clone()),
+        state.database.notify_read_executed_effects(digests.clone()),
     )
     .await
     {

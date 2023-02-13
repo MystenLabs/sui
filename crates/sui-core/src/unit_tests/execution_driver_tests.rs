@@ -245,12 +245,11 @@ pub async fn do_cert_with_shared_objects(
     send_consensus(authority, cert).await;
     authority
         .database
-        .notify_read_effects(vec![*cert.digest()])
+        .notify_read_executed_effects(vec![*cert.digest()])
         .await
         .unwrap()
         .pop()
         .unwrap()
-        .into_message()
 }
 
 async fn execute_shared_on_first_three_authorities(
@@ -426,7 +425,7 @@ async fn test_transaction_manager() {
         .collect();
     authorities[3]
         .database
-        .notify_read_effects(digests)
+        .notify_read_executed_effects(digests)
         .await
         .unwrap();
 }
@@ -478,7 +477,7 @@ async fn test_per_object_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .database
-            .notify_read_effects(vec![*create_counter_cert.digest()])
+            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
             .await
             .unwrap()
             .pop()
@@ -493,7 +492,7 @@ async fn test_per_object_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .database
-        .notify_read_effects(vec![*create_counter_cert.digest()])
+        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
         .await
         .unwrap()
         .pop()

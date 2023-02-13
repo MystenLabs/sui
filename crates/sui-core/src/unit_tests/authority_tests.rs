@@ -2885,7 +2885,7 @@ async fn test_store_revert_transfer_sui() {
         (gas_object_ref, TransactionDigest::genesis()),
     );
     assert!(db.get_certified_transaction(&tx_digest).unwrap().is_none());
-    assert!(db.as_ref().get_effects(&tx_digest).is_err());
+    assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
 #[tokio::test]
@@ -4222,7 +4222,11 @@ async fn test_consensus_message_processed() {
         }
 
         let effects2 = if send_first && rng.gen_bool(0.5) {
-            authority2.try_execute_for_test(&certificate).await.unwrap()
+            authority2
+                .try_execute_for_test(&certificate)
+                .await
+                .unwrap()
+                .into_message()
         } else {
             let epoch_store = authority2.epoch_store_for_testing();
             epoch_store
@@ -4235,15 +4239,12 @@ async fn test_consensus_message_processed() {
                 .unwrap();
             authority2
                 .database
-                .perpetual_tables
-                .executed_effects
-                .get(transaction_digest)
+                .get_executed_effects(transaction_digest)
                 .unwrap()
                 .unwrap()
-                .into()
         };
 
-        assert_eq!(effects1.data(), effects2.data());
+        assert_eq!(effects1.data(), &effects2);
 
         // If we didn't send consensus before handle_node_sync_certificate, we need to do it now.
         if !send_first {
