@@ -763,9 +763,10 @@ impl SuiClientCommands {
                 SuiClientCommandResult::PayAllSui(cert, effects)
             }
 
-            SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.keystore.addresses(), context.active_address().ok())
-            }
+            SuiClientCommands::Addresses => SuiClientCommandResult::Addresses(
+                context.config.keystore.addresses(),
+                context.active_address().ok(),
+            ),
 
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
