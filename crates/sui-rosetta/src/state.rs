@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::account::balance;
 use crate::operations::Operations;
 use crate::types::{
     Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
@@ -143,8 +144,15 @@ impl CheckpointBlockProvider {
         spawn_monitored_task!(async move {
             if f.index_store.is_empty() {
                 info!("Index Store is empty, indexing genesis block.");
-                let checkpoint = f.client.read_api().get_checkpoint(0.into()).await.unwrap();
-                let resp = f.create_block_response(checkpoint).await.unwrap();
+                let mut checkpoint = None;
+                while checkpoint.is_none() {
+                    checkpoint = f.client.read_api().get_checkpoint(0.into()).await.ok();
+                    if checkpoint.is_none() {
+                        info!("Genesis checkpoint not available, retry in 10 seconds.");
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
+                }
+                let resp = f.create_block_response(checkpoint.unwrap()).await.unwrap();
                 f.update_balance(resp.block).await.unwrap();
             } else {
                 let current_block = f.current_block_identifier().await.unwrap();
@@ -326,7 +334,7 @@ impl CheckpointIndexStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.last_checkpoint.is_empty()
+        self.last_checkpoint.is_empty() && self.balances.is_empty()
     }
 }
 
