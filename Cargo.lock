@@ -3235,9 +3235,9 @@ dependencies = [
 
 [[package]]
 name = "hakari"
-version = "0.12.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e0ce12f9db3b92519952b70ad25fce9ee6f7e63da602b1d2bd3f637aa61cf6a"
+checksum = "a2c76369039f6ac178748e96def487662aebbeb26d43070d01a0eadd53964994"
 dependencies = [
  "atomicwrites",
  "bimap",
@@ -3257,7 +3257,7 @@ dependencies = [
  "tabular",
  "target-spec",
  "toml",
- "toml_edit",
+ "toml_edit 0.15.0",
  "twox-hash",
 ]
 
@@ -4457,7 +4457,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
- "toml_edit",
+ "toml_edit 0.14.4",
  "walkdir",
 ]
 
@@ -5667,7 +5667,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "nexlint"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/nexlint.git?rev=78f131b6e56b7d2dc7419997bc757f015f6d58df#78f131b6e56b7d2dc7419997bc757f015f6d58df"
+source = "git+https://github.com/nextest-rs/nexlint.git?rev=94da5c787636dad779c340affa65219134d127f5#94da5c787636dad779c340affa65219134d127f5"
 dependencies = [
  "camino",
  "debug-ignore",
@@ -5682,7 +5682,7 @@ dependencies = [
 [[package]]
 name = "nexlint-lints"
 version = "0.1.0"
-source = "git+https://github.com/nextest-rs/nexlint.git?rev=78f131b6e56b7d2dc7419997bc757f015f6d58df#78f131b6e56b7d2dc7419997bc757f015f6d58df"
+source = "git+https://github.com/nextest-rs/nexlint.git?rev=94da5c787636dad779c340affa65219134d127f5#94da5c787636dad779c340affa65219134d127f5"
 dependencies = [
  "anyhow",
  "camino",
@@ -9962,6 +9962,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_datetime"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4553f467ac8e3d374bc9a177a26801e5d0f9b211aa1673fb137a403afd1c9cf5"
+
+[[package]]
 name = "toml_edit"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9971,6 +9977,18 @@ dependencies = [
  "indexmap",
  "itertools",
  "serde 1.0.152",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1541ba70885967e662f69d31ab3aeca7b1aaecfcd58679590b893e9239c3646"
+dependencies = [
+ "combine",
+ "indexmap",
+ "itertools",
+ "toml_datetime",
 ]
 
 [[package]]
@@ -11577,7 +11595,9 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml",
- "toml_edit",
+ "toml_datetime",
+ "toml_edit 0.14.4",
+ "toml_edit 0.15.0",
  "tonic",
  "tonic-build",
  "tonic-health",

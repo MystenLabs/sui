@@ -250,7 +250,7 @@ guppy = { version = "0.15", default-features = false, features = ["rayon1", "sum
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
-hakari = { version = "0.12", default-features = false, features = ["cli-support"] }
+hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
@@ -369,8 +369,8 @@ multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
@@ -588,7 +588,9 @@ tokio-rustls = { version = "0.23" }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml = { version = "0.5", features = ["preserve_order"] }
-toml_edit = { version = "0.14", features = ["easy"] }
+toml_datetime = { version = "0.5", default-features = false }
+toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
+toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 tonic = { version = "0.8", features = ["tls"] }
 tonic-health = { version = "0.8" }
 tower = { version = "0.4", features = ["full"] }
@@ -926,7 +928,7 @@ guppy = { version = "0.15", default-features = false, features = ["rayon1", "sum
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
 h2 = { version = "0.3", default-features = false }
-hakari = { version = "0.12", default-features = false, features = ["cli-support"] }
+hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11" }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
@@ -1059,8 +1061,8 @@ multihash-derive = { version = "0.8", default-features = false, features = ["std
 multimap = { version = "0.8", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
-nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
-nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "78f131b6e56b7d2dc7419997bc757f015f6d58df", default-features = false }
+nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
+nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
@@ -1326,7 +1328,9 @@ tokio-rustls = { version = "0.23" }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 toml = { version = "0.5", features = ["preserve_order"] }
-toml_edit = { version = "0.14", features = ["easy"] }
+toml_datetime = { version = "0.5", default-features = false }
+toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
+toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 tonic = { version = "0.8", features = ["tls"] }
 tonic-build = { version = "0.8" }
 tonic-health = { version = "0.8" }
