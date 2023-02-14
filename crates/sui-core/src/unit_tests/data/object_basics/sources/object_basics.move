@@ -3,6 +3,7 @@
 
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module examples::object_basics {
+    use sui::clock::Clock;
     use sui::dynamic_object_field as ofield;
     use sui::event;
     use sui::object::{Self, UID, ID};
@@ -105,4 +106,8 @@ module examples::object_basics {
             tx_context::sender(ctx),
         );
     }
+
+    public entry fun generic_test<T>() {}
+
+    public entry fun use_clock(_clock: &Clock) {}
 }

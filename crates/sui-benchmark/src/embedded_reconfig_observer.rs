@@ -47,8 +47,9 @@ impl ReconfigObserver<NetworkAuthorityClient> for EmbeddedReconfigObserver {
             let cur_epoch = quorum_driver.current_epoch();
 
             match auth_agg
-                .get_committee_with_net_addresses(quorum_driver.current_epoch())
+                .get_latest_system_state_object_for_testing()
                 .await
+                .map(|state| state.get_current_epoch_committee())
             {
                 Err(err) => {
                     error!("Failed to get committee with network address: {}", err)

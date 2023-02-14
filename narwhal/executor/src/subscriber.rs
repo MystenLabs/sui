@@ -235,14 +235,17 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         for cert in &sub_dag.certificates {
             let mut batches = Vec::with_capacity(num_batches);
             let output_cert = cert.clone();
+
+            self.metrics
+                .subscriber_current_round
+                .set(cert.round() as i64);
+
+            self.metrics
+                .subscriber_certificate_latency
+                .observe(cert.metadata.created_at.elapsed().as_secs_f64());
+
             for (digest, (worker_id, _)) in cert.header.payload.iter() {
-                self.metrics
-                    .subscriber_current_round
-                    .set(cert.round() as i64);
                 self.metrics.subscriber_processed_batches.inc();
-                self.metrics
-                    .subscriber_certificate_latency
-                    .observe(cert.metadata.created_at.elapsed().as_secs_f64());
 
                 let mut workers = self.network.workers_for_certificate(cert, worker_id);
 

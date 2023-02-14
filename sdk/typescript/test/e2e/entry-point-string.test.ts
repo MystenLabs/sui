@@ -41,7 +41,7 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
         toolbox.provider,
         useLocalTxnBuilder
           ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined
+          : undefined,
       );
       const packagePath =
         __dirname +
@@ -60,5 +60,5 @@ describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
     it('Test string vec', async () => {
       await callWithString(['çå∞≠¢', 'õß∂ƒ∫'], 'utf8_vec_arg');
     });
-  }
+  },
 );

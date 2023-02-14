@@ -172,7 +172,7 @@ pub struct TestClusterBuilder {
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
-    checkpoints_per_epoch: Option<u64>,
+    epoch_duration_ms: Option<u64>,
 }
 
 impl TestClusterBuilder {
@@ -182,7 +182,7 @@ impl TestClusterBuilder {
             fullnode_rpc_port: None,
             num_validators: None,
             enable_fullnode_events: false,
-            checkpoints_per_epoch: None,
+            epoch_duration_ms: None,
         }
     }
 
@@ -206,8 +206,8 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_checkpoints_per_epoch(mut self, ckpts: u64) -> Self {
-        self.checkpoints_per_epoch = Some(ckpts);
+    pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
+        self.epoch_duration_ms = Some(epoch_duration_ms);
         self
     }
 
@@ -269,8 +269,8 @@ impl TestClusterBuilder {
             builder = builder.initial_accounts_config(genesis_config);
         }
 
-        if let Some(checkpoints_per_epoch) = self.checkpoints_per_epoch {
-            builder = builder.with_checkpoints_per_epoch(checkpoints_per_epoch);
+        if let Some(epoch_duration_ms) = self.epoch_duration_ms {
+            builder = builder.with_epoch_duration_ms(epoch_duration_ms);
         }
 
         let mut swarm = builder.build();
@@ -344,7 +344,7 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
         .map(|handle| {
             handle.with_async(|node| async move {
                 let mut rx = node.subscribe_to_epoch_change();
-                let epoch = node.current_epoch();
+                let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
                     let committee = rx.recv().await.unwrap();
                     assert_eq!(committee.epoch, expected_epoch);

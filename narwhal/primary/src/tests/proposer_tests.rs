@@ -36,6 +36,7 @@ async fn propose_empty() {
         /* header_num_of_batches_threshold */ 32,
         /* max_header_num_of_batches */ 100,
         /* max_header_delay */ Duration::from_millis(20),
+        /* min_header_delay */ Duration::from_millis(20),
         None,
         NetworkModel::PartiallySynchronous,
         tx_shutdown.subscribe(),
@@ -84,6 +85,8 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ max_num_of_batches,
         /* max_header_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         Some(header_resend_delay),
         NetworkModel::PartiallySynchronous,
@@ -206,6 +209,8 @@ async fn equivocation_protection() {
         /* max_header_num_of_batches */ 10,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        /* min_header_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
         None,
         NetworkModel::PartiallySynchronous,
         tx_shutdown.subscribe(),
@@ -275,6 +280,8 @@ async fn equivocation_protection() {
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
         /* max_header_delay */
+        Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        /* min_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         None,
         NetworkModel::PartiallySynchronous,

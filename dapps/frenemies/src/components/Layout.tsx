@@ -4,15 +4,12 @@
 import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { ReactElement } from "react";
-import { useAutoconnect } from "../utils/useAutoconnect";
 
 export function Layout({ children }: { children: ReactElement | ReactElement[] }) {
-  useAutoconnect();
-
   return (
     <>
       <Header />
-      <div className="mx-auto max-w-6xl px-4 w-full flex flex-col gap-5 mb-24 mt-4">
+      <div className="mx-auto max-w-6xl px-4 w-full flex flex-col gap-5 pb-24 mt-4">
         {children}
       </div>
       <Footer />

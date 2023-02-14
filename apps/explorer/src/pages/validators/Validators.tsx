@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type ValidatorsFields } from '@mysten/sui.js';
+import {
+    is,
+    SuiObject,
+    type MoveSuiSystemObjectFields,
+    type MoveActiveValidator,
+    type SuiEventEnvelope,
+} from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -9,10 +15,8 @@ import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { calculateAPY } from '~/components/validator/calculateAPY';
 import { useGetObject } from '~/hooks/useGetObject';
-import {
-    VALIDATORS_OBJECT_ID,
-    type ActiveValidator,
-} from '~/pages/validator/ValidatorDataTypes';
+import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
+import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -24,13 +28,18 @@ import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
 import { getName } from '~/utils/getName';
+import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 import { roundFloat } from '~/utils/roundFloat';
 
-const APY_DECIMALS = 4;
+const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(validators: ActiveValidator[], epoch: number) {
+function validatorsTableData(
+    validators: MoveActiveValidator[],
+    epoch: number,
+    validatorsEvents: SuiEventEnvelope[]
+) {
     return {
         data: validators.map((validator, index) => {
             const validatorName = getName(
@@ -45,8 +54,13 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 typeof validator.fields.metadata.fields.image_url === 'string'
                     ? validator.fields.metadata.fields.image_url
                     : null;
+
+            const event = getValidatorMoveEvent(
+                validatorsEvents,
+                validator.fields.metadata.fields.sui_address
+            );
+
             return {
-                number: index + 1,
                 name: {
                     name: validatorName,
                     logo: validator.fields.metadata.fields.image_url,
@@ -56,9 +70,7 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 commission: +validator.fields.commission_rate / 100,
                 img: img,
                 address: validator.fields.metadata.fields.sui_address,
-                lastEpochReward:
-                    validator.fields.delegation_staking_pool.fields
-                        .rewards_pool,
+                lastReward: event?.fields.stake_rewards || 0,
             };
         }),
         columns: [
@@ -67,7 +79,9 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 accessorKey: 'number',
                 cell: (props: any) => (
                     <Text variant="bodySmall/medium" color="steel-dark">
-                        {props.getValue()}
+                        {props.table
+                            .getSortedRowModel()
+                            .flatRows.indexOf(props.row) + 1}
                     </Text>
                 ),
             },
@@ -75,6 +89,13 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 header: 'Name',
                 accessorKey: 'name',
                 enableSorting: true,
+                sortingFn: (a: any, b: any, colId: string) =>
+                    a
+                        .getValue(colId)
+                        .name.localeCompare(b.getValue(colId).name, 'en', {
+                            sensitivity: 'base',
+                            numeric: true,
+                        }),
                 cell: (props: any) => {
                     const { name, logo } = props.getValue();
                     return (
@@ -133,12 +154,12 @@ function validatorsTableData(validators: ActiveValidator[], epoch: number) {
                 },
             },
             {
-                header: 'Last Epoch Rewards Pool',
-                accessorKey: 'lastEpochReward',
+                header: 'Last Epoch Rewards',
+                accessorKey: 'lastReward',
                 cell: (props: any) => {
-                    const lastEpochReward = props.getValue();
-                    return lastEpochReward > 0 ? (
-                        <StakeColumn stake={lastEpochReward} hideCoinSymbol />
+                    const lastReward = props.getValue();
+                    return lastReward > 0 ? (
+                        <StakeColumn stake={lastReward} hideCoinSymbol />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
@@ -158,8 +179,23 @@ function ValidatorPageResult() {
         data &&
         is(data.details, SuiObject) &&
         data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as ValidatorsFields)
+            ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
+
+    const numberOfValidators = useMemo(() => {
+        return (
+            validatorsData?.validators.fields.active_validators.length || null
+        );
+    }, [validatorsData]);
+
+    const {
+        data: validatorEvents,
+        isLoading: validatorsEventsLoading,
+        isError: validatorEventError,
+    } = useGetValidatorsEvents({
+        limit: numberOfValidators,
+        order: 'descending',
+    });
 
     const totalStaked = useMemo(() => {
         if (!validatorsData) return 0;
@@ -189,27 +225,34 @@ function ValidatorPageResult() {
     }, [validatorsData]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!validatorEvents) return 0;
+        let totalRewards = 0;
 
-        return validators.reduce(
-            (acc, cur) =>
-                acc + +cur.fields.delegation_staking_pool.fields.rewards_pool,
-            0
-        );
-    }, [validatorsData]);
+        validatorEvents.data.forEach(({ event }) => {
+            if ('moveEvent' in event) {
+                const { moveEvent } = event;
+                totalRewards += +moveEvent.fields.stake_rewards;
+            }
+        });
+
+        return totalRewards;
+    }, [validatorEvents]);
 
     const validatorsTable = useMemo(() => {
-        if (!validatorsData) return null;
+        if (!validatorsData || !validatorEvents) return null;
 
         const validators = validatorsData.validators.fields.active_validators;
 
-        return validatorsTableData(validators, +validatorsData.epoch);
-    }, [validatorsData]);
+        return validatorsTableData(
+            validators,
+            +validatorsData.epoch,
+            validatorEvents.data
+        );
+    }, [validatorEvents, validatorsData]);
 
-    const defaultSorting = [{ id: 'stake', desc: true }];
+    const defaultSorting = [{ id: 'stake', desc: false }];
 
-    if (isError || (!isLoading && !validatorsTable?.data.length)) {
+    if (isError || validatorEventError) {
         return (
             <Banner variant="error" fullWidth>
                 Validator data could not be loaded
@@ -289,7 +332,7 @@ function ValidatorPageResult() {
             <div className="mt-8">
                 <ErrorBoundary>
                     <TableHeader>All Validators</TableHeader>
-                    {isLoading && (
+                    {(isLoading || validatorsEventsLoading) && (
                         <PlaceholderTable
                             rowCount={20}
                             rowHeight="13px"

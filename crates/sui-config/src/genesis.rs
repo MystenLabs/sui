@@ -20,9 +20,10 @@ use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::clock::Clock;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
-    AuthorityWeakQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
+    AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
 };
 use sui_types::gas::SuiGasStatus;
 use sui_types::in_memory_storage::InMemoryStorage;
@@ -40,7 +41,7 @@ use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
-    committee::{Committee, EpochId},
+    committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
     sui_serde::AuthSignature,
@@ -134,6 +135,19 @@ impl Genesis {
         let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
             .expect("Sui System State object deserialization cannot fail");
         result
+    }
+
+    pub fn clock(&self) -> Clock {
+        let clock = self
+            .objects()
+            .iter()
+            .find(|o| o.id() == sui_types::SUI_CLOCK_OBJECT_ID)
+            .expect("Clock must always exist")
+            .data
+            .try_as_move()
+            .expect("Clock must be a Move object");
+        bcs::from_bytes::<Clock>(clock.contents())
+            .expect("Clock object deserialization cannot fail")
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -464,7 +478,7 @@ impl Builder {
 
             CertifiedCheckpointSummary {
                 summary: checkpoint,
-                auth_signature: AuthorityWeakQuorumSignInfo::new_from_auth_sign_infos(
+                auth_signature: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                     signatures, &committee,
                 )
                 .unwrap(),
@@ -733,8 +747,9 @@ fn create_genesis_checkpoint(
         content_digest: contents.digest(),
         previous_digest: None,
         epoch_rolling_gas_cost_summary: Default::default(),
-        next_epoch_committee: None,
+        end_of_epoch_data: None,
         timestamp_ms: parameters.timestamp_ms,
+        version_specific_data: Vec::new(),
     };
 
     (checkpoint, contents)
@@ -1009,6 +1024,7 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
             CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
             CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&ProtocolVersion::MIN.0).unwrap()),
             CallArg::Pure(bcs::to_bytes(&epoch_start_timestamp_ms).unwrap()),
         ],
         SuiGasStatus::new_unmetered().create_move_gas_status(),

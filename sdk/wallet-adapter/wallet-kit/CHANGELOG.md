@@ -1,5 +1,37 @@
 # @mysten/wallet-kit
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [97c46ca9d]
+  - @mysten/sui.js@0.26.1
+  - @mysten/wallet-adapter-base@0.5.1
+  - @mysten/wallet-adapter-unsafe-burner@0.5.1
+  - @mysten/wallet-adapter-wallet-standard@0.5.1
+  - @mysten/wallet-kit-core@0.2.4
+  - @mysten/wallet-standard@0.3.1
+
+## 0.2.5
+
+### Patch Changes
+
+- a8746d4e9: update SuiExecuteTransactionResponse
+- Updated dependencies [034158656]
+- Updated dependencies [96e883fc1]
+- Updated dependencies [a8746d4e9]
+- Updated dependencies [57fc4dedd]
+- Updated dependencies [e6a71882f]
+- Updated dependencies [e6a71882f]
+- Updated dependencies [21781ba52]
+- Updated dependencies [b3ba6dfbc]
+  - @mysten/sui.js@0.26.0
+  - @mysten/wallet-adapter-wallet-standard@0.5.0
+  - @mysten/wallet-adapter-unsafe-burner@0.5.0
+  - @mysten/wallet-adapter-base@0.5.0
+  - @mysten/wallet-standard@0.3.0
+  - @mysten/wallet-kit-core@0.2.3
+
 ## 0.2.4
 
 ### Patch Changes

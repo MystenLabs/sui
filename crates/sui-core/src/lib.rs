@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;
@@ -13,7 +15,6 @@ pub mod consensus_validator;
 pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
-mod histogram;
 pub mod metrics;
 mod module_cache_gauge;
 pub mod narwhal_manager;
@@ -28,7 +29,6 @@ pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
-pub mod transaction_streamer;
 pub mod validator_info;
 
 #[cfg(test)]

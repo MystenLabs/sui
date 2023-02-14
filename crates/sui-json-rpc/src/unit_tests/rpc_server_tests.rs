@@ -81,7 +81,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
     assert_eq!(
         dryrun_response.transaction_digest,
         effects.effects.transaction_digest
@@ -115,7 +115,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
     ////////////////////////////////////////////////////////////////////////
     // Publish the basic randomness example
 
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
         .get_package_base64(false);
     let transaction_bytes: TransactionBytes = http_client
@@ -132,7 +132,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
     let package_id = effects
@@ -176,7 +176,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
     let randomness_object_id = effects
@@ -234,7 +234,7 @@ async fn test_tbls_sign_randomness_object() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForEffectsCert,
         )
         .await?;
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
     Ok(())
@@ -249,7 +249,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
 
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("../../sui_programmability/examples/fungible_tokens").to_path_buf())?
         .get_package_base64(/* with_unpublished_deps */ false);
 
@@ -269,7 +269,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 6);
+    matches!(tx_response, SuiExecuteTransactionResponse {effects, ..} if effects.effects.created.len() == 6);
     Ok(())
 }
 
@@ -320,7 +320,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             ExecuteTransactionRequestType::WaitForLocalExecution,
         )
         .await?;
-    matches!(tx_response, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.created.len() == 1);
+    matches!(tx_response, SuiExecuteTransactionResponse {effects, ..} if effects.effects.created.len() == 1);
     Ok(())
 }
 
@@ -428,7 +428,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -466,7 +466,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     // Publish test coin package
-    let compiled_modules = BuildConfig::default()
+    let compiled_modules = BuildConfig::new_for_testing()
         .build(Path::new("src/unit_tests/data/dummy_modules_publish").to_path_buf())?
         .get_package_base64(/* with_unpublished_deps */ false);
 
@@ -487,7 +487,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
 
     let package_id = effects
         .effects
@@ -565,7 +565,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiExecuteTransactionResponse::EffectsCert { effects, .. } = tx_response;
+    let SuiExecuteTransactionResponse { effects, .. } = tx_response;
 
     assert_eq!(SuiExecutionStatus::Success, effects.effects.status);
 
@@ -619,7 +619,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
         assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiExecuteTransactionResponse::EffectsCert {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
+            |resp| matches!(resp, SuiExecuteTransactionResponse {effects, ..} if effects.effects.transaction_digest == response.effects.transaction_digest)
         ))
     }
 
@@ -856,8 +856,8 @@ async fn test_get_fullnode_events() -> Result<(), anyhow::Error> {
         )
         .await
         .unwrap();
-    // 17 events created by this test + 33 Genesis event
-    assert_eq!(50, page2.data.len());
+    // 17 events created by this test + 34 Genesis event
+    assert_eq!(51, page2.data.len());
     assert_eq!(None, page2.next_cursor);
 
     // test get sender events

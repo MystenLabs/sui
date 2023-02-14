@@ -3,12 +3,17 @@
 
 import { ReactNode } from "react";
 import { ObjectData } from "../../network/rawObject";
-import { DELEGATION, Delegation, StakedSui, STAKED_SUI } from "../../network/types";
-import { useWalletKit } from "@mysten/wallet-kit";
+import {
+  DELEGATION,
+  Delegation,
+  StakedSui,
+  STAKED_SUI,
+} from "../../network/types";
 import { useMyType } from "../../network/queries/use-raw";
 import { GridItem } from "./GridItem";
 import { ValidatorItem } from "./Validator";
-import { ActiveValidator, normalizeSuiAddress } from "@mysten/sui.js";
+import { normalizeSuiAddress } from "@mysten/sui.js";
+import { useValidators } from "../../network/queries/sui-system";
 
 function Header({ children }: { children: ReactNode }) {
   return (
@@ -18,26 +23,24 @@ function Header({ children }: { children: ReactNode }) {
   );
 }
 
-interface Props {
-  /** Set of 40 currently active validators */
-  validators: ActiveValidator[];
-}
+export function Table() {
+  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI);
+  const { data: delegations } = useMyType<Delegation>(DELEGATION);
 
-export function Table({ validators }: Props) {
-  const { currentAccount } = useWalletKit();
-  const { data: stakes } = useMyType<StakedSui>(STAKED_SUI, currentAccount);
-  const { data: delegations } = useMyType<Delegation>(
-    DELEGATION,
-    currentAccount
+  const { data: validators } = useValidators();
+
+  // sort validators by their live stake info in DESC order
+  const sorted = [...(validators || [])].sort((a, b) =>
+    Number(
+      BigInt(b.next_epoch_stake) +
+        BigInt(b.next_epoch_delegation) -
+        (BigInt(a.next_epoch_stake) + BigInt(a.next_epoch_delegation))
+    )
   );
 
-  // sort validators by their voting power in DESC order (not by stake - these are different)
-  // TODO: using `OR "0"` since voting power is an optional field;
-  const sorted = [...validators].sort((a, b) =>
-    Number(BigInt(b.fields.voting_power || "0") - BigInt(a.fields.voting_power || "0"))
-  );
-
-  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (stakes || []).reduce(
+  const stakeByValidator: Record<string, ObjectData<StakedSui>> = (
+    stakes || []
+  ).reduce(
     (acc, stake) =>
       Object.assign(acc, {
         [normalizeSuiAddress(stake.data.validatorAddress)]: stake,
@@ -58,14 +61,12 @@ export function Table({ validators }: Props) {
       <GridItem className="px-5 py-4">
         <Header>Rank</Header>
         <Header>Validator</Header>
-        <Header>Your Sui Stake</Header>
+        <Header>Your SUI Stake</Header>
       </GridItem>
 
       <div className="flex flex-col gap-1">
         {sorted.map((validator, index) => {
-          const address = normalizeSuiAddress(
-            validator.fields.metadata.fields.sui_address
-          );
+          const address = normalizeSuiAddress(validator.sui_address);
 
           return (
             <ValidatorItem

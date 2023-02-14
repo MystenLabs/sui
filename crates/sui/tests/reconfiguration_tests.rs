@@ -17,6 +17,7 @@ use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::{init_local_authorities, make_transfer_sui_transaction};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
+use sui_types::committee::ProtocolVersion;
 use sui_types::crypto::get_account_key_pair;
 use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
@@ -40,7 +41,7 @@ async fn local_advance_epoch_tx_test() {
     let (net, states, _, _) = init_local_authorities(4, vec![]).await;
 
     // Make sure that validators do not accept advance epoch sent externally.
-    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0, 0);
+    let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0);
     let client0 = net.get_client(&states[0].name).unwrap().authority_client();
     assert!(matches!(
         client0.handle_transaction(tx.into_inner()).await,
@@ -76,7 +77,7 @@ async fn advance_epoch_tx_test_impl(
         .create_advance_epoch_tx_cert(
             &states[0].epoch_store_for_testing(),
             &GasCostSummary::new(0, 0, 0),
-            0,
+            0, // epoch_start_timestamp_ms
             Duration::from_secs(15),
             certifier,
         )
@@ -92,7 +93,7 @@ async fn advance_epoch_tx_test_impl(
                 .create_advance_epoch_tx_cert(
                     &state.epoch_store_for_testing(),
                     &GasCostSummary::new(0, 0, 0),
-                    0,
+                    0,                         // epoch_start_timestamp_ms
                     Duration::from_secs(1000), // A very very long time
                     certifier,
                 )
@@ -146,7 +147,11 @@ async fn reconfig_with_revert_end_to_end_test() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
     let effects1 = net
         .process_certificate(cert.clone().into_inner())
         .await
@@ -162,7 +167,11 @@ async fn reconfig_with_revert_end_to_end_test() {
         &keypair,
         None,
     );
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
 
     // Close epoch on 3 (2f+1) validators.
     let mut reverting_authority_idx = None;
@@ -172,7 +181,7 @@ async fn reconfig_with_revert_end_to_end_test() {
                 if position_submit_certificate(&net.committee, &node.state().name, tx.digest())
                     < (authorities.len() - 1)
                 {
-                    node.close_epoch().await.unwrap();
+                    node.close_epoch_for_testing().await.unwrap();
                 } else {
                     // remember the authority that wouild submit it to consensus last.
                     reverting_authority_idx = Some(i);
@@ -212,7 +221,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .map(|handle| {
             handle.with_async(|node| async {
                 loop {
-                    if node.state().epoch() == 1 {
+                    if node.state().current_epoch_for_testing() == 1 {
                         break;
                     }
                     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -237,7 +246,7 @@ async fn reconfig_with_revert_end_to_end_test() {
                     .unwrap();
                 assert_eq!(2, object.version().value());
                 // Due to race conditions, it's possible that tx2 went in
-                // before 2f+1 validators sent EndOfPublish messges and close
+                // before 2f+1 validators sent EndOfPublish messages and close
                 // the curtain of epoch 0. So, we are asserting that
                 // the object version is either 1 or 2, but needs to be
                 // consistent in all validators.
@@ -269,7 +278,7 @@ async fn test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
 
     let test_cluster = TestClusterBuilder::new()
-        .with_checkpoints_per_epoch(10)
+        .with_epoch_duration_ms(1000)
         .build()
         .await
         .unwrap();
@@ -321,7 +330,11 @@ async fn test_validator_resign_effects() {
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    let cert = net.process_transaction(tx.clone()).await.unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
     let effects0 = net
         .process_certificate(cert.clone().into_inner())
         .await
@@ -345,7 +358,7 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
     // Close epoch on 3 (2f+1) validators.
     for handle in authorities.iter().skip(1) {
         handle
-            .with_async(|node| async { node.close_epoch().await.unwrap() })
+            .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
             .await;
     }
     info!("close_epoch complete after {:?}", start.elapsed());

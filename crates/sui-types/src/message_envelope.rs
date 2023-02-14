@@ -6,7 +6,7 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signer,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -35,6 +35,14 @@ pub struct Envelope<T: Message, S> {
 }
 
 impl<T: Message, S> Envelope<T, S> {
+    pub fn new_from_data_and_sig(data: T, sig: S) -> Self {
+        Self {
+            digest: Default::default(),
+            data,
+            auth_signature: sig,
+        }
+    }
+
     pub fn data(&self) -> &T {
         &self.data
     }
@@ -104,7 +112,7 @@ where
     pub fn new(
         epoch: EpochId,
         data: T,
-        secret: &dyn signature::Signer<AuthoritySignature>,
+        secret: &dyn Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> Self {
         let auth_signature = AuthoritySignInfo::new(epoch, &data, authority, secret);

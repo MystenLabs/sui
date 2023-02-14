@@ -456,7 +456,9 @@ async fn execute_pay_sui(
     }));
     let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
+    let txn_result = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .map(|(_, effects)| effects);
 
     PaySuiTransactionExecutionResult {
         authority_state,
@@ -504,7 +506,9 @@ async fn execute_pay_all_sui(
     }));
     let data = TransactionData::new(kind, sender, gas_object_ref, gas_budget, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let txn_result = send_and_confirm_transaction(&authority_state, tx).await;
+    let txn_result = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .map(|(_, effects)| effects);
     PaySuiTransactionExecutionResult {
         authority_state,
         txn_result,

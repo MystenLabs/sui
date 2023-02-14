@@ -85,38 +85,6 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    // TODO: Remove this
-    // This is very expensive, it's only for backward compatibilities and should be removed asap.
-    async fn get_objects_owned_by_object(
-        &self,
-        object_id: ObjectID,
-    ) -> RpcResult<Vec<SuiObjectInfo>> {
-        let dynamic_fields = self
-            .state
-            .get_dynamic_fields(object_id, None, usize::MAX)
-            .map_err(|e| anyhow!("{e}"))?;
-
-        let mut object_info = vec![];
-        for info in dynamic_fields {
-            let object = self
-                .state
-                .get_object_read(&info.object_id)
-                .await
-                .and_then(|read| read.into_object())
-                .map_err(|e| anyhow!(e))?;
-            object_info.push(SuiObjectInfo {
-                object_id: object.id(),
-                version: object.version(),
-                digest: object.digest(),
-                // Package cannot be owned by object, safe to unwrap.
-                type_: format!("{}", object.type_().unwrap()),
-                owner: object.owner,
-                previous_transaction: object.previous_transaction,
-            });
-        }
-        Ok(object_info)
-    }
-
     async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
@@ -198,6 +166,8 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiTransactionAuthSignersResponse> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+
         let (cert, _effects) = self
             .state
             .get_transaction(digest)
@@ -205,7 +175,6 @@ impl RpcReadApiServer for ReadApi {
             .tap_err(|err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err))?;
 
         let mut signers = Vec::new();
-        let epoch_store = self.state.epoch_store();
         for authority_index in cert.auth_sig().signers_map.iter() {
             let authority = epoch_store
                 .committee()

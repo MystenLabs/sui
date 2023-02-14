@@ -10,7 +10,7 @@ interface Props {
 const GOAL_TO_COPY = {
   [Goal.Friend]: "Friend, Goal 1-13 Rank",
   [Goal.Neutral]: "Neutral, Goal 14-25 Rank",
-  [Goal.Enemy]: "Enemy, Goal 26-40 Rank",
+  [Goal.Enemy]: "Enemy, Goal 26-41 Rank",
 };
 
 export function Target({ goal }: Props) {

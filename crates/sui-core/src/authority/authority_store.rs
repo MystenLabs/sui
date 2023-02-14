@@ -4,6 +4,7 @@
 use super::authority_store_pruner::AuthorityStorePruner;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
 use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{mpsc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
 use typed_store::rocks::DBBatch;
 use typed_store::traits::Map;
@@ -60,6 +61,7 @@ impl AuthorityStore {
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
         pruning_config: &AuthorityStorePruningConfig,
+        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> SuiResult<Self> {
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
         if perpetual_tables.database_is_empty()? {
@@ -69,7 +71,14 @@ impl AuthorityStore {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
-        Self::open_inner(genesis, perpetual_tables, committee, pruning_config).await
+        Self::open_inner(
+            genesis,
+            perpetual_tables,
+            committee,
+            pruning_config,
+            checkpoint_stream,
+        )
+        .await
     }
 
     pub async fn open_with_committee_for_testing(
@@ -83,7 +92,14 @@ impl AuthorityStore {
         // as the genesis committee.
         assert_eq!(committee.epoch, 0);
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(path, db_options.clone()));
-        Self::open_inner(genesis, perpetual_tables, committee.clone(), pruning_config).await
+        Self::open_inner(
+            genesis,
+            perpetual_tables,
+            committee.clone(),
+            pruning_config,
+            mpsc::channel(1).1,
+        )
+        .await
     }
 
     async fn open_inner(
@@ -91,10 +107,12 @@ impl AuthorityStore {
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: Committee,
         pruning_config: &AuthorityStorePruningConfig,
+        checkpoint_stream: mpsc::Receiver<CheckpointExecutionMessage>,
     ) -> SuiResult<Self> {
         let epoch = committee.epoch;
 
-        let _store_pruner = AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config);
+        let _store_pruner =
+            AuthorityStorePruner::new(perpetual_tables.clone(), pruning_config, checkpoint_stream);
 
         let store = Self {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
@@ -230,28 +248,6 @@ impl AuthorityStore {
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
             .await
-    }
-
-    // Methods to read the store
-    pub fn get_owner_objects(&self, owner: Owner) -> Result<Vec<ObjectInfo>, SuiError> {
-        debug!(?owner, "get_owner_objects");
-        Ok(self.get_owner_objects_iterator(owner)?.collect())
-    }
-
-    // Methods to read the store
-    pub fn get_owner_objects_iterator(
-        &self,
-        owner: Owner,
-    ) -> Result<impl Iterator<Item = ObjectInfo> + '_, SuiError> {
-        debug!(?owner, "get_owner_objects");
-        Ok(self
-            .perpetual_tables
-            .owner_index
-            .iter()
-            // The object id 0 is the smallest possible
-            .skip_to(&(owner, ObjectID::ZERO))?
-            .take_while(move |((object_owner, _), _)| (object_owner == &owner))
-            .map(|(_, object_info)| object_info))
     }
 
     pub fn get_object_by_key(
@@ -529,14 +525,6 @@ impl AuthorityStore {
 
         // Update the index
         if object.get_single_owner().is_some() {
-            write_batch = write_batch.insert_batch(
-                &self.perpetual_tables.owner_index,
-                std::iter::once((
-                    &(object.owner, object_ref.0),
-                    &ObjectInfo::new(&object_ref, object),
-                )),
-            )?;
-
             // Only initialize lock for address owned objects.
             if !object.is_child_object() {
                 write_batch = self.initialize_locks_impl(write_batch, &[object_ref], false)?;
@@ -568,12 +556,6 @@ impl AuthorityStore {
                 ref_and_objects
                     .iter()
                     .map(|(oref, o)| (ObjectKey::from(oref), **o)),
-            )?
-            .insert_batch(
-                &self.perpetual_tables.owner_index,
-                ref_and_objects
-                    .iter()
-                    .map(|(oref, o)| ((o.owner, oref.0), ObjectInfo::new(oref, o))),
             )?
             .insert_batch(
                 &self.perpetual_tables.parent_sync,
@@ -676,31 +658,6 @@ impl AuthorityStore {
             .cloned()
             .collect();
 
-        // Make an iterator over all objects that are either deleted or have changed owner,
-        // along with their old owner.  This is used to update the owner index.
-        // For wrapped objects, although their owners technically didn't change, we will lose track
-        // of them and there is no guarantee on their owner in the future. Hence we treat them
-        // the same as deleted.
-        let old_object_owners =
-            deleted
-                .iter()
-                // We need to call get() on objects because some object that were just deleted may not
-                // be in the objects list. This can happen if these deleted objects were wrapped in the past,
-                // and hence will not show up in the input objects.
-                .filter_map(|(id, _)| objects.get(id).and_then(Object::get_owner_and_id))
-                .chain(written.iter().filter_map(
-                    |(id, (_, new_object, _))| match objects.get(id) {
-                        Some(old_object) if old_object.owner != new_object.owner => {
-                            old_object.get_owner_and_id()
-                        }
-                        _ => None,
-                    },
-                ));
-
-        // Delete the old owner index entries
-        write_batch =
-            write_batch.delete_batch(&self.perpetual_tables.owner_index, old_object_owners)?;
-
         // Index the certificate by the objects mutated
         write_batch = write_batch.insert_batch(
             &self.perpetual_tables.parent_sync,
@@ -726,19 +683,6 @@ impl AuthorityStore {
                     transaction_digest,
                 )
             }),
-        )?;
-
-        // Update the indexes of the objects written
-        write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.owner_index,
-            written
-                .iter()
-                .filter_map(|(_id, (object_ref, new_object, _kind))| {
-                    trace!(?object_ref, owner =? new_object.owner, "Updating owner_index");
-                    new_object
-                        .get_owner_and_id()
-                        .map(|owner_id| (owner_id, ObjectInfo::new(object_ref, new_object)))
-                }),
         )?;
 
         // Insert each output object into the stores
@@ -1077,21 +1021,6 @@ impl AuthorityStore {
         write_batch = write_batch
             .delete_batch(&self.perpetual_tables.objects, all_new_object_keys.clone())?;
 
-        // Reverting the change to the owner_index table is most complex.
-        // For each newly created (i.e. created and unwrapped) object, the entry in owner_index
-        // needs to be deleted; for each mutated object, we need to query the object state of
-        // the older version, and then rewrite the entry with the old object info.
-        // TODO: Validators should not need to maintain owner_index.
-        // This is dependent on https://github.com/MystenLabs/sui/issues/2629.
-        let owners_to_delete = effects
-            .created
-            .iter()
-            .chain(effects.unwrapped.iter())
-            .chain(effects.mutated.iter())
-            .map(|((id, _, _), owner)| (*owner, *id));
-        write_batch =
-            write_batch.delete_batch(&self.perpetual_tables.owner_index, owners_to_delete)?;
-
         let modified_object_keys = effects
             .modified_at_versions
             .iter()
@@ -1113,23 +1042,15 @@ impl AuthorityStore {
                         }
 
                         let obj_ref = obj.compute_object_reference();
-                        Some((
-                            ((obj.owner, obj.id()), ObjectInfo::new(&obj_ref, &obj)),
-                            obj.is_address_owned().then_some(obj_ref),
-                        ))
+                        Some(obj.is_address_owned().then_some(obj_ref))
                     })
-                    .unzip()
             };
         }
 
-        let (old_modified_objects, old_locks): (Vec<_>, Vec<_>) =
-            get_objects_and_locks!(modified_object_keys);
-        let (_, new_locks): (Vec<_>, Vec<_>) = get_objects_and_locks!(all_new_object_keys);
+        let old_locks = get_objects_and_locks!(modified_object_keys);
+        let new_locks = get_objects_and_locks!(all_new_object_keys);
 
-        let old_locks: Vec<_> = old_locks.into_iter().flatten().collect();
-
-        write_batch =
-            write_batch.insert_batch(&self.perpetual_tables.owner_index, old_modified_objects)?;
+        let old_locks: Vec<_> = old_locks.flatten().collect();
 
         // Re-create old locks.
         write_batch = self.initialize_locks_impl(write_batch, &old_locks, true)?;
@@ -1137,7 +1058,7 @@ impl AuthorityStore {
         // Delete new locks
         write_batch = write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
-            new_locks.into_iter().flatten(),
+            new_locks.flatten(),
         )?;
 
         write_batch.write()?;

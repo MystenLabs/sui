@@ -55,13 +55,14 @@ pub fn commit_checkpoint(
         - checkpoint_summary
             .epoch_rolling_gas_cost_summary
             .storage_rebate;
-    let next_committee_json = checkpoint_summary.next_epoch_committee.map(|c| {
-        serde_json::to_string(&c).expect("Failed to serialize next_epoch_committee to JSON")
+    let next_committee_json = checkpoint_summary.end_of_epoch_data.map(|e| {
+        serde_json::to_string(&e.next_epoch_committee)
+            .expect("Failed to serialize next_epoch_committee to JSON")
     });
 
     let checkpoint = NewCheckpoint {
         sequence_number: checkpoint_summary.sequence_number as i64,
-        content_digest: checkpoint_summary.content_digest.encode(),
+        content_digest: checkpoint_summary.content_digest.base58_encode(),
         epoch: checkpoint_summary.epoch as i64,
         total_gas_cost: total_gas_cost as i64,
         total_computation_cost: checkpoint_summary
@@ -74,7 +75,9 @@ pub fn commit_checkpoint(
             .epoch_rolling_gas_cost_summary
             .storage_rebate as i64,
         total_transactions: checkpoint_summary.network_total_transactions as i64,
-        previous_digest: checkpoint_summary.previous_digest.map(|d| d.encode()),
+        previous_digest: checkpoint_summary
+            .previous_digest
+            .map(|d| d.base58_encode()),
         next_epoch_committee: next_committee_json,
         timestamp_ms: checkpoint_summary.timestamp_ms as i64,
     };

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ActiveValidator } from '@mysten/sui.js';
+import { type MoveActiveValidator } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
@@ -13,15 +13,15 @@ import { Stats } from '~/ui/Stats';
 import { getStakedPercent } from '~/utils/getStakedPercent';
 
 type StatsCardProps = {
-    validatorData: ActiveValidator;
-    totalValidatorStake: string;
+    validatorData: MoveActiveValidator;
     epoch: number | string;
+    epochRewards: string;
 };
 
 export function ValidatorStats({
     validatorData,
     epoch,
-    totalValidatorStake,
+    epochRewards,
 }: StatsCardProps) {
     // TODO: add missing fields
     // const numberOfDelegators = 0;
@@ -130,8 +130,10 @@ export function ValidatorStats({
                         <Stats
                             label="Last Epoch SUI Rewards"
                             tooltip="The stake rewards collected during the last epoch."
-                            unavailable
-                        />
+                            unavailable={+epochRewards <= 0}
+                        >
+                            <DelegationAmount amount={epochRewards} isStats />
+                        </Stats>
 
                         <Stats
                             label="Reward Pool"

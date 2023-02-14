@@ -9,7 +9,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.65"
 arc-swap = "1.5.1"
-async-recursion = "1.0.0"
 async-trait = "0.1.61"
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 base64 = "0.13.0"
@@ -44,7 +43,6 @@ types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-network.workspace = true
-telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 mysten-metrics = { path = "../../crates/mysten-metrics" }
@@ -70,6 +68,7 @@ tracing-test = "0.2.3"
 worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
 reqwest = { version = "0.11.13", features = ["json"] }
+telemetry-subscribers = { path = "../../crates/telemetry-subscribers"}
 
 [features]
 benchmark = []

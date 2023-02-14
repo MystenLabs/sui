@@ -9,6 +9,7 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
+use fastcrypto::error::FastCryptoError;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     errors::{Location, PartialVMError, VMError},
@@ -19,7 +20,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
-use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -229,6 +229,8 @@ pub enum SuiError {
     TransferImmutableError,
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
+    #[error("Mutable parameter provided, immutable parameter expected.")]
+    ImmutableParameterExpectedError,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
@@ -550,6 +552,18 @@ pub enum SuiError {
     Unknown(String),
 }
 
+#[repr(u64)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Sub-status codes for the `MEMORY_LIMIT_EXCEEDED` VM Status Code which provides more context
+pub enum VMMemoryLimitExceededSubStatusCode {
+    EVENT_COUNT_LIMIT_EXCEEDED = 0,
+    EVENT_SIZE_LIMIT_EXCEEDED = 1,
+    NEW_ID_COUNT_LIMIT_EXCEEDED = 2,
+    DELETED_ID_COUNT_LIMIT_EXCEEDED = 3,
+    TRANSFER_ID_COUNT_LIMIT_EXCEEDED = 4,
+}
+
 pub type SuiResult<T = ()> = Result<T, SuiError>;
 
 // TODO these are both horribly wrong, categorization needs to be considered
@@ -572,12 +586,6 @@ impl From<VMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
-    }
-}
-
-impl From<SubscriberError> for SuiError {
-    fn from(error: SubscriberError) -> Self {
-        SuiError::HandleConsensusTransactionFailure(error.to_string())
     }
 }
 
@@ -616,6 +624,17 @@ impl From<&str> for SuiError {
     }
 }
 
+impl From<FastCryptoError> for SuiError {
+    fn from(kind: FastCryptoError) -> Self {
+        match kind {
+            FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
+                error: "Invalid signature".to_string(),
+            },
+            _ => SuiError::Unknown("Unknown cryptography error".to_string()),
+        }
+    }
+}
+
 impl SuiError {
     pub fn individual_error_indicates_epoch_change(&self) -> bool {
         matches!(
@@ -643,6 +662,35 @@ impl SuiError {
     pub fn into_transaction_input_error(error: SuiError) -> SuiError {
         SuiError::TransactionInputObjectsErrors {
             errors: vec![error],
+        }
+    }
+
+    /// Returns if the error is retryable and if the error's retryability is
+    /// explicitly categorized.
+    /// There should be only a handful of retryable errors. For now we list common
+    /// non-retryable error below to help us find more retryable errors in logs.
+    pub fn is_retryable(&self) -> (bool, bool) {
+        match self {
+            // Network error
+            SuiError::RpcError { .. } => (true, true),
+
+            // Reconfig error
+            SuiError::ValidatorHaltedAtEpochEnd => (true, true),
+            SuiError::MissingCommitteeAtEpoch(..) => (true, true),
+            SuiError::WrongEpoch { .. } => (true, true),
+
+            // Non retryable error
+            SuiError::TransactionInputObjectsErrors { .. } => (false, true),
+            SuiError::ExecutionError(..) => (false, true),
+            SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
+            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
+                (false, true)
+            }
+            SuiError::ObjectVersionUnavailableForConsumption { .. } => (false, true),
+            SuiError::GasBudgetTooHigh { .. } => (false, true),
+            SuiError::GasBudgetTooLow { .. } => (false, true),
+            SuiError::GasBalanceTooLowToCoverGasBudget { .. } => (false, true),
+            _ => (false, false),
         }
     }
 }
@@ -679,6 +727,10 @@ impl ExecutionError {
 
     pub fn kind(&self) -> &ExecutionErrorKind {
         &self.inner.kind
+    }
+
+    pub fn source(&self) -> &Option<BoxError> {
+        &self.inner.source
     }
 
     pub fn to_execution_status(&self) -> ExecutionFailureStatus {

@@ -17,7 +17,7 @@ import {
     type SuiTransactionResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import {
@@ -26,6 +26,8 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
+// TODO: (Jibz) Create a new pagination component
+import Pagination from '../../components/pagination/Pagination';
 import {
     type LinkObj,
     TxAddresses,
@@ -53,6 +55,8 @@ import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
 import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+
+const MAX_RECIPIENTS_PER_PAGE = 10;
 
 function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
@@ -290,33 +294,42 @@ function TransactionView({
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const txdetails = getTransactions(transaction.certificate)[0];
-    const txKindName = getTransactionKindName(txdetails);
+    const txnDetails = getTransactions(transaction.certificate)[0];
+    const txKindName = getTransactionKindName(txnDetails);
     const sender = getTransactionSender(transaction.certificate);
     const gasUsed = transaction?.effects.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
-    const txnTransfer = getAmount(txdetails, transaction?.effects);
-    const sendReceiveRecipients = txnTransfer?.map((item) => ({
-        address: item.recipientAddress,
-        ...(item?.amount
-            ? {
-                  coin: {
-                      amount: item.amount,
-                      coinType: item?.coinType || null,
-                  },
-              }
-            : {}),
-    }));
+    const [recipientsPageNumber, setRecipientsPageNumber] = useState(1);
 
-    const [formattedAmount, symbol] = useFormatCoin(
-        txnTransfer?.[0].amount,
-        txnTransfer?.[0].coinType
+    const coinTransfer = useMemo(
+        () =>
+            getAmount({
+                txnData: transaction,
+            }),
+        [transaction]
     );
 
-    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
+    const recipients = useMemo(() => {
+        const startAt = (recipientsPageNumber - 1) * MAX_RECIPIENTS_PER_PAGE;
+        const endAt = recipientsPageNumber * MAX_RECIPIENTS_PER_PAGE;
+        return coinTransfer.slice(startAt, endAt);
+    }, [coinTransfer, recipientsPageNumber]);
 
+    // select the first element in the array, if there are more than one element we don't show the total amount sent but display the individual amounts
+    // use absolute value
+    const totalRecipientsCount = coinTransfer.length;
+    const transferAmount = coinTransfer?.[0]?.amount
+        ? Math.abs(coinTransfer[0].amount)
+        : null;
+
+    const [formattedAmount, symbol] = useFormatCoin(
+        transferAmount,
+        coinTransfer?.[0]?.coinType
+    );
+
+    const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
     const txEventData = transaction.effects.events?.map(eventToDisplay);
 
     let eventTitles: [string, string][] = [];
@@ -477,7 +490,9 @@ function TransactionView({
                                 ])}
                                 data-testid="transaction-timestamp"
                             >
-                                {txnTransfer?.[0].amount ? (
+                                {coinTransfer.length === 1 &&
+                                coinTransfer?.[0]?.coinType &&
+                                formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount
                                             amount={formattedAmount}
@@ -494,11 +509,27 @@ function TransactionView({
                                         </div>
                                     )
                                 )}
+
                                 <SenderRecipient
                                     sender={sender}
-                                    transferCoin={txnTransfer?.[0].isCoin}
-                                    recipients={sendReceiveRecipients}
+                                    transferCoin={!!coinTransfer}
+                                    recipients={recipients}
                                 />
+                                <div className="mt-5 flex w-full max-w-lg">
+                                    {totalRecipientsCount >
+                                        MAX_RECIPIENTS_PER_PAGE && (
+                                        <Pagination
+                                            totalItems={totalRecipientsCount}
+                                            itemsPerPage={
+                                                MAX_RECIPIENTS_PER_PAGE
+                                            }
+                                            currentPage={recipientsPageNumber}
+                                            onPagiChangeFn={
+                                                setRecipientsPageNumber
+                                            }
+                                        />
+                                    )}
+                                </div>
                             </section>
 
                             <section

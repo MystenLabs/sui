@@ -32,4 +32,4 @@ entry fun t2(obj: &mut Obj, ctx: &mut TxContext) {
 
 //# run a::m::t1 --sender A
 
-//# run a::m::t2 --sender A --args object(106)
+//# run a::m::t2 --sender A --args object(107)

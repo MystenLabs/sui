@@ -27,13 +27,16 @@ use tracing::{debug, error, info, warn};
 
 use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority_aggregator::{
-    AuthorityAggregator, QuorumExecuteCertificateError, QuorumSignTransactionError,
+    AuthorityAggregator, ProcessTransactionResult, QuorumExecuteCertificateError,
+    QuorumSignTransactionError,
 };
 use crate::authority_client::AuthorityAPI;
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages::{
+    QuorumDriverResponse, VerifiedCertificate, VerifiedTransaction, VerifiedTransactionInfoResponse,
+};
 
 use self::reconfig_observer::ReconfigObserver;
 
@@ -202,7 +205,7 @@ impl<A> QuorumDriver<A> {
             }
             Err(err) => {
                 self.metrics
-                    .total_err_responses_by_err
+                    .total_err_responses
                     .with_label_values(&[err.as_ref()])
                     .inc();
                 Err((*tx_digest, err.clone()))
@@ -213,6 +216,7 @@ impl<A> QuorumDriver<A> {
         if let Err(err) = self.effects_subscribe_sender.send(effects_queue_result) {
             warn!(?tx_digest, "No subscriber found for effects: {}", err);
         }
+        debug!(?tx_digest, "notify QuorumDriver task result");
         self.notifier.notify(tx_digest, response);
     }
 }
@@ -265,13 +269,13 @@ where
     pub(crate) async fn process_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedCertificate, QuorumDriverInternalError> {
+    ) -> Result<ProcessTransactionResult, QuorumDriverInternalError> {
         let tx_digest = *transaction.digest();
         let result = self
             .validators
             .load()
             .process_transaction(transaction)
-            .instrument(tracing::debug_span!("quorum_driver_process_tx", ?tx_digest))
+            .instrument(tracing::debug_span!("aggregator_process_tx", ?tx_digest))
             .await;
 
         match result {
@@ -357,7 +361,9 @@ where
             .validators
             .load()
             .process_certificate(certificate.clone().into_inner())
-            .instrument(tracing::debug_span!("process_cert", tx_digest = ?certificate.digest()))
+            .instrument(
+                tracing::debug_span!("aggregator_process_cert", tx_digest = ?certificate.digest()),
+            )
             .await
             .map_err(QuorumDriverInternalError::CertificateError)?;
         let response = QuorumDriverResponse {
@@ -455,7 +461,7 @@ where
         original_tx_digest: &TransactionDigest,
         validators: BTreeSet<AuthorityName>,
     ) -> SuiResult<bool> {
-        let (signed_transaction, certified_transaction) = self
+        let response = self
             .validators
             .load()
             .handle_transaction_info_request_from_some_validators(
@@ -465,68 +471,63 @@ where
             )
             .await?;
 
-        // If we happen to find that a validator returns TransactionCertificate:
-        if let Some(certified_transaction) = certified_transaction {
-            self.metrics
-                .total_times_conflicting_transaction_already_finalized_when_retrying
-                .inc();
-            // We still want to ask validators to execute this certificate in case this certificate is not
-            // known to the rest of them (e.g. when *this* validator is bad).
-            let result = self
-                .validators
-                .load()
-                .process_certificate(certified_transaction.into_inner())
-                .await
-                .tap_ok(|_resp| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction certificate succeeded."
-                    );
-                })
-                .tap_err(|err| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction certificate got an error: {:?}",
-                        err
-                    );
-                });
-            // We only try it once.
-            return Ok(result.is_ok());
+        match response {
+            VerifiedTransactionInfoResponse::Executed(cert, _) => {
+                self.metrics
+                    .total_times_conflicting_transaction_already_finalized_when_retrying
+                    .inc();
+                // We still want to ask validators to execute this certificate in case this certificate is not
+                // known to the rest of them (e.g. when *this* validator is bad).
+                let result = self
+                    .validators
+                    .load()
+                    .process_certificate(cert.into_inner())
+                    .await
+                    .tap_ok(|_resp| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction certificate succeeded."
+                        );
+                    })
+                    .tap_err(|err| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction certificate got an error: {:?}",
+                            err
+                        );
+                    });
+                // We only try it once.
+                Ok(result.is_ok())
+            }
+            VerifiedTransactionInfoResponse::Signed(signed) => {
+                let verified_transaction = signed.into_unsigned();
+                // Now ask validators to execute this transaction.
+                let result = self
+                    .validators
+                    .load()
+                    .execute_transaction(&verified_transaction)
+                    .await
+                    .tap_ok(|_resp| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction succeeded."
+                        );
+                    })
+                    .tap_err(|err| {
+                        debug!(
+                            ?tx_digest,
+                            ?original_tx_digest,
+                            "Retry conflicting transaction got an error: {:?}",
+                            err
+                        );
+                    });
+                // We only try it once
+                Ok(result.is_ok())
+            }
         }
-
-        if let Some(signed_transaction) = signed_transaction {
-            let verified_transaction = signed_transaction.into_unsigned();
-            // Now ask validators to execute this transaction.
-            let result = self
-                .validators
-                .load()
-                .execute_transaction(&verified_transaction)
-                .await
-                .tap_ok(|_resp| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction succeeded."
-                    );
-                })
-                .tap_err(|err| {
-                    debug!(
-                        ?tx_digest,
-                        ?original_tx_digest,
-                        "Retry conflicting transaction got an error: {:?}",
-                        err
-                    );
-                });
-            // We only try it once
-            return Ok(result.is_ok());
-        }
-
-        // This is unreachable.
-        let err_str = "handle_transaction_info_request_from_some_validators shouldn't return empty SignedTransaction and empty CertifiedTransaction";
-        error!(err_str);
-        Err(SuiError::from(err_str))
     }
 }
 
@@ -685,9 +686,21 @@ where
 
         let tx_cert = match tx_cert {
             None => match quorum_driver.process_transaction(transaction.clone()).await {
-                Ok(tx_cert) => {
+                Ok(ProcessTransactionResult::Certified(tx_cert)) => {
                     debug!(?tx_digest, "Transaction processing succeeded");
                     tx_cert
+                }
+                Ok(ProcessTransactionResult::Executed(tx_cert, effects_cert)) => {
+                    debug!(
+                        ?tx_digest,
+                        "Transaction processing succeeded with effects directly"
+                    );
+                    let response = QuorumDriverResponse {
+                        tx_cert,
+                        effects_cert,
+                    };
+                    quorum_driver.notify(&tx_digest, &Ok(response), old_retry_times + 1);
+                    return;
                 }
                 Err(err) => {
                     Self::handle_error(
@@ -744,7 +757,7 @@ where
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "Failed to {action}: {}", err);
         if let Some(qd_error) =
-            convert_to_quorum_driver_error_if_non_retryable(err, &tx_digest, action)
+            convert_to_quorum_driver_error_if_non_retryable(&quorum_driver, err, &tx_digest, action)
         {
             // If non-retryable failure, this task reaches terminal state for now, notify waiter.
             quorum_driver.notify(&tx_digest, &Err(qd_error), old_retry_times + 1);
@@ -783,7 +796,8 @@ where
 }
 
 // TODO: categorize all possible SuiErrors
-fn convert_to_quorum_driver_error_if_non_retryable(
+fn convert_to_quorum_driver_error_if_non_retryable<A>(
+    quorum_driver: &Arc<QuorumDriver<A>>,
     err: QuorumDriverInternalError,
     tx_digest: &TransactionDigest,
     action: &'static str,
@@ -817,7 +831,13 @@ fn convert_to_quorum_driver_error_if_non_retryable(
             let threshold = validity_threshold(total_stake);
             let mut non_recoverable_errors = HashMap::new();
             for (error, mut validators, stake) in errors {
-                if !is_error_retryable(&error) {
+                let (retryable, categorized) = error.is_retryable();
+                if !categorized {
+                    // we should minimize possible uncategorized errors here
+                    // use ERROR for now to make them easier to spot.
+                    error!(?tx_digest, "uncategorized tx error: {error}");
+                }
+                if !retryable {
                     non_recoverable_bad_stake += stake;
                     let (stakes_entry, validators_entry) = non_recoverable_errors
                         .entry(error.clone())
@@ -829,13 +849,31 @@ fn convert_to_quorum_driver_error_if_non_retryable(
                     }
                 }
             }
-            if non_recoverable_bad_stake < threshold {
-                debug!(?tx_digest, "Non retryable error stake < threshold when {action}: {non_recoverable_errors:?}");
+
+            let is_tx_recoverable = non_recoverable_bad_stake < threshold;
+            // record non-retryable errors
+            for sui_err in non_recoverable_errors.keys() {
+                quorum_driver
+                    .metrics
+                    .total_aggregated_non_recoverable_err
+                    .with_label_values(&[
+                        sui_err.as_ref(),
+                        if is_tx_recoverable {
+                            "recoverable"
+                        } else {
+                            "non-recoverable"
+                        },
+                    ])
+                    .inc();
+            }
+
+            if is_tx_recoverable {
+                debug!(?tx_digest, "Non recoverable error stake < threshold when {action}: {non_recoverable_errors:?}");
                 return None;
             }
             debug!(
                 ?tx_digest,
-                "Non retryable error stake >= threshold when {action}: {non_recoverable_errors:?}"
+                "Non recoverable error stake >= threshold when {action}: {non_recoverable_errors:?}"
             );
             Some(QuorumDriverError::NonRecoverableTransactionError {
                 errors: Vec::from_iter(
@@ -844,28 +882,6 @@ fn convert_to_quorum_driver_error_if_non_retryable(
                         .map(|(err, (stake, validators))| (err, validators, stake)),
                 ),
             })
-        }
-    }
-}
-
-fn is_error_retryable(error: &SuiError) -> bool {
-    match error {
-        // Network error
-        SuiError::RpcError { .. } => true,
-
-        // Reconfig error
-        SuiError::ValidatorHaltedAtEpochEnd => true,
-        SuiError::MissingCommitteeAtEpoch(..) => true,
-        SuiError::WrongEpoch { .. } => true,
-
-        // Non retryable error
-        SuiError::TransactionInputObjectsErrors { .. } => false,
-        SuiError::ExecutionError(..) => false,
-        SuiError::ByzantineAuthoritySuspicion { .. } => false,
-        SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
-        other => {
-            debug!("uncategorized tx error: {other}");
-            false
         }
     }
 }

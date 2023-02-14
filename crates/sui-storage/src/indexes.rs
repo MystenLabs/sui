@@ -7,6 +7,7 @@
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use serde::{de::DeserializeOwned, Serialize};
+use std::cmp::min;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::debug;
@@ -30,6 +31,8 @@ type OwnerIndexKey = (SuiAddress, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
 
 pub const MAX_TX_RANGE_SIZE: u64 = 4096;
+
+pub const MAX_GET_OWNED_OBJECT_SIZE: usize = 256;
 
 pub struct ObjectIndexChanges {
     pub deleted_owners: Vec<OwnerIndexKey>,
@@ -565,22 +568,29 @@ impl IndexStore {
     }
 
     pub fn get_owner_objects(&self, owner: SuiAddress) -> SuiResult<Vec<ObjectInfo>> {
-        debug!(?owner, "get_owner_objects");
-        Ok(self.get_owner_objects_iterator(owner)?.collect())
+        Ok(self
+            .get_owner_objects_iterator(owner, ObjectID::ZERO, MAX_GET_OWNED_OBJECT_SIZE)?
+            .collect())
     }
 
+    /// starting_object_id can be used to implement pagination, where a client remembers the last
+    /// object id of each page, and use it to query the next page.
     pub fn get_owner_objects_iterator(
         &self,
         owner: SuiAddress,
+        starting_object_id: ObjectID,
+        count: usize,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        debug!(?owner, "get_owner_objects");
+        let count = min(count, MAX_GET_OWNED_OBJECT_SIZE);
+        debug!(?owner, ?count, ?starting_object_id, "get_owner_objects");
         Ok(self
             .tables
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(owner, ObjectID::ZERO))?
+            .skip_to(&(owner, starting_object_id))?
             .take_while(move |((object_owner, _), _)| (object_owner == &owner))
+            .take(count)
             .map(|(_, object_info)| object_info))
     }
 

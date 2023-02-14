@@ -32,7 +32,7 @@ export class ExampleNFT {
                 description || 'An NFT created by Sui Wallet',
                 imageUrl || DEFAULT_NFT_IMAGE,
             ],
-            gasBudget: 10000,
+            gasBudget: 2000,
         });
     }
 }

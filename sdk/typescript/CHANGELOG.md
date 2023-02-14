@@ -1,5 +1,26 @@
 # @mysten/sui.js
 
+## 0.26.1
+
+### Patch Changes
+
+- 97c46ca9d: Support calling Move function with "option" parameter
+
+## 0.26.0
+
+### Minor Changes
+
+- a8746d4e9: update SuiExecuteTransactionResponse
+- e6a71882f: Rename getDelegatedStake to getDelegatedStakes
+- 21781ba52: Secp256k1 signs 64-bytes signature [r, s] instead of [r, s, v] with recovery id
+
+### Patch Changes
+
+- 034158656: Allow passing Pure args directly in Move call
+- 57fc4dedd: Fix gas selection logic to take gas price into account
+- e6a71882f: Add convenience methods in RpcTxnDataSerializer for building staking transactions
+- b3ba6dfbc: Support Genesis transaction kind
+
 ## 0.25.0
 
 ### Minor Changes

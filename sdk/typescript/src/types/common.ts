@@ -11,7 +11,7 @@ import {
   unknown,
 } from 'superstruct';
 import { Base58DataBuffer } from '../serialization/base58';
-import { TransactionData } from './sui-bcs';
+import { CallArg, TransactionData } from './sui-bcs';
 import {
   PublicKey,
   PublicKeyInitData,
@@ -57,7 +57,12 @@ export type ObjectOwner = Infer<typeof ObjectOwner>;
 
 // TODO: Figure out if we actually should have validaton on this:
 export const SuiJsonValue = unknown();
-export type SuiJsonValue = boolean | number | string | Array<SuiJsonValue>;
+export type SuiJsonValue =
+  | boolean
+  | number
+  | string
+  | CallArg
+  | Array<SuiJsonValue>;
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
@@ -66,15 +71,9 @@ const TX_DIGEST_LENGTH = 32;
 /** Returns whether the tx digest is valid based on the serialization format */
 export function isValidTransactionDigest(
   value: string,
-  serializationFmt: 'base64' | 'base58'
 ): value is TransactionDigest {
-  let buffer;
   try {
-    if (serializationFmt === 'base58') {
-      buffer = new Base58DataBuffer(value);
-    } else {
-      buffer = new Base64DataBuffer(value);
-    }
+    const buffer = new Base58DataBuffer(value);
     return buffer.getLength() === TX_DIGEST_LENGTH;
   } catch (e) {
     return false;
@@ -109,7 +108,7 @@ export function isValidSuiObjectId(value: string): boolean {
  */
 export function normalizeSuiAddress(
   value: string,
-  forceAdd0x: boolean = false
+  forceAdd0x: boolean = false,
 ): SuiAddress {
   let address = value.toLowerCase();
   if (!forceAdd0x && address.startsWith('0x')) {
@@ -120,7 +119,7 @@ export function normalizeSuiAddress(
 
 export function normalizeSuiObjectId(
   value: string,
-  forceAdd0x: boolean = false
+  forceAdd0x: boolean = false,
 ): ObjectId {
   return normalizeSuiAddress(value, forceAdd0x);
 }
@@ -139,8 +138,6 @@ export function generateTransactionDigest(
   signature: string | Base64DataBuffer,
   publicKey: PublicKeyInitData | PublicKey,
   bcs: BCS,
-  serializationFmt: 'base64' | 'base58',
-  excludeSig: boolean = false
 ): string {
   const signatureBytes = (
     typeof signature === 'string' ? new Base64DataBuffer(signature) : signature
@@ -166,31 +163,16 @@ export function generateTransactionDigest(
   ]);
 
   const txSignature = new Uint8Array(
-    1 + signatureBytes.length + publicKeyBytes.length
+    1 + signatureBytes.length + publicKeyBytes.length,
   );
   txSignature.set(schemeByte);
   txSignature.set(signatureBytes, 1);
   txSignature.set(publicKeyBytes, 1 + signatureBytes.length);
 
-  const senderSignedData = {
-    data,
-    txSignature,
-  };
-  const senderSignedDataBytes = bcs
-    .ser('SenderSignedData', senderSignedData)
-    .toBytes();
+  const txBytes = bcs.ser('TransactionData', data).toBytes();
+  const hash = sha256Hash('TransactionData', txBytes);
 
-  let hash;
-  if (excludeSig) {
-    const txBytes = bcs.ser('TransactionData', data).toBytes();
-    hash = sha256Hash('TransactionData', txBytes);
-  } else {
-    hash = sha256Hash('SenderSignedData', senderSignedDataBytes);
-  }
-
-  return serializationFmt === 'base58'
-    ? new Base58DataBuffer(hash).toString()
-    : new Base64DataBuffer(hash).toString();
+  return new Base58DataBuffer(hash).toString();
 }
 
 function isHex(value: string): boolean {

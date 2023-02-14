@@ -388,6 +388,7 @@ pub enum OperationType {
     MoveCall,
     EpochChange,
     Genesis,
+    ConsensusCommitPrologue,
 }
 
 impl From<&SuiTransactionKind> for OperationType {
@@ -402,6 +403,9 @@ impl From<&SuiTransactionKind> for OperationType {
             SuiTransactionKind::TransferSui(_) => OperationType::TransferSUI,
             SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
             SuiTransactionKind::Genesis(_) => OperationType::Genesis,
+            SuiTransactionKind::ConsensusCommitPrologue(_) => {
+                OperationType::ConsensusCommitPrologue
+            }
         }
     }
 }
@@ -581,6 +585,7 @@ pub struct ConstructionMetadata {
     pub tx_metadata: TransactionMetadata,
     pub sender: SuiAddress,
     pub gas: ObjectRef,
+    pub gas_price: u64,
     pub budget: u64,
 }
 
@@ -898,7 +903,7 @@ impl InternalOperation {
                         CallArg::ObjVec(
                             coins.into_iter().map(ObjectArg::ImmOrOwnedObject).collect(),
                         ),
-                        CallArg::Pure(bcs::to_bytes(&amount)?),
+                        CallArg::Pure(bcs::to_bytes(&Some(amount as u64))?),
                         CallArg::Pure(bcs::to_bytes(&validator)?),
                     ],
                 })
@@ -912,11 +917,12 @@ impl InternalOperation {
             }
         };
 
-        Ok(TransactionData::new_with_dummy_gas_price(
+        Ok(TransactionData::new(
             TransactionKind::Single(single_tx),
             metadata.sender,
             metadata.gas,
             metadata.budget,
+            metadata.gas_price,
         ))
     }
 }

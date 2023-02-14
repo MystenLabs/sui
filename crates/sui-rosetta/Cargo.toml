@@ -42,6 +42,7 @@ sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 sui-storage = { path = "../sui-storage" }
 mysten-metrics = { path = "../mysten-metrics" }
+chrono = "0.4.23"
 
 move-core-types.workspace = true
 

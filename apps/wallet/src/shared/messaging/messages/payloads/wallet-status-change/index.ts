@@ -5,8 +5,10 @@ import { isBasePayload } from '_payloads';
 
 import type { SuiAddress } from '@mysten/sui.js/src';
 import type { BasePayload, Payload } from '_payloads';
+import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
 export type WalletStatusChange = {
+    network?: NetworkEnvType;
     accounts?: SuiAddress[];
 };
 

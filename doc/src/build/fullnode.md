@@ -48,7 +48,7 @@ Suggested minimum hardware to run a Sui Full node:
 
 * CPUs: 10 core
 * RAM: 32 GB
-* Storage: 1 TB
+* Storage (SSD): 1 TB
 
 ### Software requirements
 
@@ -116,7 +116,7 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
    * [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob)
     ```shell
     curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
-
+    ```
 
 1. Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
    * Update the `db-path` field with the path to the Full node database.
@@ -199,6 +199,7 @@ Source](#building-from-source), update your Full node as follows:
    * [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob)
     ```shell
     curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+    ```
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui Full node:
     ```shell

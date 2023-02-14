@@ -69,7 +69,7 @@ export type SuiMoveNormalizedType =
   | SuiMoveNormalizedStructType;
 
 function isSuiMoveNormalizedType(
-  value: unknown
+  value: unknown,
 ): value is SuiMoveNormalizedType {
   if (!value) return false;
   if (typeof value === 'string') return true;
@@ -86,7 +86,7 @@ function isSuiMoveNormalizedType(
 
 export const SuiMoveNormalizedType = define<SuiMoveNormalizedType>(
   'SuiMoveNormalizedType',
-  isSuiMoveNormalizedType
+  isSuiMoveNormalizedType,
 );
 
 export type SuiMoveNormalizedStructType = {
@@ -99,7 +99,7 @@ export type SuiMoveNormalizedStructType = {
 };
 
 function isSuiMoveNormalizedStructType(
-  value: unknown
+  value: unknown,
 ): value is SuiMoveNormalizedStructType {
   if (!value || typeof value !== 'object') return false;
 
@@ -114,7 +114,7 @@ function isSuiMoveNormalizedStructType(
     typeof structProperties.name !== 'string' ||
     !Array.isArray(structProperties.type_arguments) ||
     !structProperties.type_arguments.every((value) =>
-      isSuiMoveNormalizedType(value)
+      isSuiMoveNormalizedType(value),
     )
   ) {
     return false;
@@ -126,7 +126,7 @@ function isSuiMoveNormalizedStructType(
 // NOTE: This type is recursive, so we need to manually implement it:
 export const SuiMoveNormalizedStructType = define<SuiMoveNormalizedStructType>(
   'SuiMoveNormalizedStructType',
-  isSuiMoveNormalizedStructType
+  isSuiMoveNormalizedStructType,
 );
 
 export const SuiMoveNormalizedFunction = object({
@@ -163,12 +163,12 @@ export type SuiMoveNormalizedModule = Infer<typeof SuiMoveNormalizedModule>;
 
 export const SuiMoveNormalizedModules = record(
   string(),
-  SuiMoveNormalizedModule
+  SuiMoveNormalizedModule,
 );
 export type SuiMoveNormalizedModules = Infer<typeof SuiMoveNormalizedModules>;
 
 export function extractMutableReference(
-  normalizedType: SuiMoveNormalizedType
+  normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' &&
     'MutableReference' in normalizedType
@@ -177,7 +177,7 @@ export function extractMutableReference(
 }
 
 export function extractReference(
-  normalizedType: SuiMoveNormalizedType
+  normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedType | undefined {
   return typeof normalizedType === 'object' && 'Reference' in normalizedType
     ? normalizedType.Reference
@@ -185,7 +185,7 @@ export function extractReference(
 }
 
 export function extractStructTag(
-  normalizedType: SuiMoveNormalizedType
+  normalizedType: SuiMoveNormalizedType,
 ): SuiMoveNormalizedStructType | undefined {
   if (typeof normalizedType === 'object' && 'Struct' in normalizedType) {
     return normalizedType;

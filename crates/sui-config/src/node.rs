@@ -60,13 +60,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    /// Number of checkpoints per epoch.
-    /// Some means reconfiguration is enabled.
-    /// None means reconfiguration is disabled.
+    // TODO: It will be removed down the road.
+    /// Epoch duration in ms.
+    /// u64::MAX means reconfiguration is disabled
     /// Exposing this in config to allow easier testing with shorter epoch.
-    /// TODO: It will be removed down the road.
-    #[serde(default = "default_checkpoints_per_epoch")]
-    pub checkpoints_per_epoch: Option<u64>,
+    #[serde(default = "default_epoch_duration_ms")]
+    pub epoch_duration_ms: u64,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -135,9 +134,9 @@ pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
 }
 
-pub fn default_checkpoints_per_epoch() -> Option<u64> {
-    // Currently a checkpoint is ~3 seconds, 3000 checkpoints is 9000s, which is about 2.5 hours.
-    Some(3000)
+pub fn default_epoch_duration_ms() -> u64 {
+    // 24 Hrs
+    24 * 60 * 60 * 1000
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
@@ -240,7 +239,7 @@ impl ConsensusConfig {
 pub struct CheckpointExecutorConfig {
     /// Upper bound on the number of checkpoints that can be concurrently executed
     ///
-    /// If unspecified, this will default to `100`
+    /// If unspecified, this will default to `200`
     #[serde(default = "default_checkpoint_execution_max_concurrency")]
     pub checkpoint_execution_max_concurrency: usize,
 
@@ -254,7 +253,7 @@ pub struct CheckpointExecutorConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    100
+    200
 }
 
 fn default_local_execution_timeout_sec() -> u64 {
@@ -284,8 +283,8 @@ impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
             objects_num_latest_versions_to_retain: u64::MAX,
-            objects_pruning_period_secs: u64::MAX,
-            objects_pruning_initial_delay_secs: u64::MAX,
+            objects_pruning_period_secs: 24 * 60 * 60,
+            objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
         }

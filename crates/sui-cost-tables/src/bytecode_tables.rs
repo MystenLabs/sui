@@ -68,6 +68,10 @@ impl<'a> GasStatus<'a> {
         }
     }
 
+    pub fn is_metered(&self) -> bool {
+        self.charge
+    }
+
     /// Initialize the gas state with metering disabled.
     ///
     /// It should be used by clients in very specific cases and when executing system

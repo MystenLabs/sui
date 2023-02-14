@@ -59,7 +59,7 @@ By design, Sui validators (nodes) can effectively scale the network throughput i
 
 This experiment uses a configuration where each client submits a batch of 100 transactions (such as transfers to 100 distinct recipients) with a single signature. This configuration captures the anticipated usage pattern of a highly scalable blockchain--for example, a custodial wallet or game server operating at scale will likely need to submit hundreds or thousands of on-chain transactions per second. With a batch size of 1, a validator running on the same machine can process 20,000 TPS with 8 cores, and exhibits the same linear growth in throughput as more cores are added.
 
-We will publish a full performance report for optimized Sui networks in a variety of configurations when our testnet is released.
+We will publish a full performance report for optimized Sui networks in a variety of configurations prior to the Sui Mainnet launch.
 
 ## A safe smart contract language accessible to mainstream developers
 

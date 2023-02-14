@@ -7,19 +7,26 @@ use move_binary_format::{
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
-use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
+use move_core_types::{
+    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
+};
 use sui_types::{
     base_types::{
         STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
         STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_STRUCT_NAME,
     },
+    clock::{CLOCK_MODULE_NAME, CLOCK_STRUCT_NAME},
     error::ExecutionError,
     id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
+    move_package::FnInfoMap,
+    sui_system_state::SUI_SYSTEM_MODULE_NAME,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{format_signature_token, resolve_struct, verification_failure, INIT_FN_NAME};
+use crate::{
+    format_signature_token, is_test_fun, resolve_struct, verification_failure, INIT_FN_NAME,
+};
 
 /// Checks valid rules rules for entry points, both for module initialization and transactions
 ///
@@ -37,12 +44,22 @@ use crate::{format_signature_token, resolve_struct, verification_failure, INIT_F
 /// - The function may have a &mut TxContext or &TxContext (see `is_tx_context`) parameter
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
-pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
-    for func_def in &module.function_defs {
-        verify_init_not_called(module, func_def).map_err(verification_failure)?;
+pub fn verify_module(
+    module: &CompiledModule,
+    fn_info_map: &FnInfoMap,
+) -> Result<(), ExecutionError> {
+    // When verifying test functions, a check preventing explicit calls to init functions is
+    // disabled.
 
+    for func_def in &module.function_defs {
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
+
+        // allow calling init function in the test code
+        if !is_test_fun(name, module, fn_info_map) {
+            verify_init_not_called(module, func_def).map_err(verification_failure)?;
+        }
+
         if name == INIT_FN_NAME {
             verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
@@ -159,6 +176,7 @@ fn verify_entry_function_impl(
     let view = &BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
+    let module_id = module.self_id();
 
     let all_non_ctx_params = match params.0.last() {
         Some(last_param) if is_tx_context(view, last_param) != TxContextKind::None => {
@@ -167,7 +185,7 @@ fn verify_entry_function_impl(
         _ => &params.0,
     };
     for param in all_non_ctx_params {
-        verify_param_type(view, &handle.type_parameters, param)?;
+        verify_param_type(view, &module_id, &handle.type_parameters, param)?;
     }
 
     let return_ = view.signature_at(handle.return_);
@@ -183,9 +201,22 @@ fn verify_entry_function_impl(
 
 fn verify_param_type(
     view: &BinaryIndexedView,
+    module_id: &ModuleId,
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
 ) -> Result<(), String> {
+    // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable clock
+    // parameter.
+    if module_id != &ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned())
+        && is_mutable_clock(view, param)
+    {
+        return Err(format!(
+            "Invalid entry point parameter type. Clock must be passed by immutable reference. got: \
+             {}",
+            format_signature_token(view, param),
+        ));
+    }
+
     if is_primitive(view, function_type_args, param)
         || is_object(view, function_type_args, param)?
         || is_object_vector(view, function_type_args, param)?
@@ -201,6 +232,8 @@ fn verify_param_type(
 
 pub const RESOLVED_SUI_ID: (&AccountAddress, &IdentStr, &IdentStr) =
     (&SUI_FRAMEWORK_ADDRESS, OBJECT_MODULE_NAME, ID_STRUCT_NAME);
+pub const RESOLVED_SUI_CLOCK: (&AccountAddress, &IdentStr, &IdentStr) =
+    (&SUI_FRAMEWORK_ADDRESS, CLOCK_MODULE_NAME, CLOCK_STRUCT_NAME);
 pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
     &MOVE_STDLIB_ADDRESS,
     STD_OPTION_MODULE_NAME,
@@ -289,6 +322,16 @@ pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> TxContextK
             _ => TxContextKind::None,
         },
         _ => TxContextKind::None,
+    }
+}
+
+/// Detects a `&mut sui::clock::Clock` or `sui::clock::Clock` in the signature.
+pub fn is_mutable_clock(view: &BinaryIndexedView, t: &SignatureToken) -> bool {
+    use SignatureToken as S;
+    match t {
+        S::MutableReference(inner) => is_mutable_clock(view, inner),
+        S::Struct(idx) => resolve_struct(view, *idx) == RESOLVED_SUI_CLOCK,
+        _ => false,
     }
 }
 

@@ -190,6 +190,13 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let sender = option.internal_operation.sender();
+    let gas_price = context
+        .client
+        .governance_api()
+        .get_sui_system_state()
+        .await?
+        .reference_gas_price;
+
     let (tx_metadata, gas) = match &option.internal_operation {
         InternalOperation::PaySui {
             sender, amounts, ..
@@ -198,7 +205,13 @@ pub async fn metadata(
             let sender_coins = context
                 .client
                 .coin_read_api()
-                .select_coins(*sender, None, amount + 1000, None, vec![])
+                .select_coins(
+                    *sender,
+                    None,
+                    amount + (1000 * gas_price as u128),
+                    None,
+                    vec![],
+                )
                 .await?
                 .into_iter()
                 .map(|coin| coin.object_ref())
@@ -251,6 +264,7 @@ pub async fn metadata(
             tx_metadata: tx_metadata.clone(),
             sender,
             gas,
+            gas_price,
             budget: 1000,
         })?;
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
@@ -262,6 +276,7 @@ pub async fn metadata(
             tx_metadata,
             sender,
             gas,
+            gas_price,
             budget,
         },
         suggested_fee: vec![Amount::new(budget as i128)],

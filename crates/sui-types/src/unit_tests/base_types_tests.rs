@@ -6,6 +6,7 @@
 
 use std::str::FromStr;
 
+use fastcrypto::encoding::Base58;
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_binary_format::file_format;
 
@@ -280,7 +281,7 @@ fn test_transaction_digest_serde_not_human_readable() {
     let bcs_serialized = bcs::to_bytes(&digest).unwrap();
     // bincode use 8 bytes for BYTES len and bcs use 1 byte
     assert_eq!(serialized[8..], bcs_serialized[1..]);
-    assert_eq!(digest.0.to_vec(), serialized[8..]);
+    assert_eq!(digest.inner(), &serialized[8..]);
     let deserialized: TransactionDigest = bincode::deserialize(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }
@@ -289,7 +290,10 @@ fn test_transaction_digest_serde_not_human_readable() {
 fn test_transaction_digest_serde_human_readable() {
     let digest = TransactionDigest::random();
     let serialized = serde_json::to_string(&digest).unwrap();
-    assert_eq!(format!("\"{}\"", Base58::encode(digest.0)), serialized);
+    assert_eq!(
+        format!("\"{}\"", Base58::encode(digest.inner())),
+        serialized
+    );
     let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
     assert_eq!(deserialized, digest);
 }

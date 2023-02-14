@@ -23,11 +23,15 @@ use sui_types::id::UID;
 use sui_types::messages::ExecutionFailureStatus;
 #[cfg(test)]
 use sui_types::messages::InputObjects;
-use sui_types::messages::{GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind};
+use sui_types::messages::{
+    ConsensusCommitPrologue, GenesisTransaction, ObjectArg, Pay, PayAllSui, PaySui, TransactionKind,
+};
 use sui_types::object::{Data, MoveObject, Owner};
 use sui_types::storage::SingleTxContext;
 use sui_types::storage::{ChildObjectResolver, DeleteKind, ParentSync, WriteKind};
-use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
+use sui_types::sui_system_state::{
+    ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME,
+};
 #[cfg(test)]
 use sui_types::temporary_store;
 use sui_types::temporary_store::InnerTemporaryStore;
@@ -44,7 +48,8 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{
-    MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    MOVE_STDLIB_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -325,6 +330,9 @@ fn execution_loop<
                     }
                 }
             }
+            SingleTransactionKind::ConsensusCommitPrologue(prologue) => {
+                setup_consensus_commit(prologue, temporary_store, tx_ctx, move_vm, gas_status)?
+            }
         };
     }
     Ok(results)
@@ -353,6 +361,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         vec![
             system_object_arg.clone(),
             CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.computation_charge).unwrap()),
             CallArg::Pure(bcs::to_bytes(&change_epoch.storage_rebate).unwrap()),
@@ -382,11 +391,44 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             vec![
                 system_object_arg,
                 CallArg::Pure(bcs::to_bytes(&change_epoch.epoch).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&change_epoch.protocol_version).unwrap()),
             ],
             gas_status.create_move_gas_status(),
             tx_ctx,
         )?;
     }
+    Ok(())
+}
+
+/// Perform metadata updates in preparation for the transactions in the upcoming checkpoint:
+///
+/// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
+///   consensus.
+fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+    prologue: ConsensusCommitPrologue,
+    temporary_store: &mut TemporaryStore<S>,
+    tx_ctx: &mut TxContext,
+    move_vm: &Arc<MoveVM>,
+    gas_status: &mut SuiGasStatus,
+) -> Result<(), ExecutionError> {
+    adapter::execute::<execution_mode::Normal, _, _>(
+        move_vm,
+        temporary_store,
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned()),
+        &CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME.to_owned(),
+        vec![],
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutable: true,
+            }),
+            CallArg::Pure(bcs::to_bytes(&prologue.checkpoint_start_timestamp_ms).unwrap()),
+        ],
+        gas_status.create_move_gas_status(),
+        tx_ctx,
+    )?;
+
     Ok(())
 }
 

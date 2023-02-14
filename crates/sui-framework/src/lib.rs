@@ -79,7 +79,11 @@ fn new_testing_object_runtime(ext: &mut NativeContextExtensions) {
         InputObjects::new(vec![]),
         TransactionDigest::random(),
     );
-    ext.add(ObjectRuntime::new(Box::new(state_view), BTreeMap::new()))
+    ext.add(ObjectRuntime::new(
+        Box::new(state_view),
+        BTreeMap::new(),
+        false,
+    ))
 }
 
 pub fn get_sui_framework() -> Vec<CompiledModule> {
@@ -173,7 +177,7 @@ mod tests {
         get_sui_framework();
         get_move_stdlib();
         let path = PathBuf::from(DEFAULT_FRAMEWORK_PATH);
-        BuildConfig::default().build(path.clone()).unwrap();
+        BuildConfig::new_for_testing().build(path.clone()).unwrap();
         check_move_unit_tests(&path);
     }
 
@@ -194,7 +198,7 @@ mod tests {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../sui_programmability/examples")
                 .join(example);
-            BuildConfig::default().build(path.clone()).unwrap();
+            BuildConfig::new_for_testing().build(path.clone()).unwrap();
             check_move_unit_tests(&path);
         }
     }
@@ -204,11 +208,26 @@ mod tests {
     fn run_book_examples_move_unit_tests() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../doc/book/examples");
 
-        BuildConfig::default().build(path.clone()).unwrap();
+        BuildConfig::new_for_testing().build(path.clone()).unwrap();
         check_move_unit_tests(&path);
     }
 
     fn check_move_unit_tests(path: &Path) {
+        // build tests first to enable Sui-specific test code verification
+        matches!(
+            build_move_package(
+                path,
+                BuildConfig {
+                    config: MoveBuildConfig {
+                        test_mode: true, // make sure to verify tests
+                        ..MoveBuildConfig::default()
+                    },
+                    run_bytecode_verifier: true,
+                    print_diags_to_stderr: true,
+                },
+            ),
+            Ok(_)
+        );
         assert_eq!(
             run_move_unit_tests(path, MoveBuildConfig::default(), None, false).unwrap(),
             UnitTestResult::Success

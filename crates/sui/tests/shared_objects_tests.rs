@@ -3,8 +3,10 @@
 
 use futures::{stream, StreamExt};
 use sui_core::authority_client::AuthorityAPI;
+use sui_core::consensus_adapter::position_submit_certificate;
 use sui_types::messages::{
-    CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
+    CallArg, EntryArgumentError, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus,
+    ObjectArg, ObjectInfoRequest,
 };
 use test_utils::authority::get_client;
 use test_utils::transaction::{
@@ -86,8 +88,7 @@ async fn call_shared_object_contract() {
     );
     let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    // todo(RWLock) uncomment when serialization of mutable field is fixed
-    // let counter_creation_transaction = effects.transaction_digest;
+    let counter_creation_transaction = effects.transaction_digest;
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
     let counter_object_arg = ObjectArg::SharedObject {
         id: counter_id,
@@ -120,9 +121,8 @@ async fn call_shared_object_contract() {
         // Only gas object transaction and counter creation are dependencies
         // Note that this assert would fail for second transaction
         // if they send counter_object_arg instead of counter_object_arg_imm
-        // todo(RWLock) uncomment when serialization of mutable field is fixed
-        // assert_eq!(effects.dependencies.len(), 2);
-        // assert!(effects.dependencies.contains(&counter_creation_transaction));
+        assert_eq!(effects.dependencies.len(), 2);
+        assert!(effects.dependencies.contains(&counter_creation_transaction));
     }
 
     // Make a transaction to increment the counter.
@@ -136,19 +136,16 @@ async fn call_shared_object_contract() {
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
         .unwrap();
-    // todo(RWLock) uncomment when serialization of mutable field is fixed
-    // let increment_transaction = effects.transaction_digest;
+    let increment_transaction = effects.transaction_digest;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     // Again - only gas object transaction and counter creation are dependencies
     // Previously executed assert_value transaction(s) are not a dependency because they took immutable reference to shared object
-    // todo(RWLock) uncomment when serialization of mutable field is fixed
-    // assert_eq!(effects.dependencies.len(), 2);
-    // assert!(effects.dependencies.contains(&counter_creation_transaction));
+    assert_eq!(effects.dependencies.len(), 2);
+    assert!(effects.dependencies.contains(&counter_creation_transaction));
 
     // assert_value can take both mutable and immutable references
     // it is allowed to pass mutable shared object arg to move call taking immutable reference
-    // todo(RWLock) uncomment when serialization of mutable field is fixed
-    // let mut assert_value_mut_transaction = None;
+    let mut assert_value_mut_transaction = None;
     for imm in [true, false] {
         // Ensure the value of the counter is `1`.
         let transaction = move_transaction(
@@ -170,39 +167,36 @@ async fn call_shared_object_contract() {
             .unwrap();
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
         // Gas object transaction and increment transaction are dependencies
-        // todo(RWLock) uncomment when serialization of mutable field is fixed
-        // assert_eq!(effects.dependencies.len(), 2);
-        // assert!(effects.dependencies.contains(&increment_transaction));
-        // assert_value_mut_transaction = Some(effects.transaction_digest);
+        assert_eq!(effects.dependencies.len(), 2);
+        assert!(effects.dependencies.contains(&increment_transaction));
+        assert_value_mut_transaction = Some(effects.transaction_digest);
     }
 
-    // todo(RWLock) uncomment when serialization of mutable field is fixed
-    // let assert_value_mut_transaction = assert_value_mut_transaction.unwrap();
+    let assert_value_mut_transaction = assert_value_mut_transaction.unwrap();
 
     // And last check - attempt to send increment transaction with immutable reference
-    // todo(RWLock) uncomment when serialization of mutable field is fixed
-    // let transaction = move_transaction(
-    //     gas_objects.pop().unwrap(),
-    //     "counter",
-    //     "increment",
-    //     package_id,
-    //     vec![CallArg::Object(counter_object_arg_imm)],
-    // );
-    // let effects = submit_shared_object_transaction(transaction, configs.validator_set())
-    //     .await
-    //     .unwrap();
-    // // Transaction fails
-    // assert!(matches!(
-    //     effects.status,
-    //     ExecutionStatus::Failure {
-    //         error: ExecutionFailureStatus::EntryArgumentError(EntryArgumentError {
-    //             kind: EntryArgumentErrorKind::ObjectMutabilityMismatch,
-    //             ..
-    //         })
-    //     }
-    // ));
-    // assert_eq!(effects.dependencies.len(), 2);
-    // assert!(effects.dependencies.contains(&assert_value_mut_transaction));
+    let transaction = move_transaction(
+        gas_objects.pop().unwrap(),
+        "counter",
+        "increment",
+        package_id,
+        vec![CallArg::Object(counter_object_arg_imm)],
+    );
+    let effects = submit_shared_object_transaction(transaction, configs.validator_set())
+        .await
+        .unwrap();
+    // Transaction fails
+    assert!(matches!(
+        effects.status,
+        ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::EntryArgumentError(EntryArgumentError {
+                kind: EntryArgumentErrorKind::ObjectMutabilityMismatch,
+                ..
+            })
+        }
+    ));
+    assert_eq!(effects.dependencies.len(), 2);
+    assert!(effects.dependencies.contains(&assert_value_mut_transaction));
 }
 
 /// Same test as `call_shared_object_contract` but the clients submits many times the same
@@ -308,9 +302,20 @@ async fn shared_object_sync() {
         package_id,
         /* arguments */ Vec::default(),
     );
+
+    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
+        configs.validator_set().iter().cloned().partition(|info| {
+            position_submit_certificate(
+                &configs.committee(),
+                &info.protocol_key(),
+                create_counter_transaction.digest(),
+            ) > 0
+        });
+
     let effects = submit_single_owner_transaction(
         create_counter_transaction.clone(),
-        &configs.validator_set()[1..],
+        //&configs.validator_set()[1..],
+        &slow_validators,
     )
     .await;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -325,28 +330,22 @@ async fn shared_object_sync() {
     // sent to.
     let has_counter = stream::iter(&configs.validator_set()[1..]).any(|config| async move {
         get_client(config)
-            .handle_object_info_request(ObjectInfoRequest {
-                object_id: counter_id,
-                request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
-            })
+            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                counter_id, None,
+            ))
             .await
-            .unwrap()
-            .object()
-            .is_some()
+            .is_ok()
     });
 
     assert!(has_counter.await);
 
     // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    assert!(get_client(&configs.validator_set()[0])
-        .handle_object_info_request(ObjectInfoRequest {
-            object_id: counter_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
-        })
+    assert!(get_client(&fast_validators[0])
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            counter_id, None,
+        ))
         .await
-        .unwrap()
-        .object()
-        .is_none());
+        .is_err());
 
     // Make a transaction to increment the counter.
     let increment_counter_transaction = move_transaction(
@@ -387,7 +386,7 @@ async fn replay_shared_object_transaction() {
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
 
-    // Publish the move package to all authorities and get its packge ID
+    // Publish the move package to all authorities and get its package ID
     let package_id = publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set())
         .await
         .0;

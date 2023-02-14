@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 use crate::certificate_proof::CertificateProof;
-use crate::committee::{EpochId, StakeUnit};
+use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignature, SuiSignatureInner,
+    ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -15,10 +16,11 @@ use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMe
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::Base64;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -86,14 +88,8 @@ pub enum ObjectArg {
     SharedObject {
         id: ObjectID,
         initial_shared_version: SequenceNumber,
-        // Temporary fix until SDK will be aware of mutable flag
-        #[serde(skip, default = "bool_true")]
         mutable: bool,
     },
-}
-
-fn bool_true() -> bool {
-    true
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -178,6 +174,8 @@ pub struct Pay {
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
+    /// The protocol version in effect in the new epoch.
+    pub protocol_version: ProtocolVersion,
     /// The total amount of gas charged for storage during the epoch.
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
@@ -199,6 +197,12 @@ pub enum GenesisObject {
         data: crate::object::Data,
         owner: crate::object::Owner,
     },
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologue {
+    /// Unix timestamp from consensus
+    pub checkpoint_start_timestamp_ms: u64,
 }
 
 impl GenesisObject {
@@ -237,14 +241,23 @@ pub enum SingleTransactionKind {
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
+    ConsensusCommitPrologue(ConsensusCommitPrologue),
     // .. more transaction types go here
 }
 
 impl MoveCall {
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
         let MoveCall {
-            arguments, package, ..
+            arguments,
+            package,
+            type_arguments,
+            ..
         } = self;
+        // using a BTreeSet so the output of `input_objects` has a stable ordering
+        let mut packages = BTreeSet::from([*package]);
+        for type_argument in type_arguments {
+            add_type_tag_packages(&mut packages, type_argument)
+        }
         arguments
             .iter()
             .filter_map(|arg| match arg {
@@ -291,8 +304,31 @@ impl MoveCall {
                 ),
             })
             .flatten()
-            .chain([InputObjectKind::MovePackage(*package)])
+            .chain(packages.into_iter().map(InputObjectKind::MovePackage))
             .collect()
+    }
+}
+
+// Add package IDs, `ObjectID`, for types defined in modules.
+fn add_type_tag_packages(packages: &mut BTreeSet<ObjectID>, type_argument: &TypeTag) {
+    let mut stack = vec![type_argument];
+    while let Some(cur) = stack.pop() {
+        match cur {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256 => (),
+            TypeTag::Vector(inner) => stack.push(inner),
+            TypeTag::Struct(struct_tag) => {
+                packages.insert(struct_tag.address.into());
+                stack.extend(struct_tag.type_params.iter())
+            }
+        }
     }
 }
 
@@ -320,7 +356,7 @@ impl SingleTransactionKind {
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
-            Self::Call(_) | Self::ChangeEpoch(_) => {
+            Self::Call(_) | Self::ChangeEpoch(_) | Self::ConsensusCommitPrologue(_) => {
                 Either::Left(self.all_move_call_shared_input_objects())
             }
             _ => Either::Right(iter::empty()),
@@ -373,6 +409,11 @@ impl SingleTransactionKind {
             Self::ChangeEpoch(_) => Either::Right(iter::once(SharedInputObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            })),
+            Self::ConsensusCommitPrologue(_) => Either::Right(iter::once(SharedInputObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             })),
             _ => unreachable!(),
@@ -439,6 +480,13 @@ impl SingleTransactionKind {
             Self::Genesis(_) => {
                 vec![]
             }
+            Self::ConsensusCommitPrologue(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -453,6 +501,51 @@ impl SingleTransactionKind {
         }
         Ok(input_objects)
     }
+
+    pub fn validity_check(&self, gas_payment: &ObjectRef) -> SuiResult {
+        fp_ensure!(
+            !self.is_blocked_move_function(),
+            SuiError::BlockedMoveFunction
+        );
+        match self {
+            SingleTransactionKind::Pay(_)
+            | SingleTransactionKind::Call(_)
+            | SingleTransactionKind::Publish(_)
+            | SingleTransactionKind::TransferObject(_)
+            | SingleTransactionKind::TransferSui(_)
+            | SingleTransactionKind::ChangeEpoch(_)
+            | SingleTransactionKind::Genesis(_)
+            | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
+            SingleTransactionKind::PaySui(p) => {
+                fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(
+                    // unwrap() is safe because coins are not empty.
+                    p.coins.first().unwrap() == gas_payment,
+                    SuiError::UnexpectedGasPaymentObject
+                );
+            }
+            SingleTransactionKind::PayAllSui(pa) => {
+                fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
+                fp_ensure!(
+                    // unwrap() is safe because coins are not empty.
+                    pa.coins.first().unwrap() == gas_payment,
+                    SuiError::UnexpectedGasPaymentObject
+                );
+            }
+        };
+        Ok(())
+    }
+
+    fn is_blocked_move_function(&self) -> bool {
+        match self {
+            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
+                call.package,
+                call.module.as_str(),
+                call.function.as_str(),
+            )),
+            _ => false,
+        }
+    }
 }
 
 impl Display for SingleTransactionKind {
@@ -465,7 +558,7 @@ impl Display for SingleTransactionKind {
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                writeln!(writer, "Object Digest : {}", digest)?;
             }
             Self::TransferSui(t) => {
                 writeln!(writer, "Transaction Kind : Transfer SUI")?;
@@ -482,7 +575,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -499,7 +592,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipients:")?;
                 for recipient in &p.recipients {
@@ -516,7 +609,7 @@ impl Display for SingleTransactionKind {
                 for (object_id, seq, digest) in &p.coins {
                     writeln!(writer, "Object ID : {}", &object_id)?;
                     writeln!(writer, "Sequence Number : {:?}", seq)?;
-                    writeln!(writer, "Object Digest : {}", Hex::encode(digest.0))?;
+                    writeln!(writer, "Object Digest : {}", digest)?;
                 }
                 writeln!(writer, "Recipient:")?;
                 writeln!(writer, "{}", &p.recipient)?;
@@ -533,14 +626,19 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind: Epoch Change")?;
-                writeln!(writer, "New epoch ID: {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
-                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
+                writeln!(writer, "Transaction Kind : Epoch Change")?;
+                writeln!(writer, "New epoch ID : {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind: Genesis")?;
+                writeln!(writer, "Transaction Kind : Genesis")?;
+            }
+            Self::ConsensusCommitPrologue(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
             }
         }
         write!(f, "{}", writer)
@@ -611,8 +709,11 @@ impl TransactionKind {
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
-            TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
-                | TransactionKind::Single(SingleTransactionKind::Genesis(_))
+            TransactionKind::Single(
+                SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_)
+            )
         )
     }
 
@@ -628,17 +729,6 @@ impl TransactionKind {
             self,
             TransactionKind::Single(SingleTransactionKind::Genesis(_))
         )
-    }
-
-    fn is_blocked_move_function(&self) -> bool {
-        self.single_transactions().any(|tx| match tx {
-            SingleTransactionKind::Call(call) => BLOCKED_MOVE_FUNCTIONS.contains(&(
-                call.package,
-                call.module.as_str(),
-                call.function.as_str(),
-            )),
-            _ => false,
-        })
     }
 }
 
@@ -965,10 +1055,6 @@ impl TransactionData {
     }
 
     pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
-        fp_ensure!(
-            !kind.is_blocked_move_function(),
-            SuiError::BlockedMoveFunction
-        );
         match kind {
             TransactionKind::Batch(b) => {
                 fp_ensure!(
@@ -987,7 +1073,8 @@ impl TransactionData {
                     | SingleTransactionKind::PayAllSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_) => false,
+                    | SingleTransactionKind::Publish(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_) => false,
                 });
                 fp_ensure!(
                     valid,
@@ -997,32 +1084,11 @@ impl TransactionData {
                             .to_string()
                     }
                 );
+                for s in b {
+                    s.validity_check(gas_payment)?
+                }
             }
-            TransactionKind::Single(s) => match s {
-                SingleTransactionKind::Pay(_)
-                | SingleTransactionKind::Call(_)
-                | SingleTransactionKind::Publish(_)
-                | SingleTransactionKind::TransferObject(_)
-                | SingleTransactionKind::TransferSui(_)
-                | SingleTransactionKind::ChangeEpoch(_)
-                | SingleTransactionKind::Genesis(_) => (),
-                SingleTransactionKind::PaySui(p) => {
-                    fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
-                    fp_ensure!(
-                        // unwrap() is safe because coins are not empty.
-                        p.coins.first().unwrap() == gas_payment,
-                        SuiError::UnexpectedGasPaymentObject
-                    );
-                }
-                SingleTransactionKind::PayAllSui(pa) => {
-                    fp_ensure!(!pa.coins.is_empty(), SuiError::EmptyInputCoins);
-                    fp_ensure!(
-                        // unwrap() is safe because coins are not empty.
-                        pa.coins.first().unwrap() == gas_payment,
-                        SuiError::UnexpectedGasPaymentObject
-                    );
-                }
-            },
+            TransactionKind::Single(s) => s.validity_check(gas_payment)?,
         }
         Ok(())
     }
@@ -1107,7 +1173,7 @@ impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
         intent: Intent,
-        signer: &dyn signature::Signer<Signature>,
+        signer: &dyn Signer<Signature>,
     ) -> Self {
         let data1 = data.clone();
         let intent1 = intent.clone();
@@ -1132,6 +1198,7 @@ impl Transaction {
 impl VerifiedTransaction {
     pub fn new_change_epoch(
         next_epoch: EpochId,
+        protocol_version: ProtocolVersion,
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
@@ -1139,6 +1206,7 @@ impl VerifiedTransaction {
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
+            protocol_version,
             storage_charge,
             computation_charge,
             storage_rebate,
@@ -1152,6 +1220,14 @@ impl VerifiedTransaction {
         GenesisTransaction { objects }
             .pipe(SingleTransactionKind::Genesis)
             .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_consensus_commit_prologue(checkpoint_start_timestamp_ms: u64) -> Self {
+        ConsensusCommitPrologue {
+            checkpoint_start_timestamp_ms,
+        }
+        .pipe(SingleTransactionKind::ConsensusCommitPrologue)
+        .pipe(Self::new_system_transaction)
     }
 
     fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
@@ -1182,7 +1258,7 @@ impl VerifiedSignedTransaction {
         epoch: EpochId,
         transaction: VerifiedTransaction,
         authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
+        secret: &dyn Signer<AuthoritySignature>,
     ) -> Self {
         Self::new_from_verified(SignedTransaction::new(
             epoch,
@@ -1208,28 +1284,14 @@ pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStron
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct AccountInfoRequest {
-    pub account: SuiAddress,
-}
-
-impl From<SuiAddress> for AccountInfoRequest {
-    fn from(account: SuiAddress) -> Self {
-        AccountInfoRequest { account }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
-    /// Request the latest object state, if a format option is provided,
-    /// return the layout of the object in the given format.
-    LatestObjectInfo(Option<ObjectFormatOptions>),
-    /// Request the object state at a specific version
-    PastObjectInfo(SequenceNumber),
-    /// Similar to PastObjectInfo, except that it will also return the object content.
-    /// This is used only for debugging purpose and will not work in the long run when
-    /// we stop storing all historic versions of every object.
+    /// Request the latest object state.
+    LatestObjectInfo,
+    /// Request a specific version of the object.
+    /// This is used only for debugging purpose and will not work as a generic solution
+    /// since we don't keep around all historic object versions.
     /// No production code should depend on this kind.
-    PastObjectInfoDebug(SequenceNumber, Option<ObjectFormatOptions>),
+    PastObjectInfoDebug(SequenceNumber),
 }
 
 /// A request for information about an object and optionally its
@@ -1238,15 +1300,22 @@ pub enum ObjectInfoRequestKind {
 pub struct ObjectInfoRequest {
     /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
+    /// if a format option is provided, return the layout of the object in the given format.
+    pub object_format_options: Option<ObjectFormatOptions>,
     /// The type of request, either latest object info or the past.
     pub request_kind: ObjectInfoRequestKind,
 }
 
 impl ObjectInfoRequest {
-    pub fn past_object_info_request(object_id: ObjectID, version: SequenceNumber) -> Self {
+    pub fn past_object_info_debug_request(
+        object_id: ObjectID,
+        version: SequenceNumber,
+        layout: Option<ObjectFormatOptions>,
+    ) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_kind: ObjectInfoRequestKind::PastObjectInfo(version),
+            object_format_options: layout,
+            request_kind: ObjectInfoRequestKind::PastObjectInfoDebug(version),
         }
     }
 
@@ -1256,124 +1325,66 @@ impl ObjectInfoRequest {
     ) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(layout),
+            object_format_options: layout,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct AccountInfoResponse {
-    pub object_ids: Vec<ObjectRef>,
-    pub owner: SuiAddress,
-}
-
+/// This message provides information about the latest object and its lock.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectResponse<T = SignedTransaction> {
+pub struct ObjectInfoResponse {
     /// Value of the requested object in this authority
     pub object: Object,
-    /// Transaction the object is locked on in this authority.
-    /// None if the object is not currently locked by this authority.
-    pub lock: Option<T>,
     /// Schema of the Move value inside this object.
     /// None if the object is a Move package, or the request did not ask for the layout
     pub layout: Option<MoveStructLayout>,
+    /// Transaction the object is locked on in this authority.
+    /// None if the object is not currently locked by this authority.
+    /// This should be only used for debugging purpose, such as from sui-tool. No prod clients should
+    /// rely on it.
+    pub lock_for_debugging: Option<SignedTransaction>,
 }
 
-impl From<ObjectResponse<VerifiedSignedTransaction>> for ObjectResponse {
-    fn from(o: ObjectResponse<VerifiedSignedTransaction>) -> Self {
-        let ObjectResponse {
-            object,
-            lock,
-            layout,
-        } = o;
-
-        Self {
-            object,
-            lock: lock.map(|l| l.into()),
-            layout,
-        }
-    }
+/// Verified version of `ObjectInfoResponse`. `layout` and `lock_for_debugging` are skipped because they
+/// are not needed and we don't want to verify them.
+#[derive(Debug, Clone)]
+pub struct VerifiedObjectInfoResponse {
+    /// Value of the requested object in this authority
+    pub object: Object,
 }
 
-/// This message provides information about the latest object and its lock
-/// as well as the parent certificate of the object at a specific version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
-    /// The certificate that created or mutated the object at a given version.
-    /// If no parent certificate was requested the latest certificate concerning
-    /// this object is sent. If the parent was requested and not found a error
-    /// (ParentNotfound or CertificateNotfound) will be returned.
-    pub parent_certificate: Option<CertT>,
-    /// The full reference created by the above certificate
-    pub requested_object_reference: Option<ObjectRef>,
-
-    /// The object and its current lock, returned only if we are requesting
-    /// the latest state of an object.
-    /// If the object does not exist this is also None.
-    pub object_and_lock: Option<ObjectResponse<TxnT>>,
-}
-
-pub type VerifiedObjectInfoResponse =
-    ObjectInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
-
-impl ObjectInfoResponse {
-    pub fn object(&self) -> Option<&Object> {
-        match &self.object_and_lock {
-            Some(ObjectResponse { object, .. }) => Some(object),
-            _ => None,
-        }
-    }
-}
-
-impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
-    fn from(o: VerifiedObjectInfoResponse) -> Self {
-        let ObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
-        } = o;
-        Self {
-            parent_certificate: parent_certificate.map(|p| p.into()),
-            requested_object_reference,
-            object_and_lock: object_and_lock.map(|o| o.into()),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionInfoRequest {
     pub transaction_digest: TransactionDigest,
 }
 
-impl From<TransactionDigest> for TransactionInfoRequest {
-    fn from(transaction_digest: TransactionDigest) -> Self {
-        TransactionInfoRequest { transaction_digest }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleCertificateResponse {
-    pub signed_effects: SignedTransactionEffects,
-}
-
-#[derive(Clone, Debug)]
-pub struct VerifiedHandleCertificateResponse {
-    pub signed_effects: VerifiedSignedTransactionEffects,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfoResponse<
+pub enum TransactionInfoResponse<
     TxnT = SignedTransaction,
     CertT = CertifiedTransaction,
-    EffectsT = SignedTransactionEffects,
+    EfxT = SignedTransactionEffects,
 > {
-    // The signed transaction response to handle_transaction
-    pub signed_transaction: Option<TxnT>,
-    // The certificate in case one is available
-    pub certified_transaction: Option<CertT>,
-    // The effects resulting from a successful execution should
-    // contain ObjectRef created, mutated, deleted and events.
-    pub signed_effects: Option<EffectsT>,
+    Signed(TxnT),
+    // TODO: Eventually support a mode for finalized transactions, where we include raw effects
+    // and the finalized epoch/checkpoint number.
+    // We also shouldn't return the cert in the Executed case, but currently the client is expecting it.
+    Executed(CertT, EfxT),
+}
+
+impl PartialEq for TransactionInfoResponse {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Signed(s1) => match other {
+                Self::Signed(s2) => s1.digest() == s2.digest(),
+                _ => false,
+            },
+            Self::Executed(c1, e1) => match other {
+                Self::Executed(c2, e2) => c1.digest() == c2.digest() && e1.digest() == e2.digest(),
+                _ => false,
+            },
+        }
+    }
 }
 
 pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
@@ -1382,23 +1393,42 @@ pub type VerifiedTransactionInfoResponse = TransactionInfoResponse<
     VerifiedSignedTransactionEffects,
 >;
 
-impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
-    fn from(v: VerifiedTransactionInfoResponse) -> Self {
-        let VerifiedTransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
-        } = v;
-
-        let certified_transaction = certified_transaction.map(|c| c.into_inner());
-        let signed_transaction = signed_transaction.map(|c| c.into_inner());
-        let signed_effects = signed_effects.map(|s| s.into_inner());
-        TransactionInfoResponse {
-            signed_transaction,
-            certified_transaction,
-            signed_effects,
+impl<TxnT, CertT, EfxT> TransactionInfoResponse<TxnT, CertT, EfxT> {
+    pub fn into_signed_for_testing(self) -> TxnT {
+        match self {
+            Self::Signed(s) => s,
+            _ => unreachable!("Incorrect response type"),
         }
     }
+
+    pub fn into_executed_for_testing(self) -> (CertT, EfxT) {
+        match self {
+            Self::Executed(c, e) => (c, e),
+            _ => unreachable!("Incorrect response type"),
+        }
+    }
+}
+
+impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
+    fn from(other: VerifiedTransactionInfoResponse) -> Self {
+        match other {
+            VerifiedTransactionInfoResponse::Signed(s) => Self::Signed(s.into_inner()),
+            VerifiedTransactionInfoResponse::Executed(c, e) => {
+                Self::Executed(c.into_inner(), e.into_inner())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponse {
+    pub signed_effects: SignedTransactionEffects,
+    // TODO: Add a case for finalized transaction.
+}
+
+#[derive(Clone, Debug)]
+pub struct VerifiedHandleCertificateResponse {
+    pub signed_effects: VerifiedSignedTransactionEffects,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -1438,7 +1468,6 @@ pub enum ExecutionFailureStatus {
     InsufficientGas,
     InvalidGasObject,
     InvalidTransactionUpdate,
-    ModuleNotFound,
     FunctionNotFound,
     InvariantViolation,
     MoveObjectTooBig {
@@ -1548,7 +1577,6 @@ pub struct EntryTypeArgumentError {
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
 pub enum EntryTypeArgumentErrorKind {
-    ModuleNotFound,
     TypeNotFound,
     ArityMismatch,
     ConstraintNotSatisfied,
@@ -1624,7 +1652,6 @@ impl Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidTransactionUpdate => {
                 write!(f, "Invalid Transaction Update.")
             }
-            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
             ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => write!(f, "Move object with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => write!(f, "Move package with size {object_size} is larger than the maximum object size {max_object_size}"),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
@@ -1823,10 +1850,6 @@ impl Display for EntryTypeArgumentError {
 impl Display for EntryTypeArgumentErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            EntryTypeArgumentErrorKind::ModuleNotFound => write!(
-                f,
-                "A package (or module) in the type argument was not found"
-            ),
             EntryTypeArgumentErrorKind::TypeNotFound => {
                 write!(f, "A type was not found in the module specified",)
             }
@@ -2035,7 +2058,7 @@ impl Message for TransactionEffects {
     type DigestType = TransactionEffectsDigest;
 
     fn digest(&self) -> Self::DigestType {
-        TransactionEffectsDigest(sha3_hash(self))
+        TransactionEffectsDigest::new(sha3_hash(self))
     }
 
     fn verify(&self) -> SuiResult {
@@ -2418,6 +2441,35 @@ pub struct ExecuteTransactionRequest {
     pub request_type: ExecuteTransactionRequestType,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EffectsFinalityInfo {
+    Certified(AuthorityStrongQuorumSignInfo),
+    Checkpointed(EpochId, CheckpointSequenceNumber),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FinalizedEffects {
+    pub effects: TransactionEffects,
+    pub finality_info: EffectsFinalityInfo,
+}
+
+impl FinalizedEffects {
+    pub fn new_from_effects_cert(effects_cert: CertifiedTransactionEffects) -> Self {
+        let (data, sig) = effects_cert.into_data_and_sig();
+        Self {
+            effects: data,
+            finality_info: EffectsFinalityInfo::Certified(sig),
+        }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        match &self.finality_info {
+            EffectsFinalityInfo::Certified(cert) => cert.epoch,
+            EffectsFinalityInfo::Checkpointed(epoch, _) => *epoch,
+        }
+    }
+}
+
 /// When requested to execute a transaction with WaitForLocalExecution,
 /// TransactionOrchestrator attempts to execute this transaction locally
 /// after it is finalized. This value represents whether the transaction
@@ -2428,8 +2480,8 @@ pub type IsTransactionExecutedLocally = bool;
 pub enum ExecuteTransactionResponse {
     EffectsCert(
         Box<(
-            CertifiedTransaction,
-            CertifiedTransactionEffects,
+            Option<CertifiedTransaction>,
+            FinalizedEffects,
             IsTransactionExecutedLocally,
         )>,
     ),
@@ -2454,7 +2506,8 @@ pub struct CommitteeInfoRequest {
 #[derive(Serialize, Deserialize, Clone, schemars::JsonSchema, Debug)]
 pub struct CommitteeInfoResponse {
     pub epoch: EpochId,
-    pub committee_info: Option<Vec<(AuthorityName, StakeUnit)>>,
+    pub protocol_version: ProtocolVersion,
+    pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.
 }
@@ -2470,6 +2523,7 @@ impl CommitteeInfoResponse {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitteeInfo {
     pub epoch: EpochId,
+    pub protocol_version: ProtocolVersion,
     pub committee_info: Vec<(AuthorityName, StakeUnit)>,
     // TODO: We could also return the certified checkpoint that contains this committee.
     // This would allows a client to verify the authenticity of the committee.

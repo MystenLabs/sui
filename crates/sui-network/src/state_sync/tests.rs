@@ -120,7 +120,7 @@ async fn server_get_checkpoint() {
     // Requests for checkpoints that aren't in the server's store
     let requests = [
         GetCheckpointSummaryRequest::BySequenceNumber(9),
-        GetCheckpointSummaryRequest::ByDigest(CheckpointDigest([10; 32])),
+        GetCheckpointSummaryRequest::ByDigest(CheckpointDigest::new([10; 32])),
     ];
     for request in requests {
         let response = server

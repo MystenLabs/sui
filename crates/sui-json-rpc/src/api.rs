@@ -15,8 +15,8 @@ use sui_json_rpc_types::{
     SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct, SuiObjectInfo, SuiTBlsSignObjectCommitmentType,
     SuiTBlsSignRandomnessObjectResponse, SuiTransactionAuthSignersResponse,
-    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionFilter, SuiTransactionResponse,
-    SuiTypeTag, TransactionBytes, TransactionsPage,
+    SuiTransactionBuilderMode, SuiTransactionEffects, SuiTransactionResponse, SuiTypeTag,
+    TransactionBytes, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
@@ -116,14 +116,6 @@ pub trait RpcReadApi {
         address: SuiAddress,
     ) -> RpcResult<Vec<SuiObjectInfo>>;
 
-    /// Return the list of objects owned by an object.
-    #[method(name = "getObjectsOwnedByObject")]
-    async fn get_objects_owned_by_object(
-        &self,
-        /// the ID of the owner object
-        object_id: ObjectID,
-    ) -> RpcResult<Vec<SuiObjectInfo>>;
-
     /// Return the list of dynamic field objects owned by an object.
     #[method(name = "getDynamicFields")]
     async fn get_dynamic_fields(
@@ -188,7 +180,7 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
-    /// Runs the transaction in dev-inpsect mode. Which allows for nearly any
+    /// Runs the transaction in dev-inspect mode. Which allows for nearly any
     /// transaction (or Move call) with any arguments. Detailed results are
     /// provided, including both the transaction effects and any return values.
     #[method(name = "devInspectTransaction")]
@@ -607,18 +599,6 @@ pub trait RpcBcsApi {
     ) -> RpcResult<GetRawObjectDataResponse>;
 }
 
-#[open_rpc(namespace = "sui", tag = "Transaction Subscription")]
-#[rpc(server, client, namespace = "sui")]
-pub trait TransactionStreamingApi {
-    /// Subscribe to a stream of Sui event
-    #[subscription(name = "subscribeTransaction", item = SuiTransactionResponse)]
-    fn subscribe_transaction(
-        &self,
-        /// the filter criteria of the transaction stream.
-        filter: SuiTransactionFilter,
-    );
-}
-
 #[open_rpc(namespace = "sui", tag = "Event Subscription")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventStreamingApi {
@@ -653,6 +633,8 @@ pub trait EventReadApi {
 #[rpc(server, client, namespace = "sui")]
 pub trait ThresholdBlsApi {
     /// Sign an a Randomness object with threshold BLS.
+    /// **Warning**: This API is a work in progress and uses insecure randomness. Please use it for
+    /// testing purposes only.
     #[method(name = "tblsSignRandomnessObject")]
     async fn tbls_sign_randomness_object(
         &self,

@@ -29,7 +29,7 @@ This section aggregates links to external resources on the Move programming lang
 
 Currently, the main player on the blockchain languages scene is Solidity. As one of the first blockchain languages, Solidity was designed to implement basic programming language concepts using well known data types (e.g. byte array, string) and data structures (such as hashmaps) with the ability to build custom abstractions using a well-known base.
 
-However, as blockchain technology developed it became clear that the main purpose of blockchain languages is operations with digital assets, and the main quality of such languages is security and verifiability (which is an additional layer of security). 
+However, as blockchain technology developed it became clear that the main purpose of blockchain languages is operating on digital assets, and the main quality of such languages is security and verifiability (which is an additional layer of security). 
 
 Move was specifically designed to address both problems: representation of digital assets and safe operations over them. To provide additional protection, it has been co-developed along with the [Move Prover](https://arxiv.org/abs/2110.08362) verification tool. This allows Move developers to write formal specifications for the key correctness properties of their application, then use the prover to check that these properties will hold for all possible transactions and inputs.
 

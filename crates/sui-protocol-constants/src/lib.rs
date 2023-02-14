@@ -3,6 +3,10 @@
 
 // Constants that change the behavior of the protocol
 
+/// The minimum and maximum protocol versions supported by this build.
+pub const MIN_PROTOCOL_VERSION: u64 = 1;
+pub const MAX_PROTOCOL_VERSION: u64 = 1;
+
 // ==== Move VM, Move bytecode verifier, and execution limits ===
 
 /// Maximum Move bytecode version the VM understands. All older versions are accepted.
@@ -51,10 +55,17 @@ pub const MAX_FIELDS_IN_STRUCT: usize = 32;
 /// Maximum dependency depth. Enforced by the Move linker when loading dependent modules.
 pub const MAX_DEPENDENCY_DEPTH: usize = 100;
 
-/// Maximum number of events that a single Move function can emit. Enforced by the Sui adapter during execution.
-// TODO: is this per Move function, or per transaction? And if per-function, can't I get around the limit by calling
-// a function that emits 255 events in a loop?
+/// Maximum number of Move events that a single transaction can emit. Enforced by the VM during execution.
 pub const MAX_NUM_EVENT_EMIT: u64 = 256;
+
+/// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
+pub const MAX_NUM_NEW_MOVE_OBJECT_IDS: usize = 2048;
+
+/// Maximum number of IDs that a single transaction can delete. Enforced by the VM during execution.
+pub const MAX_NUM_DELETED_MOVE_OBJECT_IDS: usize = 2048;
+
+/// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
+pub const MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS: usize = 2048;
 
 // === Execution gas costs ====
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
@@ -123,3 +134,10 @@ pub const STAKE_SUBSIDY_RATE: u64 = 1;
 
 /// Unit gas price, Mist per internal gas unit.
 pub const STORAGE_GAS_PRICE: u64 = 1;
+
+/// === Core Protocol ===
+
+/// Max number of transactions per checkpoint.
+/// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
+pub const MAX_TRANSACTIONS_PER_CHECKPOINT: usize = 1000;
+pub const MAX_TRANSACTIONS_PER_CHECKPOINT_FOR_TESTING: usize = 2;

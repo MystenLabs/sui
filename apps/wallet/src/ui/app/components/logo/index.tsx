@@ -3,9 +3,9 @@
 
 import cl from 'classnames';
 
-import { API_ENV } from '../../ApiProvider';
 import { Text } from '../../shared/text';
 import Icon, { SuiIcons } from '_components/icon';
+import { API_ENV } from '_src/shared/api-env';
 
 const networkNames: Record<API_ENV, string> = {
     [API_ENV.local]: 'Local',
@@ -25,7 +25,7 @@ const Logo = ({ networkName }: LogoProps) => {
             <div className={cl('flex flex-col', { 'mb-2': !!networkName })}>
                 <Icon icon={SuiIcons.SuiLogoTxt} />
                 {networkName && (
-                    <div className="-mt-2 ml-0.5">
+                    <div className="-mt-2 ml-0.5 whitespace-nowrap">
                         <Text variant="subtitleSmallExtra">
                             {networkNames[networkName]}
                         </Text>

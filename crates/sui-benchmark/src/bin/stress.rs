@@ -6,11 +6,11 @@ use clap::*;
 use prometheus::Registry;
 
 use std::sync::Arc;
-
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::drivers::BenchmarkCmp;
 use sui_benchmark::drivers::BenchmarkStats;
+use sui_protocol_constants::{MAX_NUM_NEW_MOVE_OBJECT_IDS, MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS};
 
 use sui_node::metrics;
 
@@ -50,6 +50,15 @@ use tokio::sync::Barrier;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
+
+    if (opts.gas_request_chunk_size > MAX_NUM_NEW_MOVE_OBJECT_IDS as u64)
+        || (opts.gas_request_chunk_size > MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS as u64)
+    {
+        eprintln!(
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {MAX_NUM_NEW_MOVE_OBJECT_IDS} and the maximum number of transferred IDs {MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS}",
+        );
+    }
+
     let mut config = telemetry_subscribers::TelemetryConfig::new();
     config.log_string = Some("warn".to_string());
     if !opts.log_path.is_empty() {

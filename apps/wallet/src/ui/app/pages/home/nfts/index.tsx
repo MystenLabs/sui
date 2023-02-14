@@ -17,8 +17,8 @@ function NftsPage() {
     const isNftsFound = nfts.length > 0;
     return (
         <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
+            <PageTitle title="NFTs" className="justify-center" />
             <Loading loading={loading}>
-                <PageTitle title="NFTs" className="justify-center" />
                 {showError && error ? (
                     <Alert>
                         <div>

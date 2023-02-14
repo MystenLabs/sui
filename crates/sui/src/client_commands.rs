@@ -134,10 +134,6 @@ pub enum SuiClientCommands {
         #[clap(long)]
         gas_budget: u64,
 
-        /// (Deprecated) This flag is deprecated, dependency verification is on by default.
-        #[clap(long)]
-        verify_dependencies: bool,
-
         /// Publish the package without checking whether compiling dependencies from source results
         /// in bytecode matching the dependencies found on-chain.
         #[clap(long)]
@@ -467,7 +463,6 @@ impl SuiClientCommands {
                 gas,
                 build_config,
                 gas_budget,
-                verify_dependencies,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
             } => {
@@ -499,16 +494,6 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let compiled_modules =
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
-
-                if verify_dependencies {
-                    eprintln!(
-                        "{}",
-                        "Dependency verification is on by default. --verify-dependencies is \
-                         deprecated and will be removed in the next release."
-                            .bold()
-                            .yellow(),
-                    );
-                }
 
                 if !skip_dependency_verification {
                     BytecodeSourceVerifier::new(client.read_api(), false)
@@ -778,9 +763,10 @@ impl SuiClientCommands {
                 SuiClientCommandResult::PayAllSui(cert, effects)
             }
 
-            SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.keystore.addresses())
-            }
+            SuiClientCommands::Addresses => SuiClientCommandResult::Addresses(
+                context.config.keystore.addresses(),
+                context.active_address().ok(),
+            ),
 
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -1270,10 +1256,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::PayAllSui(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            SuiClientCommandResult::Addresses(addresses) => {
+            SuiClientCommandResult::Addresses(addresses, active_address) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
-                    writeln!(writer, "{}", address)?;
+                    if *active_address == Some(*address) {
+                        writeln!(writer, "{} <=", address)?;
+                    } else {
+                        writeln!(writer, "{}", address)?;
+                    }
                 }
             }
             SuiClientCommandResult::Objects(object_refs) => {
@@ -1567,7 +1557,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiCertifiedTransaction, SuiTransactionEffects),
     PaySui(SuiCertifiedTransaction, SuiTransactionEffects),
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
-    Addresses(Vec<SuiAddress>),
+    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,

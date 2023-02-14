@@ -5,7 +5,8 @@
 module sui::ecdsa_tests {
     use sui::ecdsa_k1;
     use std::vector;
-    
+    use sui::hash;
+
     #[test]
     fun test_ecrecover_pubkey() {
         // test case generated against https://docs.rs/secp256k1/latest/secp256k1/
@@ -47,32 +48,46 @@ module sui::ecdsa_tests {
     }
 
     #[test]
-    fun test_secp256k1_valid_sig() {
+    fun test_secp256k1_verify_fails_with_recoverable_sig() {
         let msg = x"57caa176af1ac0433c5df30e8dabcd2ec1af1e92a26eced5f719b88458777cd6";
         let pk = x"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
         let sig = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd601";
+        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg);
+        assert!(verify == false, 0);
+        
+        let sig_1 = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd600";
+        let verify_1 = ecdsa_k1::secp256k1_verify(&sig_1, &pk, &msg);
+        assert!(verify_1 == false, 0);
+    }
 
+    #[test]
+    fun test_secp256k1_verify_success_with_nonrecoverable_sig() {
+        let msg = x"57caa176af1ac0433c5df30e8dabcd2ec1af1e92a26eced5f719b88458777cd6";
+        let pk = x"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let sig = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd6";
         let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg);
         assert!(verify == true, 0)
     }
 
     #[test]
-    fun test_secp256k1_invalid_sig() {
+    fun test_secp256k1_verify_recoverable_sig_success() {
         let msg = x"57caa176af1ac0433c5df30e8dabcd2ec1af1e92a26eced5f719b88458777cd6";
         let pk = x"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-        // sig in the form of (r, s, 0) instead of (r, s, 1)
-        let sig = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd600";
-
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg);
-        assert!(verify == false, 0)
+        let sig = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd601";
+        let verify = ecdsa_k1::secp256k1_verify_recoverable(&sig, &pk, &msg);
+        assert!(verify == true, 0);
+        
+        let sig_1 = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd600";
+        let verify_1 = ecdsa_k1::secp256k1_verify_recoverable(&sig_1, &pk, &msg);
+        assert!(verify_1 == false, 0);
     }
 
     #[test]
-    fun test_secp256k1_invalid_sig_length() {
+    fun test_secp256k1_verify_recoverable_sig_fails() {
         let msg = x"57caa176af1ac0433c5df30e8dabcd2ec1af1e92a26eced5f719b88458777cd6";
         let pk = x"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
         let sig = x"9c7a72ff1e7db1646b9f9443cb1a3563aa3a6344e4e513efb96258c7676ac4895953629d409a832472b710a028285dfec4733a2c1bb0a2749e465a18292b8bd6";
-        let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg);
+        let verify = ecdsa_k1::secp256k1_verify_recoverable(&sig, &pk, &msg);
         assert!(verify == false, 0)
     }
 
@@ -121,14 +136,6 @@ module sui::ecdsa_tests {
         assert!(addr == addr1, 0);
     }
 
-    #[test]
-    fun test_keccak256_hash() {
-        let msg = b"hello world!";
-        let hashed_msg_bytes = x"57caa176af1ac0433c5df30e8dabcd2ec1af1e92a26eced5f719b88458777cd6";
-        let hashed_msg = ecdsa_k1::keccak256(&msg);
-        assert!(hashed_msg == hashed_msg_bytes, 0);
-    }
-
     // Helper Move function to recover signature directly to an ETH address.
     fun ecrecover_eth_address(sig: vector<u8>, hashed_msg: vector<u8>): vector<u8> {
         // Normalize the last byte of the signature to be 0 or 1.
@@ -154,7 +161,7 @@ module sui::ecdsa_tests {
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
-        let hashed = ecdsa_k1::keccak256(&uncompressed_64);
+        let hashed = hash::keccak256(&uncompressed_64);
         let addr = vector::empty<u8>();
         let i = 12;
         while (i < 32) {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use crate::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
+use crate::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use bytes::Bytes;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
@@ -118,7 +118,9 @@ async fn test_narwhal_manager() {
             registry_service,
         };
 
-        let narwhal_manager = NarwhalManager::new(narwhal_config);
+        let metrics = NarwhalManagerMetrics::new(&Registry::new());
+
+        let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
         // start narwhal
         let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
