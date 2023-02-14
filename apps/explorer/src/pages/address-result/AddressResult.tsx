@@ -28,11 +28,11 @@ function AddressResult() {
     const { id: addressId } = useParams();
 
     return (
-        <div className="space-y-12 xl:space-y-0">
+        <div className="space-y-12 xl:space-y-12">
             <PageHeader type="Address" title={addressId!} />
 
             <div>
-                <div className="border-b border-gray-45 pb-5 xl:mt-12">
+                <div className="border-b border-gray-45 pb-5 md:mt-12">
                     <Heading color="gray-90" variant="heading4/semibold">
                         Owned Objects
                     </Heading>

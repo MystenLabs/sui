@@ -80,7 +80,7 @@ function SingleCoinView({
         <Disclosure>
             <Disclosure.Button
                 data-testid="ownedcoinlabel"
-                className="grid w-full grid-cols-3 items-center justify-between rounded-lg py-2 text-left"
+                className="grid w-full grid-cols-3 items-center justify-between rounded-none py-2 text-left hover:bg-sui-light"
             >
                 <div className="flex">
                     <ClosedIcon className="mr-1.5 fill-gray-60 ui-open:rotate-90 ui-open:transform" />
