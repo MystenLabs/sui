@@ -6,10 +6,10 @@ import AccountAddress from '_components/account-address';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { Text } from '_src/ui/app/shared/text';
 
-export function AccountSettings() {
+export function AccountsSettings() {
     const backUrl = useNextMenuUrl(true, '/');
     return (
-        <MenuLayout title="Account" back={backUrl}>
+        <MenuLayout title="Accounts" back={backUrl}>
             <div className="flex flex-col gap-3">
                 <Text color="gray-90" weight="medium" variant="p1">
                     Address
