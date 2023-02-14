@@ -56,7 +56,7 @@ const router = createBrowserRouter([
         element: <Migrate />,
       },
       {
-        path: "Claim",
+        path: "claim",
         element: <Claim />,
       },
       {
