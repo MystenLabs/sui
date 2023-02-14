@@ -148,21 +148,12 @@ where
     fn get_timer_guards(&self, tx: &VerifiedTransaction) -> Vec<HistogramTimerGuard> {
         let mut guards = vec![];
         if tx.contains_shared_object() {
-            if tx.touches_system_object() {
-                guards.push(self.metrics.request_latency_system_obj.start_timer());
-                guards.push(
-                    self.metrics
-                        .wait_for_finality_latency_system_obj
-                        .start_timer(),
-                );
-            } else {
-                guards.push(self.metrics.request_latency_shared_obj.start_timer());
-                guards.push(
-                    self.metrics
-                        .wait_for_finality_latency_shared_obj
-                        .start_timer(),
-                );
-            }
+            guards.push(self.metrics.request_latency_shared_obj.start_timer());
+            guards.push(
+                self.metrics
+                    .wait_for_finality_latency_shared_obj
+                    .start_timer(),
+            );
         } else {
             guards.push(self.metrics.request_latency_single_writer.start_timer());
             guards.push(
@@ -301,11 +292,7 @@ where
             });
 
         let _guard = if tx_cert.contains_shared_object() {
-            if tx_cert.touches_system_object() {
-                metrics.local_execution_latency_system_obj.start_timer()
-            } else {
-                metrics.local_execution_latency_shared_obj.start_timer()
-            }
+            metrics.local_execution_latency_shared_obj.start_timer()
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
         };
@@ -413,19 +400,11 @@ where
         transaction: &VerifiedTransaction,
     ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
         let (in_flight, good_response) = if transaction.contains_shared_object() {
-            if transaction.touches_system_object() {
-                self.metrics.total_req_received_system_object.inc();
-                (
-                    self.metrics.req_in_flight_system_object.clone(),
-                    &self.metrics.good_response_system_object,
-                )
-            } else {
-                self.metrics.total_req_received_shared_object.inc();
-                (
-                    self.metrics.req_in_flight_shared_object.clone(),
-                    &self.metrics.good_response_shared_object,
-                )
-            }
+            self.metrics.total_req_received_shared_object.inc();
+            (
+                self.metrics.req_in_flight_shared_object.clone(),
+                &self.metrics.good_response_shared_object,
+            )
         } else {
             self.metrics.total_req_received_single_writer.inc();
             (
@@ -471,15 +450,12 @@ where
 pub struct TransactionOrchestratorMetrics {
     total_req_received_single_writer: GenericCounter<AtomicU64>,
     total_req_received_shared_object: GenericCounter<AtomicU64>,
-    total_req_received_system_object: GenericCounter<AtomicU64>,
 
     good_response_single_writer: GenericCounter<AtomicU64>,
     good_response_shared_object: GenericCounter<AtomicU64>,
-    good_response_system_object: GenericCounter<AtomicU64>,
 
     req_in_flight_single_writer: GenericGauge<AtomicI64>,
     req_in_flight_shared_object: GenericGauge<AtomicI64>,
-    req_in_flight_system_object: GenericGauge<AtomicI64>,
 
     local_execution_in_flight: GenericGauge<AtomicI64>,
     local_execution_success: GenericCounter<AtomicU64>,
@@ -488,13 +464,10 @@ pub struct TransactionOrchestratorMetrics {
 
     request_latency_single_writer: Histogram,
     request_latency_shared_obj: Histogram,
-    request_latency_system_obj: Histogram,
     wait_for_finality_latency_single_writer: Histogram,
     wait_for_finality_latency_shared_obj: Histogram,
-    wait_for_finality_latency_system_obj: Histogram,
     local_execution_latency_single_writer: Histogram,
     local_execution_latency_shared_obj: Histogram,
-    local_execution_latency_system_obj: Histogram,
 }
 
 impl TransactionOrchestratorMetrics {
@@ -511,8 +484,6 @@ impl TransactionOrchestratorMetrics {
             total_req_received.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
         let total_req_received_shared_object =
             total_req_received.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
-        let total_req_received_system_object =
-            total_req_received.with_label_values(&[TX_TYPE_SYSTEM_OBJ_TX]);
 
         let good_response = register_int_counter_vec_with_registry!(
             "tx_orchestrator_good_response",
@@ -525,7 +496,6 @@ impl TransactionOrchestratorMetrics {
         let good_response_single_writer =
             good_response.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
         let good_response_shared_object = good_response.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
-        let good_response_system_object = good_response.with_label_values(&[TX_TYPE_SYSTEM_OBJ_TX]);
 
         let req_in_flight = register_int_gauge_vec_with_registry!(
             "tx_orchestrator_req_in_flight",
@@ -538,7 +508,6 @@ impl TransactionOrchestratorMetrics {
         let req_in_flight_single_writer =
             req_in_flight.with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]);
         let req_in_flight_shared_object = req_in_flight.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]);
-        let req_in_flight_system_object = req_in_flight.with_label_values(&[TX_TYPE_SYSTEM_OBJ_TX]);
 
         let request_latency = HistogramVec::new_in_registry(
             "tx_orchestrator_request_latency",
@@ -562,13 +531,10 @@ impl TransactionOrchestratorMetrics {
         Self {
             total_req_received_single_writer,
             total_req_received_shared_object,
-            total_req_received_system_object,
             good_response_single_writer,
             good_response_shared_object,
-            good_response_system_object,
             req_in_flight_single_writer,
             req_in_flight_shared_object,
-            req_in_flight_system_object,
             local_execution_in_flight: register_int_gauge_with_registry!(
                 "tx_orchestrator_local_execution_in_flight",
                 "Number of local execution txns in flights Transaction Orchestrator handles",
@@ -596,19 +562,14 @@ impl TransactionOrchestratorMetrics {
             request_latency_single_writer: request_latency
                 .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
             request_latency_shared_obj: request_latency.with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
-            request_latency_system_obj: request_latency.with_label_values(&[TX_TYPE_SYSTEM_OBJ_TX]),
             wait_for_finality_latency_single_writer: wait_for_finality_latency
                 .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
             wait_for_finality_latency_shared_obj: wait_for_finality_latency
                 .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
-            wait_for_finality_latency_system_obj: wait_for_finality_latency
-                .with_label_values(&[TX_TYPE_SYSTEM_OBJ_TX]),
             local_execution_latency_single_writer: local_execution_latency
                 .with_label_values(&[TX_TYPE_SINGLE_WRITER_TX]),
             local_execution_latency_shared_obj: local_execution_latency
                 .with_label_values(&[TX_TYPE_SHARED_OBJ_TX]),
-            local_execution_latency_system_obj: local_execution_latency
-                .with_label_values(&[TX_TYPE_SYSTEM_OBJ_TX]),
         }
     }
 
@@ -620,4 +581,3 @@ impl TransactionOrchestratorMetrics {
 
 const TX_TYPE_SINGLE_WRITER_TX: &str = "single_writer";
 const TX_TYPE_SHARED_OBJ_TX: &str = "shared_object";
-const TX_TYPE_SYSTEM_OBJ_TX: &str = "system_object";
