@@ -357,7 +357,7 @@ function TransactionView({
         content: [
             {
                 label: 'Signature',
-                value: transaction.certificate.txSignature,
+                value: transaction.certificate.txSignatures,
                 monotypeClass: true,
             },
         ],
@@ -442,7 +442,7 @@ function TransactionView({
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasPrice = transaction.certificate.data.gasPrice || 1;
+    const gasPrice = transaction.certificate.data.gasData.gasPrice || 1;
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
@@ -568,7 +568,7 @@ function TransactionView({
                                     <ObjectLink
                                         noTruncate
                                         objectId={
-                                            transaction.certificate.data
+                                            transaction.certificate.data.gasData
                                                 .gasPayment.objectId
                                         }
                                     />
@@ -577,7 +577,7 @@ function TransactionView({
                                 <DescriptionItem title="Gas Budget">
                                     <GasAmount
                                         amount={
-                                            transaction.certificate.data
+                                            transaction.certificate.data.gasData
                                                 .gasBudget * gasPrice
                                         }
                                     />

@@ -998,7 +998,7 @@ impl AuthorityState {
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, *certificate.digest());
         let transaction_data = certificate.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
@@ -1049,7 +1049,7 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let signer = transaction.signer();
+        let signer = transaction.sender();
         let gas = transaction.gas();
         let (_inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(

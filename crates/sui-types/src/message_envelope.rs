@@ -257,6 +257,10 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
         &self.0 .0
     }
 
+    pub fn inner_mut(&mut self) -> &mut Envelope<T, S> {
+        &mut self.0 .0
+    }
+
     pub fn into_message(self) -> T {
         self.into_inner().into_data()
     }

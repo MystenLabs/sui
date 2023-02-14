@@ -94,6 +94,7 @@ describe('Transaction Serialization and deserialization', () => {
         'An NFT created by the wallet Command Line Tool',
         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
       ],
+      gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[0].objectId,
     };
@@ -137,6 +138,7 @@ describe('Transaction Serialization and deserialization', () => {
         coins[2].objectId,
         validator_address,
       ],
+      gasOwner: toolbox.address(),
       gasBudget: DEFAULT_GAS_BUDGET,
       gasPayment: coins[3].objectId,
     };

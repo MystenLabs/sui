@@ -106,6 +106,10 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
+    #[error("Required Signature from {signer} is absent.")]
+    SignerSignatureAbsent { signer: String },
+    #[error("Expect {actual} signer signatures but got {expected}.")]
+    SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Sender Signature must be verified separately from Authority Signature")]
     SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
@@ -325,6 +329,8 @@ pub enum SuiError {
         gas_budget: u128,
         gas_price: u64,
     },
+    #[error("Transaction kind does not support Sponsored Transaction")]
+    UnsupportedSponsoredTransactionKind,
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]

@@ -208,7 +208,8 @@ mod tests {
         let bogus_transaction_bytes: Vec<_> = certificates
             .into_iter()
             .map(|mut cert| {
-                cert.tx_signature.as_mut()[2] = cert.tx_signature.as_mut()[2].wrapping_add(1);
+                cert.tx_signatures[0].as_mut()[2] =
+                    cert.tx_signatures[0].as_mut()[2].wrapping_add(1);
                 bincode::serialize(&ConsensusTransaction::new_certificate_message(&name1, cert))
                     .unwrap()
             })

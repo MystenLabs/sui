@@ -1253,7 +1253,7 @@ mod tests {
             let signature = Signature::Ed25519SuiSignature(Default::default());
             state
                 .epoch_store_for_testing()
-                .test_insert_user_signature(digest, &signature);
+                .test_insert_user_signature(digest, vec![signature]);
         }
 
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);

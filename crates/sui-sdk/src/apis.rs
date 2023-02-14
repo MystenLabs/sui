@@ -472,7 +472,7 @@ impl QuorumDriver {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<TransactionExecutionResult> {
         let tx_digest = *tx.digest();
-        let (tx_bytes, signature) = tx.to_tx_bytes_and_signature();
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type =
             request_type.unwrap_or(ExecuteTransactionRequestType::WaitForLocalExecution);
         let SuiExecuteTransactionResponse {
@@ -482,7 +482,7 @@ impl QuorumDriver {
         } = TransactionExecutionApiClient::execute_transaction_serialized_sig(
             &self.api.http,
             tx_bytes,
-            signature,
+            signatures,
             request_type.clone(),
         )
         .await?;

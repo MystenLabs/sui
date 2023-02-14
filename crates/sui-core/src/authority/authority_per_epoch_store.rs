@@ -214,7 +214,7 @@ pub struct AuthorityEpochTables {
 
     /// When we see certificate through consensus for the first time, we record
     /// user signature for this transaction here. This will be included in the checkpoint later.
-    user_signatures_for_checkpoints: DBMap<TransactionDigest, Signature>,
+    user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<Signature>>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
@@ -799,7 +799,7 @@ impl AuthorityPerEpochStore {
     pub async fn user_signatures_for_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Signature>> {
+    ) -> SuiResult<Vec<Vec<Signature>>> {
         // todo - use NotifyRead::register_all might be faster
         for digest in digests {
             self.consensus_message_processed_notify(ConsensusTransactionKey::Certificate(*digest))
@@ -810,11 +810,11 @@ impl AuthorityPerEpochStore {
             .user_signatures_for_checkpoints
             .multi_get(digests)?;
         let mut result = Vec::with_capacity(digests.len());
-        for (signature, digest) in signatures.into_iter().zip(digests.iter()) {
-            let Some(signature) = signature else {
+        for (signatures, digest) in signatures.into_iter().zip(digests.iter()) {
+            let Some(signatures) = signatures else {
                 return Err(SuiError::from(format!("Can not find user signature for checkpoint for transaction {:?}", digest).as_str()));
             };
-            result.push(signature);
+            result.push(signatures);
         }
         Ok(result)
     }
@@ -1093,10 +1093,14 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn test_insert_user_signature(&self, digest: TransactionDigest, signature: &Signature) {
+    pub fn test_insert_user_signature(
+        &self,
+        digest: TransactionDigest,
+        signatures: Vec<Signature>,
+    ) {
         self.tables
             .user_signatures_for_checkpoints
-            .insert(&digest, signature)
+            .insert(&digest, &signatures)
             .unwrap();
         let key = ConsensusTransactionKey::Certificate(digest);
         self.tables
@@ -1130,7 +1134,7 @@ impl AuthorityPerEpochStore {
             .contains_key(certificate.digest())?);
         let batch = batch.insert_batch(
             &self.tables.user_signatures_for_checkpoints,
-            [(*certificate.digest(), certificate.tx_signature.clone())],
+            [(*certificate.digest(), certificate.tx_signatures.clone())],
         )?;
         self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
     }

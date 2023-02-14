@@ -11,7 +11,7 @@ use move_core_types::parser::parse_struct_tag;
 use move_core_types::value::MoveStructLayout;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiExecutionStatus, SuiMoveStruct, SuiMoveValue,
@@ -26,11 +26,12 @@ use sui_types::event::BalanceChangeType;
 use sui_types::event::Event;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverResponse,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse, GasData,
+    QuorumDriverResponse, SingleTransactionKind, TransactionData, TransactionKind, TransferObject,
 };
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::query::{EventQuery, TransactionQuery};
+use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     messages::TransactionInfoRequest,
@@ -50,6 +51,7 @@ use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
+use tracing::info;
 
 #[sim_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
@@ -97,6 +99,82 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let digest = tx_cert.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let sender = test_cluster.get_address_0();
+    let sponsor = test_cluster.get_address_1();
+    let another_addr = test_cluster.get_address_2();
+
+    let context = &mut test_cluster.wallet;
+
+    // This makes sender send one coin to sponsor.
+    // The sent coin is used as sponsor gas in the following sponsored tx.
+    let (sent_coin, sender_, receiver, _, object_ref, _) = transfer_coin(context).await.unwrap();
+    assert_eq!(sender, sender_);
+    assert_eq!(sponsor, receiver);
+    let context: &WalletContext = &test_cluster.wallet;
+    let object_ref: ObjectRef = context
+        .get_object_ref(object_ref.0)
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap()
+        .reference
+        .to_object_ref();
+    let gas_obj: ObjectRef = context
+        .get_object_ref(sent_coin)
+        .await
+        .unwrap()
+        .into_object()
+        .unwrap()
+        .reference
+        .to_object_ref();
+    info!("updated obj ref: {:?}", object_ref);
+    info!("updated gas ref: {:?}", gas_obj);
+
+    // Construct the sponsored transction
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+        recipient: another_addr,
+        object_ref,
+    }));
+    let tx_data = TransactionData::new_with_gas_data(
+        kind,
+        sender,
+        GasData {
+            gas_payment: gas_obj,
+            gas_owner: sponsor,
+            gas_price: 100,
+            gas_budget: 10000,
+        },
+    );
+
+    let tx = to_sender_signed_transaction_with_multi_signers(
+        tx_data,
+        vec![
+            context.config.keystore.get_key(&sender).unwrap(),
+            context.config.keystore.get_key(&sponsor).unwrap(),
+        ],
+    );
+
+    context.execute_transaction(tx).await.unwrap();
+
+    assert_eq!(
+        sponsor,
+        context
+            .get_object_ref(sent_coin)
+            .await
+            .unwrap()
+            .into_object()
+            .unwrap()
+            .owner
+            .get_owner_address()
+            .unwrap(),
+    );
     Ok(())
 }
 
@@ -964,10 +1042,10 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     let txns = make_transactions_with_wallet_context(context, txn_count).await;
     for txn in txns {
         let tx_digest = txn.digest();
-        let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+        let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
         let params = rpc_params![
             tx_bytes,
-            signature,
+            signatures,
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
         let response: SuiExecuteTransactionResponse = jsonrpc_client
@@ -1004,10 +1082,10 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let tx_digest = txn.digest();
 
     // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
-        signature,
+        signatures,
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client
@@ -1029,10 +1107,10 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .unwrap();
 
     // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
-    let (tx_bytes, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
-        signature,
+        signatures,
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
     let response: SuiExecuteTransactionResponse = jsonrpc_client

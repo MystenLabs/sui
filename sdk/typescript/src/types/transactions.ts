@@ -16,7 +16,7 @@ import {
   tuple,
 } from 'superstruct';
 import { SuiEvent } from './events';
-import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
+import { SuiGasData, SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 import {
   ObjectId,
   ObjectOwner,
@@ -125,10 +125,7 @@ export type SuiTransactionKind = Infer<typeof SuiTransactionKind>;
 export const SuiTransactionData = object({
   transactions: array(SuiTransactionKind),
   sender: SuiAddress,
-  gasPayment: SuiObjectRef,
-  // TODO: remove optional after 0.21.0 is released
-  gasPrice: optional(number()),
-  gasBudget: number(),
+  gasData: SuiGasData,
 });
 export type SuiTransactionData = Infer<typeof SuiTransactionData>;
 
@@ -148,7 +145,7 @@ export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 export const CertifiedTransaction = object({
   transactionDigest: TransactionDigest,
   data: SuiTransactionData,
-  txSignature: string(),
+  txSignatures: array(string()),
   authSignInfo: AuthorityQuorumSignInfo,
 });
 export type CertifiedTransaction = Infer<typeof CertifiedTransaction>;
@@ -393,8 +390,8 @@ export function getTransactionDigest(
   return effects.transactionDigest;
 }
 
-export function getTransactionSignature(tx: CertifiedTransaction): string {
-  return tx.txSignature;
+export function getTransactionSignature(tx: CertifiedTransaction): string[] {
+  return tx.txSignatures;
 }
 
 export function getTransactionAuthorityQuorumSignInfo(
@@ -418,15 +415,15 @@ export function getTransactionSender(tx: CertifiedTransaction): SuiAddress {
 export function getTransactionGasObject(
   tx: CertifiedTransaction,
 ): SuiObjectRef {
-  return tx.data.gasPayment;
+  return tx.data.gasData.gasPayment;
 }
 
 export function getTransactionGasPrice(tx: CertifiedTransaction) {
-  return tx.data.gasPrice;
+  return tx.data.gasData.gasPrice;
 }
 
 export function getTransactionGasBudget(tx: CertifiedTransaction): number {
-  return tx.data.gasBudget;
+  return tx.data.gasData.gasBudget;
 }
 
 export function getTransferObjectTransaction(

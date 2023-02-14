@@ -36,8 +36,8 @@ async fn get_gas_status(
     check_gas(
         store,
         gas_object_ref,
-        transaction.gas_budget,
-        transaction.gas_price,
+        transaction.gas_budget(),
+        transaction.gas_price(),
         &transaction.kind,
         extra_gas_object_refs,
     )
@@ -244,9 +244,15 @@ async fn check_objects(
         if transfer_object_ids.contains(&object.id()) {
             object.ensure_public_transfer_eligible()?;
         }
+        // For Gas Object, we check the object is owned by gas owner
+        let owner_address = if object.id() == transaction.gas_payment_object_ref().0 {
+            transaction.gas_owner()
+        } else {
+            transaction.sender()
+        };
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(&transaction.signer(), object_kind, &object) {
+        match check_one_object(&owner_address, object_kind, &object) {
             Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
                 errors.push(e);
@@ -270,7 +276,7 @@ async fn check_objects(
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
 fn check_one_object(
-    sender: &SuiAddress,
+    owner: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
 ) -> SuiResult {
@@ -308,7 +314,6 @@ fn check_one_object(
             );
 
             // Check the digest matches
-
             let expected_digest = object.digest();
             fp_ensure!(
                 expected_digest == object_digest,
@@ -322,12 +327,12 @@ fn check_one_object(
                 Owner::Immutable => {
                     // Nothing else to check for Immutable.
                 }
-                Owner::AddressOwner(owner) => {
-                    // Check the owner is the transaction sender.
+                Owner::AddressOwner(actual_owner) => {
+                    // Check the owner is correct.
                     fp_ensure!(
-                        sender == &owner,
+                        owner == &actual_owner,
                         SuiError::IncorrectSigner {
-                            error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object_id, owner, sender),
+                            error: format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", object_id, actual_owner, owner),
                         }
                     );
                 }

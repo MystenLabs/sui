@@ -104,7 +104,7 @@ pub async fn publish_package_with_wallet(
             .keystore
             .sign_secure(&sender, &data, Intent::default())
             .unwrap();
-        Transaction::from_data(data, Intent::default(), signature)
+        Transaction::from_data(data, Intent::default(), vec![signature])
             .verify()
             .unwrap()
     };
@@ -162,7 +162,7 @@ pub async fn submit_move_transaction(
         .sign_secure(&sender, &data, Intent::default())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), signature)
+    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
         .verify()
         .unwrap();
     let tx_digest = tx.digest();
@@ -332,7 +332,7 @@ pub async fn transfer_coin(
     let (digest, gas, gas_used) = if let SuiClientCommandResult::Transfer(_, cert, effect) = res {
         (
             cert.transaction_digest,
-            cert.data.gas_payment,
+            cert.data.gas_data.gas_payment,
             effect.gas_used.computation_cost + effect.gas_used.storage_cost
                 - effect.gas_used.storage_rebate,
         )
@@ -388,7 +388,7 @@ pub async fn delete_devnet_nft(
         .sign_secure(sender, &data, Intent::default())
         .unwrap();
 
-    let tx = Transaction::from_data(data, Intent::default(), signature)
+    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
         .verify()
         .unwrap();
     let client = context.get_client().await.unwrap();

@@ -43,15 +43,20 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
-        signature: Base64,
+        signatures: Vec<Base64>,
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse> {
         let tx_data =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
-            .map_err(|e| anyhow!(e))?;
+        let mut sigs = Vec::new();
+        for sig in signatures {
+            sigs.push(
+                crypto::Signature::from_bytes(&sig.to_vec().map_err(|e| anyhow!(e))?)
+                    .map_err(|e| anyhow!(e))?,
+            );
+        }
 
-        let txn = Transaction::from_data(tx_data, Intent::default(), signature);
+        let txn = Transaction::from_data(tx_data, Intent::default(), sigs);
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
@@ -71,18 +76,24 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
         .map_err(jsonrpsee::core::Error::from)
     }
 
+    // TODO: remove this or execute_transaction
     async fn execute_transaction_serialized_sig(
         &self,
         tx_bytes: Base64,
-        signature: Base64,
+        signatures: Vec<Base64>,
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse> {
         let tx_data =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
-        let signature = crypto::Signature::from_bytes(&signature.to_vec().map_err(|e| anyhow!(e))?)
-            .map_err(|e| anyhow!(e))?;
+        let mut sigs = Vec::new();
+        for sig in signatures {
+            sigs.push(
+                crypto::Signature::from_bytes(&sig.to_vec().map_err(|e| anyhow!(e))?)
+                    .map_err(|e| anyhow!(e))?,
+            );
+        }
 
-        let txn = Transaction::from_data(tx_data, Intent::default(), signature);
+        let txn = Transaction::from_data(tx_data, Intent::default(), sigs);
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
         let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(

@@ -681,7 +681,7 @@ export class JsonRpcProvider extends Provider {
         'sui_executeTransactionSerializedSig',
         [
           txnBytes.toString(),
-          new Base64DataBuffer(serialized_sig).toString(),
+          [new Base64DataBuffer(serialized_sig).toString()],
           requestType,
         ],
         SuiExecuteTransactionResponse,

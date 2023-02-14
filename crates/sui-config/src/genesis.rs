@@ -803,7 +803,7 @@ fn create_genesis_transaction(
         );
 
         let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<
@@ -1133,7 +1133,7 @@ mod test {
         );
 
         let transaction_data = genesis_transaction.data().intent_message.value.clone();
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (_inner_temp_store, effects, _execution_error) =
             sui_adapter::execution_engine::execute_transaction_to_effects::<

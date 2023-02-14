@@ -6,8 +6,8 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignature, SuiSignatureInner,
-    ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, PublicKey, Signature, Signer, SuiSignature,
+    SuiSignatureInner, ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -752,12 +752,18 @@ impl Display for TransactionKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct TransactionData {
-    pub kind: TransactionKind,
-    sender: SuiAddress,
-    gas_payment: ObjectRef,
+pub struct GasData {
+    pub gas_payment: ObjectRef,
+    pub gas_owner: SuiAddress,
     pub gas_price: u64,
     pub gas_budget: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct TransactionData {
+    pub kind: TransactionKind,
+    pub sender: SuiAddress,
+    pub gas_data: GasData,
 }
 
 impl TransactionData {
@@ -770,12 +776,14 @@ impl TransactionData {
         TransactionData {
             kind,
             sender,
-            gas_price: DUMMY_GAS_PRICE,
-            gas_payment,
-            gas_budget,
+            gas_data: GasData {
+                gas_price: DUMMY_GAS_PRICE,
+                gas_owner: sender,
+                gas_payment,
+                gas_budget,
+            },
         }
     }
-
     pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
@@ -786,9 +794,20 @@ impl TransactionData {
         TransactionData {
             kind,
             sender,
-            gas_price,
-            gas_payment,
-            gas_budget,
+            gas_data: GasData {
+                gas_price,
+                gas_owner: sender,
+                gas_payment,
+                gas_budget,
+            },
+        }
+    }
+
+    pub fn new_with_gas_data(kind: TransactionKind, sender: SuiAddress, gas_data: GasData) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_data,
         }
     }
 
@@ -1010,15 +1029,40 @@ impl TransactionData {
     }
 
     pub fn gas(&self) -> ObjectRef {
-        self.gas_payment
+        self.gas_data.gas_payment
     }
 
-    pub fn signer(&self) -> SuiAddress {
+    pub fn gas_data(&self) -> &GasData {
+        &self.gas_data
+    }
+
+    pub fn sender(&self) -> SuiAddress {
         self.sender
     }
 
+    /// Transaction signer and Gas owner
+    pub fn signers(&self) -> Vec<SuiAddress> {
+        let mut signers = vec![self.sender];
+        if self.gas_owner() != self.sender {
+            signers.push(self.gas_owner());
+        }
+        signers
+    }
+
+    pub fn gas_owner(&self) -> SuiAddress {
+        self.gas_data.gas_owner
+    }
+
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        &self.gas_payment
+        &self.gas_data.gas_payment
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_data.gas_price
+    }
+
+    pub fn gas_budget(&self) -> u64 {
+        self.gas_data.gas_budget
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -1051,7 +1095,38 @@ impl TransactionData {
     }
 
     pub fn validity_check(&self) -> SuiResult {
-        Self::validity_check_impl(&self.kind, &self.gas_payment)
+        Self::validity_check_impl(&self.kind, self.gas_payment_object_ref())?;
+        self.check_sponsorship()
+    }
+
+    /// Check if the transaction is compliant with sponsorship.
+    fn check_sponsorship(&self) -> SuiResult {
+        // Not a sponsored transaction, nothing to check
+        if self.gas_owner() == self.sender() {
+            return Ok(());
+        }
+        let allow_sponsored_tx = match &self.kind {
+            // Note: the check for Batch is based on the assumption that
+            // Batch transaction has the same or more restricted
+            // transaction kind limits.
+            TransactionKind::Batch(_b) => true,
+            TransactionKind::Single(s) => match s {
+                SingleTransactionKind::Call(_)
+                | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::Publish(_) => true,
+                SingleTransactionKind::TransferSui(_)
+                | SingleTransactionKind::PaySui(_)
+                | SingleTransactionKind::PayAllSui(_)
+                | SingleTransactionKind::ChangeEpoch(_)
+                | SingleTransactionKind::ConsensusCommitPrologue(_)
+                | SingleTransactionKind::Genesis(_) => false,
+            },
+        };
+        if allow_sponsored_tx {
+            return Ok(());
+        }
+        Err(SuiError::UnsupportedSponsoredTransactionKind)
     }
 
     pub fn validity_check_impl(kind: &TransactionKind, gas_payment: &ObjectRef) -> SuiResult {
@@ -1079,8 +1154,8 @@ impl TransactionData {
                 fp_ensure!(
                     valid,
                     SuiError::InvalidBatchTransaction {
-                        error: "Batch transaction contains non-batchable transactions. Only Call \
-                        and TransferObject are allowed"
+                        error: "Batch transaction contains non-batchable transactions. Only Call,
+                        Pay and TransferObject are allowed"
                             .to_string()
                     }
                 );
@@ -1097,15 +1172,52 @@ impl TransactionData {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
     pub intent_message: IntentMessage<TransactionData>,
-    pub tx_signature: Signature,
+    pub tx_signatures: Vec<Signature>,
 }
 
 impl SenderSignedData {
-    pub fn new(tx_data: TransactionData, intent: Intent, tx_signature: Signature) -> Self {
+    pub fn new(tx_data: TransactionData, intent: Intent, tx_signatures: Vec<Signature>) -> Self {
         Self {
             intent_message: IntentMessage::new(intent, tx_data),
-            tx_signature,
+            tx_signatures,
         }
+    }
+
+    pub fn new_from_sender_signature(
+        tx_data: TransactionData,
+        intent: Intent,
+        tx_signature: Signature,
+    ) -> Self {
+        Self {
+            intent_message: IntentMessage::new(intent, tx_data),
+            tx_signatures: vec![tx_signature],
+        }
+    }
+
+    // This function does not check validity of the signature
+    // or perform any de-dup checks.
+    pub fn add_signature(&mut self, new_signature: Signature) {
+        self.tx_signatures.push(new_signature);
+    }
+
+    fn get_signer_sig_mapping(&self) -> SuiResult<BTreeMap<SuiAddress, &Signature>> {
+        let mut mapping = BTreeMap::new();
+        for sig in &self.tx_signatures {
+            let scheme = sig.scheme();
+            let pub_key_bytes = sig.public_key_bytes();
+            let pub_key = PublicKey::try_from_bytes(scheme, pub_key_bytes).map_err(|e| {
+                SuiError::InvalidSignature {
+                    error: e.to_string(),
+                }
+            })?;
+            let address = SuiAddress::from(&pub_key);
+            mapping.insert(address, sig);
+        }
+        Ok(mapping)
+    }
+
+    pub fn transaction_data(&self) -> &TransactionData {
+        &self.intent_message.value
     }
 }
 
@@ -1120,8 +1232,32 @@ impl Message for SenderSignedData {
         if self.intent_message.value.kind.is_system_tx() {
             return Ok(());
         }
-        self.tx_signature
-            .verify_secure(&self.intent_message, self.intent_message.value.sender)
+
+        // Verify signatures. Steps are ordered in asc complexity order to minimize abuse.
+        let signers = self.intent_message.value.signers();
+        // Signature number needs to match
+        fp_ensure!(
+            self.tx_signatures.len() == signers.len(),
+            SuiError::SignerSignatureNumberMismatch {
+                actual: self.tx_signatures.len(),
+                expected: signers.len()
+            }
+        );
+        // All required signers need to be sign.
+        let present_sigs = self.get_signer_sig_mapping()?;
+        for s in signers {
+            if !present_sigs.contains_key(&s) {
+                return Err(SuiError::SignerSignatureAbsent {
+                    signer: s.to_string(),
+                });
+            }
+        }
+
+        // Verify all present signatures.
+        for (signer, signature) in present_sigs {
+            signature.verify_secure(&self.intent_message, signer)?;
+        }
+        Ok(())
     }
 }
 
@@ -1173,24 +1309,39 @@ impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
         intent: Intent,
-        signer: &dyn Signer<Signature>,
+        signers: Vec<&dyn Signer<Signature>>,
     ) -> Self {
-        let data1 = data.clone();
-        let intent1 = intent.clone();
+        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+        let mut signatures = Vec::with_capacity(signers.len());
+        for signer in signers {
+            signatures.push(Signature::new_secure(&intent_msg, signer));
+        }
+        Self::new(SenderSignedData::new(data, intent, signatures))
+    }
+
+    pub fn from_data(data: TransactionData, intent: Intent, signatures: Vec<Signature>) -> Self {
+        Self::new(SenderSignedData::new(data, intent, signatures))
+    }
+
+    pub fn signature_from_signer(
+        data: TransactionData,
+        intent: Intent,
+        signer: &dyn Signer<Signature>,
+    ) -> Signature {
         let intent_msg = IntentMessage::new(intent, data);
-        let signature = Signature::new_secure(&intent_msg, signer);
-        Self::new(SenderSignedData::new(data1, intent1, signature))
+        Signature::new_secure(&intent_msg, signer)
     }
 
-    pub fn from_data(data: TransactionData, intent: Intent, signature: Signature) -> Self {
-        Self::new(SenderSignedData::new(data, intent, signature))
-    }
-
-    /// Returns the Base64 encoded tx_bytes and the Base64 encoded serialized signature (`flag || sig || pk`).
-    pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
+    /// Returns the Base64 encoded tx_bytes
+    /// and a list of Base64 encoded serialized signature (`flag || sig || pk`).
+    pub fn to_tx_bytes_and_signatures(&self) -> (Base64, Vec<Base64>) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
-            Base64::from_bytes(self.data().tx_signature.as_ref()),
+            self.data()
+                .tx_signatures
+                .iter()
+                .map(|s| Base64::from_bytes(s.as_ref()))
+                .collect(),
         )
     }
 }
@@ -1241,11 +1392,14 @@ impl VerifiedTransaction {
                     0,
                 )
             })
-            .pipe(|data| SenderSignedData {
-                intent_message: IntentMessage::new(Intent::default(), data),
-                tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                    .unwrap()
-                    .into(),
+            .pipe(|data| {
+                SenderSignedData::new_from_sender_signature(
+                    data,
+                    Intent::default(),
+                    Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                        .unwrap()
+                        .into(),
+                )
             })
             .pipe(Transaction::new)
             .pipe(Self::new_from_verified)

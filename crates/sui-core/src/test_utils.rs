@@ -136,7 +136,7 @@ pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
         wrapped: Vec::new(),
         gas_object: (
             random_object_ref(),
-            Owner::AddressOwner(tx.data().intent_message.value.signer()),
+            Owner::AddressOwner(tx.data().intent_message.value.sender()),
         ),
         events: Vec::new(),
         dependencies: Vec::new(),

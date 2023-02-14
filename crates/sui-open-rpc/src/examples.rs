@@ -163,7 +163,7 @@ impl RpcExampleProvider {
     }
 
     fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
+        let (data, signatures, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
@@ -172,7 +172,13 @@ impl RpcExampleProvider {
                 "Execute an transaction with serialized signature",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("signature", json!(Base64::from_bytes(signature.as_ref()))),
+                    (
+                        "signatures",
+                        json!(signatures
+                            .into_iter()
+                            .map(|sig| Base64::from_bytes(sig.as_ref()))
+                            .collect::<Vec<_>>()),
+                    ),
                     (
                         "request_type",
                         json!(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -386,7 +392,7 @@ impl RpcExampleProvider {
         &mut self,
     ) -> (
         TransactionData,
-        Signature,
+        Vec<Signature>,
         SuiAddress,
         ObjectID,
         SuiTransactionResponse,
@@ -414,7 +420,7 @@ impl RpcExampleProvider {
 
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
-        let signature = tx.into_inner().tx_signature.clone();
+        let signatures = tx.into_inner().tx_signatures.clone();
 
         let tx_digest = tx1.digest();
         let sui_event = SuiEvent::TransferObject {
@@ -436,7 +442,7 @@ impl RpcExampleProvider {
             certificate: SuiCertifiedTransaction {
                 transaction_digest: *tx_digest,
                 data: SuiTransactionData::try_from(data1).unwrap(),
-                tx_signature: signature.clone(),
+                tx_signatures: signatures.clone(),
                 auth_sign_info: SuiAuthorityStrongQuorumSignInfo::from(&AuthorityQuorumSignInfo {
                     epoch: 0,
                     // We create a dummy signature since there is no such thing as a default valid
@@ -482,7 +488,7 @@ impl RpcExampleProvider {
             parsed_data: None,
         };
 
-        (data2, signature, recipient, obj_id, result, events)
+        (data2, signatures, recipient, obj_id, result, events)
     }
 
     fn get_events(&mut self) -> Examples {
