@@ -212,6 +212,7 @@ fn objects_table_default_config() -> DBOptions {
     DBOptions {
         options: db_options.options,
         rw_options: ReadWriteOptions {
+            // ignore_range_deletions: !cfg!(msim),
             ignore_range_deletions: true,
         },
     }
