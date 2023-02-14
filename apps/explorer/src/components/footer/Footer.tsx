@@ -7,6 +7,34 @@ import { type FooterItems, footerLinks } from './footerLinks';
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
 
+function FooterLinks({ links }: { links: FooterItems }) {
+    return (
+        <>
+            {links.map(({ category, items }) => (
+                <div
+                    key={category}
+                    className="flex flex-col gap-y-3.5 text-left"
+                >
+                    <Text variant="captionSmall/bold" color="gray-60">
+                        {category}
+                    </Text>
+                    <ul className="flex flex-col gap-y-3.5">
+                        {items.map(({ title, href }) => (
+                            <li key={href}>
+                                <Link variant="text" href={href}>
+                                    <Text variant="body/medium" color="white">
+                                        {title}
+                                    </Text>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
+        </>
+    );
+}
+
 function Footer() {
     return (
         <footer className="bg-gray-75 p-5 md:p-14">
@@ -27,39 +55,6 @@ function Footer() {
                 </div>
             </nav>
         </footer>
-    );
-}
-
-function FooterLinks({ links }: { links: FooterItems }) {
-    return (
-        <>
-            {links.map(({ category, items }) => (
-                <div
-                    key={category}
-                    className="flex flex-col gap-y-3.5 text-left"
-                >
-                    <Text variant="captionSmall/bold" color="gray-60">
-                        {category}
-                    </Text>
-                    <ul className="flex flex-col gap-y-3.5">
-                        {items.map(({ title, href }) => {
-                            return (
-                                <li key={href}>
-                                    <Link variant="text" href={href}>
-                                        <Text
-                                            variant="body/medium"
-                                            color="white"
-                                        >
-                                            {title}
-                                        </Text>
-                                    </Link>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            ))}
-        </>
     );
 }
 

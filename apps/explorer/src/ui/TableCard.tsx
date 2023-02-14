@@ -72,7 +72,7 @@ export function TableCard<DataType extends object>({
     return (
         <div
             className={clsx(
-                'w-full overflow-x-auto border-b border-solid border-gray-45 pb-4',
+                'w-full overflow-x-auto border-b border-gray-45 pb-4',
                 refetching && 'opacity-50'
             )}
         >

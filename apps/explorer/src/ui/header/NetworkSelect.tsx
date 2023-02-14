@@ -65,8 +65,6 @@ function SelectableNetwork({
             role="button"
             onClick={onClick}
             className={clsx(
-                // CSS Reset:
-                'cursor-pointer bg-transparent text-left',
                 'flex items-start gap-4 rounded-md px-2 py-3 text-body font-semibold hover:bg-gray-40 hover:text-gray-90 ui-active:bg-gray-40 ui-active:text-gray-90',
                 state !== NetworkState.UNSELECTED
                     ? 'text-gray-90'

@@ -16,4 +16,5 @@
 
 body {
     @apply antialiased;
+    @apply font-sans text-offblack;
 }

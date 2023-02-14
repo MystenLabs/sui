@@ -25,11 +25,11 @@ function instanceOfDataType(object: any): object is DataType {
 }
 
 function AddressResult() {
-    const { id: addressId } = useParams();
+    const { id: addressID } = useParams();
 
     return (
-        <div className="space-y-12 xl:space-y-12">
-            <PageHeader type="Address" title={addressId!} />
+        <div className="space-y-12">
+            <PageHeader type="Address" title={addressID!} />
 
             <div>
                 <div className="border-b border-gray-45 pb-5 md:mt-12">
@@ -38,7 +38,7 @@ function AddressResult() {
                     </Heading>
                 </div>
                 <ErrorBoundary>
-                    <OwnedObjects id={addressId!} byAddress />
+                    <OwnedObjects id={addressID!} byAddress />
                 </ErrorBoundary>
             </div>
 
@@ -50,7 +50,7 @@ function AddressResult() {
                 </div>
                 <ErrorBoundary>
                     <div className="mt-2">
-                        <TxForID id={addressId!} category="address" />
+                        <TxForID id={addressID!} category="address" />
                     </div>
                 </ErrorBoundary>
             </div>
