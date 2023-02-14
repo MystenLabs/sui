@@ -8,7 +8,7 @@
 
     .input-group-append,
     .textarea {
-        padding: 9px 12px;
+        padding: 5px 12px;
         border: 1px solid colors.$gray-50;
         box-shadow: 0 1px 2px #1018280d;
         border-radius: 10px;
@@ -51,10 +51,11 @@
         background-position: center;
     }
 
+    // move to tailwind
     &.invalid-addr {
         .input-group-append,
         .textarea {
-            border-color: colors.$error;
+            border-color: colors.$issue;
         }
     }
 
@@ -70,19 +71,21 @@
 
 .valid-address {
     background-color: colors.$success-light;
-    color: colors.$success;
+    color: colors.$success-dark;
     margin-top: 10px;
     border-radius: 6px;
     word-break: break-all;
     padding: 7px 13px;
+    width: 100%;
 
     i {
-        color: colors.$success;
+        color: colors.$success-dark;
         font-size: 10px;
         margin-right: 10px;
     }
 }
 
 .error {
+    width: 100%;
     @include utils.error-message-box;
 }

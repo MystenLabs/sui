@@ -15,8 +15,8 @@ export function createValidationSchemaStepTwo() {
 export function createValidationSchemaStepOne(
     ...args: Parameters<typeof createTokenValidation>
 ) {
-    return Yup.object({
-        amount: createTokenValidation(...args),
+    return Yup.object().shape({
         to: SUI_ADDRESS_VALIDATION,
+        amount: createTokenValidation(...args),
     });
 }
