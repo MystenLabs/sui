@@ -227,7 +227,7 @@ If the progress appears to freeze, press **Enter** in the command prompt to fix 
 
 **Known issue** - The `sui console` command does not work in PowerShell.
 
-## Install (or update) Sui binaries
+## Install (or update) Sui binaries <a name="binaries"></a>
 
 With Cargo installed, use the following command to install or update the sui executable:
 
