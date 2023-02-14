@@ -31,12 +31,17 @@ type ObjectDetailsStylesProps = VariantProps<typeof styles>;
 
 export interface ObjectDetailsProps
     extends Omit<ObjectDetailsStylesProps, 'size'> {
-    id: string;
-    image?: string;
+    id?: string;
+    image: string;
     name?: string;
     type: string;
     nsfw?: boolean;
     variant: 'small' | 'large';
+}
+
+function replaceIPFS(url?: string) {
+    if (!url) return;
+    return url.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
 }
 
 export function ObjectDetails({
@@ -51,6 +56,7 @@ export function ObjectDetails({
     const [open, setOpen] = useState(false);
     const close = () => setOpen(false);
     const openPreview = () => setOpen(true);
+    const url = replaceIPFS(image) ?? '';
 
     return (
         <div className="flex items-center gap-3.75">
@@ -60,7 +66,7 @@ export function ObjectDetails({
                         <div className="flex flex-col gap-5">
                             <Image
                                 alt={name}
-                                src={image}
+                                src={url}
                                 className="rounded-none"
                             />
                             <Heading
@@ -78,7 +84,7 @@ export function ObjectDetails({
                         <Image
                             onClick={openPreview}
                             alt={name}
-                            src={image}
+                            src={url}
                             blur={nsfw}
                             className={styles({ size: variant })}
                         />
@@ -89,7 +95,7 @@ export function ObjectDetails({
                 <Text variant="bodySmall/medium" color="gray-90">
                     {name}
                 </Text>
-                <ObjectLink objectId={id} />
+                {id && <ObjectLink objectId={id} />}
                 <Text variant="bodySmall/medium" color="steel-dark">
                     {type}
                 </Text>

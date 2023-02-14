@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
-import DisplayBox from '../../displaybox/DisplayBox';
 import { type DataType } from '../OwnedObjectConstants';
 
 import styles from '../styles/OwnedObjects.module.css';
 
+import DisplayBox from '~/components/displaybox/DisplayBox';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
