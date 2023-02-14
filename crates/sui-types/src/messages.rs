@@ -1139,11 +1139,6 @@ impl<S> Envelope<SenderSignedData, S> {
         self.shared_input_objects().next().is_some()
     }
 
-    pub fn touches_system_object(&self) -> bool {
-        self.shared_input_objects()
-            .any(|o| o.id() == SUI_SYSTEM_STATE_OBJECT_ID)
-    }
-
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         self.data().intent_message.value.kind.shared_input_objects()
     }
@@ -2452,6 +2447,7 @@ pub struct ExecuteTransactionRequest {
     pub transaction: Transaction,
     pub request_type: ExecuteTransactionRequestType,
 }
+
 #[derive(Debug)]
 pub enum TransactionType {
     SingleWriter, // Txes that only use owned objects and/or immutable objects
