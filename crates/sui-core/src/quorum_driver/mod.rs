@@ -225,6 +225,44 @@ impl<A> QuorumDriver<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    pub async fn submit_transaction_fast(
+        &self,
+        transaction: VerifiedTransaction,
+    ) -> QuorumDriverResult {
+        let tx_cert = match self.process_transaction(transaction.clone()).await {
+            Ok(ProcessTransactionResult::Certified(tx_cert)) => tx_cert,
+            Ok(ProcessTransactionResult::Executed(tx_cert, effects_cert)) => {
+                let response = QuorumDriverResponse {
+                    tx_cert,
+                    effects_cert,
+                };
+                return Ok(response);
+            }
+            Err(err) => {
+                error!("Error {:}", err);
+                return Err(QuorumDriverError::QuorumDriverInternalError(
+                    SuiError::AuthorityInformationUnavailable,
+                ));
+            }
+        };
+        let response = match self.process_certificate(tx_cert.clone()).await {
+            Ok(QuorumDriverResponse {
+                tx_cert,
+                effects_cert,
+            }) => QuorumDriverResponse {
+                tx_cert,
+                effects_cert,
+            },
+            // Note: non retryable failure when processing a cert
+            // should be very rare.
+            Err(err) => {
+                return Err(QuorumDriverError::QuorumDriverInternalError(
+                    SuiError::AuthorityInformationUnavailable,
+                ));
+            }
+        };
+        Ok(response)
+    }
     pub async fn submit_transaction(
         &self,
         transaction: VerifiedTransaction,

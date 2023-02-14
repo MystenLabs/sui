@@ -83,11 +83,11 @@ pub struct TimeoutConfig {
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
-            authority_request_timeout: Duration::from_secs(60),
-            pre_quorum_timeout: Duration::from_secs(60),
-            post_quorum_timeout: Duration::from_secs(30),
-            serial_authority_request_timeout: Duration::from_secs(5),
-            serial_authority_request_interval: Duration::from_millis(1000),
+            authority_request_timeout: Duration::from_secs(120),
+            pre_quorum_timeout: Duration::from_secs(120),
+            post_quorum_timeout: Duration::from_secs(120),
+            serial_authority_request_timeout: Duration::from_secs(15),
+            serial_authority_request_interval: Duration::from_millis(10000),
         }
     }
 }
@@ -1161,6 +1161,25 @@ where
         // TODO: return the errors too
         Ok((object_map, certificates))
     }
+
+    // pub async fn batch_process_transactions(
+    //     &self,
+    //     transactions: Vec<VerifiedTransaction>,
+    // ) -> Vec<Result<ProcessTransactionResult, QuorumSignTransactionError>> {
+    //     // Now broadcast the transaction to all authorities.
+    //     let threshold = self.committee.quorum_threshold();
+    //     let validity = self.committee.validity_threshold();
+    //     let state = ProcessTransactionState::default();
+    //
+    //     let mut state = self
+    //         .quorum_map_then_reduce_with_timeout(
+    //             state,
+    //             |_name, client| {
+    //                 Box::pin(
+    //                     async move { client.handle_transaction(transaction_ref.clone()).await },
+    //                 )
+    //             },
+    // }
 
     /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(

@@ -155,10 +155,12 @@ impl LocalValidatorAggregatorProxy {
         reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
-        let qd_handler_builder =
-            QuorumDriverHandlerBuilder::new(Arc::new(aggregator.clone()), quorum_driver_metrics);
 
         let qd_handler = (if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
+            let qd_handler_builder = QuorumDriverHandlerBuilder::new(
+                Arc::new(aggregator.clone()),
+                quorum_driver_metrics,
+            );
             info!(
                 "Using FullNodeReconfigObserver: {:?}",
                 reconfig_fullnode_rpc_url
@@ -176,6 +178,13 @@ impl LocalValidatorAggregatorProxy {
             qd_handler_builder.with_reconfig_observer(reconfig_observer)
         } else {
             info!("Using EmbeddedReconfigObserver");
+            let observer = EmbeddedReconfigObserver::new();
+            let new_agg = observer
+                .get_committee(Arc::new(aggregator))
+                .await
+                .expect("Failed to get latest committee");
+            let qd_handler_builder =
+                QuorumDriverHandlerBuilder::new(new_agg, quorum_driver_metrics);
             qd_handler_builder.with_reconfig_observer(Arc::new(EmbeddedReconfigObserver::new()))
         })
         .start();
@@ -202,33 +211,12 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
-        let tx_digest = *tx.digest();
         let tx = tx.verify()?;
-        let mut retry_cnt = 0;
-        while retry_cnt < 3 {
-            let ticket = self.qd.submit_transaction(tx.clone()).await?;
-            // The ticket only times out when QuorumDriver exceeds the retry times
-            match ticket.await {
-                Ok(resp) => {
-                    let QuorumDriverResponse {
-                        tx_cert,
-                        effects_cert,
-                    } = resp;
-                    return Ok((
-                        tx_cert.try_into().unwrap(),
-                        ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
-                    ));
-                }
-                Err(err) => {
-                    error!(
-                        ?tx_digest,
-                        retry_cnt, "Transaction failed with err: {:?}", err
-                    );
-                    retry_cnt += 1;
-                }
-            }
-        }
-        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
+        let resp = self.qd.submit_transaction_fast(tx.clone()).await?;
+        Ok((
+            resp.tx_cert.try_into().unwrap(),
+            ExecutionEffects::CertifiedTransactionEffects(resp.effects_cert.into()),
+        ))
     }
 
     fn clone_committee(&self) -> Committee {

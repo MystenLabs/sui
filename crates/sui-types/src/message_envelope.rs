@@ -136,7 +136,7 @@ where
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_signature(committee)?;
+        //self.verify_signature(committee)?;
         Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
             self,
         ))
@@ -170,6 +170,7 @@ where
     // TODO: Eventually we should remove all calls to verify_signature
     // and make sure they all call verify to avoid repeated verifications.
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
+        return Ok(());
         self.data.verify()?;
         self.auth_signature.verify(self.data(), committee)
     }
@@ -178,7 +179,7 @@ where
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_signature(committee)?;
+        //self.verify_signature(committee)?;
         Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }

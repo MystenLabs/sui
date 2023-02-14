@@ -33,7 +33,7 @@ mod server_tests;
 
 // Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
 // Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
-const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
+const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 1000000;
 
 pub struct AuthorityServerHandle {
     tx_cancellation: tokio::sync::oneshot::Sender<()>,
