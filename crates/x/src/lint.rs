@@ -26,11 +26,10 @@ pub fn run(args: Args) -> crate::Result<()> {
                 "lazy_static".to_owned(),
                 "use once_cell::sync::Lazy instead".to_owned(),
             ),
-            // TODO: re-enable after dropping the dependency from Narwhal.
-            // (
-            //     "tracing-test".to_owned(),
-            //     "you should not be testing against log lines".to_owned(),
-            // ),
+            (
+                "tracing-test".to_owned(),
+                "you should not be testing against log lines".to_owned(),
+            ),
         ]
         .into_iter()
         .collect(),
