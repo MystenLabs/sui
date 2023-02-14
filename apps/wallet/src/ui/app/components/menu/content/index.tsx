@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
 import { useCallback } from 'react';
 import {
     Navigate,
@@ -10,7 +11,7 @@ import {
     useNavigate,
 } from 'react-router-dom';
 
-import { AccountSettings } from './AccountSettings';
+import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
 import MenuList from './MenuList';
 import { NetworkSettings } from './NetworkSettings';
@@ -22,6 +23,7 @@ import {
     useNextMenuUrl,
 } from '_components/menu/hooks';
 import { useOnKeyboardEvent } from '_hooks';
+import { FEATURES } from '_src/shared/experimentation/features';
 
 import type { MouseEvent } from 'react';
 
@@ -44,6 +46,9 @@ function MenuContent() {
         [isOpen, navigate, closeMenuUrl]
     );
     useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
+    const isMultiAccountsEnabled = useFeature(
+        FEATURES.WALLET_MULTI_ACCOUNTS
+    ).on;
     if (!isOpen) {
         return null;
     }
@@ -53,7 +58,12 @@ function MenuContent() {
                 <MainLocationContext.Provider value={mainLocation}>
                     <Routes location={menuUrl || ''}>
                         <Route path="/" element={<MenuList />} />
-                        <Route path="/account" element={<AccountSettings />} />
+                        {isMultiAccountsEnabled ? (
+                            <Route
+                                path="/accounts"
+                                element={<AccountsSettings />}
+                            />
+                        ) : null}
                         <Route path="/network" element={<NetworkSettings />} />
                         <Route
                             path="/auto-lock"
