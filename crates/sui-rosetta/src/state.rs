@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::account::balance;
 use crate::operations::Operations;
 use crate::types::{
     Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
