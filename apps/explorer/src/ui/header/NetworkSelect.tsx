@@ -116,7 +116,7 @@ function CustomRPCInput({
                 {...register('url')}
                 type="text"
                 className={clsx(
-                    'block w-full rounded-md border border-solid p-3 pr-16 shadow-sm outline-none',
+                    'block w-full rounded-md border p-3 pr-16 shadow-sm outline-none',
                     errors.url
                         ? 'border-issue-dark text-issue-dark'
                         : 'border-gray-65 text-gray-90'

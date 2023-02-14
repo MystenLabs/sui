@@ -90,10 +90,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     };
 
     return (
-        <div className="flex flex-col gap-5 border-y border-solid border-gray-45 md:flex-row md:flex-nowrap">
+        <div className="flex flex-col gap-5 border-y border-gray-45 md:flex-row md:flex-nowrap">
             <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={onChangeModule}>
-                    <div className="mt-2.5 flex w-full justify-between rounded-md border border-solid border-gray-50 py-1 pl-3 placeholder-gray-65 shadow-sm">
+                    <div className="mt-2.5 flex w-full justify-between rounded-md border border-gray-50 py-1 pl-3 placeholder-gray-65 shadow-sm">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => query}
@@ -162,7 +162,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </VerticalList>
                 </div>
             </div>
-            <div className="grow overflow-auto border-solid border-gray-45 pt-5 md:w-2/5 md:border-l md:pl-7">
+            <div className="grow overflow-auto border-gray-45 pt-5 md:w-2/5 md:border-l md:pl-7">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
@@ -180,7 +180,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </TabPanels>
                 </TabGroup>
             </div>
-            <div className="grow overflow-auto border-solid border-gray-45 pt-5 md:w-3/5 md:border-l md:pl-7">
+            <div className="grow overflow-auto border-gray-45 pt-5 md:w-3/5 md:border-l md:pl-7">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Execute</Tab>

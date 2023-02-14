@@ -49,7 +49,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 
     return (
         <>
-            <div className="flex basis-full gap-5 border-r border-solid border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
+            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
                 <ImageIcon
                     src={logo}
                     label={validatorName}

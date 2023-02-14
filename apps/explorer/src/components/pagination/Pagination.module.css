@@ -32,7 +32,7 @@ button.nointeract,
 }
 
 button.pagenumber {
-    @apply select-none border-solid border-sui-dark text-sui-dark;
+    @apply select-none border-sui-dark text-sui-dark;
 
     background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
 }

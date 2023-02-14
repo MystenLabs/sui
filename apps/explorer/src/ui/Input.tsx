@@ -18,7 +18,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <input
                 ref={ref}
                 {...inputProps}
-                className="rounded-md border border-solid border-gray-45 bg-white p-2 text-body font-medium text-steel-darker shadow-sm shadow-ebony/10 placeholder:text-gray-60"
+                className="rounded-md border border-gray-45 bg-white p-2 text-body font-medium text-steel-darker shadow-sm shadow-ebony/10 placeholder:text-gray-60"
             />
         </Label>
     )

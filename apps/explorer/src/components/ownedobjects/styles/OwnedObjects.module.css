@@ -12,7 +12,7 @@
 }
 
 .layout > div:first-child {
-    @apply sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-gray-45 sm:pr-[4vw];
+    @apply sm:mr-[4vw] sm:border-0 sm:border-r sm:border-gray-45 sm:pr-[4vw];
 }
 
 .ownedobjects {
