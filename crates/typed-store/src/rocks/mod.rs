@@ -189,6 +189,12 @@ macro_rules! delegate_call {
     }
 }
 
+impl Drop for RocksDB {
+    fn drop(&mut self) {
+        delegate_call!(self.cancel_all_background_work(/* wait */ true))
+    }
+}
+
 impl RocksDB {
     pub fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Vec<u8>>, rocksdb::Error> {
         delegate_call!(self.get(key))
