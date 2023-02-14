@@ -20,7 +20,7 @@
 }
 
 .objectbox {
-    @apply my-[5vh] flex h-fit min-h-[72px] items-center break-all sm:my-[1vh] lg:w-[50%];
+    @apply my-2 flex h-fit min-h-[72px] items-center break-all sm:my-[1vh] lg:w-[50%];
 }
 
 .objectbox a {

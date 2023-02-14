@@ -40,18 +40,17 @@ function PaginationLogic({
     return (
         <>
             {viewComponentFn(objectSample)}
-            <div className="mt-5">
-                <Pagination
-                    totalItems={count}
-                    itemsPerPage={pageLength}
-                    updateItemsPerPage={
-                        allowVaryItemsPerPage ? setPageLength : undefined
-                    }
-                    currentPage={currentPage}
-                    onPagiChangeFn={setCurrentPage}
-                    stats={stats}
-                />
-            </div>
+
+            <Pagination
+                totalItems={count}
+                itemsPerPage={pageLength}
+                updateItemsPerPage={
+                    allowVaryItemsPerPage ? setPageLength : undefined
+                }
+                currentPage={currentPage}
+                onPagiChangeFn={setCurrentPage}
+                stats={stats}
+            />
         </>
     );
 }

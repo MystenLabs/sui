@@ -29,7 +29,7 @@ export default function OwnedObjectView({ results }: { results: DataType }) {
             stats_text: 'Total NFTs',
         },
     };
-
+    console.log(other_results);
     return (
         <div className="grid w-1/2 grid-cols-1 divide-x-0 divide-gray-45 xl:w-full xl:grid-cols-2 xl:divide-x">
             {coin_results.length > 0 && (
