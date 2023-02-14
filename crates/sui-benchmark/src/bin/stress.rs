@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::*;
 
 use prometheus::Registry;
+use rand::seq::SliceRandom;
 
 use std::sync::Arc;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
@@ -76,10 +77,17 @@ async fn main() -> Result<()> {
     let barrier = Arc::new(Barrier::new(2));
     let cloned_barrier = barrier.clone();
     let env = if opts.local { Env::Local } else { Env::Remote };
-    let benchmark_setup = env.setup(cloned_barrier, &registry, &opts).await?;
+    let proxy_gas_and_coins = env.setup(cloned_barrier, &registry, &opts).await?;
     let system_state_observer = {
-        let mut system_state_observer =
-            SystemStateObserver::new(benchmark_setup.validator_proxy.clone());
+        // Only need to get system state from one proxy as it is shared for the
+        // whole network.
+        let mut system_state_observer = SystemStateObserver::new(
+            proxy_gas_and_coins
+                .choose(&mut rand::thread_rng())
+                .context("Failed to get proxy for system state observer")?
+                .proxy
+                .clone(),
+        );
         system_state_observer.reference_gas_price.changed().await?;
         eprintln!(
             "Found reference gas price from system state object = {:?}",
@@ -106,15 +114,9 @@ async fn main() -> Result<()> {
             } else {
                 WorkloadConfiguration::Combined
             };
-            let workloads = workload_configuration
-                .configure(
-                    benchmark_setup.primary_gas,
-                    benchmark_setup.pay_coin,
-                    benchmark_setup.pay_coin_type_tag,
-                    benchmark_setup.validator_proxy.clone(),
-                    &opts,
-                    system_state_observer.clone(),
-                )
+
+            let proxy_workloads = workload_configuration
+                .configure(proxy_gas_and_coins, &opts, system_state_observer.clone())
                 .await?;
             let interval = opts.run_duration;
             // We only show continuous progress in stderr
@@ -125,8 +127,7 @@ async fn main() -> Result<()> {
             let driver = BenchDriver::new(opts.stat_collection_interval, stress_stat_collection);
             driver
                 .run(
-                    workloads,
-                    benchmark_setup.validator_proxy.clone(),
+                    proxy_workloads,
                     system_state_observer,
                     &registry_clone,
                     show_progress,
