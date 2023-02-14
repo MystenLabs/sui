@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-import { type FooterItems, navLinks } from './footerLinks';
+import { type FooterItems, footerLinks } from './footerLinks';
 
 import { Link } from '~/ui/Link';
 import { Text } from '~/ui/Text';
@@ -23,7 +23,7 @@ function Footer() {
                             </Text>
                         </div>
                     </div>
-                    <FooterLinks links={navLinks} />
+                    <FooterLinks links={footerLinks} />
                 </div>
             </nav>
         </footer>

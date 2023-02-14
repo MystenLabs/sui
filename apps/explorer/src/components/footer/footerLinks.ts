@@ -6,7 +6,7 @@ type FooterItem = {
     items: { title: string; href: string }[];
 };
 export type FooterItems = FooterItem[];
-export const navLinks = [
+export const footerLinks = [
     {
         category: 'Read',
         items: [
