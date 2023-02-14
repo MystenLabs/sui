@@ -334,10 +334,10 @@ pub struct PrimaryMetrics {
     pub gc_core_latency: Histogram,
     /// The current Narwhal round in proposer
     pub current_round: IntGauge,
+    /// The highest Narwhal round of certificates that have been accepted.
+    pub highest_processed_round: IntGaugeVec,
     /// The highest Narwhal round that has been received.
     pub highest_received_round: IntGaugeVec,
-    /// The highest Narwhal round that has been processed.
-    pub highest_processed_round: IntGaugeVec,
     /// 0 if there is no inflight certificates fetching, 1 otherwise.
     pub certificate_fetcher_inflight_fetch: IntGauge,
     /// Number of fetched certificates successfully processed by core.

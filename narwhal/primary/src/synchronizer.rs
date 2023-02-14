@@ -7,7 +7,7 @@ use consensus::dag::Dag;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_monitored_task;
-use network::{anemo_ext::NetworkExt, CancelOnDropHandler, ReliableNetwork, RetryConfig};
+use network::{anemo_ext::NetworkExt, ReliableNetwork, RetryConfig};
 use parking_lot::Mutex;
 use std::{
     collections::{HashMap, HashSet},
@@ -32,7 +32,7 @@ use types::{
     Round, WorkerSynchronizeMessage,
 };
 
-use crate::metrics::PrimaryMetrics;
+use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
@@ -50,16 +50,12 @@ struct Inner {
     /// Highest round that has been GC'ed.
     gc_round: AtomicU64,
     /// Highest round of certificate accepted into the certificate store.
-    highest_accepted_round: AtomicU64,
+    highest_processed_round: AtomicU64,
     /// Highest round of verfied certificate that has been received.
     highest_received_round: AtomicU64,
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    /// Contains background tasks for:
-    /// - synchronizing worker batches for processed certificates
-    /// - broadcasting newly formed certificates
-    background_tasks: JoinSet<DagResult<()>>,
     /// Send commands to the `CertificateFetcher`.
     tx_certificate_fetcher: Sender<Certificate>,
     /// Output all certificates to the consensus layer.
@@ -74,26 +70,18 @@ struct Inner {
     dag: Option<Arc<Dag>>,
     /// Contains Synchronizer specific metrics among other Primary metrics.
     metrics: Arc<PrimaryMetrics>,
-}
-
-struct SuspendedCertificate {
-    certificate: Option<Certificate>,
-    missing_parents: HashSet<CertificateDigest>,
-    accepted: broadcast::Sender<()>,
-}
-
-#[derive(Default)]
-struct State {
-    suspened: HashMap<CertificateDigest, SuspendedCertificate>,
-    missing: HashMap<CertificateDigest, HashSet<CertificateDigest>>,
+    /// Contains background tasks for:
+    /// - synchronizing worker batches for processed certificates
+    /// - broadcasting newly formed certificates
+    background_tasks: Mutex<JoinSet<DagResult<()>>>,
+    /// Aggregates certificates to use as parents for new headers.
+    certificates_aggregators: Mutex<HashMap<Round, Box<CertificatesAggregator>>>,
 }
 
 /// The `Synchronizer` provides functions for retrieving missing certificates and batches.
 pub struct Synchronizer {
     /// Internal data that are thread safe.
     inner: Arc<Inner>,
-    /// Buffer for certificates that cannot be accepted yet.
-    state: Mutex<State>,
 }
 
 impl Synchronizer {
@@ -113,7 +101,7 @@ impl Synchronizer {
     ) -> Self {
         let committee: &Committee = &committee.load();
         let genesis = Self::make_genesis(committee);
-        let highest_accepted_round = certificate_store.highest_round_number();
+        let highest_processed_round = certificate_store.highest_round_number();
         let gc_round = (*rx_consensus_round_updates.borrow()).saturating_sub(gc_depth);
         let inner = Arc::new(Inner {
             name,
@@ -121,11 +109,10 @@ impl Synchronizer {
             worker_cache,
             gc_depth,
             gc_round: AtomicU64::new(gc_round),
-            highest_accepted_round: AtomicU64::new(highest_accepted_round),
+            highest_processed_round: AtomicU64::new(highest_processed_round),
             highest_received_round: AtomicU64::new(0),
             certificate_store,
             payload_store,
-            background_tasks: JoinSet::new(),
             tx_certificate_fetcher,
             tx_new_certificates,
             tx_parents,
@@ -133,7 +120,11 @@ impl Synchronizer {
             genesis,
             dag,
             metrics,
+            background_tasks: Mutex::new(JoinSet::new()),
+            certificates_aggregators: Mutex::new(HashMap::with_capacity(2 * gc_depth as usize)),
         });
+
+        // Create a task to update gc_round.
         let weak_inner = Arc::downgrade(&inner);
         spawn_monitored_task!(async move {
             let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
@@ -152,10 +143,8 @@ impl Synchronizer {
                 inner.gc_round.store(gc_round, Ordering::Release);
             }
         });
-        Self {
-            inner,
-            state: Default::default(),
-        }
+
+        Self { inner }
     }
 
     fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
@@ -166,7 +155,7 @@ impl Synchronizer {
     }
 
     async fn process_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
@@ -178,22 +167,6 @@ impl Synchronizer {
         }
 
         self.sanitize_certificate(&certificate).await?;
-
-        let certificate_source = if self.inner.name.eq(&certificate.origin()) {
-            "own"
-        } else {
-            "other"
-        };
-        let highest_received_round = self
-            .inner
-            .highest_received_round
-            .fetch_max(certificate.round(), Ordering::AcqRel)
-            .max(certificate.round());
-        self.inner
-            .metrics
-            .highest_received_round
-            .with_label_values(&[certificate_source])
-            .set(highest_received_round as i64);
 
         let result = self
             .process_certificate_internal(certificate, network)
@@ -219,7 +192,7 @@ impl Synchronizer {
         }
     }
 
-    async fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
+    async fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -257,7 +230,7 @@ impl Synchronizer {
     // }
 
     async fn process_own_certificate(
-        &mut self,
+        &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
@@ -287,12 +260,13 @@ impl Synchronizer {
             network_keys,
             &PrimaryMessage::Certificate(certificate.clone()),
         );
-        // self.inner
-        //     .background_tasks
-        //     .spawn(Self::broadcast_certificate(
-        //         self.inner.clone(),
-        //         certificate.clone(),
-        //     ));
+        self.inner
+            .background_tasks
+            .lock()
+            .spawn(Self::broadcast_certificate(
+                self.inner.clone(),
+                certificate.clone(),
+            ));
 
         // Update metrics.
         self.inner
@@ -317,7 +291,7 @@ impl Synchronizer {
     }
 
     async fn process_certificate_internal(
-        &mut self,
+        &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
@@ -332,6 +306,16 @@ impl Synchronizer {
         } else {
             "other"
         };
+        let highest_received_round = self
+            .inner
+            .highest_received_round
+            .fetch_max(certificate.round(), Ordering::AcqRel)
+            .max(certificate.round());
+        self.inner
+            .metrics
+            .highest_received_round
+            .with_label_values(&[certificate_source])
+            .set(highest_received_round as i64);
 
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
         // parents or payload (which we may not have yet).
@@ -350,11 +334,13 @@ impl Synchronizer {
         // Instruct workers to download any missing batches referenced in this certificate.
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
+        let inner = self.inner.clone();
         let header = certificate.header.clone();
         let network = network.clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
-        // self.background_tasks
-        //     .spawn(async move { self.sync_batches(&header, network, max_age).await });
+        self.inner.background_tasks.lock().spawn(async move {
+            Synchronizer::sync_batches_internal(inner, &header, network, max_age).await
+        });
 
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
         // If we don't, the synchronizer will start fetching missing certificates.
@@ -377,30 +363,36 @@ impl Synchronizer {
         // consensus dag.
         self.inner.certificate_store.write(certificate.clone())?;
 
-        // Update metrics for processed certificates.
-        // self.highest_processed_round = self.highest_processed_round.max(certificate.round());
-        // self.metrics
-        //     .highest_processed_round
-        //     .with_label_values(&[certificate_source])
-        //     .set(self.highest_processed_round as i64);
-        // self.metrics
-        //     .certificates_processed
-        //     .with_label_values(&[certificate_source])
-        //     .inc();
+        // Update metrics for accepted certificates.
+        let highest_processed_round = self
+            .inner
+            .highest_processed_round
+            .fetch_max(certificate.round(), Ordering::AcqRel)
+            .max(certificate.round());
+        self.inner
+            .metrics
+            .highest_processed_round
+            .with_label_values(&[certificate_source])
+            .set(highest_processed_round as i64);
+        self.inner
+            .metrics
+            .certificates_processed
+            .with_label_values(&[certificate_source])
+            .inc();
 
         // Append the certificate to the aggregator of the
         // corresponding round.
         let digest = certificate.digest();
-        // if let Err(e) = self
-        //     .append_certificate_in_aggregator(certificate.clone())
-        //     .await
-        // {
-        //     warn!(
-        //         "Failed to aggregate certificate {} for header: {}",
-        //         digest, e
-        //     );
-        //     return Err(DagError::ShuttingDown);
-        // }
+        if let Err(e) = self
+            .append_certificate_in_aggregator(certificate.clone())
+            .await
+        {
+            warn!(
+                "Failed to aggregate certificate {} for header: {}",
+                digest, e
+            );
+            return Err(DagError::ShuttingDown);
+        }
 
         // Send it to the consensus layer.
         if let Err(e) = self.inner.tx_new_certificates.send(certificate).await {
@@ -444,6 +436,25 @@ impl Synchronizer {
         //         },
         //     }
         // }
+    }
+
+    async fn append_certificate_in_aggregator(&self, certificate: Certificate) -> DagResult<()> {
+        // Check if we have enough certificates to enter a new dag round and propose a header.
+        let Some(parents) = self
+            .inner
+            .certificates_aggregators
+            .lock()
+            .entry(certificate.round())
+            .or_insert_with(|| Box::new(CertificatesAggregator::new()))
+            .append(certificate.clone(), &self.inner.committee) else {
+                return Ok(());
+            };
+        // Send it to the `Proposer`.
+        self.inner
+            .tx_parents
+            .send((parents, certificate.round(), certificate.epoch()))
+            .await
+            .map_err(|_| DagError::ShuttingDown)
     }
 
     /// Synchronizes batches in the given header with other nodes (through our workers).
