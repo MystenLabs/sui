@@ -72,27 +72,31 @@ export function getTransfersAmount(
             : null;
     }
 
-    const paySuiData =
-        getPaySuiTransaction(txnData) ?? getPayTransaction(txnData);
+    const payData = getPaySuiTransaction(txnData) ?? getPayTransaction(txnData);
 
-    const amountByRecipient = paySuiData?.recipients.reduce(
-        (acc, value, index) => ({
-            ...acc,
-            [value]: {
-                amount:
-                    paySuiData.amounts[index] +
-                    (value in acc ? acc[value].amount : 0),
-                coinType: txnEffect
+    const amountByRecipient = payData?.recipients.reduce(
+        (acc, value, index) => {
+            // for PaySuiTransaction the coinType is SUI
+            const coinType =
+                txKindName === 'PaySui'
+                    ? SUI_TYPE_ARG
+                    : txnEffect
                     ? getCoinType(
                           txnEffect,
-                          paySuiData.recipients[index] ||
-                              paySuiData.recipients[0]
+                          payData.recipients[index] || payData.recipients[0]
                       )
-                    : null,
-                address:
-                    paySuiData.recipients[index] || paySuiData.recipients[0],
-            },
-        }),
+                    : null;
+            return {
+                ...acc,
+                [value]: {
+                    amount:
+                        payData.amounts[index] +
+                        (value in acc ? acc[value].amount : 0),
+                    coinType,
+                    address: payData.recipients[index] || payData.recipients[0],
+                },
+            };
+        },
         {} as {
             [key: string]: {
                 amount: number;
