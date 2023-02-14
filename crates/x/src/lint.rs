@@ -7,7 +7,10 @@ use nexlint_lints::{
     content::*,
     handle_lint_results,
     package::*,
-    project::{BannedDeps, BannedDepsConfig, DirectDuplicateGitDependencies},
+    project::{
+        BannedDepConfig, BannedDepType, BannedDeps, BannedDepsConfig,
+        DirectDuplicateGitDependencies,
+    },
 };
 
 static LICENSE_HEADER: &str = "Copyright (c) Mysten Labs, Inc.\n\
@@ -20,20 +23,26 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> crate::Result<()> {
-    let banned_deps_config = BannedDepsConfig {
-        direct: vec![
+    let banned_deps_config = BannedDepsConfig(
+        vec![
             (
                 "lazy_static".to_owned(),
-                "use once_cell::sync::Lazy instead".to_owned(),
+                BannedDepConfig {
+                    message: "use once_cell::sync::Lazy instead".to_owned(),
+                    type_: BannedDepType::Direct,
+                },
             ),
             (
                 "tracing-test".to_owned(),
-                "you should not be testing against log lines".to_owned(),
+                BannedDepConfig {
+                    message: "you should not be testing against log lines".to_owned(),
+                    type_: BannedDepType::Always,
+                },
             ),
         ]
         .into_iter()
         .collect(),
-    };
+    );
     let project_linters: &[&dyn ProjectLinter] = &[
         &BannedDeps::new(&banned_deps_config),
         &DirectDuplicateGitDependencies,
