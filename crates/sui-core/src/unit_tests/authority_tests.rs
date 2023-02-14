@@ -32,7 +32,7 @@ use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSumma
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
 };
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use std::{convert::TryInto, env};
@@ -2660,6 +2660,78 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
         authority_state.handle_transaction(transaction).await,
         Err(SuiError::InvalidSystemTransaction),
     ));
+}
+
+#[tokio::test]
+async fn test_invalid_mutable_clock_parameter() {
+    // User transactions that take the singleton Clock object at `0x6` by mutable reference will
+    // fail to sign, to prevent transactions bottlenecking on it.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_ref = gas_object.compute_object_reference();
+
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutable: true,
+        })],
+        MAX_GAS,
+    );
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+
+    let Err(e) = authority_state.handle_transaction(transaction).await else {
+        panic!("Expected handling transaction to fail");
+    };
+
+    assert_eq!(
+        e,
+        SuiError::TransactionInputObjectsErrors {
+            errors: vec![SuiError::ImmutableParameterExpectedError]
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_valid_immutable_clock_parameter() {
+    // User transactions can take an immutable reference of the singleton Clock.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_ref = gas_object.compute_object_reference();
+
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutable: false,
+        })],
+        MAX_GAS,
+    );
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    authority_state
+        .handle_transaction(transaction)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
