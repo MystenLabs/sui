@@ -5,6 +5,7 @@
 use super::*;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use crate::{
+    authority::move_integration_tests::build_and_publish_test_package,
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
     checkpoints::CheckpointServiceNoop,
@@ -24,6 +25,7 @@ use rand::{
     prelude::StdRng,
     Rng, SeedableRng,
 };
+use std::collections::HashSet;
 use std::fs;
 use std::future::Future;
 use std::pin::Pin;
@@ -3380,7 +3382,204 @@ async fn test_store_revert_remove_ofield() {
     assert_eq!(inner.version(), inner_v1.1);
 }
 
+#[tokio::test]
+async fn test_iter_live_object_set() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (receiver, _): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let obj_id = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas), (sender, obj_id)]).await;
+
+    let starting_live_set: HashSet<_> = authority
+        .database
+        .iter_live_object_set()
+        .filter_map(|(id, _, _)| {
+            if id != gas && id != obj_id {
+                Some(id)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let gas_obj = authority.get_object(&gas).await.unwrap().unwrap();
+    let obj = authority.get_object(&obj_id).await.unwrap().unwrap();
+
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        receiver,
+        obj.compute_object_reference(),
+        gas_obj.compute_object_reference(),
+        &authority,
+    );
+    authority
+        .execute_certificate(
+            &certified_transfer_transaction,
+            &authority.epoch_store_for_testing(),
+        )
+        .await
+        .unwrap();
+
+    let package =
+        build_and_publish_test_package(&authority, &sender, &sender_key, &gas, "object_wrapping")
+            .await;
+
+    // Create a Child object.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_wrapping",
+        "create_child",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let child_object_ref = effects.created[0].0;
+
+    // Create a Parent object, by wrapping the child object.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_wrapping",
+        "create_parent",
+        vec![],
+        vec![TestCallArg::Object(child_object_ref.0)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    // Child object is wrapped, Parent object is created.
+    assert_eq!(
+        (
+            effects.created.len(),
+            effects.deleted.len(),
+            effects.wrapped.len()
+        ),
+        (1, 0, 1)
+    );
+
+    let parent_object_ref = effects.created[0].0;
+
+    // Extract the child out of the parent.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_wrapping",
+        "extract_child",
+        vec![],
+        vec![TestCallArg::Object(parent_object_ref.0)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // Make sure that version increments again when unwrapped.
+    let child_object_ref = effects.unwrapped[0].0;
+
+    // Wrap the child to the parent again.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_wrapping",
+        "set_child",
+        vec![],
+        vec![
+            TestCallArg::Object(parent_object_ref.0),
+            TestCallArg::Object(child_object_ref.0),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let parent_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
+
+    // Now delete the parent object, which will in turn delete the child object.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_wrapping",
+        "delete_parent",
+        vec![],
+        vec![TestCallArg::Object(parent_object_ref.0)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    check_live_set(
+        &authority,
+        &starting_live_set,
+        &[
+            (package.0, package.1),
+            (gas, SequenceNumber::from_u64(8)),
+            (obj_id, SequenceNumber::from_u64(2)),
+        ],
+    );
+}
+
 // helpers
+
+#[cfg(test)]
+fn check_live_set(
+    authority: &AuthorityState,
+    ignore: &HashSet<ObjectID>,
+    expected_live_set: &[(ObjectID, SequenceNumber)],
+) {
+    let mut expected: Vec<_> = expected_live_set.into();
+    expected.sort();
+
+    let actual: Vec<_> = authority
+        .database
+        .iter_live_object_set()
+        .filter_map(|(id, v, _)| {
+            if ignore.contains(&id) {
+                None
+            } else {
+                Some((id, v))
+            }
+        })
+        .collect();
+
+    assert_eq!(actual, expected);
+}
 
 #[cfg(test)]
 pub fn find_by_id(fx: &[(ObjectRef, Owner)], id: ObjectID) -> Option<ObjectRef> {

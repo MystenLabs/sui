@@ -1128,6 +1128,10 @@ impl AuthorityStore {
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.perpetual_tables.get_sui_system_state_object()
     }
+
+    pub fn iter_live_object_set(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        self.perpetual_tables.iter_live_object_set()
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {
