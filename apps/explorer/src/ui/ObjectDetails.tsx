@@ -39,11 +39,6 @@ export interface ObjectDetailsProps
     variant: 'small' | 'large';
 }
 
-function replaceIPFS(url?: string) {
-    if (!url) return;
-    return url.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
-}
-
 export function ObjectDetails({
     id,
     image,
@@ -56,7 +51,6 @@ export function ObjectDetails({
     const [open, setOpen] = useState(false);
     const close = () => setOpen(false);
     const openPreview = () => setOpen(true);
-    const url = replaceIPFS(image) ?? '';
 
     return (
         <div className="flex items-center gap-3.75">
@@ -66,7 +60,7 @@ export function ObjectDetails({
                         <div className="flex flex-col gap-5">
                             <Image
                                 alt={name}
-                                src={url}
+                                src={image}
                                 className="rounded-none"
                             />
                             <Heading
@@ -84,7 +78,7 @@ export function ObjectDetails({
                         <Image
                             onClick={openPreview}
                             alt={name}
-                            src={url}
+                            src={image}
                             blur={nsfw}
                             className={styles({ size: variant })}
                         />
