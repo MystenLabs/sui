@@ -3,7 +3,7 @@
 
 use crate::operations::Operations;
 use crate::types::{
-    Block, BlockHash, BlockIdentifier, BlockResponse, OperationType, Transaction,
+    Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
     TransactionIdentifier,
 };
 use crate::Error;
@@ -295,17 +295,19 @@ impl CheckpointBlockProvider {
 fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128> {
     ops.into_iter()
         .fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
-            match op.type_ {
-                OperationType::SuiBalanceChange
-                | OperationType::Gas
-                | OperationType::PaySui
-                | OperationType::Delegation => {
-                    if let (Some(addr), Some(amount)) = (op.account, op.amount) {
-                        *changes.entry(addr.address).or_default() += amount.value
+            if let Some(OperationStatus::Success) = op.status {
+                match op.type_ {
+                    OperationType::SuiBalanceChange
+                    | OperationType::Gas
+                    | OperationType::PaySui
+                    | OperationType::Delegation => {
+                        if let (Some(addr), Some(amount)) = (op.account, op.amount) {
+                            *changes.entry(addr.address).or_default() += amount.value
+                        }
                     }
-                }
-                _ => {}
-            };
+                    _ => {}
+                };
+            }
             changes
         })
 }
