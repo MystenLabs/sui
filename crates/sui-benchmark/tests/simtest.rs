@@ -9,16 +9,12 @@ mod test {
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+    use sui_benchmark::benchmark_setup::ProxyGasAndCoin;
     use sui_benchmark::system_state_observer::SystemStateObserver;
-    use sui_benchmark::util::generate_all_gas_for_test;
-    use sui_benchmark::workloads::delegation::DelegationWorkload;
-    use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
-    use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
-    use sui_benchmark::workloads::WorkloadGasConfig;
+    use sui_benchmark::workloads::workload_configuration::configure_combined_mode;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
-        workloads::make_combination_workload,
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
@@ -214,12 +210,12 @@ mod test {
             Owner::AddressOwner(sender),
             ed25519_keypair.clone(),
         );
-        let coin = (
+        let pay_coin = (
             pay_coin.clone(),
             Owner::AddressOwner(sender),
             ed25519_keypair.clone(),
         );
-        let coin_type_tag = move_struct.type_params[0].clone();
+        let pay_coin_type_tag = move_struct.type_params[0].clone();
 
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
@@ -230,6 +226,14 @@ mod test {
             )
             .await,
         );
+
+        let proxy_gas_and_coins = vec![ProxyGasAndCoin {
+            primary_gas,
+            pay_coin,
+            pay_coin_type_tag,
+            proxy: proxy.clone(),
+        }];
+
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
             if let Ok(_) = system_state_observer.reference_gas_price.changed().await {
@@ -237,58 +241,32 @@ mod test {
             }
             Arc::new(system_state_observer)
         };
-        let reference_gas_price = *system_state_observer.reference_gas_price.borrow();
         // The default test parameters are somewhat conservative in order to keep the running time
         // of the test reasonable in CI.
-
         let target_qps = get_var("SIM_STRESS_TEST_QPS", 10);
         let num_workers = get_var("SIM_STRESS_TEST_WORKERS", 10);
         let in_flight_ratio = get_var("SIM_STRESS_TEST_IFR", 2);
-        let max_ops = target_qps * in_flight_ratio;
-        let num_shared_counters = max_ops;
-        let shared_counter_workload_init_gas_config =
-            SharedCounterWorkload::generate_coin_config_for_init(num_shared_counters);
-        let shared_counter_workload_payload_gas_config =
-            SharedCounterWorkload::generate_coin_config_for_payloads(max_ops);
+        let shared_counter_weight = 1;
+        let transfer_object_weight = 1;
+        let num_transfer_accounts = 2;
+        let delegation_weight = 1;
+        let shared_counter_hotness_factor = 50;
 
-        let (transfer_object_workload_tokens, transfer_object_workload_payload_gas_config) =
-            TransferObjectWorkload::generate_coin_config_for_payloads(max_ops, 2, max_ops);
-        let delegation_gas_configs = DelegationWorkload::generate_gas_config_for_payloads(max_ops);
-        let (workload_init_gas, workload_payload_gas) = generate_all_gas_for_test(
-            proxy.clone(),
-            primary_gas,
-            coin,
-            coin_type_tag,
-            WorkloadGasConfig {
-                shared_counter_workload_init_gas_config,
-                shared_counter_workload_payload_gas_config,
-                transfer_object_workload_tokens,
-                transfer_object_workload_payload_gas_config,
-                delegation_gas_configs,
-            },
-            reference_gas_price,
+        let proxy_workloads = configure_combined_mode(
+            num_workers,
+            num_transfer_accounts,
+            shared_counter_weight,
+            transfer_object_weight,
+            delegation_weight,
+            shared_counter_hotness_factor,
+            target_qps,
+            in_flight_ratio,
+            proxy_gas_and_coins,
+            system_state_observer.clone(),
             1000,
         )
         .await
         .unwrap();
-        let mut combination_workload = make_combination_workload(
-            target_qps,
-            num_workers,
-            in_flight_ratio,
-            2, // num transfer accounts
-            1, // shared_counter_weight
-            1, // transfer_object_weight
-            1, // delegation_weight
-            workload_payload_gas,
-        );
-        combination_workload
-            .workload
-            .init(
-                workload_init_gas,
-                proxy.clone(),
-                system_state_observer.clone(),
-            )
-            .await;
 
         let driver = BenchDriver::new(5, false);
 
@@ -304,8 +282,7 @@ mod test {
         let show_progress = interval.is_unbounded();
         let (benchmark_stats, _) = driver
             .run(
-                vec![combination_workload],
-                proxy,
+                proxy_workloads,
                 system_state_observer,
                 &registry,
                 show_progress,
