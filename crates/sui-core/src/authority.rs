@@ -174,7 +174,6 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_ready: IntGauge,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
-    pub(crate) execution_driver_execution_failures: IntCounter,
 
     pub(crate) skipped_consensus_txns: IntCounter,
 
@@ -337,12 +336,6 @@ impl AuthorityMetrics {
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
-                registry,
-            )
-            .unwrap(),
-            execution_driver_execution_failures: register_int_counter_with_registry!(
-                "execution_driver_execution_failures",
-                "Cumulative number of transactions failed to be executed by execution driver",
                 registry,
             )
             .unwrap(),
@@ -611,13 +604,10 @@ impl AuthorityState {
 
         let observed_effects_digest = observed_effects.digest();
         if observed_effects_digest != expected_effects_digest {
-            error!(
-                ?expected_effects_digest,
-                ?observed_effects_digest,
-                expected_effects=?effects.data(),
-                observed_effects=?observed_effects.data(),
-                input_objects = ?certificate.data().intent_message.value.input_objects(),
-                "Locally executed effects do not match canonical effects!");
+            panic!(
+                "Locally executed effects do not match canonical effects! expected_effects_digest={:?} observed_effects_digest={:?} expected_effects={:?} observed_effects={:?} input_objects={:?}",
+                expected_effects_digest, observed_effects_digest, effects.data(), observed_effects.data(), certificate.data().intent_message.value.input_objects()
+            );
         }
         Ok(())
     }
