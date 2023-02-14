@@ -19,7 +19,11 @@ use std::{
 };
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
-use tokio::{sync::watch, task::JoinSet, time::sleep};
+use tokio::{
+    sync::{oneshot, watch},
+    task::JoinSet,
+    time::sleep,
+};
 use tracing::{debug, trace, warn};
 use types::{
     ensure,
@@ -95,6 +99,7 @@ impl Synchronizer {
         tx_new_certificates: Sender<Certificate>,
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         rx_consensus_round_updates: watch::Receiver<Round>,
+        rx_synchronizer_network: oneshot::Receiver<Network>,
         dag: Option<Arc<Dag>>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {

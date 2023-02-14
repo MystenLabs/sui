@@ -34,6 +34,7 @@ async fn propose_header() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -100,6 +101,7 @@ async fn propose_header() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -151,6 +153,7 @@ async fn propose_header_failure() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let (header_store, certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
@@ -200,6 +203,7 @@ async fn propose_header_failure() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -252,6 +256,7 @@ async fn process_certificates() {
     let (tx_parents, mut rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -268,6 +273,7 @@ async fn process_certificates() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -368,6 +374,7 @@ async fn recover_core() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -384,6 +391,7 @@ async fn recover_core() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -509,6 +517,7 @@ async fn recover_core_partial_certs() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -525,6 +534,7 @@ async fn recover_core_partial_certs() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -646,6 +656,7 @@ async fn recover_core_expecting_header_of_previous_round() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(3);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -662,6 +673,7 @@ async fn recover_core_expecting_header_of_previous_round() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -783,6 +795,7 @@ async fn shutdown_core() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Create test stores.
     let (header_store, certificate_store, payload_store) = create_db_stores();
@@ -799,6 +812,7 @@ async fn shutdown_core() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));

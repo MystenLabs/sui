@@ -33,7 +33,7 @@ use storage::PayloadToken;
 use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
 use store::Store;
 use test_utils::{temp_dir, CommitteeFixture};
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 
 use types::{
     error::DagError, now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
@@ -308,6 +308,7 @@ async fn test_request_vote_missing_parents() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -320,6 +321,7 @@ async fn test_request_vote_missing_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -480,6 +482,7 @@ async fn test_request_vote_missing_batches() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -492,6 +495,7 @@ async fn test_request_vote_missing_batches() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -604,6 +608,7 @@ async fn test_request_vote_already_voted() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -616,6 +621,7 @@ async fn test_request_vote_already_voted() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -761,6 +767,7 @@ async fn test_fetch_certificates_handler() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -773,6 +780,7 @@ async fn test_fetch_certificates_handler() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -928,6 +936,7 @@ async fn test_process_payload_availability_success() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -940,6 +949,7 @@ async fn test_process_payload_availability_success() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -1078,6 +1088,7 @@ async fn test_process_payload_availability_when_failures() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -1090,6 +1101,7 @@ async fn test_process_payload_availability_when_failures() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
@@ -1176,6 +1188,7 @@ async fn test_request_vote_created_at_in_future() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -1188,6 +1201,7 @@ async fn test_request_vote_created_at_in_future() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));

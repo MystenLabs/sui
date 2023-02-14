@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use types::{error::DagError, Certificate, PreSubscribedBroadcastSender};
 
 #[tokio::test]
@@ -31,6 +31,7 @@ async fn deliver_certificate_using_dag() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -55,6 +56,7 @@ async fn deliver_certificate_using_dag() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         Some(dag.clone()),
         metrics.clone(),
     );
@@ -100,6 +102,7 @@ async fn deliver_certificate_using_store() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Synchronizer::new(
         name,
@@ -112,6 +115,7 @@ async fn deliver_certificate_using_store() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     );
@@ -157,6 +161,7 @@ async fn deliver_certificate_not_found_parents() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Synchronizer::new(
         name,
@@ -169,6 +174,7 @@ async fn deliver_certificate_not_found_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     );
@@ -221,6 +227,7 @@ async fn sync_batches_drops_old() {
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
     let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
         name.clone(),
@@ -233,6 +240,7 @@ async fn sync_batches_drops_old() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));

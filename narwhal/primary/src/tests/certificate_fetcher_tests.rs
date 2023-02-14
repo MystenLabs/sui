@@ -17,6 +17,7 @@ use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use storage::NodeStorage;
+use tokio::sync::oneshot;
 
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
@@ -174,6 +175,7 @@ async fn fetch_certificates_basic() {
     // Signal rounds
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Make a synchronizer for the core.
     let synchronizer = Arc::new(Synchronizer::new(
@@ -187,6 +189,7 @@ async fn fetch_certificates_basic() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        rx_synchronizer_network,
         None,
         metrics.clone(),
     ));
