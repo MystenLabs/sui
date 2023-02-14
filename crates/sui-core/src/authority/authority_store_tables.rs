@@ -10,7 +10,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::messages::TrustedCertificate;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
-use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use typed_store_derive::DBMapUtils;
 
@@ -200,6 +200,44 @@ impl AuthorityPerpetualTables {
             .skip_to(&ObjectKey::ZERO)?
             .next()
             .is_none())
+    }
+
+    pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
+        LiveSetIter {
+            iter: self.parent_sync.keys(),
+            prev: None,
+        }
+    }
+}
+
+pub struct LiveSetIter<'a> {
+    iter: <DBMap<ObjectRef, TransactionDigest> as Map<'a, ObjectRef, TransactionDigest>>::Keys,
+    prev: Option<ObjectRef>,
+}
+
+impl Iterator for LiveSetIter<'_> {
+    type Item = ObjectRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(next) = self.iter.next() {
+                let prev = self.prev;
+                self.prev = Some(next);
+
+                match prev {
+                    Some(prev) if prev.0 != next.0 && prev.2.is_alive() => return Some(prev),
+                    _ => continue,
+                }
+            }
+
+            return match self.prev {
+                Some(prev) if prev.2.is_alive() => {
+                    self.prev = None;
+                    Some(prev)
+                }
+                _ => None,
+            };
+        }
     }
 }
 
