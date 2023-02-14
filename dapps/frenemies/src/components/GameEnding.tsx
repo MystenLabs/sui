@@ -28,10 +28,10 @@ export function GameEnding() {
   return (
     <Card>
       <h2 className="text-steel-darker font-semibold text-heading2">
-        Frenemies is ending.
+        Frenemies is ending soon
       </h2>
       <div className="text-left text-steel-darker mt-4">
-        The game will end on{" "}
+        Frenemies will end on{" "}
         <span className="font-bold">
           {GAME_END_DATE.toLocaleString("en-US", {
             day: "numeric",
@@ -41,7 +41,8 @@ export function GameEnding() {
             timeZoneName: "short",
           })}
         </span>
-        . Please make sure you submit your scores beforehand.
+        . We will take a snapshot of the leaderboard by 10am PST. Please submit
+        your final moves before that time.
       </div>
     </Card>
   );

@@ -20,10 +20,13 @@ function Connect() {
     <div>
       <img src="/capy_cowboy.svg" alt="Capy" className="block mx-auto" />
       <h1 className="mt-4 text-steel-darker text-heading2 font-semibold">
-        Sui Frenemies game has ended.
+        Thank You For Playing Frenemies!
       </h1>
-      <div className="mt-4 text-steel-darker text-heading6">
-        Connect your wallet to verify if you won.
+      <div className="mt-4 text-steel-darker text-heading6 leading-normal">
+        Sui Testnet Wave 2 will end Wednesday February 15 at 4pm PST. If you are
+        among the top 2000 players you will be eligible for a reward, subject to
+        game terms and conditions. US citizens and residents are not eligible
+        for a reward.
       </div>
       <div className="mt-10">
         <ConnectButton className="!bg-frenemies !text-white !px-5 !py-3 leading-none" />
@@ -52,7 +55,7 @@ function Done() {
     <div>
       <img src="/capy_thumbs_up.svg" alt="Capy" className="block mx-auto" />
       <h1 className="mt-4 text-steel-darker text-heading2 leading-tight font-semibold">
-        Thank you!
+        Thank You For Playing Frenemies!
       </h1>
       <div className="mt-4 text-steel-darker text-heading6 leading-tight">
         Your information has been submitted. We'll be in touch shortly.
@@ -66,6 +69,8 @@ const Schema = z.object({
   email: z.string().email(),
   agreed: z.boolean(),
 });
+
+const GAS_BUDGET = 10000n;
 
 function Connected() {
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
@@ -87,7 +92,7 @@ function Connected() {
   const submitWinner = useMutation(
     ["submit-winner"],
     async (values: z.infer<typeof Schema>) => {
-      fetch(
+      const res = await fetch(
         import.meta.env.DEV
           ? "http://127.0.0.1:3003/frenemies"
           : "https://apps-backend.sui.io/frenemies",
@@ -104,7 +109,23 @@ function Connected() {
         }
       );
 
-      // await signAndExecuteTransaction();
+      if (!res.ok) {
+        throw new Error("Network error");
+      }
+
+      const data = await res.json();
+
+      await signAndExecuteTransaction({
+        kind: "moveCall",
+        data: {
+          packageObjectId: config.VITE_NOOP,
+          module: "noop",
+          function: "noop_w_metadata",
+          typeArguments: [],
+          gasBudget: Number(GAS_BUDGET),
+          arguments: [data.bytes],
+        },
+      });
     }
   );
 
@@ -139,11 +160,30 @@ function Connected() {
     <div>
       <img src="/capy_cowboy.svg" alt="Capy" className="block mx-auto" />
       <h1 className="mt-4 text-steel-darker text-heading2 font-semibold leading-tight">
-        You won. Congratulations!
+        Thank You For Playing Frenemies!
       </h1>
-      <div className="mt-4 text-steel-darker text-heading6 leading-normal">
-        Please submit your name and email information below. The information
-        submitted should match your exchange information.
+      <div className="mt-4 text-steel-darker text-heading6 leading-normal text-left">
+        Please enter your full name and email address, which will be used to
+        provide access to the Community Access Program, subject to game terms
+        and conditions. Please ensure the accuracy of this information{" "}
+        <span className="font-bold">
+          as it cannot be modified once submitted
+        </span>
+        . Winners will be required to undergo KYC and sanctions compliance.{" "}
+        <span className="font-bold">
+          US citizens and residents are not eligible for a reward
+        </span>
+        . When the Community Access Program launches you will receive further
+        instructions at the email address you provided. By submitting this
+        information you hereby agree to and acknowledge our{" "}
+        <a
+          className="text-frenemies"
+          target="_blank"
+          href="https://mystenlabs.com/legal?content=privacy"
+        >
+          Privacy Policy
+        </a>
+        .
         <br />
         <br />
         You will also be prompted to send a transaction to Testnet to validate
