@@ -79,7 +79,7 @@ fn test_update_contents() {
     // update contents should not touch the version number or ID.
     let old_contents = coin_obj.contents().to_vec();
     let old_type_specific_contents = coin_obj.type_specific_contents().to_vec();
-    coin_obj.update_contents(old_contents).unwrap();
+    coin_obj.update_coin_contents(old_contents);
     assert_eq!(&coin_obj.id(), coin.id());
     assert_eq!(
         coin_obj.type_specific_contents(),

@@ -29,6 +29,7 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     AuthorityName, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress,
     TransactionDigest, TransactionEffectsDigest,
@@ -576,6 +577,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
                         o.has_public_transfer,
                         o.version,
                         o.bcs_bytes,
+                        ProtocolConfig::get_for_min_version(),
                     )?
                 })
             }

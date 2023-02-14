@@ -38,7 +38,7 @@ use move_vm_runtime::{
 use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::natives::object_runtime::{self, ObjectRuntime};
 use sui_json::primitive_type;
-use sui_protocol_constants::*;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::*,
     error::ExecutionError,
@@ -57,24 +57,29 @@ use tracing::instrument;
 
 use crate::execution_mode::{self, ExecutionMode};
 
-pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
+pub fn new_move_vm(
+    natives: NativeFunctionTable,
+    protocol_config: &ProtocolConfig,
+) -> Result<MoveVM, SuiError> {
     MoveVM::new_with_config(
         natives,
         VMConfig {
             verifier: VerifierConfig {
-                max_loop_depth: Some(MAX_LOOP_DEPTH),
-                max_generic_instantiation_length: Some(MAX_GENERIC_INSTANTIATION_LENGTH),
-                max_function_parameters: Some(MAX_FUNCTION_PARAMETERS),
-                max_basic_blocks: Some(MAX_BASIC_BLOCKS),
-                max_value_stack_size: MAX_VALUE_STACK_SIZE,
-                max_type_nodes: Some(MAX_TYPE_NODES),
-                max_push_size: Some(MAX_PUSH_SIZE),
-                max_dependency_depth: Some(MAX_DEPENDENCY_DEPTH),
-                max_fields_in_struct: Some(MAX_FIELDS_IN_STRUCT),
-                max_function_definitions: Some(MAX_FUNCTION_DEFINITIONS),
-                max_struct_definitions: Some(MAX_STRUCT_DEFINITIONS),
+                max_loop_depth: Some(protocol_config.max_loop_depth()),
+                max_generic_instantiation_length: Some(
+                    protocol_config.max_generic_instantiation_length(),
+                ),
+                max_function_parameters: Some(protocol_config.max_function_parameters()),
+                max_basic_blocks: Some(protocol_config.max_basic_blocks()),
+                max_value_stack_size: protocol_config.max_value_stack_size(),
+                max_type_nodes: Some(protocol_config.max_type_nodes()),
+                max_push_size: Some(protocol_config.max_push_size()),
+                max_dependency_depth: Some(protocol_config.max_dependency_depth()),
+                max_fields_in_struct: Some(protocol_config.max_fields_in_struct()),
+                max_function_definitions: Some(protocol_config.max_function_definitions()),
+                max_struct_definitions: Some(protocol_config.max_struct_definitions()),
             },
-            max_binary_format_version: MOVE_BINARY_FORMAT_VERSION,
+            max_binary_format_version: protocol_config.move_binary_format_version(),
             paranoid_type_checks: false,
         },
     )
@@ -91,12 +96,14 @@ pub fn new_session<
     state_view: &'r S,
     input_objects: BTreeMap<ObjectID, (/* by_value */ bool, Owner)>,
     is_metered: bool,
+    protocol_config: &ProtocolConfig,
 ) -> Session<'r, 'v, S> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
         Box::new(state_view),
         input_objects,
         is_metered,
+        protocol_config,
     ));
     vm.new_session_with_extensions(state_view, extensions)
 }
@@ -129,6 +136,7 @@ pub fn execute<
     args: Vec<CallArg>,
     gas_status: &mut GasStatus,
     ctx: &mut TxContext,
+    protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let mut objects: BTreeMap<ObjectID, &Object> = BTreeMap::new();
     for arg in &args {
@@ -181,6 +189,7 @@ pub fn execute<
         mutable_ref_objects,
         gas_status,
         ctx,
+        protocol_config,
     )
 }
 
@@ -208,12 +217,19 @@ fn execute_internal<
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut GasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
+    protocol_config: &ProtocolConfig,
 ) -> Result<Mode::ExecutionResult, ExecutionError> {
     let input_objects = object_data
         .iter()
         .map(|(id, (owner, _))| (*id, (by_value_objects.contains(id), *owner)))
         .collect();
-    let mut session = new_session(vm, state_view, input_objects, gas_status.is_metered());
+    let mut session = new_session(
+        vm,
+        state_view,
+        input_objects,
+        gas_status.is_metered(),
+        protocol_config,
+    );
     // check type arguments separately for error conversion
     for (idx, ty) in type_args.iter().enumerate() {
         session
@@ -292,7 +308,13 @@ fn execute_internal<
         user_events,
         loaded_child_objects,
     } = object_runtime.finish()?;
-    let session = new_session(vm, &*state_view, BTreeMap::new(), gas_status.is_metered());
+    let session = new_session(
+        vm,
+        &*state_view,
+        BTreeMap::new(),
+        gas_status.is_metered(),
+        protocol_config,
+    );
     let writes = writes
         .into_iter()
         .map(|(id, (write_kind, owner, ty, tag, value))| {
@@ -327,6 +349,7 @@ fn execute_internal<
         deletions,
         user_events,
         ctx,
+        protocol_config,
     )?;
     Ok(mode_result)
 }
@@ -346,6 +369,7 @@ pub fn publish<
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let mut modules = module_bytes
         .iter()
@@ -361,8 +385,15 @@ pub fn publish<
     }
 
     let package_id = generate_package_id(&mut modules, ctx)?;
-    let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
+    let vm = verify_and_link(
+        state_view,
+        &modules,
+        package_id,
+        natives,
+        gas_status,
+        protocol_config,
+    )?;
+    store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status, protocol_config)
 }
 
 /// Store package in state_view and call module initializers
@@ -379,6 +410,7 @@ pub fn store_package_and_init_modules<
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let modules_to_init = modules
         .iter()
@@ -408,7 +440,14 @@ pub fn store_package_and_init_modules<
     )]);
     state_view.apply_object_changes(changes);
 
-    init_modules(state_view, vm, modules_to_init, ctx, gas_status)
+    init_modules(
+        state_view,
+        vm,
+        modules_to_init,
+        ctx,
+        gas_status,
+        protocol_config,
+    )
 }
 
 /// Modules in module_ids_to_init must have the init method defined
@@ -425,6 +464,7 @@ fn init_modules<
     module_ids_to_init: Vec<(ModuleId, FunctionHandleIndex)>,
     ctx: &mut TxContext,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
     for (module_id, fhandle_idx) in module_ids_to_init {
@@ -463,6 +503,7 @@ fn init_modules<
             BTreeMap::new(),
             gas_status,
             ctx,
+            protocol_config,
         )?;
     }
     Ok(())
@@ -480,13 +521,20 @@ pub fn verify_and_link<
     package_id: ObjectID,
     natives: NativeFunctionTable,
     gas_status: &mut GasStatus,
+    protocol_config: &ProtocolConfig,
 ) -> Result<MoveVM, ExecutionError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
-    let mut session = new_session(&vm, state_view, BTreeMap::new(), gas_status.is_metered());
+    let mut session = new_session(
+        &vm,
+        state_view,
+        BTreeMap::new(),
+        gas_status.is_metered(),
+        protocol_config,
+    );
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -569,6 +617,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
     deletions: LinkedHashMap<ObjectID, DeleteKind>,
     user_events: Vec<(StructTag, Vec<u8>)>,
     ctx: &TxContext,
+    protocol_config: &ProtocolConfig,
 ) -> Result<(), ExecutionError> {
     let sender = ctx.sender();
     let tx_ctx = SingleTxContext {
@@ -586,7 +635,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents(new_contents)?;
+            .update_contents(new_contents, protocol_config)?;
 
         changes.insert(
             obj_id,
@@ -627,6 +676,7 @@ fn process_successful_execution<S: Storage + ParentSync>(
                 has_public_transfer,
                 old_obj_ver.unwrap_or_else(SequenceNumber::new),
                 contents,
+                protocol_config,
             )?
         };
 
