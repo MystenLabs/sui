@@ -35,7 +35,7 @@ use sui_types::base_types::{
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{Signature, SuiAuthorityStrongQuorumSignInfo};
+use sui_types::crypto::SuiAuthorityStrongQuorumSignInfo;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
@@ -55,6 +55,7 @@ use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
+use sui_types::signature::GenericSignature;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
@@ -1809,7 +1810,7 @@ pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
     /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
-    pub tx_signature: Signature,
+    pub tx_signature: GenericSignature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }

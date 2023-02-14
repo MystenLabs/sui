@@ -6,14 +6,14 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignature, SuiSignatureInner,
-    ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
+use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
@@ -21,6 +21,7 @@ use crate::{
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::Base64;
+use fastcrypto::traits::Signer;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, LocalIndex, TypeParameterIndex};
@@ -1097,11 +1098,11 @@ impl TransactionData {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
     pub intent_message: IntentMessage<TransactionData>,
-    pub tx_signature: Signature,
+    pub tx_signature: GenericSignature,
 }
 
 impl SenderSignedData {
-    pub fn new(tx_data: TransactionData, intent: Intent, tx_signature: Signature) -> Self {
+    pub fn new(tx_data: TransactionData, intent: Intent, tx_signature: GenericSignature) -> Self {
         Self {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signature,
@@ -1121,7 +1122,7 @@ impl Message for SenderSignedData {
             return Ok(());
         }
         self.tx_signature
-            .verify_secure(&self.intent_message, self.intent_message.value.sender)
+            .verify_secure_generic(&self.intent_message, self.intent_message.value.sender)
     }
 }
 
@@ -1179,14 +1180,22 @@ impl Transaction {
         let intent1 = intent.clone();
         let intent_msg = IntentMessage::new(intent, data);
         let signature = Signature::new_secure(&intent_msg, signer);
-        Self::new(SenderSignedData::new(data1, intent1, signature))
+        Self::new(SenderSignedData::new(data1, intent1, signature.into()))
     }
 
     pub fn from_data(data: TransactionData, intent: Intent, signature: Signature) -> Self {
+        Self::from_generic_sig_data(data, intent, signature.into())
+    }
+
+    pub fn from_generic_sig_data(
+        data: TransactionData,
+        intent: Intent,
+        signature: GenericSignature,
+    ) -> Self {
         Self::new(SenderSignedData::new(data, intent, signature))
     }
 
-    /// Returns the Base64 encoded tx_bytes and the Base64 encoded serialized signature (`flag || sig || pk`).
+    /// Returns the Base64 encoded tx_bytes and the Base64 encoded [enum GenericSignature].
     pub fn to_tx_bytes_and_signature(&self) -> (Base64, Base64) {
         (
             Base64::from_bytes(&bcs::to_bytes(&self.data().intent_message.value).unwrap()),
@@ -1243,9 +1252,7 @@ impl VerifiedTransaction {
             })
             .pipe(|data| SenderSignedData {
                 intent_message: IntentMessage::new(Intent::default(), data),
-                tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                    .unwrap()
-                    .into(),
+                tx_signature: GenericSignature::Signature(Ed25519SuiSignature::default().into()),
             })
             .pipe(Transaction::new)
             .pipe(Self::new_from_verified)
