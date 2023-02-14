@@ -530,7 +530,7 @@ impl SuiNode {
         let system_state = state
             .get_sui_system_state_object()
             .expect("Reading Sui system state object cannot fail");
-        let committee = Arc::new(system_state.get_current_epoch_narwhal_committee());
+        let committee = system_state.get_current_epoch_narwhal_committee();
 
         let transactions_addr = &config
             .consensus_config
