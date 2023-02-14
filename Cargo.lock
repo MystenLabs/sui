@@ -5220,7 +5220,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "tracing-test",
  "workspace-hack",
 ]
 
@@ -5499,7 +5498,6 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "tracing-test",
  "typed-store",
  "workspace-hack",
 ]
@@ -10220,29 +10218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-test"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e3d272c44878d2bbc9f4a20ad463724f03e19dbc667c6e84ac433ab7ffcc70b"
-dependencies = [
- "lazy_static 1.4.0",
- "tracing-core",
- "tracing-subscriber 0.3.16",
- "tracing-test-macro",
-]
-
-[[package]]
-name = "tracing-test-macro"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744324b12d69a9fc1edea4b38b7b1311295b662d161ad5deac17bb1358224a08"
-dependencies = [
- "lazy_static 1.4.0",
- "quote 1.0.23",
- "syn 1.0.107",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11620,8 +11595,6 @@ dependencies = [
  "tracing-serde",
  "tracing-subscriber 0.2.25",
  "tracing-subscriber 0.3.16",
- "tracing-test",
- "tracing-test-macro",
  "try-lock",
  "tui",
  "twox-hash",

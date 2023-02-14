@@ -603,7 +603,6 @@ tracing-log = { version = "0.1" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
-tracing-test = { version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17" }
 twox-hash = { version = "1", default-features = false }
@@ -1345,8 +1344,6 @@ tracing-log = { version = "0.1" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
-tracing-test = { version = "0.2", default-features = false }
-tracing-test-macro = { version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17" }
 twox-hash = { version = "1", default-features = false }
