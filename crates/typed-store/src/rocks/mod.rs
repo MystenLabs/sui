@@ -11,6 +11,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
+use rocksdb::checkpoint::Checkpoint;
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -375,6 +376,20 @@ impl RocksDB {
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         delegate_call!(self.flush())
+    }
+
+    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
+        match self {
+            Self::DBWithThreadMode(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+            Self::OptimisticTransactionDB(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {
