@@ -2456,17 +2456,12 @@ pub struct ExecuteTransactionRequest {
 pub enum TransactionType {
     SingleWriter, // Txes that only use owned objects and/or immutable objects
     SharedObject, // Txes that use at least one shared object
-    SystemObject, // SystemObject is a subset of SharedObject txes that touch the 0x5 System Object
 }
 
 impl ExecuteTransactionRequest {
     pub fn transaction_type(&self) -> TransactionType {
         if self.transaction.contains_shared_object() {
-            if self.transaction.touches_system_object() {
-                TransactionType::SystemObject
-            } else {
-                TransactionType::SharedObject
-            }
+            TransactionType::SharedObject
         } else {
             TransactionType::SingleWriter
         }
