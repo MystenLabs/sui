@@ -388,6 +388,7 @@ pub struct Vote {
     pub epoch: Epoch,
     pub origin: PublicKey,
     pub author: PublicKey,
+    // Signature of the HeaderDigest.
     pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
@@ -484,12 +485,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        let mut hasher = crypto::DefaultHashFunction::default();
-        hasher.update(Digest::from(self.digest));
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(&self.origin);
-        VoteDigest(hasher.finalize().into())
+        VoteDigest(self.digest.0)
     }
 }
 
@@ -769,12 +765,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
-        let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(Digest::from(self.header.digest()));
-        hasher.update(self.round().to_le_bytes());
-        hasher.update(self.epoch().to_le_bytes());
-        hasher.update(&self.origin());
-        CertificateDigest(hasher.finalize().into())
+        CertificateDigest(self.header.digest().0)
     }
 }
 

@@ -212,7 +212,19 @@ impl Core {
             .await;
         };
 
-        // Verify the vote.
+        // Verify the vote. Note that only the header digest is signed by the vote.
+        ensure!(
+            vote.digest == header.digest(),
+            DagError::UnexpectedVote(vote.digest)
+        );
+        // Possible equivocations.
+        ensure!(
+            header.epoch == vote.epoch,
+            DagError::InvalidEpoch {
+                expected: header.epoch,
+                received: vote.epoch
+            }
+        );
         ensure!(
             header.round == vote.round,
             DagError::InvalidRound {
@@ -221,12 +233,11 @@ impl Core {
             }
         );
         ensure!(
-            vote.digest == header.digest()
-                && vote.origin == header.author
-                && vote.author == authority,
+            vote.origin == header.author && vote.author == authority,
             DagError::UnexpectedVote(vote.digest)
         );
         vote.verify(&committee)?;
+
         Ok(vote)
     }
 
