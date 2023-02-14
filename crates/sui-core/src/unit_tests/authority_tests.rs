@@ -32,7 +32,7 @@ use sui_json_rpc_types::{SuiExecutionResult, SuiExecutionStatus, SuiGasCostSumma
 use sui_types::utils::{
     make_committee_key, mock_certified_checkpoint, to_sender_signed_transaction,
 };
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::epoch::epoch_metrics::EpochMetrics;
 use std::{convert::TryInto, env};
@@ -1507,9 +1507,7 @@ async fn test_conflicting_transactions() {
         assert_eq!(
             ok.clone().into_signed_for_testing().digest(),
             object_info
-                .object_and_lock
-                .expect("object should exist")
-                .lock
+                .lock_for_debugging
                 .expect("object should be locked")
                 .digest()
         );
@@ -1517,9 +1515,7 @@ async fn test_conflicting_transactions() {
         assert_eq!(
             ok.into_signed_for_testing().digest(),
             gas_info
-                .object_and_lock
-                .expect("gas should exist")
-                .lock
+                .lock_for_debugging
                 .expect("gas should be locked")
                 .digest()
         );
@@ -2015,6 +2011,12 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         std::mem::drop(g);
 
         // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
+        // Must manually enqueue the cert to transaction manager because send_consensus_no_execution
+        // explicitly doesn't do so.
+        authority_state
+            .transaction_manager()
+            .enqueue(vec![shared_object_cert.clone()], &epoch_store)
+            .unwrap();
         authority_state
             .execute_certificate(
                 &shared_object_cert,
@@ -2515,7 +2517,6 @@ async fn test_authority_persist() {
             committee_store,
             None,
             None,
-            None,
             checkpoint_store,
             &registry,
             &AuthorityStorePruningConfig::default(),
@@ -2625,6 +2626,108 @@ async fn test_idempotent_reversed_confirmation() {
             .1
             .into_message()
     );
+}
+
+#[tokio::test]
+async fn test_refusal_to_sign_consensus_commit_prologue() {
+    // The system should refuse to handle sender-signed system transactions
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let gas_ref = gas_object.compute_object_reference();
+    let tx_data = TransactionData::new_with_dummy_gas_price(
+        TransactionKind::Single(SingleTransactionKind::ConsensusCommitPrologue(
+            ConsensusCommitPrologue {
+                checkpoint_start_timestamp_ms: 42,
+            },
+        )),
+        sender,
+        gas_ref,
+        MAX_GAS,
+    );
+
+    // Sender is able to sign it.
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+
+    // But the authority should refuse to handle it.
+    assert!(matches!(
+        authority_state.handle_transaction(transaction).await,
+        Err(SuiError::InvalidSystemTransaction),
+    ));
+}
+
+#[tokio::test]
+async fn test_invalid_mutable_clock_parameter() {
+    // User transactions that take the singleton Clock object at `0x6` by mutable reference will
+    // fail to sign, to prevent transactions bottlenecking on it.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_ref = gas_object.compute_object_reference();
+
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutable: true,
+        })],
+        MAX_GAS,
+    );
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+
+    let Err(e) = authority_state.handle_transaction(transaction).await else {
+        panic!("Expected handling transaction to fail");
+    };
+
+    assert_eq!(
+        e,
+        SuiError::TransactionInputObjectsErrors {
+            errors: vec![SuiError::ImmutableParameterExpectedError]
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_valid_immutable_clock_parameter() {
+    // User transactions can take an immutable reference of the singleton Clock.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_ref = gas_object.compute_object_reference();
+
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutable: false,
+        })],
+        MAX_GAS,
+    );
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    authority_state
+        .handle_transaction(transaction)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

@@ -7,6 +7,7 @@ module sui::object {
     use sui::address;
     use sui::tx_context::{Self, TxContext};
 
+    friend sui::clock;
     friend sui::dynamic_field;
     friend sui::dynamic_object_field;
     friend sui::sui_system;
@@ -17,6 +18,9 @@ module sui::object {
 
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
+
+    /// The hardcoded ID for the singleton Clock Object.
+    const SUI_CLOCK_OBJECT_ID: address = @0x6;
 
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
@@ -71,6 +75,14 @@ module sui::object {
     public(friend) fun sui_system_state(): UID {
         UID {
             id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
+        }
+    }
+
+    /// Create the `UID` for the singleton `Clock` object.
+    /// This should only be called once from `clock`.
+    public(friend) fun clock(): UID {
+        UID {
+            id: ID { bytes: SUI_CLOCK_OBJECT_ID }
         }
     }
 

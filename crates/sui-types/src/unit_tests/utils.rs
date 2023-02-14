@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::KeyPair as KeypairTraits;
-use signature::Signer;
 
+use crate::crypto::Signer;
 use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::{Committee, ProtocolVersion},

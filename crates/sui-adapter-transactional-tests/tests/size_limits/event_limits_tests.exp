@@ -1,14 +1,14 @@
 processed 6 tasks
 
 task 1 'publish'. lines 8-29:
-created: object(103)
-written: object(102)
+created: object(104)
+written: object(103)
 
 task 2 'run'. lines 30-32:
-written: object(104)
+written: object(105)
 
 task 3 'run'. lines 33-35:
-written: object(105)
+written: object(106)
 
 task 4 'run'. lines 36-38:
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::event::emit (function index 0) at offset 0. Arithmetic error, stack overflow, max value depth, etc.

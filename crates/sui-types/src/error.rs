@@ -9,6 +9,7 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
+use fastcrypto::error::FastCryptoError;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
     errors::{Location, PartialVMError, VMError},
@@ -228,6 +229,8 @@ pub enum SuiError {
     TransferImmutableError,
     #[error("Wrong initial version given for shared object")]
     SharedObjectStartingVersionMismatch,
+    #[error("Mutable parameter provided, immutable parameter expected.")]
+    ImmutableParameterExpectedError,
 
     // Errors related to batches
     #[error("The range specified is invalid.")]
@@ -617,6 +620,17 @@ impl From<&str> for SuiError {
     fn from(error: &str) -> Self {
         SuiError::GenericAuthorityError {
             error: error.to_string(),
+        }
+    }
+}
+
+impl From<FastCryptoError> for SuiError {
+    fn from(kind: FastCryptoError) -> Self {
+        match kind {
+            FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
+                error: "Invalid signature".to_string(),
+            },
+            _ => SuiError::Unknown("Unknown cryptography error".to_string()),
         }
     }
 }

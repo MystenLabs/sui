@@ -6,7 +6,8 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    Ed25519SuiSignature, EmptySignInfo, Signature, SuiSignature, SuiSignatureInner, ToFromBytes,
+    Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignature, SuiSignatureInner,
+    ToFromBytes,
 };
 use crate::gas::GasCostSummary;
 use crate::intent::{Intent, IntentMessage};
@@ -15,7 +16,8 @@ use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMe
 use crate::object::{MoveObject, Object, ObjectFormatOptions, Owner, PACKAGE_VERSION};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::encoding::Base64;
@@ -197,6 +199,12 @@ pub enum GenesisObject {
     },
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologue {
+    /// Unix timestamp from consensus
+    pub checkpoint_start_timestamp_ms: u64,
+}
+
 impl GenesisObject {
     pub fn id(&self) -> ObjectID {
         match self {
@@ -233,6 +241,7 @@ pub enum SingleTransactionKind {
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
+    ConsensusCommitPrologue(ConsensusCommitPrologue),
     // .. more transaction types go here
 }
 
@@ -347,7 +356,7 @@ impl SingleTransactionKind {
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
-            Self::Call(_) | Self::ChangeEpoch(_) => {
+            Self::Call(_) | Self::ChangeEpoch(_) | Self::ConsensusCommitPrologue(_) => {
                 Either::Left(self.all_move_call_shared_input_objects())
             }
             _ => Either::Right(iter::empty()),
@@ -400,6 +409,11 @@ impl SingleTransactionKind {
             Self::ChangeEpoch(_) => Either::Right(iter::once(SharedInputObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            })),
+            Self::ConsensusCommitPrologue(_) => Either::Right(iter::once(SharedInputObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             })),
             _ => unreachable!(),
@@ -466,6 +480,13 @@ impl SingleTransactionKind {
             Self::Genesis(_) => {
                 vec![]
             }
+            Self::ConsensusCommitPrologue(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
         // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
@@ -493,7 +514,8 @@ impl SingleTransactionKind {
             | SingleTransactionKind::TransferObject(_)
             | SingleTransactionKind::TransferSui(_)
             | SingleTransactionKind::ChangeEpoch(_)
-            | SingleTransactionKind::Genesis(_) => (),
+            | SingleTransactionKind::Genesis(_)
+            | SingleTransactionKind::ConsensusCommitPrologue(_) => (),
             SingleTransactionKind::PaySui(p) => {
                 fp_ensure!(!p.coins.is_empty(), SuiError::EmptyInputCoins);
                 fp_ensure!(
@@ -604,14 +626,19 @@ impl Display for SingleTransactionKind {
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind: Epoch Change")?;
-                writeln!(writer, "New epoch ID: {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
-                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
+                writeln!(writer, "Transaction Kind : Epoch Change")?;
+                writeln!(writer, "New epoch ID : {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind: Genesis")?;
+                writeln!(writer, "Transaction Kind : Genesis")?;
+            }
+            Self::ConsensusCommitPrologue(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
             }
         }
         write!(f, "{}", writer)
@@ -682,8 +709,11 @@ impl TransactionKind {
     pub fn is_system_tx(&self) -> bool {
         matches!(
             self,
-            TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
-                | TransactionKind::Single(SingleTransactionKind::Genesis(_))
+            TransactionKind::Single(
+                SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Genesis(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_)
+            )
         )
     }
 
@@ -1043,7 +1073,8 @@ impl TransactionData {
                     | SingleTransactionKind::PayAllSui(_)
                     | SingleTransactionKind::ChangeEpoch(_)
                     | SingleTransactionKind::Genesis(_)
-                    | SingleTransactionKind::Publish(_) => false,
+                    | SingleTransactionKind::Publish(_)
+                    | SingleTransactionKind::ConsensusCommitPrologue(_) => false,
                 });
                 fp_ensure!(
                     valid,
@@ -1142,7 +1173,7 @@ impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
         intent: Intent,
-        signer: &dyn signature::Signer<Signature>,
+        signer: &dyn Signer<Signature>,
     ) -> Self {
         let data1 = data.clone();
         let intent1 = intent.clone();
@@ -1191,6 +1222,14 @@ impl VerifiedTransaction {
             .pipe(Self::new_system_transaction)
     }
 
+    pub fn new_consensus_commit_prologue(checkpoint_start_timestamp_ms: u64) -> Self {
+        ConsensusCommitPrologue {
+            checkpoint_start_timestamp_ms,
+        }
+        .pipe(SingleTransactionKind::ConsensusCommitPrologue)
+        .pipe(Self::new_system_transaction)
+    }
+
     fn new_system_transaction(system_transaction: SingleTransactionKind) -> Self {
         system_transaction
             .pipe(TransactionKind::Single)
@@ -1219,7 +1258,7 @@ impl VerifiedSignedTransaction {
         epoch: EpochId,
         transaction: VerifiedTransaction,
         authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
+        secret: &dyn Signer<AuthoritySignature>,
     ) -> Self {
         Self::new_from_verified(SignedTransaction::new(
             epoch,
@@ -1246,16 +1285,13 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
-    /// Request the latest object state, if a format option is provided,
-    /// return the layout of the object in the given format.
-    LatestObjectInfo(Option<ObjectFormatOptions>),
-    /// Request the object state at a specific version
-    PastObjectInfo(SequenceNumber),
-    /// Similar to PastObjectInfo, except that it will also return the object content.
-    /// This is used only for debugging purpose and will not work in the long run when
-    /// we stop storing all historic versions of every object.
+    /// Request the latest object state.
+    LatestObjectInfo,
+    /// Request a specific version of the object.
+    /// This is used only for debugging purpose and will not work as a generic solution
+    /// since we don't keep around all historic object versions.
     /// No production code should depend on this kind.
-    PastObjectInfoDebug(SequenceNumber, Option<ObjectFormatOptions>),
+    PastObjectInfoDebug(SequenceNumber),
 }
 
 /// A request for information about an object and optionally its
@@ -1264,15 +1300,22 @@ pub enum ObjectInfoRequestKind {
 pub struct ObjectInfoRequest {
     /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
+    /// if a format option is provided, return the layout of the object in the given format.
+    pub object_format_options: Option<ObjectFormatOptions>,
     /// The type of request, either latest object info or the past.
     pub request_kind: ObjectInfoRequestKind,
 }
 
 impl ObjectInfoRequest {
-    pub fn past_object_info_request(object_id: ObjectID, version: SequenceNumber) -> Self {
+    pub fn past_object_info_debug_request(
+        object_id: ObjectID,
+        version: SequenceNumber,
+        layout: Option<ObjectFormatOptions>,
+    ) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_kind: ObjectInfoRequestKind::PastObjectInfo(version),
+            object_format_options: layout,
+            request_kind: ObjectInfoRequestKind::PastObjectInfoDebug(version),
         }
     }
 
@@ -1282,82 +1325,33 @@ impl ObjectInfoRequest {
     ) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(layout),
+            object_format_options: layout,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         }
     }
 }
 
+/// This message provides information about the latest object and its lock.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectResponse<T = SignedTransaction> {
+pub struct ObjectInfoResponse {
     /// Value of the requested object in this authority
     pub object: Object,
-    /// Transaction the object is locked on in this authority.
-    /// None if the object is not currently locked by this authority.
-    pub lock: Option<T>,
     /// Schema of the Move value inside this object.
     /// None if the object is a Move package, or the request did not ask for the layout
     pub layout: Option<MoveStructLayout>,
+    /// Transaction the object is locked on in this authority.
+    /// None if the object is not currently locked by this authority.
+    /// This should be only used for debugging purpose, such as from sui-tool. No prod clients should
+    /// rely on it.
+    pub lock_for_debugging: Option<SignedTransaction>,
 }
 
-impl From<ObjectResponse<VerifiedSignedTransaction>> for ObjectResponse {
-    fn from(o: ObjectResponse<VerifiedSignedTransaction>) -> Self {
-        let ObjectResponse {
-            object,
-            lock,
-            layout,
-        } = o;
-
-        Self {
-            object,
-            lock: lock.map(|l| l.into()),
-            layout,
-        }
-    }
-}
-
-/// This message provides information about the latest object and its lock
-/// as well as the parent certificate of the object at a specific version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
-    /// The certificate that created or mutated the object at a given version.
-    /// If no parent certificate was requested the latest certificate concerning
-    /// this object is sent. If the parent was requested and not found a error
-    /// (ParentNotfound or CertificateNotfound) will be returned.
-    pub parent_certificate: Option<CertT>,
-    /// The full reference created by the above certificate
-    pub requested_object_reference: Option<ObjectRef>,
-
-    /// The object and its current lock, returned only if we are requesting
-    /// the latest state of an object.
-    /// If the object does not exist this is also None.
-    pub object_and_lock: Option<ObjectResponse<TxnT>>,
-}
-
-pub type VerifiedObjectInfoResponse =
-    ObjectInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
-
-impl ObjectInfoResponse {
-    pub fn object(&self) -> Option<&Object> {
-        match &self.object_and_lock {
-            Some(ObjectResponse { object, .. }) => Some(object),
-            _ => None,
-        }
-    }
-}
-
-impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
-    fn from(o: VerifiedObjectInfoResponse) -> Self {
-        let ObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
-        } = o;
-        Self {
-            parent_certificate: parent_certificate.map(|p| p.into()),
-            requested_object_reference,
-            object_and_lock: object_and_lock.map(|o| o.into()),
-        }
-    }
+/// Verified version of `ObjectInfoResponse`. `layout` and `lock_for_debugging` are skipped because they
+/// are not needed and we don't want to verify them.
+#[derive(Debug, Clone)]
+pub struct VerifiedObjectInfoResponse {
+    /// Value of the requested object in this authority
+    pub object: Object,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

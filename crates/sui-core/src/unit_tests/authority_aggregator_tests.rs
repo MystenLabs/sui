@@ -10,17 +10,15 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_types::crypto::AuthoritySignature;
 use sui_types::crypto::{
     get_authority_key_pair, get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
 };
+use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
-use test_utils::sui_system_state::{test_sui_system_state, test_validator};
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
 use sui_types::object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING};
-use test_utils::messages::make_random_certified_transaction;
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -50,7 +48,7 @@ pub fn get_local_client(
 
 pub fn transfer_coin_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -69,7 +67,7 @@ pub fn transfer_coin_transaction(
 
 pub fn transfer_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
@@ -97,7 +95,7 @@ pub fn transfer_object_move_transaction(
 
 pub fn create_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     dest: SuiAddress,
     value: u64,
     package_id: ObjectID,
@@ -126,7 +124,7 @@ pub fn create_object_move_transaction(
 
 pub fn delete_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
@@ -148,7 +146,7 @@ pub fn delete_object_move_transaction(
 
 pub fn set_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn signature::Signer<Signature>,
+    secret: &dyn Signer<Signature>,
     object_ref: ObjectRef,
     value: u64,
     framework_obj_id: ObjectID,
@@ -250,17 +248,13 @@ pub async fn get_latest_ref<A>(authority: &SafeClient<A>, object_id: ObjectID) -
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    if let Ok(ObjectInfoResponse {
-        requested_object_reference: Some(object_ref),
-        ..
-    }) = authority
-        .handle_object_info_request(
-            ObjectInfoRequest::latest_object_info_request(object_id, None),
-            false,
-        )
+    if let Ok(VerifiedObjectInfoResponse { object }) = authority
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
         .await
     {
-        return object_ref;
+        return object.compute_object_reference();
     }
     panic!("Object not found!");
 }
@@ -670,270 +664,11 @@ fn get_agg<A>(
     )
 }
 
-#[tokio::test]
-async fn test_get_committee_with_net_addresses() {
-    telemetry_subscribers::init_for_testing();
-    let count = Arc::new(Mutex::new(0));
-    let new_client = |delay: u64| {
-        let delay = Duration::from_millis(delay);
-        let count = count.clone();
-        MockAuthorityApi::new(delay, count)
-    };
-
-    let (val0_pk, val0_addr) = get_authority_pub_key_bytes_and_address();
-    let (val1_pk, val1_addr) = get_authority_pub_key_bytes_and_address();
-    let (val2_pk, val2_addr) = get_authority_pub_key_bytes_and_address();
-    let (val3_pk, val3_addr) = get_authority_pub_key_bytes_and_address();
-
-    let mut clients = BTreeMap::from([
-        (val0_pk, new_client(1000)),
-        (val1_pk, new_client(1000)),
-        (val2_pk, new_client(1000)),
-        (val3_pk, new_client(1000)),
-    ]);
-    let authorities = BTreeMap::from([(val0_pk, 1), (val1_pk, 1), (val2_pk, 1), (val3_pk, 1)]);
-
-    let validators = vec![
-        test_validator(val0_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val1_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val2_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val3_pk, Multiaddr::empty().to_vec(), 1, 0),
-    ];
-    let system_state = test_sui_system_state(1, validators);
-    let good_result = make_response_from_sui_system_state(system_state.clone());
-
-    for client in clients.values_mut() {
-        client.set_handle_object_info_request(good_result.clone());
-    }
-    let clients = clients;
-    let agg = get_agg(authorities.clone(), clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-
-    macro_rules! verify_good_result {
-        ($res: expr, $epoch: expr) => {{
-            let res = $res;
-            match res {
-                Ok(info) => {
-                    assert_eq!(info.committee.epoch, $epoch);
-                    assert_eq!(
-                        info.committee
-                            .voting_rights
-                            .into_iter()
-                            .collect::<BTreeMap<_, _>>(),
-                        BTreeMap::from([(val0_pk, 1), (val1_pk, 1), (val2_pk, 1), (val3_pk, 1),]),
-                    );
-                    assert_eq!(
-                        info.net_addresses,
-                        BTreeMap::from([
-                            (val0_pk, val0_addr.clone()),
-                            (val1_pk, val1_addr.clone()),
-                            (val2_pk, val2_addr.clone()),
-                            (val3_pk, val3_addr.clone()),
-                        ])
-                    );
-                }
-                Err(err) => panic!("expect Ok result but got {err}"),
-            };
-        }};
-    }
-
-    macro_rules! verify_bad_result {
-        ($res: expr, $epoch: expr) => {{
-            let res = $res;
-            match res {
-                Ok(info) => panic!(
-                    "expect SuiError::FailedToGetAgreedCommitteeFromMajority but got {:?}",
-                    info
-                ),
-                Err(SuiError::FailedToGetAgreedCommitteeFromMajority { minimal_epoch }) => {
-                    assert_eq!(minimal_epoch, $epoch);
-                }
-                Err(err) => panic!(
-                    "expect SuiError::FailedToGetAgreedCommitteeFromMajority but got {:?}",
-                    err
-                ),
-            };
-        }};
-    }
-    verify_good_result!(res, 1);
-
-    // 1 out of 4 gives bad result, we are good
-    let mut clone_clients = clients.clone();
-    let bad_result: SuiResult<ObjectInfoResponse> = Err(SuiError::GenericAuthorityError {
-        error: "foo".into(),
-    });
-
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(bad_result.clone());
-
-    let agg = get_agg(authorities.clone(), clone_clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-
-    verify_good_result!(res, 1);
-
-    // 2 out of 4 give bad result, get error
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(bad_result.clone());
-    let agg = get_agg(authorities.clone(), clone_clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    verify_bad_result!(res, 1);
-
-    // val0 and val1 gives a slightly different system state but
-    // CommitteeWithNetAddresses is the same, we are good.
-    let mut system_state_clone = system_state.clone();
-    // In practice we wouldn't expect validator_stake differs in the same epoch.
-    // Here we update it for simplicity.
-    system_state_clone.validators.validator_stake += 1;
-    let different_result = make_response_from_sui_system_state(system_state_clone);
-
-    let mut clone_clients = clients.clone();
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-
-    let agg = get_agg(authorities.clone(), clone_clients.clone(), 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    verify_good_result!(res, 1);
-
-    // (val0, val1) disagree with (val2, val3) on network address, get error
-    let validators = vec![
-        test_validator(
-            val0_pk,
-            "/ip4/127.0.0.1".parse::<Multiaddr>().unwrap().to_vec(),
-            1,
-            0,
-        ),
-        test_validator(val1_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val2_pk, Multiaddr::empty().to_vec(), 1, 0),
-        test_validator(val3_pk, Multiaddr::empty().to_vec(), 1, 0),
-    ];
-    let system_state_with_different_net_addr = test_sui_system_state(1, validators);
-    let different_result =
-        make_response_from_sui_system_state(system_state_with_different_net_addr);
-
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(different_result.clone());
-
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    verify_bad_result!(res, 1);
-
-    // val0, val1 and val2 are still in epoch0
-    let mut system_state_clone = system_state.clone();
-    system_state_clone.epoch = 0;
-    let epoch_0_result = make_response_from_sui_system_state(system_state_clone);
-
-    let mut clone_clients = clients.clone();
-    clone_clients
-        .get_mut(&val0_pk)
-        .unwrap()
-        .set_handle_object_info_request(epoch_0_result.clone());
-    clone_clients
-        .get_mut(&val1_pk)
-        .unwrap()
-        .set_handle_object_info_request(epoch_0_result.clone());
-    clone_clients
-        .get_mut(&val2_pk)
-        .unwrap()
-        .set_handle_object_info_request(epoch_0_result.clone());
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_with_net_addresses(1).await;
-    // Get error when asking with minimal epoch = 1
-    verify_bad_result!(res, 1);
-    // Get good results when asking with minimal epoch = 0
-    let res = agg.get_committee_with_net_addresses(0).await;
-    verify_good_result!(res, 0);
-}
-
-#[tokio::test]
-async fn test_get_committee_info() {
-    telemetry_subscribers::init_for_testing();
-
-    let count = Arc::new(Mutex::new(0));
-    // 4 out of 4 give good result
-    let (authorities, authorities_vec, mut clients) = get_authorities(count.clone(), 4);
-    let good_result = Ok(CommitteeInfoResponse {
-        epoch: 0,
-        protocol_version: ProtocolVersion::MIN,
-        committee_info: authorities_vec.clone(),
-    });
-    for client in clients.values_mut() {
-        client.set_handle_committee_info_request_result(good_result.clone());
-    }
-    let clients = clients;
-    let clone_clients = clients.clone();
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Ok(info) => {
-            assert_eq!(info.epoch, 0);
-            assert_eq!(info.committee_info, authorities_vec);
-        }
-        Err(err) => panic!("expect Ok result but got {err}"),
-    };
-
-    // 1 out 4 gives error
-    let mut clone_clients = clients.clone();
-    let bad_result = Err(SuiError::GenericAuthorityError {
-        error: "foo".into(),
-    });
-
-    clone_clients
-        .values_mut()
-        .next()
-        .unwrap()
-        .set_handle_committee_info_request_result(bad_result.clone());
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Ok(info) => {
-            assert_eq!(info.epoch, 0);
-            assert_eq!(info.committee_info, authorities_vec);
-        }
-        Err(_) => panic!("expect Ok result!"),
-    };
-
-    // 2 out 4 gives error
-    let mut clone_clients = clients.clone();
-    let mut i = 0;
-    for client in clone_clients.values_mut() {
-        client.set_handle_committee_info_request_result(bad_result.clone());
-        i += 1;
-        if i >= 2 {
-            break;
-        }
-    }
-    let agg = get_agg(authorities.clone(), clone_clients, 0);
-    let res = agg.get_committee_info(Some(0)).await;
-    match res {
-        Err(SuiError::TooManyIncorrectAuthorities { .. }) => (),
-        other => panic!(
-            "expect to get SuiError::TooManyIncorrectAuthorities but got {:?}",
-            other
-        ),
-    };
-}
-
 fn sign_tx(
     tx: VerifiedTransaction,
     epoch: EpochId,
     authority: AuthorityName,
-    secret: &dyn signature::Signer<AuthoritySignature>,
+    secret: &dyn Signer<AuthoritySignature>,
 ) -> SignedTransaction {
     SignedTransaction::new(epoch, tx.into_inner().into_data(), secret, authority)
 }
@@ -942,7 +677,7 @@ fn sign_tx_effects(
     effects: TransactionEffects,
     epoch: EpochId,
     authority: AuthorityName,
-    secret: &dyn signature::Signer<AuthoritySignature>,
+    secret: &dyn Signer<AuthoritySignature>,
 ) -> SignedTransactionEffects {
     SignedTransactionEffects::new(epoch, effects, secret, authority)
 }
@@ -1218,7 +953,6 @@ pub fn make_response_from_sui_system_state(
     system_state: SuiSystemState,
 ) -> SuiResult<ObjectInfoResponse> {
     let move_content = to_bytes(&system_state).unwrap();
-    let tx_cert = make_random_certified_transaction();
     let move_object = unsafe {
         MoveObject::new_from_execution(
             SuiSystemState::type_(),
@@ -1234,17 +968,12 @@ pub fn make_response_from_sui_system_state(
         Owner::Shared {
             initial_shared_version,
         },
-        *tx_cert.digest(),
+        TransactionDigest::random(),
     );
-    let obj_digest = object.compute_object_reference();
     Ok(ObjectInfoResponse {
-        parent_certificate: Some(tx_cert.into()),
-        requested_object_reference: Some(obj_digest),
-        object_and_lock: Some(ObjectResponse {
-            object,
-            lock: None,
-            layout: None,
-        }),
+        object,
+        layout: None,
+        lock_for_debugging: None,
     })
 }
 

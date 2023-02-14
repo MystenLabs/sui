@@ -754,6 +754,30 @@ fn test_change_epoch_transaction() {
 }
 
 #[test]
+fn test_consensus_commit_prologue_transaction() {
+    let tx = VerifiedTransaction::new_consensus_commit_prologue(42);
+    assert!(tx.contains_shared_object());
+    assert_eq!(
+        tx.shared_input_objects().next().unwrap(),
+        SharedInputObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutable: true,
+        },
+    );
+    assert!(tx.is_system_tx());
+    assert_eq!(
+        tx.data()
+            .intent_message
+            .value
+            .input_objects()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn test_move_input_objects() {
     let package = ObjectID::random();
     let p1 = ObjectID::random();

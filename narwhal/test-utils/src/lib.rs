@@ -573,9 +573,7 @@ pub fn mock_signed_certificate(
     let mut votes = Vec::new();
     for signer in signers {
         let pk = signer.public();
-        let sig = signer
-            .try_sign(Digest::from(cert.digest()).as_ref())
-            .unwrap();
+        let sig = signer.sign(Digest::from(cert.digest()).as_ref());
         votes.push((pk.clone(), sig))
     }
     let cert = Certificate::new(committee, header, votes).unwrap();

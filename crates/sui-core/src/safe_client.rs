@@ -258,125 +258,22 @@ impl<C> SafeClient<C> {
         &self,
         request: &ObjectInfoRequest,
         response: ObjectInfoResponse,
-        // We skip the signature check when there's potentially an epoch change.
-        // In this case we don't have the latest committee info locally until reconfig finishes.
-        skip_committee_check_during_reconfig: bool,
     ) -> SuiResult<VerifiedObjectInfoResponse> {
         let ObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
+            object,
+            layout: _,
+            lock_for_debugging: _,
         } = response;
 
-        // If we get a certificate make sure it is a valid certificate
-        let parent_certificate = if skip_committee_check_during_reconfig {
-            parent_certificate.map(VerifiedCertificate::new_unchecked)
-        } else if let Some(certificate) = parent_certificate {
-            let epoch = certificate.epoch();
-            Some(certificate.verify(&self.get_committee(&epoch)?)?)
-        } else {
-            None
-        };
-
-        // Check the right object ID and version is returned
-        if let Some((object_id, version, _)) = &requested_object_reference {
-            fp_ensure!(
-                object_id == &request.object_id,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason: "Object ID mismatch".to_string()
-                }
-            );
-            if let ObjectInfoRequestKind::PastObjectInfo(requested_version) = &request.request_kind
-            {
-                fp_ensure!(
-                    version == requested_version,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Object version mismatch".to_string()
-                    }
-                );
+        fp_ensure!(
+            request.object_id == object.id(),
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "Object id mismatch in the response".to_string()
             }
-        }
+        );
 
-        let object_and_lock = if let Some(object_and_lock) = object_and_lock {
-            let ObjectResponse {
-                object,
-                lock,
-                layout,
-            } = object_and_lock;
-            // We should only be returning the object and lock data if requesting the latest object info.
-            fp_ensure!(
-                matches!(
-                    request.request_kind,
-                    ObjectInfoRequestKind::LatestObjectInfo(_)
-                ),
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                    reason:
-                        "Object and lock data returned when request kind is not LatestObjectInfo"
-                            .to_string()
-                }
-            );
-
-            match requested_object_reference {
-                Some(obj_ref) => {
-                    // Since we are requesting the latest version, we should validate that if the object's
-                    // reference actually match with the one from the responded object reference.
-                    fp_ensure!(
-                        object.compute_object_reference() == obj_ref,
-                        SuiError::ByzantineAuthoritySuspicion {
-                            authority: self.address,
-                            reason: "Requested object reference mismatch with returned object"
-                                .to_string()
-                        }
-                    );
-                }
-                None => {
-                    // Since we are returning the object for the latest version,
-                    // we must also have the requested object reference in the response.
-                    // Otherwise the authority has inconsistent data.
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Object returned without the object reference in response"
-                            .to_string(),
-                    });
-                }
-            };
-
-            let signed_transaction = if let Some(signed_transaction) = lock {
-                // We cannot reuse the committee fetched above since they may not be from the same
-                // epoch.
-                let epoch = signed_transaction.epoch();
-                let signed_transaction = signed_transaction.verify(&self.get_committee(&epoch)?)?;
-                // Check it has the right signer
-                fp_ensure!(
-                    signed_transaction.auth_sig().authority == self.address,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                        reason: "Unexpected validator address in the signed tx signature"
-                            .to_string()
-                    }
-                );
-                Some(signed_transaction)
-            } else {
-                None
-            };
-
-            Some(ObjectResponse {
-                object,
-                lock: signed_transaction,
-                layout,
-            })
-        } else {
-            None
-        };
-
-        Ok(VerifiedObjectInfoResponse {
-            parent_certificate,
-            requested_object_reference,
-            object_and_lock,
-        })
+        Ok(VerifiedObjectInfoResponse { object })
     }
 
     pub fn address(&self) -> &AuthorityPublicKeyBytes {
@@ -437,12 +334,9 @@ where
         Ok(verified)
     }
 
-    /// Pass `skip_committee_check_during_reconfig = true` during reconfiguration, so that
-    /// we can tolerate missing committee information when processing the object data.
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-        skip_committee_check_during_reconfig: bool,
     ) -> Result<VerifiedObjectInfoResponse, SuiError> {
         self.metrics.total_requests_handle_object_info_request.inc();
 
@@ -452,12 +346,8 @@ where
             .handle_object_info_request(request.clone())
             .await?;
         let response = self
-            .check_object_response(&request, response, skip_committee_check_during_reconfig)
-            .tap_err(|err|
-                error!(?err, authority=?self.address, "Client error in handle_object_info_request")
-
-
-                )?;
+            .check_object_response(&request, response)
+            .tap_err(|err| error!(?err, authority=?self.address, "Client error in handle_object_info_request"))?;
 
         self.metrics
             .total_ok_responses_handle_object_info_request
