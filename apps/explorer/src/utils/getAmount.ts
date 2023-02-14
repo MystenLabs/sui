@@ -20,9 +20,11 @@ import type {
 } from '@mysten/sui.js';
 
 const getCoinType = (
-    txEffects: TransactionEffects,
+    txEffects: TransactionEffects | null,
     address: string
 ): string | null => {
+    if (!txEffects) return null;
+
     const events = txEffects?.events || [];
     const coinType = events
         ?.map((event: SuiEvent) => {
@@ -76,23 +78,21 @@ export function getTransfersAmount(
 
     const amountByRecipient = payData?.recipients.reduce(
         (acc, value, index) => {
-            // for PaySuiTransaction the coinType is SUI
-            const coinType =
-                txKindName === 'PaySui'
-                    ? SUI_TYPE_ARG
-                    : txnEffect
-                    ? getCoinType(
-                          txnEffect,
-                          payData.recipients[index] || payData.recipients[0]
-                      )
-                    : null;
             return {
                 ...acc,
                 [value]: {
                     amount:
                         payData.amounts[index] +
                         (value in acc ? acc[value].amount : 0),
-                    coinType,
+                    // for PaySuiTransaction the coinType is SUI
+                    coinType:
+                        txKindName === 'PaySui'
+                            ? SUI_TYPE_ARG
+                            : getCoinType(
+                                  txnEffect || null,
+                                  payData.recipients[index] ||
+                                      payData.recipients[0]
+                              ),
                     address: payData.recipients[index] || payData.recipients[0],
                 },
             };
