@@ -3,6 +3,10 @@
 
 // Constants that change the behavior of the protocol
 
+/// The minimum and maximum protocol versions supported by this build.
+pub const MIN_PROTOCOL_VERSION: u64 = 1;
+pub const MAX_PROTOCOL_VERSION: u64 = 1;
+
 // ==== Move VM, Move bytecode verifier, and execution limits ===
 
 /// Maximum Move bytecode version the VM understands. All older versions are accepted.
@@ -55,13 +59,13 @@ pub const MAX_DEPENDENCY_DEPTH: usize = 100;
 pub const MAX_NUM_EVENT_EMIT: u64 = 256;
 
 /// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
-pub const MAX_NUM_NEW_MOVE_OBJECT_IDS: usize = 1024;
+pub const MAX_NUM_NEW_MOVE_OBJECT_IDS: usize = 2048;
 
 /// Maximum number of IDs that a single transaction can delete. Enforced by the VM during execution.
-pub const MAX_NUM_DELETED_MOVE_OBJECT_IDS: usize = 1024;
+pub const MAX_NUM_DELETED_MOVE_OBJECT_IDS: usize = 2048;
 
 /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
-pub const MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS: usize = 1024;
+pub const MAX_NUM_TRANSFERED_MOVE_OBJECT_IDS: usize = 2048;
 
 // === Execution gas costs ====
 // note: per-instruction and native function gas costs live in the sui-cost-tables crate
