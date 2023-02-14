@@ -1,16 +1,16 @@
-use anemo::Network;
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use anemo::{rpc, Network, Request};
 use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
-use crypto::PublicKey;
+use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, ReliableNetwork, RetryConfig};
 use parking_lot::Mutex;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -19,17 +19,14 @@ use std::{
 };
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
-use tokio::{
-    sync::{broadcast, watch},
-    task::JoinSet,
-};
-use tracing::{debug, error, trace, warn};
+use tokio::{sync::watch, task::JoinSet, time::sleep};
+use tracing::{debug, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::Sender,
-    BatchDigest, Certificate, CertificateDigest, Header, PrimaryMessage, PrimaryToWorkerClient,
-    Round, WorkerSynchronizeMessage,
+    BatchDigest, Certificate, CertificateDigest, Header, PrimaryMessage, PrimaryToPrimaryClient,
+    PrimaryToWorkerClient, Round, WorkerSynchronizeMessage,
 };
 
 use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics};
@@ -53,6 +50,8 @@ struct Inner {
     highest_processed_round: AtomicU64,
     /// Highest round of verfied certificate that has been received.
     highest_received_round: AtomicU64,
+    /// Highest round of certificate created at this primary.
+    highest_created_round: AtomicU64,
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -102,6 +101,7 @@ impl Synchronizer {
         let committee: &Committee = &committee.load();
         let genesis = Self::make_genesis(committee);
         let highest_processed_round = certificate_store.highest_round_number();
+        let highest_created_certificate = certificate_store.last_round(&name).unwrap();
         let gc_round = (*rx_consensus_round_updates.borrow()).saturating_sub(gc_depth);
         let inner = Arc::new(Inner {
             name,
@@ -111,6 +111,9 @@ impl Synchronizer {
             gc_round: AtomicU64::new(gc_round),
             highest_processed_round: AtomicU64::new(highest_processed_round),
             highest_received_round: AtomicU64::new(0),
+            highest_created_round: AtomicU64::new(
+                highest_created_certificate.map_or(0, |c| c.round()),
+            ),
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
@@ -124,7 +127,7 @@ impl Synchronizer {
             certificates_aggregators: Mutex::new(HashMap::with_capacity(2 * gc_depth as usize)),
         });
 
-        // Create a task to update gc_round.
+        // Start a task to update gc_round.
         let weak_inner = Arc::downgrade(&inner);
         spawn_monitored_task!(async move {
             let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
@@ -143,6 +146,16 @@ impl Synchronizer {
                 inner.gc_round.store(gc_round, Ordering::Release);
             }
         });
+
+        // Start a task to broadcast last created certificate.
+        // inner
+        // .background_tasks
+        // .lock()
+        // .spawn(Self::broadcast_certificate(
+        //     inner.clone(),
+        //     network.clone(),
+        //     certificate.clone(),
+        // ));
 
         Self { inner }
     }
@@ -246,29 +259,19 @@ impl Synchronizer {
 
         // Broadcast the certificate.
         let round = certificate.round();
-        let header_to_certificate_duration =
-            Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
-                .as_secs_f64();
-        let network_keys = self
-            .inner
-            .committee
-            .others_primaries(&self.inner.name)
-            .into_iter()
-            .map(|(_, _, network_key)| network_key)
-            .collect();
-        let tasks = network.broadcast(
-            network_keys,
-            &PrimaryMessage::Certificate(certificate.clone()),
-        );
         self.inner
             .background_tasks
             .lock()
             .spawn(Self::broadcast_certificate(
                 self.inner.clone(),
+                network.clone(),
                 certificate.clone(),
             ));
 
         // Update metrics.
+        let header_to_certificate_duration =
+            Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
+                .as_secs_f64();
         self.inner
             .metrics
             .certificate_created_round
@@ -408,12 +411,43 @@ impl Synchronizer {
 
     // Awaits completion of the given certificate broadcasts, aborting if narwhal round
     // advances past certificate round.
-    async fn broadcast_certificate(inner: Arc<Inner>, certificate: Certificate) -> DagResult<()> {
+    async fn broadcast_certificate(
+        inner: Arc<Inner>,
+        network: Network,
+        certificate: Certificate,
+    ) -> DagResult<()> {
+        let mut tasks = JoinSet::new();
+        let request = PrimaryMessage::Certificate(certificate);
+        for (_, _, network_key) in inner.committee.others_primaries(&inner.name).into_iter() {
+            tasks.spawn(Self::send_certificate(
+                inner.clone(),
+                network.clone(),
+                network_key,
+                request.clone(),
+            ));
+        }
+        while let Some(result) = tasks.join_next().await {
+            match result {
+                Ok(None) => {}
+                Ok(Some((network_key, status))) => {
+                    debug!("Error sending certificate {request:?} to {network_key:?}: {status:?}");
+                    sleep(Duration::from_secs(1)).await;
+                    // Retry sending certificate when there are errors.
+                    tasks.spawn(Self::send_certificate(
+                        inner.clone(),
+                        network.clone(),
+                        network_key,
+                        request.clone(),
+                    ));
+                }
+                Err(err) => {
+                    if err.is_panic() {
+                        panic!("Panic while sending certificate: {err}");
+                    }
+                }
+            }
+        }
         Ok(())
-        // let mut narwhal_round = *rx_narwhal_round_updates.borrow();
-        // if narwhal_round > certificate_round {
-        //     return Ok(());
-        // }
 
         // let mut join_all = futures::future::try_join_all(tasks);
         // loop {
@@ -436,6 +470,24 @@ impl Synchronizer {
         //         },
         //     }
         // }
+    }
+
+    async fn send_certificate(
+        inner: Arc<Inner>,
+        network: Network,
+        network_key: NetworkPublicKey,
+        reqeust: PrimaryMessage,
+    ) -> Option<(NetworkPublicKey, rpc::Status)> {
+        let peer_id = anemo::PeerId(network_key.0.to_bytes());
+        let peer = network.waiting_peer(peer_id);
+        let mut client = PrimaryToPrimaryClient::new(peer);
+        match client
+            .send_message(Request::new(reqeust.clone()).with_timeout(Duration::from_secs(10)))
+            .await
+        {
+            Ok(response) => None,
+            Err(status) => Some((network_key, status)),
+        }
     }
 
     async fn append_certificate_in_aggregator(&self, certificate: Certificate) -> DagResult<()> {

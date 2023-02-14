@@ -375,6 +375,23 @@ impl CertificateStore {
         Ok(certificates)
     }
 
+    /// Retrieves the last certificate of the given origin.
+    /// Returns None if there is no certificate for the origin.
+    pub fn last_round(&self, origin: &PublicKey) -> StoreResult<Option<Certificate>> {
+        let key = (origin.clone(), Round::MAX);
+        if let Some(((name, round), digest)) = self
+            .certificate_id_by_origin
+            .iter()
+            .skip_prior_to(&key)?
+            .next()
+        {
+            if &name == origin {
+                return Ok(self.certificates_by_id.get(&digest)?);
+            }
+        }
+        Ok(None)
+    }
+
     /// Retrieves the highest round number in the store.
     /// Returns 0 if there is no certificate in the store.
     pub fn highest_round_number(&self) -> Round {
@@ -621,6 +638,7 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
+        let last_round_cert = store.last_round(&origin).unwrap().unwrap();
         let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
         let last_round_number_not_exist = store
             .last_round_number(&PublicKey::insecure_default())
@@ -629,6 +647,7 @@ mod test {
 
         // THEN
         assert_eq!(result.len(), 8);
+        assert_eq!(last_round_cert.round(), 50);
         assert_eq!(last_round_number, 50);
         assert_eq!(highest_round_number, 50);
         for certificate in result {
@@ -647,6 +666,7 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
+        let last_round_cert = store.last_round(&PublicKey::insecure_default()).unwrap();
         let last_round_number = store
             .last_round_number(&PublicKey::insecure_default())
             .unwrap();
@@ -654,6 +674,7 @@ mod test {
 
         // THEN
         assert!(result.is_empty());
+        assert!(last_round_cert.is_none());
         assert!(last_round_number.is_none());
         assert_eq!(highest_round_number, 0);
     }
