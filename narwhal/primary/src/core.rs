@@ -581,8 +581,8 @@ impl Core {
         let header = certificate.header.clone();
         let network = self.network.clone();
         let max_age = self.gc_depth.saturating_sub(1);
-        // self.background_tasks
-        //     .spawn(async move { synchronizer.sync_batches(&header, network, max_age).await });
+        self.background_tasks
+            .spawn(async move { synchronizer.sync_batches(&header, network, max_age).await });
 
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
         // If we don't, the synchronizer will start fetching missing certificates.
