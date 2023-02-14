@@ -1,29 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
+import { ArrowUpRight16 } from '@mysten/icons';
 import { toast } from 'react-hot-toast';
 
-import FaucetMessageInfo from '../message-info';
-import { useFaucetMutation } from '../useFaucetMutation';
-import { FaucetDiscordLink } from './FaucetDiscordLink';
+import FaucetMessageInfo from './FaucetMessageInfo';
+import { useFaucetMutation } from './useFaucetMutation';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
-import Button from '_app/shared/button';
-import Icon, { SuiIcons } from '_components/icon';
+import { Button, type ButtonProps } from '_app/shared/ButtonUI';
 import { useAppSelector } from '_hooks';
 import { trackEvent } from '_shared/plausible';
 
-import type { ButtonProps } from '_app/shared/button';
-
-import st from './RequestButton.module.scss';
-
-type FaucetRequestButtonProps = {
-    mode?: ButtonProps['mode'];
+export type FaucetRequestButtonProps = {
+    variant?: ButtonProps['variant'];
     trackEventSource: 'home' | 'settings';
 };
 
 function FaucetRequestButton({
-    mode = 'primary',
+    variant = 'primary',
     trackEventSource,
 }: FaucetRequestButtonProps) {
     const network = useAppSelector(({ app }) => app.apiEnv);
@@ -33,16 +27,23 @@ function FaucetRequestButton({
     //TODO: remove this TestNet check after testnet
     if (network === 'testNet') {
         return (
-            <FaucetDiscordLink
-                mode={mode}
-                trackEventSource={trackEventSource}
+            <Button
+                variant={variant}
+                href="https://discord.com/channels/916379725201563759/1037811694564560966"
+                onClick={() =>
+                    trackEvent('DiscordRequestSUIToken', {
+                        props: { source: trackEventSource },
+                    })
+                }
+                after={<ArrowUpRight16 />}
+                text="Request Testnet SUI on Discord"
             />
         );
     }
 
     return mutation.enabled ? (
         <Button
-            mode={mode}
+            variant={variant}
             onClick={() => {
                 toast.promise(mutation.mutateAsync(), {
                     loading: <FaucetMessageInfo loading />,
@@ -57,11 +58,9 @@ function FaucetRequestButton({
                     props: { source: trackEventSource, networkName },
                 });
             }}
-            disabled={mutation.isMutating}
-        >
-            <Icon icon={SuiIcons.Download} className={cl(st.icon, st[mode])} />
-            Request {networkName} SUI Tokens
-        </Button>
+            loading={mutation.isMutating}
+            text={`Request ${networkName} SUI Tokens`}
+        />
     ) : null;
 }
 

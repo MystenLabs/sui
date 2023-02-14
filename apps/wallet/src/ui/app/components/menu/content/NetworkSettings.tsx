@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import Layout from '_components/menu/content/layout';
+import { MenuLayout } from './MenuLayout';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import NetworkSelector from '_components/network-selector';
 
-function Network() {
+export function NetworkSettings() {
     const mainMenuUrl = useNextMenuUrl(true, '/');
     return (
-        <Layout backUrl={mainMenuUrl} title="Network" isSettings>
+        <MenuLayout title="Network" back={mainMenuUrl}>
             <NetworkSelector />
-        </Layout>
+        </MenuLayout>
     );
 }
-
-export default Network;

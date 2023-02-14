@@ -3,19 +3,11 @@
 
 import { Add16, StakeAdd16 } from '@mysten/icons';
 import { type Meta, type StoryObj } from '@storybook/react';
-import { MemoryRouter } from 'react-router-dom';
 
 import { Button } from './ButtonUI';
 
 export default {
     component: Button,
-    decorators: [
-        (Story) => (
-            <MemoryRouter>
-                <Story />
-            </MemoryRouter>
-        ),
-    ],
 } as Meta<typeof Button>;
 
 export const Default: StoryObj<typeof Button> = {
@@ -32,8 +24,9 @@ export const AllButton: StoryObj<typeof Button> = {
             'outline',
             'outlineWarning',
             'warning',
+            'plain',
         ] as const;
-        const sizes = ['tall', 'narrow'] as const;
+        const sizes = ['tall', 'narrow', 'tiny'] as const;
         return (
             <div className="grid gap-4 grid-cols-2">
                 {sizes.map((size) =>
