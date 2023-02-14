@@ -7,8 +7,6 @@ import { Card } from "../components/Card";
 import { Spinner } from "../components/Spinner";
 import { config } from "../config";
 import { useScorecard } from "../network/queries/scorecard";
-import { useRawObject } from "../network/queries/use-raw";
-import { LEADERBOARD, Leaderboard } from "../network/types";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -72,14 +70,12 @@ const Schema = z.object({
 
 const GAS_BUDGET = 10000n;
 
+const MIN_SCORE = 1;
+
 function Connected() {
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const [searchParams] = useSearchParams();
   const scorecard = useScorecard();
-  const leaderboard = useRawObject<Leaderboard>(
-    config.VITE_LEADERBOARD,
-    LEADERBOARD
-  );
 
   const { handleSubmit, register, formState, control } = useForm<
     z.infer<typeof Schema>
@@ -133,7 +129,7 @@ function Connected() {
     return <Done />;
   }
 
-  if (scorecard.isLoading || leaderboard.isLoading) {
+  if (scorecard.isLoading) {
     return (
       <div className="flex items-center justify-center -mt-32">
         <Spinner />
@@ -141,18 +137,11 @@ function Connected() {
     );
   }
 
-  if (!scorecard.data || !leaderboard.data) {
+  if (!scorecard.data) {
     return <NoWinner />;
   }
 
-  // TODO: Once we have a snapshot, use that instead of the live leaderboard.
-  const rank = searchParams.get("rank")
-    ? parseInt(searchParams.get("rank") as string, 10)
-    : leaderboard.data.data.topScores.findIndex(
-        (score) => score.name == scorecard.data!.data.name
-      );
-
-  if (rank === -1 || rank > 2000) {
+  if (MIN_SCORE > scorecard.data.data.score) {
     return <NoWinner />;
   }
 
