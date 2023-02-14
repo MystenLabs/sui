@@ -125,6 +125,10 @@ impl CheckpointExecutor {
     /// We don't technically need &mut on self, but passing it to make sure only one instance is
     /// running at one time.
     pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) -> Committee {
+        debug!(
+            "Checkpoint executor running for epoch {}",
+            epoch_store.epoch(),
+        );
         self.metrics
             .checkpoint_exec_epoch
             .set(epoch_store.epoch() as i64);
@@ -252,6 +256,9 @@ impl CheckpointExecutor {
             .checkpoint_store
             .get_highest_synced_checkpoint()
             .expect("Failed to read highest synced checkpoint") else {
+            debug!(
+                "No checkpoints to schedule, highest synced checkpoint is None",
+            );
             return;
         };
 
@@ -283,7 +290,9 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
+        let _scope = monitored_scope("ScheduleCheckpoint");
         debug!("Executing checkpoint {:?}", checkpoint.sequence_number());
+
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
         let checkpoint_epoch = checkpoint.epoch();
