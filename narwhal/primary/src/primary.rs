@@ -827,9 +827,9 @@ impl PrimaryReceiverHandler {
         );
 
         // Synchronize all batches referenced in the header.
-        self.synchronizer
-            .sync_batches(header, network, /* max_age */ 0)
-            .await?;
+        // self.synchronizer
+        //     .sync_batches(self.inner.clone(), header, network, /* max_age */ 0)
+        //     .await?;
 
         // Check that the time of the header is smaller than the current time. If not but the difference is
         // small, just wait. Otherwise reject with an error.
