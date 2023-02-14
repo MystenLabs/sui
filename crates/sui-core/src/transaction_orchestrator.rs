@@ -470,6 +470,9 @@ pub struct TransactionOrchestratorMetrics {
     local_execution_latency_shared_obj: Histogram,
 }
 
+// Note that labeled-metrics are stored upfront individually
+// to mitigate the perf hit by MetricsVec.
+// See https://github.com/tikv/rust-prometheus/tree/master/static-metric
 impl TransactionOrchestratorMetrics {
     pub fn new(registry: &Registry) -> Self {
         let total_req_received = register_int_counter_vec_with_registry!(
