@@ -76,26 +76,23 @@ export function getTransfersAmount(
         getPaySuiTransaction(txnData) ?? getPayTransaction(txnData);
 
     const amountByRecipient = paySuiData?.recipients.reduce(
-        (acc, value, index) => {
-            return {
-                ...acc,
-                [value]: {
-                    amount:
-                        paySuiData.amounts[index] +
-                        (value in acc ? acc[value].amount : 0),
-                    coinType: txnEffect
-                        ? getCoinType(
-                              txnEffect,
-                              paySuiData.recipients[index] ||
-                                  paySuiData.recipients[0]
-                          )
-                        : null,
-                    address:
-                        paySuiData.recipients[index] ||
-                        paySuiData.recipients[0],
-                },
-            };
-        },
+        (acc, value, index) => ({
+            ...acc,
+            [value]: {
+                amount:
+                    paySuiData.amounts[index] +
+                    (value in acc ? acc[value].amount : 0),
+                coinType: txnEffect
+                    ? getCoinType(
+                          txnEffect,
+                          paySuiData.recipients[index] ||
+                              paySuiData.recipients[0]
+                      )
+                    : null,
+                address:
+                    paySuiData.recipients[index] || paySuiData.recipients[0],
+            },
+        }),
         {} as {
             [key: string]: {
                 amount: number;

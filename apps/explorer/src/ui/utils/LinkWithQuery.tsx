@@ -29,9 +29,8 @@ export function useNavigateWithQuery() {
     const { search } = useLocation();
 
     const navigateWithQuery = useCallback(
-        (url: string, options: NavigateOptions) => {
-            return navigate(`${url}${search}`, options);
-        },
+        (url: string, options: NavigateOptions) =>
+            navigate(`${url}${search}`, options),
         [navigate, search]
     );
 

@@ -90,32 +90,25 @@ export function Search({
                             <LoadingSpinner />
                         </div>
                     ) : hasOptions ? (
-                        options.map(({ label, results }) => {
-                            return (
-                                <div key={label}>
-                                    {!!results?.length && (
-                                        <div className="mb-2">
-                                            <Text
-                                                color="steel-dark"
-                                                variant="captionSmall/medium"
-                                            >
-                                                {label}
-                                            </Text>
-                                        </div>
-                                    )}
-                                    {results?.map((item) => {
-                                        return (
-                                            <SearchItem
-                                                key={item.id}
-                                                value={item}
-                                            >
-                                                {item.label}
-                                            </SearchItem>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })
+                        options.map(({ label, results }) => (
+                            <div key={label}>
+                                {!!results?.length && (
+                                    <div className="mb-2">
+                                        <Text
+                                            color="steel-dark"
+                                            variant="captionSmall/medium"
+                                        >
+                                            {label}
+                                        </Text>
+                                    </div>
+                                )}
+                                {results?.map((item) => (
+                                    <SearchItem key={item.id} value={item}>
+                                        {item.label}
+                                    </SearchItem>
+                                ))}
+                            </div>
+                        ))
                     ) : (
                         <div className="flex items-center justify-center">
                             <Text

@@ -21,9 +21,7 @@ type ValidatorMetaProps = {
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
     const metadata = validatorData.fields.metadata.fields;
 
-    const validatorName = useMemo(() => {
-        return getName(metadata.name);
-    }, [metadata]);
+    const validatorName = useMemo(() => getName(metadata.name), [metadata]);
 
     const validatorPublicKey = useMemo(
         () =>
