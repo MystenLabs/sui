@@ -49,6 +49,7 @@ export function useEpoch() {
     {
       // Refetch every 10 minutes:
       refetchInterval: 10 * 60 * 1000,
+      staleTime: 10 * 60 * 1000,
     }
   );
 

@@ -5,6 +5,7 @@ import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
 import { ReactNode, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
+import { GameEnding, useGameOverRedirect } from "../components/GameEnding";
 
 function InfoItem({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -31,6 +32,7 @@ function InfoLink({ href, children }: { href: string; children: ReactNode }) {
 }
 
 export function Connect() {
+  useGameOverRedirect();
   const navigate = useNavigate();
   const { currentAccount } = useWalletKit();
 
@@ -42,6 +44,9 @@ export function Connect() {
 
   return (
     <div className="max-w-4xl w-full mx-auto text-center">
+      <div className="mb-8">
+        <GameEnding />
+      </div>
       <Card spacing="xl">
         <h1 className="text-steel-darker text-2xl leading-tight font-semibold mb-5">
           Welcome to Sui Frenemies game
