@@ -1,16 +1,16 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anemo::{rpc, Network, Request};
+use anemo::{Network, Request};
 use config::{Committee, Epoch, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::dag::Dag;
 use crypto::{NetworkPublicKey, PublicKey};
-use fastcrypto::hash::Hash as _;
+use fastcrypto::{bls12381::min_sig::BLS12381PublicKey, hash::Hash as _};
 use mysten_metrics::spawn_monitored_task;
-use network::{anemo_ext::NetworkExt, ReliableNetwork, RetryConfig};
+use network::{anemo_ext::NetworkExt, RetryConfig};
 use parking_lot::Mutex;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -20,11 +20,11 @@ use std::{
 use storage::{CertificateStore, PayloadToken};
 use store::Store;
 use tokio::{
-    sync::{oneshot, watch},
+    sync::{broadcast, oneshot, watch},
     task::JoinSet,
     time::sleep,
 };
-use tracing::{debug, trace, warn};
+use tracing::{debug, error, trace, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -65,6 +65,8 @@ struct Inner {
     tx_new_certificates: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
     tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
+    /// Send own certificates to be broadcasted to all other peers.
+    tx_own_certificate_broadcast: broadcast::Sender<Certificate>,
     /// Get a signal when the round changes.
     rx_consensus_round_updates: watch::Receiver<Round>,
     /// The genesis and its digests.
@@ -77,6 +79,10 @@ struct Inner {
     /// - synchronizing worker batches for processed certificates
     /// - broadcasting newly formed certificates
     background_tasks: Mutex<JoinSet<DagResult<()>>>,
+    /// Contains background tasks for:
+    /// - synchronizing worker batches for processed certificates
+    /// - broadcasting newly formed certificates
+    certificate_senders: Mutex<JoinSet<()>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<HashMap<Round, Box<CertificatesAggregator>>>,
 }
@@ -108,6 +114,8 @@ impl Synchronizer {
         let highest_processed_round = certificate_store.highest_round_number();
         let highest_created_certificate = certificate_store.last_round(&name).unwrap();
         let gc_round = (*rx_consensus_round_updates.borrow()).saturating_sub(gc_depth);
+        let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
+            broadcast::channel(1000);
         let inner = Arc::new(Inner {
             name,
             committee: committee.clone(),
@@ -117,18 +125,22 @@ impl Synchronizer {
             highest_processed_round: AtomicU64::new(highest_processed_round),
             highest_received_round: AtomicU64::new(0),
             highest_created_round: AtomicU64::new(
-                highest_created_certificate.map_or(0, |c| c.round()),
+                highest_created_certificate
+                    .as_ref()
+                    .map_or(0, |c| c.round()),
             ),
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
             tx_new_certificates,
             tx_parents,
+            tx_own_certificate_broadcast: tx_own_certificate_broadcast.clone(),
             rx_consensus_round_updates: rx_consensus_round_updates.clone(),
             genesis,
             dag,
             metrics,
             background_tasks: Mutex::new(JoinSet::new()),
+            certificate_senders: Mutex::new(JoinSet::new()),
             certificates_aggregators: Mutex::new(HashMap::with_capacity(2 * gc_depth as usize)),
         });
 
@@ -152,15 +164,33 @@ impl Synchronizer {
             }
         });
 
-        // Start a task to broadcast last created certificate.
-        // inner
-        // .background_tasks
-        // .lock()
-        // .spawn(Self::broadcast_certificate(
-        //     inner.clone(),
-        //     network.clone(),
-        //     certificate.clone(),
-        // ));
+        // Start tasks to broadcast created certificates.
+        let inner_senders = inner.clone();
+        spawn_monitored_task!(async move {
+            let Ok(network) = rx_synchronizer_network.await else {
+                error!("Failed to receive Network!");
+                return;
+            };
+            let mut senders = inner_senders.certificate_senders.lock();
+            for (name, _, network_key) in inner_senders
+                .committee
+                .others_primaries(&inner_senders.name)
+                .into_iter()
+            {
+                senders.spawn(Self::push_certificates(
+                    network.clone(),
+                    name,
+                    network_key,
+                    tx_own_certificate_broadcast.subscribe(),
+                ));
+            }
+            if let Some(cert) = highest_created_certificate {
+                // Error can be ignored.
+                if tx_own_certificate_broadcast.send(cert).is_err() {
+                    error!("Failed to populate initial certificate to send to peers!");
+                }
+            }
+        });
 
         Self { inner }
     }
@@ -263,17 +293,17 @@ impl Synchronizer {
         }?;
 
         // Broadcast the certificate.
-        let round = certificate.round();
-        self.inner
-            .background_tasks
-            .lock()
-            .spawn(Self::broadcast_certificate(
-                self.inner.clone(),
-                network.clone(),
-                certificate.clone(),
-            ));
+        if self
+            .inner
+            .tx_own_certificate_broadcast
+            .send(certificate.clone())
+            .is_err()
+        {
+            return Err(DagError::ShuttingDown);
+        }
 
         // Update metrics.
+        let round = certificate.round();
         let header_to_certificate_duration =
             Duration::from_millis(certificate.metadata.created_at - certificate.header.created_at)
                 .as_secs_f64();
@@ -414,84 +444,61 @@ impl Synchronizer {
         Ok(())
     }
 
-    // Awaits completion of the given certificate broadcasts, aborting if narwhal round
-    // advances past certificate round.
-    async fn broadcast_certificate(
-        inner: Arc<Inner>,
+    async fn push_certificates(
         network: Network,
-        certificate: Certificate,
-    ) -> DagResult<()> {
-        let mut tasks = JoinSet::new();
-        let request = PrimaryMessage::Certificate(certificate);
-        for (_, _, network_key) in inner.committee.others_primaries(&inner.name).into_iter() {
-            tasks.spawn(Self::send_certificate(
-                inner.clone(),
-                network.clone(),
-                network_key,
-                request.clone(),
-            ));
-        }
-        while let Some(result) = tasks.join_next().await {
-            match result {
-                Ok(None) => {}
-                Ok(Some((network_key, status))) => {
-                    debug!("Error sending certificate {request:?} to {network_key:?}: {status:?}");
-                    sleep(Duration::from_secs(1)).await;
-                    // Retry sending certificate when there are errors.
-                    tasks.spawn(Self::send_certificate(
-                        inner.clone(),
-                        network.clone(),
-                        network_key,
-                        request.clone(),
-                    ));
-                }
-                Err(err) => {
-                    if err.is_panic() {
-                        panic!("Panic while sending certificate: {err}");
-                    }
-                }
-            }
-        }
-        Ok(())
-
-        // let mut join_all = futures::future::try_join_all(tasks);
-        // loop {
-        //     tokio::select! {
-        //         _ = &mut join_all => {
-        //             // Reliable broadcast will not return errors.
-        //             return Ok(())
-        //         },
-        //         result = rx_narwhal_round_updates.changed() => {
-        //             if result.is_err() {
-        //                 // this happens during reconfig when the other side hangs up.
-        //                 return Ok(());
-        //             }
-        //             narwhal_round = *rx_narwhal_round_updates.borrow();
-        //             if narwhal_round > certificate_round {
-        //                 // Round has advanced. No longer need to broadcast this cert to
-        //                 // ensure liveness.
-        //                 return Ok(())
-        //             }
-        //         },
-        //     }
-        // }
-    }
-
-    async fn send_certificate(
-        inner: Arc<Inner>,
-        network: Network,
+        name: BLS12381PublicKey,
         network_key: NetworkPublicKey,
-        reqeust: PrimaryMessage,
-    ) -> Option<(NetworkPublicKey, rpc::Status)> {
+        mut rx_own_certificate_broadcast: broadcast::Receiver<Certificate>,
+    ) {
         let peer_id = anemo::PeerId(network_key.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
         let mut client = PrimaryToPrimaryClient::new(peer);
-        match client
-            .send_message(Request::new(reqeust.clone()).with_timeout(Duration::from_secs(10)))
-            .await
-        {
-            Ok(response) => None,
-            Err(status) => Some((network_key, status)),
+        let mut certificates = VecDeque::new();
+        loop {
+            if certificates.is_empty() {
+                match rx_own_certificate_broadcast.recv().await {
+                    Ok(cert) => certificates.push_front(cert),
+                    Err(broadcast::error::RecvError::Closed) => {
+                        trace!("Certificate sender {name} shutting down!");
+                        return;
+                    }
+                    Err(broadcast::error::RecvError::Lagged(e)) => {
+                        warn!("Certificate sender {name} lagging! {e}");
+                        // Re-run the loop to receive again.
+                        continue;
+                    }
+                };
+            } else {
+                match rx_own_certificate_broadcast.try_recv() {
+                    Ok(cert) => {
+                        // TODO: support sending an array of certificates.
+                        certificates.clear();
+                        certificates.push_front(cert);
+                    }
+                    Err(broadcast::error::TryRecvError::Closed) => {
+                        trace!("Certificate sender {name} shutting down!");
+                        return;
+                    }
+                    Err(broadcast::error::TryRecvError::Lagged(e)) => {
+                        warn!("Certificate sender {name} lagging! {e}");
+                    }
+                    Err(broadcast::error::TryRecvError::Empty) => {}
+                };
+            }
+            let request = Request::new(PrimaryMessage::Certificate(
+                certificates.front().unwrap().clone(),
+            ))
+            .with_timeout(Duration::from_secs(10));
+
+            match client.send_message(request).await {
+                Ok(_) => {
+                    certificates.pop_front();
+                }
+                Err(status) => {
+                    warn!("Failed to send certificate to {name}! {status:?}");
+                    sleep(Duration::from_secs(1));
+                }
+            }
         }
     }
 
