@@ -1,7 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Account24, ArrowUpRight12, Domain24, Version24 } from '@mysten/icons';
+import { useFeature } from '@growthbook/growthbook-react';
+import {
+    Account24,
+    ArrowUpRight12,
+    Copy16,
+    Domain24,
+    Version24,
+} from '@mysten/icons';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
@@ -15,14 +22,16 @@ import { lockWallet } from '_app/wallet/actions';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppDispatch, useAppSelector, useMiddleEllipsis } from '_hooks';
 import { ToS_LINK } from '_src/shared/constants';
+import { FEATURES } from '_src/shared/experimentation/features';
 import { useAutoLockInterval } from '_src/ui/app/hooks/useAutoLockInterval';
+import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { logout } from '_src/ui/app/redux/slices/account';
 import { Link } from '_src/ui/app/shared/Link';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import { Text } from '_src/ui/app/shared/text';
 
 function MenuList() {
-    const accountUrl = useNextMenuUrl(true, '/account');
+    const accountUrl = useNextMenuUrl(true, '/accounts');
     const networkUrl = useNextMenuUrl(true, '/network');
     const autoLockUrl = useNextMenuUrl(true, '/auto-lock');
     const address = useAppSelector(({ account }) => account.address);
@@ -34,14 +43,24 @@ function MenuList() {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const [logoutInProgress, setLogoutInProgress] = useState(false);
+    const copyAddressCallback = useCopyToClipboard(address || '', {
+        copySuccessMessage: 'Address copied',
+    });
+    const isMultiAccountsEnabled = useFeature(
+        FEATURES.WALLET_MULTI_ACCOUNTS
+    ).on;
     return (
         <MenuLayout title="Wallet Settings">
             <div className="flex flex-col divide-y divide-x-0 divide-solid divide-gray-45">
                 <MenuListItem
-                    to={accountUrl}
+                    to={isMultiAccountsEnabled ? accountUrl : undefined}
                     icon={<Account24 />}
-                    title="Account"
+                    title={isMultiAccountsEnabled ? 'Accounts' : 'Account'}
                     subtitle={shortenAddress}
+                    onClick={
+                        isMultiAccountsEnabled ? undefined : copyAddressCallback
+                    }
+                    iconAfter={isMultiAccountsEnabled ? undefined : <Copy16 />}
                 />
                 <MenuListItem
                     to={networkUrl}
