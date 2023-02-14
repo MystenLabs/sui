@@ -1,37 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { trimStdLibPrefix } from '../../../utils/stringUtils';
-import { type DataType } from '../OwnedObjectConstants';
+import { transformURL } from '../../../utils/stringUtils';
+import { type Data, type DataType } from '../OwnedObjectConstants';
 
 import styles from '../styles/OwnedObjects.module.css';
 
-import DisplayBox from '~/components/displaybox/DisplayBox';
-import { ObjectLink } from '~/ui/InternalLink';
-import { Text } from '~/ui/Text';
+import { useImageMod } from '~/hooks/useImageMod';
+import { ObjectDetails } from '~/ui/ObjectDetails';
+
+function OwnedNFT(entryObj: Data) {
+    const url = transformURL(entryObj.display ?? '');
+    const { data: allowed } = useImageMod({ url });
+
+    return (
+        <ObjectDetails
+            name={entryObj.name}
+            type={entryObj.name || ''}
+            image={url}
+            variant="small"
+            nsfw={!allowed}
+        />
+    );
+}
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
     return (
         <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
-                <div className={styles.objectbox} key={`object-${index1}`}>
-                    <div className={styles.previewimage}>
-                        <DisplayBox display={entryObj.display} />
-                    </div>
-                    <div className={styles.textitem}>
-                        {entryObj.name && (
-                            <div className={styles.name}>{entryObj.name}</div>
-                        )}
-                        <div>
-                            <ObjectLink objectId={entryObj.id} />
-                        </div>
-                        <div className={styles.typevalue}>
-                            <Text variant="p2/medium">
-                                {trimStdLibPrefix(entryObj.Type)}
-                            </Text>
-                        </div>
-                    </div>
-                </div>
+                <OwnedNFT key={`object-${index1}`} {...entryObj} />
             ))}
         </div>
     );
