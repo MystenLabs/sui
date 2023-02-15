@@ -1779,6 +1779,9 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     checkpoint_start_timestamp_ms: p.checkpoint_start_timestamp_ms,
                 })
             }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                anyhow::bail!("programmable transactions are not yet supported")
+            }
         })
     }
 }

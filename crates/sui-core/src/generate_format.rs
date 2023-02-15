@@ -18,8 +18,9 @@ use sui_types::{
         AuthoritySignature, KeypairTraits, Signature,
     },
     messages::{
-        CallArg, EntryArgumentErrorKind, EntryTypeArgumentErrorKind, ExecutionFailureStatus,
-        ExecutionStatus, ObjectArg, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+        Argument, CallArg, Command, EntryArgumentErrorKind, EntryTypeArgumentErrorKind,
+        ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind,
+        SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
     storage::DeleteKind,
@@ -89,6 +90,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
     tracer.trace_type::<DeleteKind>(&samples)?;
+    tracer.trace_type::<Argument>(&samples)?;
+    tracer.trace_type::<Command>(&samples)?;
 
     tracer.registry()
 }
