@@ -34,6 +34,7 @@ third-party = [
     { name = "move-unit-test", git = "https://github.com/move-language/move", rev = "8729cf2445696cb29f1e0ca06df7d09cf3c2c55f" },
     { name = "move-cli", git = "https://github.com/move-language/move", rev = "8729cf2445696cb29f1e0ca06df7d09cf3c2c55f" },
     { name = "move-transactional-test-runner", git = "https://github.com/move-language/move", rev = "8729cf2445696cb29f1e0ca06df7d09cf3c2c55f" },
+    { name = "object_store" },
 ]
 
 [final-excludes]

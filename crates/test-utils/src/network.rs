@@ -259,6 +259,7 @@ impl TestClusterBuilder {
         self.db_checkpoint_config_validators = DBCheckpointConfig {
             perform_db_checkpoints_at_epoch_end: true,
             checkpoint_path: None,
+            object_store_config: None,
         };
         self
     }
@@ -267,6 +268,7 @@ impl TestClusterBuilder {
         self.db_checkpoint_config_fullnodes = DBCheckpointConfig {
             perform_db_checkpoints_at_epoch_end: true,
             checkpoint_path: None,
+            object_store_config: None,
         };
         self
     }
