@@ -25,6 +25,7 @@ export type TransferCoinFormProps = {
     balance: bigint | null;
 };
 
+//TODO: update the form input to use input with action component
 export function StepOne({
     submitError,
     coinType,
