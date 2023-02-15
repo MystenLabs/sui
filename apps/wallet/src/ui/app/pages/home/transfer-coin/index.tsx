@@ -89,6 +89,7 @@ function TransferCoinPage() {
                 });
                 try {
                     const bigIntAmount = parseAmount(amount, coinDecimals);
+                    //Todo:(Jibz) move to react-query
                     const response = await dispatch(
                         sendTokens({
                             amount: bigIntAmount,

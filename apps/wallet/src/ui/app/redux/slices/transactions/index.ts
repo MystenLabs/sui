@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest, Coin as CoinAPI } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    Coin as CoinAPI,
+    SUI_TYPE_ARG,
+} from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -31,6 +35,7 @@ type SendTokensTXArgs = {
 };
 type TransactionResult = SuiExecuteTransactionResponse;
 
+// TODO: Move to react-query
 export const sendTokens = createAsyncThunk<
     TransactionResult,
     SendTokensTXArgs,
@@ -49,7 +54,8 @@ export const sendTokens = createAsyncThunk<
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
         const signer = api.getSignerInstance(activeAddress, background);
         let response;
-        if (sendMax) {
+        // Use payAllSui if sendMax is true and the token type is SUI
+        if (sendMax && tokenTypeArg === SUI_TYPE_ARG) {
             response = await signer.payAllSui({
                 recipient: recipientAddress,
                 gasBudget: gasBudget,
