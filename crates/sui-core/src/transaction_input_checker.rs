@@ -38,7 +38,7 @@ async fn get_gas_status(
     // Here we only check there is enough to cover, execution will smash coins together.
     let gas_coin_ref = transaction.gas_coins().get(0).unwrap();
     let empty_coins = vec![]; // this is just to get an iterator over an empty vec
-    // select all other coins, including the special transaction ones
+                              // select all other coins, including the special transaction ones
     let gas_object_refs = transaction.gas_coins()[1..]
         .iter()
         .chain(match tx_kind {

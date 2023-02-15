@@ -484,7 +484,7 @@ pub fn verify_and_link<
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
-    let vm = MoveVM::new(natives)
+    let vm = new_move_vm(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
     let mut session = new_session(&vm, state_view, BTreeMap::new(), gas_status.is_metered());
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
