@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair, fromB64, toB64 } from '@mysten/sui.js';
+import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
 import mitt from 'mitt';
 import { throttle } from 'throttle-debounce';
 
