@@ -3,10 +3,12 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { SerializedSignature } from '../signers/signer';
 import { IntentScope, messageWithIntent } from './intent';
 import * as secp from '@noble/secp256k1';
-import { fromSerializedSignature } from '../cryptography/publickey';
+import {
+  fromSerializedSignature,
+  SerializedSignature,
+} from '../cryptography/signature';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are
@@ -27,14 +29,14 @@ export async function verifyMessage(
     case 'ED25519':
       return nacl.sign.detached.verify(
         messageBytes,
-        fromB64(signature.signature),
-        fromB64(signature.pubKey),
+        signature.signature,
+        signature.pubKey.toBytes(),
       );
     case 'Secp256k1':
       return secp.verify(
-        secp.Signature.fromCompact(fromB64(signature.signature)),
+        secp.Signature.fromCompact(signature.signature),
         await secp.utils.sha256(messageBytes),
-        fromB64(signature.pubKey),
+        signature.pubKey.toBytes(),
       );
     default:
       throw new Error(

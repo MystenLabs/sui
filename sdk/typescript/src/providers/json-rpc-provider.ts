@@ -72,7 +72,7 @@ import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
-import { SerializedSignature } from '../signers/signer';
+import { SerializedSignature } from '../cryptography/signature';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,

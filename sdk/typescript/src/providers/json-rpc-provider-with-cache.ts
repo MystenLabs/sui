@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
 import { is } from 'superstruct';
-import { SerializedSignature } from '../signers/signer';
+import { SerializedSignature } from '../cryptography/signature';
 
 export class JsonRpcProviderWithCache extends JsonRpcProvider {
   /**

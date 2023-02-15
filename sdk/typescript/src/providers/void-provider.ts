@@ -49,7 +49,7 @@ import {
 import { Provider } from './provider';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
-import { SerializedSignature } from '../signers/signer';
+import { SerializedSignature } from '../cryptography/signature';
 
 export class VoidProvider extends Provider {
   // API Version

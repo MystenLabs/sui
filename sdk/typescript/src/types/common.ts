@@ -10,7 +10,7 @@ import {
   union,
   unknown,
 } from 'superstruct';
-import { Base58DataBuffer } from '../serialization/base58';
+import bs58 from 'bs58';
 import { CallArg, TransactionData } from './sui-bcs';
 import { sha256Hash } from '../cryptography/hash';
 import { BCS } from '@mysten/bcs';
@@ -64,8 +64,8 @@ export function isValidTransactionDigest(
   value: string,
 ): value is TransactionDigest {
   try {
-    const buffer = new Base58DataBuffer(value);
-    return buffer.getLength() === TX_DIGEST_LENGTH;
+    const buffer = bs58.decode(value);
+    return buffer.length === TX_DIGEST_LENGTH;
   } catch (e) {
     return false;
   }
@@ -130,7 +130,7 @@ export function generateTransactionDigest(
   const txBytes = bcs.ser('TransactionData', data).toBytes();
   const hash = sha256Hash('TransactionData', txBytes);
 
-  return new Base58DataBuffer(hash).toString();
+  return bs58.encode(hash);
 }
 
 function isHex(value: string): boolean {

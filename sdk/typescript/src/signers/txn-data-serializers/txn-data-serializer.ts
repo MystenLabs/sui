@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SerializedSignature } from '../../cryptography/signature';
 import {
   ObjectId,
   PureArg,
@@ -8,7 +9,6 @@ import {
   SuiJsonValue,
   TypeTag,
 } from '../../types';
-import { SerializedSignature } from '../signer';
 
 ///////////////////////////////
 // Exported Types

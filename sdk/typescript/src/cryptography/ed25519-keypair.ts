@@ -4,10 +4,10 @@
 import nacl from 'tweetnacl';
 import type { ExportedKeypair, Keypair } from './keypair';
 import { Ed25519PublicKey } from './ed25519-publickey';
-import { SignatureScheme } from './publickey';
 import { isValidHardenedPath, mnemonicToSeedHex } from './mnemonics';
 import { derivePath, getPublicKey } from '../utils/ed25519-hd-key';
 import { toB64 } from '@mysten/bcs';
+import { SignatureScheme } from './signature';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 

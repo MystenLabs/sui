@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
@@ -19,7 +20,7 @@ import {
   bcsForVersion,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
-import { SerializedSignature, Signer } from './signer';
+import { Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
   MoveCallTransaction,

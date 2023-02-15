@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
-import { SerializedSignature } from '../signers/signer';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,

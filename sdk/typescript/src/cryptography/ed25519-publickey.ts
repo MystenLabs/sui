@@ -3,11 +3,8 @@
 
 import sha3 from 'js-sha3';
 import { fromB64, toB64 } from '@mysten/bcs';
-import {
-  bytesEqual,
-  PublicKeyInitData,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from './publickey';
+import { bytesEqual, PublicKeyInitData } from './publickey';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
 
 const PUBLIC_KEY_SIZE = 32;
 
