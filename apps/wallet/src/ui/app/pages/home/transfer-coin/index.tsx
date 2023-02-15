@@ -76,41 +76,38 @@ function TransferCoinPage() {
     const navigate = useNavigate();
 
     const onHandleSubmit = useCallback(
-        async ({ to, amount, sendMaxToken }: FormValues) =>
-            //  { resetForm }: FormikHelpers<FormValues>
-            {
-                if (coinType === null || !gasBudgetEstimationUnits) {
-                    return;
-                }
+        async ({ to, amount, sendMaxToken }: FormValues) => {
+            if (coinType === null || !gasBudgetEstimationUnits) {
+                return;
+            }
 
-                setSendError(null);
-                trackEvent('TransferCoins', {
-                    props: { coinType },
-                });
-                try {
-                    const bigIntAmount = parseAmount(amount, coinDecimals);
-                    //Todo:(Jibz) move to react-query
-                    const response = await dispatch(
-                        sendTokens({
-                            amount: bigIntAmount,
-                            recipientAddress: to,
-                            tokenTypeArg: coinType,
-                            gasBudget: gasBudgetEstimationUnits,
-                            sendMax: sendMaxToken,
-                        })
-                    ).unwrap();
+            setSendError(null);
+            trackEvent('TransferCoins', {
+                props: { coinType },
+            });
+            try {
+                const bigIntAmount = parseAmount(amount, coinDecimals);
+                //Todo:(Jibz) move to react-query
+                const response = await dispatch(
+                    sendTokens({
+                        amount: bigIntAmount,
+                        recipientAddress: to,
+                        tokenTypeArg: coinType,
+                        gasBudget: gasBudgetEstimationUnits,
+                        sendMax: sendMaxToken,
+                    })
+                ).unwrap();
 
-                    // resetForm();
-                    const txDigest = getTransactionDigest(response);
-                    const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                        txDigest
-                    )}&from=transactions`;
+                const txDigest = getTransactionDigest(response);
+                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                    txDigest
+                )}&from=transactions`;
 
-                    navigate(receiptUrl);
-                } catch (e) {
-                    setSendError((e as SerializedError).message || null);
-                }
-            },
+                navigate(receiptUrl);
+            } catch (e) {
+                setSendError((e as SerializedError).message || null);
+            }
+        },
         [dispatch, navigate, coinType, coinDecimals, gasBudgetEstimationUnits]
     );
 
