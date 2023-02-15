@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
+import { SignatureScheme } from '../cryptography/publickey';
 
 ///////////////////////////////
 // Exported Types
@@ -11,8 +11,11 @@ import { PublicKey, SignatureScheme } from '../cryptography/publickey';
  */
 export type SignaturePubkeyPair = {
   signatureScheme: SignatureScheme;
-  signature: Uint8Array;
-  pubKey: PublicKey;
+  /** Base64-encoded signature */
+  signature: string;
+  /** Base64-encoded public key */
+  pubKey: string;
+  serializedSignature: string;
 };
 
 ///////////////////////////////

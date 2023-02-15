@@ -24,6 +24,7 @@ export * from './signers/signer-with-provider';
 export * from './types';
 export * from './utils/api-endpoints';
 export * from './utils/format';
+export * from './utils/intent';
 
 export * from './framework';
 

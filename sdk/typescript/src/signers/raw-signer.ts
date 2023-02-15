@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/bcs';
 import { gt } from '@suchipi/femver';
 import { Keypair } from '../cryptography/keypair';
+import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
 import { Provider } from '../providers/provider';
 import { SuiAddress, versionToString } from '../types';
 import { SignaturePubkeyPair } from './signer';
@@ -32,10 +34,22 @@ export class RawSigner extends SignerWithProvider {
     let useRecoverable =
       version && gt(versionToString(version), '0.24.0') ? false : true;
 
+    const pubkey = this.keypair.getPublicKey();
+    const signature = this.keypair.signData(data, useRecoverable);
+    const signatureScheme = this.keypair.getKeyScheme();
+
+    const serialized_sig = new Uint8Array(
+      1 + signature.length + pubkey.toBytes().length,
+    );
+    serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+    serialized_sig.set(signature, 1);
+    serialized_sig.set(pubkey.toBytes(), 1 + signature.length);
+
     return {
-      signatureScheme: this.keypair.getKeyScheme(),
-      signature: this.keypair.signData(data, useRecoverable),
-      pubKey: this.keypair.getPublicKey(),
+      signatureScheme,
+      signature: toB64(signature),
+      pubKey: pubkey.toBase64(),
+      serializedSignature: toB64(serialized_sig),
     };
   }
 
