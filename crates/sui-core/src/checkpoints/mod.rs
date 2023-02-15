@@ -31,7 +31,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{EpochId, TransactionDigest};
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
     ConsensusTransactionKey, SingleTransactionKind, TransactionDataAPI, TransactionEffects,
@@ -387,6 +387,13 @@ impl CheckpointStore {
                 .epoch_rolling_gas_cost_summary
                 .computation_cost,
         })
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        // This checkpoints the entire db and not one column family
+        self.checkpoint_content
+            .checkpoint_db(path)
+            .map_err(SuiError::StorageError)
     }
 }
 

@@ -3,7 +3,7 @@
 
 use crate::node::{
     default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
-    AuthorityKeyPairWithPath, KeyPairWithPath, StateSnapshotConfig,
+    AuthorityKeyPairWithPath, DBCheckpointConfig, KeyPairWithPath,
 };
 use crate::{
     genesis,
@@ -79,6 +79,8 @@ pub struct ConfigBuilder<R = OsRng> {
 
     // the versions that are supported by each validator
     supported_protocol_versions_config: ProtocolVersionsConfig,
+
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl ConfigBuilder {
@@ -101,6 +103,7 @@ impl ConfigBuilder {
             epoch_duration_ms: default_epoch_duration_ms(),
             protocol_version: ProtocolVersion::MAX,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 }
@@ -169,6 +172,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -182,6 +190,7 @@ impl<R> ConfigBuilder<R> {
             epoch_duration_ms: self.epoch_duration_ms,
             protocol_version: self.protocol_version,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
+            db_checkpoint_config: self.db_checkpoint_config,
         }
     }
 }
@@ -451,7 +460,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     checkpoint_executor_config: Default::default(),
                     metrics: None,
                     supported_protocol_versions: Some(supported_protocol_versions),
-                    state_snapshot_config: StateSnapshotConfig::validator_config(),
+                    db_checkpoint_config: self.db_checkpoint_config.clone(),
                 }
             })
             .collect();
