@@ -3207,7 +3207,7 @@
         }
       },
       "CompressedSignature": {
-        "description": "Unlike `enum Signature`, `enum CompressedSignature` does not contain public key.",
+        "description": "Unlike [enum Signature], [enum CompressedSignature] does not contain public key.",
         "oneOf": [
           {
             "type": "object",
