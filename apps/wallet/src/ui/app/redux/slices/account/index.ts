@@ -62,11 +62,15 @@ const accountsAdapter = createEntityAdapter<AccountSerialized>({
         } else if (a.type === 'derived') {
             // sort derived accounts by derivation path
             return (a.derivationPath || '').localeCompare(
-                b.derivationPath || ''
+                b.derivationPath || '',
+                undefined,
+                { numeric: true }
             );
         } else {
             // sort imported account by address
-            return a.address.localeCompare(b.address);
+            return a.address.localeCompare(b.address, undefined, {
+                numeric: true,
+            });
         }
     },
 });

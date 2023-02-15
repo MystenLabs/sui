@@ -271,6 +271,17 @@ export class BackgroundClient {
         );
     }
 
+    public async deriveNextAccount() {
+        return await lastValueFrom(
+            this.sendMessage(
+                createMessage<KeyringPayload<'deriveNextAccount'>>({
+                    type: 'keyring',
+                    method: 'deriveNextAccount',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private setupAppStatusUpdateInterval() {
         setInterval(() => {
             this.sendAppStatus();
