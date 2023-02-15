@@ -37,20 +37,21 @@ function FooterLinks({ links }: { links: FooterItems }) {
 
 function Footer() {
     return (
-        <footer className="bg-gray-75 p-5 md:p-14">
-            <nav className="mx-auto grid grid-cols-1 items-center justify-center text-left xl:grid-cols-2">
-                <div className="grid grid-cols-4 md:grid-cols-5">
-                    <div className="hidden h-full flex-col md:flex">
-                        <SuiLogoIcon />
-                        <div className="mt-7.5">
+        <footer className="bg-gray-75 py-10 px-5 md:px-10 md:py-14">
+            <nav className="mx-auto grid grid-cols-1 gap-8 md:mx-0 md:grid-cols-4 md:gap-10 xl:w-1/2">
+                <div className="order-last mx-auto md:order-first md:mt-0">
+                    <div className="h-full space-y-2 md:flex md:flex-col md:justify-between">
+                        <SuiLogoIcon className="mx-auto md:mx-0" />
+                        <div className="mt-auto">
                             <Text color="white" variant="p4/semibold">
-                                &copy;{`${new Date().getFullYear()} Sui`}
-                            </Text>
-                            <Text color="white" variant="p4/semibold">
-                                All rights reserved
+                                &copy;
+                                {`${new Date().getFullYear()} Sui. All
+                                rights reserved.`}
                             </Text>
                         </div>
                     </div>
+                </div>
+                <div className="col-span-1 grid grid-cols-4 md:col-span-3">
                     <FooterLinks links={footerLinks} />
                 </div>
             </nav>

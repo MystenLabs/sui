@@ -30,22 +30,10 @@ export function Layout() {
                 <GrowthBookProvider growthbook={growthbook}>
                     <QueryClientProvider client={queryClient}>
                         <NetworkContext.Provider value={[network, setNetwork]}>
-                            <div
-                                className="w-full"
-                                style={{
-                                    // TODO: Remove this once we rewrite the footer, this is a nasty hack that we can get rid of:
-                                    background: `linear-gradient(
-                                        to bottom,
-                                        #2a4362 50%,
-                                        #2a4362 0%,
-                                        #767a81 0%,
-                                        #767a81 50%
-                                    )`,
-                                }}
-                            >
+                            <div className="w-full">
                                 <Header />
-                                <main className="relative z-10 min-h-screen rounded-3xl bg-offwhite py-2 shadow-2xl">
-                                    <section className="mx-auto max-w-[1440px] p-5 2xl:px-0">
+                                <main className="relative z-10 min-h-screen bg-offwhite py-2">
+                                    <section className="mx-auto max-w-[1440px] py-10 px-5 2xl:px-0">
                                         <Outlet />
                                     </section>
                                 </main>
