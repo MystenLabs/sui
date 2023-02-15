@@ -117,7 +117,7 @@ pub enum SuiError {
         committee: Committee,
     },
     #[error(
-        "Validator {:?} sent multiple signatures for the same message, conflicting: {:?}",
+        "Validator {:?} responded multiple signatures for the same message, conflicting: {:?}",
         signer,
         conflicting_sig
     )]
@@ -154,7 +154,7 @@ pub enum SuiError {
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
-        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
