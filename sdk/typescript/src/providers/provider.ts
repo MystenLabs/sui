@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { HttpHeaders } from '../rpc/client';
-import { SignaturePubkeyPair } from '../signers/signer';
+import { SerializedSignature } from '../signers/signer';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   GetObjectDataResponse,
@@ -233,7 +233,7 @@ export abstract class Provider {
    */
   abstract executeTransaction(
     txnBytes: Uint8Array | string,
-    signature: SignaturePubkeyPair,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse>;
 

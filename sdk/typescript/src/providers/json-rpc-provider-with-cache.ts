@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
 import { is } from 'superstruct';
-import { SignaturePubkeyPair } from '../signers/signer';
+import { SerializedSignature } from '../signers/signer';
 
 export class JsonRpcProviderWithCache extends JsonRpcProvider {
   /**
@@ -62,7 +62,7 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
 
   async executeTransaction(
     txnBytes: Uint8Array | string,
-    signature: SignaturePubkeyPair,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
     if (requestType !== 'WaitForEffectsCert') {

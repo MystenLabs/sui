@@ -3,9 +3,10 @@
 
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { SignaturePubkeyPair } from '../signers/signer';
+import { SerializedSignature } from '../signers/signer';
 import { IntentScope, messageWithIntent } from './intent';
 import * as secp from '@noble/secp256k1';
+import { fromSerializedSignature } from '../cryptography/publickey';
 
 // TODO: This might actually make sense to eventually move to the `Keypair` instances themselves, as
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are
@@ -14,12 +15,9 @@ import * as secp from '@noble/secp256k1';
 /** Verify data that is signed with `signer.signMessage`. */
 export async function verifyMessage(
   message: Uint8Array | string,
-  // NOTE: We intentionally omit the serialized signature so that this can also be manually constructed:
-  signature: Pick<
-    SignaturePubkeyPair,
-    'signature' | 'pubKey' | 'signatureScheme'
-  >,
+  serializedSignature: SerializedSignature,
 ) {
+  const signature = fromSerializedSignature(serializedSignature);
   const messageBytes = messageWithIntent(
     IntentScope.PersonalMessage,
     typeof message === 'string' ? fromB64(message) : message,

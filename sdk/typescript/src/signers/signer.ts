@@ -15,8 +15,9 @@ export type SignaturePubkeyPair = {
   signature: string;
   /** Base64-encoded public key */
   pubKey: string;
-  serializedSignature: string;
 };
+
+export type SerializedSignature = string;
 
 ///////////////////////////////
 // Exported Abstracts
@@ -30,5 +31,5 @@ export interface Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  signData(data: Uint8Array): Promise<SignaturePubkeyPair>;
+  signData(data: Uint8Array): Promise<SerializedSignature>;
 }

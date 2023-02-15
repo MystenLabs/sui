@@ -12,16 +12,8 @@ import {
 } from 'superstruct';
 import { Base58DataBuffer } from '../serialization/base58';
 import { CallArg, TransactionData } from './sui-bcs';
-import {
-  PublicKey,
-  PublicKeyInitData,
-  SIGNATURE_SCHEME_TO_FLAG,
-  SignatureScheme,
-} from '../cryptography/publickey';
 import { sha256Hash } from '../cryptography/hash';
-import { Ed25519PublicKey } from '../cryptography/ed25519-publickey';
-import { Secp256k1PublicKey } from '../cryptography/secp256k1-publickey';
-import { BCS, fromB64 } from '@mysten/bcs';
+import { BCS } from '@mysten/bcs';
 
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
@@ -133,40 +125,8 @@ export function normalizeSuiObjectId(
  */
 export function generateTransactionDigest(
   data: TransactionData,
-  signatureScheme: SignatureScheme,
-  signature: string | Uint8Array,
-  publicKey: PublicKeyInitData | PublicKey,
   bcs: BCS,
 ): string {
-  const signatureBytes =
-    typeof signature === 'string' ? fromB64(signature) : signature;
-
-  let pk: PublicKey;
-  switch (signatureScheme) {
-    case 'ED25519':
-      pk =
-        publicKey instanceof Ed25519PublicKey
-          ? publicKey
-          : new Ed25519PublicKey(publicKey as PublicKeyInitData);
-      break;
-    case 'Secp256k1':
-      pk =
-        publicKey instanceof Secp256k1PublicKey
-          ? publicKey
-          : new Secp256k1PublicKey(publicKey as PublicKeyInitData);
-  }
-  const publicKeyBytes = pk.toBytes();
-  const schemeByte = new Uint8Array([
-    SIGNATURE_SCHEME_TO_FLAG[signatureScheme],
-  ]);
-
-  const txSignature = new Uint8Array(
-    1 + signatureBytes.length + publicKeyBytes.length,
-  );
-  txSignature.set(schemeByte);
-  txSignature.set(signatureBytes, 1);
-  txSignature.set(publicKeyBytes, 1 + signatureBytes.length);
-
   const txBytes = bcs.ser('TransactionData', data).toBytes();
   const hash = sha256Hash('TransactionData', txBytes);
 
