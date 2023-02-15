@@ -711,8 +711,8 @@ impl CheckpointBuilder {
             .instrument(span)
             .await?;
         debug!(
-            "Effects of the change epoch transaction: {:?}",
-            signed_effect.data()
+            "Effects summary of the change epoch transaction: {:?}",
+            signed_effect.summary_for_debug()
         );
         self.epoch_store.record_is_safe_mode_metric(
             self.state.get_sui_system_state_object().unwrap().safe_mode,
