@@ -9,7 +9,7 @@ import { FormOverlayStepper, FormStep } from './FormOverlayStepper';
 import { StepOne } from './TransferCoinForm/StepOne';
 import { StepTwo } from './TransferCoinForm/StepTwo';
 import { createValidationSchema } from './validation';
-import ActiveCoinsCard from '_components/active-coins-card';
+import { ActiveCoinsCard } from '_components/active-coins-card';
 import { parseAmount } from '_helpers';
 import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
 import {
@@ -95,7 +95,7 @@ function TransferCoinPage() {
                             recipientAddress: to,
                             tokenTypeArg: coinType,
                             gasBudget: gasBudgetEstimationUnits,
-                            // sendMax: sendMaxToken,
+                            sendMax: sendMaxToken,
                         })
                     ).unwrap();
 

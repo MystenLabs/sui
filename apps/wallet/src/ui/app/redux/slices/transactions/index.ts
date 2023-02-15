@@ -27,6 +27,7 @@ type SendTokensTXArgs = {
     amount: bigint;
     recipientAddress: SuiAddress;
     gasBudget: number;
+    sendMax: boolean;
 };
 type TransactionResult = SuiExecuteTransactionResponse;
 
@@ -37,7 +38,7 @@ export const sendTokens = createAsyncThunk<
 >(
     'sui-objects/send-tokens',
     async (
-        { tokenTypeArg, amount, recipientAddress, gasBudget },
+        { tokenTypeArg, amount, recipientAddress, gasBudget, sendMax },
         { getState, extra: { api, background }, dispatch }
     ) => {
         const state = getState();
@@ -47,15 +48,24 @@ export const sendTokens = createAsyncThunk<
         }
         const coins: SuiMoveObject[] = accountCoinsSelector(state);
         const signer = api.getSignerInstance(activeAddress, background);
-        const response = await signer.signAndExecuteTransaction(
-            await CoinAPI.newPayTransaction(
-                coins,
-                tokenTypeArg,
-                amount,
-                recipientAddress,
-                gasBudget
-            )
-        );
+        let response;
+        if (sendMax) {
+            response = await signer.payAllSui({
+                recipient: recipientAddress,
+                gasBudget: gasBudget,
+                inputCoins: coins.map((o) => o.fields.id.id),
+            });
+        } else {
+            response = await signer.signAndExecuteTransaction(
+                await CoinAPI.newPayTransaction(
+                    coins,
+                    tokenTypeArg,
+                    amount,
+                    recipientAddress,
+                    gasBudget
+                )
+            );
+        }
         // TODO: better way to sync latest objects
         dispatch(fetchAllOwnedAndRequiredObjects());
         return response;
