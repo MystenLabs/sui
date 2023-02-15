@@ -34,7 +34,7 @@ function SelectedCoinCard({
                     {symbol} available
                 </Text>
                 <Text variant="body" color="steel-darker" weight="medium">
-                    {formatted} available
+                    {formatted}
                 </Text>
             </div>
         </Link>
