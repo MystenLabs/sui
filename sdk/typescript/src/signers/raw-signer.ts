@@ -7,7 +7,6 @@ import { Keypair } from '../cryptography/keypair';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
 import { Provider } from '../providers/provider';
 import { SuiAddress, versionToString } from '../types';
-import { messageWithIntent } from '../utils/intent';
 import { SignaturePubkeyPair } from './signer';
 import { SignerWithProvider } from './signer-with-provider';
 import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
