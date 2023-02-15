@@ -2202,6 +2202,8 @@ impl From<InvalidSharedByValue> for ExecutionFailureStatus {
 pub struct TransactionEffects {
     /// The status of the execution
     pub status: ExecutionStatus,
+    /// The epoch when this transaction was executed.
+    pub executed_epoch: EpochId,
     pub gas_used: GasCostSummary,
     /// The version that every modified (mutated or deleted) object had before it was modified by
     /// this transaction.
@@ -2362,6 +2364,7 @@ impl Default for TransactionEffects {
     fn default() -> Self {
         TransactionEffects {
             status: ExecutionStatus::Success,
+            executed_epoch: 0,
             gas_used: GasCostSummary {
                 computation_cost: 0,
                 storage_cost: 0,

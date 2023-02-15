@@ -14,6 +14,7 @@ use sui_protocol_constants::STORAGE_REBATE_RATE;
 use tracing::trace;
 
 use crate::coin::Coin;
+use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
 use crate::storage::SingleTxContext;
 use crate::{
@@ -497,6 +498,7 @@ impl<S> TemporaryStore<S> {
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
+        epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let mut modified_at_versions = vec![];
 
@@ -548,6 +550,7 @@ impl<S> TemporaryStore<S> {
 
         let effects = TransactionEffects {
             status,
+            executed_epoch: epoch,
             gas_used: gas_cost_summary,
             modified_at_versions,
             shared_objects: shared_object_refs,
