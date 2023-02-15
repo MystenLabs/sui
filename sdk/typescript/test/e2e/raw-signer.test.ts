@@ -15,7 +15,7 @@ import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
 import { setup, TestToolbox } from './utils/setup';
 import { gt } from '@suchipi/femver';
-import { fromB64, toB64 } from '@mysten/bcs';
+import { toB64 } from '@mysten/bcs';
 
 describe('RawSigner', () => {
   let toolbox: TestToolbox;
@@ -32,8 +32,8 @@ describe('RawSigner', () => {
     const { signature, pubKey } = fromSerializedSignature(serializedSignature);
     const isValid = nacl.sign.detached.verify(
       signData,
-      fromB64(signature),
-      fromB64(pubKey),
+      signature,
+      pubKey.toBytes(),
     );
     expect(isValid).toBeTruthy();
   });
@@ -74,8 +74,8 @@ describe('RawSigner', () => {
     if (useRecoverable) {
       const recovered_pubkey = secp.recoverPublicKey(
         msgHash,
-        Signature.fromCompact(fromB64(signature).slice(0, 64)),
-        fromB64(signature)[64],
+        Signature.fromCompact(signature.slice(0, 64)),
+        signature[64],
         true,
       );
       const expected = keypair.getPublicKey().toBase64();
@@ -84,9 +84,9 @@ describe('RawSigner', () => {
     } else {
       expect(
         secp.verify(
-          Signature.fromCompact(fromB64(signature)),
+          Signature.fromCompact(signature),
           msgHash,
-          fromB64(pubKey),
+          pubKey.toBytes(),
         ),
       ).toBeTruthy();
     }
