@@ -15,6 +15,7 @@ const PUBLIC_KEY_SIZE = 32;
  * An Ed25519 public key
  */
 export class Ed25519PublicKey {
+  static SIZE = PUBLIC_KEY_SIZE;
   private data: Uint8Array;
 
   /**

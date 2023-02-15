@@ -7,7 +7,7 @@ import { Keypair } from '../cryptography/keypair';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
 import { Provider } from '../providers/provider';
 import { SuiAddress, versionToString } from '../types';
-import { SignaturePubkeyPair } from './signer';
+import { SerializedSignature } from './signer';
 import { SignerWithProvider } from './signer-with-provider';
 import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
@@ -27,7 +27,7 @@ export class RawSigner extends SignerWithProvider {
     return this.keypair.getPublicKey().toSuiAddress();
   }
 
-  async signData(data: Uint8Array): Promise<SignaturePubkeyPair> {
+  async signData(data: Uint8Array): Promise<SerializedSignature> {
     // Starting Sui 0.25.0, only 64-byte nonrecoverable signatures are accepted.
     // TODO(joyqvq): Remove once 0.25.0 is released.
     const version = await this.provider.getRpcApiVersion();
@@ -45,12 +45,7 @@ export class RawSigner extends SignerWithProvider {
     serialized_sig.set(signature, 1);
     serialized_sig.set(pubkey.toBytes(), 1 + signature.length);
 
-    return {
-      signatureScheme,
-      signature: toB64(signature),
-      pubKey: pubkey.toBase64(),
-      serializedSignature: toB64(serialized_sig),
-    };
+    return toB64(serialized_sig);
   }
 
   connect(provider: Provider): SignerWithProvider {

@@ -5,6 +5,7 @@ import nacl from 'tweetnacl';
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Ed25519Keypair,
+  fromSerializedSignature,
   RawSigner,
   Secp256k1Keypair,
   verifyMessage,
@@ -27,7 +28,8 @@ describe('RawSigner', () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const { signature, pubKey } = await signer.signData(signData);
+    const serializedSignature = await signer.signData(signData);
+    const { signature, pubKey } = fromSerializedSignature(serializedSignature);
     const isValid = nacl.sign.detached.verify(
       signData,
       fromB64(signature),
@@ -62,7 +64,8 @@ describe('RawSigner', () => {
     const signData = new TextEncoder().encode('hello world');
     const msgHash = await secp.utils.sha256(signData);
     const signer = new RawSigner(keypair, toolbox.provider);
-    const { signature, pubKey } = await signer.signData(signData);
+    const serializedSignature = await signer.signData(signData);
+    const { signature, pubKey } = fromSerializedSignature(serializedSignature);
 
     const version = await toolbox.provider.getRpcApiVersion();
     // TODO(joyqvq): Remove recoverable signature test once 0.25.0 is released.

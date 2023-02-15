@@ -49,7 +49,7 @@ import {
 import { Provider } from './provider';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
-import { SignaturePubkeyPair } from '../signers/signer';
+import { SerializedSignature } from '../signers/signer';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -180,7 +180,7 @@ export class VoidProvider extends Provider {
 
   async executeTransaction(
     _txnBytes: Uint8Array,
-    _signature: SignaturePubkeyPair,
+    _signature: SerializedSignature,
     _requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');

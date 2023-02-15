@@ -72,7 +72,7 @@ import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
-import { SignaturePubkeyPair } from '../signers/signer';
+import { SerializedSignature } from '../signers/signer';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -658,7 +658,7 @@ export class JsonRpcProvider extends Provider {
 
   async executeTransaction(
     txnBytes: Uint8Array | string,
-    signature: SignaturePubkeyPair,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
     try {
@@ -666,7 +666,7 @@ export class JsonRpcProvider extends Provider {
         'sui_executeTransactionSerializedSig',
         [
           typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
-          signature.serializedSignature,
+          signature,
           requestType,
         ],
         SuiExecuteTransactionResponse,

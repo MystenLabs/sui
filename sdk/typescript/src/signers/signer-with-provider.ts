@@ -19,7 +19,7 @@ import {
   bcsForVersion,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
-import { SignaturePubkeyPair, Signer } from './signer';
+import { SerializedSignature, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
   MoveCallTransaction,
@@ -52,7 +52,7 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  abstract signData(data: Uint8Array): Promise<SignaturePubkeyPair>;
+  abstract signData(data: Uint8Array): Promise<SerializedSignature>;
 
   // Returns a new instance of the Signer, connected to provider.
   // This MAY throw if changing providers is not supported.
@@ -90,7 +90,7 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a message using the keypair, with the `PersonalMessage` intent.
    */
-  async signMessage(message: Uint8Array): Promise<SignaturePubkeyPair> {
+  async signMessage(message: Uint8Array): Promise<SerializedSignature> {
     return await this.signData(
       messageWithIntent(IntentScope.PersonalMessage, message),
     );
@@ -159,17 +159,8 @@ export abstract class SignerWithProvider implements Signer {
     }
     const version = await this.provider.getRpcApiVersion();
     const bcs = bcsForVersion(version);
-    const sig = await this.signData(
-      messageWithIntent(IntentScope.TransactionData, txBytes),
-    );
     const data = deserializeTransactionBytesToTransactionData(bcs, txBytes);
-    return generateTransactionDigest(
-      data,
-      sig.signatureScheme,
-      sig.signature,
-      sig.pubKey,
-      bcs,
-    );
+    return generateTransactionDigest(data, bcs);
   }
 
   /**
