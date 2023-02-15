@@ -5,10 +5,9 @@ import nacl from 'tweetnacl';
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Ed25519Keypair,
-  IntentScope,
-  messageWithIntent,
   RawSigner,
   Secp256k1Keypair,
+  verifyMessage,
   versionToString,
 } from '../../src';
 import * as secp from '@noble/secp256k1';
@@ -41,13 +40,21 @@ describe('RawSigner', () => {
     const keypair = new Ed25519Keypair();
     const signData = new TextEncoder().encode('hello world');
     const signer = new RawSigner(keypair, toolbox.provider);
-    const { messageBytes, signature } = await signer.signMessage(signData);
-    const isValid = nacl.sign.detached.verify(
-      fromB64(messageBytes),
-      fromB64(signature.signature),
-      fromB64(signature.pubKey),
+    const signature = await signer.signMessage(signData);
+    const isValid = await verifyMessage(signData, signature);
+    expect(isValid).toBe(true);
+  });
+
+  it('Ed25519 keypair invalid signMessage', async () => {
+    const keypair = new Ed25519Keypair();
+    const signData = new TextEncoder().encode('hello world');
+    const signer = new RawSigner(keypair, toolbox.provider);
+    const signature = await signer.signMessage(signData);
+    const isValid = await verifyMessage(
+      new TextEncoder().encode('hello worlds'),
+      signature,
     );
-    expect(isValid).toBeTruthy();
+    expect(isValid).toBe(false);
   });
 
   it('Secp256k1 keypair signData', async () => {
@@ -80,5 +87,15 @@ describe('RawSigner', () => {
         ),
       ).toBeTruthy();
     }
+  });
+
+  it('Secp256k1 keypair signMessage', async () => {
+    const keypair = new Secp256k1Keypair();
+    const signData = new TextEncoder().encode('hello world');
+    const signer = new RawSigner(keypair, toolbox.provider);
+    const signature = await signer.signMessage(signData);
+
+    const isValid = await verifyMessage(signData, signature);
+    expect(isValid).toBe(true);
   });
 });
