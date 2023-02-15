@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/sui.js';
+import { type SerializedSignature, toB64 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
@@ -19,11 +19,7 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type {
-    SignaturePubkeyPair,
-    SuiAddress,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';
 import type {
@@ -214,7 +210,7 @@ export class BackgroundClient {
     public async signData(
         address: SuiAddress,
         data: Uint8Array
-    ): Promise<SignaturePubkeyPair> {
+    ): Promise<SerializedSignature> {
         return await lastValueFrom(
             this.sendMessage(
                 createMessage<KeyringPayload<'signData'>>({
