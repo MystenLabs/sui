@@ -238,6 +238,7 @@ impl SuiNode {
             &config.authority_store_pruning_config,
             genesis.objects(),
             config.epoch_duration_ms,
+            &config.state_snapshot_config,
         )
         .await;
 
