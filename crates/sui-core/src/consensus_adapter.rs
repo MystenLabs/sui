@@ -65,6 +65,8 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_acknowledge_latency: HistogramVec,
     pub sequencing_certificate_latency: HistogramVec,
     pub sequencing_certificate_authority_position: Histogram,
+    pub sequencing_certificate_timeouts: IntCounter,
+    pub sequencing_certificate_skipped_disconnected: IntCounter,
 }
 
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
@@ -124,6 +126,20 @@ impl ConsensusAdapterMetrics {
                 authority_position_buckets.to_vec(),
                 registry,
             ).unwrap(),
+            sequencing_certificate_timeouts: register_int_counter_with_registry!(
+                "sequencing_certificate_timeouts",
+                "The number of timeouts observed when waiting another validator to submit a \
+                transaction to consensus.",
+                registry,
+            )
+                .unwrap(),
+            sequencing_certificate_skipped_disconnected: register_int_counter_with_registry!(
+                "sequencing_certificate_skipped_disconnected",
+                "The number of times another validator responsible to submit a \
+                transaction to consensus was observed to be disconnected.",
+                registry,
+            )
+                .unwrap(),
         }))
     }
 
@@ -415,6 +431,10 @@ impl ConsensusAdapter {
                 return false;
             }
 
+            if let Some(metrics) = self.opt_metrics.as_ref() {
+                metrics.sequencing_certificate_skipped_disconnected.inc();
+            }
+
             // if we don't have connection to the first validator, we don't expect that they are
             // running so we shift the positions, making the next validator in the list responsible
             // for submission, given that it is connected to by at least one other validator
@@ -541,8 +561,9 @@ impl ConsensusAdapter {
             Either::Right(((), _timer)) => {
                 // we timed out
                 // try again with exclusion of the validator that was selected to submit
-                // todo: remove this and add metric
-                info!("(!!!!) timeout submission, sumbitting tx ourselves");
+                self.opt_metrics.as_ref().map(|metrics| {
+                    metrics.sequencing_certificate_timeouts.inc();
+                });
                 self.submit_after_selected(transaction.clone(), epoch_store)
                     .await;
             }
