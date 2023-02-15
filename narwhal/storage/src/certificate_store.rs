@@ -607,7 +607,9 @@ mod test {
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
         let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
-        let last_round_number_not_exist = store.last_round_number(&PublicKey::default()).unwrap();
+        let last_round_number_not_exist = store
+            .last_round_number(&PublicKey::insecure_default())
+            .unwrap();
 
         // THEN
         assert_eq!(result.len(), 8);
@@ -628,7 +630,9 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
-        let last_round_number = store.last_round_number(&PublicKey::default()).unwrap();
+        let last_round_number = store
+            .last_round_number(&PublicKey::insecure_default())
+            .unwrap();
 
         // THEN
         assert!(result.is_empty());
