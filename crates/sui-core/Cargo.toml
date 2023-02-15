@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 rocksdb = "0.20.1"
+dashmap = "5.4.0"
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.4"
 chrono = "0.4.23"
