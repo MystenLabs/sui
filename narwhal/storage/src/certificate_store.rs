@@ -379,14 +379,14 @@ impl CertificateStore {
     /// Returns None if there is no certificate for the origin.
     pub fn last_round(&self, origin: &PublicKey) -> StoreResult<Option<Certificate>> {
         let key = (origin.clone(), Round::MAX);
-        if let Some(((name, round), digest)) = self
+        if let Some(((name, _round), digest)) = self
             .certificate_id_by_origin
             .iter()
             .skip_prior_to(&key)?
             .next()
         {
             if &name == origin {
-                return Ok(self.certificates_by_id.get(&digest)?);
+                return self.certificates_by_id.get(&digest);
             }
         }
         Ok(None)

@@ -75,16 +75,14 @@ struct Inner {
     dag: Option<Arc<Dag>>,
     /// Contains Synchronizer specific metrics among other Primary metrics.
     metrics: Arc<PrimaryMetrics>,
-    /// Contains background tasks for:
-    /// - synchronizing worker batches for processed certificates
-    /// - broadcasting newly formed certificates
-    background_tasks: Mutex<JoinSet<DagResult<()>>>,
-    /// Contains background tasks for:
-    /// - synchronizing worker batches for processed certificates
-    /// - broadcasting newly formed certificates
+    /// Background tasks synchronizing worker batches for processed certificates.
+    batch_tasks: Mutex<JoinSet<DagResult<()>>>,
+    /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: Mutex<HashMap<Round, Box<CertificatesAggregator>>>,
+    /// Map of certificates pending to be accepted.
+    pending: Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
 }
 
 /// The `Synchronizer` provides functions for retrieving missing certificates and batches.
@@ -139,9 +137,10 @@ impl Synchronizer {
             genesis,
             dag,
             metrics,
-            background_tasks: Mutex::new(JoinSet::new()),
+            batch_tasks: Mutex::new(JoinSet::new()),
             certificate_senders: Mutex::new(JoinSet::new()),
             certificates_aggregators: Mutex::new(HashMap::with_capacity(2 * gc_depth as usize)),
+            pending: Mutex::new(HashMap::new()),
         });
 
         // Start a task to update gc_round.
@@ -202,20 +201,23 @@ impl Synchronizer {
             .collect()
     }
 
-    async fn process_certificate(
+    async fn try_accept_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
-        let digest = certificate.digest();
-        if self.inner.certificate_store.contains(&digest)? {
-            trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.inner.metrics.duplicate_certificates_processed.inc();
-            return Ok(());
-        }
+        let result = self
+            .process_certificate_internal(certificate, network)
+            .await;
+        if result.is_ok() {}
+        result
+    }
 
-        self.sanitize_certificate(&certificate).await?;
-
+    async fn accept_certificate_with_wait(
+        &self,
+        certificate: Certificate,
+        network: &Network,
+    ) -> DagResult<()> {
         let result = self
             .process_certificate_internal(certificate, network)
             .await;
@@ -333,6 +335,15 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
+        let digest = certificate.digest();
+        if self.inner.certificate_store.contains(&digest)? {
+            trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            self.inner.metrics.duplicate_certificates_processed.inc();
+            return Ok(());
+        }
+
+        self.sanitize_certificate(&certificate).await?;
+
         debug!(
             "Processing certificate {:?} round:{:?}",
             certificate,
@@ -376,7 +387,7 @@ impl Synchronizer {
         let header = certificate.header.clone();
         let network = network.clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
-        self.inner.background_tasks.lock().spawn(async move {
+        self.inner.batch_tasks.lock().spawn(async move {
             Synchronizer::sync_batches_internal(inner, &header, network, max_age).await
         });
 
@@ -457,7 +468,7 @@ impl Synchronizer {
         loop {
             if certificates.is_empty() {
                 match rx_own_certificate_broadcast.recv().await {
-                    Ok(cert) => certificates.push_front(cert),
+                    Ok(cert) => certificates.push_back(cert),
                     Err(broadcast::error::RecvError::Closed) => {
                         trace!("Certificate sender {name} shutting down!");
                         return;
@@ -468,12 +479,14 @@ impl Synchronizer {
                         continue;
                     }
                 };
-            } else {
+            }
+            // Get more certificates if available in the broadcast channel.
+            loop {
                 match rx_own_certificate_broadcast.try_recv() {
                     Ok(cert) => {
                         // TODO: support sending an array of certificates.
                         certificates.clear();
-                        certificates.push_front(cert);
+                        certificates.push_back(cert);
                     }
                     Err(broadcast::error::TryRecvError::Closed) => {
                         trace!("Certificate sender {name} shutting down!");
@@ -482,21 +495,22 @@ impl Synchronizer {
                     Err(broadcast::error::TryRecvError::Lagged(e)) => {
                         warn!("Certificate sender {name} lagging! {e}");
                     }
-                    Err(broadcast::error::TryRecvError::Empty) => {}
+                    Err(broadcast::error::TryRecvError::Empty) => {
+                        break;
+                    }
                 };
             }
             let request = Request::new(PrimaryMessage::Certificate(
                 certificates.front().unwrap().clone(),
             ))
             .with_timeout(Duration::from_secs(10));
-
             match client.send_message(request).await {
                 Ok(_) => {
                     certificates.pop_front();
                 }
                 Err(status) => {
                     warn!("Failed to send certificate to {name}! {status:?}");
-                    sleep(Duration::from_secs(1));
+                    sleep(Duration::from_secs(1)).await;
                 }
             }
         }
