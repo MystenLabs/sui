@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { fromB64, toB64 } from '@mysten/bcs';
 import { Ed25519PublicKey } from './ed25519-publickey';
 import { PublicKey } from './publickey';
