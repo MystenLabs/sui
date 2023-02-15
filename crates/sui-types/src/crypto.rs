@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::sui_serde::ToArray;
 use anyhow::{anyhow, Error};
 use derive_more::From;
 use eyre::eyre;
@@ -324,7 +323,7 @@ impl PublicKey {
 )]
 pub struct AuthorityPublicKeyBytes(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<ToArray<Base64>, Bytes>")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; AuthorityPublicKey::LENGTH],
 );
 
@@ -815,7 +814,7 @@ impl SuiPublicKey for BLS12381PublicKey {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 pub struct Ed25519SuiSignature(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<ToArray<Base64>, Bytes>")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1],
 );
 
@@ -873,7 +872,7 @@ impl Signer<Signature> for Ed25519KeyPair {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 pub struct Secp256k1SuiSignature(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<ToArray<Base64>, Bytes>")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; Secp256k1PublicKey::LENGTH + Secp256k1Signature::LENGTH + 1],
 );
 
@@ -924,7 +923,7 @@ impl Signer<Signature> for Secp256k1KeyPair {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 pub struct Secp256r1SuiSignature(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<ToArray<Base64>, Bytes>")]
+    #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; Secp256r1PublicKey::LENGTH + Secp256r1Signature::LENGTH + 1],
 );
 

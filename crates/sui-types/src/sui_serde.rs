@@ -4,9 +4,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use anyhow::anyhow;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::encoding::Hex;
 use move_core_types::account_address::AccountAddress;
 use serde;
 use serde::de::{Deserializer, Error};
@@ -86,9 +84,9 @@ where
 }
 
 /// custom serde for AccountAddress
-pub struct HexObjectId;
+pub struct HexAccountAddress;
 
-impl SerializeAs<AccountAddress> for HexObjectId {
+impl SerializeAs<AccountAddress> for HexAccountAddress {
     fn serialize_as<S>(value: &AccountAddress, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -97,7 +95,7 @@ impl SerializeAs<AccountAddress> for HexObjectId {
     }
 }
 
-impl<'de> DeserializeAs<'de, AccountAddress> for HexObjectId {
+impl<'de> DeserializeAs<'de, AccountAddress> for HexAccountAddress {
     fn deserialize_as<D>(deserializer: D) -> Result<AccountAddress, D::Error>
     where
         D: Deserializer<'de>,
@@ -109,76 +107,6 @@ impl<'de> DeserializeAs<'de, AccountAddress> for HexObjectId {
             AccountAddress::from_hex(&s)
         }
         .map_err(to_custom_error::<'de, D, _>)
-    }
-}
-
-/// DeserializeAs adaptor for `Vec<u8>` <> `TryFrom<Vec<u8>>`
-pub struct TryFromVec<V> {
-    vec: PhantomData<V>,
-}
-
-impl<T: ?Sized, V> SerializeAs<T> for TryFromVec<V>
-where
-    V: SerializeAs<T>,
-{
-    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        V::serialize_as(value, serializer)
-    }
-}
-
-impl<'de, V, T> DeserializeAs<'de, T> for TryFromVec<V>
-where
-    V: DeserializeAs<'de, Vec<u8>>,
-    T: TryFrom<Vec<u8>>,
-    <T as TryFrom<Vec<u8>>>::Error: std::fmt::Display,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        T::try_from(V::deserialize_as(deserializer)?).map_err(Error::custom)
-    }
-}
-
-/// DeserializeAs adaptor for `Vec<u8>` <> `[u8;N]`
-pub struct ToArray<V> {
-    vec: PhantomData<V>,
-}
-
-impl<T: ?Sized, V> SerializeAs<T> for ToArray<V>
-where
-    V: SerializeAs<T>,
-{
-    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        V::serialize_as(value, serializer)
-    }
-}
-
-impl<'de, V, const N: usize> DeserializeAs<'de, [u8; N]> for ToArray<V>
-where
-    V: DeserializeAs<'de, Vec<u8>>,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<[u8; N], D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = V::deserialize_as(deserializer)?;
-        if value.len() != N {
-            return Err(Error::custom(anyhow!(
-                "invalid array length {}, expecting {}",
-                value.len(),
-                N
-            )));
-        }
-        let mut array = [0u8; N];
-        array.copy_from_slice(&value[..N]);
-        Ok(array)
     }
 }
 

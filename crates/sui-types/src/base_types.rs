@@ -8,15 +8,15 @@ use crate::crypto::{
     SuiPublicKey,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::epoch_data::EpochData;
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::gas_coin::GasCoin;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
-use crate::sui_serde::HexObjectId;
+use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
-use crate::sui_serde::ToArray;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -73,7 +73,7 @@ pub type AuthorityName = AuthorityPublicKeyBytes;
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<HexObjectId, _>")]
+    #[serde_as(as = "Readable<HexAccountAddress, _>")]
     AccountAddress,
 );
 
@@ -154,7 +154,7 @@ pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 )]
 pub struct SuiAddress(
     #[schemars(with = "Hex")]
-    #[serde_as(as = "Readable<ToArray<Hex>, _>")]
+    #[serde_as(as = "Readable<Hex, _>")]
     [u8; SUI_ADDRESS_LENGTH],
 );
 
