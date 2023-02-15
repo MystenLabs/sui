@@ -156,9 +156,9 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
             .map_err(|_| DagError::ShuttingDown)
             .map_err(|e| Status::not_found(e.to_string()))?;
 
-        // TODO: distingush between a digest being returned vs the channel closing
-        // suggesting an error.
-        let _digest = when_done.await;
+        let _digest = when_done
+            .await
+            .map_err(|_| Status::internal("Failed to propagate transaction for proposal"))?;
 
         Ok(Response::new(Empty {}))
     }
