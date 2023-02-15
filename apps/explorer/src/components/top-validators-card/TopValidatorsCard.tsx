@@ -56,36 +56,32 @@ const validatorsTable = (
     const validatorsItems = limit ? validators.splice(0, limit) : validators;
 
     return {
-        data: validatorsItems.map(({ name, stake, address, logo }) => {
-            return {
-                name: (
-                    <div className="flex items-center gap-2.5">
-                        {showIcon && (
-                            <ImageIcon
-                                src={logo}
-                                size="sm"
-                                fallback={name}
-                                label={name}
-                                circle
-                            />
-                        )}
+        data: validatorsItems.map(({ name, stake, address, logo }) => ({
+            name: (
+                <div className="flex items-center gap-2.5">
+                    {showIcon && (
+                        <ImageIcon
+                            src={logo}
+                            size="sm"
+                            fallback={name}
+                            label={name}
+                            circle
+                        />
+                    )}
 
-                        <Link to={`/validator/${encodeURIComponent(address)}`}>
-                            {name}
-                        </Link>
-                    </div>
-                ),
-                stake: <StakeColumn stake={stake} />,
-                delegation: (
-                    <Text variant="bodySmall/medium" color="steel-darker">
-                        {stake.toString()}
-                    </Text>
-                ),
-                address: (
-                    <ValidatorLink address={address} noTruncate={!limit} />
-                ),
-            };
-        }),
+                    <Link to={`/validator/${encodeURIComponent(address)}`}>
+                        {name}
+                    </Link>
+                </div>
+            ),
+            stake: <StakeColumn stake={stake} />,
+            delegation: (
+                <Text variant="bodySmall/medium" color="steel-darker">
+                    {stake.toString()}
+                </Text>
+            ),
+            address: <ValidatorLink address={address} noTruncate={!limit} />,
+        })),
         columns: [
             {
                 header: 'Name',
