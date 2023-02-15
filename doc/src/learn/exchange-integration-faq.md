@@ -12,7 +12,7 @@ The Sui blockchain is still in its development stages, therefore many of the sol
 
 ## When will Testnet be live?
 
-Testnet Wave 2 started on 01/25/23 and runs until completed. Information about subsequent Testnet waves will be provided when available.
+Testnet Wave 2 ended on 02/15/23. Information about subsequent Testnet waves will be provided when available.
 
 ## General questions about Sui
 
@@ -74,7 +74,6 @@ There are no nonce or timestamps in our transaction data structure at the moment
 
 Transactions don't expire.
 
-
 ## Staking and delegation
 
 The following questions are related to staking on the Sui network.
@@ -128,11 +127,11 @@ Yes, use the `request_switch_delegation` method to change the validator while a 
 
 ### Does Sui require a bonding / warm-up period?
 
-Yes, but the specifics are still under consideration. We expect a period of only a few days maximum.
+Yes, the specifics are still under consideration.
 
 ### Does Sui require an un-bonding / cool-down period?
 
-The current un-bonding period is one week, this may change prior to Mainnet launch.
+Yes, the current un-bonding period under consideration.
 
 ### Are staking rewards auto-compounded?
 
