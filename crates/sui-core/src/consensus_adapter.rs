@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
+use dashmap::try_result::TryResult;
+use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
@@ -165,18 +167,18 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
 pub struct ConnectionMonitorStatusForTests {}
 
 impl CheckConnection for ConnectionMonitorStatusForTests {
-    fn check_connection(&self, _authority: &AuthorityName) -> Option<&ConnectionStatus> {
-        Some(&ConnectionStatus::Connected)
+    fn check_connection(&self, _authority: &AuthorityName) -> Option<ConnectionStatus> {
+        Some(ConnectionStatus::Connected)
     }
 }
 
 pub trait CheckConnection {
-    fn check_connection(&self, authority: &AuthorityName) -> Option<&ConnectionStatus>;
+    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus>;
 }
 
 pub struct ConnectionMonitorStatus {
     /// Current connection statuses forwarded from the connection monitor
-    pub connection_statuses: Arc<HashMap<AuthorityName, ConnectionStatus>>,
+    pub connection_statuses: Arc<DashMap<AuthorityName, ConnectionStatus>>,
     /// Join handle for the Connection Monitor Listener
     pub connection_monitor_listener_handle: JoinHandle<()>,
 }
@@ -185,14 +187,22 @@ pub struct ConnectionMonitorListener {
     /// Receiver from the Connection Monitor
     receiver: Receiver<(PeerId, ConnectionStatus)>,
     /// Map to look up the connection statuses as a latency aid during submit to consensus
-    pub current_connection_statuses: Arc<HashMap<AuthorityName, ConnectionStatus>>,
+    pub current_connection_statuses: Arc<DashMap<AuthorityName, ConnectionStatus>>,
     /// Map to populate the current connection statuses from the receiver
     peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
 }
 
 impl CheckConnection for ConnectionMonitorStatus {
-    fn check_connection(&self, authority: &AuthorityName) -> Option<&ConnectionStatus> {
-        self.connection_statuses.get(authority)
+    fn check_connection(&self, authority: &AuthorityName) -> Option<ConnectionStatus> {
+        let res = match self.connection_statuses.try_get(authority) {
+            TryResult::Present(c) => Some(c.value().clone()),
+            TryResult::Absent => None,
+            TryResult::Locked => {
+                // update is in progress, assume the status is still or becoming disconnected
+                Some(ConnectionStatus::Disconnected)
+            }
+        };
+        res
     }
 }
 
@@ -201,7 +211,7 @@ impl ConnectionMonitorListener {
         receiver: Receiver<(PeerId, ConnectionStatus)>,
         peer_id_to_authority_names: HashMap<PeerId, AuthorityName>,
     ) -> ConnectionMonitorStatus {
-        let mut connection_statuses = HashMap::new();
+        let connection_statuses = DashMap::with_capacity(peer_id_to_authority_names.len());
         for (_, authority_name) in peer_id_to_authority_names.iter() {
             // initialize all to connected as default,if we don't have a consensus monitor running so
             // the fallback behavior is we submit to consensus once and not 2f+1 times
@@ -209,6 +219,7 @@ impl ConnectionMonitorListener {
         }
         let current_connection_statuses = Arc::new(connection_statuses);
 
+        debug!(" spawning connection monitor listener");
         ConnectionMonitorStatus {
             connection_statuses: current_connection_statuses.clone(),
             connection_monitor_listener_handle: spawn_monitored_task!(Self {
@@ -224,13 +235,21 @@ impl ConnectionMonitorListener {
         loop {
             match self.receiver.recv().await {
                 Some((peer_id, connection_status)) => {
-                    let current_connection_statuses =
-                        Arc::make_mut(&mut self.current_connection_statuses);
+                    debug!(
+                        "received message that the peer id {:?} has connection status {:?}",
+                        peer_id, connection_status
+                    );
+
                     let authority_name = self
                         .peer_id_to_authority_names
                         .get(&peer_id)
                         .expect("failed to find peer {:?} in connection monitor listener");
-                    current_connection_statuses.insert(*authority_name, connection_status);
+                    self.current_connection_statuses
+                        .insert(*authority_name, connection_status);
+                    debug!(
+                        "connection statuses are now: {:?}",
+                        self.current_connection_statuses
+                    );
                 }
                 None => return,
             }
@@ -322,12 +341,12 @@ impl ConsensusAdapter {
         ourselves: &AuthorityName,
         transaction: &ConsensusTransaction,
         exclusions: Vec<usize>,
-    ) -> (bool, usize) {
+    ) -> bool {
         let tx_digest;
         if let ConsensusTransactionKind::UserTransaction(certificate) = &transaction.kind {
             tx_digest = certificate.digest();
         } else {
-            return (true, 0);
+            return true;
         }
         let positions = order_validators_for_submission(committee, tx_digest);
 
@@ -353,8 +372,13 @@ impl ConsensusAdapter {
         &self,
         ourselves: &AuthorityName,
         positions: Vec<AuthorityName>,
+<<<<<<< HEAD
         _exclusions: Vec<usize>,
     ) -> (bool, usize) {
+=======
+        exclusions: Vec<usize>,
+    ) -> bool {
+>>>>>>> d5245f7b89 (update to dashmap)
         let (our_position, _) = positions
             .clone()
             .into_iter()
@@ -371,7 +395,7 @@ impl ConsensusAdapter {
                 // if we are the running validator in the first position
                 // we are responsible for submission
                 self.populate_position_metric(i);
-                return (true, i);
+                return true;
             }
 
             let connection_to_first_validator = self
@@ -382,13 +406,13 @@ impl ConsensusAdapter {
                         "Could not find authority in status from connectivity monitor {:?}",
                         positions[i]
                     );
-                    &ConnectionStatus::Disconnected
+                    ConnectionStatus::Disconnected
                 });
 
-            if connection_to_first_validator == &ConnectionStatus::Connected {
+            if connection_to_first_validator == ConnectionStatus::Connected {
                 // If we are connected to the validator at the first position, we assume they
                 // will submit the transaction, so we don't need to submit it ourselves
-                return (false, i);
+                return false;
             }
 
             // if we don't have connection to the first validator, we don't expect that they are
@@ -397,7 +421,7 @@ impl ConsensusAdapter {
             i += 1;
             if i >= positions.len() {
                 self.populate_position_metric(i);
-                return (true, i);
+                return true;
             }
         }
     }
@@ -489,23 +513,40 @@ impl ConsensusAdapter {
             }
         }));
 
-        let mut tx_submitted = false;
-        let mut exclusions = vec![];
-        while !tx_submitted {
-            let (should_submit, position) = self.should_submit(
-                epoch_store.committee(),
-                &self.authority,
-                &transaction,
-                exclusions.clone(),
-            );
-            exclusions.push(position);
+        // later populate this with the narwhal nodes that had lowest reputation scores
+        let exclusions = vec![];
 
-            if should_submit {
+        let should_submit = self.should_submit(
+            epoch_store.committee(),
+            &self.authority,
+            &transaction,
+            exclusions.clone(),
+        );
+
+        if should_submit {
+            self.submit_after_selected(transaction.clone(), epoch_store)
+                .await;
+        }
+
+        // We wait to ensure the transaction was received by consensus. If sufficient time passes
+        // and consensus hasn't received the transaction, we submit it ourselves as a fallback.
+        let sleep_timer = tokio::time::sleep(Duration::from_secs(7));
+        let processed_waiter = epoch_store
+            .consensus_message_processed_notify(transaction.key())
+            .boxed();
+        match select(processed_waiter, Box::pin(sleep_timer)).await {
+            Either::Left((processed, _)) => {
+                processed.expect("Storage error when waiting for consensus message processed");
+            }
+            Either::Right(((), _timer)) => {
+                // we timed out
+                // try again with exclusion of the validator that was selected to submit
+                // todo: remove this and add metric
+                info!("(!!!!) timeout submission, sumbitting tx ourselves");
                 self.submit_after_selected(transaction.clone(), epoch_store)
                     .await;
-                tx_submitted = true;
-                continue;
             }
+<<<<<<< HEAD
 
             // We need to wait for some delay until we submit transaction to the consensus
             // However, if transaction is received by consensus while we wait, we don't need to wait
@@ -525,6 +566,9 @@ impl ConsensusAdapter {
                 }
             };
         }
+=======
+        };
+>>>>>>> d5245f7b89 (update to dashmap)
 
         debug!("{transaction_key:?} processed by consensus");
         epoch_store
