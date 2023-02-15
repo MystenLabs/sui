@@ -229,16 +229,7 @@ export class BackgroundClient {
                         isKeyringPayload(payload, 'signData') &&
                         payload.return
                     ) {
-                        const { signatureScheme, signature, pubKey } =
-                            payload.return;
-                        return {
-                            signatureScheme,
-                            signature: fromB64(signature),
-                            pubKey: publicKeyFromSerialized(
-                                signatureScheme,
-                                pubKey
-                            ),
-                        };
+                        return payload.return;
                     }
                     throw new Error(
                         'Error unknown response for signData message'

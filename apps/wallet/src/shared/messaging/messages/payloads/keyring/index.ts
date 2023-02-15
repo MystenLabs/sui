@@ -3,7 +3,7 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { SignatureScheme, SuiAddress } from '@mysten/sui.js';
+import type { SignaturePubkeyPair, SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { AccountSerialized } from '_src/background/keyring/Account';
 
@@ -47,11 +47,7 @@ type MethodToPayloads = {
     };
     signData: {
         args: { data: string; address: SuiAddress };
-        return: {
-            signatureScheme: SignatureScheme;
-            signature: string;
-            pubKey: string;
-        };
+        return: SignaturePubkeyPair;
     };
     switchAccount: {
         args: { address: SuiAddress };

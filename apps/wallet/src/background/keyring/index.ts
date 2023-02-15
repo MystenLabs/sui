@@ -245,18 +245,13 @@ export class Keyring {
                         `Account for address ${address} not found in keyring`
                     );
                 }
-                const { signature, signatureScheme, pubKey } =
-                    await account.sign(fromB64(data));
+                const signature = await account.sign(fromB64(data));
                 uiConnection.send(
                     createMessage<KeyringPayload<'signData'>>(
                         {
                             type: 'keyring',
                             method: 'signData',
-                            return: {
-                                signatureScheme,
-                                signature: toB64(signature),
-                                pubKey: pubKey.toBase64(),
-                            },
+                            return: signature,
                         },
                         id
                     )

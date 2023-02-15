@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiAddress } from '@mysten/sui.js';
+import {
+    normalizeSuiAddress,
+    SIGNATURE_SCHEME_TO_FLAG,
+    toB64,
+} from '@mysten/sui.js';
 
 import type { SignaturePubkeyPair, Keypair, SuiAddress } from '@mysten/sui.js';
 
@@ -36,13 +40,25 @@ export class Account {
         return this.#keypair.export();
     }
 
+    // TODO: Ideally we can make `KeyPair` own the full `SignaturePubkeyPair` signing structure.
     async sign(data: Uint8Array): Promise<SignaturePubkeyPair> {
+        const pubkey = this.#keypair.getPublicKey();
+        // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
+        const signature = this.#keypair.signData(data, false);
+        const signatureScheme = this.#keypair.getKeyScheme();
+
+        const serialized_sig = new Uint8Array(
+            1 + signature.length + pubkey.toBytes().length
+        );
+        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
+        serialized_sig.set(signature, 1);
+        serialized_sig.set(pubkey.toBytes(), 1 + signature.length);
+
         return {
-            signatureScheme: this.#keypair.getKeyScheme(),
-            // TODO(joyqvq): Remove once 0.25.0 is released.
-            // This is fine to hardcode useRecoverable = false because wallet does not support Secp256k1. Ed25519 does not use this parameter.
-            signature: this.#keypair.signData(data, false),
-            pubKey: this.#keypair.getPublicKey(),
+            signatureScheme,
+            signature: toB64(signature),
+            pubKey: pubkey.toBase64(),
+            serializedSignature: toB64(serialized_sig),
         };
     }
 
