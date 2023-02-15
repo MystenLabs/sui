@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { ErrorMessage } from 'formik';
+import { ErrorMessage, type FormikErrors } from 'formik';
 import { memo, useCallback, useMemo } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 
@@ -22,11 +22,12 @@ export interface AddressInputProps<Values>
     className?: string;
 }
 
+// TODO: (Jibz) use Tailwind and match latest designs
 function AddressInput<FormValues>({
     disabled: forcedDisabled,
     placeholder = '0x...',
     className,
-    form: { isSubmitting, dirty, setFieldValue, isValid },
+    form: { isSubmitting, dirty, setFieldValue, isValid, errors },
     field: { onBlur, name, value },
 }: AddressInputProps<FormValues>) {
     const disabled =
@@ -47,12 +48,14 @@ function AddressInput<FormValues>({
         setFieldValue('to', '');
     }, [setFieldValue]);
 
+    const { to: addressError } = errors as FormikErrors<{ to: string }>;
+
     return (
         <>
             <div
                 className={cl(
                     st.group,
-                    dirty && formattedValue !== '' && !isValid
+                    dirty && formattedValue !== '' && addressError
                         ? st.invalidAddr
                         : ''
                 )}
@@ -83,7 +86,7 @@ function AddressInput<FormValues>({
 
             <ErrorMessage className={st.error} name="to" component="div" />
 
-            {isValid && formattedValue !== '' && dirty && (
+            {!addressError && formattedValue !== '' && dirty && (
                 <div className={st.validAddress}>
                     <Icon icon={SuiIcons.Checkmark} className={st.checkmark} />
                     Valid address

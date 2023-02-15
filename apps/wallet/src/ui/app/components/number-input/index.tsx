@@ -11,6 +11,8 @@ export interface NumberInputProps<Values> extends FieldProps<string, Values> {
     placeholder?: string;
     disabled?: boolean;
     decimals?: boolean;
+    suffix?: string;
+    prefix?: string;
 }
 
 function NumberInput<FormValues>({
@@ -21,6 +23,8 @@ function NumberInput<FormValues>({
     decimals = false,
     field: { onBlur, name, value },
     form: { isSubmitting, setFieldValue },
+    prefix,
+    suffix,
 }: NumberInputProps<FormValues>) {
     const disabled =
         forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
@@ -38,6 +42,8 @@ function NumberInput<FormValues>({
                 thousandSeparator: true,
                 onBlur,
                 onValueChange: (values) => setFieldValue(name, values.value),
+                prefix,
+                suffix,
             }}
         />
     );

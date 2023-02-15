@@ -70,19 +70,20 @@
 
 .valid-address {
     background-color: colors.$success-light;
-    color: colors.$success;
+    color: colors.$success-dark;
     margin-top: 10px;
     border-radius: 6px;
     word-break: break-all;
     padding: 7px 13px;
 
     i {
-        color: colors.$success;
+        color: colors.$success-dark;
         font-size: 10px;
         margin-right: 10px;
     }
 }
 
 .error {
+    width: 100%;
     @include utils.error-message-box;
 }
