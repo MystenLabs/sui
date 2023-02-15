@@ -516,6 +516,14 @@ impl ProtocolConfig {
         }
     }
 
+    // Add more arguments for different test scenarios
+    pub fn get_for_move_publish_testing(max_function_definitions: Option<usize>) -> Self {
+        Self {
+            max_function_definitions,
+            ..Self::get_for_version(ProtocolVersion::MAX)
+        }
+    }
+
     /// Override one or more settings in the config, for testing.
     /// This must be called at the beginning of the test, before get_for_(min|max)_version is
     /// called, since those functions cache their return value.

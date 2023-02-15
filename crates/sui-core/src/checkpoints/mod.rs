@@ -1265,7 +1265,8 @@ mod tests {
             .protocol_key_pair()
             .copy();
         let state =
-            AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
+            AuthorityState::new_for_testing(committee.clone(), &keypair, None, None, &genesis)
+                .await;
 
         let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
         store.insert(

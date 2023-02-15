@@ -319,9 +319,14 @@ async fn init_executor_test(
     let keypair = network_config.validator_configs[0]
         .protocol_key_pair()
         .copy();
-    let state =
-        AuthorityState::new_for_testing(committee.committee().clone(), &keypair, None, &genesis)
-            .await;
+    let state = AuthorityState::new_for_testing(
+        committee.committee().clone(),
+        &keypair,
+        None,
+        None,
+        &genesis,
+    )
+    .await;
 
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);

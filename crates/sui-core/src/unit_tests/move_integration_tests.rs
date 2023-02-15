@@ -4,7 +4,8 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, call_move_, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
+    call_move, call_move_, init_state_with_ids, init_state_with_ids_and_config,
+    send_and_confirm_transaction, TestCallArg,
 };
 use sui_types::{object::Data, utils::to_sender_signed_transaction};
 
@@ -22,6 +23,7 @@ use sui_types::{
 
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
+use sui_types::messages::ExecutionStatus::Failure;
 
 const MAX_GAS: u64 = 10000;
 
@@ -1918,7 +1920,36 @@ async fn test_object_no_id_error() {
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }
 
-pub async fn build_and_try_publish_test_package(
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publish_verification() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let protocol_config = ProtocolConfig::get_for_move_publish_testing(Some(2));
+    let authority =
+        init_state_with_ids_and_config(vec![(sender, gas)], Some(protocol_config)).await;
+
+    let (_, effects) = build_and_publish(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_string",
+        MAX_GAS,
+        false,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        effects.status,
+        Failure {
+            error: ExecutionFailureStatus::VMVerificationOrDeserializationError
+        }
+    );
+}
+
+async fn make_transaction(
     authority: &AuthorityState,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
@@ -1926,7 +1957,7 @@ pub async fn build_and_try_publish_test_package(
     test_dir: &str,
     gas_budget: u64,
     with_unpublished_deps: bool,
-) -> (Transaction, SignedTransactionEffects) {
+) -> VerifiedTransaction {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
@@ -1944,7 +1975,28 @@ pub async fn build_and_try_publish_test_package(
         all_module_bytes,
         gas_budget,
     );
-    let transaction = to_sender_signed_transaction(data, sender_key);
+    to_sender_signed_transaction(data, sender_key)
+}
+
+pub async fn build_and_try_publish_test_package(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    test_dir: &str,
+    gas_budget: u64,
+    with_unpublished_deps: bool,
+) -> (Transaction, SignedTransactionEffects) {
+    let transaction = make_transaction(
+        authority,
+        sender,
+        sender_key,
+        gas_object_id,
+        test_dir,
+        gas_budget,
+        with_unpublished_deps,
+    )
+    .await;
 
     (
         transaction.clone().into_inner(),
@@ -1953,6 +2005,28 @@ pub async fn build_and_try_publish_test_package(
             .unwrap()
             .1,
     )
+}
+
+pub async fn build_and_publish(
+    authority: &AuthorityState,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    test_dir: &str,
+    gas_budget: u64,
+    with_unpublished_deps: bool,
+) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
+    let transaction = make_transaction(
+        authority,
+        sender,
+        sender_key,
+        gas_object_id,
+        test_dir,
+        gas_budget,
+        with_unpublished_deps,
+    )
+    .await;
+    send_and_confirm_transaction(authority, transaction).await
 }
 
 pub async fn build_and_publish_test_package(

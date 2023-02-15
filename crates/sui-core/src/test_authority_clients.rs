@@ -113,7 +113,7 @@ impl AuthorityAPI for LocalAuthorityClient {
 
 impl LocalAuthorityClient {
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
-        let state = AuthorityState::new_for_testing(committee, &secret, None, genesis).await;
+        let state = AuthorityState::new_for_testing(committee, &secret, None, None, genesis).await;
         Self {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),

@@ -103,6 +103,7 @@ use crate::{
     event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
 };
 use sui_adapter::execution_engine;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::epoch_data::EpochData;
 
 #[cfg(test)]
@@ -1592,6 +1593,7 @@ impl AuthorityState {
         genesis_committee: Committee,
         key: &AuthorityKeyPair,
         store_base_path: Option<PathBuf>,
+        protocol_config: Option<ProtocolConfig>,
         genesis: &Genesis,
     ) -> Arc<Self> {
         let secret = Arc::pin(key.copy());
@@ -1618,13 +1620,14 @@ impl AuthorityState {
             .unwrap(),
         );
         let registry = Registry::new();
-        let epoch_store = AuthorityPerEpochStore::new(
+        let epoch_store = AuthorityPerEpochStore::new_with_config_for_testing(
             name,
             genesis_committee.clone(),
             &path.join("store"),
             None,
             EpochMetrics::new(&registry),
             Some(Default::default()),
+            protocol_config,
         );
 
         let epochs = Arc::new(CommitteeStore::new(

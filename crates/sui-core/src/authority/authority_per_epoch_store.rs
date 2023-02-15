@@ -299,6 +299,27 @@ impl AuthorityPerEpochStore {
         metrics: Arc<EpochMetrics>,
         epoch_start_configuration: Option<EpochStartConfiguration>,
     ) -> Arc<Self> {
+        Self::new_internal(
+            name,
+            committee,
+            parent_path,
+            db_options,
+            metrics,
+            epoch_start_configuration,
+            None,
+        )
+    }
+
+    // Internal new that takes an optional Protocol config
+    fn new_internal(
+        name: AuthorityName,
+        committee: Committee,
+        parent_path: &Path,
+        db_options: Option<Options>,
+        metrics: Arc<EpochMetrics>,
+        epoch_start_configuration: Option<EpochStartConfiguration>,
+        protocol_config: Option<ProtocolConfig>,
+    ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
@@ -352,10 +373,15 @@ impl AuthorityPerEpochStore {
             .current_voting_right
             .set(committee.weight(&name) as i64);
         metrics.epoch_total_votes.set(committee.total_votes as i64);
-        let protocol_version = committee.protocol_version;
+        let protocol_config = if let Some(config) = protocol_config {
+            config
+        } else {
+            let protocol_version = committee.protocol_version;
+            ProtocolConfig::get_for_version(protocol_version)
+        };
         Arc::new(Self {
             committee,
-            protocol_config: ProtocolConfig::get_for_version(protocol_version),
+            protocol_config,
             tables,
             parent_path: parent_path.to_path_buf(),
             db_options,
@@ -399,6 +425,26 @@ impl AuthorityPerEpochStore {
             self.db_options.clone(),
             self.metrics.clone(),
             Some(epoch_start_configuration),
+        )
+    }
+
+    pub fn new_with_config_for_testing(
+        name: AuthorityName,
+        committee: Committee,
+        parent_path: &Path,
+        db_options: Option<Options>,
+        metrics: Arc<EpochMetrics>,
+        epoch_start_configuration: Option<EpochStartConfiguration>,
+        protocol_config: Option<ProtocolConfig>,
+    ) -> Arc<Self> {
+        Self::new_internal(
+            name,
+            committee,
+            parent_path,
+            db_options,
+            metrics,
+            epoch_start_configuration,
+            protocol_config,
         )
     }
 

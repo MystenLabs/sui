@@ -95,7 +95,7 @@ async fn test_narwhal_manager() {
         let genesis_committee = genesis.committee().unwrap();
 
         let state =
-            AuthorityState::new_for_testing(genesis_committee, &secret, None, genesis).await;
+            AuthorityState::new_for_testing(genesis_committee, &secret, None, None, genesis).await;
 
         let system_state = state
             .get_sui_system_state_object()

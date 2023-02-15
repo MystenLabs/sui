@@ -3741,6 +3741,20 @@ pub async fn init_state() -> Arc<AuthorityState> {
 }
 
 #[cfg(test)]
+pub async fn init_state_with_config(
+    protocol_config: Option<ProtocolConfig>,
+) -> Arc<AuthorityState> {
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_config::builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+
+    init_state_with_committee_and_config(&genesis, &keypair, protocol_config).await
+}
+
+#[cfg(test)]
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {
     use sui_types::crypto::get_authority_key_pair;
 
@@ -3762,8 +3776,7 @@ pub async fn init_state_with_committee(
     genesis: &Genesis,
     authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
-    AuthorityState::new_for_testing(genesis.committee().unwrap(), authority_key, None, genesis)
-        .await
+    init_state_with_committee_and_config(genesis, authority_key, None).await
 }
 
 #[cfg(test)]
@@ -3771,6 +3784,19 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
     objects: I,
 ) -> Arc<AuthorityState> {
     let state = init_state().await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        state.insert_genesis_object(obj).await;
+    }
+    state
+}
+
+#[cfg(test)]
+pub async fn init_state_with_ids_and_config<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
+    objects: I,
+    protocol_config: Option<ProtocolConfig>,
+) -> Arc<AuthorityState> {
+    let state = init_state_with_config(protocol_config).await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state.insert_genesis_object(obj).await;
@@ -3886,6 +3912,22 @@ pub async fn init_state_with_object_id(
     object: ObjectID,
 ) -> Arc<AuthorityState> {
     init_state_with_ids(std::iter::once((address, object))).await
+}
+
+#[cfg(test)]
+pub async fn init_state_with_committee_and_config(
+    genesis: &Genesis,
+    authority_key: &AuthorityKeyPair,
+    protocol_config: Option<ProtocolConfig>,
+) -> Arc<AuthorityState> {
+    AuthorityState::new_for_testing(
+        genesis.committee().unwrap(),
+        authority_key,
+        None,
+        protocol_config,
+        genesis,
+    )
+    .await
 }
 
 #[cfg(test)]
