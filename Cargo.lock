@@ -2621,6 +2621,54 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92#93c9ed513e531a1ddd3998d876105be746adea92"
+dependencies = [
+ "aes",
+ "aes-gcm",
+ "auto_ops",
+ "base64ct",
+ "bincode",
+ "blake2 0.10.6",
+ "blake3",
+ "blst",
+ "bs58",
+ "bulletproofs",
+ "cbc",
+ "ctr",
+ "curve25519-dalek-ng",
+ "derive_more",
+ "digest 0.10.6",
+ "ecdsa 0.15.1",
+ "ed25519-consensus",
+ "elliptic-curve",
+ "eyre",
+ "fastcrypto-derive 0.1.2 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "generic-array",
+ "hex",
+ "hkdf",
+ "merlin",
+ "once_cell",
+ "p256",
+ "rand 0.8.5",
+ "readonly",
+ "rfc6979",
+ "schemars",
+ "secp256k1",
+ "serde 1.0.152",
+ "serde_bytes",
+ "serde_with",
+ "sha2 0.10.6",
+ "sha3 0.10.6",
+ "signature 1.6.4",
+ "thiserror",
+ "tokio",
+ "typenum",
+ "zeroize",
+]
+
+[[package]]
+name = "fastcrypto"
+version = "0.1.4"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d#9a41ba511899c0d7efd9e047af2e968cdc54f77d"
 dependencies = [
  "aes",
@@ -2642,7 +2690,7 @@ dependencies = [
  "ed25519-consensus",
  "elliptic-curve",
  "eyre",
- "fastcrypto-derive",
+ "fastcrypto-derive 0.1.2 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
  "generic-array",
  "hex",
  "hkdf",
@@ -2669,6 +2717,17 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.2"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92#93c9ed513e531a1ddd3998d876105be746adea92"
+dependencies = [
+ "convert_case 0.6.0",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "fastcrypto-derive"
+version = "0.1.2"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d#9a41ba511899c0d7efd9e047af2e968cdc54f77d"
 dependencies = [
  "convert_case 0.6.0",
@@ -2680,17 +2739,50 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d#9a41ba511899c0d7efd9e047af2e968cdc54f77d"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92#93c9ed513e531a1ddd3998d876105be746adea92"
 dependencies = [
  "bincode",
  "digest 0.10.6",
- "fastcrypto",
- "fastcrypto-derive",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "fastcrypto-derive 0.1.2 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "rand 0.8.5",
  "serde 1.0.152",
  "sha3 0.10.6",
  "typenum",
  "zeroize",
+]
+
+[[package]]
+name = "fastcrypto-tbls"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d#9a41ba511899c0d7efd9e047af2e968cdc54f77d"
+dependencies = [
+ "bincode",
+ "digest 0.10.6",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
+ "fastcrypto-derive 0.1.2 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
+ "rand 0.8.5",
+ "serde 1.0.152",
+ "sha3 0.10.6",
+ "typenum",
+ "zeroize",
+]
+
+[[package]]
+name = "fastcrypto-zkp"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92#93c9ed513e531a1ddd3998d876105be746adea92"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-groth16",
+ "ark-relations",
+ "ark-serialize",
+ "blst",
+ "byte-slice-cast",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -2706,7 +2798,7 @@ dependencies = [
  "ark-serialize",
  "blst",
  "byte-slice-cast",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
  "untrusted 0.9.0",
 ]
 
@@ -5160,7 +5252,7 @@ version = "0.11.0"
 dependencies = [
  "cfg-if",
  "ed25519-consensus",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
  "indexmap",
@@ -5207,7 +5299,7 @@ name = "narwhal-config"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "insta",
  "match_opt",
  "multiaddr",
@@ -5232,7 +5324,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "criterion",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "indexmap",
  "match_opt",
@@ -5265,7 +5357,7 @@ dependencies = [
  "bincode",
  "criterion",
  "eyre",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "hex-literal",
  "merlin",
  "once_cell",
@@ -5290,7 +5382,7 @@ dependencies = [
  "arc-swap",
  "dashmap",
  "either",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "itertools",
  "narwhal-crypto",
  "once_cell",
@@ -5327,7 +5419,7 @@ dependencies = [
  "backoff",
  "bincode",
  "bytes",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "indexmap",
  "itertools",
@@ -5374,7 +5466,7 @@ dependencies = [
  "bytes",
  "eyre",
  "fail 0.5.1",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "multiaddr",
  "mysten-metrics",
@@ -5407,7 +5499,7 @@ dependencies = [
  "clap 2.34.0",
  "eyre",
  "fail 0.5.1",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "itertools",
  "multiaddr",
@@ -5462,7 +5554,7 @@ dependencies = [
  "dashmap",
  "derive_builder",
  "fail 0.5.1",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "governor",
  "indexmap",
@@ -5508,7 +5600,7 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "fail 0.5.1",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "narwhal-config",
  "narwhal-crypto",
@@ -5534,7 +5626,7 @@ dependencies = [
  "bincode",
  "bytes",
  "derive_builder",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "fdlimit",
  "futures",
  "indexmap",
@@ -5580,7 +5672,7 @@ dependencies = [
  "criterion",
  "dashmap",
  "derive_builder",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "indexmap",
  "mockall",
@@ -5626,7 +5718,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "eyre",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "governor",
  "multiaddr",
@@ -8332,7 +8424,7 @@ dependencies = [
  "clap 3.2.23",
  "colored",
  "const-str",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "git-version",
  "jemalloc-ctl",
@@ -8480,7 +8572,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap 3.2.23",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "jsonrpsee",
  "move-core-types",
@@ -8518,7 +8610,7 @@ dependencies = [
  "bcs",
  "camino",
  "dirs",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "insta",
  "move-binary-format",
  "move-core-types",
@@ -8556,7 +8648,7 @@ dependencies = [
  "clap 3.2.23",
  "either",
  "eyre",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "fs_extra",
  "futures",
  "itertools",
@@ -8704,9 +8796,9 @@ dependencies = [
  "bincode",
  "curve25519-dalek-ng",
  "digest 0.10.6",
- "fastcrypto",
- "fastcrypto-tbls",
- "fastcrypto-zkp",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "fastcrypto-tbls 0.1.0 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "fastcrypto-zkp 0.1.0 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "linked-hash-map",
  "move-binary-format",
  "move-bytecode-verifier",
@@ -8733,7 +8825,7 @@ name = "sui-framework-build"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -8758,7 +8850,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "diesel",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "narwhal-network",
  "prometheus",
@@ -8788,7 +8880,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bcs",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "move-binary-format",
  "move-core-types",
  "schemars",
@@ -8809,8 +8901,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "fastcrypto",
- "fastcrypto-tbls",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "fastcrypto-tbls 0.1.0 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "hyper",
  "jsonrpsee",
@@ -8859,8 +8951,8 @@ dependencies = [
  "bincode",
  "colored",
  "either",
- "fastcrypto",
- "fastcrypto-tbls",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
+ "fastcrypto-tbls 0.1.0 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -8881,7 +8973,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bip32",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
@@ -8977,7 +9069,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap 3.2.23",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "move-core-types",
  "pretty_assertions",
  "rand 0.8.5",
@@ -9037,7 +9129,7 @@ dependencies = [
  "chrono",
  "clap 3.2.23",
  "eyre",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "futures-core",
  "hyper",
@@ -9085,7 +9177,7 @@ dependencies = [
  "bcs",
  "clap 3.2.23",
  "dirs",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "futures",
  "futures-core",
  "jsonrpsee",
@@ -9117,7 +9209,7 @@ version = "0.7.0"
 dependencies = [
  "anemo",
  "anemo-tower",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "msim",
  "narwhal-network",
  "sui-framework",
@@ -9168,7 +9260,7 @@ dependencies = [
  "criterion",
  "enum_dispatch",
  "eyre",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "fdlimit",
  "flexstr",
  "futures",
@@ -9340,7 +9432,7 @@ dependencies = [
  "derive_more",
  "enum_dispatch",
  "eyre",
- "fastcrypto",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=93c9ed513e531a1ddd3998d876105be746adea92)",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -11109,10 +11201,10 @@ dependencies = [
  "eyre",
  "fail 0.4.0",
  "fail 0.5.1",
- "fastcrypto",
- "fastcrypto-derive",
- "fastcrypto-tbls",
- "fastcrypto-zkp",
+ "fastcrypto 0.1.4 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
+ "fastcrypto-derive 0.1.2 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
+ "fastcrypto-tbls 0.1.0 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
+ "fastcrypto-zkp 0.1.0 (git+https://github.com/MystenLabs/fastcrypto?rev=9a41ba511899c0d7efd9e047af2e968cdc54f77d)",
  "fastrand",
  "fd-lock",
  "fdlimit",

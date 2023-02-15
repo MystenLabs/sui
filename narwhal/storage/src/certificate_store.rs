@@ -3,12 +3,14 @@
 use crypto::PublicKey;
 use dashmap::DashMap;
 use fastcrypto::hash::Hash;
+use fastcrypto::traits::InsecureDefault;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, VecDeque},
     iter,
     sync::Arc,
 };
+
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
@@ -287,7 +289,7 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
         }
 
         let mut digests = Vec::new();
@@ -326,7 +328,7 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
         }
 
         let mut result = BTreeMap::<Round, Vec<PublicKey>>::new();
