@@ -3,7 +3,7 @@
 
 import * as secp from '@noble/secp256k1';
 import type { ExportedKeypair, Keypair } from './keypair';
-import { PublicKey, SignatureScheme } from './publickey';
+import { PublicKey } from './publickey';
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { Secp256k1PublicKey } from './secp256k1-publickey';
@@ -11,6 +11,7 @@ import { Signature } from '@noble/secp256k1';
 import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
+import { SignatureScheme } from './signature';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 

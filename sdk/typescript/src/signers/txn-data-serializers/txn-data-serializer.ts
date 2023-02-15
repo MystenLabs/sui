@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SerializedSignature } from '../../cryptography/signature';
 import {
   ObjectId,
   PureArg,
@@ -144,6 +145,11 @@ export type UnserializedSignableTransaction =
       kind: 'publish';
       data: PublishTransaction;
     };
+
+export type SignedTransaction = {
+  transactionBytes: string;
+  signature: SerializedSignature;
+};
 
 /** A type that represents the possible transactions that can be signed: */
 export type SignableTransaction =

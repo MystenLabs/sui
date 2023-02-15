@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
@@ -15,6 +14,7 @@ import {
 } from '../types';
 import { JsonRpcProvider } from './json-rpc-provider';
 import { is } from 'superstruct';
+import { SerializedSignature } from '../cryptography/signature';
 
 export class JsonRpcProviderWithCache extends JsonRpcProvider {
   /**
@@ -61,10 +61,8 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
   // Transactions
 
   async executeTransaction(
-    txnBytes: Uint8Array,
-    signatureScheme: SignatureScheme,
-    signature: Uint8Array,
-    pubkey: PublicKey,
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
     if (requestType !== 'WaitForEffectsCert') {
@@ -76,9 +74,7 @@ export class JsonRpcProviderWithCache extends JsonRpcProvider {
     }
     const resp = await super.executeTransaction(
       txnBytes,
-      signatureScheme,
       signature,
-      pubkey,
       requestType,
     );
     const effects = getTransactionEffects(resp);

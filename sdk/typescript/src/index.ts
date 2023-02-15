@@ -7,6 +7,7 @@ export * from './cryptography/ed25519-publickey';
 export * from './cryptography/secp256k1-publickey';
 export * from './cryptography/publickey';
 export * from './cryptography/mnemonics';
+export * from './cryptography/signature';
 
 export * from './providers/provider';
 export * from './providers/json-rpc-provider';
@@ -24,6 +25,8 @@ export * from './signers/signer-with-provider';
 export * from './types';
 export * from './utils/api-endpoints';
 export * from './utils/format';
+export * from './utils/intent';
+export * from './utils/verify';
 
 export * from './framework';
 
