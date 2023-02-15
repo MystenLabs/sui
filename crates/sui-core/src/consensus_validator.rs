@@ -105,11 +105,10 @@ impl TransactionValidator for SuiTxValidator {
             .verify_all()
             .wrap_err("Malformed batch (failed to verify)")?;
 
-        // all certificates had valid signatures, schedule them for execution prior to sequencing.
-        // Note that this does not persist the certs to pending_certificates - that happens in
-        // consensus_handler.rs - this is an optimization only, to start executing single-writer
-        // certs as soon as possible. Persistent state should only be updated due to consensus
-        // output.
+        // all certificates had valid signatures, schedule them for execution prior to sequencing
+        // which is unnecessary for owned object transactions.
+        self.epoch_store
+            .insert_pending_certificates(&owned_tx_certs)?;
         self.transaction_manager
             .enqueue(owned_tx_certs, &self.epoch_store)
             .wrap_err("Failed to schedule certificates for execution")
