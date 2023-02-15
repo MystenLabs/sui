@@ -292,14 +292,14 @@ impl IndexerCheckpointHandlerMetrics {
             )
             .unwrap(),
             db_write_request_latency: register_histogram_with_registry!(
-                "db_write_request_latency",
+                "checkpoint_db_write_request_latency",
                 "Time spent commiting a checkpoint to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             full_node_read_request_latency: register_histogram_with_registry!(
-                "full_node_read_request_latency",
+                "checkpoint_full_node_read_request_latency",
                 "Time spent in waiting for a new checkpoint from the Full Node",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
