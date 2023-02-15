@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Copy12, CopyNew24 } from '@mysten/icons';
+import { CopyNew24 } from '@mysten/icons';
 import { type TransactionKindName } from '@mysten/sui.js';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
 import { Heading } from './Heading';
-import { ReactComponent as CopyIcon } from './icons/copy.svg';
 import { ReactComponent as ImageIcon } from './icons/image.svg';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
