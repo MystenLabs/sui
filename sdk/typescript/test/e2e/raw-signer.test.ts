@@ -5,6 +5,8 @@ import nacl from 'tweetnacl';
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   Ed25519Keypair,
+  IntentScope,
+  messageWithIntent,
   RawSigner,
   Secp256k1Keypair,
   versionToString,
@@ -13,7 +15,7 @@ import * as secp from '@noble/secp256k1';
 import { Signature } from '@noble/secp256k1';
 import { setup, TestToolbox } from './utils/setup';
 import { gt } from '@suchipi/femver';
-import { toB64 } from '@mysten/bcs';
+import { fromB64, toB64 } from '@mysten/bcs';
 
 describe('RawSigner', () => {
   let toolbox: TestToolbox;
@@ -29,8 +31,21 @@ describe('RawSigner', () => {
     const { signature, pubKey } = await signer.signData(signData);
     const isValid = nacl.sign.detached.verify(
       signData,
-      signature,
-      pubKey.toBytes(),
+      fromB64(signature),
+      fromB64(pubKey),
+    );
+    expect(isValid).toBeTruthy();
+  });
+
+  it('Ed25519 keypair signMessage', async () => {
+    const keypair = new Ed25519Keypair();
+    const signData = new TextEncoder().encode('hello world');
+    const signer = new RawSigner(keypair, toolbox.provider);
+    const { messageBytes, signature } = await signer.signMessage(signData);
+    const isValid = nacl.sign.detached.verify(
+      fromB64(messageBytes),
+      fromB64(signature.signature),
+      fromB64(signature.pubKey),
     );
     expect(isValid).toBeTruthy();
   });
@@ -49,19 +64,19 @@ describe('RawSigner', () => {
     if (useRecoverable) {
       const recovered_pubkey = secp.recoverPublicKey(
         msgHash,
-        Signature.fromCompact(signature.slice(0, 64)),
-        signature[64],
+        Signature.fromCompact(fromB64(signature).slice(0, 64)),
+        fromB64(signature)[64],
         true,
       );
       const expected = keypair.getPublicKey().toBase64();
-      expect(pubKey.toBase64()).toEqual(expected);
+      expect(pubKey).toEqual(expected);
       expect(toB64(recovered_pubkey)).toEqual(expected);
     } else {
       expect(
         secp.verify(
-          Signature.fromCompact(signature),
+          Signature.fromCompact(fromB64(signature)),
           msgHash,
-          pubKey.toBytes(),
+          fromB64(pubKey),
         ),
       ).toBeTruthy();
     }

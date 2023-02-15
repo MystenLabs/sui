@@ -146,6 +146,11 @@ export type UnserializedSignableTransaction =
       data: PublishTransaction;
     };
 
+export type SignedMessage = {
+  messageBytes: string;
+  signature: SignaturePubkeyPair;
+};
+
 export type SignedTransaction = {
   transactionBytes: string;
   signature: SignaturePubkeyPair;

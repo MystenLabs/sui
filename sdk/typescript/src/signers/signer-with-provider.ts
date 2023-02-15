@@ -35,6 +35,7 @@ import {
   SignableTransaction,
   UnserializedSignableTransaction,
   SignedTransaction,
+  SignedMessage,
 } from './txn-data-serializers/txn-data-serializer';
 
 ///////////////////////////////
@@ -90,10 +91,16 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a message using the keypair, with the `PersonalMessage` intent.
    */
-  async signMessage(message: Uint8Array): Promise<SignaturePubkeyPair> {
-    return await this.signData(
-      messageWithIntent(IntentScope.PersonalMessage, message),
+  async signMessage(message: Uint8Array): Promise<SignedMessage> {
+    const messageBytes = messageWithIntent(
+      IntentScope.PersonalMessage,
+      message,
     );
+    const signature = await this.signData(messageBytes);
+    return {
+      messageBytes: toB64(messageBytes),
+      signature,
+    };
   }
 
   /**
