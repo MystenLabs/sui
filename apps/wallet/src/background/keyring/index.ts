@@ -274,6 +274,11 @@ export class Keyring {
                     throw new Error(`Failed to change account to ${address}`);
                 }
                 uiConnection.send(createMessage({ type: 'done' }, id));
+            } else if (isKeyringPayload(payload, 'deriveNextAccount')) {
+                if (!(await this.deriveNextAccount())) {
+                    throw new Error('Failed to derive next account');
+                }
+                uiConnection.send(createMessage({ type: 'done' }, id));
             }
         } catch (e) {
             uiConnection.send(

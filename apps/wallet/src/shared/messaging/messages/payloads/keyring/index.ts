@@ -57,6 +57,10 @@ type MethodToPayloads = {
         args: { address: SuiAddress };
         return: void;
     };
+    deriveNextAccount: {
+        args: void;
+        return: void;
+    };
 };
 
 export interface KeyringPayload<Method extends keyof MethodToPayloads>
