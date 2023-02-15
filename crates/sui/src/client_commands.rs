@@ -1043,10 +1043,10 @@ impl WalletContext {
         request_timeout: Option<std::time::Duration>,
     ) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
-            err.context(format!(
-                "Cannot open wallet config file at {:?}",
-                config_path
-            ))
+            anyhow!("Cannot open wallet config file at {:?}. Error: {}",
+                config_path,
+                err
+            )
         })?;
 
         let config = config.persisted(config_path);
