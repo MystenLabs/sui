@@ -42,9 +42,8 @@ function TransactionResult() {
 
     const checkStateHasData = (
         state: any
-    ): state is { data: SuiTransactionResponse } => {
-        return state !== null && 'data' in state;
-    };
+    ): state is { data: SuiTransactionResponse } =>
+        state !== null && 'data' in state;
 
     const checkIsString = (value: any): value is string =>
         typeof value === 'string';
