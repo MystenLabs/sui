@@ -2035,6 +2035,22 @@ impl TransactionEffects {
     pub fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
     }
+
+    pub fn summary_for_debug(&self) -> TransactionEffectsDebugSummary {
+        TransactionEffectsDebugSummary {
+            bcs_size: bcs::to_bytes(self).unwrap().len(),
+            status: self.status.clone(),
+            gas_used: self.gas_used.clone(),
+            transaction_digest: self.transaction_digest,
+            created_object_count: self.created.len(),
+            mutated_object_count: self.mutated.len(),
+            unwrapped_object_count: self.unwrapped.len(),
+            deleted_object_count: self.deleted.len(),
+            wrapped_object_count: self.wrapped.len(),
+            event_count: self.events.len(),
+            dependency_count: self.dependencies.len(),
+        }
+    }
 }
 
 impl Message for TransactionEffectsDigest {
@@ -2136,6 +2152,23 @@ impl Default for TransactionEffects {
             dependencies: Vec::new(),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct TransactionEffectsDebugSummary {
+    /// Size of bcs serialized byets of the effects.
+    pub bcs_size: usize,
+    pub status: ExecutionStatus,
+    pub gas_used: GasCostSummary,
+    pub transaction_digest: TransactionDigest,
+    pub created_object_count: usize,
+    pub mutated_object_count: usize,
+    pub unwrapped_object_count: usize,
+    pub deleted_object_count: usize,
+    pub wrapped_object_count: usize,
+    pub event_count: usize,
+    pub dependency_count: usize,
+    // TODO: Add deleted_and_unwrapped_object_count and event digest.
 }
 
 pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
