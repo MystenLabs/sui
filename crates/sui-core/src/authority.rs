@@ -27,7 +27,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{collections::HashMap, pin::Pin, sync::Arc};
-use sui_config::node::AuthorityStorePruningConfig;
+use sui_config::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use sui_protocol_constants::{MAX_TX_GAS, STORAGE_GAS_PRICE};
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
@@ -101,6 +101,7 @@ use crate::{
     event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
 };
 use sui_adapter::execution_engine;
+use typed_store::rocks::TypedStoreError;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -166,6 +167,7 @@ pub struct AuthorityMetrics {
     internal_execution_latency: Histogram,
     prepare_certificate_latency: Histogram,
     commit_certificate_latency: Histogram,
+    state_snapshot_checkpoint_latency: Histogram,
 
     pub(crate) transaction_manager_num_enqueued_certificates: IntCounterVec,
     pub(crate) transaction_manager_num_missing_objects: IntGauge,
@@ -303,6 +305,12 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            state_snapshot_checkpoint_latency: register_histogram_with_registry!(
+                "state_snapshot_checkpoint_latency",
+                "Latency of checkpointing perpetual db",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             transaction_manager_num_enqueued_certificates: register_int_counter_vec_with_registry!(
                 "transaction_manager_num_enqueued_certificates",
                 "Current number of certificates enqueued to TransactionManager",
@@ -432,6 +440,9 @@ pub struct AuthorityState {
 
     pub metrics: Arc<AuthorityMetrics>,
     _pruner: AuthorityPerEpochStorePruner,
+
+    /// Take snapshot of the live object set at the end of epoch
+    enable_state_snapshot: bool,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1496,6 +1507,7 @@ impl AuthorityState {
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         pruning_config: &AuthorityStorePruningConfig,
+        state_snapshot_config: &StateSnapshotConfig,
     ) -> Arc<Self> {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -1540,6 +1552,7 @@ impl AuthorityState {
             tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
             metrics,
             _pruner,
+            enable_state_snapshot: state_snapshot_config.enabled,
         });
 
         prometheus_registry
@@ -1630,6 +1643,7 @@ impl AuthorityState {
             checkpoint_store,
             &registry,
             &AuthorityStorePruningConfig::default(),
+            &StateSnapshotConfig::default(),
         )
         .await;
 
@@ -1742,6 +1756,11 @@ impl AuthorityState {
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
+        if self.enable_state_snapshot {
+            let _checkpointed_db_path = self.checkpoint_perpetual_db()?;
+            // TODO: Start a background task to persist live object set in
+            // checkpointed db to canonical storage format
+        }
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
             .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_timestamp_ms)
@@ -2570,6 +2589,20 @@ impl AuthorityState {
         self.epoch_store.store(new_epoch_store.clone());
         cur_epoch_store.epoch_terminated().await;
         Ok(new_epoch_store)
+    }
+
+    pub fn checkpoint_perpetual_db(&self) -> SuiResult<PathBuf> {
+        let _metrics_guard = self.metrics.state_snapshot_checkpoint_latency.start_timer();
+        let checkpoint_path = PathBuf::from(format!(
+            "epoch_{}",
+            self.db().perpetual_tables.get_recovery_epoch_at_restart()?
+        ));
+        self.database
+            .perpetual_tables
+            .objects
+            .rocksdb
+            .checkpoint(&checkpoint_path)
+            .map_err(SuiError::StorageError)
     }
 
     #[cfg(test)]

@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::node::AuthorityStorePruningConfig;
 use crate::node::{
     default_end_of_epoch_broadcast_channel_capacity, default_epoch_duration_ms,
     AuthorityKeyPairWithPath, KeyPairWithPath,
 };
+use crate::node::{AuthorityStorePruningConfig, StateSnapshotConfig};
 use crate::p2p::{P2pConfig, SeedPeer};
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
 use fastcrypto::traits::KeyPair;
@@ -241,6 +241,7 @@ impl<'a> FullnodeConfigBuilder<'a> {
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),
+            state_snapshot_config: StateSnapshotConfig::fullnode_config(),
         })
     }
 }

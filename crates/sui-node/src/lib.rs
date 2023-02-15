@@ -217,6 +217,7 @@ impl SuiNode {
             checkpoint_store.clone(),
             &prometheus_registry,
             &config.authority_store_pruning_config,
+            &config.state_snapshot_config,
         )
         .await;
 

@@ -89,6 +89,8 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub checkpoint_executor_config: CheckpointExecutorConfig,
+
+    pub state_snapshot_config: StateSnapshotConfig,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -311,6 +313,21 @@ impl AuthorityStorePruningConfig {
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
         }
+    }
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct StateSnapshotConfig {
+    pub enabled: bool,
+}
+
+impl StateSnapshotConfig {
+    pub fn validator_config() -> Self {
+        Self { enabled: false }
+    }
+    pub fn fullnode_config() -> Self {
+        Self { enabled: true }
     }
 }
 
