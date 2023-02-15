@@ -155,10 +155,11 @@ impl LocalValidatorAggregatorProxy {
         reconfig_fullnode_rpc_url: Option<&str>,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
-        let qd_handler_builder =
-            QuorumDriverHandlerBuilder::new(Arc::new(aggregator.clone()), quorum_driver_metrics);
-
         let qd_handler = (if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
+            let qd_handler_builder = QuorumDriverHandlerBuilder::new(
+                Arc::new(aggregator.clone()),
+                quorum_driver_metrics,
+            );
             info!(
                 "Using FullNodeReconfigObserver: {:?}",
                 reconfig_fullnode_rpc_url
@@ -176,6 +177,14 @@ impl LocalValidatorAggregatorProxy {
             qd_handler_builder.with_reconfig_observer(reconfig_observer)
         } else {
             info!("Using EmbeddedReconfigObserver");
+            let observer = EmbeddedReconfigObserver::new();
+            // Get the latest committee from config observer
+            let new_agg = observer
+                .get_committee(Arc::new(aggregator))
+                .await
+                .expect("Failed to get latest committee");
+            let qd_handler_builder =
+                QuorumDriverHandlerBuilder::new(new_agg, quorum_driver_metrics);
             qd_handler_builder.with_reconfig_observer(Arc::new(EmbeddedReconfigObserver::new()))
         })
         .start();
