@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Copy12, CopyNew24 } from '@mysten/icons';
 import { type TransactionKindName } from '@mysten/sui.js';
 import toast from 'react-hot-toast';
 
@@ -85,10 +86,12 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                             navigator.clipboard.writeText(title);
                             toast.success('Copied!');
                         }}
-                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-steel"
+                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-xl text-steel transition-colors hover:text-steel-dark"
                     >
                         <span className="sr-only">Copy</span>
-                        <CopyIcon aria-hidden="true" />
+                        <CopyNew24 aria-hidden="true" />
+                        {/* <Copy12 aria-hidden="true" /> */}
+                        {/* <CopyIcon aria-hidden="true" /> */}
                     </button>
                 </div>
 
