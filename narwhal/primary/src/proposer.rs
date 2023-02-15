@@ -475,8 +475,8 @@ impl Proposer {
                 debug!("Dag moved to round {}", self.round);
 
                 // we want anyone else except the first validator to produce headers normally.
-                // we flip a bit every 240 rounds and we either send headers, or we don't
-                if self.round % 240 == 0 {
+                // we flip a bit every 720 rounds and we either send headers, or we don't
+                if self.round % 720 == 0 {
                     should_send = !should_send;
                     debug!("Switched mode for should_send to {}", should_send);
                 }
