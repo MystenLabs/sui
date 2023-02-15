@@ -1,16 +1,4 @@
 ---
-BLS12381AggregateSignature:
-  STRUCT:
-    - sig:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
-BLS12381Signature:
-  STRUCT:
-    - sig:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
 Batch:
   STRUCT:
     - transactions:
@@ -28,7 +16,9 @@ Certificate:
     - header:
         TYPENAME: Header
     - aggregated_signature:
-        TYPENAME: BLS12381AggregateSignature
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
@@ -57,7 +47,9 @@ Header:
         SEQ:
           TYPENAME: CertificateDigest
     - signature:
-        TYPENAME: BLS12381Signature
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:

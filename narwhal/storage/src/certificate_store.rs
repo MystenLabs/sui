@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::PublicKey;
+use crypto::{traits::InsecureDefault, PublicKey};
 use dashmap::DashMap;
 use fastcrypto::hash::Hash;
 use std::{
@@ -9,6 +9,7 @@ use std::{
     iter,
     sync::Arc,
 };
+
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
@@ -287,7 +288,7 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
         }
 
         let mut digests = Vec::new();
@@ -326,7 +327,7 @@ impl CertificateStore {
         // TODO: Add a more efficient seek method to typed store.
         let mut iter = self.certificate_id_by_round.iter();
         if round > 0 {
-            iter = iter.skip_to(&(round - 1, PublicKey::default()))?;
+            iter = iter.skip_to(&(round - 1, PublicKey::insecure_default()))?;
         }
 
         let mut result = BTreeMap::<Round, Vec<PublicKey>>::new();
@@ -440,7 +441,7 @@ impl CertificateStore {
 #[cfg(test)]
 mod test {
     use crate::certificate_store::CertificateStore;
-    use crypto::PublicKey;
+    use crypto::{traits::InsecureDefault, PublicKey};
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
     use std::{
@@ -605,7 +606,9 @@ mod test {
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
         let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
-        let last_round_number_not_exist = store.last_round_number(&PublicKey::default()).unwrap();
+        let last_round_number_not_exist = store
+            .last_round_number(&PublicKey::insecure_default())
+            .unwrap();
 
         // THEN
         assert_eq!(result.len(), 8);
@@ -626,7 +629,9 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
-        let last_round_number = store.last_round_number(&PublicKey::default()).unwrap();
+        let last_round_number = store
+            .last_round_number(&PublicKey::insecure_default())
+            .unwrap();
 
         // THEN
         assert!(result.is_empty());

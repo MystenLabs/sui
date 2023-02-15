@@ -29,12 +29,6 @@ Argument:
           - U16
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
-BLS12381Signature:
-  STRUCT:
-    - sig:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
 CallArg:
   ENUM:
     0:
