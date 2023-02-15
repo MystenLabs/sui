@@ -3,7 +3,6 @@
 
 import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
-import { Base64DataBuffer } from '../serialization/base64';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
   CertifiedTransaction,
@@ -180,9 +179,9 @@ export class VoidProvider extends Provider {
   }
 
   async executeTransaction(
-    _txnBytes: Base64DataBuffer,
+    _txnBytes: Uint8Array,
     _signatureScheme: SignatureScheme,
-    _signature: Base64DataBuffer,
+    _signature: Uint8Array,
     _pubkey: PublicKey,
     _requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse> {
@@ -191,14 +190,14 @@ export class VoidProvider extends Provider {
 
   devInspectTransaction(
     _sender: SuiAddress,
-    _txn: UnserializedSignableTransaction | string | Base64DataBuffer,
+    _txn: UnserializedSignableTransaction | string | Uint8Array,
     _gasPrice: number | null = null,
     _epoch: number | null = null,
   ): Promise<DevInspectResults> {
     throw this.newError('devInspectTransaction');
   }
 
-  dryRunTransaction(_txBytes: string): Promise<TransactionEffects> {
+  dryRunTransaction(_txBytes: Uint8Array): Promise<TransactionEffects> {
     throw this.newError('dryRunTransaction');
   }
 

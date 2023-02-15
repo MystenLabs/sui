@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as secp from '@noble/secp256k1';
-import { Base64DataBuffer } from '../serialization/base64';
 import type { ExportedKeypair, Keypair } from './keypair';
 import { PublicKey, SignatureScheme } from './publickey';
 import { hmac } from '@noble/hashes/hmac';
@@ -119,8 +118,8 @@ export class Secp256k1Keypair implements Keypair {
   /**
    * Return the signature for the provided data.
    */
-  signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer {
-    const msgHash = sha256(data.getData());
+  signData(data: Uint8Array, useRecoverable: boolean): Uint8Array {
+    const msgHash = sha256(data);
     // Starting from sui 0.25.0, sui accepts 64-byte nonrecoverable signature instead of 65-byte recoverable signature for Secp256k1.
     // TODO(joyqvq): Remove recoverable signature support after 0.25.0 is released.
     if (useRecoverable) {
@@ -131,13 +130,13 @@ export class Secp256k1Keypair implements Keypair {
       var recoverable_sig = new Uint8Array(65);
       recoverable_sig.set(Signature.fromDER(sig).toCompactRawBytes());
       recoverable_sig.set([rec_id], 64);
-      return new Base64DataBuffer(recoverable_sig);
+      return recoverable_sig;
     } else {
       const sig = secp.signSync(msgHash, this.keypair.secretKey, {
         canonical: true,
         recovered: false,
       });
-      return new Base64DataBuffer(Signature.fromDER(sig).toCompactRawBytes());
+      return Signature.fromDER(sig).toCompactRawBytes();
     }
   }
 

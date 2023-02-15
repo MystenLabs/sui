@@ -3,6 +3,9 @@
 
 import bs58 from 'bs58';
 
+/**
+ * @deprecated Use `bs58` module directly.
+ */
 export class Base58DataBuffer {
   private data: Uint8Array;
 

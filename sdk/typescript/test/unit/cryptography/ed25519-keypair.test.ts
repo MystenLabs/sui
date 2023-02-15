@@ -4,7 +4,7 @@
 import { fromB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import { Base64DataBuffer, Ed25519Keypair } from '../../../src';
+import { Ed25519Keypair } from '../../../src';
 
 const VALID_SECRET_KEY =
   'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCgbL0kJbj5dvQ/PqcDAzZLZqzshVEs01d1KZdmLh4uZIg==';
@@ -54,13 +54,11 @@ describe('ed25519-keypair', () => {
 
   it('signature of data is valid', () => {
     const keypair = new Ed25519Keypair();
-    const signData = new Base64DataBuffer(
-      new TextEncoder().encode('hello world'),
-    );
+    const signData = new TextEncoder().encode('hello world');
     const signature = keypair.signData(signData);
     const isValid = nacl.sign.detached.verify(
-      signData.getData(),
-      signature.getData(),
+      signData,
+      signature,
       keypair.getPublicKey().toBytes(),
     );
     expect(isValid).toBeTruthy();

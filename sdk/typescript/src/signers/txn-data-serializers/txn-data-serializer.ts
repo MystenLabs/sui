@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '../../serialization/base64';
 import {
   ObjectId,
   PureArg,
@@ -173,7 +172,7 @@ export type SignableTransactionData = SignableTransaction['data'];
  *
  * // Include the following line if you are using `LocalTxnDataSerializer`, skip
  * // if you are using `RpcTxnDataSerializer`
- * // const modulesInBytes = modules.map((m) => Array.from(new Base64DataBuffer(m).getData()));
+ * // const modulesInBytes = modules.map((m) => Array.from(fromB64(m)));
  * // ... publish logic ...
  * ```
  *
@@ -195,5 +194,5 @@ export interface TxnDataSerializer {
     signerAddress: SuiAddress,
     txn: UnserializedSignableTransaction,
     mode: TransactionBuilderMode,
-  ): Promise<Base64DataBuffer>;
+  ): Promise<Uint8Array>;
 }

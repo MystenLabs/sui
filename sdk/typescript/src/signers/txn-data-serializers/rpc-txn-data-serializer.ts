@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64 } from '@mysten/bcs';
 import { JsonRpcClient } from '../../rpc/client';
-import { Base64DataBuffer } from '../../serialization/base64';
 import { isPureArg } from '../../types';
 import { TransactionBytes } from '../../types/transactions';
 import {
@@ -52,7 +52,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     signerAddress: string,
     unserializedTxn: UnserializedSignableTransaction,
     mode: TransactionBuilderMode = 'Commit',
-  ): Promise<Base64DataBuffer> {
+  ): Promise<Uint8Array> {
     let endpoint: string;
     let args: Array<any>;
     if (!unserializedTxn.data.gasBudget) {
@@ -177,7 +177,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         TransactionBytes,
         this.skipDataValidation,
       );
-      return new Base64DataBuffer(resp.txBytes);
+      return fromB64(resp.txBytes);
     } catch (e) {
       throw new Error(
         `Encountered error when calling RpcTxnDataSerialize for a ${unserializedTxn.kind} transaction for ` +
