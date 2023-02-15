@@ -10,7 +10,7 @@ use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, RetryConfig};
 use parking_lot::Mutex;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{hash_map, HashMap, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -206,10 +206,16 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
+        let digest = certificate.digest();
         let result = self
             .process_certificate_internal(certificate, network)
             .await;
-        if result.is_ok() {}
+        if result.is_ok() {
+            let mut pending = self.inner.pending.lock();
+            if let Some(sender) = pending.remove(&digest) {
+                let _ = sender.send(());
+            }
+        }
         result
     }
 
@@ -218,28 +224,34 @@ impl Synchronizer {
         certificate: Certificate,
         network: &Network,
     ) -> DagResult<()> {
+        let digest = certificate.digest();
         let result = self
             .process_certificate_internal(certificate, network)
             .await;
-        match result {
+        let mut receiver = match result {
+            Ok(()) => {
+                let mut pending = self.inner.pending.lock();
+                if let Some(sender) = pending.remove(&digest) {
+                    let _ = sender.send(());
+                }
+                return Ok(());
+            }
             Err(DagError::Suspended) => {
-                // if let Some(notify) = notify {
-                //     self.pending_certificates
-                //         .entry(digest)
-                //         .or_insert_with(Vec::new)
-                //         .push(notify);
-                // }
-                Ok(())
+                let mut pending = self.inner.pending.lock();
+                match pending.entry(digest) {
+                    hash_map::Entry::Occupied(entry) => entry.get().subscribe(),
+                    hash_map::Entry::Vacant(entry) => {
+                        let (tx, rx) = broadcast::channel(1);
+                        entry.insert(tx);
+                        rx
+                    }
+                }
             }
             result => {
-                // if let Some(notifies) = self.pending_certificates.remove(&digest) {
-                //     for notify in notifies {
-                //         let _ = notify.send(result.clone()); // no problem if remote side isn't listening
-                //     }
-                // }
-                result
+                return result;
             }
-        }
+        };
+        receiver.recv().await.map_err(|_| DagError::ShuttingDown)
     }
 
     async fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
@@ -262,24 +274,7 @@ impl Synchronizer {
             .map_err(DagError::from)
     }
 
-    // Logs Core errors as appropriate.
-    // fn process_result(result: &DagResult<()>) {
-    //     match result {
-    //         Ok(()) => (),
-    //         Err(DagError::StoreError(e)) => {
-    //             error!("{e}");
-    //             panic!("Storage failure: killing node.");
-    //         }
-    //         Err(
-    //             e @ DagError::TooOld(..)
-    //             | e @ DagError::VoteTooOld(..)
-    //             | e @ DagError::InvalidEpoch { .. },
-    //         ) => debug!("{e}"),
-    //         Err(e) => warn!("{e}"),
-    //     }
-    // }
-
-    async fn process_own_certificate(
+    pub async fn accept_own_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
