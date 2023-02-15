@@ -2669,6 +2669,7 @@ async fn test_authority_persist() {
             &registry,
             &AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
+            10000,
         )
         .await
     }
@@ -2684,15 +2685,9 @@ async fn test_authority_persist() {
 
     // Create an authority
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
-            &path,
-            None,
-            &committee,
-            &genesis,
-            &AuthorityStorePruningConfig::default(),
-        )
-        .await
-        .unwrap(),
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+            .await
+            .unwrap(),
     );
     let authority = init_state(committee, authority_key, store).await;
 
@@ -2716,15 +2711,9 @@ async fn test_authority_persist() {
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
     let committee = genesis.committee().unwrap();
     let store = Arc::new(
-        AuthorityStore::open_with_committee_for_testing(
-            &path,
-            None,
-            &committee,
-            &genesis,
-            &AuthorityStorePruningConfig::default(),
-        )
-        .await
-        .unwrap(),
+        AuthorityStore::open_with_committee_for_testing(&path, None, &committee, &genesis)
+            .await
+            .unwrap(),
     );
     let authority2 = init_state(committee, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
