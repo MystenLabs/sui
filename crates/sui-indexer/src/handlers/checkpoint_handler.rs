@@ -56,7 +56,7 @@ impl CheckpointHandler {
                 .total_checkpoint_requested
                 .inc();
 
-            let _request_guard = self
+            let request_guard = self
                 .checkpoint_handler_metrics
                 .full_node_read_request_latency
                 .start_timer();
@@ -77,13 +77,13 @@ impl CheckpointHandler {
                     .get_checkpoint_summary(next_cursor_sequence_number as u64)
                     .await;
             }
-            _request_guard.stop_and_record();
+            request_guard.stop_and_record();
 
             self.checkpoint_handler_metrics
                 .total_checkpoint_received
                 .inc();
 
-            let _db_guard = self
+            let db_guard = self
                 .checkpoint_handler_metrics
                 .db_write_request_latency
                 .start_timer();
@@ -94,7 +94,7 @@ impl CheckpointHandler {
             self.checkpoint_handler_metrics
                 .total_checkpoint_processed
                 .inc();
-            _db_guard.stop_and_record();
+            db_guard.stop_and_record();
             previous_checkpoint_commit = Checkpoint::from(new_checkpoint.clone());
             next_cursor_sequence_number += 1;
             commit_checkpoint_log(&mut pg_pool_conn, next_cursor_sequence_number)?;

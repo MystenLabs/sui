@@ -63,7 +63,7 @@ impl EventHandler {
                 .total_event_page_fetch_attempt
                 .inc();
 
-            let _request_guard = self
+            let request_guard = self
                 .event_handler_metrics
                 .full_node_read_request_latency
                 .start_timer();
@@ -82,9 +82,9 @@ impl EventHandler {
                 txn_response_res_vec.len(),
                 txn_page.next_cursor.clone()
             );
-            _request_guard.stop_and_record();
+            request_guard.stop_and_record();
 
-            let _db_guard = self
+            let db_guard = self
                 .event_handler_metrics
                 .db_write_request_latency
                 .start_timer();
@@ -118,7 +118,7 @@ impl EventHandler {
                     commit_count, next_cursor
                 );
             }
-            _db_guard.stop_and_record();
+            db_guard.stop_and_record();
 
             if txn_page.next_cursor.is_none() {
                 sleep(Duration::from_secs_f32(0.1)).await;

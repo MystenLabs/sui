@@ -60,7 +60,7 @@ impl TransactionHandler {
             self.transaction_handler_metrics
                 .total_transaction_page_fetch_attempt
                 .inc();
-            let _request_guard = self
+            let request_guard = self
                 .transaction_handler_metrics
                 .full_node_read_request_latency
                 .start_timer();
@@ -85,9 +85,9 @@ impl TransactionHandler {
                 txn_response_res_vec.len(),
                 page.next_cursor,
             );
-            _request_guard.stop_and_record();
+            request_guard.stop_and_record();
 
-            let _db_guard = self
+            let db_guard = self
                 .transaction_handler_metrics
                 .db_write_request_latency
                 .start_timer();
@@ -115,7 +115,7 @@ impl TransactionHandler {
             self.transaction_handler_metrics
                 .total_transaction_page_committed
                 .inc();
-            _db_guard.stop_and_record();
+            db_guard.stop_and_record();
 
             if txn_count < TRANSACTION_PAGE_SIZE || page.next_cursor.is_none() {
                 sleep(Duration::from_secs_f32(0.1)).await;
