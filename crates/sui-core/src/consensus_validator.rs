@@ -107,8 +107,8 @@ impl TransactionValidator for SuiTxValidator {
 
         // all certificates had valid signatures, schedule them for execution prior to sequencing
         // which is unnecessary for owned object transactions.
-        self.epoch_store
-            .insert_pending_certificates(&owned_tx_certs)?;
+        // It is unnecessary to write to pending_certificates table because the certs will be written
+        // via Narwhal output.
         self.transaction_manager
             .enqueue(owned_tx_certs, &self.epoch_store)
             .wrap_err("Failed to schedule certificates for execution")
