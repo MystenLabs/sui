@@ -1931,6 +1931,8 @@ impl SuiFinalizedEffects {
 pub struct SuiTransactionEffects {
     // The status of the execution
     pub status: SuiExecutionStatus,
+    /// The epoch when this transaction was executed.
+    pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1977,6 +1979,7 @@ impl SuiTransactionEffects {
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             status: effect.status.into(),
+            executed_epoch: effect.executed_epoch,
             gas_used: effect.gas_used.into(),
             shared_objects: to_sui_object_ref(effect.shared_objects),
             transaction_digest: effect.transaction_digest,

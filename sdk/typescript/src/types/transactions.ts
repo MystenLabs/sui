@@ -182,6 +182,11 @@ export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
 export const TransactionEffects = object({
   /** The status of the execution */
   status: ExecutionStatus,
+  /**
+   * The epoch when this transaction was executed
+   * TODO: Changed it to non-optional once this is stable.
+   * */
+  executedEpoch: optional(EpochId),
   gasUsed: GasCostSummary,
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects: optional(array(SuiObjectRef)),
