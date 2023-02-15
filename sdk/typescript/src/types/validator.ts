@@ -142,9 +142,10 @@ export const DelegationStakingPool = object({
 
 export const CommitteeInfo = object({
   epoch: number(),
-  protocol_version: number(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  protocol_version: optional(number()),
   /* array of (validator public key, stake unit) tuple */
-  committee_info: array(tuple([AuthorityName, number()])),
+  committee_info: optional(array(tuple([AuthorityName, number()]))),
 });
 
 export const SystemParameters = object({
@@ -182,7 +183,8 @@ export const ValidatorSet = object({
 export const SuiSystemState = object({
   info: object({ id: string() }),
   epoch: number(),
-  protocol_version: number(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  protocol_version: optional(number()),
   validators: ValidatorSet,
   treasury_cap: SuiSupplyFields,
   storage_fund: Balance,
@@ -308,7 +310,8 @@ export const MoveValidatorsFieldsClass = object({
 export const MoveSuiSystemObjectFields = object({
   chain_id: optional(number()),
   epoch: string(),
-  protocol_version: string(),
+  // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
+  protocol_version: optional(string()),
   // TODO(cleanup): remove optional after TestNet Wave 2(0.22.0)
   epoch_start_timestamp_ms: optional(string()),
   safe_mode: boolean(),

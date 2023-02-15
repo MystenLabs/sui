@@ -10,6 +10,7 @@ import {
   string,
   union,
   tuple,
+  optional,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
@@ -42,7 +43,7 @@ export const CheckpointSummary = object({
   epoch_rolling_gas_cost_summary: GasCostSummary,
   end_of_epoch_data: union([EndOfEpochData, literal(null)]),
   timestamp_ms: union([number(), literal(null)]),
-  version_specific_data: array(number()),
+  version_specific_data: optional(array(number())),
 });
 export type CheckpointSummary = Infer<typeof CheckpointSummary>;
 
