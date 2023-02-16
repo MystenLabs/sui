@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
@@ -10,6 +8,7 @@ use crate::primary;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
+use std::collections::HashMap;
 use test_utils::CommitteeFixture;
 use tokio::time::Duration;
 use types::{

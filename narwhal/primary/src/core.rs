@@ -1,22 +1,15 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    aggregators::{CertificatesAggregator, VotesAggregator},
-    certificate_fetcher::CertificateLoopbackMessage,
-    metrics::PrimaryMetrics,
-    primary::PrimaryMessage,
-    synchronizer::Synchronizer,
-};
+use crate::{aggregators::VotesAggregator, metrics::PrimaryMetrics, synchronizer::Synchronizer};
 
-use anyhow::Result;
-use config::{Committee, Epoch};
+use config::Committee;
 use crypto::{NetworkPublicKey, PublicKey, Signature};
 use fastcrypto::signature_service::SignatureService;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
-use network::{anemo_ext::NetworkExt, CancelOnDropHandler};
+use network::anemo_ext::NetworkExt;
 use std::time::Duration;
 use std::{sync::Arc, time::Instant};
 use storage::CertificateStore;
@@ -29,7 +22,7 @@ use tracing::{debug, enabled, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    metered_channel::{Receiver, Sender},
+    metered_channel::Receiver,
     Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderDigest,
     PrimaryToPrimaryClient, RequestVoteRequest, Round, Vote,
 };
@@ -132,7 +125,7 @@ impl Core {
     }
 
     #[instrument(level = "info", skip_all)]
-    pub async fn recover(mut self) -> DagResult<Self> {
+    pub async fn recover(self) -> DagResult<Self> {
         info!("Starting certificate recovery. Message processing will begin after completion.");
 
         let last_round_certificates = self

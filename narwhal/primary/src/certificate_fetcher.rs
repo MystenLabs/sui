@@ -1,10 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    metrics::PrimaryMetrics,
-    synchronizer::{self, Synchronizer},
-};
+use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Network;
 use config::{Committee, SharedWorkerCache};
 use crypto::{NetworkPublicKey, PublicKey};
@@ -21,14 +18,14 @@ use std::{
 use storage::CertificateStore;
 use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
-    sync::{oneshot, watch},
+    sync::watch,
     task::JoinHandle,
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
-    metered_channel::{Receiver, Sender},
+    metered_channel::Receiver,
     Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
     Round,
 };
@@ -48,15 +45,6 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 // Batch size is chosen so that verifying a batch takes non-trival
 // time (verifying a batch of 200 certificates should take > 100ms).
 const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
-
-/// Message format from CertificateFetcher to core on the loopback channel.
-pub struct CertificateLoopbackMessage {
-    /// Certificates to be processed by the core.
-    /// In normal case processing the certificates in order should not encounter any missing parent.
-    pub certificates: Vec<Certificate>,
-    /// Used by core to signal back that it is done with the certificates.
-    pub done: oneshot::Sender<()>,
-}
 
 /// The CertificateFetcher is responsible for fetching certificates that this node is missing
 /// from other primaries. It operates two loops:
