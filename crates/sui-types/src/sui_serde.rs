@@ -5,17 +5,13 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use anyhow::anyhow;
-use fastcrypto::encoding::{Base64, Encoding};
-use fastcrypto::traits::ToFromBytes;
+use fastcrypto::encoding::Encoding;
 use move_core_types::account_address::AccountAddress;
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::Deserialize;
-use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
-
-use crate::crypto::{AggregateAuthoritySignature, KeypairTraits};
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -165,32 +161,6 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
     {
         let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
         roaring::RoaringBitmap::deserialize_from(&bytes[..]).map_err(to_custom_error::<'de, D, _>)
-    }
-}
-pub struct KeyPairBase64 {}
-
-impl<T> SerializeAs<T> for KeyPairBase64
-where
-    T: KeypairTraits,
-{
-    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        value.encode_base64().serialize(serializer)
-    }
-}
-
-impl<'de, T> DeserializeAs<'de, T> for KeyPairBase64
-where
-    T: KeypairTraits,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        T::decode_base64(&s).map_err(to_custom_error::<'de, D, _>)
     }
 }
 
