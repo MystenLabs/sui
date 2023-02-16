@@ -56,9 +56,7 @@ function AddressInput<FormValues>({
             <div
                 className={cl(
                     st.group,
-                    dirty && formattedValue !== '' && addressError
-                        ? st.invalidAddr
-                        : ''
+                    dirty && addressError ? st.invalidAddr : ''
                 )}
             >
                 <div className={st.textarea}>
@@ -87,7 +85,7 @@ function AddressInput<FormValues>({
 
             <ErrorMessage className={st.error} name="to" component="div" />
 
-            {!addressError && formattedValue !== '' && touched && (
+            {!addressError && touched && (
                 <div className="mt-2 w-full">
                     <Alert mode="success">
                         <Text variant="bodySmall" weight="medium">

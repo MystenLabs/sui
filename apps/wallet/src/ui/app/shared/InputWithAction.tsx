@@ -3,10 +3,10 @@
 
 import { cx } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
-import { NumericFormat } from 'react-number-format';
 
 import Alert from '../components/alert';
 import { Pill, type PillProps } from './Pill';
+import NumberInput from '_components/number-input';
 
 import type { ComponentProps } from 'react';
 
@@ -18,8 +18,9 @@ export interface InputWithActionProps
     name: string;
     prefix?: string;
     suffix?: string;
-    actionDisabled?: boolean;
+    actionDisabled?: boolean | 'auto';
     allowNegative?: boolean;
+    allowDecimals?: boolean;
 }
 
 export function InputWithAction({
@@ -36,25 +37,37 @@ export function InputWithAction({
     ...props
 }: InputWithActionProps) {
     const [field, meta] = useField(name);
-    const { isSubmitting } = useFormikContext();
+    const form = useFormikContext();
+    const { isSubmitting } = form;
     const isInputDisabled = isSubmitting || disabled;
+    const isActionDisabled =
+        actionDisabled === 'auto'
+            ? isInputDisabled ||
+              meta?.initialValue === meta?.value ||
+              !!meta?.error
+            : actionDisabled;
     const shareStyle = cx(
         'transition flex flex-row items-center p-3 bg-white text-body font-semibold',
         'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)] rounded-md shadow-button',
         'border-solid border border-gray-45 text-steel-darker hover:border-steel focus:border-steel',
         'disabled:border-gray-40 disabled:text-gray-55'
     );
+
     return (
         <>
             <div className="flex flex-row flex-nowrap items-center relative">
                 {type === 'number' ? (
-                    <NumericFormat
-                        valueIsNumericString
+                    <NumberInput
+                        className={shareStyle}
+                        allowNegative
+                        {...props}
+                        form={form}
+                        field={field}
+                        meta={meta}
                         disabled={isInputDisabled}
+                        decimals={true}
                         prefix={prefix}
                         suffix={suffix}
-                        {...field}
-                        className={shareStyle}
                     />
                 ) : (
                     <input
@@ -69,7 +82,7 @@ export function InputWithAction({
                     <Pill
                         text={actionText}
                         type={actionType}
-                        disabled={actionDisabled || isInputDisabled}
+                        disabled={isActionDisabled}
                         loading={isSubmitting}
                         onClick={onActionClicked}
                     />

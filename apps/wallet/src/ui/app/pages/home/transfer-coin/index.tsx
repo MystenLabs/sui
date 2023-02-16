@@ -121,40 +121,44 @@ function TransferCoinPage() {
         navigate('/');
     }, [navigate]);
 
-    const onHandleSubmit = useCallback(
-        async ({ to, amount, isPayAllSui }: FormValues) => {
-            if (coinType === null || !gasBudgetEstimationUnits) {
-                return;
-            }
+    const onHandleSubmit = useCallback(async () => {
+        if (coinType === null || !gasBudgetEstimationUnits) {
+            return;
+        }
 
-            setSendError(null);
-            trackEvent('TransferCoins', {
-                props: { coinType },
-            });
-            try {
-                const bigIntAmount = parseAmount(amount, coinDecimals);
-                //Todo:(Jibz) move to react-query
-                const response = await dispatch(
-                    sendTokens({
-                        amount: bigIntAmount,
-                        recipientAddress: to,
-                        tokenTypeArg: coinType,
-                        gasBudget: gasBudgetEstimationUnits,
-                    })
-                ).unwrap();
+        setSendError(null);
+        trackEvent('TransferCoins', {
+            props: { coinType },
+        });
+        try {
+            const bigIntAmount = parseAmount(formData.amount, coinDecimals);
+            //Todo:(Jibz) move to react-query
+            const response = await dispatch(
+                sendTokens({
+                    amount: bigIntAmount,
+                    recipientAddress: formData.to,
+                    tokenTypeArg: coinType,
+                    gasBudget: gasBudgetEstimationUnits,
+                })
+            ).unwrap();
 
-                const txDigest = getTransactionDigest(response);
-                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                    txDigest
-                )}&from=transactions`;
+            const txDigest = getTransactionDigest(response);
+            const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                txDigest
+            )}&from=transactions`;
 
-                navigate(receiptUrl);
-            } catch (e) {
-                setSendError((e as SerializedError).message || null);
-            }
-        },
-        [dispatch, navigate, coinType, coinDecimals, gasBudgetEstimationUnits]
-    );
+            navigate(receiptUrl);
+        } catch (e) {
+            setSendError((e as SerializedError).message || null);
+        }
+    }, [
+        coinType,
+        gasBudgetEstimationUnits,
+        formData,
+        coinDecimals,
+        dispatch,
+        navigate,
+    ]);
 
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
@@ -231,9 +235,9 @@ function TransferCoinPage() {
                 <Button
                     type="button"
                     variant="primary"
-                    onClick={() => onHandleSubmit}
+                    onClick={onHandleSubmit}
                     size="tall"
-                    text={'Review'}
+                    text={'Send Now'}
                     after={<ArrowRight16 />}
                 />
             </Menu>

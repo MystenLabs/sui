@@ -79,7 +79,6 @@ export function StepOne({
     const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
     const [maxToken, symbol, queryResult] = useFormatCoin(balance, coinType);
 
-    // set sendMaxToken to true if the amount is equal to the maxToken
     useEffect(() => {
         // reset isPayAllSui to false if the amount is not equal to the maxToken
         if (amount !== maxToken) {
@@ -111,7 +110,7 @@ export function StepOne({
                                 color="steel-dark"
                                 weight="semibold"
                             >
-                                Select SUI Amount to Send
+                                Select SUI Amount to Send {symbol}
                             </Text>
                         </div>
                         <InputWithAction
@@ -123,14 +122,16 @@ export function StepOne({
                             type="number"
                             actionType="button"
                             allowNegative={false}
+                            allowDecimals
                             onActionClicked={setMaxToken}
                             actionDisabled={
-                                maxToken === amount ||
+                                isPayAllSui ||
                                 queryResult.isLoading ||
                                 !maxToken
                             }
                         />
                     </div>
+
                     <div className="px-2 mt-3 mb-5 flex w-full gap-2 justify-between">
                         <div className="flex gap-1">
                             <Text
