@@ -84,6 +84,25 @@ struct Inner {
     pending: Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
 }
 
+impl Inner {
+    async fn append_certificate_in_aggregator(&self, certificate: Certificate) -> DagResult<()> {
+        // Check if we have enough certificates to enter a new dag round and propose a header.
+        let Some(parents) = self
+            .certificates_aggregators
+            .lock()
+            .entry(certificate.round())
+            .or_insert_with(|| Box::new(CertificatesAggregator::new()))
+            .append(certificate.clone(), &self.committee) else {
+                return Ok(());
+            };
+        // Send it to the `Proposer`.
+        self.tx_parents
+            .send((parents, certificate.round(), certificate.epoch()))
+            .await
+            .map_err(|_| DagError::ShuttingDown)
+    }
+}
+
 /// The `Synchronizer` provides functions for retrieving missing certificates and batches.
 pub struct Synchronizer {
     /// Internal data that are thread safe.
@@ -137,6 +156,25 @@ impl Synchronizer {
             pending: Mutex::new(HashMap::new()),
         });
 
+        // Start a task to recover parent certificates for proposer.
+        let weak_inner = Arc::downgrade(&inner);
+        spawn_monitored_task!(async move {
+            let Some(inner) = weak_inner.upgrade() else {
+                // this happens if Narwhal is shutting down.
+                return;
+            };
+            let last_round_certificates = inner
+                .certificate_store
+                .last_two_rounds_certs()
+                .expect("Failed recovering certificates in primary core");
+            for certificate in last_round_certificates {
+                if let Err(e) = inner.append_certificate_in_aggregator(certificate).await {
+                    debug!("Failed to recover certificate, assuming Narwhal is shutting down. {e}");
+                    return;
+                }
+            }
+        });
+
         // Start a task to update gc_round and gc in-memory data.
         let weak_inner = Arc::downgrade(&inner);
         spawn_monitored_task!(async move {
@@ -149,7 +187,7 @@ impl Synchronizer {
                 }
                 let gc_round = (*rx_consensus_round_updates.borrow()).saturating_sub(gc_depth);
                 let Some(inner) = weak_inner.upgrade() else {
-                    // this happens during reconfig when Narwhal is shutting down.
+                    // this happens if Narwhal is shutting down.
                     return;
                 };
                 // this is the only task updating gc_round
@@ -429,6 +467,7 @@ impl Synchronizer {
         // corresponding round.
         let digest = certificate.digest();
         if let Err(e) = self
+            .inner
             .append_certificate_in_aggregator(certificate.clone())
             .await
         {
@@ -515,28 +554,6 @@ impl Synchronizer {
                 }
             }
         }
-    }
-
-    pub async fn append_certificate_in_aggregator(
-        &self,
-        certificate: Certificate,
-    ) -> DagResult<()> {
-        // Check if we have enough certificates to enter a new dag round and propose a header.
-        let Some(parents) = self
-            .inner
-            .certificates_aggregators
-            .lock()
-            .entry(certificate.round())
-            .or_insert_with(|| Box::new(CertificatesAggregator::new()))
-            .append(certificate.clone(), &self.inner.committee) else {
-                return Ok(());
-            };
-        // Send it to the `Proposer`.
-        self.inner
-            .tx_parents
-            .send((parents, certificate.round(), certificate.epoch()))
-            .await
-            .map_err(|_| DagError::ShuttingDown)
     }
 
     /// Synchronizes batches in the given header with other nodes (through our workers).

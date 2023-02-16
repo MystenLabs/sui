@@ -115,31 +115,13 @@ impl Core {
 
     #[instrument(level = "info", skip_all)]
     async fn run_inner(self) {
-        let core = async move { self.recover().await?.run().await };
+        let core = async move { self.run().await };
 
         match core.await {
             Err(err @ DagError::ShuttingDown) => debug!("{:?}", err),
             Err(err) => panic!("{:?}", err),
             Ok(_) => {}
         }
-    }
-
-    #[instrument(level = "info", skip_all)]
-    pub async fn recover(self) -> DagResult<Self> {
-        info!("Starting certificate recovery. Message processing will begin after completion.");
-
-        let last_round_certificates = self
-            .certificate_store
-            .last_two_rounds_certs()
-            .expect("Failed recovering certificates in primary core");
-
-        for certificate in last_round_certificates {
-            self.synchronizer
-                .append_certificate_in_aggregator(certificate)
-                .await?;
-        }
-
-        Ok(self)
     }
 
     // Requests a vote for a Header from the given peer. Retries indefinitely until either a
