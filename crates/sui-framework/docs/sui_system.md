@@ -359,15 +359,6 @@ the epoch advancement transaction.
 
 
 
-<a name="0x2_sui_system_MAX_SUPPLY"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system.md#0x2_sui_system_MAX_SUPPLY">MAX_SUPPLY</a>: u64 = 1000000000000000000;
-</code></pre>
-
-
-
 <a name="0x2_sui_system_create"></a>
 
 ## Function `create`
