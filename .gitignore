@@ -30,6 +30,9 @@ node_modules
 *.tsbuildinfo
 .turbo
 
+# TS SDK artifacts
+sdk/typescript/doc/
+
 # App build directories
 dist/
 storybook-static/
