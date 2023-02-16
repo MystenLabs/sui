@@ -171,6 +171,13 @@ async fn check_gas(
             TransactionKind::Single(SingleTransactionKind::PaySui(t)) => t.amounts.iter().sum(),
             _ => 0,
         };
+        let reference_gas_price = epoch_store.reference_gas_price();
+        if computation_gas_price < reference_gas_price {
+            return Err(SuiError::GasPriceUnderRGP {
+                gas_price: computation_gas_price,
+                reference_gas_price,
+            });
+        }
         let protocol_config = epoch_store.protocol_config();
         let cost_table = SuiCostTable::new(protocol_config);
         let storage_gas_price = protocol_config.storage_gas_price();

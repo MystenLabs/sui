@@ -332,6 +332,15 @@ pub enum SuiError {
     },
     #[error("Transaction kind does not support Sponsored Transaction")]
     UnsupportedSponsoredTransactionKind,
+    #[error(
+        "Gas price {:?} under reference gas price (RGP) {:?}",
+        gas_price,
+        reference_gas_price
+    )]
+    GasPriceUnderRGP {
+        gas_price: u64,
+        reference_gas_price: u64,
+    },
 
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
@@ -697,6 +706,7 @@ impl SuiError {
             SuiError::GasBudgetTooHigh { .. } => (false, true),
             SuiError::GasBudgetTooLow { .. } => (false, true),
             SuiError::GasBalanceTooLowToCoverGasBudget { .. } => (false, true),
+            SuiError::GasPriceUnderRGP { .. } => (false, true),
             _ => (false, false),
         }
     }
