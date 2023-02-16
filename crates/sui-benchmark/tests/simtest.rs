@@ -149,9 +149,9 @@ mod test {
     #[sim_test(config = "test_config()")]
     #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_pruning() {
-        let epoch_duration_ms = 1000;
-        let test_cluster = build_test_cluster(7, epoch_duration_ms).await;
-        test_simulated_load(test_cluster.clone(), 5).await;
+        let epoch_duration_ms = 5000;
+        let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
+        test_simulated_load(test_cluster.clone(), 30).await;
         // waiting enough time to get all transactions into checkpoints
         tokio::time::sleep(Duration::from_millis(2 * epoch_duration_ms)).await;
 
