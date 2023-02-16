@@ -86,10 +86,6 @@ module sui::validator {
         commission_rate: u64,
     }
 
-//    spec Validator {
-//        invariant stake_amount + delegation_staking_pool.sui_balance <= MAX_U64;
-//    }
-
     const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[107, 111, 115, 107];
 
     fun verify_proof_of_possession(
