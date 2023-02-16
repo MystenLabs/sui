@@ -487,15 +487,10 @@ pub(crate) fn make_anemo_config() -> anemo_cli::Config {
         // Sui discovery
         .add_service(
             "Discovery",
-            anemo_cli::ServiceInfo::new()
-                .add_method(
-                    "GetExternalAddress",
-                    anemo_cli::ron_method!(DiscoveryClient, get_external_address, ()),
-                )
-                .add_method(
-                    "GetKnownPeers",
-                    anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
-                ),
+            anemo_cli::ServiceInfo::new().add_method(
+                "GetKnownPeers",
+                anemo_cli::ron_method!(DiscoveryClient, get_known_peers, ()),
+            ),
         )
         // Sui state sync
         .add_service(
