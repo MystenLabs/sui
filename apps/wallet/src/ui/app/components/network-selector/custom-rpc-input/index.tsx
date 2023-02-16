@@ -64,6 +64,7 @@ export function CustomRPCInput() {
                     min={MIN_CHAR}
                     placeholder={placeholder}
                     actionText="Save"
+                    actionDisabled="auto"
                 />
             </Form>
         </Formik>
