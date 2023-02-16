@@ -646,21 +646,9 @@ impl Core {
         &mut self,
         certificate: Certificate,
     ) -> DagResult<()> {
-        // Check if we have enough certificates to enter a new dag round and propose a header.
-        if let Some(parents) = self
-            .certificates_aggregators
-            .entry(certificate.round())
-            .or_insert_with(|| Box::new(CertificatesAggregator::new()))
-            .append(certificate.clone(), &self.committee)
-        {
-            // Send it to the `Proposer`.
-            self.tx_parents
-                .send((parents, certificate.round(), certificate.epoch()))
-                .await
-                .map_err(|_| DagError::ShuttingDown)?;
-        }
-
-        Ok(())
+        self.synchronizer
+            .append_certificate_in_aggregator(certificate)
+            .await
     }
 
     // Logs Core errors as appropriate.
@@ -745,7 +733,7 @@ impl Core {
                 Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
-                            self.process_own_certificate(certificate).await
+                            self.synchronizer.accept_own_certificate(certificate, &self.network).await
                         },
                         Ok(Err(e)) => Err(e),
                         Err(_) => Err(DagError::ShuttingDown),

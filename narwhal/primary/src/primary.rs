@@ -382,7 +382,7 @@ impl Primary {
                     retries_left -= 1;
 
                     if retries_left <= 0 {
-                        panic!();
+                        panic!("Failed to initialize Network!");
                     }
                     error!(
                         "Address {} should be available for the primary Narwhal service, retrying in one second",

@@ -10,6 +10,7 @@ use mysten_metrics::spawn_monitored_task;
 use network::{anemo_ext::NetworkExt, RetryConfig};
 use parking_lot::Mutex;
 use std::{
+    cmp::min,
     collections::{hash_map, HashMap, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -388,8 +389,9 @@ impl Synchronizer {
 
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
         // If we don't, the synchronizer will start fetching missing certificates.
-        if !self.check_parents(&certificate).await? {
-            // certificate.round() > self.gc_round + 1 &&
+        if certificate.round() > self.inner.gc_round.load(Ordering::Acquire) + 1
+            && !self.check_parents(&certificate).await?
+        {
             debug!(
                 "Processing certificate {:?} suspended: missing ancestors",
                 certificate
@@ -460,6 +462,7 @@ impl Synchronizer {
         let peer = network.waiting_peer(peer_id);
         let mut client = PrimaryToPrimaryClient::new(peer);
         let mut certificates = VecDeque::new();
+        let mut failure_backoff = 0;
         loop {
             if certificates.is_empty() {
                 match rx_own_certificate_broadcast.recv().await {
@@ -479,8 +482,6 @@ impl Synchronizer {
             loop {
                 match rx_own_certificate_broadcast.try_recv() {
                     Ok(cert) => {
-                        // TODO: support sending an array of certificates.
-                        certificates.clear();
                         certificates.push_back(cert);
                     }
                     Err(broadcast::error::TryRecvError::Closed) => {
@@ -495,23 +496,32 @@ impl Synchronizer {
                     }
                 };
             }
-            let request = Request::new(PrimaryMessage::Certificate(
-                certificates.front().unwrap().clone(),
-            ))
-            .with_timeout(Duration::from_secs(10));
+            // TODO: support sending an array of certificates.
+            while certificates.len() > 1 {
+                certificates.pop_front();
+            }
+            let cert = certificates.front().unwrap().clone();
+            // println!("dbg broadcasting {cert:?}");
+            let request = Request::new(PrimaryMessage::Certificate(cert))
+                .with_timeout(Duration::from_secs(10));
             match client.send_message(request).await {
                 Ok(_) => {
                     certificates.pop_front();
+                    failure_backoff = 0;
                 }
                 Err(status) => {
                     warn!("Failed to send certificate to {name}! {status:?}");
-                    sleep(Duration::from_secs(1)).await;
+                    failure_backoff = min((failure_backoff + 1) * 2, 100);
+                    sleep(Duration::from_millis(100) * failure_backoff).await;
                 }
             }
         }
     }
 
-    async fn append_certificate_in_aggregator(&self, certificate: Certificate) -> DagResult<()> {
+    pub async fn append_certificate_in_aggregator(
+        &self,
+        certificate: Certificate,
+    ) -> DagResult<()> {
         // Check if we have enough certificates to enter a new dag round and propose a header.
         let Some(parents) = self
             .inner
