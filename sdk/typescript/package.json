@@ -37,7 +37,8 @@
     "prettier:fix": "prettier --write .",
     "prepublishOnly": "pnpm build",
     "size": "size-limit",
-    "analyze": "size-limit --why"
+    "analyze": "size-limit --why",
+    "postpublish": "pnpm doc"
   },
   "husky": {
     "hooks": {
