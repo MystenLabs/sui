@@ -15,7 +15,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
-use crate::crypto::{AggregateAuthoritySignature, AuthoritySignature, KeypairTraits};
+use crate::crypto::{AggregateAuthoritySignature, KeypairTraits};
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -191,28 +191,6 @@ where
     {
         let s = String::deserialize(deserializer)?;
         T::decode_base64(&s).map_err(to_custom_error::<'de, D, _>)
-    }
-}
-
-pub struct AuthSignature {}
-
-impl SerializeAs<AuthoritySignature> for AuthSignature {
-    fn serialize_as<S>(value: &AuthoritySignature, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        Base64::encode(value.as_ref()).serialize(serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, AuthoritySignature> for AuthSignature {
-    fn deserialize_as<D>(deserializer: D) -> Result<AuthoritySignature, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let sig_bytes = Base64::decode(&s).map_err(to_custom_error::<'de, D, _>)?;
-        AuthoritySignature::from_bytes(&sig_bytes[..]).map_err(to_custom_error::<'de, D, _>)
     }
 }
 
