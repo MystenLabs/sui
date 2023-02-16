@@ -158,7 +158,7 @@ pub struct SuiCostTable {
     /// gas charged for a transaction.
     pub min_transaction_cost: FixedCost,
     /// Maximum allowable budget for a transaction.
-    pub max_gas_budget: FixedCost,
+    pub max_gas_budget: u64,
     /// Computation cost per byte charged for package publish. This cost is primarily
     /// determined by the cost to verify and link a package. Note that this does not
     /// include the cost of writing the package to the store.
@@ -189,7 +189,7 @@ impl SuiCostTable {
     pub fn new(c: &ProtocolConfig) -> Self {
         Self {
             min_transaction_cost: FixedCost::new(c.base_tx_cost_fixed()),
-            max_gas_budget: FixedCost::new(c.max_tx_gas()),
+            max_gas_budget: c.max_tx_gas(),
             package_publish_per_byte_cost: ComputationCostPerByte::new(
                 c.package_publish_cost_per_byte(),
             ),
@@ -210,12 +210,16 @@ impl SuiCostTable {
     fn unmetered() -> Self {
         Self {
             min_transaction_cost: FixedCost::new(0),
-            max_gas_budget: FixedCost::new(u64::MAX),
+            max_gas_budget: u64::MAX,
             package_publish_per_byte_cost: ComputationCostPerByte::new(0),
             object_read_per_byte_cost: ComputationCostPerByte::new(0),
             object_mutation_per_byte_cost: ComputationCostPerByte::new(0),
             storage_per_byte_cost: StorageCostPerByte::new(0),
         }
+    }
+
+    pub fn min_gas_budget_external(&self) -> u64 {
+        u64::from(to_external(*self.min_transaction_cost))
     }
 }
 
@@ -444,8 +448,8 @@ pub fn check_gas_balance(
         });
     }
 
-    let max_gas_budget = u64::from(*cost_table.max_gas_budget);
-    let min_gas_budget = u64::from(*cost_table.min_transaction_cost);
+    let max_gas_budget = cost_table.max_gas_budget;
+    let min_gas_budget = cost_table.min_gas_budget_external();
 
     if gas_budget > max_gas_budget {
         return Err(SuiError::GasBudgetTooHigh {
