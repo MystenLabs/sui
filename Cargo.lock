@@ -11731,6 +11731,7 @@ dependencies = [
  "vcpkg",
  "vec_map",
  "version_check",
+ "versions",
  "vte",
  "vte_generate_state_changes",
  "wait-timeout",

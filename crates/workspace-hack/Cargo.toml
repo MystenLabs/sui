@@ -637,6 +637,7 @@ url = { version = "2" }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "v4"] }
 vec_map = { version = "0.8", default-features = false }
+versions = { version = "4", default-features = false }
 vte = { version = "0.10" }
 wait-timeout = { version = "0.2", default-features = false }
 waker-fn = { version = "1", default-features = false }
@@ -1387,6 +1388,7 @@ variant_count = { version = "1", default-features = false }
 vcpkg = { version = "0.2", default-features = false }
 vec_map = { version = "0.8", default-features = false }
 version_check = { version = "0.9", default-features = false }
+versions = { version = "4", default-features = false }
 vte = { version = "0.10" }
 vte_generate_state_changes = { version = "0.1", default-features = false }
 wait-timeout = { version = "0.2", default-features = false }
