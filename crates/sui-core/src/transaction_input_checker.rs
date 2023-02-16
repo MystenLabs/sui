@@ -294,22 +294,17 @@ fn check_one_object(
                 SuiError::InvalidSequenceNumber
             );
 
-            // Check that the seq number is the same
-            // Note that this generally can't fail, because we fetch objects at the version
-            // specified by the input objects. This makes check_transaction_input idempotent.
-            // A tx that tries to operate on older versions will fail later when checking the
-            // object locks.
-            fp_ensure!(
-                object.version() == sequence_number,
-                SuiError::UnexpectedSequenceNumber {
-                    object_id,
-                    expected_sequence: object.version(),
-                    given_sequence: sequence_number,
-                }
+            // This is an invariant - we just load the object with the given ID and version.
+            assert_eq!(
+                object.version(),
+                sequence_number,
+                "The fetched object version {} does not match the requested version {}, object id: {}",
+                object.version(),
+                sequence_number,
+                object.id(),
             );
 
-            // Check the digest matches
-
+            // Check the digest matches - uesr could give a mismatched ObjectDigest
             let expected_digest = object.digest();
             fp_ensure!(
                 expected_digest == object_digest,
