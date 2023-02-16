@@ -10,6 +10,8 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use sui_protocol_constants::MAX_EVENT_EMIT_SIZE;
+use sui_types::error::VMMemoryLimitExceededSubStatusCode;
 
 /// Implementation of Move native function `event::emit<T: copy + drop>(event: T)`
 /// Adds an event to the transaction's event log
@@ -34,7 +36,16 @@ pub fn emit(
             )
         }
     };
-
+    let ev_size = u64::from(tag.abstract_size_for_gas_metering() + event.legacy_size());
+    if ev_size > MAX_EVENT_EMIT_SIZE {
+        return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+            .with_message(format!(
+                "Emitting event of size {ev_size} bytes. Limit is {MAX_EVENT_EMIT_SIZE} bytes."
+            ))
+            .with_sub_status(
+                VMMemoryLimitExceededSubStatusCode::EVENT_SIZE_LIMIT_EXCEEDED as u64,
+            ));
+    }
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     obj_runtime.emit_event(*tag, event)?;
     Ok(NativeResult::ok(cost, smallvec![]))
