@@ -443,9 +443,7 @@ async fn test_request_vote_missing_parents() {
     }
     // Populate header payload so they don't have to be retrieved.
     for (digest, (worker_id, _)) in &test_header.payload {
-        payload_store
-            .async_write((*digest, *worker_id), 1)
-            .await;
+        payload_store.async_write((*digest, *worker_id), 1).await;
     }
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,

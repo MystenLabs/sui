@@ -314,8 +314,10 @@ impl Synchronizer {
 
         // NOTE: This log entry is used to compute performance.
         debug!(
-            "Header {:?} took {} seconds to be materialized to a certificate {:?}",
+            "Header {:?} at round {} with {} batches, took {} seconds to be materialized to a certificate {:?}",
             certificate.header.digest(),
+            certificate.header.round,
+            certificate.header.payload.len(),
             header_to_certificate_duration,
             certificate.digest()
         );
