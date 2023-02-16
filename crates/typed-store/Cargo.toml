@@ -29,7 +29,6 @@ sui-macros = { path = "../sui-macros" }
 ouroboros = "0.15.5"
 rand = "0.8.5"
 async-trait = "0.1.57"
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tempfile = "3.3.0"

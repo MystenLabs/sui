@@ -40,7 +40,6 @@ sui-types = { path = "../../crates/sui-types" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
 reqwest = { version = "0.11.13", default_features= false, features = ["json", "rustls-tls"] }

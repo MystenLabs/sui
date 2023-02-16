@@ -16,7 +16,6 @@ clap = "2.34"
 prost = "0.11.3"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tonic = "0.8.2"
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [target.'cfg(not(target_env = "msvc"))'.build-dependencies]
 protobuf-src = "1.1.0"

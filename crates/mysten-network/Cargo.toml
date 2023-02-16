@@ -24,4 +24,3 @@ tonic-health = "0.8.0"
 tower = { version = "0.4.13", features = ["full"] }
 tower-http = { version = "0.3.4", features = ["trace", "set-header", "propagate-header"] }
 tracing = "0.1.37"
-workspace-hack = { version = "0.1", path = "../workspace-hack" }

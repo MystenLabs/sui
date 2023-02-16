@@ -8,7 +8,9 @@ publish = false
 
 [dependencies]
 fastcrypto.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
+eyre = "0.6.8"
+rand = { version = "0.8.5", features = ["std"] }
 serde = { version = "1.0.144", features = ["derive"] }
 shared-crypto = { path = "../../crates/shared-crypto"}
 bcs = "0.1.4"

@@ -22,7 +22,6 @@ storage = { path = "../storage", package = "narwhal-storage" }
 dag = { path = "../dag", package = "narwhal-dag" }
 prometheus = "0.13.3"
 types = { path = "../types", package = "narwhal-types" }
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 cfg-if = "1.0.0"
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 store = { path = "../../crates/typed-store", package = "typed-store" }

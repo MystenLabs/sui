@@ -80,7 +80,7 @@ class Demo:
             for filename in primary_key_files:
                 cmd = CommandMaker.generate_key(filename).split()
                 subprocess.run(cmd, check=True)
-                cmd_pk = CommandMaker.get_pub_key(filename)
+                cmd_pk = CommandMaker.get_pub_key(filename).split()
                 pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
                 primary_names += [pk]
 
@@ -168,6 +168,7 @@ class Demo:
 
             # Parse logs and return the parser.
             Print.info('Parsing logs...')
+            sleep(1)
             port_logs = LogGrpcParser.process(
                 PathMaker.logs_path(), faults=self.faults)
 

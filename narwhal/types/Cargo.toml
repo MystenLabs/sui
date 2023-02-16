@@ -34,7 +34,6 @@ fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 dag = { path = "../dag", package = "narwhal-dag" }
 anemo.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 once_cell = "1.16.0"
 
 store = { path = "../../crates/typed-store", package = "typed-store" }

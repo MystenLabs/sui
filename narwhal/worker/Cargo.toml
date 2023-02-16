@@ -36,7 +36,6 @@ mysten-metrics = { path = "../../crates/mysten-metrics" }
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow = "1.0.65"
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 eyre = "0.6.8"
 
 [dev-dependencies]

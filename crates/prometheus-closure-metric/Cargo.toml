@@ -12,4 +12,3 @@ publish = false
 anyhow = "1.0.58"
 prometheus = "0.13.3"
 protobuf = "^2.0"
-workspace-hack = { version = "0.1", path = "../workspace-hack" }

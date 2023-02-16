@@ -10,8 +10,6 @@ edition = "2021"
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-vm-types.workspace = true
-move-vm-test-utils.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.141", features = ["derive"] }

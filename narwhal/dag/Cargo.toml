@@ -15,7 +15,6 @@ itertools = "0.10.5"
 once_cell = "1.16"
 rayon = "1.5.3"
 thiserror = "1.0.35"
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 

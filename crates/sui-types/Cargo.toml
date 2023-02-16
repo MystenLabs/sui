@@ -53,7 +53,6 @@ sui-macros = { path = "../sui-macros" }
 fastcrypto = { workspace = true, features = ["copy_key"] }
 
 typed-store.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 derive_more = "0.99.17"
 
 [dev-dependencies]
