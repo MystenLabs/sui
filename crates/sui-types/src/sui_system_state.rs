@@ -22,6 +22,8 @@ const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
+pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
+    ident_str!("consensus_commit_prologue");
 
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
@@ -44,10 +46,10 @@ pub struct ValidatorMetadata {
     pub network_pubkey_bytes: Vec<u8>,
     pub worker_pubkey_bytes: Vec<u8>,
     pub proof_of_possession_bytes: Vec<u8>,
-    pub name: Vec<u8>,
-    pub description: Vec<u8>,
-    pub image_url: Vec<u8>,
-    pub project_url: Vec<u8>,
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
     pub net_address: Vec<u8>,
     pub consensus_address: Vec<u8>,
     pub worker_address: Vec<u8>,

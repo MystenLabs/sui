@@ -4,8 +4,8 @@ init:
 A: object(100)
 
 task 1 'publish'. lines 8-15:
-created: object(104)
-written: object(103)
+created: object(105)
+written: object(104)
 
 task 2 'run'. lines 17-17:
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.

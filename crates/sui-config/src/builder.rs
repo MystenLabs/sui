@@ -300,16 +300,16 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .map(|validator| {
                 let public_key: AuthorityPublicKeyBytes =
                     validator.genesis_info.key_pair.public().into();
+                let mut key_path = Hex::encode(public_key);
+                key_path.truncate(12);
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(Hex::encode(public_key));
+                    .join(key_path.clone());
                 let network_address = validator.genesis_info.network_address;
                 let consensus_address = validator.consensus_address;
-                let consensus_db_path = self
-                    .config_directory
-                    .join(CONSENSUS_DB_NAME)
-                    .join(Hex::encode(public_key));
+                let consensus_db_path =
+                    self.config_directory.join(CONSENSUS_DB_NAME).join(key_path);
                 let internal_worker_address = validator.consensus_internal_worker_address;
                 let consensus_config = ConsensusConfig {
                     address: consensus_address,

@@ -13,12 +13,14 @@ import {
 } from "react-router-dom";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 
-import { Root } from "./routes/Root";
-import { Home } from "./routes/Home";
-import { Connect } from "./routes/Connect";
-import { Setup } from "./routes/Setup";
 import { toast } from "react-hot-toast";
-import { Migrate } from "./routes/Migrate";
+import { Root } from "./routes/Root";
+import { Ended } from "./routes/Ended";
+// import { Home } from "./routes/Home";
+// import { Connect } from "./routes/Connect";
+// import { Setup } from "./routes/Setup";
+// import { Migrate } from "./routes/Migrate";
+// import { Claim } from "./routes/Claim";
 
 const plausible = Plausible({});
 plausible.enableAutoPageviews();
@@ -40,20 +42,28 @@ const router = createBrowserRouter([
     children: [
       {
         path: "",
-        element: <Home />,
+        element: <Ended />,
       },
-      {
-        path: "connect",
-        element: <Connect />,
-      },
-      {
-        path: "setup",
-        element: <Setup />,
-      },
-      {
-        path: "migrate",
-        element: <Migrate />,
-      },
+      // {
+      //   path: "",
+      //   element: <Home />,
+      // },
+      // {
+      //   path: "connect",
+      //   element: <Connect />,
+      // },
+      // {
+      //   path: "setup",
+      //   element: <Setup />,
+      // },
+      // {
+      //   path: "migrate",
+      //   element: <Migrate />,
+      // },
+      // {
+      //   path: "claim",
+      //   element: <Claim />,
+      // },
       {
         path: "*",
         element: <Navigate to="/" replace />,

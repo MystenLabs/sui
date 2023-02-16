@@ -182,11 +182,11 @@ function ValidatorPageResult() {
             ? (data.details.data.fields as MoveSuiSystemObjectFields)
             : null;
 
-    const numberOfValidators = useMemo(() => {
-        return (
-            validatorsData?.validators.fields.active_validators.length || null
-        );
-    }, [validatorsData]);
+    const numberOfValidators = useMemo(
+        () =>
+            validatorsData?.validators.fields.active_validators.length || null,
+        [validatorsData]
+    );
 
     const {
         data: validatorEvents,

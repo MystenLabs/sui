@@ -292,7 +292,7 @@ impl ValidatorService {
         // 1) Check if cert already executed
         let tx_digest = *certificate.digest();
         if let Some(signed_effects) =
-            state.get_signed_effects_and_maybe_resign(epoch_store.epoch(), &tx_digest)?
+            state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
         {
             return Ok(tonic::Response::new(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
@@ -377,16 +377,10 @@ impl ValidatorService {
 
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
-        let res = if certificate.contains_shared_object() {
-            // The transaction needs sequencing by Narwhal before it can be sent for execution.
-            // So rely on the submission to consensus above to execute the certificate.
-            state.notify_read_effects(&certificate).await
-        } else {
-            state.execute_certificate(&certificate, &epoch_store).await
-        };
+        let res = state.execute_certificate(&certificate, &epoch_store).await;
         match res {
-            Ok(signed_effects) => Ok(tonic::Response::new(HandleCertificateResponse {
-                signed_effects: signed_effects.into_inner(),
+            Ok(effects) => Ok(tonic::Response::new(HandleCertificateResponse {
+                signed_effects: effects.into_inner(),
             })),
             Err(e) => Err(tonic::Status::from(e)),
         }
@@ -437,7 +431,7 @@ impl Validator for ValidatorService {
 
         let response = self.state.handle_object_info_request(request).await?;
 
-        Ok(tonic::Response::new(response.into()))
+        Ok(tonic::Response::new(response))
     }
 
     async fn transaction_info(

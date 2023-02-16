@@ -3,6 +3,7 @@
 
 module sui::sui_system {
     use sui::balance::{Self, Balance, Supply};
+    use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::staking_pool::{Delegation, StakedSui};
     use sui::object::{Self, UID};
@@ -569,6 +570,17 @@ module sui::sui_system {
         self.epoch = new_epoch;
         self.protocol_version = next_protocol_version;
         self.safe_mode = true;
+    }
+
+    public entry fun consensus_commit_prologue(
+        clock: &mut Clock,
+        timestamp_ms: u64,
+        ctx: &TxContext,
+    ) {
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(tx_context::sender(ctx) == @0x0, 0);
+
+        clock::set_timestamp(clock, timestamp_ms);
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

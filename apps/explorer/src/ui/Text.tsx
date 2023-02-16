@@ -18,13 +18,17 @@ const textStyles = cva(['break-words'], {
             captionSmall: 'uppercase text-captionSmall',
             p1: 'text-p1',
             p2: 'text-p2',
+            p3: 'text-p3',
+            p4: 'text-p4',
         },
         weight: {
             medium: 'font-medium',
+            normal: 'font-normal',
             semibold: 'font-semibold',
             bold: 'font-bold',
         },
         color: {
+            white: 'text-white',
             'gray-100': 'text-gray-100',
             'gray-90': 'text-gray-90',
             'gray-80': 'text-gray-80',

@@ -172,7 +172,7 @@ async fn test_object_wrapping_unwrapping() {
     );
     // Make sure that the child's version gets increased after wrapped.
     assert_eq!(new_child_object_ref, expected_child_object_ref);
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
 
     let parent_object_ref = effects.created[0].0;
     assert_eq!(parent_object_ref.1, wrapped_version);
@@ -211,7 +211,7 @@ async fn test_object_wrapping_unwrapping() {
     );
     // Make sure that version increments again when unwrapped.
     assert_eq!(effects.unwrapped[0].0 .1, unwrapped_version);
-    check_latest_object_ref(&authority, &effects.unwrapped[0].0).await;
+    check_latest_object_ref(&authority, &effects.unwrapped[0].0, false).await;
     let child_object_ref = effects.unwrapped[0].0;
 
     let rewrap_version = SequenceNumber::lamport_increment([
@@ -251,7 +251,7 @@ async fn test_object_wrapping_unwrapping() {
         ObjectDigest::OBJECT_DIGEST_WRAPPED,
     );
     assert_eq!(effects.wrapped[0], expected_child_object_ref);
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let child_object_ref = effects.wrapped[0];
     let parent_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
 
@@ -285,14 +285,14 @@ async fn test_object_wrapping_unwrapping() {
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
     assert!(effects.deleted.contains(&expected_child_object_ref));
-    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    check_latest_object_ref(&authority, &expected_child_object_ref, true).await;
     let expected_parent_object_ref = (
         parent_object_ref.0,
         deleted_version,
         ObjectDigest::OBJECT_DIGEST_DELETED,
     );
     assert!(effects.deleted.contains(&expected_parent_object_ref));
-    check_latest_object_ref(&authority, &expected_parent_object_ref).await;
+    check_latest_object_ref(&authority, &expected_parent_object_ref, true).await;
 }
 
 #[tokio::test]
@@ -1947,7 +1947,7 @@ pub async fn build_and_try_publish_test_package(
     )
 }
 
-async fn build_and_publish_test_package(
+pub async fn build_and_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
@@ -1974,13 +1974,24 @@ async fn build_and_publish_test_package(
     effects.created[0].0
 }
 
-async fn check_latest_object_ref(authority: &AuthorityState, object_ref: &ObjectRef) {
+async fn check_latest_object_ref(
+    authority: &AuthorityState,
+    object_ref: &ObjectRef,
+    expect_not_found: bool,
+) {
     let response = authority
         .handle_object_info_request(ObjectInfoRequest {
             object_id: object_ref.0,
-            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+            object_format_options: None,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         })
-        .await
-        .unwrap();
-    assert_eq!(&response.requested_object_reference.unwrap(), object_ref,);
+        .await;
+    if expect_not_found {
+        assert!(matches!(response, Err(SuiError::ObjectNotFound { .. })));
+    } else {
+        assert_eq!(
+            &response.unwrap().object.compute_object_reference(),
+            object_ref
+        );
+    }
 }

@@ -491,6 +491,7 @@ function TransactionView({
                                 data-testid="transaction-timestamp"
                             >
                                 {coinTransfer.length === 1 &&
+                                coinTransfer?.[0]?.coinType &&
                                 formattedAmount ? (
                                     <section className="mb-10">
                                         <StatAmount

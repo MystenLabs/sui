@@ -88,20 +88,3 @@
         width: 278px;
     }
 }
-
-.error {
-    margin-top: 5px;
-}
-
-.action {
-    text-transform: uppercase;
-
-    &.valid {
-        opacity: 1;
-    }
-
-    &.can-save {
-        background: colors.$gray-90;
-        color: colors.$white;
-    }
-}

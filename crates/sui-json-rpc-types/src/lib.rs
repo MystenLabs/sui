@@ -35,12 +35,12 @@ use sui_types::base_types::{
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{Signature, SuiAuthorityStrongQuorumSignInfo};
+use sui_types::crypto::SuiAuthorityStrongQuorumSignInfo;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
 use sui_types::event::{EventEnvelope, EventType};
-use sui_types::filter::{EventFilter, TransactionFilter};
+use sui_types::filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::message_envelope::Message;
@@ -55,6 +55,7 @@ use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
+use sui_types::signature::GenericSignature;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
@@ -1592,6 +1593,11 @@ pub struct SuiGenesisTransaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SuiConsensusCommitPrologue {
+    pub checkpoint_start_timestamp_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
     /// Initiate an object transfer between addresses
@@ -1614,6 +1620,9 @@ pub enum SuiTransactionKind {
     ChangeEpoch(SuiChangeEpoch),
     /// A system transaction used for initializing the initial state of the chain.
     Genesis(SuiGenesisTransaction),
+    /// A system transaction marking the start of a series of transactions scheduled as part of a
+    /// checkpoint
+    ConsensusCommitPrologue(SuiConsensusCommitPrologue),
     // .. more transaction types go here
 }
 
@@ -1692,13 +1701,19 @@ impl Display for SuiTransactionKind {
                 write!(writer, "Type Arguments : {:?}", c.type_arguments)?;
             }
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind: Epoch Change")?;
-                writeln!(writer, "New epoch ID: {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Transaction Kind : Epoch Change")?;
+                writeln!(writer, "New epoch ID : {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind: Genesis Transaction")?;
+                writeln!(writer, "Transaction Kind : Genesis Transaction")?;
+            }
+            Self::ConsensusCommitPrologue(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Timestamp : {}", p.checkpoint_start_timestamp_ms)?;
             }
         }
         write!(f, "{}", writer)
@@ -1753,10 +1768,20 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                 epoch: e.epoch,
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
+                storage_rebate: e.storage_rebate,
+                epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
             }),
             SingleTransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
                 objects: g.objects.iter().map(GenesisObject::id).collect(),
             }),
+            SingleTransactionKind::ConsensusCommitPrologue(p) => {
+                Self::ConsensusCommitPrologue(SuiConsensusCommitPrologue {
+                    checkpoint_start_timestamp_ms: p.checkpoint_start_timestamp_ms,
+                })
+            }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                anyhow::bail!("programmable transactions are not yet supported")
+            }
         })
     }
 }
@@ -1778,7 +1803,8 @@ pub struct SuiChangeEpoch {
     pub epoch: EpochId,
     pub storage_charge: u64,
     pub computation_charge: u64,
-    // TODO: add storage rebate here
+    pub storage_rebate: u64,
+    pub epoch_start_timestamp_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1787,7 +1813,7 @@ pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
     /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
-    pub tx_signature: Signature,
+    pub tx_signature: GenericSignature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }
@@ -1905,6 +1931,8 @@ impl SuiFinalizedEffects {
 pub struct SuiTransactionEffects {
     // The status of the execution
     pub status: SuiExecutionStatus,
+    /// The epoch when this transaction was executed.
+    pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1951,6 +1979,7 @@ impl SuiTransactionEffects {
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             status: effect.status.into(),
+            executed_epoch: effect.executed_epoch,
             gas_used: effect.gas_used.into(),
             shared_objects: to_sui_object_ref(effect.shared_objects),
             transaction_digest: effect.transaction_digest,
@@ -2888,21 +2917,6 @@ pub struct MoveCallParams {
     #[serde(default)]
     pub type_arguments: Vec<SuiTypeTag>,
     pub arguments: Vec<SuiJsonValue>,
-}
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
-#[serde(rename = "SuiTransactionFilter")]
-pub enum SuiTransactionFilter {
-    Any,
-}
-
-impl From<SuiTransactionFilter> for TransactionFilter {
-    fn from(filter: SuiTransactionFilter) -> Self {
-        use SuiTransactionFilter::*;
-        match filter {
-            Any => TransactionFilter::Any,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]

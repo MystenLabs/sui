@@ -64,8 +64,9 @@ export function Search({
             className="relative flex h-fit w-full flex-col"
         >
             <Combobox.Input
+                spellCheck={false}
                 displayValue={(value: SearchResult) => value?.label}
-                className="box-border w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-8 text-white/20 placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-solid focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+                className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
                 onChange={onChange}
                 placeholder={placeholder}
                 autoComplete="off"
@@ -89,32 +90,25 @@ export function Search({
                             <LoadingSpinner />
                         </div>
                     ) : hasOptions ? (
-                        options.map(({ label, results }) => {
-                            return (
-                                <div key={label}>
-                                    {!!results?.length && (
-                                        <div className="mb-2">
-                                            <Text
-                                                color="steel-dark"
-                                                variant="captionSmall/medium"
-                                            >
-                                                {label}
-                                            </Text>
-                                        </div>
-                                    )}
-                                    {results?.map((item) => {
-                                        return (
-                                            <SearchItem
-                                                key={item.id}
-                                                value={item}
-                                            >
-                                                {item.label}
-                                            </SearchItem>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })
+                        options.map(({ label, results }) => (
+                            <div key={label}>
+                                {!!results?.length && (
+                                    <div className="mb-2">
+                                        <Text
+                                            color="steel-dark"
+                                            variant="captionSmall/medium"
+                                        >
+                                            {label}
+                                        </Text>
+                                    </div>
+                                )}
+                                {results?.map((item) => (
+                                    <SearchItem key={item.id} value={item}>
+                                        {item.label}
+                                    </SearchItem>
+                                ))}
+                            </div>
+                        ))
                     ) : (
                         <div className="flex items-center justify-center">
                             <Text

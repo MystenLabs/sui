@@ -11,6 +11,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
+use rocksdb::checkpoint::Checkpoint;
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -186,6 +187,12 @@ macro_rules! delegate_call {
             Self::DBWithThreadMode(d) => d.underlying.$method($($args),*),
             Self::OptimisticTransactionDB(d) => d.underlying.$method($($args),*),
         }
+    }
+}
+
+impl Drop for RocksDB {
+    fn drop(&mut self) {
+        delegate_call!(self.cancel_all_background_work(/* wait */ true))
     }
 }
 
@@ -369,6 +376,20 @@ impl RocksDB {
 
     pub fn flush(&self) -> Result<(), rocksdb::Error> {
         delegate_call!(self.flush())
+    }
+
+    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
+        match self {
+            Self::DBWithThreadMode(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+            Self::OptimisticTransactionDB(d) => {
+                let checkpoint = Checkpoint::new(&d.underlying)?;
+                checkpoint.create_checkpoint(path)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn flush_cf(&self, cf: &impl AsColumnFamilyRef) -> Result<(), rocksdb::Error> {

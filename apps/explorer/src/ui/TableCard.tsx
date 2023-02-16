@@ -43,15 +43,17 @@ export function TableCard<DataType extends object>({
     const [sorting, setSorting] = useState<SortingState>(defaultSorting || []);
 
     // Use Columns to create a table
-    const processedcol = useMemo<ColumnDef<DataType>[]>(() => {
-        return columns.map((column) => ({
-            ...column,
-            // cell renderer for each column from react-table
-            // cell should be in the column definition
-            //TODO: move cell to column definition
-            ...(!sortTable && { cell: ({ getValue }) => getValue() }),
-        }));
-    }, [columns, sortTable]);
+    const processedcol = useMemo<ColumnDef<DataType>[]>(
+        () =>
+            columns.map((column) => ({
+                ...column,
+                // cell renderer for each column from react-table
+                // cell should be in the column definition
+                //TODO: move cell to column definition
+                ...(!sortTable && { cell: ({ getValue }) => getValue() }),
+            })),
+        [columns, sortTable]
+    );
 
     const table = useReactTable({
         data,
@@ -72,11 +74,11 @@ export function TableCard<DataType extends object>({
     return (
         <div
             className={clsx(
-                'w-full overflow-x-auto border-0 border-b border-solid border-gray-45 pb-4',
+                'w-full overflow-x-auto border-b border-gray-45 pb-4',
                 refetching && 'opacity-50'
             )}
         >
-            <table className="w-full min-w-max border-collapse border-0 text-left">
+            <table className="w-full min-w-max border-collapse text-left">
                 <thead>
                     {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id}>

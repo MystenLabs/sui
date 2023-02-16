@@ -20,6 +20,7 @@ use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode};
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::clock::Clock;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, SuiAuthoritySignature, ToFromBytes,
@@ -43,7 +44,6 @@ use sui_types::{
     committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
-    sui_serde::AuthSignature,
 };
 use tracing::trace;
 
@@ -134,6 +134,19 @@ impl Genesis {
         let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
             .expect("Sui System State object deserialization cannot fail");
         result
+    }
+
+    pub fn clock(&self) -> Clock {
+        let clock = self
+            .objects()
+            .iter()
+            .find(|o| o.id() == sui_types::SUI_CLOCK_OBJECT_ID)
+            .expect("Clock must always exist")
+            .data
+            .try_as_move()
+            .expect("Clock must be a Move object");
+        bcs::from_bytes::<Clock>(clock.contents())
+            .expect("Clock object deserialization cannot fail")
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -254,7 +267,6 @@ impl<'de> Deserialize<'de> for Genesis {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisValidatorInfo {
     pub info: ValidatorInfo,
-    #[serde_as(as = "AuthSignature")]
     pub proof_of_possession: AuthoritySignature,
 }
 
@@ -510,7 +522,7 @@ impl Builder {
                 validator.protocol_key().as_ref().to_vec(),
                 onchain_validator.metadata.pubkey_bytes,
             );
-            assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
+            assert_eq!(validator.name(), onchain_validator.metadata.name);
             assert_eq!(
                 validator.network_address().to_vec(),
                 onchain_validator.metadata.net_address

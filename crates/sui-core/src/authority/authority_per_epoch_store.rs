@@ -19,13 +19,14 @@ use sui_storage::mutex_table::LockGuard;
 use sui_storage::write_ahead_log::{DBWriteAheadLog, TxGuard, WriteAheadLog};
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
-use sui_types::crypto::{AuthoritySignInfo, Signature};
+use sui_types::crypto::AuthoritySignInfo;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     SenderSignedData, SharedInputObject, TransactionEffects, TrustedCertificate,
     TrustedSignedTransactionEffects, VerifiedCertificate, VerifiedSignedTransaction,
 };
+use sui_types::signature::GenericSignature;
 use tracing::{debug, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -125,6 +126,10 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "transactions_table_default_config"]
     transactions: DBMap<TransactionDigest, TrustedEnvelope<SenderSignedData, AuthoritySignInfo>>,
 
+    /// Signatures over transaction effects that were executed in the current epoch.
+    /// Store this to avoid re-signing the same effects twice.
+    effects_signatures: DBMap<TransactionDigest, AuthoritySignInfo>,
+
     /// The two tables below manage shared object locks / versions. There are two ways they can be
     /// updated:
     /// 1. Upon receiving a certified transaction from consensus, the authority assigns the next
@@ -214,7 +219,7 @@ pub struct AuthorityEpochTables {
 
     /// When we see certificate through consensus for the first time, we record
     /// user signature for this transaction here. This will be included in the checkpoint later.
-    user_signatures_for_checkpoints: DBMap<TransactionDigest, Signature>,
+    user_signatures_for_checkpoints: DBMap<TransactionDigest, GenericSignature>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
@@ -443,6 +448,24 @@ impl AuthorityPerEpochStore {
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         Ok(self.tables.transactions.get(tx_digest)?.map(|t| t.into()))
+    }
+
+    pub fn insert_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+        effects_signature: &AuthoritySignInfo,
+    ) -> SuiResult {
+        Ok(self
+            .tables
+            .effects_signatures
+            .insert(tx_digest, effects_signature)?)
+    }
+
+    pub fn get_effects_signature(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<AuthoritySignInfo>> {
+        Ok(self.tables.effects_signatures.get(tx_digest)?)
     }
 
     pub fn multi_get_next_shared_object_versions<'a>(
@@ -799,7 +822,7 @@ impl AuthorityPerEpochStore {
     pub async fn user_signatures_for_checkpoint(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Signature>> {
+    ) -> SuiResult<Vec<GenericSignature>> {
         // todo - use NotifyRead::register_all might be faster
         for digest in digests {
             self.consensus_message_processed_notify(ConsensusTransactionKey::Certificate(*digest))
@@ -1093,7 +1116,11 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn test_insert_user_signature(&self, digest: TransactionDigest, signature: &Signature) {
+    pub fn test_insert_user_signature(
+        &self,
+        digest: TransactionDigest,
+        signature: &GenericSignature,
+    ) {
         self.tables
             .user_signatures_for_checkpoints
             .insert(&digest, signature)

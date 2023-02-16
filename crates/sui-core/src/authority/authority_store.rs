@@ -40,7 +40,7 @@ pub struct AuthorityStore {
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
-    pub(crate) effects_notify_read: NotifyRead<TransactionDigest, VerifiedSignedTransactionEffects>,
+    pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
     _store_pruner: AuthorityStorePruner,
     /// This lock denotes current 'execution epoch'.
     /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
@@ -118,7 +118,7 @@ impl AuthorityStore {
             mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             perpetual_tables,
             _store_pruner,
-            effects_notify_read: NotifyRead::new(),
+            executed_effects_notify_read: NotifyRead::new(),
             execution_lock: RwLock::new(epoch),
         };
         // Only initialize an empty database.
@@ -149,6 +149,8 @@ impl AuthorityStore {
                 .effects
                 .insert(&genesis.effects().digest(), genesis.effects())
                 .unwrap();
+            // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
+            // This is important for fullnodes to be able to generate indexing data right now.
         }
 
         Ok(store)
@@ -158,44 +160,63 @@ impl AuthorityStore {
         self.perpetual_tables.get_recovery_epoch_at_restart()
     }
 
-    pub(crate) fn get_signed_effects(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TrustedSignedTransactionEffects>> {
-        Ok(self
-            .perpetual_tables
-            .executed_effects
-            .get(transaction_digest)?)
-    }
-
-    /// Returns the TransactionEffects if we have an effects structure for this transaction digest
     pub fn get_effects(
         &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<TransactionEffects> {
-        self.get_effects_if_exists(transaction_digest)?
-            .ok_or(SuiError::TransactionNotFound {
-                digest: *transaction_digest,
-            })
-    }
-
-    pub fn get_effects_if_exists(
-        &self,
-        transaction_digest: &TransactionDigest,
+        effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult<Option<TransactionEffects>> {
-        Ok(self
-            .perpetual_tables
-            .executed_effects
-            .get(transaction_digest)?
-            .map(|data| data.into_inner().into_data()))
+        Ok(self.perpetual_tables.effects.get(effects_digest)?)
     }
 
     /// Returns true if we have an effects structure for this transaction digest
-    pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+    pub fn effects_exists(&self, effects_digest: &TransactionEffectsDigest) -> SuiResult<bool> {
         self.perpetual_tables
-            .executed_effects
-            .contains_key(transaction_digest)
+            .effects
+            .contains_key(effects_digest)
             .map_err(|e| e.into())
+    }
+
+    pub fn multi_get_effects<'a>(
+        &self,
+        effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(self.perpetual_tables.effects.multi_get(effects_digests)?)
+    }
+
+    pub fn get_executed_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionEffects>> {
+        let effects_digest = self.perpetual_tables.executed_effects.get(tx_digest)?;
+        match effects_digest {
+            Some(digest) => Ok(self.perpetual_tables.effects.get(&digest)?),
+            None => Ok(None),
+        }
+    }
+
+    /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
+    /// executed. For transactions that have not been executed, None is returned.
+    pub fn multi_get_executed_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        let executed_effects_digests = self.perpetual_tables.executed_effects.multi_get(digests)?;
+        let effects = self.multi_get_effects(executed_effects_digests.iter().flatten())?;
+        let mut tx_to_effects_map = effects
+            .into_iter()
+            .flatten()
+            .map(|effects| (effects.transaction_digest, effects))
+            .collect::<HashMap<_, _>>();
+        Ok(digests
+            .iter()
+            .map(|digest| tx_to_effects_map.remove(digest))
+            .collect())
+    }
+
+    pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
+        Ok(self
+            .perpetual_tables
+            .executed_effects
+            .contains_key(digest)?)
     }
 
     pub fn insert_executed_transactions(
@@ -589,8 +610,7 @@ impl AuthorityStore {
         &self,
         inner_temporary_store: InnerTemporaryStore,
         certificate: &VerifiedCertificate,
-        effects: &VerifiedSignedTransactionEffects,
-        effects_digest: &TransactionEffectsDigest,
+        effects: &TransactionEffects,
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
@@ -604,12 +624,13 @@ impl AuthorityStore {
         )?;
 
         // Add batched writes for objects and locks.
+        let effects_digest = effects.digest();
         write_batch = self
             .update_objects_and_locks(
                 write_batch,
                 inner_temporary_store,
                 *transaction_digest,
-                UpdateType::Transaction(*effects_digest),
+                UpdateType::Transaction(effects_digest),
             )
             .await?;
 
@@ -618,19 +639,17 @@ impl AuthorityStore {
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
         write_batch = write_batch
+            .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects.serializable_ref())],
-            )?
-            .insert_batch(
-                &self.perpetual_tables.effects,
-                [(effects_digest, effects.data())],
+                [(transaction_digest, effects_digest)],
             )?;
 
         // Commit.
         write_batch.write()?;
 
-        self.effects_notify_read.notify(transaction_digest, effects);
+        self.executed_effects_notify_read
+            .notify(transaction_digest, effects);
 
         Ok(())
     }
@@ -988,19 +1007,19 @@ impl AuthorityStore {
     /// 3. All new object states are deleted.
     /// 4. owner_index table change is reverted.
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
-        let effects = self.get_effects_if_exists(tx_digest)?;
-        let Some(effects) = effects else {
+        let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(())
         };
 
         let mut write_batch = self.perpetual_tables.certificates.batch();
-        write_batch =
-            write_batch.delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?;
-        write_batch = write_batch.delete_batch(
-            &self.perpetual_tables.executed_effects,
-            iter::once(tx_digest),
-        )?;
+        write_batch = write_batch
+            .delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?
+            .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
+            .delete_batch(
+                &self.perpetual_tables.executed_effects,
+                iter::once(tx_digest),
+            )?;
 
         let all_new_refs = effects
             .mutated
@@ -1128,6 +1147,10 @@ impl AuthorityStore {
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.perpetual_tables.get_sui_system_state_object()
     }
+
+    pub fn iter_live_object_set(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        self.perpetual_tables.iter_live_object_set()
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {
@@ -1207,28 +1230,6 @@ impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
 pub enum UpdateType {
     Transaction(TransactionEffectsDigest),
     Genesis,
-}
-
-pub trait EffectsStore {
-    fn get_effects<'a>(
-        &self,
-        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>>;
-}
-
-impl EffectsStore for Arc<AuthorityStore> {
-    fn get_effects<'a>(
-        &self,
-        transactions: impl Iterator<Item = &'a TransactionDigest> + Clone,
-    ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
-        Ok(self
-            .perpetual_tables
-            .executed_effects
-            .multi_get(transactions)?
-            .into_iter()
-            .map(|e_opt| e_opt.map(|e| e.into()))
-            .collect())
-    }
 }
 
 pub type SuiLockResult = SuiResult<ObjectLockStatus>;

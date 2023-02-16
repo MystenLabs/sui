@@ -7,17 +7,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
-use crate::crypto::{
-    AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, Signature,
-};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::signature::GenericSignature;
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, VerificationObligation},
     error::SuiError,
 };
+use fastcrypto::traits::Signer;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -202,7 +202,7 @@ impl SignedCheckpointSummary {
         sequence_number: CheckpointSequenceNumber,
         network_total_transactions: u64,
         authority: AuthorityName,
-        signer: &dyn signature::Signer<AuthoritySignature>,
+        signer: &dyn Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         epoch_rolling_gas_cost_summary: GasCostSummary,
@@ -225,7 +225,7 @@ impl SignedCheckpointSummary {
     pub fn new_from_summary(
         checkpoint: CheckpointSummary,
         authority: AuthorityName,
-        signer: &dyn signature::Signer<AuthoritySignature>,
+        signer: &dyn Signer<AuthoritySignature>,
     ) -> SignedCheckpointSummary {
         let epoch = checkpoint.epoch;
         let auth_signature = AuthoritySignInfo::new(epoch, &checkpoint, authority, signer);
@@ -405,7 +405,7 @@ pub struct CheckpointContents {
     /// * Genesis checkpoint has transactions but this field is empty.
     /// * Last checkpoint in the epoch will have (last)extra system transaction
     /// in the transactions list not covered in the signatures list
-    user_signatures: Vec<Signature>,
+    user_signatures: Vec<GenericSignature>,
 }
 
 impl CheckpointSignatureMessage {
@@ -427,7 +427,7 @@ impl CheckpointContents {
 
     pub fn new_with_causally_ordered_transactions_and_signatures<T>(
         contents: T,
-        signatures: Vec<Signature>,
+        signatures: Vec<GenericSignature>,
     ) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,

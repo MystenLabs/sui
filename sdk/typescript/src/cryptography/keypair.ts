@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import { Base64DataBuffer } from '../serialization/base64';
 import { Ed25519Keypair } from './ed25519-keypair';
-import { PublicKey, SignatureScheme } from './publickey';
+import { PublicKey } from './publickey';
 import { Secp256k1Keypair } from './secp256k1-keypair';
+import { SignatureScheme } from './signature';
 
 export type ExportedKeypair = {
   schema: SignatureScheme;
@@ -24,7 +24,7 @@ export interface Keypair {
   /**
    * Return the signature for the data
    */
-  signData(data: Base64DataBuffer, useRecoverable: boolean): Base64DataBuffer;
+  signData(data: Uint8Array, useRecoverable: boolean): Uint8Array;
 
   /**
    * Get the key scheme of the keypair: Secp256k1 or ED25519

@@ -44,8 +44,18 @@ export const SuiChangeEpoch = object({
   epoch: EpochId,
   storage_charge: number(),
   computation_charge: number(),
+  // TODO: Make non-optional after v0.26.0 lands everywhere
+  storage_rebate: optional(number()),
+  epoch_start_timestamp_ms: optional(number()),
 });
 export type SuiChangeEpoch = Infer<typeof SuiChangeEpoch>;
+
+export const SuiConsensusCommitPrologue = object({
+  checkpoint_start_timestamp_ms: number(),
+});
+export type SuiConsensusCommitPrologue = Infer<
+  typeof SuiConsensusCommitPrologue
+>;
 
 export const Pay = object({
   coins: array(SuiObjectRef),
@@ -92,6 +102,7 @@ export type TransactionKindName =
   | 'Call'
   | 'TransferSui'
   | 'ChangeEpoch'
+  | 'ConsensusCommitPrologue'
   | 'Pay'
   | 'PaySui'
   | 'PayAllSui'
@@ -103,6 +114,7 @@ export const SuiTransactionKind = union([
   object({ Call: MoveCall }),
   object({ TransferSui: SuiTransferSui }),
   object({ ChangeEpoch: SuiChangeEpoch }),
+  object({ ConsensusCommitPrologue: SuiConsensusCommitPrologue }),
   object({ Pay: Pay }),
   object({ PaySui: PaySui }),
   object({ PayAllSui: PayAllSui }),
@@ -170,6 +182,11 @@ export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
 export const TransactionEffects = object({
   /** The status of the execution */
   status: ExecutionStatus,
+  /**
+   * The epoch when this transaction was executed
+   * TODO: Changed it to non-optional once this is stable.
+   * */
+  executedEpoch: optional(EpochId),
   gasUsed: GasCostSummary,
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects: optional(array(SuiObjectRef)),
@@ -461,6 +478,14 @@ export function getChangeEpochTransaction(
   data: SuiTransactionKind,
 ): SuiChangeEpoch | undefined {
   return 'ChangeEpoch' in data ? data.ChangeEpoch : undefined;
+}
+
+export function getConsensusCommitPrologueTransaction(
+  data: SuiTransactionKind,
+): SuiConsensusCommitPrologue | undefined {
+  return 'ConsensusCommitPrologue' in data
+    ? data.ConsensusCommitPrologue
+    : undefined;
 }
 
 export function getTransactions(

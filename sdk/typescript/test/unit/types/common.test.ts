@@ -27,17 +27,8 @@ describe('Test common functions', () => {
         gasPrice: 1,
         gasBudget: 100,
       };
-      const publicKey = 'ISHc0JgGmuU1aX3QGc/YZ3ynq6CtrB0ZWcvObcVLElk=';
-      const signature =
-        '4wL9wK8iLCLLmFKMMB/8t9KEGZxFOntJH2zWI/RBsySfNpnSLPxhYVdfujjnxvlP3bZunFz/GZAJga38bdn9Aw==';
 
-      const transactionDigest = generateTransactionDigest(
-        transactionData,
-        'ED25519',
-        signature,
-        publicKey,
-        bcs,
-      );
+      const transactionDigest = generateTransactionDigest(transactionData, bcs);
       expect(transactionDigest).toEqual(
         'HZaXLHhraTyRJjQAEbaEn9ruT1LrjUMG9Sq9EeGY2JLZ',
       );

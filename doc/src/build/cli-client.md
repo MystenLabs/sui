@@ -378,7 +378,7 @@ public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
 
 Please note that there is no real need to use a Move call to transfer
 coins as this can be accomplished with a built-in Sui client
-[command](#transferring-coins) - we chose this example due to its
+[command](#transfer-objects) - we chose this example due to its
 simplicity.
 
 Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
@@ -398,7 +398,7 @@ Showing 5 results.
 
 Now that we know which objects are owned by that address,
 we can transfer one of them to another address, say the fresh one
-we created in the [Generating a new account](#generating-a-new-account) section
+we created in the [Create new account addresses](#create-new-account-addresses) section
 (`0xc72cf3adcc4d11c03079cef2c8992aea5268677a`). We can try any object,
 but for the sake of this exercise, let's choose the last one on the
 list.

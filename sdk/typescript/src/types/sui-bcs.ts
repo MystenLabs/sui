@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { BCS, decodeStr, encodeStr, getSuiMoveConfig } from '@mysten/bcs';
-import { Base64DataBuffer } from '../serialization/base64';
 import { SuiObjectRef } from './objects';
 import { RpcApiVersion } from './version';
 
@@ -275,9 +274,9 @@ export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
 
 export function deserializeTransactionBytesToTransactionData(
   bcs: BCS,
-  bytes: Base64DataBuffer,
+  bytes: Uint8Array,
 ): TransactionData {
-  return bcs.de('TransactionData', bytes.getData());
+  return bcs.de('TransactionData', bytes);
 }
 
 const BCS_SPEC = {
