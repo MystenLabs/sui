@@ -66,7 +66,9 @@ pub mod metrics;
 pub use handle::SuiNodeHandle;
 use narwhal_config::SharedWorkerCache;
 use narwhal_types::TransactionsClient;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_per_epoch_store::{
+    AuthorityPerEpochStore, EpochStartConfiguration,
+};
 use sui_core::checkpoints::checkpoint_executor::CheckpointExecutionMessage;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -160,13 +162,20 @@ impl SuiNode {
         let committee = committee_store
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
+        let epoch_start_configuration = if cur_epoch == genesis.epoch() {
+            Some(EpochStartConfiguration {
+                epoch_start_timestamp_ms: genesis.checkpoint().summary.timestamp_ms,
+            })
+        } else {
+            None
+        };
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee,
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
-            None,
+            epoch_start_configuration,
         );
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -585,9 +594,9 @@ impl SuiNode {
             authority: config.protocol_public_key(),
             next_reconfiguration_timestamp_ms: epoch_store
                 .epoch_start_configuration()
-                .expect("Failed to load epoch start configuration")
                 .epoch_start_timestamp_ms
-                .saturating_add(config.epoch_duration_ms),
+                .checked_add(config.epoch_duration_ms)
+                .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
             metrics: checkpoint_metrics.clone(),
         });
 
