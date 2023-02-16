@@ -4,7 +4,7 @@
 import {
     type SerializedSignature,
     toB64,
-    SignedTransaction,
+    type SignedTransaction,
 } from '@mysten/sui.js';
 import { lastValueFrom, map, take } from 'rxjs';
 
@@ -99,7 +99,6 @@ export class BackgroundClient {
         tsResultError?: string,
         txSigned?: SignedTransaction
     ) {
-        console.log('RESPOPNSE', txSigned);
         this.sendMessage(
             createMessage<TransactionRequestResponse>({
                 type: 'transaction-request-response',

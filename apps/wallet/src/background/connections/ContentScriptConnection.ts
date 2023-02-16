@@ -17,7 +17,7 @@ import {
     isExecuteTransactionRequest,
     isSignTransactionRequest,
     isStakeRequest,
-    SignTransactionResponse,
+    type SignTransactionResponse,
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
