@@ -81,23 +81,36 @@ procedure {:inline 1} $2_dynamic_field_has_child_object(parent: int, id: int) re
 
 {%- for instance in dynamic_field_instances %}
 
-{%- set S = "'" ~ instance.suffix ~ "'" -%}
-{%- set T = instance.name -%}
+{%- set K = instance.0.name -%}
+{%- set V = instance.1.name -%}
+{%- set S = "'" ~ instance.0.suffix ~ "_" ~ instance.1.suffix ~ "'" -%}
+{%- set SK = "'" ~ instance.0.suffix ~ "'" -%}
+{%- set SV = "'" ~ instance.1.suffix ~ "'" -%}
 
 // ----------------------------------------------------------------------------------
-// Native dynamic field implementation for object type `{{instance.suffix}}`
+// Native dynamic field implementation for object type `{{S}}`
 
-procedure {:inline 1} $2_dynamic_field_hash_type_and_key{{S}}(parent: int, k: {{T}}) returns (res: int);
+procedure {:inline 1} $2_dynamic_field_borrow_mut{{S}}(m: $Mutation ($2_object_UID), k: {{K}})
+returns (dst: $Mutation ({{V}}), m': $Mutation ($2_object_UID))
+{
+    var u: $2_object_UID;
+    var e: bool;
 
-procedure {:inline 1} $2_dynamic_field_add_child_object{{S}}(parent: int, child: {{T}});
-
-procedure {:inline 1} $2_dynamic_field_borrow_child_object{{S}}(object: $2_object_UID, id: int) returns (res: {{T}});
-
-procedure {:inline 1} $2_dynamic_field_borrow_child_object_mut{{S}}(object: $Mutation $2_object_UID, id: int) returns (res: $Mutation ({{T}}), m: $Mutation ($2_object_UID));
-
-procedure {:inline 1} $2_dynamic_field_remove_child_object{{S}}(parent: int, id: int) returns (res: {{T}});
-
-procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int, id: int) returns (res: bool);
+    u := $Dereference(m);
+    e :=
+        $2_dynamic_field_spec_uid_has_field{{SK}}(
+            $2_dynamic_field_NameShard{{SK}}_$memory, u, k
+        ) &&
+        $2_dynamic_field_spec_uid_has_field_with_type{{S}}(
+            $2_dynamic_field_PairShard{{S}}_$memory, u, k
+        );
+    if (!e) {
+        call $ExecFailureAbort();
+        return;
+    }
+    // TODO: we cannot talk about the borrowed value here
+    m' := m;
+}
 
 {%- endfor %}
 
@@ -105,7 +118,7 @@ procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int
 // Native prover
 
 
-{%- for instance in prover_instances %}
+{%- for instance in prover_vec_instances %}
 
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
 {%- set T = instance.name -%}
@@ -125,4 +138,7 @@ function $2_prover_vec_remove{{S}}(v: Vec ({{T}}), elem_idx: int): Vec ({{T}}) {
 
 function GetDynField<T, V>(o: T, addr: int): V;
 
-function UpdateDynField<T, V>(o: T, addr: int, v: V): T;
+function UpdateDynField<T, V>(o: T, addr: int, v: V): T {
+    // TODO(mengxu): this is only a partial semantics of the update
+    o
+}
