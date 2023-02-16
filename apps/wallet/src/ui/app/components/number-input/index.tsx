@@ -28,7 +28,6 @@ function NumberInput<FormValues>({
 }: NumberInputProps<FormValues>) {
     const disabled =
         forcedDisabled !== undefined ? forcedDisabled : isSubmitting;
-
     return (
         <NumericFormat
             valueIsNumericString
