@@ -522,7 +522,7 @@ impl Builder {
                 validator.protocol_key().as_ref().to_vec(),
                 onchain_validator.metadata.pubkey_bytes,
             );
-            assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
+            assert_eq!(validator.name(), onchain_validator.metadata.name);
             assert_eq!(
                 validator.network_address().to_vec(),
                 onchain_validator.metadata.net_address
