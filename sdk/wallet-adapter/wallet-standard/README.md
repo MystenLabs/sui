@@ -36,6 +36,7 @@ Features are standard methods consumers can use to interact with a wallet. To be
 
 - `standard:connect` - Used to initiate a connection to the wallet.
 - `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
+- `sui:signTransaction` - Used to prompt the user to sign a transaction, and return the serializated transaction and transaction signature back to the user. This method does not submit the transaction for execution.
 - `sui:signAndExecuteTransaction` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
 
 You can implement these features in your wallet class under the `features` property:
@@ -46,12 +47,13 @@ import {
   ConnectMethod,
   EventsFeature,
   EventsOnMethod,
-  SuiSignAndExecuteTransactionFeature,
+  SuiFeatures,
+  SuiTransactionMethod,
   SuiSignAndExecuteTransactionMethod
 } from "@mysten/wallet-standard";
 
 class YourWallet implements Wallet {
-  get features(): ConnectFeature & EventsFeature & SuiSignAndExecuteTransactionFeature {
+  get features(): ConnectFeature & EventsFeature & SuiFeatures {
     return {
       "standard:connect": {
         version: "1.0.0",
@@ -60,9 +62,13 @@ class YourWallet implements Wallet {
       "standard:events": {
         version: "1.0.0",
         on: this.#on,
-      }
-      "sui:signAndExecuteTransaction": {
+      },
+      "sui:signTransaction": {
         version: "1.0.0",
+        signTransaction: this.#signTransaction,
+      },
+      "sui:signAndExecuteTransaction": {
+        version: "1.1.0",
         signAndExecuteTransaction: this.#signAndExecuteTransaction,
       },
     };
@@ -74,6 +80,10 @@ class YourWallet implements Wallet {
 
   #connect: ConnectMethod = () => {
     // Your wallet's connect implementation
+  };
+
+  #signTransaction: SuiTransactionMethod = () => {
+    // Your wallet's signTransaction implementation
   };
 
   #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
@@ -116,7 +126,7 @@ class YourWallet implements Wallet {
 Once you have a compatible interface for your wallet, you can register it using the `registerWallet` function.
 
 ```typescript
-import { registerWallet } from '@mysten/wallet-standard';
+import { registerWallet } from "@mysten/wallet-standard";
 
 registerWallet(new YourWallet());
 ```

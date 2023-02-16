@@ -4,6 +4,7 @@
 import {
   ExecuteTransactionRequestType,
   SignableTransaction,
+  SignedTransaction,
   SuiAddress,
   SuiTransactionResponse,
 } from "@mysten/sui.js";
@@ -52,6 +53,7 @@ export interface WalletKitCore {
   subscribe(handler: SubscribeHandler): Unsubscribe;
   connect(walletName: string): Promise<void>;
   disconnect(): Promise<void>;
+  signTransaction(transaction: SignableTransaction): Promise<SignedTransaction>;
   signAndExecuteTransaction(
     transaction: SignableTransaction,
     options?: { requestType?: ExecuteTransactionRequestType }
@@ -224,6 +226,16 @@ export function createWalletKitCore({
       } catch {}
       await internalState.currentWallet.disconnect();
       disconnected();
+    },
+
+    signTransaction(transaction) {
+      if (!internalState.currentWallet) {
+        throw new Error(
+          "No wallet is currently connected, cannot call `signAndExecuteTransaction`."
+        );
+      }
+
+      return internalState.currentWallet.signTransaction(transaction);
     },
 
     signAndExecuteTransaction(transaction, options) {
