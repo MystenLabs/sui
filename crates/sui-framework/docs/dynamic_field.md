@@ -323,12 +323,13 @@ type.
 <b>aborts_if</b> [abstract] !<a href="prover.md#0x2_prover_uid_has_field">prover::uid_has_field</a>(<a href="object.md#0x2_object">object</a>, name);
 <b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>));
 <b>ensures</b> [abstract] <a href="object.md#0x2_object">object</a>.id == <b>old</b>(<a href="object.md#0x2_object">object</a>.id);
-<b>ensures</b> [abstract] <b>old</b>(<a href="prover.md#0x2_prover_uid_num_fields">prover::uid_num_fields</a>&lt;Name&gt;(<a href="object.md#0x2_object">object</a>)) == 0
+<b>ensures</b> [abstract] <b>old</b>(<a href="prover.md#0x2_prover_uid_num_fields">prover::uid_num_fields</a>&lt;Name&gt;(<a href="object.md#0x2_object">object</a>)) == 1
     ==&gt; !<b>exists</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>));
-<b>ensures</b> [abstract] <b>old</b>(<a href="prover.md#0x2_prover_uid_num_fields">prover::uid_num_fields</a>&lt;Name&gt;(<a href="object.md#0x2_object">object</a>)) &gt; 0
+<b>ensures</b> [abstract] <b>old</b>(<a href="prover.md#0x2_prover_uid_num_fields">prover::uid_num_fields</a>&lt;Name&gt;(<a href="object.md#0x2_object">object</a>)) &gt; 1
     ==&gt; <b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>)).names ==
             <b>old</b>(<a href="prover.md#0x2_prover_vec_remove">prover::vec_remove</a>(<b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>)).names,
                 index_of(<b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;Name&gt;&gt;(<a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(<a href="object.md#0x2_object">object</a>)).names, name)));
+<b>ensures</b> [abstract] !<a href="prover.md#0x2_prover_uid_has_field">prover::uid_has_field</a>(<a href="object.md#0x2_object">object</a>, name);
 </code></pre>
 
 

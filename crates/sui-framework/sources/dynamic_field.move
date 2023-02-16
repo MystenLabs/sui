@@ -131,12 +131,14 @@ spec remove {
     aborts_if [abstract] !prover::uid_has_field(object, name);
     modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
     ensures [abstract] object.id == old(object.id);
-    ensures [abstract] old(prover::uid_num_fields<Name>(object)) == 0
+    ensures [abstract] old(prover::uid_num_fields<Name>(object)) == 1
         ==> !exists<object::DynamicFields<Name>>(object::uid_to_address(object));
-    ensures [abstract] old(prover::uid_num_fields<Name>(object)) > 0
+    ensures [abstract] old(prover::uid_num_fields<Name>(object)) > 1
         ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names ==
                 old(prover::vec_remove(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
                     index_of(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names, name)));
+    // this is needed to ensure that there was only one field with a given name
+    ensures [abstract] !prover::uid_has_field(object, name);
 }
 
 
