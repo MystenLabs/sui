@@ -743,8 +743,8 @@ impl CheckpointBuilder {
                 {
                     continue;
                 }
-                let executed_epoch = self.state.database.transaction_executed_in_epoch(&digest)?;
-                if let Some(executed_epoch) = executed_epoch {
+                let executed_epoch = self.state.database.get_transaction_checkpoint(&digest)?;
+                if let Some((executed_epoch, _checkpoint)) = executed_epoch {
                     // Skip here if transaction was executed in previous epoch
                     //
                     // Do not skip if transaction was executed in this epoch -

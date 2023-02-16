@@ -1218,6 +1218,7 @@ impl WalletContext {
                 certificate: tx_cert.unwrap(), // check is done in execute_transaction, safe to unwrap
                 effects: effects.unwrap(), // check is done in execute_transaction, safe to unwrap
                 timestamp_ms,
+                checkpoint: None,
                 parsed_data,
             }),
             Err(err) => Err(anyhow!(
