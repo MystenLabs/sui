@@ -103,6 +103,7 @@ use crate::{
     event_handler::EventHandler, transaction_input_checker, transaction_manager::TransactionManager,
 };
 use sui_adapter::execution_engine;
+use sui_types::epoch_data::EpochData;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -928,7 +929,7 @@ impl AuthorityState {
                 &self.move_vm,
                 &self._native_functions,
                 gas_status,
-                epoch_store.epoch(),
+                &epoch_store.epoch_start_configuration().epoch_data(),
             );
 
         let signed_effects = VerifiedSignedTransactionEffects::new_unchecked(
@@ -979,7 +980,7 @@ impl AuthorityState {
                 &self.move_vm,
                 &self._native_functions,
                 gas_status,
-                epoch_store.epoch(),
+                &epoch_store.epoch_start_configuration().epoch_data(),
             );
         SuiTransactionEffects::try_from(effects, self.module_cache.as_ref())
     }
@@ -1044,7 +1045,7 @@ impl AuthorityState {
                 &self.move_vm,
                 &self._native_functions,
                 gas_status,
-                epoch,
+                &EpochData::new(epoch), /* TODO(epoch_data): this needs to be figured out */
             );
         DevInspectResults::new(effects, execution_result, self.module_cache.as_ref())
     }
@@ -2496,6 +2497,7 @@ impl AuthorityState {
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
         let epoch_start_configuration = EpochStartConfiguration {
+            epoch_id: new_epoch,
             epoch_start_timestamp_ms,
         };
         let new_epoch_store =

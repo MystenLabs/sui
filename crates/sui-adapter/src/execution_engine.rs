@@ -14,7 +14,7 @@ use sui_protocol_constants::{
     REWARD_SLASHING_RATE, STAKE_SUBSIDY_RATE, STORAGE_FUND_REINVEST_RATE,
 };
 use sui_types::coin::{transfer_coin, update_input_coins, Coin};
-use sui_types::committee::EpochId;
+use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
@@ -69,13 +69,13 @@ pub fn execute_transaction_to_effects<
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
-    epoch: EpochId,
+    epoch_data: &EpochData,
 ) -> (
     InnerTemporaryStore,
     TransactionEffects,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch);
+    let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -112,7 +112,7 @@ pub fn execute_transaction_to_effects<
         gas_cost_summary,
         status,
         gas_object_ref,
-        epoch,
+        epoch_data.epoch_id(),
     );
     (inner, effects, execution_result)
 }

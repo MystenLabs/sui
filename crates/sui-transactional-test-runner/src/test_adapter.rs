@@ -39,6 +39,7 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode, genesis};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_types::epoch_data::EpochData;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -53,6 +54,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
+
 pub(crate) type FakeID = u64;
 
 // initial value for fake object ID mapping
@@ -519,7 +521,7 @@ impl<'a> SuiTestAdapter<'a> {
             &self.native_functions,
             gas_status,
             // TODO: Support different epochs in transactional tests.
-            0,
+            &EpochData::genesis(),
         );
 
         let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();
