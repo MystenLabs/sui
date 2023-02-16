@@ -65,4 +65,31 @@ module sui::pay_tests {
         coin::destroy_for_testing(coin2);
         test_scenario::end(scenario_val);
     }
+
+    #[test]
+    public entry fun test_split_vec() {
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let coin = coin::mint_for_testing<SUI>(10, ctx);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let v = vector[1, 4];
+        pay::split_vec(&mut coin, v, test_scenario::ctx(scenario));
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let coin1 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let coin2 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+
+        assert!(coin::value(&coin1) == 4, 0);
+        assert!(coin::value(&coin2) == 1, 0);
+        assert!(coin::value(&coin) == 5, 0);
+
+        coin::destroy_for_testing(coin);
+        coin::destroy_for_testing(coin1);
+        coin::destroy_for_testing(coin2);
+        test_scenario::end(scenario_val);
+    }
 }
