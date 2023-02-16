@@ -756,26 +756,21 @@ impl PrimaryReceiverHandler {
         self.metrics
             .certificates_in_votes
             .inc_by(request.body().parents.len() as u64);
+        let wait_network = network.clone();
         let mut notifies = Vec::new();
         for certificate in request.body().parents.clone() {
             if !self.deduplicate_and_verify(&certificate)? {
                 continue;
             }
-            let (tx_notify, rx_notify) = oneshot::channel();
-            notifies.push(rx_notify);
-            self.tx_certificates
-                .send((certificate, Some(tx_notify)))
-                .await
-                .map_err(|_| DagError::ChannelFull)?;
+            notifies.push(
+                self.synchronizer
+                    .accept_certificate_with_wait(certificate, &wait_network),
+            );
         }
         let mut wait_notifies = futures::future::try_join_all(notifies);
         loop {
             tokio::select! {
                 results = &mut wait_notifies => {
-                    let results: Result<Vec<_>, _> = results
-                        .map_err(|e| DagError::ClosedChannel(format!("{e:?}")))?
-                        .into_iter()
-                        .collect();
                     results?;
                     break
                 },
@@ -935,6 +930,15 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         &self,
         request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let network = request
+            .extensions()
+            .get::<anemo::NetworkRef>()
+            .and_then(anemo::NetworkRef::upgrade)
+            .ok_or_else(|| {
+                anemo::rpc::Status::internal(
+                    "Unable to access network to send child RPCs".to_owned(),
+                )
+            })?;
         let PrimaryMessage::Certificate(certificate) = request.into_body();
         if !self
             .deduplicate_and_verify(&certificate)
@@ -942,14 +946,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         {
             return Ok(anemo::Response::new(()));
         }
-        let (tx_notify, rx_notify) = oneshot::channel();
-        self.tx_certificates
-            .send((certificate, Some(tx_notify)))
+        self.synchronizer
+            .accept_certificate_with_wait(certificate, &network)
             .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-        rx_notify
-            .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
         Ok(anemo::Response::new(()))
     }

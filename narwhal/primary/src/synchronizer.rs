@@ -202,7 +202,7 @@ impl Synchronizer {
             .collect()
     }
 
-    async fn try_accept_certificate(
+    pub async fn try_accept_certificate(
         &self,
         certificate: Certificate,
         network: &Network,
@@ -220,7 +220,7 @@ impl Synchronizer {
         result
     }
 
-    async fn accept_certificate_with_wait(
+    pub async fn accept_certificate_with_wait(
         &self,
         certificate: Certificate,
         network: &Network,
