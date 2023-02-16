@@ -164,6 +164,9 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
     }
 }
 
+/// Macro for implementing serde Serialize/Deserialize for a type that implements AsRef<[u8]>.
+/// To be used only for non-fixed-size types (see `serialize_deserialize_with_to_from_bytes` in
+/// FastCrypto for fixed-size types).
 #[macro_export]
 macro_rules! serde_to_from_bytes {
     ($type:ty) => {
