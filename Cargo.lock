@@ -138,7 +138,7 @@ dependencies = [
  "pkcs8",
  "quinn",
  "rand 0.8.5",
- "rcgen 0.9.3",
+ "rcgen",
  "ring",
  "rustls",
  "serde 1.0.152",
@@ -1874,19 +1874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "curve25519-dalek"
-version = "3.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
-dependencies = [
- "byteorder",
- "digest 0.9.0",
- "rand_core 0.5.1",
- "subtle",
- "zeroize",
-]
-
-[[package]]
 name = "curve25519-dalek-fiat"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2414,20 +2401,6 @@ dependencies = [
  "serde 1.0.152",
  "sha2 0.9.9",
  "thiserror",
- "zeroize",
-]
-
-[[package]]
-name = "ed25519-dalek"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
-dependencies = [
- "curve25519-dalek",
- "ed25519",
- "rand 0.7.3",
- "serde 1.0.152",
- "sha2 0.9.9",
  "zeroize",
 ]
 
@@ -7003,27 +6976,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rccheck"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "ed25519",
- "ed25519-dalek",
- "eyre",
- "ouroboros 0.15.5",
- "pkcs8",
- "proptest",
- "rand 0.7.3",
- "rcgen 0.10.0",
- "rustls",
- "serde 1.0.152",
- "tracing",
- "webpki",
- "workspace-hack",
- "x509-parser",
-]
-
-[[package]]
 name = "rcgen"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7032,19 +6984,6 @@ dependencies = [
  "pem",
  "ring",
  "time 0.3.17",
- "yasna",
-]
-
-[[package]]
-name = "rcgen"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
-dependencies = [
- "pem",
- "ring",
- "time 0.3.17",
- "x509-parser",
  "yasna",
 ]
 
@@ -9327,7 +9266,7 @@ dependencies = [
  "fastcrypto",
  "pkcs8",
  "rand 0.8.5",
- "rcgen 0.9.3",
+ "rcgen",
  "rustls",
  "tracing",
  "webpki",
@@ -11128,7 +11067,6 @@ dependencies = [
  "csv-core",
  "ctor",
  "ctr",
- "curve25519-dalek",
  "curve25519-dalek-fiat",
  "curve25519-dalek-ng",
  "darling",
@@ -11176,7 +11114,6 @@ dependencies = [
  "ecdsa 0.15.1",
  "ed25519",
  "ed25519-consensus",
- "ed25519-dalek",
  "ed25519-dalek-fiat",
  "either",
  "elliptic-curve",
@@ -11517,8 +11454,7 @@ dependencies = [
  "raw-cpuid",
  "rayon",
  "rayon-core",
- "rcgen 0.10.0",
- "rcgen 0.9.3",
+ "rcgen",
  "read-write-set",
  "read-write-set-dynamic",
  "readonly",
@@ -11799,7 +11735,6 @@ dependencies = [
  "lazy_static 1.4.0",
  "nom 7.1.2",
  "oid-registry",
- "ring",
  "rusticata-macros",
  "thiserror",
  "time 0.3.17",

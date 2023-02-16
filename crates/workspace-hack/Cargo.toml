@@ -153,7 +153,6 @@ crypto-mac = { version = "0.8", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
-curve25519-dalek = { version = "3", default-features = false, features = ["std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 dashmap = { version = "5", default-features = false }
@@ -189,7 +188,6 @@ ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features
 ecdsa-3575ec1268b04181 = { package = "ecdsa", version = "0.15", features = ["pkcs8", "signing", "std", "verifying"] }
 ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-consensus = { version = "2" }
-ed25519-dalek = { version = "1" }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
 either = { version = "1" }
 elliptic-curve = { version = "0.12", features = ["hash2curve", "hazmat", "pkcs8", "std"] }
@@ -464,8 +462,7 @@ rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
-rcgen-93f6ce9d446188ac = { package = "rcgen", version = "0.10", features = ["x509-parser"] }
-rcgen-274715c4dabd11b0 = { package = "rcgen", version = "0.9" }
+rcgen = { version = "0.9" }
 read-write-set = { git = "https://github.com/move-language/move", rev = "7343821f67c070d28dcdb5bf7d2e07ced046b52f", default-features = false }
 read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "7343821f67c070d28dcdb5bf7d2e07ced046b52f", default-features = false }
 ref-cast = { version = "1", default-features = false }
@@ -649,7 +646,7 @@ webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots = { version = "0.22", default-features = false }
 whoami = { version = "1" }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
-x509-parser = { version = "0.14", features = ["verify"] }
+x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
@@ -817,7 +814,6 @@ crypto-mac = { version = "0.8", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
-curve25519-dalek = { version = "3", default-features = false, features = ["std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 darling = { version = "0.14" }
@@ -864,7 +860,6 @@ ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features
 ecdsa-3575ec1268b04181 = { package = "ecdsa", version = "0.15", features = ["pkcs8", "signing", "std", "verifying"] }
 ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-consensus = { version = "2" }
-ed25519-dalek = { version = "1" }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
 either = { version = "1" }
 elliptic-curve = { version = "0.12", features = ["hash2curve", "hazmat", "pkcs8", "std"] }
@@ -1180,8 +1175,7 @@ rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
-rcgen-93f6ce9d446188ac = { package = "rcgen", version = "0.10", features = ["x509-parser"] }
-rcgen-274715c4dabd11b0 = { package = "rcgen", version = "0.9" }
+rcgen = { version = "0.9" }
 read-write-set = { git = "https://github.com/move-language/move", rev = "7343821f67c070d28dcdb5bf7d2e07ced046b52f", default-features = false }
 read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "7343821f67c070d28dcdb5bf7d2e07ced046b52f", default-features = false }
 readonly = { version = "0.2", default-features = false }
@@ -1405,7 +1399,7 @@ webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
 wyz = { version = "0.2", default-features = false, features = ["alloc"] }
-x509-parser = { version = "0.14", features = ["verify"] }
+x509-parser = { version = "0.14" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
 yasna = { version = "0.5", features = ["std", "time"] }
