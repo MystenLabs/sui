@@ -91,7 +91,6 @@ export function StepOne({
         const maxAmount =
             coinType === SUI_TYPE_ARG ? maxToken : balance?.toString();
         setFieldValue('amount', maxAmount);
-        // For SUI coin type, set isPayAllSui to true
         if (coinType === SUI_TYPE_ARG) {
             setFieldValue('isPayAllSui', true);
         }
