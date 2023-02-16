@@ -46,15 +46,23 @@ export default function AutoLockTimerSelector() {
                 }}
                 enableReinitialize={true}
             >
-                <Form>
-                    <InputWithAction
-                        name="timer"
-                        min={AUTO_LOCK_TIMER_MIN_MINUTES}
-                        max={AUTO_LOCK_TIMER_MAX_MINUTES}
-                        step="1"
-                        actionText="Save"
-                    />
-                </Form>
+                {({ errors, values, initialValues }) => (
+                    <Form>
+                        <InputWithAction
+                            name="timer"
+                            min={AUTO_LOCK_TIMER_MIN_MINUTES}
+                            max={AUTO_LOCK_TIMER_MAX_MINUTES}
+                            step="1"
+                            actionDisabled={
+                                !!(
+                                    errors?.timer ||
+                                    values.timer === initialValues.timer
+                                )
+                            }
+                            actionText="Save"
+                        />
+                    </Form>
+                )}
             </Formik>
         </Loading>
     );

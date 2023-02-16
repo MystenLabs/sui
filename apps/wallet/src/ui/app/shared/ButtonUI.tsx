@@ -128,6 +128,7 @@ export const Button = forwardRef(
             <ButtonOrLink
                 ref={ref}
                 className={styles({ variant, size })}
+                disabled={disabled}
                 {...otherProps}
             >
                 {before ? (

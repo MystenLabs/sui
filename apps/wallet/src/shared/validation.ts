@@ -74,7 +74,11 @@ export function createTokenValidation(
                 gasBudget,
                 gasDecimals
             )} ${GAS_SYMBOL})`,
-            (amount?: BigNumber) => {
+            (amount: BigNumber | undefined, ctx) => {
+                // For Pay All SUI and SUI coinType, we don't need to check gas balance.
+                if (ctx.parent.isPayAllSui && coinType === GAS_TYPE_ARG) {
+                    return true;
+                }
                 if (!amount) {
                     return false;
                 }

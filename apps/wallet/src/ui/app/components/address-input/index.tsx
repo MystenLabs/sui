@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { ErrorMessage, type FormikErrors } from 'formik';
+import { ErrorMessage, useField } from 'formik';
 import { memo, useCallback, useMemo } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 
 import { SUI_ADDRESS_VALIDATION } from './validation';
-import Icon, { SuiIcons } from '_components/icon';
+import { Text } from '_app/shared/text';
+import Alert from '_src/ui/app/components/alert';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { FieldProps } from 'formik';
@@ -27,7 +28,7 @@ function AddressInput<FormValues>({
     disabled: forcedDisabled,
     placeholder = '0x...',
     className,
-    form: { isSubmitting, dirty, setFieldValue, isValid, errors },
+    form: { isSubmitting, dirty, setFieldValue },
     field: { onBlur, name, value },
 }: AddressInputProps<FormValues>) {
     const disabled =
@@ -48,7 +49,7 @@ function AddressInput<FormValues>({
         setFieldValue('to', '');
     }, [setFieldValue]);
 
-    const { to: addressError } = errors as FormikErrors<{ to: string }>;
+    const [, { touched, error: addressError }] = useField(name);
 
     return (
         <>
@@ -86,10 +87,13 @@ function AddressInput<FormValues>({
 
             <ErrorMessage className={st.error} name="to" component="div" />
 
-            {!addressError && formattedValue !== '' && dirty && (
-                <div className={st.validAddress}>
-                    <Icon icon={SuiIcons.Checkmark} className={st.checkmark} />
-                    Valid address
+            {!addressError && formattedValue !== '' && touched && (
+                <div className="mt-2 w-full">
+                    <Alert mode="success">
+                        <Text variant="bodySmall" weight="medium">
+                            Valid address
+                        </Text>
+                    </Alert>
                 </div>
             )}
         </>
