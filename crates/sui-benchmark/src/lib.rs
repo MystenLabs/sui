@@ -4,29 +4,46 @@ use anyhow::bail;
 use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
+use futures::{stream::FuturesUnordered, StreamExt};
 use prometheus::Registry;
+use roaring::RoaringBitmap;
 use std::{collections::BTreeMap, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_config::NetworkConfig;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
-    authority_client::NetworkAuthorityClient,
+    authority_client::{make_authority_clients, AuthorityAPI, NetworkAuthorityClient},
     quorum_driver::{
         QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
+    validator_info::make_committee,
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
+use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::{base_types::ObjectID, sui_system_state::SuiSystemState};
+use sui_types::{
+    base_types::ObjectID,
+    committee::{Committee, EpochId, ProtocolVersion},
+    crypto::{
+        AggregateAuthenticator, AggregateAuthoritySignature, AuthorityQuorumSignInfo,
+        AuthoritySignature,
+    },
+    message_envelope::Envelope,
+    messages::{
+        CertifiedTransaction, CertifiedTransactionEffects, HandleCertificateResponse,
+        QuorumDriverResponse, Transaction,
+    },
+    object::Object,
+};
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
 };
-use sui_types::{base_types::SuiAddress, object::Object};
 use sui_types::{
-    committee::{Committee, EpochId},
-    messages::{CertifiedTransactionEffects, QuorumDriverResponse, Transaction},
+    base_types::{AuthorityName, SuiAddress},
+    messages::TransactionInfoResponse,
 };
+use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tracing::{error, info};
 
 pub mod benchmark_setup;
@@ -108,6 +125,13 @@ pub trait ValidatorProxy {
         tx: Transaction,
     ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
 
+    /// This function is similar to `execute_transaction` but does not check any validator's
+    /// signature. It should only be used for benchmarks.
+    async fn execute_bench_transaction(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
+
     fn clone_committee(&self) -> Committee;
 
     fn get_current_epoch(&self) -> EpochId;
@@ -121,6 +145,8 @@ pub trait ValidatorProxy {
 pub struct LocalValidatorAggregatorProxy {
     _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    committee: Committee,
+    clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -134,7 +160,22 @@ impl LocalValidatorAggregatorProxy {
             .build()
             .unwrap();
 
-        Self::new_impl(aggregator, registry, reconfig_fullnode_rpc_url).await
+        let validator_info = genesis.validator_set();
+        let committee = make_committee(0, ProtocolVersion::MIN, validator_info).unwrap();
+        let clients = make_authority_clients(
+            validator_info,
+            DEFAULT_CONNECT_TIMEOUT_SEC,
+            DEFAULT_REQUEST_TIMEOUT_SEC,
+        );
+
+        Self::new_impl(
+            aggregator,
+            registry,
+            reconfig_fullnode_rpc_url,
+            clients,
+            committee,
+        )
+        .await
     }
 
     pub async fn from_network_config(
@@ -146,13 +187,31 @@ impl LocalValidatorAggregatorProxy {
             .with_registry(registry)
             .build()
             .unwrap();
-        Self::new_impl(aggregator, registry, reconfig_fullnode_rpc_url).await
+
+        let validator_info = configs.validator_set();
+        let committee = make_committee(0, ProtocolVersion::MIN, validator_info).unwrap();
+        let clients = make_authority_clients(
+            validator_info,
+            DEFAULT_CONNECT_TIMEOUT_SEC,
+            DEFAULT_REQUEST_TIMEOUT_SEC,
+        );
+
+        Self::new_impl(
+            aggregator,
+            registry,
+            reconfig_fullnode_rpc_url,
+            clients,
+            committee,
+        )
+        .await
     }
 
     async fn new_impl(
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
+        clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+        committee: Committee,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
         let qd_handler = (if let Some(reconfig_fullnode_rpc_url) = reconfig_fullnode_rpc_url {
@@ -193,6 +252,8 @@ impl LocalValidatorAggregatorProxy {
         Self {
             _qd_handler: qd_handler,
             qd,
+            clients,
+            committee,
         }
     }
 }
@@ -244,6 +305,149 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
     }
 
+    async fn execute_bench_transaction(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+        // Store the epoch number; we read it from the votes and use it later to create the certificate.
+        let mut epoch = 0;
+
+        // Send the transaction to all validators.
+        let mut futures = FuturesUnordered::new();
+        for client in self.clients.values() {
+            let fut = client.handle_transaction(tx.clone());
+            futures.push(fut);
+        }
+
+        // Listen to the replies from the first 2f+1 votes.
+        let mut total_stake = 0;
+        let mut votes = Vec::new();
+        let mut message_data = None;
+        let mut certificate = None;
+        while let Some(response) = futures.next().await {
+            match response {
+                // If all goes well, the authority returns a vote.
+                Ok(TransactionInfoResponse::Signed(vote)) => {
+                    let (data, signature) = vote.into_data_and_sig();
+                    message_data = Some(data);
+                    epoch = signature.epoch;
+                    total_stake += self.committee.weight(&signature.authority);
+                    votes.push(signature);
+                }
+
+                // The transaction may be submitted again in case the certificate's submission failed.
+                Ok(TransactionInfoResponse::Executed(cert, _effect)) => {
+                    tracing::warn!("Transaction already submitted: {tx:?}");
+                    certificate = Some(cert);
+                }
+
+                // This typically happens when the validators are overloaded and the transaction is
+                // immediately rejected.
+                Err(e) => tracing::warn!("Failed to submit transaction: {e}"),
+            }
+
+            if total_stake >= self.committee.quorum_threshold() {
+                break;
+            }
+            if certificate.is_some() {
+                break;
+            }
+        }
+
+        // Assemble a certificate from the validator's replies.
+        let certified_transaction: CertifiedTransaction = match certificate {
+            Some(x) => x,
+            None => {
+                // Abort if we failed to submit the transaction to enough validators. This typically
+                // happens when the validators are overloaded and all requests timed out.
+                if message_data.is_none() {
+                    bail!("Failed to submit transaction to quorum of validators");
+                }
+
+                let signatures: BTreeMap<_, _> = votes
+                    .into_iter()
+                    .map(|a| (a.authority, a.signature))
+                    .collect();
+                let mut signers_map = RoaringBitmap::new();
+                for pk in signatures.keys() {
+                    signers_map.insert(
+                        self.committee
+                            .authority_index(pk)
+                            .ok_or(SuiError::UnknownSigner {
+                                signer: Some(pk.concise().to_string()),
+                                index: None,
+                                committee: self.committee.clone(),
+                            })
+                            .expect("Received signature from unknown validator")
+                            as u32,
+                    );
+                }
+                let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();
+
+                let quorum_signature = AuthorityQuorumSignInfo {
+                    epoch,
+                    // Note: This function simply aggregates signatures (it does not check that they
+                    // are individually valid).
+                    signature: AggregateAuthoritySignature::aggregate(&sigs)
+                        .map_err(|e| SuiError::InvalidSignature {
+                            error: e.to_string(),
+                        })
+                        .expect("Validator returned invalid signature"),
+                    signers_map,
+                };
+
+                Envelope::new_from_data_and_sig(message_data.unwrap(), quorum_signature)
+            }
+        };
+
+        // Send the certificate to all validators.
+        let mut futures = FuturesUnordered::new();
+        total_stake = 0;
+        let mut transaction_effects = None;
+        for client in self.clients.values() {
+            let fut = client.handle_certificate(certified_transaction.clone());
+            futures.push(fut);
+        }
+
+        // Wait for the replies from a quorum of validators.
+        while let Some(response) = futures.next().await {
+            match response {
+                // If all goes well, the validators reply with signed effects.
+                Ok(HandleCertificateResponse { signed_effects }) => {
+                    let author = signed_effects.auth_sig().authority;
+                    transaction_effects = Some(signed_effects.data().clone());
+                    total_stake += self.committee.weight(&author);
+                }
+
+                // This typically happens when the validators are overloaded and the certificate is
+                // immediately rejected.
+                Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
+            }
+
+            // TODO: We can't stop sending transactions after receiving a quorum of replies otherwise
+            // some validators may not be able to process the next transactions. However this is a
+            // problem because: (i) it biases latency which should be computed upon receiving a quorum
+            // of certificate, and (ii) it prevents us from running benchmarks under (crash-)faults.
+            // if total_stake >= self.committee.quorum_threshold() {
+            //     break;
+            // }
+        }
+
+        // Abort if we failed to submit the certificate to enough validators. This typically
+        // happens when the validators are overloaded and the requests timed out.
+        if transaction_effects.is_none() || total_stake < self.committee.quorum_threshold() {
+            bail!("Failed to submit certificate to quorum of validators");
+        }
+
+        // Package the certificate and effects to return.
+        let signed_material = certified_transaction.auth_sig().clone();
+        let certificate = SuiCertifiedTransaction::try_from(certified_transaction)?;
+        let effects = ExecutionEffects::CertifiedTransactionEffects(
+            Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
+        );
+        Ok((certificate, effects))
+    }
+
     fn clone_committee(&self) -> Committee {
         self.qd.clone_committee()
     }
@@ -258,6 +462,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         Box::new(Self {
             _qd_handler: qdh,
             qd,
+            clients: self.clients.clone(),
+            committee: self.committee.clone(),
         })
     }
 
@@ -348,6 +554,13 @@ impl ValidatorProxy for FullNodeProxy {
             }
         }
         bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
+    }
+
+    async fn execute_bench_transaction(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+        self.execute_transaction(tx).await
     }
 
     fn clone_committee(&self) -> Committee {
