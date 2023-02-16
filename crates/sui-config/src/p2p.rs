@@ -198,12 +198,6 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peers_to_query: Option<usize>,
 
-    /// Per-peer rate-limit (in requests/sec) for the GetExternalAddress RPC.
-    ///
-    /// If unspecified, this will default to no limit.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub get_external_address_rate_limit: Option<NonZeroU32>,
-
     /// Per-peer rate-limit (in requests/sec) for the GetKnownPeers RPC.
     ///
     /// If unspecified, this will default to no limit.

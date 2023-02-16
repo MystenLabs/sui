@@ -96,15 +96,6 @@ fn build_anemo_services(out_dir: &Path) {
         .package("sui")
         .method(
             anemo_build::manual::Method::builder()
-                .name("get_external_address")
-                .route_name("GetExternalAddress")
-                .request_type("()")
-                .response_type("std::net::SocketAddr")
-                .codec_path("anemo::rpc::codec::BincodeCodec")
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("get_known_peers")
                 .route_name("GetKnownPeers")
                 .request_type("()")
