@@ -55,8 +55,6 @@ struct Inner {
     highest_processed_round: AtomicU64,
     /// Highest round of verfied certificate that has been received.
     highest_received_round: AtomicU64,
-    /// Highest round of certificate created at this primary.
-    highest_created_round: AtomicU64,
     /// The persistent storage.
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -123,11 +121,6 @@ impl Synchronizer {
             gc_round: AtomicU64::new(gc_round),
             highest_processed_round: AtomicU64::new(highest_processed_round),
             highest_received_round: AtomicU64::new(0),
-            highest_created_round: AtomicU64::new(
-                highest_created_certificate
-                    .as_ref()
-                    .map_or(0, |c| c.round()),
-            ),
             certificate_store,
             payload_store,
             tx_certificate_fetcher,
