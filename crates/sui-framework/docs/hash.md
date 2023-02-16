@@ -39,6 +39,19 @@ Hash the input bytes using Blake2b-256 and returns 32 bytes.
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_hash_keccak256"></a>
 
 ## Function `keccak256`
@@ -57,6 +70,19 @@ Hash the input bytes using keccak256 and returns 32 bytes.
 
 
 <pre><code><b>native</b> <b>public</b> <b>fun</b> <a href="hash.md#0x2_hash_keccak256">keccak256</a>(data: &<a href="">vector</a>&lt;u8&gt;): <a href="">vector</a>&lt;u8&gt;;
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

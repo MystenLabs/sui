@@ -834,8 +834,24 @@ Called by <code><a href="validator_set.md#0x2_validator_set">validator_set</a></
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_total_stake_amount">total_stake_amount</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): u64 {
+    <b>spec</b> {
+        // TODO: this should be provable rather than assumed
+        <b>assume</b> self.stake_amount + self.delegation_staking_pool.sui_balance &lt;= MAX_U64;
+    };
     self.stake_amount + <a href="staking_pool.md#0x2_staking_pool_sui_balance">staking_pool::sui_balance</a>(&self.delegation_staking_pool)
 }
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>aborts_if</b> <b>false</b>;
 </code></pre>
 
 

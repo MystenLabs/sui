@@ -10,6 +10,7 @@
 module sui::dynamic_field {
 
 use sui::object::{Self, ID, UID};
+use sui::prover;
 
 friend sui::dynamic_object_field;
 
@@ -56,6 +57,21 @@ public fun add<Name: copy + drop + store, Value: store>(
     add_child_object(object_addr, field)
 }
 
+spec add {
+    pragma opaque;
+    aborts_if [abstract] prover::uid_has_field(object, name);
+    modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
+    ensures [abstract] object == old(object);
+    ensures [abstract] exists<object::DynamicFields<Name>>(object::uid_to_address(object));
+    ensures [abstract] (!old(exists<object::DynamicFields<Name>>(object::uid_to_address(object))))
+        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names == vec(name);
+    ensures [abstract] old(exists<object::DynamicFields<Name>>(object::uid_to_address(object)))
+        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names == old(concat(
+                global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
+                vec(name)
+            ));
+    }
+
 /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
 /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
@@ -70,6 +86,11 @@ public fun borrow<Name: copy + drop + store, Value: store>(
     &field.value
 }
 
+spec borrow {
+    pragma opaque;
+    aborts_if [abstract] !prover::uid_has_field(object, name);
+}
+
 /// Mutably borrows the `object`s dynamic field with the name specified by `name: Name`.
 /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.
 /// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
@@ -82,6 +103,11 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
     let hash = hash_type_and_key(object_addr, name);
     let field = borrow_child_object_mut<Field<Name, Value>>(object, hash);
     &mut field.value
+}
+
+spec borrow_mut {
+    pragma opaque;
+    aborts_if [abstract] !prover::uid_has_field(object, name);
 }
 
 /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
@@ -99,6 +125,22 @@ public fun remove<Name: copy + drop + store, Value: store>(
     object::delete(id);
     value
 }
+
+spec remove {
+    pragma opaque;
+    aborts_if [abstract] !prover::uid_has_field(object, name);
+    modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
+    ensures [abstract] object.id == old(object.id);
+    ensures [abstract] old(prover::uid_num_fields<Name>(object)) == 1
+        ==> !exists<object::DynamicFields<Name>>(object::uid_to_address(object));
+    ensures [abstract] old(prover::uid_num_fields<Name>(object)) > 1
+        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names ==
+                old(prover::vec_remove(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
+                    index_of(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names, name)));
+    // this is needed to ensure that there was only one field with a given name
+    ensures [abstract] !prover::uid_has_field(object, name);
+}
+
 
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` but without specifying the `Value` type
@@ -144,20 +186,70 @@ public(friend) fun field_info_mut<Name: copy + drop + store>(
 
 public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
+spec hash_type_and_key {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun add_child_object<Child: key>(parent: address, child: Child);
+
+spec add_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match
 /// we need two versions to return a reference or a mutable reference
 public(friend) native fun borrow_child_object<Child: key>(object: &UID, id: address): &Child;
+
+spec borrow_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun borrow_child_object_mut<Child: key>(object: &mut UID, id: address): &mut Child;
+
+spec borrow_child_object_mut {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
 
 /// throws `EFieldDoesNotExist` if a child does not exist with that ID
 /// or throws `EFieldTypeMismatch` if the type does not match
 public(friend) native fun remove_child_object<Child: key>(parent: address, id: address): Child;
 
+spec remove_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun has_child_object(parent: address, id: address): bool;
 
+spec has_child_object {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
+
 public(friend) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
+
+spec has_child_object_with_ty {
+    pragma opaque;
+    // TODO: stub to be replaced by actual abort conditions if any
+    aborts_if [abstract] true;
+    // TODO: specify actual function behavior
+}
 
 }

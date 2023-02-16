@@ -68,6 +68,10 @@ impl Prove {
                             sui_framework_address_concat_string("::dynamic_field"),
                             "dynamic_field_instances".to_string(),
                         ),
+                        (
+                            sui_framework_address_concat_string("::prover"),
+                            "prover_instances".to_string(),
+                        ),
                     ],
                 });
         }

@@ -8,6 +8,8 @@ Sui object identifiers
 
 -  [Struct `ID`](#0x2_object_ID)
 -  [Struct `UID`](#0x2_object_UID)
+-  [Resource `Ownership`](#0x2_object_Ownership)
+-  [Resource `DynamicFields`](#0x2_object_DynamicFields)
 -  [Constants](#@Constants_0)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
@@ -95,6 +97,69 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 <dl>
 <dt>
 <code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_object_Ownership"></a>
+
+## Resource `Ownership`
+
+Ownership information for a given object (stored at the object's address)
+
+
+<pre><code><b>struct</b> <a href="object.md#0x2_object_Ownership">Ownership</a> <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>owner: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>status: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_object_DynamicFields"></a>
+
+## Resource `DynamicFields`
+
+List of fields with a given name type of an object containing fields (stored at the
+containing object's address)
+
+
+<pre><code><b>struct</b> <a href="object.md#0x2_object_DynamicFields">DynamicFields</a>&lt;K: <b>copy</b>, drop, store&gt; <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>names: <a href="">vector</a>&lt;K&gt;</code>
 </dt>
 <dd>
 
@@ -614,6 +679,20 @@ Generate a new UID specifically used for creating a UID from a hash
 
 </details>
 
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>false</b>;
+<b>ensures</b> [abstract] !<b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">Ownership</a>&gt;(id);
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_object_record_new_uid"></a>
 
 ## Function `record_new_uid`
@@ -630,6 +709,19 @@ Generate a new UID specifically used for creating a UID from a hash
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="object.md#0x2_object_record_new_uid">record_new_uid</a>(id: <b>address</b>);
+</code></pre>
+
+
+
+</details>
+
+<details>
+<summary>Specification</summary>
+
+
+
+<pre><code><b>pragma</b> opaque;
+<b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
 
 

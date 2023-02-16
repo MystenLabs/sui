@@ -106,6 +106,8 @@ module sui::sui_system {
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
+    const MAX_SUPPLY: u64 = 1000000000000000000;
+
     // ==== functions that can only be called by genesis ====
 
     /// Create a new SuiSystemState object and make it shared.
