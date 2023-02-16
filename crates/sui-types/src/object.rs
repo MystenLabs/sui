@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::base_types::ObjectIDParseError;
 use crate::crypto::{deterministic_random_account_key, sha3_hash};
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
@@ -149,8 +150,12 @@ impl MoveObject {
         self.has_public_transfer
     }
     pub fn id(&self) -> ObjectID {
+        Self::id_opt(&self.contents).unwrap()
+    }
+
+    pub fn id_opt(contents: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
         // TODO: Ensure safe index to to parse ObjectID. https://github.com/MystenLabs/sui/issues/6278
-        ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
+        ObjectID::try_from(&contents[0..ID_END_INDEX])
     }
 
     pub fn version(&self) -> SequenceNumber {

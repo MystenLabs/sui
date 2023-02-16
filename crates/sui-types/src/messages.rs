@@ -1915,6 +1915,7 @@ pub enum ExecutionFailureStatus {
     /// In pay transaction, it means the input coins' types are not the same;
     /// In PaySui/PayAllSui, it means some input coins are not SUI coins.
     CoinTypeMismatch,
+    CoinTooLarge,
 
     //
     // MoveCall errors
@@ -2043,6 +2044,12 @@ impl Display for ExecutionFailureStatus {
                 write!(
                     f,
                     "Coin type check failed in pay/pay_sui/pay_all_sui transaction"
+                )
+            }
+            ExecutionFailureStatus::CoinTooLarge => {
+                write!(
+                    f,
+                    "Coin exceeds maximum value for a single coin"
                 )
             }
             ExecutionFailureStatus::EmptyInputCoins => {
