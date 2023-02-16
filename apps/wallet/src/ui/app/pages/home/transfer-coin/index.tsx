@@ -19,7 +19,7 @@ import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
-import ActiveCoinsCard from '_components/active-coins-card';
+import { ActiveCoinsCard } from '_components/active-coins-card';
 import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
@@ -139,6 +139,7 @@ function TransferCoinPage() {
                     recipientAddress: formData.to,
                     tokenTypeArg: coinType,
                     gasBudget: gasBudgetEstimationUnits,
+                    sendMax: formData.isPayAllSui,
                 })
             ).unwrap();
 

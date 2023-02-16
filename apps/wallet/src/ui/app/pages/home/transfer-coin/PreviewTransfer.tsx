@@ -44,11 +44,11 @@ export function PreviewTransfer({
             <TxnAddress address={accountAddress || ''} label="From" />
             <TxnAddress address={to} label="To" />
             <div className="pt-3.5 mb-5 flex w-full gap-2 justify-between">
-                <div className="flex gap-2 ">
+                <div className="flex gap-1">
                     <Text variant="body" color="gray-80" weight="medium">
                         Estimated Gas Fees
                     </Text>
-                    <div className="text-gray-60">
+                    <div className="text-gray-60 h-4 items-end flex">
                         <IconTooltip tip="Estimated Gas Fees" placement="top" />
                     </div>
                 </div>

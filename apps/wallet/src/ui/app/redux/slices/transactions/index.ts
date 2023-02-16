@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getTransactionDigest, Coin as CoinAPI } from '@mysten/sui.js';
+import {
+    getTransactionDigest,
+    Coin as CoinAPI,
+} from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -28,6 +31,7 @@ type SendTokensTXArgs = {
     amount: bigint;
     recipientAddress: SuiAddress;
     gasBudget: number;
+    sendMax: boolean;
 };
 type TransactionResult = SuiExecuteTransactionResponse;
 
@@ -38,7 +42,7 @@ export const sendTokens = createAsyncThunk<
 >(
     'sui-objects/send-tokens',
     async (
-        { tokenTypeArg, amount, recipientAddress, gasBudget },
+        { tokenTypeArg, amount, recipientAddress, gasBudget, sendMax },
         { getState, extra: { api, background }, dispatch }
     ) => {
         const transaction = Sentry.startTransaction({ name: 'send-tokens' });
