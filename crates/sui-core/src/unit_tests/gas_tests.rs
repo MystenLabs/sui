@@ -3,14 +3,14 @@
 
 use super::*;
 
-use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
+use super::authority_tests::{
+    create_genesis_module_packages, init_state_with_ids, send_and_confirm_transaction,
+};
 use super::move_integration_tests::build_and_try_publish_test_package;
 use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
-use sui_config::genesis;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
@@ -18,9 +18,9 @@ use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{base_types::dbg_addr, crypto::get_key_pair, gas::SuiGasStatus};
 use sui_types::{MOVE_STDLIB_OBJECT_ID, SUI_FRAMEWORK_OBJECT_ID};
 
-static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| ProtocolConfig::get_for_max_version().max_tx_gas());
+static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| SuiCostTable::new_for_testing().max_gas_budget);
 static MIN_GAS_BUDGET: Lazy<u64> =
-    Lazy::new(|| ProtocolConfig::get_for_max_version().base_tx_cost_fixed());
+    Lazy::new(|| SuiCostTable::new_for_testing().min_gas_budget_external());
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -307,7 +307,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         expected_gas_balance,
     );
     // genesis objects are read during transaction since they are direct dependencies.
-    let genesis_objects = genesis::Builder::new().build().objects().to_vec();
+    let genesis_objects = create_genesis_module_packages();
     // We need the original package bytes in order to reproduce the publish computation cost.
     let publish_bytes = match response
         .0
