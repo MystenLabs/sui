@@ -163,8 +163,11 @@ impl SuiNode {
             .get_committee(&cur_epoch)?
             .expect("Committee of the current epoch must exist");
         let epoch_start_configuration = if cur_epoch == genesis.epoch() {
+            let checkpoint = genesis.checkpoint();
+            let summary = &checkpoint.summary;
             Some(EpochStartConfiguration {
-                epoch_start_timestamp_ms: genesis.checkpoint().summary.timestamp_ms,
+                epoch_id: summary.epoch,
+                epoch_start_timestamp_ms: summary.timestamp_ms,
             })
         } else {
             None

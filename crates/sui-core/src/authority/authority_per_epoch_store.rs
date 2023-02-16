@@ -48,6 +48,7 @@ use crate::transaction_manager::TransactionManager;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;
+use sui_types::epoch_data::EpochData;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
@@ -238,6 +239,7 @@ pub struct AuthorityEpochTables {
 /// Parameters of the epoch fixed at epoch start.
 #[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct EpochStartConfiguration {
+    pub epoch_id: EpochId,
     pub epoch_start_timestamp_ms: CheckpointTimestamp,
     // Current epoch committee can eventually move here too, though right now it is served from a different table
 }
@@ -320,6 +322,7 @@ impl AuthorityPerEpochStore {
         // is initialized during epoch change
         let epoch_start_configuration =
             if let Some(epoch_start_configuration) = epoch_start_configuration {
+                assert_eq!(epoch_start_configuration.epoch_id, epoch_id);
                 tables
                     .epoch_start_configuration
                     .insert(&(), &epoch_start_configuration)
@@ -1557,12 +1560,6 @@ impl AuthorityPerEpochStore {
                 .builder_digest_to_checkpoint
                 .insert(&digest, &sequence)?;
         }
-        let epoch_start_configuration = EpochStartConfiguration {
-            epoch_start_timestamp_ms: summary.timestamp_ms,
-        };
-        self.tables
-            .epoch_start_configuration
-            .insert(&(), &epoch_start_configuration)?;
         self.tables
             .builder_checkpoint_summary
             .insert(summary.sequence_number(), summary)?;
@@ -1716,4 +1713,10 @@ impl AuthorityPerEpochStore {
 
 fn transactions_table_default_config() -> DBOptions {
     default_db_options(None, None).1
+}
+
+impl EpochStartConfiguration {
+    pub fn epoch_data(&self) -> EpochData {
+        EpochData::new(self.epoch_id)
+    }
 }
