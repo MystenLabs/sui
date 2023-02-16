@@ -10,7 +10,7 @@ use parking_lot::RwLock;
 use sui_types::{base_types::ObjectID, committee::EpochId, storage::ObjectKey};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::VerifiedCertificate};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -127,7 +127,7 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            if self.authority_store.effects_exists(&digest)? {
+            if self.authority_store.is_tx_already_executed(&digest)? {
                 // also ensure the transaction will not be retried after restart.
                 let _ = epoch_store.remove_pending_certificate(&digest);
                 self.metrics
@@ -267,17 +267,12 @@ impl TransactionManager {
             let cert = match epoch_store.get_pending_certificate(digest) {
                 Ok(Some(cert)) => cert,
                 Ok(None) => {
-                    error!(tx_digest = ?digest,
-                        "Ready certificate not found in the pending table",
+                    panic!(
+                        "Ready certificate {digest:?} not found in the pending_certificates table!",
                     );
-                    continue;
                 }
                 Err(e) => {
-                    error!(tx_digest = ?digest,
-                        "Failed to read pending table: {e}",
-                    );
-
-                    continue;
+                    panic!("Failed to read certificate {digest:?} pending_certificates table: {e}",);
                 }
             };
             self.certificate_ready(cert);

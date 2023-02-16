@@ -10,10 +10,12 @@ import { Spinner } from "../components/Spinner";
 import { config } from "../config";
 import { useLegacyScorecard, useScorecard } from "../network/queries/scorecard";
 import { SCORECARD } from "../network/types";
+import { useGameOverRedirect } from "../components/GameEnding";
 
 const GAS_BUDGET = 20000;
 
 export function Migrate() {
+  useGameOverRedirect();
   const { currentAccount, signAndExecuteTransaction } = useWalletKit();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

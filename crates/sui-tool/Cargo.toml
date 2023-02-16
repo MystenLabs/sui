@@ -18,7 +18,7 @@ itertools = { version = "0.10.3", features = ["use_alloc"] }
 multiaddr = "0.17.0"
 textwrap = "0.16"
 futures = "0.3.23"
-rocksdb = "0.19.0"
+rocksdb = "0.20.1"
 tempfile = "3.3.0"
 serde_with = { version = "2.1.0", features = ["hex"] }
 strum_macros = "^0.24"

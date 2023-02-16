@@ -116,6 +116,15 @@ pub enum SuiError {
         index: Option<u32>,
         committee: Committee,
     },
+    #[error(
+        "Validator {:?} responded multiple signatures for the same message, conflicting: {:?}",
+        signer,
+        conflicting_sig
+    )]
+    StakeAggregatorRepeatedSigner {
+        signer: AuthorityName,
+        conflicting_sig: bool,
+    },
 
     // Certificate verification and execution
     #[error(
@@ -145,7 +154,7 @@ pub enum SuiError {
         "Failed to get a quorum of signed effects when processing transaction: {effects_map:?}"
     )]
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
-        effects_map: BTreeMap<(EpochId, TransactionEffectsDigest), (Vec<AuthorityName>, StakeUnit)>,
+        effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },

@@ -38,9 +38,11 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_keys::keystore::AccountKeystore;
+use sui_sdk::SuiClient;
 use sui_sdk::TransactionExecutionResult;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::intent::Intent;
+use sui_types::signature::GenericSignature;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -48,14 +50,9 @@ use sui_types::{
     object::Owner,
     parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{
-    crypto::{Signature, SignatureScheme},
-    intent::IntentMessage,
-};
+use sui_types::{crypto::SignatureScheme, intent::IntentMessage};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
-
-use sui_sdk::SuiClient;
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -769,9 +766,10 @@ impl SuiClientCommands {
                 SuiClientCommandResult::PayAllSui(cert, effects)
             }
 
-            SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.keystore.addresses())
-            }
+            SuiClientCommands::Addresses => SuiClientCommandResult::Addresses(
+                context.config.keystore.addresses(),
+                context.active_address().ok(),
+            ),
 
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -957,15 +955,14 @@ impl SuiClientCommands {
                         .to_vec()
                         .map_err(|e| anyhow!(e))?,
                 )?;
-                let signature = Signature::from_bytes(
-                    &Base64::try_from(signature)
-                        .map_err(|e| anyhow!(e))?
-                        .to_vec()
-                        .map_err(|e| anyhow!(e))?,
-                )?;
-                let verified =
-                    Transaction::from_data(data, Intent::default(), signature).verify()?;
+                let bytes = &Base64::try_from(signature)
+                    .map_err(|e| anyhow!(e))?
+                    .to_vec()
+                    .map_err(|e| anyhow!(e))?;
 
+                let sig = GenericSignature::from_bytes(bytes)?;
+                let verified =
+                    Transaction::from_generic_sig_data(data, Intent::default(), sig).verify()?;
                 let response = context.execute_transaction(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
@@ -1271,10 +1268,14 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::PayAllSui(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            SuiClientCommandResult::Addresses(addresses) => {
+            SuiClientCommandResult::Addresses(addresses, active_address) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
-                    writeln!(writer, "{}", address)?;
+                    if *active_address == Some(*address) {
+                        writeln!(writer, "{} <=", address)?;
+                    } else {
+                        writeln!(writer, "{}", address)?;
+                    }
                 }
             }
             SuiClientCommandResult::Objects(object_refs) => {
@@ -1569,7 +1570,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiCertifiedTransaction, SuiTransactionEffects),
     PaySui(SuiCertifiedTransaction, SuiTransactionEffects),
     PayAllSui(SuiCertifiedTransaction, SuiTransactionEffects),
-    Addresses(Vec<SuiAddress>),
+    Addresses(Vec<SuiAddress>, Option<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,

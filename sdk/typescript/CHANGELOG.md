@@ -1,5 +1,20 @@
 # @mysten/sui.js
 
+## 0.27.0
+
+### Minor Changes
+
+- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch information in CheckpointSummary.
+- 59641dc29: Support for deserializing new ConsensusCommitPrologue system transaction
+- 629804d26: Remove usage of `Base64DataBuffer`, and use `Uint8Array` instead.
+- f51c85e85: remove get_objects_owned_by_object and replace it with get_dynamic_fields
+
+### Patch Changes
+
+- fcba70206: Add basic formatting utilities
+- ebe6c3945: Support deserializing `paySui` and `payAllSui` transactions
+- e630f6832: Added string option to getCheckpointContents call in SDK to support 0.22.0
+
 ## 0.26.1
 
 ### Patch Changes

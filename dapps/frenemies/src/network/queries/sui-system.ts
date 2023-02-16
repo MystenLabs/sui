@@ -24,6 +24,7 @@ export function useValidators() {
     },
     {
       refetchInterval: 60 * 1000,
+      staleTime: 5000,
     }
   );
 }

@@ -164,15 +164,28 @@ module sui::object {
     // helper for delete
     native fun delete_impl(id: address);
 
+    spec delete_impl {
+        pragma opaque;
+        aborts_if [abstract] false;
+        ensures [abstract] !exists<Ownership>(id);
+    }
+
     // marks newly created UIDs from hash
     native fun record_new_uid(id: address);
+
+    spec record_new_uid {
+        pragma opaque;
+        // TODO: stub to be replaced by actual abort conditions if any
+        aborts_if [abstract] true;
+        // TODO: specify actual function behavior
+     }
 
     // Cost calibration functions
     #[test_only]
     public fun calibrate_address_from_bytes(bytes: vector<u8>) {
         sui::address::from_bytes(bytes);
     }
-    
+
     #[test_only]
     public fun calibrate_address_from_bytes_nop(bytes: vector<u8>) {
         let _ = bytes;
@@ -202,4 +215,23 @@ module sui::object {
     public fun last_created(ctx: &TxContext): ID {
         ID { bytes: tx_context::last_created_object_id(ctx) }
     }
+
+
+    // === Prover support (to avoid circular dependency ===
+
+    #[verify_only]
+    /// Ownership information for a given object (stored at the object's address)
+    struct Ownership has key {
+        owner: address, // only matters if status == OWNED
+        status: u64,
+    }
+
+    #[verify_only]
+    /// List of fields with a given name type of an object containing fields (stored at the
+    /// containing object's address)
+    struct DynamicFields<K: copy + drop + store> has key {
+        names: vector<K>,
+    }
+
+
 }

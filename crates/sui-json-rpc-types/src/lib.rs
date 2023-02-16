@@ -35,7 +35,7 @@ use sui_types::base_types::{
 };
 use sui_types::coin::CoinMetadata;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{Signature, SuiAuthorityStrongQuorumSignInfo};
+use sui_types::crypto::SuiAuthorityStrongQuorumSignInfo;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::event::{BalanceChangeType, Event, EventID};
@@ -55,6 +55,7 @@ use sui_types::move_package::{disassemble_modules, MovePackage};
 use sui_types::object::{
     Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
 };
+use sui_types::signature::GenericSignature;
 use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
@@ -1778,6 +1779,9 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     checkpoint_start_timestamp_ms: p.checkpoint_start_timestamp_ms,
                 })
             }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                anyhow::bail!("programmable transactions are not yet supported")
+            }
         })
     }
 }
@@ -1809,7 +1813,7 @@ pub struct SuiCertifiedTransaction {
     pub transaction_digest: TransactionDigest,
     pub data: SuiTransactionData,
     /// tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.
-    pub tx_signature: Signature,
+    pub tx_signature: GenericSignature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
     pub auth_sign_info: SuiAuthorityStrongQuorumSignInfo,
 }
@@ -1927,6 +1931,8 @@ impl SuiFinalizedEffects {
 pub struct SuiTransactionEffects {
     // The status of the execution
     pub status: SuiExecutionStatus,
+    /// The epoch when this transaction was executed.
+    pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1973,6 +1979,7 @@ impl SuiTransactionEffects {
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             status: effect.status.into(),
+            executed_epoch: effect.executed_epoch,
             gas_used: effect.gas_used.into(),
             shared_objects: to_sui_object_ref(effect.shared_objects),
             transaction_digest: effect.transaction_digest,

@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.26.0"
+    "version": "0.27.0"
   },
   "methods": [
     {
@@ -334,6 +334,7 @@
                 "status": {
                   "status": "success"
                 },
+                "executedEpoch": 0,
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
@@ -1543,6 +1544,7 @@
                 "status": {
                   "status": "success"
                 },
+                "executedEpoch": 0,
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
@@ -2862,7 +2864,7 @@
             "description": "tx_signature is signed by the transaction sender, committing to the intent message containing the transaction data and intent.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/Signature"
+                "$ref": "#/components/schemas/GenericSignature"
               }
             ]
           }
@@ -2886,7 +2888,7 @@
             "description": "This field 'pins' user signatures for the checkpoint:\n\n* For normal checkpoint this field will contain same number of elements as transactions. * Genesis checkpoint has transactions but this field is empty. * Last checkpoint in the epoch will have (last)extra system transaction in the transactions list not covered in the signatures list",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Signature"
+              "$ref": "#/components/schemas/GenericSignature"
             }
           }
         }
@@ -3055,6 +3057,47 @@
             "$ref": "#/components/schemas/ProtocolVersion"
           }
         }
+      },
+      "CompressedSignature": {
+        "description": "Unlike `enum Signature`, `enum CompressedSignature` does not contain public key.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Ed25519"
+            ],
+            "properties": {
+              "Ed25519": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Secp256k1"
+            ],
+            "properties": {
+              "Secp256k1": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Secp256r1"
+            ],
+            "properties": {
+              "Secp256r1": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "Data": {
         "oneOf": [
@@ -4241,6 +4284,35 @@
           }
         }
       },
+      "GenericSignature": {
+        "description": "Due to the incompatibility of [enum Signature] (which dispatches a trait that assumes signature and pubkey bytes for verification), here we add a wrapper enum where member can just implement a lightweight [trait AuthenticatorTrait]. This way MultiSig (and future Authenticators) can implement its own `verify`.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "MultiSig"
+            ],
+            "properties": {
+              "MultiSig": {
+                "$ref": "#/components/schemas/MultiSig"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Signature"
+            ],
+            "properties": {
+              "Signature": {
+                "$ref": "#/components/schemas/Signature"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "Hex": {
         "description": "Hex string encoding.",
         "type": "string"
@@ -4521,6 +4593,75 @@
             ]
           }
         ]
+      },
+      "MultiSig": {
+        "description": "The struct that contains signatures and public keys necessary for authenticating a MultiSig.",
+        "type": "object",
+        "required": [
+          "bitmap",
+          "multisig_pk",
+          "sigs"
+        ],
+        "properties": {
+          "bitmap": {
+            "description": "A bitmap that indicates the position of which public key the signature should be authenticated with.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
+          },
+          "multisig_pk": {
+            "description": "The public key encoded with each public key with its signature scheme used along with the corresponding weight.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MultiSigPublicKey"
+              }
+            ]
+          },
+          "sigs": {
+            "description": "The plain signature encoded with signature scheme.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompressedSignature"
+            }
+          }
+        }
+      },
+      "MultiSigPublicKey": {
+        "description": "The struct that contains the public key used for authenticating a MultiSig.",
+        "type": "object",
+        "required": [
+          "pk_map",
+          "threshold"
+        ],
+        "properties": {
+          "pk_map": {
+            "description": "A list of public key and its corresponding weight.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/PublicKey"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "threshold": {
+            "description": "If the total weight of the public keys corresponding to verified signatures is larger than threshold, the MultiSig is verified.",
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
       },
       "Object": {
         "type": "object",
@@ -4974,6 +5115,46 @@
         "type": "integer",
         "format": "uint64",
         "minimum": 0.0
+      },
+      "PublicKey": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Ed25519"
+            ],
+            "properties": {
+              "Ed25519": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Secp256k1"
+            ],
+            "properties": {
+              "Secp256k1": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Secp256r1"
+            ],
+            "properties": {
+              "Secp256r1": {
+                "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "RPCTransactionRequestParams": {
         "oneOf": [
@@ -6139,6 +6320,7 @@
         "description": "The response from processing a transaction or a certified transaction",
         "type": "object",
         "required": [
+          "executedEpoch",
           "gasObject",
           "gasUsed",
           "status",
@@ -6170,6 +6352,12 @@
             "items": {
               "$ref": "#/components/schemas/Event"
             }
+          },
+          "executedEpoch": {
+            "description": "The epoch when this transaction was executed.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "gasObject": {
             "$ref": "#/components/schemas/OwnedObjectRef"

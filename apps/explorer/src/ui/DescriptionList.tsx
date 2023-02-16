@@ -24,5 +24,5 @@ export type DescriptionListProps = {
 };
 
 export function DescriptionList({ children }: DescriptionListProps) {
-    return <dl className="flex flex-col gap-4">{children}</dl>;
+    return <dl className="mt-4 flex flex-col gap-4">{children}</dl>;
 }

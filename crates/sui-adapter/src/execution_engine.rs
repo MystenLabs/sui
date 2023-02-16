@@ -112,6 +112,7 @@ pub fn execute_transaction_to_effects<
         gas_cost_summary,
         status,
         gas_object_ref,
+        epoch,
     );
     (inner, effects, execution_result)
 }
@@ -332,6 +333,9 @@ fn execution_loop<
             }
             SingleTransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(prologue, temporary_store, tx_ctx, move_vm, gas_status)?
+            }
+            SingleTransactionKind::ProgrammableTransaction(_) => {
+                unreachable!("programmable transactions are not yet supported")
             }
         };
     }

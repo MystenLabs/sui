@@ -1947,7 +1947,7 @@ pub async fn build_and_try_publish_test_package(
     )
 }
 
-async fn build_and_publish_test_package(
+pub async fn build_and_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,

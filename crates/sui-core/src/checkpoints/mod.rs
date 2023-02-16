@@ -32,7 +32,7 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::{TransactionEffects, VerifiedSignedTransactionEffects};
+use sui_types::messages::TransactionEffects;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
@@ -469,7 +469,7 @@ impl CheckpointBuilder {
             .inc_by(pending.roots.len() as u64);
         let roots = self
             .effects_store
-            .notify_read_effects(pending.roots)
+            .notify_read_executed_effects(pending.roots)
             .in_monitored_scope("CheckpointNotifyRead")
             .await?;
         let _scope = monitored_scope("CheckpointBuilder");
@@ -711,8 +711,8 @@ impl CheckpointBuilder {
             .instrument(span)
             .await?;
         debug!(
-            "Effects of the change epoch transaction: {:?}",
-            signed_effect.data()
+            "Effects summary of the change epoch transaction: {:?}",
+            signed_effect.summary_for_debug()
         );
         self.epoch_store.record_is_safe_mode_metric(
             self.state.get_sui_system_state_object().unwrap().safe_mode,
@@ -728,7 +728,7 @@ impl CheckpointBuilder {
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already
     fn complete_checkpoint_effects(
         &self,
-        mut roots: Vec<VerifiedSignedTransactionEffects>,
+        mut roots: Vec<TransactionEffects>,
     ) -> SuiResult<Vec<TransactionEffects>> {
         let _scope = monitored_scope("CheckpointBuilder::complete_checkpoint_effects");
         let mut results = vec![];
@@ -759,13 +759,13 @@ impl CheckpointBuilder {
                         pending.insert(*dependency);
                     }
                 }
-                results.push(effect.into_message());
+                results.push(effect);
             }
             if pending.is_empty() {
                 break;
             }
             let pending = pending.into_iter().collect::<Vec<_>>();
-            let effects = self.effects_store.get_effects(&pending)?;
+            let effects = self.effects_store.multi_get_executed_effects(&pending)?;
             let effects = effects
                 .into_iter()
                 .zip(pending.into_iter())
@@ -924,12 +924,6 @@ impl CheckpointSignatureAggregator {
             return Err(());
         }
         match self.signatures.insert(signature) {
-            InsertResult::RepeatingEntry { previous, new } => {
-                if previous != new {
-                    warn!("Validator {:?} submitted two different signatures for checkpoint {}: {:?}, {:?}", author.concise(), self.summary.sequence_number, previous, new);
-                }
-                Err(())
-            }
             InsertResult::Failed { error } => {
                 warn!(
                     "Failed to aggregate new signature from validator {:?} for checkpoint {}: {:?}",
@@ -1197,7 +1191,6 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use std::collections::HashMap;
     use sui_types::crypto::Signature;
-    use sui_types::messages::{SignedTransactionEffects, TrustedSignedTransactionEffects};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
@@ -1215,42 +1208,23 @@ mod tests {
         let state =
             AuthorityState::new_for_testing(committee.clone(), &keypair, None, &genesis).await;
 
-        let mut store = HashMap::<TransactionDigest, TrustedSignedTransactionEffects>::new();
+        let mut store = HashMap::<TransactionDigest, TransactionEffects>::new();
         store.insert(
             d(1),
-            e(
-                &state,
-                d(1),
-                vec![d(2), d(3)],
-                GasCostSummary::new(11, 12, 13),
-            ),
+            e(d(1), vec![d(2), d(3)], GasCostSummary::new(11, 12, 13)),
         );
         store.insert(
             d(2),
-            e(
-                &state,
-                d(2),
-                vec![d(3), d(4)],
-                GasCostSummary::new(21, 22, 23),
-            ),
+            e(d(2), vec![d(3), d(4)], GasCostSummary::new(21, 22, 23)),
         );
-        store.insert(
-            d(3),
-            e(&state, d(3), vec![], GasCostSummary::new(31, 32, 33)),
-        );
-        store.insert(
-            d(4),
-            e(&state, d(4), vec![], GasCostSummary::new(41, 42, 43)),
-        );
+        store.insert(d(3), e(d(3), vec![], GasCostSummary::new(31, 32, 33)));
+        store.insert(d(4), e(d(4), vec![], GasCostSummary::new(41, 42, 43)));
         for i in [10, 11, 12, 13] {
-            store.insert(
-                d(i),
-                e(&state, d(i), vec![], GasCostSummary::new(41, 42, 43)),
-            );
+            store.insert(d(i), e(d(i), vec![], GasCostSummary::new(41, 42, 43)));
         }
         let all_digests: Vec<_> = store.iter().map(|(k, _v)| *k).collect();
         for digest in all_digests {
-            let signature = Signature::Ed25519SuiSignature(Default::default());
+            let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
                 .epoch_store_for_testing()
                 .test_insert_user_signature(digest, &signature);
@@ -1353,25 +1327,22 @@ mod tests {
     }
 
     #[async_trait]
-    impl EffectsNotifyRead for HashMap<TransactionDigest, TrustedSignedTransactionEffects> {
-        async fn notify_read_effects(
+    impl EffectsNotifyRead for HashMap<TransactionDigest, TransactionEffects> {
+        async fn notify_read_executed_effects(
             &self,
             digests: Vec<TransactionDigest>,
-        ) -> SuiResult<Vec<VerifiedSignedTransactionEffects>> {
+        ) -> SuiResult<Vec<TransactionEffects>> {
             Ok(digests
                 .into_iter()
-                .map(|d| self.get(&d).expect("effects not found").clone().into())
+                .map(|d| self.get(&d).expect("effects not found").clone())
                 .collect())
         }
 
-        fn get_effects(
+        fn multi_get_executed_effects(
             &self,
             digests: &[TransactionDigest],
-        ) -> SuiResult<Vec<Option<VerifiedSignedTransactionEffects>>> {
-            Ok(digests
-                .iter()
-                .map(|d| self.get(d).cloned().map(|e_opt| e_opt.into()))
-                .collect())
+        ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+            Ok(digests.iter().map(|d| self.get(d).cloned()).collect())
         }
     }
 
@@ -1417,23 +1388,15 @@ mod tests {
     }
 
     fn e(
-        state: &AuthorityState,
         transaction_digest: TransactionDigest,
         dependencies: Vec<TransactionDigest>,
         gas_used: GasCostSummary,
-    ) -> TrustedSignedTransactionEffects {
-        let effects = TransactionEffects {
+    ) -> TransactionEffects {
+        TransactionEffects {
             transaction_digest,
             dependencies,
             gas_used,
             ..Default::default()
-        };
-        VerifiedSignedTransactionEffects::new_unchecked(SignedTransactionEffects::new(
-            state.epoch_store_for_testing().epoch(),
-            effects,
-            &*state.secret,
-            state.name,
-        ))
-        .serializable()
+        }
     }
 }

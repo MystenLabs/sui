@@ -57,8 +57,9 @@ use crate::{
     traits::{AsyncMap, Map},
 };
 
-use crate::rocks::iter::Iter as RocksDBIter;
+use crate::rocks::iter::{Iter as RocksDBIter, RevIter};
 use crate::rocks::{DBMapTableConfigMap, MetricConf};
+use crate::test_db::TestDBRevIter;
 use async_trait::async_trait;
 use collectable::TryExtend;
 use rocksdb::Options;
@@ -411,6 +412,66 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SallyIter<'a, K,
         match self {
             SallyIter::RocksDB(iter) => iter.next(),
             SallyIter::TestDB(iter) => iter.next(),
+        }
+    }
+}
+
+impl<'a, K: Serialize, V> SallyIter<'a, K, V> {
+    /// Skips all the elements that are smaller than the given key,
+    /// and either lands on the key or the first one greater than
+    /// the key.
+    pub fn skip_to(self, key: &K) -> Result<Self, TypedStoreError> {
+        let iter = match self {
+            SallyIter::RocksDB(iter) => SallyIter::RocksDB(iter.skip_to(key)?),
+            SallyIter::TestDB(iter) => SallyIter::TestDB(iter.skip_to(key)?),
+        };
+        Ok(iter)
+    }
+
+    /// Moves the iterator the element given or
+    /// the one prior to it if it does not exist. If there is
+    /// no element prior to it, it returns an empty iterator.
+    pub fn skip_prior_to(self, key: &K) -> Result<Self, TypedStoreError> {
+        let iter = match self {
+            SallyIter::RocksDB(iter) => SallyIter::RocksDB(iter.skip_prior_to(key)?),
+            SallyIter::TestDB(iter) => SallyIter::TestDB(iter.skip_prior_to(key)?),
+        };
+        Ok(iter)
+    }
+
+    /// Seeks to the last key in the database (at this column family).
+    pub fn skip_to_last(self) -> Self {
+        match self {
+            SallyIter::RocksDB(iter) => SallyIter::RocksDB(iter.skip_to_last()),
+            SallyIter::TestDB(iter) => SallyIter::TestDB(iter.skip_to_last()),
+        }
+    }
+
+    /// Will make the direction of the iteration reverse and will
+    /// create a new `RevIter` to consume. Every call to `next` method
+    /// will give the next element from the end.
+    pub fn reverse(self) -> SallyRevIter<'a, K, V> {
+        match self {
+            SallyIter::RocksDB(iter) => SallyRevIter::RocksDB(iter.reverse()),
+            SallyIter::TestDB(iter) => SallyRevIter::TestDB(iter.reverse()),
+        }
+    }
+}
+
+pub enum SallyRevIter<'a, K, V> {
+    // Iter for a rocksdb backed sally column when `fallback_to_db` is true
+    RocksDB(RevIter<'a, K, V>),
+    TestDB(TestDBRevIter<'a, K, V>),
+}
+
+impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for SallyRevIter<'a, K, V> {
+    type Item = (K, V);
+
+    /// Will give the next item backwards
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            SallyRevIter::RocksDB(rev_iter) => rev_iter.next(),
+            SallyRevIter::TestDB(rev_iter) => rev_iter.next(),
         }
     }
 }

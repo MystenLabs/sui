@@ -360,29 +360,8 @@ async fn test_quorum_map_and_reduce_timeout() {
 async fn test_map_reducer() {
     let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
-    // Test: reducer errors get propagated up
-    let res = authorities
-        .quorum_map_then_reduce_with_timeout(
-            0usize,
-            |_name, _client| Box::pin(async move { Ok(()) }),
-            |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    })
-                })
-            },
-            Duration::from_millis(1000),
-        )
-        .await;
-    assert!(matches!(
-        res,
-        Err(SuiError::TooManyIncorrectAuthorities { .. })
-    ));
-
     // Test: mapper errors do not get propagated up, reducer works
-    let res = authorities
+    let res: Result<(), usize> = authorities
         .quorum_map_then_reduce_with_timeout(
             0usize,
             |_name, _client| {
@@ -401,13 +380,13 @@ async fn test_map_reducer() {
                         Err(SuiError::TooManyIncorrectAuthorities { .. })
                     ));
                     accumulated_state += 1;
-                    Ok(ReduceOutput::Continue(accumulated_state))
+                    ReduceOutput::Continue(accumulated_state)
                 })
             },
             Duration::from_millis(1000),
         )
         .await;
-    assert_eq!(Ok(4), res);
+    assert_eq!(Err(4), res);
 
     // Test: early end
     let res = authorities
@@ -417,10 +396,10 @@ async fn test_map_reducer() {
             |mut accumulated_state, _authority_name, _authority_weight, _result| {
                 Box::pin(async move {
                     if accumulated_state > 2 {
-                        Ok(ReduceOutput::End(accumulated_state))
+                        ReduceOutput::Success(accumulated_state)
                     } else {
                         accumulated_state += 1;
-                        Ok(ReduceOutput::Continue(accumulated_state))
+                        ReduceOutput::Continue(accumulated_state)
                     }
                 })
             },
@@ -430,7 +409,7 @@ async fn test_map_reducer() {
     assert_eq!(Ok(3), res);
 
     // Test: Global timeout works
-    let res = authorities
+    let res: Result<(), _> = authorities
         .quorum_map_then_reduce_with_timeout(
             0usize,
             |_name, _client| {
@@ -441,21 +420,16 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    Err(SuiError::TooManyIncorrectAuthorities {
-                        errors: vec![],
-                        action: "".to_string(),
-                    })
-                })
+                Box::pin(async move { ReduceOutput::Continue(0) })
             },
             Duration::from_millis(10),
         )
         .await;
-    assert_eq!(Ok(0), res);
+    assert_eq!(Err(0), res);
 
     // Test: Local timeout works
     let bad_auth = *authorities.committee.sample();
-    let res = authorities
+    let res: Result<(), _> = authorities
         .quorum_map_then_reduce_with_timeout(
             HashSet::new(),
             |_name, _client| {
@@ -471,12 +445,12 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     accumulated_state.insert(authority_name);
                     if accumulated_state.len() <= 3 {
-                        Ok(ReduceOutput::Continue(accumulated_state))
+                        ReduceOutput::Continue(accumulated_state)
                     } else {
-                        Ok(ReduceOutput::ContinueWithTimeout(
+                        ReduceOutput::ContinueWithTimeout(
                             accumulated_state,
                             Duration::from_millis(10),
-                        ))
+                        )
                     }
                 })
             },
@@ -484,8 +458,8 @@ async fn test_map_reducer() {
             Duration::from_millis(10 * 60),
         )
         .await;
-    assert_eq!(res.as_ref().unwrap().len(), 3);
-    assert!(!res.as_ref().unwrap().contains(&bad_auth));
+    assert_eq!(res.as_ref().unwrap_err().len(), 3);
+    assert!(!res.as_ref().unwrap_err().contains(&bad_auth));
 }
 
 #[sim_test]
@@ -901,12 +875,18 @@ async fn assert_resp_err<F>(
     match agg.process_transaction(tx).await {
         Err(QuorumSignTransactionError {
             total_stake,
-            good_stake,
+            good_stake: _,
             errors,
             conflicting_tx_digests,
         }) => {
+            println!("{:?}", errors);
             assert_eq!(total_stake, 4);
-            assert_eq!(good_stake, 0);
+            // TODO: good_stake no longer always makes sense.
+            // Specifically, when we have non-quorum signed effects, it's difficult to say
+            // what good state should be. Right now, good_stake is only used for conflicting
+            // transaction processing. We should refactor this when we refactor conflicting
+            // transaction processing.
+            //assert_eq!(good_stake, 0);
             assert!(conflicting_tx_digests.is_empty());
             assert!(errors.iter().map(|e| &e.0).all(checker));
         }

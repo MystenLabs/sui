@@ -321,8 +321,10 @@ impl TryFrom<SuiTransactionResponse> for Operations {
         let accounted_balances = ops
             .as_ref()
             .iter()
-            .filter_map(|op| match (&op.account, &op.amount) {
-                (Some(acc), Some(amount)) => Some((acc.address, -amount.value)),
+            .filter_map(|op| match (&op.account, &op.amount, &op.status) {
+                (Some(acc), Some(amount), Some(OperationStatus::Success)) => {
+                    Some((acc.address, -amount.value))
+                }
                 _ => None,
             })
             .fold(HashMap::new(), |mut balances, (addr, amount)| {
