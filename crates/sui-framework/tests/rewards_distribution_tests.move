@@ -87,19 +87,19 @@ module sui::rewards_distribution_tests {
         // 10 SUI rewards for each 100 SUI of stake
         advance_epoch_with_reward_amounts(0, 130, scenario);
         assert_validator_stake_amounts(validator_addrs(), vector[110, 220, 330, 440], scenario);
-        undelegate(DELEGATOR_ADDR_1, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
         delegate_to(DELEGATOR_ADDR_2, VALIDATOR_ADDR_1, 600, scenario);
         // 10 SUI rewards for each 110 SUI of stake
         advance_epoch_with_reward_amounts(0, 130, scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_1, scenario) == 240, 0); // 40 SUI of rewards received
         assert_validator_stake_amounts(validator_addrs(), vector[120, 240, 360, 480], scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
         governance_test_utils::advance_epoch(scenario);
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 120, 0); // 20 SUI of rewards received
 
         // 10 SUI rewards for each 120 SUI of stake
         advance_epoch_with_reward_amounts(0, 150, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario); // unstake 600 principal SUI
+        undelegate(DELEGATOR_ADDR_2, 0, scenario); // unstake 600 principal SUI
         governance_test_utils::advance_epoch(scenario);
         // additional 600 SUI of principal and 50 SUI of rewards withdrawn to Coin<SUI>
         assert!(total_sui_balance(DELEGATOR_ADDR_2, scenario) == 770, 0);
@@ -124,7 +124,7 @@ module sui::rewards_distribution_tests {
         advance_epoch_with_reward_amounts(0, 130, scenario);
 
         // undelegate the delegations
-        undelegate(DELEGATOR_ADDR_1, 1, 1, scenario);
+        undelegate(DELEGATOR_ADDR_1, 1, scenario);
 
         // and advance epoch should succeed
         advance_epoch_with_reward_amounts(0, 150, scenario);
@@ -206,8 +206,8 @@ module sui::rewards_distribution_tests {
         assert_validator_stake_amounts(validator_addrs(), vector[203, 380, 610, 813], scenario);
 
         // Undelegate so we can check the delegation rewards as well.
-        undelegate(DELEGATOR_ADDR_1, 0, 0, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
 
         advance_epoch(scenario);
 
@@ -251,8 +251,8 @@ module sui::rewards_distribution_tests {
         assert_validator_stake_amounts(validator_addrs(), vector[294, 508, 722, 780], scenario);
 
         // Undelegate so we can check the delegation rewards as well.
-        undelegate(DELEGATOR_ADDR_1, 0, 0, scenario);
-        undelegate(DELEGATOR_ADDR_2, 0, 0, scenario);
+        undelegate(DELEGATOR_ADDR_1, 0, scenario);
+        undelegate(DELEGATOR_ADDR_2, 0, scenario);
 
         advance_epoch(scenario);
 

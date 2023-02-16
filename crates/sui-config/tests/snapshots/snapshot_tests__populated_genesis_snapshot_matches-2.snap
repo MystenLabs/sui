@@ -242,20 +242,16 @@ system_state:
         pending_withdraw: 0
         gas_price: 1
         delegation_staking_pool:
-          id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+          id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
           starting_epoch: 1
           sui_balance: 0
           rewards_pool:
             value: 0
-          delegation_token_supply:
-            value: 0
-          pending_delegations:
-            id: "0xab8235dace3d68c7fb48110d63cbf4d6fd81ce10"
-            size: 0
-            head:
-              vec: []
-            tail:
-              vec: []
+          pool_token_balance: 0
+          exchange_rates:
+            id: "0xd5d9aa879b78dc1f516d71ab979189086eff752f"
+            size: 1
+          pending_delegation: 0
           pending_withdraws:
             contents:
               id: "0x18b8140c8a6ea340142f128061016fc4bd8220ec"

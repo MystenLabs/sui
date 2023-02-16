@@ -10,7 +10,7 @@ module sui::validator_set {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, ValidatorMetadata, staking_pool_id, sui_address};
     use sui::stake::Stake;
-    use sui::staking_pool::{Delegation, PoolTokenExchangeRate, StakedSui, pool_id};
+    use sui::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::object::ID;
     use sui::priority_queue as pq;
@@ -213,7 +213,6 @@ module sui::validator_set {
     /// of the epoch.
     public(friend) fun request_withdraw_delegation(
         self: &mut ValidatorSet,
-        delegation: Delegation,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
@@ -224,7 +223,7 @@ module sui::validator_set {
 
         let validator_index = option::extract(&mut validator_index_opt);
         let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-        validator::request_withdraw_delegation(validator, delegation, staked_sui, ctx);
+        validator::request_withdraw_delegation(validator, staked_sui, ctx);
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
@@ -323,12 +322,13 @@ module sui::validator_set {
             &adjusted_storage_fund_reward_amounts,
             computation_reward,
             storage_fund_reward,
+            new_epoch,
             ctx
         );
 
         adjust_stake_and_gas_price(&mut self.active_validators);
 
-        process_pending_delegations_and_withdraws(&mut self.active_validators, ctx);
+        process_pending_delegations_and_withdraws(&mut self.active_validators, new_epoch, ctx);
 
         // Emit events after we have processed all the rewards distribution and pending delegations.
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
@@ -541,12 +541,14 @@ module sui::validator_set {
     }
 
     /// Process all active validators' pending delegation deposits and withdraws.
-    fun process_pending_delegations_and_withdraws(validators: &mut vector<Validator>, ctx: &mut TxContext) {
+    fun process_pending_delegations_and_withdraws(
+        validators: &mut vector<Validator>, new_epoch: u64, ctx: &mut TxContext
+    ) {
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            validator::process_pending_delegations_and_withdraws(validator, ctx);
+            validator::process_pending_delegations_and_withdraws(validator, new_epoch, ctx);
             i = i + 1;
         }
     }
@@ -749,6 +751,7 @@ module sui::validator_set {
         adjusted_storage_fund_reward_amounts: &vector<u64>,
         staking_rewards: &mut Balance<SUI>,
         storage_fund_reward: &mut Balance<SUI>,
+        new_epoch: u64,
         ctx: &mut TxContext
     ) {
         let length = vector::length(validators);
@@ -775,7 +778,7 @@ module sui::validator_set {
             // Add rewards to the validator.
             validator::request_add_stake(validator, validator_reward, option::none(), ctx);
             // Add rewards to delegation staking pool to auto compound for delegators.
-            validator::deposit_delegation_rewards(validator, delegator_reward);
+            validator::deposit_delegation_rewards(validator, delegator_reward, new_epoch);
             i = i + 1;
         }
     }
@@ -846,7 +849,7 @@ module sui::validator_set {
                     delegated_stake: validator::delegate_amount(v),
                     commission_rate: validator::commission_rate(v),
                     stake_rewards: *vector::borrow(reward_amounts, i),
-                    pool_token_exchange_rate: validator::pool_token_exchange_rate(v),
+                    pool_token_exchange_rate: validator::pool_token_exchange_rate_at_epoch(v, new_epoch),
                     tallying_rule_reporters,
                     tallying_rule_global_score,
                 }

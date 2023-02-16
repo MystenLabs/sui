@@ -15,7 +15,7 @@ module sui::validator {
     use sui::object::{Self, ID};
     use std::option::Option;
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
-    use sui::staking_pool::{Self, Delegation, PoolTokenExchangeRate, StakedSui, StakingPool};
+    use sui::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
     use std::string::{Self, String};
     use sui::url::Url;
     use sui::url;
@@ -255,12 +255,11 @@ module sui::validator {
     /// Request to withdraw delegation from the validator's staking pool, processed at the end of the epoch.
     public(friend) fun request_withdraw_delegation(
         self: &mut Validator,
-        delegation: Delegation,
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
         let principal_withdraw_amount = staking_pool::request_withdraw_delegation(
-                &mut self.delegation_staking_pool, delegation, staked_sui, ctx);
+                &mut self.delegation_staking_pool, staked_sui, ctx);
         decrease_next_epoch_delegation(self, principal_withdraw_amount);
     }
 
@@ -279,17 +278,17 @@ module sui::validator {
     }
 
     /// Deposit delegations rewards into the validator's staking pool, called at the end of the epoch.
-    public(friend) fun deposit_delegation_rewards(self: &mut Validator, reward: Balance<SUI>) {
+    public(friend) fun deposit_delegation_rewards(self: &mut Validator, reward: Balance<SUI>, new_epoch: u64) {
         self.next_epoch_delegation = self.next_epoch_delegation + balance::value(&reward);
-        staking_pool::deposit_rewards(&mut self.delegation_staking_pool, reward);
+        staking_pool::deposit_rewards(&mut self.delegation_staking_pool, reward, new_epoch);
     }
 
     /// Process pending delegations and withdraws, called at the end of the epoch.
-    public(friend) fun process_pending_delegations_and_withdraws(self: &mut Validator, ctx: &mut TxContext) {
+    public(friend) fun process_pending_delegations_and_withdraws(self: &mut Validator, new_epoch: u64, ctx: &mut TxContext) {
         let reward_withdraw_amount = staking_pool::process_pending_delegation_withdraws(
-            &mut self.delegation_staking_pool, ctx);
+            &mut self.delegation_staking_pool, new_epoch, ctx);
         self.next_epoch_delegation = self.next_epoch_delegation - reward_withdraw_amount;
-        staking_pool::process_pending_delegations(&mut self.delegation_staking_pool, ctx);
+        staking_pool::process_pending_delegation(&mut self.delegation_staking_pool, new_epoch);
         // TODO: consider bringing this assert back when we are more confident.
         // assert!(delegate_amount(self) == self.metadata.next_epoch_delegation, 0);
     }
@@ -358,8 +357,8 @@ module sui::validator {
         self.commission_rate
     }
 
-    public fun pool_token_exchange_rate(self: &Validator): PoolTokenExchangeRate {
-        staking_pool::pool_token_exchange_rate(&self.delegation_staking_pool)
+    public fun pool_token_exchange_rate_at_epoch(self: &Validator, epoch: u64): PoolTokenExchangeRate {
+        staking_pool::pool_token_exchange_rate_at_epoch(&self.delegation_staking_pool, epoch)
     }
 
     public fun staking_pool_id(self: &Validator): ID {

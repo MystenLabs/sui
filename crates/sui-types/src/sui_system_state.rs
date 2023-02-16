@@ -168,8 +168,9 @@ pub struct StakingPool {
     pub starting_epoch: u64,
     pub sui_balance: u64,
     pub rewards_pool: Balance,
-    pub delegation_token_supply: Supply,
-    pub pending_delegations: LinkedTable<ObjectID>,
+    pub pool_token_balance: u64,
+    pub exchange_rates: Table,
+    pub pending_delegation: u64,
     pub pending_withdraws: TableVec,
 }
 

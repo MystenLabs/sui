@@ -8,7 +8,7 @@ module sui::governance_test_utils {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::stake::{Self, Stake};
-    use sui::staking_pool::{StakedSui, Delegation};
+    use sui::staking_pool::StakedSui;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::sui_system::{Self, SuiSystemState};
@@ -131,17 +131,15 @@ module sui::governance_test_utils {
     }
 
     public fun undelegate(
-        delegator: address, staked_sui_idx: u64, delegation_obj_idx: u64, scenario: &mut Scenario
+        delegator: address, staked_sui_idx: u64, scenario: &mut Scenario
     ) {
         test_scenario::next_tx(scenario, delegator);
         let stake_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
         let staked_sui = test_scenario::take_from_sender_by_id(scenario, *vector::borrow(&stake_sui_ids, staked_sui_idx));
-        let delegation_ids = test_scenario::ids_for_sender<Delegation>(scenario);
-        let delegation = test_scenario::take_from_sender_by_id(scenario, *vector::borrow(&delegation_ids, delegation_obj_idx));
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
 
         let ctx = test_scenario::ctx(scenario);
-        sui_system::request_withdraw_delegation(&mut system_state, delegation, staked_sui, ctx);
+        sui_system::request_withdraw_delegation(&mut system_state, staked_sui, ctx);
         test_scenario::return_shared(system_state);
     }
 
