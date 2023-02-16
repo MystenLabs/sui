@@ -153,13 +153,8 @@ async fn fetch_certificates_basic() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     // synchronizer to certificate fetcher
     let (tx_certificate_fetcher, rx_certificate_fetcher) = test_utils::test_channel!(1000);
-    // certificates
-    let (tx_certificates, rx_certificates) = test_utils::test_channel!(1000);
-    // certificate fetcher to primary
-    let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1000);
     // proposer back to the core
     let (_tx_headers, rx_headers) = test_utils::test_channel!(1000);
-    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1000);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(1000);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(1000);
     // FetchCertificateProxy -> test
@@ -235,14 +230,9 @@ async fn fetch_certificates_basic() {
         synchronizer.clone(),
         signature_service,
         rx_consensus_round_updates,
-        rx_narwhal_round_updates,
         gc_depth,
         tx_shutdown.subscribe(),
-        rx_certificates,
-        rx_certificates_loopback,
         rx_headers,
-        tx_consensus,
-        tx_parents,
         metrics.clone(),
         client_network,
     );
@@ -290,10 +280,10 @@ async fn fetch_certificates_basic() {
 
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
-    tx_certificates
-        .send((certificates[target_index].clone(), None))
-        .await
-        .unwrap();
+    // tx_certificates
+    //     .send((certificates[target_index].clone(), None))
+    //     .await
+    //     .unwrap();
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();

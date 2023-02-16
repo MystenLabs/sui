@@ -153,11 +153,6 @@ impl Primary {
             &primary_channel_metrics.tx_certificate_fetcher,
             &primary_channel_metrics.tx_certificate_fetcher_total,
         );
-        let (tx_certificates_loopback, rx_certificates_loopback) = channel_with_total(
-            1, // Only one inflight item is possible.
-            &primary_channel_metrics.tx_certificates_loopback,
-            &primary_channel_metrics.tx_certificates_loopback_total,
-        );
         let (tx_certificates, rx_certificates) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_certificates,
@@ -239,7 +234,7 @@ impl Primary {
             certificate_store: certificate_store.clone(),
             payload_store: payload_store.clone(),
             vote_digest_store,
-            rx_narwhal_round_updates: rx_narwhal_round_updates.clone(),
+            rx_narwhal_round_updates,
             metrics: node_metrics.clone(),
         })
         // Allow only one inflight RequestVote RPC at a time per peer.
@@ -475,14 +470,9 @@ impl Primary {
             synchronizer.clone(),
             signature_service.clone(),
             rx_consensus_round_updates.clone(),
-            rx_narwhal_round_updates,
             parameters.gc_depth,
             tx_shutdown.subscribe(),
-            rx_certificates,
-            rx_certificates_loopback,
             rx_headers,
-            tx_new_certificates,
-            tx_parents,
             node_metrics.clone(),
             network.clone(),
         );

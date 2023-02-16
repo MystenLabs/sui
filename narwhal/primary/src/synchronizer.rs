@@ -11,7 +11,7 @@ use network::{anemo_ext::NetworkExt, RetryConfig};
 use parking_lot::Mutex;
 use std::{
     cmp::min,
-    collections::{hash_map, HashMap, VecDeque},
+    collections::{hash_map, BTreeMap, HashMap, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -81,7 +81,7 @@ struct Inner {
     /// Background tasks broadcasting newly formed certificates.
     certificate_senders: Mutex<JoinSet<()>>,
     /// Aggregates certificates to use as parents for new headers.
-    certificates_aggregators: Mutex<HashMap<Round, Box<CertificatesAggregator>>>,
+    certificates_aggregators: Mutex<BTreeMap<Round, Box<CertificatesAggregator>>>,
     /// Map of certificates pending to be accepted.
     pending: Mutex<HashMap<CertificateDigest, broadcast::Sender<()>>>,
 }
@@ -140,11 +140,11 @@ impl Synchronizer {
             metrics,
             batch_tasks: Mutex::new(JoinSet::new()),
             certificate_senders: Mutex::new(JoinSet::new()),
-            certificates_aggregators: Mutex::new(HashMap::with_capacity(2 * gc_depth as usize)),
+            certificates_aggregators: Mutex::new(BTreeMap::new()),
             pending: Mutex::new(HashMap::new()),
         });
 
-        // Start a task to update gc_round.
+        // Start a task to update gc_round and gc in-memory data.
         let weak_inner = Arc::downgrade(&inner);
         spawn_monitored_task!(async move {
             let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
@@ -161,6 +161,10 @@ impl Synchronizer {
                 };
                 // this is the only task updating gc_round
                 inner.gc_round.store(gc_round, Ordering::Release);
+                inner
+                    .certificates_aggregators
+                    .lock()
+                    .retain(|k, _| k > &gc_round);
             }
         });
 
