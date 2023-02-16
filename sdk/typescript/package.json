@@ -24,7 +24,8 @@
   },
   "scripts": {
     "clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-    "build": "pnpm genversion --es6 --semi src/version.ts && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "codegen:version": "pnpm changeset version && pnpm genversion --es6 --semi src/package-version.ts",
+    "build": "pnpm genversion --es6 --semi src/package-version.ts && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "doc": "typedoc",
     "test": "pnpm test:unit",

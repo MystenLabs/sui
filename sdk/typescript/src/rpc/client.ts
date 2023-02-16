@@ -13,7 +13,7 @@ import {
   string,
   Struct,
 } from 'superstruct';
-import { version } from '../version';
+import { version } from '../package-version';
 
 /**
  * An object defining headers to be passed to the RPC server
