@@ -1670,6 +1670,7 @@ impl VerifiedSignedTransaction {
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = Envelope<SenderSignedData, EmptySignInfo>;
 pub type VerifiedTransaction = VerifiedEnvelope<SenderSignedData, EmptySignInfo>;
+pub type TrustedTransaction = TrustedEnvelope<SenderSignedData, EmptySignInfo>;
 
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;

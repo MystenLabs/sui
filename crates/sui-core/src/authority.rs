@@ -2375,13 +2375,21 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
+        let tx_digest = certificate.digest();
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_effects_signature(certificate.digest(), signed_effects.auth_sig())?;
+        epoch_store.insert_effects_signature(tx_digest, signed_effects.auth_sig())?;
+        // TODO: This will eventually be done in the epoch_store atomically with the insertion of the effects signature.
+        self.database
+            .insert_transaction_cert_sig(tx_digest, certificate.auth_sig())?;
 
         let effects_digest = signed_effects.digest();
         self.database
-            .update_state(inner_temporary_store, certificate, signed_effects.data())
+            .update_state(
+                inner_temporary_store,
+                &certificate.clone().into_unsigned(),
+                signed_effects.data(),
+            )
             .await
             .tap_ok(|_| {
                 debug!(?effects_digest, "commit_certificate finished");
@@ -2442,16 +2450,6 @@ impl AuthorityState {
             tx_option = epoch_store.get_signed_transaction(tx_digest)?;
         }
         Ok(tx_option)
-    }
-
-    // Helper functions to manage certificates
-
-    /// Read from the DB of certificates
-    pub async fn read_certificate(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, SuiError> {
-        self.database.read_certificate(digest)
     }
 
     pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {

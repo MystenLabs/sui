@@ -96,13 +96,8 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedCertificate>, Self::Error> {
-        if let Some(transaction) = self
-            .authority_store
-            .perpetual_tables
-            .certificates
-            .get(digest)?
-        {
-            return Ok(Some(transaction.into()));
+        if let Some(transaction) = self.authority_store.get_certified_transaction(digest)? {
+            return Ok(Some(transaction));
         }
 
         if let Some(transaction) = self

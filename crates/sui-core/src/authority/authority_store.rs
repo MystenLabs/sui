@@ -11,6 +11,7 @@ use std::iter;
 use std::path::Path;
 use std::sync::Arc;
 use sui_storage::mutex_table::{LockGuard, MutexTable};
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::object::PACKAGE_VERSION;
@@ -18,7 +19,7 @@ use sui_types::storage::{ChildObjectResolver, ObjectKey};
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
-use typed_store::rocks::DBBatch;
+use typed_store::rocks::{DBBatch, TypedStoreError};
 use typed_store::traits::Map;
 
 const NUM_SHARDS: usize = 4096;
@@ -113,7 +114,7 @@ impl AuthorityStore {
 
             store
                 .perpetual_tables
-                .certificates
+                .synced_transactions
                 .insert(transaction.digest(), transaction.serializable_ref())
                 .unwrap();
 
@@ -192,7 +193,28 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn insert_executed_transactions(
+    pub fn get_transaction_cert_sig(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<AuthorityStrongQuorumSignInfo>, TypedStoreError> {
+        self.perpetual_tables
+            .transaction_cert_signatures
+            .get(tx_digest)
+    }
+
+    // TODO: Move this to epoch store.
+    pub fn insert_transaction_cert_sig(
+        &self,
+        tx_digest: &TransactionDigest,
+        sig: &AuthorityStrongQuorumSignInfo,
+    ) -> SuiResult {
+        self.perpetual_tables
+            .transaction_cert_signatures
+            .insert(tx_digest, sig)
+            .map_err(|e| e.into())
+    }
+
+    pub fn insert_finalized_transactions(
         &self,
         digests: &[TransactionDigest],
         epoch: EpochId,
@@ -437,18 +459,6 @@ impl AuthorityStore {
         }
     }
 
-    /// Read a certificate and return an option with None if it does not exist.
-    pub fn read_certificate(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedCertificate>, SuiError> {
-        self.perpetual_tables
-            .certificates
-            .get(digest)
-            .map(|r| r.map(|c| c.into()))
-            .map_err(|e| e.into())
-    }
-
     /// Read the transactionDigest that is the parent of an object reference
     /// (ie. the transaction that created an object at this version.)
     pub fn parent(&self, object_ref: &ObjectRef) -> Result<Option<TransactionDigest>, SuiError> {
@@ -581,18 +591,18 @@ impl AuthorityStore {
     pub async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,
-        certificate: &VerifiedCertificate,
+        transaction: &VerifiedTransaction,
         effects: &TransactionEffects,
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let mut write_batch = self.perpetual_tables.certificates.batch();
+        let mut write_batch = self.perpetual_tables.executed_transactions.batch();
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: &TransactionDigest = certificate.digest();
+        let transaction_digest = transaction.digest();
         write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.certificates,
-            iter::once((transaction_digest, certificate.serializable_ref())),
+            &self.perpetual_tables.executed_transactions,
+            iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
 
         // Add batched writes for objects and locks.
@@ -984,9 +994,12 @@ impl AuthorityStore {
             return Ok(())
         };
 
-        let mut write_batch = self.perpetual_tables.certificates.batch();
+        let mut write_batch = self.perpetual_tables.executed_transactions.batch();
         write_batch = write_batch
-            .delete_batch(&self.perpetual_tables.certificates, iter::once(tx_digest))?
+            .delete_batch(
+                &self.perpetual_tables.executed_transactions,
+                iter::once(tx_digest),
+            )?
             .delete_batch(&self.perpetual_tables.effects, iter::once(effects.digest()))?
             .delete_batch(
                 &self.perpetual_tables.executed_effects,
@@ -1096,25 +1109,34 @@ impl AuthorityStore {
         }
     }
 
-    pub fn get_certified_transaction(
+    pub fn get_executed_transaction(
         &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<VerifiedCertificate>> {
-        let transaction = self.perpetual_tables.certificates.get(transaction_digest)?;
-        Ok(transaction.map(|t| t.into()))
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, TypedStoreError> {
+        self.perpetual_tables
+            .executed_transactions
+            .get(tx_digest)
+            .map(|v_opt| v_opt.map(|v| v.into()))
     }
 
-    pub fn multi_get_certified_transaction(
+    // TODO: This function will be moved to authority.rs since it will need to access the per-epoch store
+    // for the certificate signature.
+    pub fn get_certified_transaction(
         &self,
-        transaction_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedCertificate>>> {
-        Ok(self
-            .perpetual_tables
-            .certificates
-            .multi_get(transaction_digests)?
-            .into_iter()
-            .map(|o| o.map(|c| c.into()))
-            .collect())
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedCertificate>, TypedStoreError> {
+        let Some(transaction) = self.get_executed_transaction(tx_digest)? else {
+            return Ok(None);
+        };
+        let Some(cert_sig) = self.get_transaction_cert_sig(tx_digest)? else {
+            return Ok(None);
+        };
+        Ok(Some(VerifiedCertificate::new_unchecked(
+            CertifiedTransaction::new_from_data_and_sig(
+                transaction.into_inner().into_data(),
+                cert_sig,
+            ),
+        )))
     }
 
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {

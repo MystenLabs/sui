@@ -480,7 +480,7 @@ async fn execute_transactions(
                         panic!("When executing checkpoint {checkpoint_sequence}, transaction {tx_digest} is expected to have effects digest {expected_effects_digest}, but got {}!", actual_effects.digest());
                     }
                 }
-                authority_store.insert_executed_transactions(
+                authority_store.insert_finalized_transactions(
                     &all_tx_digests,
                     epoch_store.epoch(),
                     checkpoint_sequence,
