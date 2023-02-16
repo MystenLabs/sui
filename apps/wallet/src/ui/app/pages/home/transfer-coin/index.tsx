@@ -9,6 +9,7 @@ import {
 } from '@mysten/sui.js';
 import { Formik, type FormikHelpers } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { PreviewTransfer } from './PreviewTransfer';
@@ -150,7 +151,18 @@ function TransferCoinPage() {
 
             navigate(receiptUrl);
         } catch (e) {
-            setSendError((e as SerializedError).message || null);
+            const errorMsg = (e as SerializedError).message || null;
+            setSendError(errorMsg);
+
+            toast.error(
+                <div className="max-w-xs overflow-hidden flex flex-col">
+                    {errorMsg ? (
+                        <small className="text-ellipsis overflow-hidden">
+                            {errorMsg}
+                        </small>
+                    ) : null}
+                </div>
+            );
         }
     }, [
         coinType,
