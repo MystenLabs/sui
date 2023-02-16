@@ -116,7 +116,6 @@ procedure {:inline 1} $2_dynamic_field_has_child_object_with_ty{{S}}(parent: int
 function $2_prover_vec_remove{{S}}(v: Vec ({{T}}), elem_idx: int): Vec ({{T}}) {
     RemoveAtVec(v, elem_idx)
 }
-procedure {:inline 1} $2_types_is_one_time_witness{{S}}(_: {{T}}) returns (res: bool);
 
 {%- endfor %}
 
