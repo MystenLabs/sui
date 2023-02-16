@@ -2160,7 +2160,7 @@ impl AuthorityState {
             .expect("Cannot insert genesis object")
     }
 
-    /// Make an status response for a transaction
+    /// Make a status response for a transaction
     pub fn get_transaction_status(
         &self,
         transaction_digest: &TransactionDigest,

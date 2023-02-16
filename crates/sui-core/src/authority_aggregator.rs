@@ -1129,7 +1129,7 @@ where
                 Ok(Some(ProcessTransactionResult::Certified(certificate)))
             }
             _ => {
-                // If we get 2f+1 effects, it's an proof that the transaction
+                // If we get 2f+1 effects, it's a proof that the transaction
                 // has already been finalized. This works because validators would re-sign effects for transactions
                 // that were finalized in previous epochs.
                 let (effects, sig) = signed_effects.into_inner().into_data_and_sig();
@@ -1376,7 +1376,7 @@ where
                         return cert;
                     }
                     Ok(ProcessTransactionResult::Executed(None, _)) => {
-                        // Note: This will go away as soon as fianlized transaction work finishes,
+                        // Note: This will go away as soon as finalized transaction work finishes,
                         // since we will no longer need a cert.
                         debug!(
                             "The network has executed this transaction, but no cert is available"

@@ -191,33 +191,33 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     let mut votes = vec![];
-    let mut transaction: Option<VerifiedSignedTransaction> = None;
+    let mut tx_data: Option<SenderSignedData> = None;
     for authority in authorities {
         let response = authority
             .handle_transaction_info_request(TransactionInfoRequest {
                 transaction_digest: *transaction_digest,
             })
-            .await
-            .unwrap();
+            .await;
         match response {
-            VerifiedTransactionInfoResponse::Signed(signed) => {
-                votes.push(signed.auth_sig().clone());
-                if let Some(inner_transaction) = transaction {
+            Ok(VerifiedTransactionInfoResponse::Signed(signed)) => {
+                let (data, sig) = signed.into_inner().into_data_and_sig();
+                votes.push(sig);
+                if let Some(inner_transaction) = tx_data {
                     assert_eq!(
-                        inner_transaction.data().intent_message.value,
-                        signed.data().intent_message.value
+                        inner_transaction.intent_message.value,
+                        data.intent_message.value
                     );
-                    transaction = Some(signed);
                 }
+                tx_data = Some(data);
             }
-            VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _) => {
+            Ok(VerifiedTransactionInfoResponse::ExecutedWithCert(cert, _)) => {
                 return cert.into_inner();
             }
             _ => {}
         }
     }
 
-    CertifiedTransaction::new(transaction.unwrap().into_message(), votes, committee).unwrap()
+    CertifiedTransaction::new(tx_data.unwrap(), votes, committee).unwrap()
 }
 
 pub async fn do_cert<A>(

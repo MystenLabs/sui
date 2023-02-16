@@ -21,6 +21,7 @@ use sui_core::{
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiObjectRead, SuiTransactionEffects};
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId, ProtocolVersion},
@@ -31,17 +32,13 @@ use sui_types::{
     message_envelope::Envelope,
     messages::{
         CertifiedTransaction, CertifiedTransactionEffects, HandleCertificateResponse,
-        QuorumDriverResponse, Transaction,
+        QuorumDriverResponse, Transaction, TransactionStatus,
     },
     object::Object,
 };
 use sui_types::{
     base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo,
     messages::ExecuteTransactionRequestType, object::Owner,
-};
-use sui_types::{
-    base_types::{AuthorityName, SuiAddress},
-    messages::TransactionInfoResponse,
 };
 use sui_types::{error::SuiError, sui_system_state::SuiSystemState};
 use tracing::{error, info};
@@ -130,7 +127,7 @@ pub trait ValidatorProxy {
     async fn execute_bench_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
+    ) -> anyhow::Result<(Option<SuiCertifiedTransaction>, ExecutionEffects)>;
 
     fn clone_committee(&self) -> Committee;
 
@@ -308,7 +305,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn execute_bench_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+    ) -> anyhow::Result<(Option<SuiCertifiedTransaction>, ExecutionEffects)> {
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let mut epoch = 0;
 
@@ -319,28 +316,32 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             futures.push(fut);
         }
 
+        // TODO: This following aggregation will not work well at epoch boundary.
+
         // Listen to the replies from the first 2f+1 votes.
         let mut total_stake = 0;
         let mut votes = Vec::new();
-        let mut message_data = None;
         let mut certificate = None;
         while let Some(response) = futures.next().await {
             match response {
-                // If all goes well, the authority returns a vote.
-                Ok(TransactionInfoResponse::Signed(vote)) => {
-                    let (data, signature) = vote.into_data_and_sig();
-                    message_data = Some(data);
-                    epoch = signature.epoch;
-                    total_stake += self.committee.weight(&signature.authority);
-                    votes.push(signature);
-                }
-
-                // The transaction may be submitted again in case the certificate's submission failed.
-                Ok(TransactionInfoResponse::Executed(cert, _effect)) => {
-                    tracing::warn!("Transaction already submitted: {tx:?}");
-                    certificate = Some(cert);
-                }
-
+                Ok(response) => match response.status {
+                    // If all goes well, the authority returns a vote.
+                    TransactionStatus::Signed(signature) => {
+                        epoch = signature.epoch;
+                        total_stake += self.committee.weight(&signature.authority);
+                        votes.push(signature);
+                    }
+                    // The transaction may be submitted again in case the certificate's submission failed.
+                    TransactionStatus::Executed(cert, _effects) => {
+                        tracing::warn!("Transaction already submitted: {tx:?}");
+                        if let Some(cert) = cert {
+                            certificate = Some(CertifiedTransaction::new_from_data_and_sig(
+                                tx.data().clone(),
+                                cert,
+                            ));
+                        }
+                    }
+                },
                 // This typically happens when the validators are overloaded and the transaction is
                 // immediately rejected.
                 Err(e) => tracing::warn!("Failed to submit transaction: {e}"),
@@ -349,6 +350,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             if total_stake >= self.committee.quorum_threshold() {
                 break;
             }
+
             if certificate.is_some() {
                 break;
             }
@@ -358,12 +360,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let certified_transaction: CertifiedTransaction = match certificate {
             Some(x) => x,
             None => {
-                // Abort if we failed to submit the transaction to enough validators. This typically
-                // happens when the validators are overloaded and all requests timed out.
-                if message_data.is_none() {
-                    bail!("Failed to submit transaction to quorum of validators");
-                }
-
                 let signatures: BTreeMap<_, _> = votes
                     .into_iter()
                     .map(|a| (a.authority, a.signature))
@@ -396,7 +392,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     signers_map,
                 };
 
-                Envelope::new_from_data_and_sig(message_data.unwrap(), quorum_signature)
+                Envelope::new_from_data_and_sig(tx.into_data(), quorum_signature)
             }
         };
 
@@ -445,7 +441,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let effects = ExecutionEffects::CertifiedTransactionEffects(
             Envelope::new_from_data_and_sig(transaction_effects.unwrap(), signed_material),
         );
-        Ok((certificate, effects))
+        Ok((Some(certificate), effects))
     }
 
     fn clone_committee(&self) -> Committee {
@@ -558,7 +554,7 @@ impl ValidatorProxy for FullNodeProxy {
     async fn execute_bench_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+    ) -> anyhow::Result<(Option<SuiCertifiedTransaction>, ExecutionEffects)> {
         self.execute_transaction(tx).await
     }
 
