@@ -5,7 +5,6 @@
 
 
 
--  [Resource `DynamicFieldContainment`](#0x2_prover_DynamicFieldContainment)
 -  [Constants](#@Constants_0)
 -  [Module Specification](#@Module_Specification_1)
 
@@ -13,35 +12,6 @@
 <pre><code></code></pre>
 
 
-
-<a name="0x2_prover_DynamicFieldContainment"></a>
-
-## Resource `DynamicFieldContainment`
-
-Information about which object contains a given object field (stored at the field object's
-address).
-
-
-<pre><code><b>struct</b> <a href="prover.md#0x2_prover_DynamicFieldContainment">DynamicFieldContainment</a> <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>container: <b>address</b></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
 
 <a name="@Constants_0"></a>
 
@@ -143,8 +113,8 @@ Verifies if a given object has field with a given name.
 
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_has_field">has_field</a>&lt;T: key, K: <b>copy</b> + drop + store&gt;(obj: T, name: K): bool {
-   <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
-   <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K&gt;(addr, name)
+   <b>let</b> uid = <a href="object.md#0x2_object_borrow_uid">object::borrow_uid</a>(obj);
+   <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K&gt;(uid, name)
 }
 </code></pre>
 
@@ -156,7 +126,31 @@ Returns number of K-type fields of a given object.
 
 
 <pre><code><b>fun</b> <a href="prover.md#0x2_prover_num_fields">num_fields</a>&lt;T: key, K: <b>copy</b> + drop + store&gt;(obj: T): u64 {
-   <b>let</b> addr = <a href="object.md#0x2_object_id">object::id</a>(obj).bytes;
+   <b>let</b> uid = <a href="object.md#0x2_object_borrow_uid">object::borrow_uid</a>(obj);
+   <a href="prover.md#0x2_prover_uid_num_fields">uid_num_fields</a>&lt;K&gt;(uid)
+}
+</code></pre>
+
+
+
+
+<a name="0x2_prover_uid_has_field"></a>
+
+
+<pre><code><b>fun</b> <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K: <b>copy</b> + drop + store&gt;(uid: sui::object::UID, name: K): bool {
+   <b>let</b> addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(uid);
+   <b>exists</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr) && contains(<b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr).names, name)
+}
+</code></pre>
+
+
+
+
+<a name="0x2_prover_uid_num_fields"></a>
+
+
+<pre><code><b>fun</b> <a href="prover.md#0x2_prover_uid_num_fields">uid_num_fields</a>&lt;K: <b>copy</b> + drop + store&gt;(uid: sui::object::UID): u64 {
+   <b>let</b> addr = <a href="object.md#0x2_object_uid_to_address">object::uid_to_address</a>(uid);
    <b>if</b> (!<b>exists</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr)) {
        0
    } <b>else</b> {
@@ -168,28 +162,8 @@ Returns number of K-type fields of a given object.
 
 
 
-<a name="0x2_prover_uid_has_field"></a>
-
-
-<pre><code><b>fun</b> <a href="prover.md#0x2_prover_uid_has_field">uid_has_field</a>&lt;K: <b>copy</b> + drop + store&gt;(addr: <b>address</b>, name: K): bool {
-   <b>exists</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr) && contains(<b>global</b>&lt;<a href="object.md#0x2_object_DynamicFields">object::DynamicFields</a>&lt;K&gt;&gt;(addr).names, name)
-}
-</code></pre>
-
-
-
-
 <a name="0x2_prover_vec_remove"></a>
 
 
-<pre><code><b>fun</b> <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>&lt;T&gt;(v: <a href="">vector</a>&lt;T&gt;, elem_idx: u64, current_idx: u64) : <a href="">vector</a>&lt;T&gt; {
-   <b>let</b> len = len(v);
-   <b>if</b> (current_idx != len) {
-       vec()
-   } <b>else</b> <b>if</b> (current_idx != elem_idx) {
-       concat(vec(v[current_idx]), <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>(v, elem_idx, current_idx + 1))
-   } <b>else</b> {
-       <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>(v, elem_idx, current_idx + 1)
-   }
-}
+<pre><code><b>native</b> <b>fun</b> <a href="prover.md#0x2_prover_vec_remove">vec_remove</a>&lt;T&gt;(v: <a href="">vector</a>&lt;T&gt;, elem_idx: u64): <a href="">vector</a>&lt;T&gt;;
 </code></pre>

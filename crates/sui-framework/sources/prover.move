@@ -9,13 +9,6 @@ module sui::prover {
     const SHARED: u64 = 2;
     const IMMUTABLE: u64 = 3;
 
-    #[verify_only]
-    /// Information about which object contains a given object field (stored at the field object's
-    /// address).
-    struct DynamicFieldContainment has key {
-        container: address,
-    }
-
     // "public" functions to be used in specs as an equivalent of core Prover's builtins
 
     /// Verifies if a given object it owned.
@@ -49,13 +42,26 @@ module sui::prover {
 
     /// Verifies if a given object has field with a given name.
     spec fun has_field<T: key, K: copy + drop + store>(obj: T, name: K): bool {
-        let addr = object::id(obj).bytes;
-        uid_has_field<K>(addr, name)
+        let uid = object::borrow_uid(obj);
+        uid_has_field<K>(uid, name)
     }
 
     /// Returns number of K-type fields of a given object.
     spec fun num_fields<T: key, K: copy + drop + store>(obj: T): u64 {
-        let addr = object::id(obj).bytes;
+        let uid = object::borrow_uid(obj);
+        uid_num_fields<K>(uid)
+    }
+
+    // "helper" function - may also be used in specs but mostly opaque ones defining behavior of key
+    // framework functions
+
+    spec fun uid_has_field<K: copy + drop + store>(uid: sui::object::UID, name: K): bool {
+        let addr = object::uid_to_address(uid);
+        exists<object::DynamicFields<K>>(addr) && contains(global<object::DynamicFields<K>>(addr).names, name)
+    }
+
+    spec fun uid_num_fields<K: copy + drop + store>(uid: sui::object::UID): u64 {
+        let addr = object::uid_to_address(uid);
         if (!exists<object::DynamicFields<K>>(addr)) {
             0
         } else {
@@ -63,23 +69,9 @@ module sui::prover {
         }
     }
 
-    // "helper" function - may also be used in specs but mostly opaque ones defining behavior of key
-    // framework functions
 
-    spec fun uid_has_field<K: copy + drop + store>(addr: address, name: K): bool {
-        exists<object::DynamicFields<K>>(addr) && contains(global<object::DynamicFields<K>>(addr).names, name)
-    }
-
-    // remove an element at index from a vector and return the resulting vector
-    spec fun vec_remove<T>(v: vector<T>, elem_idx: u64, current_idx: u64) : vector<T> {
-        let len = len(v);
-        if (current_idx != len) {
-            vec()
-        } else if (current_idx != elem_idx) {
-            concat(vec(v[current_idx]), vec_remove(v, elem_idx, current_idx + 1))
-        } else {
-            vec_remove(v, elem_idx, current_idx + 1)
-        }
-    }
+    // remove an element at index from a vector and return the resulting vector (redirects to a
+    // function in vector theory)
+    spec native fun vec_remove<T>(v: vector<T>, elem_idx: u64): vector<T>;
 
 }

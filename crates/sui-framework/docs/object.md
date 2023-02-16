@@ -592,19 +592,6 @@ restrictable in the object's module.
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_object_new_uid_from_hash"></a>
 
 ## Function `new_uid_from_hash`

@@ -141,13 +141,6 @@ module sui::object {
     /// restrictable in the object's module.
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
-    spec borrow_uid {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-     }
-
     /// Generate a new UID specifically used for creating a UID from a hash
     public(friend) fun new_uid_from_hash(bytes: address): UID {
         record_new_uid(bytes);

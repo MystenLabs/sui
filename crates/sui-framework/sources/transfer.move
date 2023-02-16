@@ -3,6 +3,9 @@
 
 module sui::transfer {
 
+    use sui::object;
+    use sui::prover;
+
     /// Shared an object that was previously created. Shared objects must currently
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
@@ -25,9 +28,9 @@ module sui::transfer {
         // - it's OK to freeze whether object is fresh or owned
         // - shared or immutable object cannot be passed by value
         aborts_if [abstract] false;
-        modifies [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] exists<sui::object::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).status == 3 /* IMMUTABLE */;
+        modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
+        ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
+        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::IMMUTABLE;
     }
 
     /// Turn the given object into a mutable shared object that everyone
@@ -40,9 +43,9 @@ module sui::transfer {
     spec share_object {
         pragma opaque;
         aborts_if [abstract] sui::prover::owned(obj);
-        modifies [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] exists<sui::object::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).status == 2 /* SHARED */;
+        modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
+        ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
+        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::SHARED;
     }
 
     native fun transfer_internal<T: key>(obj: T, recipient: address);
@@ -53,10 +56,10 @@ module sui::transfer {
         // - it's OK to transfer whether object is fresh or already owned
         // - shared or immutable object cannot be passed by value
         aborts_if [abstract] false;
-        modifies [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] exists<sui::object::Ownership>(sui::object::id(obj).bytes);
-        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).owner == recipient;
-        ensures [abstract] global<sui::object::Ownership>(sui::object::id(obj).bytes).status == 1 /* OWNED */;
+        modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
+        ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
+        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).owner == recipient;
+        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::OWNED;
     }
 
     // Cost calibration functions

@@ -10,6 +10,7 @@
 module sui::dynamic_field {
 
 use sui::object::{Self, ID, UID};
+use sui::prover;
 
 friend sui::dynamic_object_field;
 
@@ -58,17 +59,17 @@ public fun add<Name: copy + drop + store, Value: store>(
 
 spec add {
     pragma opaque;
-    aborts_if [abstract] sui::prover::uid_has_field(object.id.bytes, name);
-    modifies [abstract] global<object::DynamicFields<Name>>(object.id.bytes);
+    aborts_if [abstract] prover::uid_has_field(object, name);
+    modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
     ensures [abstract] object == old(object);
-    ensures [abstract] exists<object::DynamicFields<Name>>(object.id.bytes);
-    ensures [abstract] (!old(exists<object::DynamicFields<Name>>(object.id.bytes)))
-        ==> global<object::DynamicFields<Name>>(object.id.bytes).names == vec(name);
-    ensures [abstract] old(exists<object::DynamicFields<Name>>(object.id.bytes))
-        ==> global<object::DynamicFields<Name>>(object.id.bytes).names == concat(
-                old(global<object::DynamicFields<Name>>(object.id.bytes).names),
+    ensures [abstract] exists<object::DynamicFields<Name>>(object::uid_to_address(object));
+    ensures [abstract] (!old(exists<object::DynamicFields<Name>>(object::uid_to_address(object))))
+        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names == vec(name);
+    ensures [abstract] old(exists<object::DynamicFields<Name>>(object::uid_to_address(object)))
+        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names == old(concat(
+                global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
                 vec(name)
-            );
+            ));
     }
 
 /// Immutably borrows the `object`s dynamic field with the name specified by `name: Name`.
@@ -87,7 +88,7 @@ public fun borrow<Name: copy + drop + store, Value: store>(
 
 spec borrow {
     pragma opaque;
-    aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
+    aborts_if [abstract] !prover::uid_has_field(object, name);
 }
 
 /// Mutably borrows the `object`s dynamic field with the name specified by `name: Name`.
@@ -106,7 +107,7 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
 
 spec borrow_mut {
     pragma opaque;
-    aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
+    aborts_if [abstract] !prover::uid_has_field(object, name);
 }
 
 /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
@@ -127,13 +128,15 @@ public fun remove<Name: copy + drop + store, Value: store>(
 
 spec remove {
     pragma opaque;
-    aborts_if [abstract] !sui::prover::uid_has_field(object.id.bytes, name);
-    modifies [abstract] global<object::DynamicFields<Name>>(object.id.bytes);
+    aborts_if [abstract] !prover::uid_has_field(object, name);
+    modifies [abstract] global<object::DynamicFields<Name>>(object::uid_to_address(object));
     ensures [abstract] object.id == old(object.id);
-    ensures [abstract] exists<object::DynamicFields<Name>>(object.id.bytes);
-    ensures [abstract] sui::prover::vec_remove(global<object::DynamicFields<Name>>(object.id.bytes).names,
-        index_of(global<object::DynamicFields<Name>>(object.id.bytes).names, name), 0) ==
-          old(global<object::DynamicFields<Name>>(object.id.bytes).names);
+    ensures [abstract] old(prover::uid_num_fields<Name>(object)) == 0
+        ==> !exists<object::DynamicFields<Name>>(object::uid_to_address(object));
+    ensures [abstract] old(prover::uid_num_fields<Name>(object)) > 0
+        ==> global<object::DynamicFields<Name>>(object::uid_to_address(object)).names ==
+                old(prover::vec_remove(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names,
+                    index_of(global<object::DynamicFields<Name>>(object::uid_to_address(object)).names, name)));
 }
 
 

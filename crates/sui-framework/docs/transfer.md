@@ -91,9 +91,9 @@ longer be transferred or mutated.
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>false</b>;
-<b>modifies</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
-<b>ensures</b> [abstract] <b>exists</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
-<b>ensures</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes).status == 3 /* IMMUTABLE */;
+<b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_IMMUTABLE">prover::IMMUTABLE</a>;
 </code></pre>
 
 
@@ -134,9 +134,9 @@ in this transaction. This restriction may be relaxed in the future.
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] sui::prover::owned(obj);
-<b>modifies</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
-<b>ensures</b> [abstract] <b>exists</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
-<b>ensures</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes).status == 2 /* SHARED */;
+<b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_SHARED">prover::SHARED</a>;
 </code></pre>
 
 
@@ -172,10 +172,10 @@ in this transaction. This restriction may be relaxed in the future.
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>false</b>;
-<b>modifies</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
-<b>ensures</b> [abstract] <b>exists</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes);
-<b>ensures</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes).owner == recipient;
-<b>ensures</b> [abstract] <b>global</b>&lt;sui::object::Ownership&gt;(sui::object::id(obj).bytes).status == 1 /* OWNED */;
+<b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).owner == recipient;
+<b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_OWNED">prover::OWNED</a>;
 </code></pre>
 
 
