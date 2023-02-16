@@ -194,32 +194,6 @@ where
     }
 }
 
-pub struct AggrAuthSignature {}
-
-impl SerializeAs<AggregateAuthoritySignature> for AggrAuthSignature {
-    fn serialize_as<S>(
-        value: &AggregateAuthoritySignature,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        Base64::encode(value.as_ref()).serialize(serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, AggregateAuthoritySignature> for AggrAuthSignature {
-    fn deserialize_as<D>(deserializer: D) -> Result<AggregateAuthoritySignature, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let sig_bytes = Base64::decode(&s).map_err(to_custom_error::<'de, D, _>)?;
-        AggregateAuthoritySignature::from_bytes(&sig_bytes[..])
-            .map_err(to_custom_error::<'de, D, _>)
-    }
-}
-
 #[macro_export]
 macro_rules! serde_to_from_bytes {
     ($type:ty) => {
