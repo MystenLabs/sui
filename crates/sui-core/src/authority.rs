@@ -1657,7 +1657,7 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        sui_system_state: SuiSystemState,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
@@ -1666,7 +1666,7 @@ impl AuthorityState {
             .await?;
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
-            .reopen_epoch_db(cur_epoch_store, new_committee, epoch_start_timestamp_ms)
+            .reopen_epoch_db(cur_epoch_store, new_committee, sui_system_state)
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.transaction_manager.reconfigure(new_epoch);
@@ -2491,15 +2491,12 @@ impl AuthorityState {
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         new_committee: Committee,
-        epoch_start_timestamp_ms: u64,
+        system_state: SuiSystemState,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         let new_epoch = new_committee.epoch;
         info!(new_epoch = ?new_committee.epoch, "re-opening AuthorityEpochTables for new epoch");
 
-        let epoch_start_configuration = EpochStartConfiguration {
-            epoch_id: new_epoch,
-            epoch_start_timestamp_ms,
-        };
+        let epoch_start_configuration = EpochStartConfiguration { system_state };
         let new_epoch_store =
             cur_epoch_store.new_at_next_epoch(self.name, new_committee, epoch_start_configuration);
         self.db().perpetual_tables.set_recovery_epoch(new_epoch)?;
