@@ -105,15 +105,9 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
 
             <ReceiptCardBg status={isSuccessful}>
                 {error && (
-                    <div className="pb-3.5">
-                        <Text
-                            variant="body"
-                            weight="medium"
-                            color="steel-darker"
-                        >
-                            {error}
-                        </Text>
-                    </div>
+                    <Text variant="body" weight="medium" color="steel-darker">
+                        {error}
+                    </Text>
                 )}
 
                 {isStakeTxn ? (
@@ -140,6 +134,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                 <TxnImage id={objectId} />
                             </div>
                         )}
+
                         {transferAmount.length > 0
                             ? transferAmount.map(
                                   ({ amount, coinType, receiverAddress }) => {
@@ -169,6 +164,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                   }
                               )
                             : null}
+
                         {txnKind === 'ChangeEpoch' &&
                             !transferAmount.length && (
                                 <TxnAddress
@@ -176,6 +172,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
                                     label="From"
                                 />
                             )}
+
                         {gasTotal && isSender ? (
                             <TxnGasSummery
                                 totalGas={gasTotal}

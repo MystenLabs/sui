@@ -7,6 +7,7 @@ import {
     getTransactionDigest,
     SUI_TYPE_ARG,
 } from '@mysten/sui.js';
+import { useMutation } from '@tanstack/react-query';
 import { Formik, type FormikHelpers } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -27,16 +28,15 @@ import Overlay from '_components/overlay';
 import { parseAmount } from '_helpers';
 import {
     useAppSelector,
-    useAppDispatch,
     useCoinDecimals,
     useIndividualCoinMaxBalance,
+    useSigner,
 } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountCoinsSelector,
 } from '_redux/slices/account';
 import { Coin } from '_redux/slices/sui-objects/Coin';
-import { sendTokens } from '_redux/slices/transactions';
 import { trackEvent } from '_src/shared/plausible';
 import { useGasBudgetInMist } from '_src/ui/app/hooks/useGasBudgetInMist';
 
@@ -90,6 +90,7 @@ function TransferCoinPage() {
     const { gasBudget: gasBudgetEstimation, isLoading } = useGasBudgetInMist(
         gasBudgetEstimationUnits
     );
+
     const validationSchemaStepOne = useMemo(
         () =>
             createValidationSchemaStepOne(
@@ -114,59 +115,68 @@ function TransferCoinPage() {
         ]
     );
 
-    const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
     const closeSendToken = useCallback(() => {
         navigate('/');
     }, [navigate]);
 
-    const onHandleSubmit = useCallback(async () => {
-        if (coinType === null || !gasBudgetEstimationUnits) {
-            return;
-        }
-        trackEvent('TransferCoins', {
-            props: { coinType },
-        });
-        try {
-            const bigIntAmount = parseAmount(formData.amount, coinDecimals);
-            //Todo:(Jibz) move to react-query
-            const response = await dispatch(
-                sendTokens({
-                    amount: bigIntAmount,
-                    recipientAddress: formData.to,
-                    tokenTypeArg: coinType,
-                    gasBudget: gasBudgetEstimationUnits,
-                    sendMax: formData.isPayAllSui,
-                })
-            ).unwrap();
+    const signer = useSigner();
 
-            const txDigest = getTransactionDigest(response);
-            const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                txDigest
-            )}&from=transactions`;
+    const executeTransfer = useMutation({
+        mutationFn: async () => {
+            if (!signer) throw new Error('Signer not found');
+            if (coinType === null || !gasBudgetEstimationUnits) {
+                return;
+            }
+            trackEvent('TransferCoins', {
+                props: { coinType },
+            });
+            try {
+                let response;
+                // Use payAllSui if sendMax is true and the token type is SUI
+                if (formData.isPayAllSui && coinType === SUI_TYPE_ARG) {
+                    response = await signer.payAllSui({
+                        recipient: formData.to,
+                        gasBudget: gasBudgetEstimationUnits,
+                        inputCoins: allCoins.map((coin) => CoinAPI.getID(coin)),
+                    });
+                } else {
+                    const bigIntAmount = parseAmount(
+                        formData.amount,
+                        coinDecimals
+                    );
+                    response = await signer.signAndExecuteTransaction(
+                        await CoinAPI.newPayTransaction(
+                            allCoins,
+                            coinType,
+                            bigIntAmount,
+                            formData.to,
+                            gasBudgetEstimationUnits
+                        )
+                    );
+                }
 
-            navigate(receiptUrl);
-        } catch (e) {
-            const errorMsg = (e as SerializedError).message || null;
-            toast.error(
-                <div className="max-w-xs overflow-hidden flex flex-col">
-                    {errorMsg ? (
-                        <small className="text-ellipsis overflow-hidden">
-                            {errorMsg}
-                        </small>
-                    ) : null}
-                </div>
-            );
-        }
-    }, [
-        coinType,
-        gasBudgetEstimationUnits,
-        formData,
-        coinDecimals,
-        dispatch,
-        navigate,
-    ]);
+                const txDigest = getTransactionDigest(response);
+                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                    txDigest
+                )}&from=transactions`;
+
+                return navigate(receiptUrl);
+            } catch (e) {
+                const errorMsg = (e as SerializedError).message || null;
+                toast.error(
+                    <div className="max-w-xs overflow-hidden flex flex-col">
+                        {errorMsg ? (
+                            <small className="text-ellipsis overflow-hidden">
+                                {errorMsg}
+                            </small>
+                        ) : null}
+                    </div>
+                );
+            }
+        },
+    });
 
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
@@ -237,10 +247,11 @@ function TransferCoinPage() {
                 <Button
                     type="button"
                     variant="primary"
-                    onClick={onHandleSubmit}
+                    onClick={() => executeTransfer.mutateAsync()}
                     size="tall"
                     text={'Send Now'}
                     after={<ArrowRight16 />}
+                    loading={executeTransfer.isLoading}
                 />
             </Menu>
         </BottomMenuLayout>
