@@ -63,9 +63,6 @@ export function StepOne({
         if (!isCoinDecimalsLoading) {
             const parsedAmount = parseAmount(amount, coinDecimals);
             onAmountChanged(parsedAmount);
-            // seems changing the validationSchema doesn't rerun the validation for the form
-            // trigger re-validation here when the amount to send is changed
-            // (changing the amount will probably change the gasBudget and in the end the validationSchema)
             validateForm();
         }
     }, [
@@ -123,7 +120,6 @@ export function StepOne({
                             type="number"
                             actionType="button"
                             allowNegative={false}
-                            step="1"
                             onActionClicked={setMaxToken}
                             actionDisabled={
                                 maxToken === amount ||

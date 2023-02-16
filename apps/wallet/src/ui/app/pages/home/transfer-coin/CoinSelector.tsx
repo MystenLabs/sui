@@ -15,7 +15,7 @@ function CoinsSelectorPage() {
     const coinType = searchParams.get('type') || SUI_TYPE_ARG;
     const navigate = useNavigate();
 
-    const closeReceipt = useCallback(() => {
+    const closeCoinSelection = useCallback(() => {
         navigate(
             `/send?${new URLSearchParams({
                 type: coinType,
@@ -28,7 +28,7 @@ function CoinsSelectorPage() {
             showModal={showModal}
             setShowModal={setShowModal}
             title="Select Coin"
-            closeOverlay={closeReceipt}
+            closeOverlay={closeCoinSelection}
             closeIcon={SuiIcons.Check}
         >
             <ActiveCoinsCard activeCoinType={coinType} showActiveCoin={false} />
