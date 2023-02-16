@@ -352,6 +352,9 @@ pub struct SuiTransactionResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
     pub timestamp_ms: Option<u64>,
+    /// The checkpoint number when this transaction was included and hence finalized.
+    /// This is only returned in the read api, not in the transaction execution api.
+    pub checkpoint: Option<CheckpointSequenceNumber>,
     pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 

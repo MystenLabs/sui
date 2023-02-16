@@ -591,6 +591,7 @@ async fn test_transaction(
         certificate: response.tx_cert.clone().unwrap(),
         effects: effects.clone(),
         timestamp_ms: None,
+        checkpoint: None,
         parsed_data: None,
     };
 
