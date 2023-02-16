@@ -89,9 +89,8 @@ export function FormOverlayStepper({
                                     type="submit"
                                     variant="primary"
                                     onClick={submitForm}
-                                    disabled={!isValid || isSubmitting}
+                                    loading={!isValid || isSubmitting}
                                     size="tall"
-                                    loading={isSubmitting}
                                     text={isLastStep() ? 'Send Now' : 'Review'}
                                     after={<ArrowRight16 />}
                                 />

@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { formatAddress } from '@mysten/sui.js';
+
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import { useMiddleEllipsis } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
-
-const TRUNCATE_MAX_LENGTH = 8;
-const TRUNCATE_PREFIX_LENGTH = 4;
 
 type TxnAddressProps = {
     address: string;
@@ -15,11 +13,7 @@ type TxnAddressProps = {
 };
 
 export function TxnAddress({ address, label }: TxnAddressProps) {
-    const txnAddress = useMiddleEllipsis(
-        address,
-        TRUNCATE_MAX_LENGTH,
-        TRUNCATE_PREFIX_LENGTH
-    );
+    const truncatedAddress = formatAddress(address);
     return (
         <div className="flex justify-between w-full items-center py-3.5 first:pt-0">
             <Text variant="body" weight="medium" color="steel-darker">
@@ -31,10 +25,10 @@ export function TxnAddress({ address, label }: TxnAddressProps) {
                     type={ExplorerLinkType.address}
                     address={address}
                     title="View on Sui Explorer"
-                    className="text-sui-dark font-mono text-body font-semibold no-underline uppercase tracking-wider"
+                    className="text-sui-dark font-mono text-body font-medium no-underline tracking-wider"
                     showIcon={false}
                 >
-                    {txnAddress}
+                    {truncatedAddress}
                 </ExplorerLink>
             </div>
         </div>

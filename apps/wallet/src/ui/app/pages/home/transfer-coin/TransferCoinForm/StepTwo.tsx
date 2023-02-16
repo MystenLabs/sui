@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormikContext } from 'formik';
-import { useRef, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
@@ -12,28 +11,20 @@ import { parseAmount } from '_helpers';
 import { useAppSelector, useFormatCoin, useCoinDecimals } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
-import type { FormValues } from '../';
-
 export type TransferCoinFormProps = {
     coinType: string;
     gasCostEstimation: number | null;
     onClearSubmitError: () => void;
+    to: string;
+    amount: string;
 };
 
 export function StepTwo({
     coinType,
     gasCostEstimation,
-    onClearSubmitError,
+    to,
+    amount,
 }: TransferCoinFormProps) {
-    const {
-        values: { amount, to },
-    } = useFormikContext<FormValues>();
-    const onClearRef = useRef(onClearSubmitError);
-    onClearRef.current = onClearSubmitError;
-    useEffect(() => {
-        onClearRef.current();
-    }, [amount, to]);
-
     const accountAddress = useAppSelector(({ account }) => account.address);
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = useMemo(
@@ -44,7 +35,7 @@ export function StepTwo({
     const [formattedGas] = useFormatCoin(gasCostEstimation, GAS_TYPE_ARG);
 
     return (
-        <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5">
+        <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">
             <TxnAmount
                 amount={amountWithoutDecimals.toString()}
                 label="Sending"

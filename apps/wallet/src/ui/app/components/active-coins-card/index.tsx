@@ -70,7 +70,7 @@ export function ActiveCoinsCard({
             <Text variant="caption" color="steel-darker" weight="semibold">
                 My Coins
             </Text>
-            <div className="flex flex-row justify-between items-center mt-2">
+            <div className="flex flex-col justify-between items-center mt-2">
                 {coins.map(({ coinType, balance }) => (
                     <Link
                         to={`/send?${new URLSearchParams({

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Coins16 } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -31,14 +32,18 @@ export interface CoinIconProps extends VariantProps<typeof imageStyle> {
 // TODO: (jibz) use getCoinMetadata to get the coin metadata and use sui icons
 
 export function CoinIcon({ coinType, ...styleProps }: CoinIconProps) {
-    const coinIcon =
-        coinType === SUI_TYPE_ARG ? SuiIcons.SuiLogoIcon : SuiIcons.Tokens;
     return (
         <div className={imageStyle(styleProps)}>
-            <Icon
-                icon={coinIcon}
-                className="flex h-full w-full items-center justify-center text-white text-body"
-            />
+            {coinType === SUI_TYPE_ARG ? (
+                <Icon
+                    icon={SuiIcons.SuiLogoIcon}
+                    className="flex h-full w-full items-center justify-center text-white text-body"
+                />
+            ) : (
+                <div className="flex h-full w-full items-center justify-center text-white">
+                    <Coins16 />
+                </div>
+            )}
         </div>
     );
 }
