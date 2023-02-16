@@ -2,4 +2,4 @@
 "@mysten/sui.js": patch
 ---
 
-add headers for version
+Include client type and version in RPC client request headers
