@@ -9052,6 +9052,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-types",
  "tokio",
+ "versions",
  "workspace-hack",
 ]
 
@@ -10642,6 +10643,16 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "versions"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee97e1d97bd593fb513912a07691b742361b3dd64ad56f2c694ea2dbfe0665d3"
+dependencies = [
+ "itertools",
+ "nom 7.1.2",
+]
 
 [[package]]
 name = "vte"

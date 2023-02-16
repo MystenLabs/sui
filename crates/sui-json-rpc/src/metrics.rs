@@ -220,7 +220,7 @@ where
     }
 }
 
-fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
+pub fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
     content_type
         .and_then(|val| val.to_str().ok())
         .map_or(false, |content| {

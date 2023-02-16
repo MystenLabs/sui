@@ -19,6 +19,7 @@ use tracing::{info, warn};
 use sui_open_rpc::{Module, Project};
 
 use crate::metrics::MetricsLayer;
+use crate::routing_layer::RoutingLayer;
 
 pub mod api;
 pub mod bcs_api;
@@ -28,6 +29,7 @@ pub mod event_api;
 pub mod governance_api;
 mod metrics;
 pub mod read_api;
+mod routing_layer;
 pub mod threshold_bls_api;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
@@ -107,6 +109,8 @@ impl JsonRpcServerBuilder {
                 HeaderName::from_static(APP_NAME_HEADER),
             ]);
 
+        let routing = self.rpc_doc.method_routing.clone();
+
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
         let methods_names = self.module.method_names().collect::<Vec<_>>();
@@ -121,8 +125,11 @@ impl JsonRpcServerBuilder {
             .unwrap_or(u32::MAX);
 
         let metrics_layer = MetricsLayer::new(&self.registry, &methods_names);
+        let routing_layer = RoutingLayer::new(routing);
+
         let middleware = tower::ServiceBuilder::new()
             .layer(cors)
+            .layer(routing_layer)
             .layer(metrics_layer);
 
         let server = ServerBuilder::default()

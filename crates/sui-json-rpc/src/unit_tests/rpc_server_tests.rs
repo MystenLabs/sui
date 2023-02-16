@@ -1,3 +1,4 @@
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::api::CoinReadApiClient;
@@ -6,6 +7,11 @@ use crate::api::{RpcFullNodeReadApiClient, ThresholdBlsApiClient, TransactionExe
 use crate::api::{RpcReadApiClient, RpcTransactionBuilderClient};
 use std::path::Path;
 
+use hyper::HeaderMap;
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::http_client::{HeaderValue, HttpClientBuilder};
+use jsonrpsee::rpc_params;
+use prometheus::Registry;
 #[cfg(not(msim))]
 use std::str::FromStr;
 use sui_config::SUI_KEYSTORE_FILENAME;
@@ -34,6 +40,8 @@ use test_utils::network::TestClusterBuilder;
 use sui_macros::sim_test;
 use sui_types::governance::{DelegatedStake, DelegationStatus};
 
+use crate::JsonRpcServerBuilder;
+use sui_config::utils::get_available_port;
 use tokio::time::{sleep, Duration};
 
 #[sim_test]
@@ -1182,4 +1190,112 @@ async fn test_delegation_with_locked_sui() -> Result<(), anyhow::Error> {
     ));
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_rpc_backward_compatibility() {
+    use crate::SuiRpcModule;
+    use async_trait::async_trait;
+    use jsonrpsee::core::RpcResult;
+    use jsonrpsee::RpcModule;
+    use jsonrpsee_proc_macros::rpc;
+    use sui_open_rpc::Module;
+    use sui_open_rpc_macros::open_rpc;
+
+    #[open_rpc(namespace = "test")]
+    #[rpc(server, client, namespace = "test")]
+    trait TestApi {
+        #[method(name = "foo")]
+        async fn foo(&self, some_bool: bool) -> RpcResult<String>;
+
+        #[method(name = "foo", version <= "1.5")]
+        async fn bar(&self, some_str: String) -> RpcResult<String>;
+    }
+
+    struct TestApiModule;
+
+    #[async_trait]
+    impl TestApiServer for TestApiModule {
+        async fn foo(&self, _some_bool: bool) -> RpcResult<String> {
+            Ok("Some string".into())
+        }
+
+        async fn bar(&self, _some_str: String) -> RpcResult<String> {
+            Ok("Some string from old method".into())
+        }
+    }
+
+    impl SuiRpcModule for TestApiModule {
+        fn rpc(self) -> RpcModule<Self> {
+            self.into_rpc()
+        }
+        fn rpc_doc_module() -> Module {
+            TestApiOpenRpc::module_doc()
+        }
+    }
+
+    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new()).unwrap();
+    builder.register_module(TestApiModule).unwrap();
+
+    let port = get_available_port("0.0.0.0");
+    let handle = builder
+        .start(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)))
+        .await
+        .unwrap();
+    let url = format!("http://0.0.0.0:{}", port);
+
+    // Test with un-versioned client
+    let client = HttpClientBuilder::default().build(&url).unwrap();
+    let response: String = client.request("test_foo", rpc_params!(true)).await.unwrap();
+    assert_eq!("Some string", response);
+
+    // Test with versioned client, version > backward compatible method version
+    let mut versioned_header = HeaderMap::new();
+    versioned_header.insert("client_api_version", HeaderValue::from_static("1.6"));
+    let client_with_new_header = HttpClientBuilder::default()
+        .set_headers(versioned_header)
+        .build(&url)
+        .unwrap();
+
+    let response: String = client_with_new_header
+        .request("test_foo", rpc_params!(true))
+        .await
+        .unwrap();
+    assert_eq!("Some string", response);
+
+    // Test with versioned client, version = backward compatible method version
+    let mut versioned_header = HeaderMap::new();
+    versioned_header.insert("client_api_version", HeaderValue::from_static("1.5"));
+    let client_with_new_header = HttpClientBuilder::default()
+        .set_headers(versioned_header)
+        .build(&url)
+        .unwrap();
+
+    let response: String = client_with_new_header
+        .request(
+            "test_foo",
+            rpc_params!("old version expect string as input"),
+        )
+        .await
+        .unwrap();
+    assert_eq!("Some string from old method", response);
+
+    // Test with versioned client, version < backward compatible method version
+    let mut versioned_header = HeaderMap::new();
+    versioned_header.insert("client_api_version", HeaderValue::from_static("1.4"));
+    let client_with_new_header = HttpClientBuilder::default()
+        .set_headers(versioned_header)
+        .build(&url)
+        .unwrap();
+
+    let response: String = client_with_new_header
+        .request(
+            "test_foo",
+            rpc_params!("old version expect string as input"),
+        )
+        .await
+        .unwrap();
+    assert_eq!("Some string from old method", response);
+
+    handle.stop().unwrap()
 }
