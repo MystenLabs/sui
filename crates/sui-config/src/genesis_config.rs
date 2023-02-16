@@ -15,7 +15,6 @@ use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::object::Object;
-use sui_types::sui_serde::KeyPairBase64;
 
 use crate::genesis::GenesisChainParameters;
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
@@ -102,12 +101,9 @@ impl GenesisConfig {
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorGenesisInfo {
-    #[serde_as(as = "KeyPairBase64")]
     pub key_pair: AuthorityKeyPair,
-    #[serde_as(as = "KeyPairBase64")]
     pub worker_key_pair: NetworkKeyPair,
     pub account_key_pair: SuiKeyPair,
-    #[serde_as(as = "KeyPairBase64")]
     pub network_key_pair: NetworkKeyPair,
     pub network_address: Multiaddr,
     pub p2p_address: Multiaddr,
