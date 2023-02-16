@@ -283,7 +283,7 @@ impl ProtocolConfig {
         self.obj_metadata_cost_non_refundable
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn storage_rebate_rate(&self) -> f64 {
+    pub fn storage_rebate_rate(&self) -> u64 {
         self.storage_rebate_rate.expect(CONSTANT_ERR_MSG)
     }
     pub fn storage_fund_reinvest_rate(&self) -> u64 {
