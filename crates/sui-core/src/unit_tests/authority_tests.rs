@@ -2004,7 +2004,10 @@ async fn test_handle_confirmation_transaction_ok() {
             .parent(&(object_id, new_account.version(), new_account.digest()))
             .await
             .unwrap();
-        authority_state.read_certificate(&refx).await.unwrap()
+        authority_state
+            .database
+            .get_certified_transaction(&refx)
+            .unwrap()
     };
     if let Some(certified_transaction) = opt_cert {
         // valid since our test authority should not update its certificate set
