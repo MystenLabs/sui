@@ -389,8 +389,7 @@
                   }
                 ]
               },
-              "timestamp_ms": null,
-              "parsed_data": null
+              "timestamp_ms": null
             }
           }
         }
@@ -1599,8 +1598,7 @@
                   }
                 ]
               },
-              "timestamp_ms": null,
-              "parsed_data": null
+              "timestamp_ms": null
             }
           }
         }
@@ -5883,137 +5881,6 @@
           "Friend"
         ]
       },
-      "SuiParsedMergeCoinResponse": {
-        "type": "object",
-        "required": [
-          "updatedCoin",
-          "updatedGas"
-        ],
-        "properties": {
-          "updatedCoin": {
-            "description": "The updated original coin object after merge",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          },
-          "updatedGas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "SuiParsedPublishResponse": {
-        "type": "object",
-        "required": [
-          "createdObjects",
-          "package",
-          "updatedGas"
-        ],
-        "properties": {
-          "createdObjects": {
-            "description": "List of Move objects created as part of running the module initializers in the package",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "package": {
-            "description": "The newly published package object reference.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ObjectRef"
-              }
-            ]
-          },
-          "updatedGas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "SuiParsedSplitCoinResponse": {
-        "type": "object",
-        "required": [
-          "newCoins",
-          "updatedCoin",
-          "updatedGas"
-        ],
-        "properties": {
-          "newCoins": {
-            "description": "All the newly created coin objects generated from the split",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Object"
-            }
-          },
-          "updatedCoin": {
-            "description": "The updated original coin object after split",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          },
-          "updatedGas": {
-            "description": "The updated gas payment object after deducting payment",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Object"
-              }
-            ]
-          }
-        }
-      },
-      "SuiParsedTransactionResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "Publish"
-            ],
-            "properties": {
-              "Publish": {
-                "$ref": "#/components/schemas/SuiParsedPublishResponse"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "MergeCoin"
-            ],
-            "properties": {
-              "MergeCoin": {
-                "$ref": "#/components/schemas/SuiParsedMergeCoinResponse"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "SplitCoin"
-            ],
-            "properties": {
-              "SplitCoin": {
-                "$ref": "#/components/schemas/SuiParsedSplitCoinResponse"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "SuiSystemState": {
         "description": "Rust version of the Move sui::sui_system::SuiSystemState type",
         "type": "object",
@@ -6157,16 +6024,6 @@
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
-          },
-          "parsed_data": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SuiParsedTransactionResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "timestamp_ms": {
             "type": [
