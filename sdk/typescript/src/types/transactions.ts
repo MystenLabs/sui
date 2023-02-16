@@ -364,7 +364,6 @@ export const SuiTransactionResponse = object({
   certificate: CertifiedTransaction,
   effects: TransactionEffects,
   timestamp_ms: union([number(), literal(null)]),
-  parsed_data: union([SuiParsedTransactionResponse, literal(null)]),
 });
 export type SuiTransactionResponse = Infer<typeof SuiTransactionResponse>;
 
@@ -593,60 +592,6 @@ export function getTimestampFromTransactionResponse(
   data: SuiExecuteTransactionResponse | SuiTransactionResponse,
 ): number | undefined {
   return 'timestamp_ms' in data ? data.timestamp_ms ?? undefined : undefined;
-}
-
-export function getParsedSplitCoinResponse(
-  data: SuiTransactionResponse,
-): SuiParsedSplitCoinResponse | undefined {
-  const parsed = data.parsed_data;
-  return parsed && 'SplitCoin' in parsed ? parsed.SplitCoin : undefined;
-}
-
-export function getParsedMergeCoinResponse(
-  data: SuiTransactionResponse,
-): SuiParsedMergeCoinResponse | undefined {
-  const parsed = data.parsed_data;
-  return parsed && 'MergeCoin' in parsed ? parsed.MergeCoin : undefined;
-}
-
-export function getParsedPublishResponse(
-  data: SuiTransactionResponse,
-): SuiParsedPublishResponse | undefined {
-  const parsed = data.parsed_data;
-  return parsed && 'Publish' in parsed ? parsed.Publish : undefined;
-}
-
-/**
- * Get the updated coin after a merge.
- * @param data the response for executing a merge coin transaction
- * @returns the updated state of the primary coin after the merge
- */
-export function getCoinAfterMerge(
-  data: SuiTransactionResponse,
-): SuiObject | undefined {
-  return getParsedMergeCoinResponse(data)?.updatedCoin;
-}
-
-/**
- * Get the updated coin after a split.
- * @param data the response for executing a Split coin transaction
- * @returns the updated state of the original coin object used for the split
- */
-export function getCoinAfterSplit(
-  data: SuiTransactionResponse,
-): SuiObject | undefined {
-  return getParsedSplitCoinResponse(data)?.updatedCoin;
-}
-
-/**
- * Get the newly created coin after a split.
- * @param data the response for executing a Split coin transaction
- * @returns the updated state of the original coin object used for the split
- */
-export function getNewlyCreatedCoinsAfterSplit(
-  data: SuiTransactionResponse,
-): SuiObject[] | undefined {
-  return getParsedSplitCoinResponse(data)?.newCoins;
 }
 
 /**
