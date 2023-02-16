@@ -11,13 +11,15 @@ macro_rules! invariant_violation {
 }
 
 macro_rules! assert_invariant {
-    ($cond:expr, $msg:expr) => {
+    ($cond:expr, $msg:expr) => {{
         if !$cond {
             invariant_violation!($msg)
         }
-    };
+    }};
 }
 
 pub mod adapter;
 pub mod execution_engine;
 pub mod execution_mode;
+pub mod genesis;
+pub mod programmable_transactions;
