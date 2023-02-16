@@ -14,7 +14,6 @@ import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 export type TransferCoinFormProps = {
     coinType: string;
     gasCostEstimation: number | null;
-    onClearSubmitError: () => void;
     to: string;
     amount: string;
 };

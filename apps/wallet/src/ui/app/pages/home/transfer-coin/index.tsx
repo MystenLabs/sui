@@ -76,7 +76,6 @@ function TransferCoinPage() {
         () => allCoins.filter((aCoin) => aCoin.type === coinType),
         [allCoins, coinType]
     );
-    const [sendError, setSendError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
     const [formData, setFormData] = useState<FormValues>(initialValues);
 
@@ -126,8 +125,6 @@ function TransferCoinPage() {
         if (coinType === null || !gasBudgetEstimationUnits) {
             return;
         }
-
-        setSendError(null);
         trackEvent('TransferCoins', {
             props: { coinType },
         });
@@ -152,8 +149,6 @@ function TransferCoinPage() {
             navigate(receiptUrl);
         } catch (e) {
             const errorMsg = (e as SerializedError).message || null;
-            setSendError(errorMsg);
-
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     {errorMsg ? (
@@ -173,9 +168,6 @@ function TransferCoinPage() {
         navigate,
     ]);
 
-    const handleOnClearSubmitError = useCallback(() => {
-        setSendError(null);
-    }, []);
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
@@ -213,7 +205,6 @@ function TransferCoinPage() {
                     coinType={coinType}
                     balance={coinBalance}
                     gasCostEstimation={gasBudgetEstimation || null}
-                    onClearSubmitError={handleOnClearSubmitError}
                     onAmountChanged={(anAmount) => setAmountToSend(anAmount)}
                 />
             </Formik>

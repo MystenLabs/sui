@@ -4,7 +4,7 @@
 import { ArrowRight16 } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 
 import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
@@ -14,7 +14,6 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import AddressInput from '_components/address-input';
-import Alert from '_components/alert';
 import { parseAmount } from '_helpers';
 import { useCoinDecimals, useFormatCoin } from '_hooks';
 import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
@@ -23,7 +22,6 @@ import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
 import type { FormValues } from './';
 
 export type TransferCoinFormProps = {
-    submitError: string | null;
     coinType: string;
     gasCostEstimation: number | null;
     onClearSubmitError: () => void;
@@ -33,26 +31,19 @@ export type TransferCoinFormProps = {
 
 //TODO: update the form input to use input with action component
 export function SendTokenForm({
-    submitError,
     coinType,
-    onClearSubmitError,
     onAmountChanged,
     gasCostEstimation,
     balance,
 }: TransferCoinFormProps) {
     const {
         validateForm,
-        values: { amount, to, isPayAllSui },
+        values: { amount, isPayAllSui },
         setFieldValue,
         isValid,
         isSubmitting,
         submitForm,
     } = useFormikContext<FormValues>();
-    const onClearRef = useRef(onClearSubmitError);
-    onClearRef.current = onClearSubmitError;
-    useEffect(() => {
-        onClearRef.current();
-    }, [amount, to]);
 
     const [coinDecimals, { isLoading: isCoinDecimalsLoading }] =
         useCoinDecimals(coinType);
@@ -129,7 +120,7 @@ export function SendTokenForm({
                             actionDisabled={
                                 parsedAmount === balance ||
                                 queryResult.isLoading ||
-                                !maxToken
+                                !maxToken 
                             }
                         />
                     </div>
@@ -172,12 +163,6 @@ export function SendTokenForm({
                                 placeholder="Enter Address"
                             />
                         </div>
-
-                        {submitError ? (
-                            <div className="mt-3 w-full">
-                                <Alert>{submitError}</Alert>
-                            </div>
-                        ) : null}
                     </div>
                 </Form>
             </Content>
