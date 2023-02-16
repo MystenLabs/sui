@@ -117,6 +117,7 @@ pub struct AuthorityPerEpochStore {
     /// the last few seconds of an epoch.
     epoch_close_time: RwLock<Option<Instant>>,
     metrics: Arc<EpochMetrics>,
+    epoch_start_configuration: Arc<EpochStartConfiguration>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -317,12 +318,25 @@ impl AuthorityPerEpochStore {
         // (1) For the first epoch, this is inserted in the DB along with genesis checkpoint
         // (2) For other epochs, this is updated when AuthorityPerEpochStore
         // is initialized during epoch change
-        if let Some(epoch_start_configuration) = epoch_start_configuration {
-            tables
-                .epoch_start_configuration
-                .insert(&(), &epoch_start_configuration)
-                .expect("Failed to store epoch_start_configuration");
-        }
+        let epoch_start_configuration =
+            if let Some(epoch_start_configuration) = epoch_start_configuration {
+                tables
+                    .epoch_start_configuration
+                    .insert(&(), &epoch_start_configuration)
+                    .expect("Failed to store epoch_start_configuration");
+                epoch_start_configuration
+            } else {
+                assert!(
+                    epoch_id > 0,
+                    "epoch_start_configuration should be provided for epoch 0"
+                );
+                tables
+                    .epoch_start_configuration
+                    .get(&())
+                    .expect("Failed to load epoch_start_configuration")
+                    .expect("epoch_start_configuration not found for non-0 epoch")
+            };
+        let epoch_start_configuration = Arc::new(epoch_start_configuration);
         metrics.current_epoch.set(epoch_id as i64);
         metrics
             .current_voting_right
@@ -343,6 +357,7 @@ impl AuthorityPerEpochStore {
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
+            epoch_start_configuration,
         })
     }
 
@@ -350,12 +365,10 @@ impl AuthorityPerEpochStore {
         self.parent_path.clone()
     }
 
-    pub fn epoch_start_configuration(&self) -> SuiResult<EpochStartConfiguration> {
-        Ok(self
-            .tables
-            .epoch_start_configuration
-            .get(&())?
-            .expect("epoch_start_configuration was not initialized properly"))
+    /// Returns &Arc<EpochStartConfiguration>
+    /// User can treat this Arc as &EpochStartConfiguration, or clone the Arc to pass as owned object
+    pub fn epoch_start_configuration(&self) -> &Arc<EpochStartConfiguration> {
+        &self.epoch_start_configuration
     }
 
     pub fn new_at_next_epoch(
