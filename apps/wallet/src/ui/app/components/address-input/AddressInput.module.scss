@@ -54,7 +54,11 @@
     &.invalid-addr {
         .input-group-append,
         .textarea {
-            border-color: colors.$error;
+            border-color: colors.$issue;
+        }
+
+        .textarea {
+            border-right: transparent;
         }
     }
 
