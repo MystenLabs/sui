@@ -8,10 +8,14 @@ import Browser from 'webextension-polyfill';
 
 import { Window } from './Window';
 
-import type { TransactionDataType } from '_messages/payloads/transactions/ExecuteTransactionRequest';
+import type {
+    ExecuteTransactionRequest,
+    TransactionDataType,
+} from '_messages/payloads/transactions/ExecuteTransactionRequest';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
+import { SignedTransaction, SuiTransactionResponse } from '@mysten/sui.js';
 
 const TX_STORE_KEY = 'transactions';
 
@@ -25,60 +29,17 @@ function openTxWindow(txRequestID: string) {
 class Transactions {
     private _txResponseMessages = new Subject<TransactionRequestResponse>();
 
-    async signTransaction(
-        input: SuiSignTransactionInput,
-        connection: ContentScriptConnection
-    ) {
-        const txRequest = this.createTransactionRequest(
-            { type: 'v2', justSign: true, data: input.transaction },
-            connection.origin,
-            connection.originFavIcon
-        );
-        await this.storeTransactionRequest(txRequest);
-        const popUp = openTxWindow(txRequest.id);
-        const popUpClose = (await popUp.show()).pipe(
-            take(1),
-            map<number, false>(() => false)
-        );
-        const txResponseMessage = this._txResponseMessages.pipe(
-            filter((msg) => msg.txID === txRequest.id),
-            take(1)
-        );
-        return lastValueFrom(
-            race(popUpClose, txResponseMessage).pipe(
-                take(1),
-                map(async (response) => {
-                    if (response) {
-                        const { approved, txSigned, tsResultError } = response;
-                        if (approved) {
-                            txRequest.approved = approved;
-                            txRequest.txSigned = txSigned;
-                            txRequest.txResultError = tsResultError;
-                            if (tsResultError) {
-                                throw new Error(
-                                    `Transaction failed with the following error. ${tsResultError}`
-                                );
-                            }
-                            if (!txSigned) {
-                                throw new Error('Missing signed transaction');
-                            }
-                            await this.storeTransactionRequest(txRequest);
-                            return txSigned;
-                        }
-                    }
-                    await this.removeTransactionRequest(txRequest.id);
-                    throw new Error('Transaction rejected from user');
-                })
-            )
-        );
-    }
-
-    public async executeTransaction(
-        tx: TransactionDataType,
-        connection: ContentScriptConnection
-    ) {
-        const txRequest = this.createTransactionRequest(
+    public async executeOrSignTransaction(
+        {
             tx,
+            sign,
+        }:
+            | { tx: TransactionDataType; sign?: undefined }
+            | { tx?: undefined; sign: SuiSignTransactionInput },
+        connection: ContentScriptConnection
+    ): Promise<SuiTransactionResponse | SignedTransaction> {
+        const txRequest = this.createTransactionRequest(
+            tx ?? { type: 'v2', justSign: true, data: sign.transaction },
             connection.origin,
             connection.originFavIcon
         );
@@ -97,21 +58,28 @@ class Transactions {
                 take(1),
                 map(async (response) => {
                     if (response) {
-                        const { approved, txResult, tsResultError } = response;
+                        const { approved, txResult, txSigned, tsResultError } =
+                            response;
                         if (approved) {
                             txRequest.approved = approved;
                             txRequest.txResult = txResult;
                             txRequest.txResultError = tsResultError;
+                            txRequest.txSigned = txSigned;
                             await this.storeTransactionRequest(txRequest);
                             if (tsResultError) {
                                 throw new Error(
                                     `Transaction failed with the following error. ${tsResultError}`
                                 );
                             }
-                            if (!txResult) {
+                            if (sign && !txSigned) {
+                                throw new Error(
+                                    'Transaction signature is empty'
+                                );
+                            }
+                            if (tx && !txResult) {
                                 throw new Error(`Transaction result is empty`);
                             }
-                            return txResult;
+                            return tx ? txResult! : txSigned!;
                         }
                     }
                     await this.removeTransactionRequest(txRequest.id);

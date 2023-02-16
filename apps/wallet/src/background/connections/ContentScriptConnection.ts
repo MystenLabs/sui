@@ -22,7 +22,11 @@ import {
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
 
-import type { SuiAddress } from '@mysten/sui.js';
+import type {
+    SignedTransaction,
+    SuiAddress,
+    SuiTransactionResponse,
+} from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -96,15 +100,15 @@ export class ContentScriptConnection extends Connection {
                     'suggestTransactions',
                 ]);
                 if (allowed) {
-                    const result = await Transactions.executeTransaction(
-                        payload.transaction,
+                    const result = await Transactions.executeOrSignTransaction(
+                        { tx: payload.transaction },
                         this
                     );
                     this.send(
                         createMessage<ExecuteTransactionResponse>(
                             {
                                 type: 'execute-transaction-response',
-                                result,
+                                result: result as SuiTransactionResponse,
                             },
                             msg.id
                         )
@@ -118,15 +122,15 @@ export class ContentScriptConnection extends Connection {
                     'suggestTransactions',
                 ]);
                 if (allowed) {
-                    const result = await Transactions.signTransaction(
-                        payload.transaction,
+                    const result = await Transactions.executeOrSignTransaction(
+                        { sign: payload.transaction },
                         this
                     );
                     this.send(
                         createMessage<SignTransactionResponse>(
                             {
                                 type: 'sign-transaction-response',
-                                result,
+                                result: result as SignedTransaction,
                             },
                             msg.id
                         )
