@@ -505,7 +505,7 @@ impl AuthorityState {
     pub async fn handle_transaction(
         &self,
         transaction: VerifiedTransaction,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+    ) -> Result<HandleTransactionResponse, SuiError> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
 
         let tx_digest = *transaction.digest();
@@ -515,8 +515,8 @@ impl AuthorityState {
         );
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
-        if let Some(response) = self.make_transaction_info(&tx_digest, &epoch_store)? {
-            return Ok(response);
+        if let Some((_, status)) = self.get_transaction_status(&tx_digest, &epoch_store)? {
+            return Ok(HandleTransactionResponse { status });
         }
         // CRITICAL! Validators should never sign an external system transaction.
         fp_ensure!(
@@ -542,13 +542,18 @@ impl AuthorityState {
             .handle_transaction_impl(transaction, &epoch_store)
             .await;
         match signed {
-            Ok(s) => Ok(VerifiedTransactionInfoResponse::Signed(s)),
+            Ok(s) => Ok(HandleTransactionResponse {
+                status: TransactionStatus::Signed(s.into_inner().into_sig()),
+            }),
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(err) => self
-                .make_transaction_info(&tx_digest, &epoch_store)?
-                .ok_or(err),
+            Err(err) => Ok(HandleTransactionResponse {
+                status: self
+                    .get_transaction_status(&tx_digest, &epoch_store)?
+                    .ok_or(err)?
+                    .1,
+            }),
         }
     }
 
@@ -1299,12 +1304,17 @@ impl AuthorityState {
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
-    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
+    ) -> Result<TransactionInfoResponse, SuiError> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        self.make_transaction_info(&request.transaction_digest, &epoch_store)?
+        let (transaction, status) = self
+            .get_transaction_status(&request.transaction_digest, &epoch_store)?
             .ok_or(SuiError::TransactionNotFound {
                 digest: request.transaction_digest,
-            })
+            })?;
+        Ok(TransactionInfoResponse {
+            transaction,
+            status,
+        })
     }
 
     pub async fn handle_object_info_request(
@@ -2150,12 +2160,13 @@ impl AuthorityState {
             .expect("Cannot insert genesis object")
     }
 
-    /// Make an information response for a transaction
-    pub fn make_transaction_info(
+    /// Make an status response for a transaction
+    pub fn get_transaction_status(
         &self,
         transaction_digest: &TransactionDigest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<Option<VerifiedTransactionInfoResponse>, SuiError> {
+    ) -> Result<Option<(SenderSignedData, TransactionStatus)>, SuiError> {
+        // TODO: In the case of read path, we should not have to re-sign the effects.
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
@@ -2163,8 +2174,10 @@ impl AuthorityState {
                 .database
                 .get_certified_transaction(transaction_digest)?
             {
-                return Ok(Some(VerifiedTransactionInfoResponse::Executed(
-                    cert, effects,
+                let (tx, cert_sig) = cert.into_inner().into_data_and_sig();
+                return Ok(Some((
+                    tx,
+                    TransactionStatus::Executed(Some(cert_sig), effects.into_inner()),
                 )));
             }
             // The read of effects and read of cert are not atomic. It's possible that we reverted
@@ -2174,7 +2187,8 @@ impl AuthorityState {
         }
         if let Some(signed) = epoch_store.get_signed_transaction(transaction_digest)? {
             self.metrics.tx_already_processed.inc();
-            Ok(Some(VerifiedTransactionInfoResponse::Signed(signed)))
+            let (transaction, sig) = signed.into_inner().into_data_and_sig();
+            Ok(Some((transaction, TransactionStatus::Signed(sig))))
         } else {
             Ok(None)
         }

@@ -123,7 +123,7 @@ pub trait ValidatorProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)>;
+    ) -> anyhow::Result<(Option<SuiCertifiedTransaction>, ExecutionEffects)>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
@@ -275,7 +275,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+    ) -> anyhow::Result<(Option<SuiCertifiedTransaction>, ExecutionEffects)> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -289,7 +289,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         effects_cert,
                     } = resp;
                     return Ok((
-                        tx_cert.try_into().unwrap(),
+                        tx_cert.map(|cert| cert.try_into().unwrap()),
                         ExecutionEffects::CertifiedTransactionEffects(effects_cert.into()),
                     ));
                 }
@@ -522,7 +522,7 @@ impl ValidatorProxy for FullNodeProxy {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(SuiCertifiedTransaction, ExecutionEffects)> {
+    ) -> anyhow::Result<(Option<SuiCertifiedTransaction>, ExecutionEffects)> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -540,9 +540,8 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    let tx_cert = resp.tx_cert.unwrap();
                     let effects = ExecutionEffects::SuiTransactionEffects(resp.effects.unwrap());
-                    return Ok((tx_cert, effects));
+                    return Ok((resp.tx_cert, effects));
                 }
                 Err(err) => {
                     error!(

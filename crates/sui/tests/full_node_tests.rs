@@ -424,7 +424,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
         })
         .await?;
     // Check that it has been executed.
-    info.into_executed_for_testing();
+    info.status.into_effects_for_testing();
 
     Ok(())
 }
@@ -895,7 +895,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*certified_txn.unwrap().digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
     // verify that the node has sequenced and executed the txn
@@ -920,7 +920,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     } = rx.recv().await.unwrap().unwrap();
     let (ct, cte, is_executed_locally) = *res;
     assert_eq!(*ct.unwrap().digest(), digest);
-    assert_eq!(*certified_txn.digest(), digest);
+    assert_eq!(*certified_txn.unwrap().digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(!is_executed_locally);
     wait_for_tx(digest, node.state().clone()).await;

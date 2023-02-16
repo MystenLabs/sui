@@ -1045,7 +1045,10 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(account_info.into_signed_for_testing(), pending_confirmation);
+    assert_eq!(
+        &account_info.status.into_signed_for_testing(),
+        pending_confirmation.auth_sig()
+    );
 
     // Check the final state of the locks
     let Some(envelope) = authority_state.get_transaction_lock(
@@ -1177,18 +1180,15 @@ pub async fn send_and_confirm_transaction_(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let response = authority.handle_transaction(transaction.clone()).await?;
-    let vote = response.into_signed_for_testing();
+    let vote = response.status.into_signed_for_testing();
 
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
-    let certificate = CertifiedTransaction::new(
-        transaction.into_message(),
-        vec![vote.auth_sig().clone()],
-        &committee,
-    )
-    .unwrap()
-    .verify(&committee)
-    .unwrap();
+    let certificate =
+        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
+            .unwrap()
+            .verify(&committee)
+            .unwrap();
 
     if with_shared {
         send_consensus(authority, &certificate).await;
@@ -1507,19 +1507,19 @@ async fn test_conflicting_transactions() {
             .unwrap();
 
         assert_eq!(
-            ok.clone().into_signed_for_testing().digest(),
+            &ok.clone().status.into_signed_for_testing(),
             object_info
                 .lock_for_debugging
                 .expect("object should be locked")
-                .digest()
+                .auth_sig()
         );
 
         assert_eq!(
-            ok.into_signed_for_testing().digest(),
+            &ok.clone().status.into_signed_for_testing(),
             gas_info
                 .lock_for_debugging
                 .expect("gas should be locked")
-                .digest()
+                .auth_sig()
         );
 
         authority_state.database.reset_locks_for_test(
@@ -1559,17 +1559,15 @@ async fn test_handle_transfer_transaction_double_spend() {
         gas_object.compute_object_reference(),
     );
 
-    let signed_transaction: TransactionInfoResponse = authority_state
+    let signed_transaction = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await
-        .unwrap()
-        .into();
+        .unwrap();
     // calls to handlers are idempotent -- returns the same.
-    let double_spend_signed_transaction: TransactionInfoResponse = authority_state
+    let double_spend_signed_transaction = authority_state
         .handle_transaction(transfer_transaction)
         .await
-        .unwrap()
-        .into();
+        .unwrap();
     // this is valid because our test authority should not change its certified transaction
     assert_eq!(signed_transaction, double_spend_signed_transaction);
 }
@@ -1676,6 +1674,7 @@ async fn test_type_argument_dependencies() {
         .handle_transaction(transaction)
         .await
         .unwrap()
+        .status
         .into_signed_for_testing();
     // obj type tag succeeds
     let data = TransactionData::new_move_call_with_dummy_gas_price(
@@ -1698,6 +1697,7 @@ async fn test_type_argument_dependencies() {
         .handle_transaction(transaction)
         .await
         .unwrap()
+        .status
         .into_signed_for_testing();
     // missing package fails obj type tag succeeds
     let data = TransactionData::new_move_call_with_dummy_gas_price(
@@ -2089,7 +2089,10 @@ async fn test_handle_confirmation_transaction_idempotent() {
         .await
         .unwrap();
 
-    assert_eq!(info.into_executed_for_testing().1, signed_effects);
+    assert_eq!(
+        info.status.into_effects_for_testing(),
+        signed_effects.into_inner()
+    );
 }
 
 #[tokio::test]
@@ -2624,9 +2627,9 @@ async fn test_idempotent_reversed_confirmation() {
         result1.unwrap().into_message(),
         result2
             .unwrap()
-            .into_executed_for_testing()
-            .1
-            .into_message()
+            .status
+            .into_effects_for_testing()
+            .into_data()
     );
 }
 
@@ -4060,9 +4063,11 @@ async fn make_test_transaction(
             .handle_transaction(transaction.clone())
             .await
             .unwrap();
-        let vote = response.into_signed_for_testing();
-        sigs.push(vote.auth_sig().clone());
-        if let Ok(cert) = CertifiedTransaction::new(vote.into_message(), sigs.clone(), &committee) {
+        let vote = response.status.into_signed_for_testing();
+        sigs.push(vote.clone());
+        if let Ok(cert) =
+            CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
+        {
             return cert.verify(&committee).unwrap();
         }
     }
