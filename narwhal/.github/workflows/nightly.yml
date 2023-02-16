@@ -4,7 +4,7 @@ on:
   ## Allow triggering this workflow manually via GitHub CLI/web
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # every day at midnight
+    - cron: "0 0 * * *" # every day at midnight
 
 env:
   CARGO_TERM_COLOR: always
@@ -98,20 +98,12 @@ jobs:
         with:
           crate: cargo-udeps
           locked: true
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-hakari
-          locked: true
       # Normally running cargo-udeps requires use of a nightly compiler
       # In order to have a more stable and less noisy experience, lets instead
       # opt to use the stable toolchain specified via the 'rust-toolchain' file
       # and instead enable nightly features via 'RUSTC_BOOTSTRAP'
       - name: run cargo-udeps
         run: |
-          # First we need to disable the workspace-hack package
-          cargo hakari disable
-          cargo hakari remove-deps -y
           RUSTC_BOOTSTRAP=1 cargo udeps
 
   report-status:
@@ -128,7 +120,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
         with:
-          channel-id: 'narwhal-tusk'
+          channel-id: "narwhal-tusk"
           payload: |
             {
               "text": "NARWAL Workflow *${{ github.workflow }}* failed",

@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - devnet
-      - 'dependabot/**'
+      - "dependabot/**"
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -39,15 +39,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-hakari
-          locked: true
       - run: scripts/license_check.sh
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
     runs-on: ${{ matrix.os }}
@@ -110,5 +102,5 @@ jobs:
     name: cargo-deny (advisories, licenses, bans, ...)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: actions/checkout@v3
+      - uses: EmbarkStudios/cargo-deny-action@v1

@@ -24,14 +24,6 @@ jobs:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.AUTOMERGE_TOKEN }}
       - uses: actions-rs/toolchain@v1
-      - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-hakari
-          locked: true
-      - name: run cargo-hakari
-        run: |
-          cargo hakari generate
       - name: Check for modified files
         id: git-check
         run: echo "modified=$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)" >> $GITHUB_OUTPUT
@@ -42,12 +34,12 @@ jobs:
           git config --global user.name 'Francois Garillot'
           git config --global user.email 'francois@mystenlabs.com'
           git remote set-url origin https://x-access-token:${{ secrets.AUTOMERGE_TOKEN }}@github.com/${{ github.repository }}
-          git commit -am "chore(deps): cargo hakari"
+          git commit -am "chore(deps): cargo"
           git push
       - uses: ahmadnassri/action-dependabot-auto-merge@v2.6
         with:
           github-token: ${{ secrets.AUTOMERGE_TOKEN }}
-          command: 'squash and merge'
+          command: "squash and merge"
           target: minor
       - name: Enable auto-merge for Dependabot PRs on patch versions
         if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
@@ -55,4 +47,3 @@ jobs:
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
