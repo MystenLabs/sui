@@ -125,7 +125,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             image_url,
             project_url,
         } => {
-            let mut builder = Builder::load_with_expected_protocol_version(&dir, protocol_version)?;
+            let mut builder = Builder::load(&dir)?;
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
             let account_keypair: SuiKeyPair = read_keypair_from_file(account_key_file)?;
             let worker_keypair: NetworkKeyPair = read_network_keypair_from_file(worker_key_file)?;
@@ -160,7 +160,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             object_id,
             value,
         } => {
-            let mut builder = Builder::load_with_expected_protocol_version(&dir, protocol_version)?;
+            let mut builder = Builder::load(&dir)?;
 
             let object_id = object_id.unwrap_or_else(ObjectID::random);
             let object = Object::with_id_owner_gas_for_testing(object_id, address, value);
@@ -170,7 +170,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
-            let mut builder = Builder::load_with_expected_protocol_version(&dir, protocol_version)?;
+            let mut builder = Builder::load(&dir)?;
             let GenesisTuple(_, unsigned_checkpoint, ..) =
                 builder.build_unsigned_genesis_checkpoint();
             println!(
@@ -184,7 +184,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         CeremonyCommand::VerifyAndSign { key_file } => {
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
 
-            let mut builder = Builder::load_with_expected_protocol_version(&dir, protocol_version)?;
+            let mut builder = Builder::load(&dir)?;
+
+            check_protocol_version(&builder, protocol_version)?;
 
             // Don't sign unless the unsigned checkpoint has already been created
             if builder.unsigned_genesis_checkpoint().is_none() {
@@ -204,7 +206,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
 
         CeremonyCommand::Finalize => {
-            let builder = Builder::load_with_expected_protocol_version(&dir, protocol_version)?;
+            let builder = Builder::load(&dir)?;
+            check_protocol_version(&builder, protocol_version)?;
 
             let genesis = builder.build();
 
@@ -218,6 +221,18 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn check_protocol_version(builder: &Builder, protocol_version: ProtocolVersion) -> Result<()> {
+    // It is entirely possible for the user to sign a genesis blob with an unknown
+    // protocol version, but if this happens there is almost certainly some confusion
+    // (e.g. using a `sui` binary built at the wrong commit).
+    if builder.protocol_version() != protocol_version {
+        return Err(anyhow::anyhow!(
+                        "Serialized protocol version does not match local --protocol-version argument. ({:?} vs {:?})",
+                        builder.protocol_version(), protocol_version));
+    }
     Ok(())
 }
 

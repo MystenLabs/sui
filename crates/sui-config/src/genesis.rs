@@ -61,7 +61,6 @@ pub struct Genesis {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct GenesisTuple(
-    pub ProtocolVersion,
     pub CheckpointSummary,
     pub CheckpointContents,
     pub Transaction,
@@ -286,7 +285,9 @@ pub struct GenesisValidatorInfo {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisChainParameters {
     pub timestamp_ms: u64,
-    // In the future we can add the initial gas schedule or other parameters here
+    // protocol version that the chain starts at.
+    pub protocol_version: ProtocolVersion,
+    // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
 }
 
 impl GenesisChainParameters {
@@ -296,6 +297,7 @@ impl GenesisChainParameters {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as u64,
+            protocol_version: ProtocolVersion::MAX,
         }
     }
 }
@@ -308,8 +310,6 @@ impl Default for GenesisChainParameters {
 
 pub struct Builder {
     parameters: GenesisChainParameters,
-    // protocol version that the chain starts at.
-    protocol_version: ProtocolVersion,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
     // Validator signatures over 0: checkpoint 1: genesis transaction
@@ -328,7 +328,6 @@ impl Builder {
     pub fn new() -> Self {
         Self {
             parameters: Default::default(),
-            protocol_version: ProtocolVersion::MAX,
             objects: Default::default(),
             validators: Default::default(),
             signatures: Default::default(),
@@ -342,7 +341,7 @@ impl Builder {
     }
 
     pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
-        self.protocol_version = v;
+        self.parameters.protocol_version = v;
         self
     }
 
@@ -374,7 +373,7 @@ impl Builder {
     }
 
     pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
-        let GenesisTuple(_, checkpoint, _checkpoint_contents, transaction, _effects, _objects) =
+        let GenesisTuple(checkpoint, _checkpoint_contents, transaction, _effects, _objects) =
             self.build_unsigned_genesis_checkpoint();
 
         let name = keypair.public().into();
@@ -428,7 +427,6 @@ impl Builder {
             &self.parameters,
             &validators,
             &objects,
-            self.protocol_version,
         ));
 
         self.built_genesis.clone().unwrap()
@@ -448,8 +446,12 @@ impl Builder {
         result.get_current_epoch_committee().committee
     }
 
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.parameters.protocol_version
+    }
+
     pub fn build(mut self) -> Genesis {
-        let GenesisTuple(_, checkpoint, checkpoint_contents, transaction, effects, objects) =
+        let GenesisTuple(checkpoint, checkpoint_contents, transaction, effects, objects) =
             self.build_unsigned_genesis_checkpoint();
 
         let committee = Self::committee(&objects);
@@ -531,16 +533,7 @@ impl Builder {
         genesis
     }
 
-    pub fn load_with_expected_protocol_version<P: AsRef<Path>>(
-        path: P,
-        protocol_version: ProtocolVersion,
-    ) -> Result<Self, anyhow::Error> {
-        let res = Self::load(path)?;
-        assert_eq!(protocol_version, res.protocol_version);
-        Ok(res)
-    }
-
-    fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
         let path = path.as_ref();
         let path: &Utf8Path = path.try_into()?;
         trace!("Reading Genesis Builder from {}", path);
@@ -621,8 +614,7 @@ impl Builder {
                 .map(|(_, v)| v)
                 .collect::<Vec<_>>();
 
-            let built =
-                build_unsigned_genesis_data(&parameters, &validators, &objects, loaded_genesis.0);
+            let built = build_unsigned_genesis_data(&parameters, &validators, &objects);
             assert_eq!(
                 &built, loaded_genesis,
                 "loaded genesis does not match built genesis"
@@ -634,10 +626,6 @@ impl Builder {
             objects,
             validators: committee,
             signatures,
-            protocol_version: loaded_genesis
-                .as_ref()
-                .map(|l| l.0)
-                .unwrap_or(ProtocolVersion::MAX),
             built_genesis: loaded_genesis,
         })
     }
@@ -703,9 +691,8 @@ fn build_unsigned_genesis_data(
     parameters: &GenesisChainParameters,
     validators: &[GenesisValidatorInfo],
     objects: &[Object],
-    protocol_version: ProtocolVersion,
 ) -> GenesisTuple {
-    let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
 
     let mut genesis_ctx = get_genesis_context();
 
@@ -721,7 +708,7 @@ fn build_unsigned_genesis_data(
         objects,
         validators,
         parameters.timestamp_ms,
-        protocol_version,
+        parameters.protocol_version,
     );
 
     let (genesis_transaction, genesis_effects, objects) =
@@ -730,7 +717,6 @@ fn build_unsigned_genesis_data(
         create_genesis_checkpoint(parameters, &genesis_transaction, &genesis_effects);
 
     GenesisTuple(
-        protocol_version,
         checkpoint,
         checkpoint_contents,
         genesis_transaction,
