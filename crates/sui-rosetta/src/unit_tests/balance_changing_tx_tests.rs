@@ -19,7 +19,6 @@ use sui_sdk::rpc_types::{
     SuiTransactionResponse,
 };
 use sui_sdk::SuiClient;
-use sui_sdk::TransactionExecutionResult;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::intent::Intent;
@@ -139,7 +138,7 @@ async fn test_publish_and_move_call() {
         test_transaction(&client, keystore, vec![], sender, tx, None, 10000, false).await;
 
     // Test move call (reuse published module from above test)
-    let effect = response.effects.clone().unwrap();
+    let effect = response.effects;
     let package = effect
         .events
         .iter()
@@ -524,7 +523,7 @@ async fn test_transaction(
     gas: Option<ObjectRef>,
     budget: u64,
     expect_fail: bool,
-) -> TransactionExecutionResult {
+) -> SuiTransactionResponse {
     let gas = if let Some(gas) = gas {
         gas
     } else {
@@ -574,7 +573,7 @@ async fn test_transaction(
         .map_err(|e| anyhow!("TX execution failed for {data:#?}, error : {e}"))
         .unwrap();
 
-    let effects = response.effects.clone().unwrap();
+    let effects = &response.effects;
 
     if !expect_fail {
         assert_eq!(
@@ -587,15 +586,7 @@ async fn test_transaction(
         assert!(matches!(effects.status, SuiExecutionStatus::Failure { .. }));
     }
 
-    let tx_response = SuiTransactionResponse {
-        certificate: response.tx_cert.clone().unwrap(),
-        effects: effects.clone(),
-        timestamp_ms: None,
-        checkpoint: None,
-        parsed_data: None,
-    };
-
-    let ops = tx_response.try_into().unwrap();
+    let ops = response.clone().try_into().unwrap();
     let balances_from_ops = extract_balance_changes_from_ops(ops);
 
     // get actual balance changed after transaction

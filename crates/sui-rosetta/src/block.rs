@@ -43,7 +43,7 @@ pub async fn transaction(
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
     let response = context.client.read_api().get_transaction(digest).await?;
-    let hash = response.certificate.transaction_digest;
+    let hash = response.effects.transaction_digest;
 
     let operations = response.try_into()?;
 

@@ -313,7 +313,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
     type Error = Error;
     fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
         let status = Some(response.effects.status.into());
-        let ops: Operations = response.certificate.data.try_into()?;
+        let ops: Operations = response.signed_transaction.data.try_into()?;
         let ops = ops.set_status(status).into_iter();
 
         // We will need to subtract the operation amounts from the actual balance

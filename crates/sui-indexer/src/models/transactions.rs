@@ -121,20 +121,23 @@ pub fn commit_transactions(
 pub fn transaction_response_to_new_transaction(
     tx_resp: SuiTransactionResponse,
 ) -> Result<NewTransaction, IndexerError> {
-    let cer = tx_resp.certificate;
-    let txn_json = serde_json::to_string(&cer).map_err(|err| {
+    let txn_json = serde_json::to_string(&tx_resp.signed_transaction).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
             "Failed converting transaction {:?} to JSON with error: {:?}",
-            cer.clone(),
-            err
+            tx_resp.signed_transaction, err
         ))
     })?;
     // canonical txn digest string is Base58 encoded
-    let tx_digest = cer.transaction_digest.base58_encode();
-    let gas_budget = cer.data.gas_data.budget;
-    let gas_price = cer.data.gas_data.price;
-    let sender = cer.data.sender.to_string();
-    let txn_kind_iter = cer.data.transactions.iter().map(|k| k.to_string());
+    let tx_digest = tx_resp.effects.transaction_digest.base58_encode();
+    let gas_budget = tx_resp.signed_transaction.data.gas_data.budget;
+    let gas_price = tx_resp.signed_transaction.data.gas_data.price;
+    let sender = tx_resp.signed_transaction.data.sender.to_string();
+    let txn_kind_iter = tx_resp
+        .signed_transaction
+        .data
+        .transactions
+        .iter()
+        .map(|k| k.to_string());
 
     let effects = tx_resp.effects.clone();
     let created: Vec<String> = effects

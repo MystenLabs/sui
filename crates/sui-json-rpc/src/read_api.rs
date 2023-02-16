@@ -177,11 +177,11 @@ impl RpcReadApiServer for ReadApi {
             .get_transaction_checkpoint(&digest)
             .map_err(|e| anyhow!("{e}"))?;
         Ok(SuiTransactionResponse {
-            certificate: cert.try_into()?,
+            signed_transaction: cert.data().clone().try_into()?,
             effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
+            confirmed_local_execution: None,
             checkpoint: checkpoint.map(|(_epoch, checkpoint)| checkpoint),
-            parsed_data: None,
         })
     }
 
