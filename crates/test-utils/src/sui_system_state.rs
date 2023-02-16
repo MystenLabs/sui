@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::balance::{Balance, Supply};
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -11,8 +11,8 @@ use sui_types::crypto::{
 use sui_types::id::UID;
 use sui_types::sui_system_state::SystemParameters;
 use sui_types::sui_system_state::{
-    LinkedTable, StakeSubsidy, StakingPool, SuiSystemState, TableVec, Validator, ValidatorMetadata,
-    ValidatorSet,
+    LinkedTable, StakeSubsidy, StakingPool, SuiSystemState, Table, TableVec, Validator,
+    ValidatorMetadata, ValidatorSet,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
@@ -42,9 +42,9 @@ pub fn test_validatdor_metadata(
     }
 }
 
-pub fn test_staking_pool(sui_address: SuiAddress, sui_balance: u64) -> StakingPool {
+pub fn test_staking_pool(sui_balance: u64) -> StakingPool {
     StakingPool {
-        validator_address: sui_address,
+        id: ObjectID::from(SuiAddress::ZERO),
         starting_epoch: 0,
         sui_balance,
         rewards_pool: Balance::new(0),
@@ -68,7 +68,7 @@ pub fn test_validator(
         pending_stake: 1,
         pending_withdraw: 1,
         gas_price: 1,
-        delegation_staking_pool: test_staking_pool(sui_address, delegated_amount),
+        delegation_staking_pool: test_staking_pool(delegated_amount),
         commission_rate: 0,
     }
 }
@@ -81,6 +81,7 @@ pub fn test_sui_system_state(epoch: EpochId, validators: Vec<Validator>) -> SuiS
         pending_validators: vec![],
         pending_removals: vec![],
         next_epoch_validators: vec![],
+        staking_pool_mappings: Table::default(),
     };
     SuiSystemState {
         info: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),

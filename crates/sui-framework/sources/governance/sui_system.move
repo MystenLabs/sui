@@ -6,7 +6,7 @@ module sui::sui_system {
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::staking_pool::{Delegation, StakedSui};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, ID, UID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -23,6 +23,7 @@ module sui::sui_system {
     use sui::epoch_time_lock;
     use sui::pay;
     use sui::event;
+    use sui::table::Table;
 
     friend sui::genesis;
 
@@ -118,8 +119,9 @@ module sui::sui_system {
         initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         epoch_start_timestamp_ms: u64,
+        ctx: &mut TxContext,
     ) {
-        let validators = validator_set::new(validators);
+        let validators = validator_set::new(validators, ctx);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let state = SuiSystemState {
             // Use a hardcoded ID.
@@ -576,6 +578,17 @@ module sui::sui_system {
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_stake_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_stake_amount(&self.validators, validator_addr)
+    }
+
+    /// Returns the staking pool id of a given validator.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_staking_pool_id(self: &SuiSystemState, validator_addr: address): ID {
+        validator_set::validator_staking_pool_id(&self.validators, validator_addr)
+    }
+
+    /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
+    public fun validator_staking_pool_mappings(self: &SuiSystemState): &Table<ID, address> {
+        validator_set::staking_pool_mappings(&self.validators)
     }
 
     /// Returns all the validators who have reported `addr` this epoch.

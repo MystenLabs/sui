@@ -8,10 +8,11 @@ module sui::validator {
 
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
     use sui::stake;
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
+    use sui::object::{Self, ID};
     use std::option::Option;
     use sui::bls12381::bls12381_min_sig_verify_with_domain;
     use sui::staking_pool::{Self, Delegation, PoolTokenExchangeRate, StakedSui, StakingPool};
@@ -166,7 +167,7 @@ module sui::validator {
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
-            delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1, ctx),
+            delegation_staking_pool: staking_pool::new(ctx),
             commission_rate,
         }
     }
@@ -236,7 +237,9 @@ module sui::validator {
     ) {
         let delegate_amount = balance::value(&delegated_stake);
         assert!(delegate_amount > 0, 0);
-        staking_pool::request_add_delegation(&mut self.delegation_staking_pool, delegated_stake, locking_period, delegator, ctx);
+        staking_pool::request_add_delegation(
+            &mut self.delegation_staking_pool, delegated_stake, locking_period, self.metadata.sui_address, delegator, ctx
+        );
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + delegate_amount;
     }
 
@@ -350,6 +353,10 @@ module sui::validator {
         staking_pool::pool_token_exchange_rate(&self.delegation_staking_pool)
     }
 
+    public fun staking_pool_id(self: &Validator): ID {
+        object::id(&self.delegation_staking_pool)
+    }
+
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
@@ -414,7 +421,7 @@ module sui::validator {
             pending_stake: 0,
             pending_withdraw: 0,
             gas_price,
-            delegation_staking_pool: staking_pool::new(sui_address, tx_context::epoch(ctx) + 1, ctx),
+            delegation_staking_pool: staking_pool::new(ctx),
             commission_rate,
         }
     }

@@ -35,6 +35,7 @@
 -  [Function `gas_price`](#0x2_validator_gas_price)
 -  [Function `commission_rate`](#0x2_validator_commission_rate)
 -  [Function `pool_token_exchange_rate`](#0x2_validator_pool_token_exchange_rate)
+-  [Function `staking_pool_id`](#0x2_validator_staking_pool_id)
 -  [Function `is_duplicate`](#0x2_validator_is_duplicate)
 
 
@@ -46,6 +47,7 @@
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="bls12381.md#0x2_bls12381">0x2::bls12381</a>;
 <b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
+<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="stake.md#0x2_stake">0x2::stake</a>;
 <b>use</b> <a href="staking_pool.md#0x2_staking_pool">0x2::staking_pool</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
@@ -373,7 +375,7 @@
         pending_stake: 0,
         pending_withdraw: 0,
         gas_price,
-        delegation_staking_pool: <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(sui_address, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1, ctx),
+        delegation_staking_pool: <a href="staking_pool.md#0x2_staking_pool_new">staking_pool::new</a>(ctx),
         commission_rate,
     }
 }
@@ -543,7 +545,9 @@ Request to add delegation to the validator's staking pool, processed at the end 
 ) {
     <b>let</b> delegate_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&delegated_stake);
     <b>assert</b>!(delegate_amount &gt; 0, 0);
-    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(&<b>mut</b> self.delegation_staking_pool, delegated_stake, locking_period, delegator, ctx);
+    <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">staking_pool::request_add_delegation</a>(
+        &<b>mut</b> self.delegation_staking_pool, delegated_stake, locking_period, self.metadata.sui_address, delegator, ctx
+    );
     self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + delegate_amount;
 }
 </code></pre>
@@ -1063,6 +1067,30 @@ Set the voting power of this validator, called only from validator_set.
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_pool_token_exchange_rate">pool_token_exchange_rate</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): PoolTokenExchangeRate {
     <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate">staking_pool::pool_token_exchange_rate</a>(&self.delegation_staking_pool)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_staking_pool_id"></a>
+
+## Function `staking_pool_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_staking_pool_id">staking_pool_id</a>(self: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_staking_pool_id">staking_pool_id</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>): ID {
+    <a href="object.md#0x2_object_id">object::id</a>(&self.delegation_staking_pool)
 }
 </code></pre>
 

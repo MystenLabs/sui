@@ -27,7 +27,7 @@ module sui::validator_set_tests {
         let validator4 = create_validator(@0x4, 4, ctx1);
 
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[validator1]);
+        let validator_set = validator_set::new(vector[validator1], ctx1);
         assert!(validator_set::next_epoch_validator_count(&validator_set) == 1, 0);
         assert!(validator_set::total_validator_stake(&validator_set) == 100, 0);
 
@@ -115,7 +115,7 @@ module sui::validator_set_tests {
         let v5 = create_validator_with_gas_price(@0x5, 10, 43, ctx1);
 
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[v1]);
+        let validator_set = validator_set::new(vector[v1], ctx1);
 
         assert_eq(validator_set::derive_reference_gas_price(&validator_set), 45);
 

@@ -47,8 +47,8 @@ impl Delegation {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct StakedSui {
     id: UID,
+    pool_id: ID,
     validator_address: SuiAddress,
-    pool_starting_epoch: u64,
     delegation_request_epoch: u64,
     principal: Balance,
     sui_token_lock: Option<EpochId>,

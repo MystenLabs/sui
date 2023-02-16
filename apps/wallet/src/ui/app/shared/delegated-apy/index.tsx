@@ -33,8 +33,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
         validators.forEach((validator) => {
             if (
                 stakedValidators.includes(
-                    validator.fields.delegation_staking_pool.fields
-                        .validator_address
+                    validator.fields.metadata.fields.sui_address
                 )
             ) {
                 stakedAPYs += calculateAPY(validator, +validatorsData.epoch);

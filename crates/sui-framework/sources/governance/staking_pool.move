@@ -29,9 +29,8 @@ module sui::staking_pool {
     const EPendingDelegationDoesNotExist: u64 = 8;
 
     /// A staking pool embedded in each validator struct in the system state object.
-    struct StakingPool has store {
-        /// The sui address of the validator associated with this pool.
-        validator_address: address,
+    struct StakingPool has key, store {
+        id: UID,
         /// The epoch at which this pool started operating. Should be the epoch at which the validator became active.
         starting_epoch: u64,
         /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
@@ -96,10 +95,10 @@ module sui::staking_pool {
     /// A self-custodial object holding the staked SUI tokens.
     struct StakedSui has key {
         id: UID,
-        /// The validator we are staking with.
+        /// ID of the staking pool we are staking with.
+        pool_id: ID,
+        // TODO: keeping this field here because the apps depend on it. consider removing it.
         validator_address: address,
-        /// The epoch at which the staking pool started operating.
-        pool_starting_epoch: u64,
         /// The epoch at which the delegation is requested.
         delegation_request_epoch: u64,
         /// The staked SUI tokens.
@@ -112,10 +111,10 @@ module sui::staking_pool {
     // ==== initializer ====
 
     /// Create a new, empty staking pool.
-    public(friend) fun new(validator_address: address, starting_epoch: u64, ctx: &mut TxContext) : StakingPool {
+    public(friend) fun new(ctx: &mut TxContext) : StakingPool {
         StakingPool {
-            validator_address,
-            starting_epoch,
+            id: object::new(ctx),
+            starting_epoch: tx_context::epoch(ctx) + 1, // active beginning next epoch
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
@@ -134,6 +133,7 @@ module sui::staking_pool {
         pool: &mut StakingPool, 
         stake: Balance<SUI>, 
         sui_token_lock: Option<EpochTimeLock>,
+        validator_address: address,
         delegator: address,
         ctx: &mut TxContext
     ) {
@@ -141,8 +141,8 @@ module sui::staking_pool {
         assert!(sui_amount > 0, 0);
         let staked_sui = StakedSui {
             id: object::new(ctx),
-            validator_address: pool.validator_address,
-            pool_starting_epoch: pool.starting_epoch,
+            pool_id: object::id(pool),
+            validator_address,
             delegation_request_epoch: tx_context::epoch(ctx),
             principal: stake,
             sui_token_lock,
@@ -201,11 +201,7 @@ module sui::staking_pool {
         assert!(object::id(&staked_sui) == delegation.staked_sui_id, EWrongDelegation);
 
         // Check that the delegation information matches the pool. 
-        assert!(
-            staked_sui.validator_address == pool.validator_address &&
-            staked_sui.pool_starting_epoch == pool.starting_epoch,
-            EWrongPool
-        );
+        assert!(staked_sui.pool_id == object::id(pool), EWrongPool);
 
         assert!(delegation.principal_sui_amount == balance::value(&staked_sui.principal), EInsufficientSuiTokenBalance);
 
@@ -228,8 +224,8 @@ module sui::staking_pool {
     fun unwrap_staked_sui(staked_sui: StakedSui): (Balance<SUI>, Option<EpochTimeLock>) {
         let StakedSui { 
             id,
+            pool_id: _,
             validator_address: _,
-            pool_starting_epoch: _,
             delegation_request_epoch: _,
             principal,
             sui_token_lock
@@ -390,8 +386,8 @@ module sui::staking_pool {
     public entry fun destroy_empty_staked_sui(staked_sui: StakedSui) {
         let StakedSui {
             id,
+            pool_id: _,
             validator_address: _,
-            pool_starting_epoch: _,
             delegation_request_epoch: _,
             principal,
             sui_token_lock
@@ -408,7 +404,7 @@ module sui::staking_pool {
 
     public fun sui_balance(pool: &StakingPool) : u64 { pool.sui_balance }
 
-    public fun validator_address(staked_sui: &StakedSui) : address { staked_sui.validator_address }
+    public fun pool_id(staked_sui: &StakedSui) : ID { staked_sui.pool_id }
 
     public fun staked_sui_amount(staked_sui: &StakedSui): u64 { balance::value(&staked_sui.principal) }
 

@@ -171,6 +171,7 @@ all the information we need in the system.
         <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
         protocol_version,
         epoch_start_timestamp_ms,
+        ctx,
     );
 
     <a href="clock.md#0x2_clock_create">clock::create</a>();
