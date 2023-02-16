@@ -222,7 +222,7 @@ async fn fetch_certificates_basic() {
         gc_depth,
         tx_shutdown.subscribe(),
         rx_certificate_fetcher,
-        tx_certificates_loopback,
+        synchronizer.clone(),
         metrics.clone(),
     );
 

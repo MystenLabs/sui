@@ -472,7 +472,7 @@ impl Primary {
             (**committee.load()).clone(),
             header_store.clone(),
             certificate_store.clone(),
-            synchronizer,
+            synchronizer.clone(),
             signature_service.clone(),
             rx_consensus_round_updates.clone(),
             rx_narwhal_round_updates,
@@ -499,7 +499,7 @@ impl Primary {
             parameters.gc_depth,
             tx_shutdown.subscribe(),
             rx_certificate_fetcher,
-            tx_certificates_loopback,
+            synchronizer,
             node_metrics.clone(),
         );
 
