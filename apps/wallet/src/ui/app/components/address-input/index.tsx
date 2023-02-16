@@ -70,7 +70,7 @@ function AddressInput<FormValues>({
                         value={formattedValue}
                         onChange={handleOnChange}
                         onBlur={onBlur}
-                        className={className}
+                        className="w-full py-3.5 px-3 flex items-center rounded-2lg text-gray-90 text-bodySmall leading-130 font-medium font-mono bg-white placeholder:text-steel-dark placeholder:font-normal placeholder:font-mono border border-solid border-gray-45 box-border focus:border-steel transition-all"
                         name={name}
                     />
                 </div>

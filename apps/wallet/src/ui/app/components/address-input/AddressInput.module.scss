@@ -25,7 +25,7 @@
             resize: none;
             padding: 5px 0;
             vertical-align: bottom;
-            height: 40px;
+            min-height: 30px;
 
             &::placeholder {
                 color: colors.$gray-65;

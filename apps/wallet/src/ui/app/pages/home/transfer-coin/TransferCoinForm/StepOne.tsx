@@ -123,7 +123,6 @@ export function StepOne({
                             type="number"
                             actionType="button"
                             allowNegative={false}
-                            step="1"
                             onActionClicked={setMaxToken}
                             actionDisabled={
                                 maxToken === amount ||
@@ -168,7 +167,6 @@ export function StepOne({
                                 allowNegative={false}
                                 name="to"
                                 placeholder="Enter Address"
-                                className="w-full py-3.5 px-3 flex items-center rounded-2lg text-gray-90 text-bodySmall leading-130 font-medium font-mono bg-white placeholder:text-steel-dark placeholder:font-normal placeholder:font-mono border border-solid border-gray-45 box-border focus:border-steel transition-all"
                             />
                         </div>
 
