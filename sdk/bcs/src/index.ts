@@ -13,6 +13,7 @@
 
 import { toB64, fromB64 } from "./b64";
 import { toHEX, fromHEX } from "./hex";
+import { binary_to_base58 as toB58, base58_to_binary as fromB58 } from "base58-js";
 
 function toLittleEndian(bigint: bigint, size: number) {
   let result = new Uint8Array(size);
@@ -26,7 +27,13 @@ function toLittleEndian(bigint: bigint, size: number) {
 }
 
 // Re-export all encoding dependencies.
-export { toB64, fromB64, fromHEX, toHEX };
+export { toB58, fromB58, toB64, fromB64, fromHEX, toHEX };
+
+/**
+ * Supported encodings.
+ * Used in `Reader.toString()` as well as in `decodeStr` and `encodeStr` functions.
+ */
+export type Encoding = 'base58' | 'base64' | 'hex';
 
 /**
  * Class used for reading BCS data chunk by chunk. Meant to be used
@@ -323,7 +330,7 @@ export class BcsWriter {
    * Represent data as 'hex' or 'base64'
    * @param encoding Encoding to use: 'base64' or 'hex'
    */
-  toString(encoding: string): string {
+  toString(encoding: Encoding): string {
     return encodeStr(this.toBytes(), encoding);
   }
 }
@@ -554,7 +561,7 @@ export class BCS {
    * @param encoding Optional - encoding to use if data is of type String
    * @return Deserialized data.
    */
-  public de(type: string, data: Uint8Array | string, encoding?: string): any {
+  public de(type: string, data: Uint8Array | string, encoding?: Encoding): any {
     if (typeof data == "string") {
       if (encoding) {
         data = decodeStr(data, encoding);
@@ -643,7 +650,7 @@ export class BCS {
   public registerAddressType(
     name: string,
     length: number,
-    encoding: string | void = "hex"
+    encoding: Encoding | void = "hex"
   ): BCS {
     switch (encoding) {
       case "base64":
@@ -992,8 +999,10 @@ export class BCS {
  * @param {String} encoding Encoding to use: base64 or hex
  * @return {String} Encoded value.
  */
-export function encodeStr(data: Uint8Array, encoding: string): string {
+export function encodeStr(data: Uint8Array, encoding: Encoding): string {
   switch (encoding) {
+    case "base58":
+      return toB58(data);
     case "base64":
       return toB64(data);
     case "hex":
@@ -1012,8 +1021,10 @@ export function encodeStr(data: Uint8Array, encoding: string): string {
  * @param {String} encoding Encoding to use: base64 or hex
  * @return {Uint8Array} Encoded value.
  */
-export function decodeStr(data: string, encoding: string): Uint8Array {
+export function decodeStr(data: string, encoding: Encoding): Uint8Array {
   switch (encoding) {
+    case "base58":
+      return fromB58(data);
     case "base64":
       return fromB64(data);
     case "hex":

@@ -11,7 +11,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "composite": true,
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
+    "typeRoots": [
+      "@types",
+      "node_modules/@types"
+    ]
   },
   "include": ["src"]
 }
