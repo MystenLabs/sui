@@ -15,7 +15,9 @@ import {
 } from '_payloads/permissions';
 import {
     isExecuteTransactionRequest,
+    isSignTransactionRequest,
     isStakeRequest,
+    SignTransactionResponse,
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
@@ -102,6 +104,28 @@ export class ContentScriptConnection extends Connection {
                         createMessage<ExecuteTransactionResponse>(
                             {
                                 type: 'execute-transaction-response',
+                                result,
+                            },
+                            msg.id
+                        )
+                    );
+                } else {
+                    this.sendNotAllowedError(msg.id);
+                }
+            } else if (isSignTransactionRequest(payload)) {
+                const allowed = await Permissions.hasPermissions(this.origin, [
+                    'viewAccount',
+                    'suggestTransactions',
+                ]);
+                if (allowed) {
+                    const result = await Transactions.signTransaction(
+                        payload.transaction,
+                        this
+                    );
+                    this.send(
+                        createMessage<SignTransactionResponse>(
+                            {
+                                type: 'sign-transaction-response',
                                 result,
                             },
                             msg.id
