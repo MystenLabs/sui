@@ -39,7 +39,7 @@ use tokio::{
 };
 
 use types::{
-    error::DagError, now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
+    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
     MockPrimaryToWorker, PayloadAvailabilityRequest, PreSubscribedBroadcastSender,
     PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest, Round,
 };
