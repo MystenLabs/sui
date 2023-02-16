@@ -14,6 +14,5 @@ export const getStakedPercent = (
         .multipliedBy(100)
         .decimalPlaces(3, BigNumber.ROUND_DOWN)
         .toNumber();
-
     return bnPercent || 0;
 };
