@@ -15,12 +15,9 @@ use mockall::*;
 use std::time::Duration;
 use storage::CertificateStore;
 use thiserror::Error;
-use tokio::{
-    sync::{mpsc::channel, oneshot},
-    time::timeout,
-};
+use tokio::{sync::mpsc::channel, time::timeout};
 use tracing::{debug, error, instrument, trace};
-use types::{error::DagResult, metered_channel, Certificate, CertificateDigest};
+use types::{metered_channel, Certificate, CertificateDigest};
 
 #[cfg(test)]
 #[path = "tests/handler_tests.rs"]
@@ -103,10 +100,8 @@ pub struct BlockSynchronizerHandler {
     /// Channel to send commands to the block_synchronizer.
     tx_block_synchronizer: metered_channel::Sender<Command>,
 
-    /// Channel to send the fetched certificates to Core for
-    /// further processing, validation and possibly causal
-    /// completion.
-    tx_certificates: metered_channel::Sender<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
+    /// Channel to send the certificates for causal completion.
+    tx_certificate_fetcher: metered_channel::Sender<Certificate>,
 
     /// The store that holds the certificates.
     certificate_store: CertificateStore,
@@ -119,16 +114,13 @@ pub struct BlockSynchronizerHandler {
 impl BlockSynchronizerHandler {
     pub fn new(
         tx_block_synchronizer: metered_channel::Sender<Command>,
-        tx_certificates: metered_channel::Sender<(
-            Certificate,
-            Option<oneshot::Sender<DagResult<()>>>,
-        )>,
+        tx_certificate_fetcher: metered_channel::Sender<Certificate>,
         certificate_store: CertificateStore,
         certificate_deliver_timeout: Duration,
     ) -> Self {
         Self {
             tx_block_synchronizer,
-            tx_certificates,
+            tx_certificate_fetcher,
             certificate_store,
             certificate_deliver_timeout,
         }
@@ -191,12 +183,11 @@ impl Handler for BlockSynchronizerHandler {
                     if !block_header.fetched_from_storage {
                         // we need to perform causal completion since this
                         // entity has not been fetched from storage.
-                        self.tx_certificates
-                            .send((block_header.certificate.clone(), None))
+                        self.tx_certificate_fetcher
+                            .send(block_header.certificate.clone())
                             .await
-                            .expect("Couldn't send certificate to core");
+                            .expect("Couldn't send certificate to CertificateFetcher");
                         wait_for.push(block_header.certificate.clone());
-
                         debug!(
                             "Need to causally complete {}",
                             block_header.certificate.digest()

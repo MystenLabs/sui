@@ -302,7 +302,6 @@ async fn test_request_vote_missing_parents() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificates, mut rx_certificates) = test_utils::test_channel!(100);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -331,7 +330,6 @@ async fn test_request_vote_missing_parents() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -431,14 +429,8 @@ async fn test_request_vote_missing_parents() {
         result.err().unwrap().status()
     );
 
-    // TEST PHASE 3: Handler should process missing certificates and report back
-    // any errors.
+    // TEST PHASE 3: Handler should process missing certificates and succeed.
     let _ = tx_narwhal_round_updates.send(1);
-    tokio::task::spawn(async move {
-        while let Some((_certificate, tx_notify)) = rx_certificates.recv().await {
-            let _ = tx_notify.unwrap().send(Err(DagError::Canceled));
-        }
-    });
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
         parents: missing_certificates.values().cloned().collect(),
@@ -453,10 +445,10 @@ async fn test_request_vote_missing_parents() {
         .is_none());
 
     let result = handler.request_vote(request).await;
-    assert_ne!(
-        // Returned error should be retriable.
-        anemo::types::response::StatusCode::BadRequest,
-        result.err().unwrap().status()
+    assert!(
+        result.as_ref().err().unwrap().status().is_success(),
+        "{:?}",
+        result
     );
 }
 
@@ -476,7 +468,6 @@ async fn test_request_vote_missing_batches() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -505,7 +496,6 @@ async fn test_request_vote_missing_batches() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -602,7 +592,6 @@ async fn test_request_vote_already_voted() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -631,7 +620,6 @@ async fn test_request_vote_already_voted() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -761,7 +749,6 @@ async fn test_fetch_certificates_handler() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificates, _) = test_utils::test_channel!(1);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -790,7 +777,6 @@ async fn test_fetch_certificates_handler() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -930,7 +916,6 @@ async fn test_process_payload_availability_success() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificates, _) = test_utils::test_channel!(1);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -959,7 +944,6 @@ async fn test_process_payload_availability_success() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -1082,7 +1066,6 @@ async fn test_process_payload_availability_when_failures() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (header_store, _, _) = create_db_stores();
-    let (tx_certificates, _) = test_utils::test_channel!(1);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -1111,7 +1094,6 @@ async fn test_process_payload_availability_when_failures() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -1182,7 +1164,6 @@ async fn test_request_vote_created_at_in_future() {
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(100);
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
@@ -1211,7 +1192,6 @@ async fn test_request_vote_created_at_in_future() {
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
-        tx_certificates,
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),

@@ -153,11 +153,6 @@ impl Primary {
             &primary_channel_metrics.tx_certificate_fetcher,
             &primary_channel_metrics.tx_certificate_fetcher_total,
         );
-        let (tx_certificates, rx_certificates) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_certificates,
-            &primary_channel_metrics.tx_certificates_total,
-        );
         let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
@@ -196,9 +191,9 @@ impl Primary {
             parameters.gc_depth,
             certificate_store.clone(),
             payload_store.clone(),
-            tx_certificate_fetcher,
-            tx_new_certificates.clone(),
-            tx_parents.clone(),
+            tx_certificate_fetcher.clone(),
+            tx_new_certificates,
+            tx_parents,
             rx_consensus_round_updates.clone(),
             rx_synchronizer_network,
             dag.clone(),
@@ -229,7 +224,6 @@ impl Primary {
             worker_cache: worker_cache.clone(),
             synchronizer: synchronizer.clone(),
             signature_service: signature_service.clone(),
-            tx_certificates: tx_certificates.clone(),
             header_store: header_store.clone(),
             certificate_store: certificate_store.clone(),
             payload_store: payload_store.clone(),
@@ -529,7 +523,7 @@ impl Primary {
         if dag.is_some() {
             let block_synchronizer_handler = Arc::new(BlockSynchronizerHandler::new(
                 tx_block_synchronizer_commands,
-                tx_certificates,
+                tx_certificate_fetcher,
                 certificate_store.clone(),
                 parameters
                     .block_synchronizer
@@ -642,7 +636,6 @@ struct PrimaryReceiverHandler {
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
-    tx_certificates: Sender<(Certificate, Option<oneshot::Sender<DagResult<()>>>)>,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,

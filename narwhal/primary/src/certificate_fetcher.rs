@@ -467,7 +467,7 @@ async fn process_certificates_helper(
     // Wait for Core to finish processing the certificates.
     let _process_scope = monitored_scope("ProcessingFetchedCertificates");
     for cert in verified_certificates {
-        synchronizer.try_accept_certificate(cert, &network).await?;
+        synchronizer.try_accept_certificate(cert, network).await?;
     }
     trace!("Fetched certificates have been processed");
 

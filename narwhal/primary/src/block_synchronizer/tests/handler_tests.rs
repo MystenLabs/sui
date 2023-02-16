@@ -18,11 +18,11 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
     let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
-        tx_certificates,
+        tx_certificate_fetcher,
         certificate_store: certificate_store.clone(),
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
@@ -76,11 +76,11 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
     let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
-    let (tx_certificates, mut rx_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, mut rx_certificate_fetcher) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
-        tx_certificates,
+        tx_certificate_fetcher,
         certificate_store: certificate_store.clone(),
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
@@ -138,8 +138,8 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     // AND mock the "core" module. We assume that the certificate will be
     // stored after validated and causally complete the history.
     tokio::spawn(async move {
-        match rx_certificates.recv().await {
-            Some((c, _)) => {
+        match rx_certificate_fetcher.recv().await {
+            Some(c) => {
                 assert_eq!(c.digest(), cert_missing.digest());
                 certificate_store.write(c).unwrap();
             }
@@ -175,11 +175,11 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
     let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
-        tx_certificates,
+        tx_certificate_fetcher,
         certificate_store: certificate_store.clone(),
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
@@ -256,11 +256,11 @@ async fn test_synchronize_block_payload() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
-        tx_certificates,
+        tx_certificate_fetcher,
         certificate_store: certificate_store.clone(),
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
@@ -338,11 +338,11 @@ async fn test_call_methods_with_empty_input() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
     let (tx_block_synchronizer, _) = test_utils::test_channel!(1);
-    let (tx_certificates, _rx_certificates) = test_utils::test_channel!(1);
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
-        tx_certificates,
+        tx_certificate_fetcher,
         certificate_store: certificate_store.clone(),
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
