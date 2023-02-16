@@ -58,6 +58,7 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_with_reconfig() {
         let test_cluster = build_test_cluster(4, 1000).await;
         test_simulated_load(test_cluster, 60).await;
@@ -146,6 +147,7 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    #[ignore = "The benchmark client aborts certificates submission when it fails to gather a quorum of acknowledgements. This happens upon epoch change."]
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 1000;
         let test_cluster = build_test_cluster(7, epoch_duration_ms).await;

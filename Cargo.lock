@@ -8455,6 +8455,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_distr",
  "rayon",
+ "roaring",
  "rocksdb",
  "serde 1.0.152",
  "serde_json",

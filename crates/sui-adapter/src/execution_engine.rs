@@ -112,6 +112,7 @@ pub fn execute_transaction_to_effects<
         gas_cost_summary,
         status,
         gas_object_ref,
+        epoch,
     );
     (inner, effects, execution_result)
 }

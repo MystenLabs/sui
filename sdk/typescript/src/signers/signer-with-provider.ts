@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import { fromB64, toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
@@ -18,7 +19,8 @@ import {
   DevInspectResults,
   bcsForVersion,
 } from '../types';
-import { SignaturePubkeyPair, Signer } from './signer';
+import { IntentScope, messageWithIntent } from '../utils/intent';
+import { Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
   MoveCallTransaction,
@@ -33,11 +35,9 @@ import {
   PublishTransaction,
   SignableTransaction,
   UnserializedSignableTransaction,
+  SignedTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
-// See: sui/crates/sui-types/src/intent.rs
-// This is currently hardcoded with [IntentScope::TransactionData = 0, Version::V0 = 0, AppId::Sui = 0]
-const INTENT_BYTES = [0, 0, 0];
 ///////////////////////////////
 // Exported Abstracts
 export abstract class SignerWithProvider implements Signer {
@@ -53,7 +53,7 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Returns the signature for the data and the public key of the signer
    */
-  abstract signData(data: Uint8Array): Promise<SignaturePubkeyPair>;
+  abstract signData(data: Uint8Array): Promise<SerializedSignature>;
 
   // Returns a new instance of the Signer, connected to provider.
   // This MAY throw if changing providers is not supported.
@@ -89,40 +89,58 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * Sign a transaction and submit to the Fullnode for execution. Only exists
-   * on Fullnode
+   * Sign a message using the keypair, with the `PersonalMessage` intent.
+   */
+  async signMessage(message: Uint8Array): Promise<SerializedSignature> {
+    return await this.signData(
+      messageWithIntent(IntentScope.PersonalMessage, message),
+    );
+  }
+
+  /**
+   * Sign a transaction.
+   */
+  async signTransaction(
+    transaction: Uint8Array | SignableTransaction,
+  ): Promise<SignedTransaction> {
+    let transactionBytes;
+    if (transaction instanceof Uint8Array || transaction.kind === 'bytes') {
+      transactionBytes =
+        transaction instanceof Uint8Array ? transaction : transaction.data;
+    } else {
+      transactionBytes = await this.serializer.serializeToBytes(
+        await this.getAddress(),
+        transaction,
+        'Commit',
+      );
+    }
+
+    const intentMessage = messageWithIntent(
+      IntentScope.TransactionData,
+      transactionBytes,
+    );
+    const signature = await this.signData(intentMessage);
+
+    return {
+      transactionBytes: toB64(transactionBytes),
+      signature,
+    };
+  }
+
+  /**
+   * Sign a transaction and submit to the Fullnode for execution.
    */
   async signAndExecuteTransaction(
     transaction: Uint8Array | SignableTransaction,
     requestType: ExecuteTransactionRequestType = 'WaitForLocalExecution',
   ): Promise<SuiExecuteTransactionResponse> {
-    // Handle submitting raw transaction bytes:
-    if (transaction instanceof Uint8Array || transaction.kind === 'bytes') {
-      const txBytes =
-        transaction instanceof Uint8Array ? transaction : transaction.data;
-      const intentMessage = new Uint8Array(
-        INTENT_BYTES.length + txBytes.length,
-      );
-      intentMessage.set(INTENT_BYTES);
-      intentMessage.set(txBytes, INTENT_BYTES.length);
+    const { transactionBytes, signature } = await this.signTransaction(
+      transaction,
+    );
 
-      const dataToSign = intentMessage;
-      const txBytesToSubmit = txBytes;
-      const sig = await this.signData(dataToSign);
-      return await this.provider.executeTransaction(
-        txBytesToSubmit,
-        sig.signatureScheme,
-        sig.signature,
-        sig.pubKey,
-        requestType,
-      );
-    }
-    return await this.signAndExecuteTransaction(
-      await this.serializer.serializeToBytes(
-        await this.getAddress(),
-        transaction,
-        'Commit',
-      ),
+    return await this.provider.executeTransaction(
+      transactionBytes,
+      signature,
       requestType,
     );
   }
@@ -141,21 +159,9 @@ export abstract class SignerWithProvider implements Signer {
       );
     }
     const version = await this.provider.getRpcApiVersion();
-    const intentMessage = new Uint8Array(INTENT_BYTES.length + txBytes.length);
-    intentMessage.set(INTENT_BYTES);
-    intentMessage.set(txBytes, INTENT_BYTES.length);
-    const dataToSign = intentMessage;
-
     const bcs = bcsForVersion(version);
-    const sig = await this.signData(dataToSign);
     const data = deserializeTransactionBytesToTransactionData(bcs, txBytes);
-    return generateTransactionDigest(
-      data,
-      sig.signatureScheme,
-      sig.signature,
-      sig.pubKey,
-      bcs,
-    );
+    return generateTransactionDigest(data, bcs);
   }
 
   /**

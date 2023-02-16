@@ -1,5 +1,17 @@
 # @mysten/wallet-adapter-all-wallets
 
+## 0.4.0
+
+### Minor Changes
+
+- 473005d8f: Add protocol_version to CheckpointSummary and SuiSystemObject. Consolidate end-of-epoch information in CheckpointSummary.
+
+### Patch Changes
+
+- Updated dependencies [473005d8f]
+  - @mysten/wallet-adapter-wallet-standard@0.6.0
+  - @mysten/wallet-adapter-unsafe-burner@0.6.0
+
 ## 0.3.13
 
 ### Patch Changes

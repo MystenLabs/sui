@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
@@ -50,6 +49,7 @@ import {
 import { Provider } from './provider';
 
 import { DynamicFieldPage } from '../types/dynamic_fields';
+import { SerializedSignature } from '../cryptography/signature';
 
 export class VoidProvider extends Provider {
   // API Version
@@ -180,9 +180,7 @@ export class VoidProvider extends Provider {
 
   async executeTransaction(
     _txnBytes: Uint8Array,
-    _signatureScheme: SignatureScheme,
-    _signature: Uint8Array,
-    _pubkey: PublicKey,
+    _signature: SerializedSignature,
     _requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse> {
     throw this.newError('executeTransaction with request Type');

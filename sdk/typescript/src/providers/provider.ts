@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey, SignatureScheme } from '../cryptography/publickey';
+import { SerializedSignature } from '../cryptography/signature';
 import { HttpHeaders } from '../rpc/client';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import {
@@ -232,10 +232,8 @@ export abstract class Provider {
    * Gateway
    */
   abstract executeTransaction(
-    txnBytes: Uint8Array,
-    signatureScheme: SignatureScheme,
-    signature: Uint8Array,
-    pubkey: PublicKey,
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType,
   ): Promise<SuiExecuteTransactionResponse>;
 

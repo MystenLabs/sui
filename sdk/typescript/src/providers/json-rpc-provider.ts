@@ -61,11 +61,6 @@ import {
 } from '../types';
 import { DynamicFieldPage } from '../types/dynamic_fields';
 import {
-  PublicKey,
-  SignatureScheme,
-  SIGNATURE_SCHEME_TO_FLAG,
-} from '../cryptography/publickey';
-import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
   WebsocketClientOptions,
@@ -77,6 +72,7 @@ import { any, is, number, array } from 'superstruct';
 import { UnserializedSignableTransaction } from '../signers/txn-data-serializers/txn-data-serializer';
 import { LocalTxnDataSerializer } from '../signers/txn-data-serializers/local-txn-data-serializer';
 import { toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -661,29 +657,21 @@ export class JsonRpcProvider extends Provider {
   }
 
   async executeTransaction(
-    txnBytes: Uint8Array,
-    signatureScheme: SignatureScheme,
-    signature: Uint8Array,
-    pubkey: PublicKey,
+    txnBytes: Uint8Array | string,
+    signature: SerializedSignature,
     requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert',
   ): Promise<SuiExecuteTransactionResponse> {
     try {
-      let resp;
-      // Serialize sigature field as: `flag || signature || pubkey`
-      const serialized_sig = new Uint8Array(
-        1 + signature.length + pubkey.toBytes().length,
-      );
-      serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-      serialized_sig.set(signature, 1);
-      serialized_sig.set(pubkey.toBytes(), 1 + signature.length);
-
-      resp = await this.client.requestWithType(
+      return await this.client.requestWithType(
         'sui_executeTransactionSerializedSig',
-        [toB64(txnBytes), toB64(serialized_sig), requestType],
+        [
+          typeof txnBytes === 'string' ? txnBytes : toB64(txnBytes),
+          signature,
+          requestType,
+        ],
         SuiExecuteTransactionResponse,
         this.options.skipDataValidation,
       );
-      return resp;
     } catch (err) {
       throw new Error(`Error executing transaction with request type: ${err}`);
     }

@@ -3,8 +3,9 @@
 
 import { fromB64 } from '@mysten/bcs';
 import { Ed25519Keypair } from './ed25519-keypair';
-import { PublicKey, SignatureScheme } from './publickey';
+import { PublicKey } from './publickey';
 import { Secp256k1Keypair } from './secp256k1-keypair';
+import { SignatureScheme } from './signature';
 
 export type ExportedKeypair = {
   schema: SignatureScheme;

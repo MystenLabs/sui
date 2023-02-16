@@ -14,6 +14,7 @@ use sui_protocol_constants::STORAGE_REBATE_RATE;
 use tracing::trace;
 
 use crate::coin::Coin;
+use crate::committee::EpochId;
 use crate::event::BalanceChangeType;
 use crate::storage::SingleTxContext;
 use crate::{
@@ -497,6 +498,7 @@ impl<S> TemporaryStore<S> {
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
+        epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let mut modified_at_versions = vec![];
 
@@ -548,6 +550,7 @@ impl<S> TemporaryStore<S> {
 
         let effects = TransactionEffects {
             status,
+            executed_epoch: epoch,
             gas_used: gas_cost_summary,
             modified_at_versions,
             shared_objects: shared_object_refs,
@@ -670,7 +673,12 @@ impl<S> TemporaryStore<S> {
         }
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
-        let gas_rebate = (cost_summary.storage_rebate as f64 * STORAGE_REBATE_RATE).round() as u64;
+        // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
+        // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
+        const BASIS_POINTS: u128 = 10000;
+        let gas_rebate = (((cost_summary.storage_rebate as u128 * STORAGE_REBATE_RATE as u128)
+            + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
+            / BASIS_POINTS) as u64;
         // We must re-fetch the gas object from the temporary store, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
