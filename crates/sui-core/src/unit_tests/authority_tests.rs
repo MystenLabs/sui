@@ -2527,6 +2527,7 @@ async fn test_authority_persist() {
             checkpoint_store,
             &registry,
             &AuthorityStorePruningConfig::default(),
+            &[], // no genesis objects
         )
         .await
     }

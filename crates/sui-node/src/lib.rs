@@ -229,6 +229,7 @@ impl SuiNode {
             checkpoint_store.clone(),
             &prometheus_registry,
             &config.authority_store_pruning_config,
+            genesis.objects(),
         )
         .await;
 

@@ -37,7 +37,6 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, error_span, info, instrument, trace, warn, Instrument};
-use typed_store::Map;
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
@@ -1177,7 +1176,7 @@ impl AuthorityState {
                     let Some(o) = self.database.get_object_by_key(&oref.0, oref.1)? else{
                         continue;
                     };
-                    let Some(df_info) = self.try_create_dynamic_field_info(o)? else{
+                    let Some(df_info) = self.try_create_dynamic_field_info(&o)? else{
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -1195,7 +1194,7 @@ impl AuthorityState {
         })
     }
 
-    fn try_create_dynamic_field_info(&self, o: Object) -> SuiResult<Option<DynamicFieldInfo>> {
+    fn try_create_dynamic_field_info(&self, o: &Object) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
         let Some(move_object) =  o.data.try_as_move().cloned() else {
             return Ok(None);
@@ -1428,6 +1427,7 @@ impl AuthorityState {
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         pruning_config: &AuthorityStorePruningConfig,
+        genesis_objects: &[Object],
     ) -> Arc<Self> {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -1494,7 +1494,7 @@ impl AuthorityState {
         ));
 
         state
-            .create_owner_index_if_empty()
+            .create_owner_index_if_empty(genesis_objects)
             .expect("Error indexing genesis objects.");
 
         state
@@ -1562,10 +1562,13 @@ impl AuthorityState {
             checkpoint_store,
             &registry,
             &AuthorityStorePruningConfig::default(),
+            genesis.objects(),
         )
         .await;
 
-        state.create_owner_index_if_empty().unwrap();
+        state
+            .create_owner_index_if_empty(genesis.objects())
+            .unwrap();
 
         state
     }
@@ -1628,7 +1631,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    fn create_owner_index_if_empty(&self) -> SuiResult {
+    fn create_owner_index_if_empty(&self, genesis_objects: &[Object]) -> SuiResult {
         let Some(index_store) = &self.indexes else{
             return Ok(())
         };
@@ -1638,11 +1641,11 @@ impl AuthorityState {
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
-        for (_, o) in self.database.perpetual_tables.objects.iter() {
+        for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) => new_owners.push((
                     (addr, o.id()),
-                    ObjectInfo::new(&o.compute_object_reference(), &o),
+                    ObjectInfo::new(&o.compute_object_reference(), o),
                 )),
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
