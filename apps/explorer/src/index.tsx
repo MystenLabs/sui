@@ -17,6 +17,7 @@ import './index.css';
 // Start loading features as early as we can:
 loadFeatures();
 
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <RouterProvider router={router} />
