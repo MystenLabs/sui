@@ -3,11 +3,13 @@
 
 # Module `0x2::object`
 
-Sui object identifiers
+Sui object identifiers.
+Defines creation, use and deletion of the <code><a href="object.md#0x2_object_UID">UID</a></code> and <code><a href="object.md#0x2_object_ID">ID</a></code> types.
 
 
 -  [Struct `ID`](#0x2_object_ID)
 -  [Struct `UID`](#0x2_object_UID)
+-  [Struct `DeletedUID`](#0x2_object_DeletedUID)
 -  [Constants](#@Constants_0)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
@@ -18,8 +20,10 @@ Sui object identifiers
 -  [Function `uid_to_inner`](#0x2_object_uid_to_inner)
 -  [Function `uid_to_bytes`](#0x2_object_uid_to_bytes)
 -  [Function `uid_to_address`](#0x2_object_uid_to_address)
+-  [Function `deleted_id`](#0x2_object_deleted_id)
 -  [Function `new`](#0x2_object_new)
 -  [Function `delete`](#0x2_object_delete)
+-  [Function `delete_with_proof`](#0x2_object_delete_with_proof)
 -  [Function `id`](#0x2_object_id)
 -  [Function `borrow_id`](#0x2_object_borrow_id)
 -  [Function `id_bytes`](#0x2_object_id_bytes)
@@ -83,6 +87,35 @@ This is a privileged type that can only be derived from a <code>TxContext</code>
 
 
 <pre><code><b>struct</b> <a href="object.md#0x2_object_UID">UID</a> <b>has</b> store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_object_DeletedUID"></a>
+
+## Struct `DeletedUID`
+
+Confirmation that a UID was deleted for cases where 'proof of deletion' is required.
+Can only be spawned by the <code>delete_with_proof</code> method.
+
+
+<pre><code><b>struct</b> <a href="object.md#0x2_object_DeletedUID">DeletedUID</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -346,6 +379,31 @@ Get the inner bytes of <code>id</code> as an address.
 
 </details>
 
+<a name="0x2_object_deleted_id"></a>
+
+## Function `deleted_id`
+
+Get the inner <code><a href="object.md#0x2_object_ID">ID</a></code> of <code>DeletedID</code>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_deleted_id">deleted_id</a>(proof: &<a href="object.md#0x2_object_DeletedUID">object::DeletedUID</a>): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_deleted_id">deleted_id</a>(proof: &<a href="object.md#0x2_object_DeletedUID">DeletedUID</a>): <a href="object.md#0x2_object_ID">ID</a> {
+    proof.id
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_object_new"></a>
 
 ## Function `new`
@@ -393,6 +451,33 @@ Delete the object and it's <code><a href="object.md#0x2_object_UID">UID</a></cod
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_delete">delete</a>(id: <a href="object.md#0x2_object_UID">UID</a>) {
     <b>let</b> <a href="object.md#0x2_object_UID">UID</a> { id: <a href="object.md#0x2_object_ID">ID</a> { bytes } } = id;
     <a href="object.md#0x2_object_delete_impl">delete_impl</a>(bytes)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_object_delete_with_proof"></a>
+
+## Function `delete_with_proof`
+
+Delete the object and it's <code><a href="object.md#0x2_object_UID">UID</a></code> and return the proof of deletion - <code><a href="object.md#0x2_object_DeletedUID">DeletedUID</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_delete_with_proof">delete_with_proof</a>(id: <a href="object.md#0x2_object_UID">object::UID</a>): <a href="object.md#0x2_object_DeletedUID">object::DeletedUID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_delete_with_proof">delete_with_proof</a>(id: <a href="object.md#0x2_object_UID">UID</a>): <a href="object.md#0x2_object_DeletedUID">DeletedUID</a> {
+    <b>let</b> inner = <a href="object.md#0x2_object_uid_to_inner">uid_to_inner</a>(&id);
+    <a href="object.md#0x2_object_delete">delete</a>(id);
+    <a href="object.md#0x2_object_DeletedUID">DeletedUID</a> { id: inner }
 }
 </code></pre>
 
@@ -557,6 +642,7 @@ Generate a new UID specifically used for creating a UID from a hash
 
 ## Function `delete_impl`
 
+Helper for delete
 
 
 <pre><code><b>fun</b> <a href="object.md#0x2_object_delete_impl">delete_impl</a>(id: <b>address</b>)
@@ -579,6 +665,7 @@ Generate a new UID specifically used for creating a UID from a hash
 
 ## Function `record_new_uid`
 
+Marks newly created UIDs from hash
 
 
 <pre><code><b>fun</b> <a href="object.md#0x2_object_record_new_uid">record_new_uid</a>(id: <b>address</b>)

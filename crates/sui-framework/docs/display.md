@@ -42,7 +42,7 @@ More entry functions might be added in the future depending on the use cases.
 
 ## Resource `Display`
 
-The Display object. Defines the way an object should be
+The Display<T> object. Defines the way a T instance should be
 displayed. Display object can only be created and modified with
 a PublisherCap, making sure that the rules are set by the owner
 of the type.
@@ -54,9 +54,9 @@ on the property values of an Object.
 // Example of a display object
 Display<0x...::capy::Capy> {
 fields:
-<name, "Capy {{ genes }}">
-<link, "https://capy.art/capy/{{ id }}">
-<image, "https://api.capy.art/capy/{{ id }}/svg">
+<name, "Capy { genes }">
+<link, "https://capy.art/capy/{ id }">
+<image, "https://api.capy.art/capy/{ id }/svg">
 <description, "Lovely Capy, one of many">
 }
 ```
@@ -100,6 +100,9 @@ the property names have a priority over their types.
 Event: emitted when a new Display object has been created for type T.
 Type signature of the event corresponds to the type while id serves for
 the discovery.
+
+Since Sui RPC supports querying events by type, finding a Display for the T
+would be as simple as looking for the first event with <code><a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;</code>.
 
 
 <pre><code><b>struct</b> <a href="display.md#0x2_display_DisplayCreated">DisplayCreated</a>&lt;T: key&gt; <b>has</b> <b>copy</b>, drop
@@ -184,7 +187,7 @@ vector<u8> is the best type for that purpose.
 
 ## Function `empty`
 
-Create an empty Display object. It can either be shared empty of filled
+Create an empty Display object. It can either be shared empty or filled
 with data right away via cheaper <code>set_owned</code> method.
 
 
@@ -289,10 +292,11 @@ Create a new Display<T> object with a set of fields.
     <b>let</b> len = <a href="_length">vector::length</a>(&fields);
     <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
 
+    <b>let</b> i = 0;
     <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="display.md#0x2_display_empty">empty</a>&lt;T&gt;(pub, ctx);
-    <b>while</b> (len &gt; 0) {
-        <a href="display.md#0x2_display_set_internal">set_internal</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, *<a href="_borrow">vector::borrow</a>(&fields, len), *<a href="_borrow">vector::borrow</a>(&values, len));
-        len = len - 1;
+    <b>while</b> (i &lt; len) {
+        <a href="display.md#0x2_display_set_internal">set_internal</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, *<a href="_borrow">vector::borrow</a>(&fields, i), *<a href="_borrow">vector::borrow</a>(&values, i));
+        i = i + 1;
     };
 
     <a href="display.md#0x2_display_share">share</a>(<a href="display.md#0x2_display">display</a>)
@@ -352,9 +356,10 @@ Sets multiple <code>fields</code> with <code>values</code>.
     <b>assert</b>!(is_package&lt;T&gt;(pub), <a href="display.md#0x2_display_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(len == <a href="_length">vector::length</a>(&values), <a href="display.md#0x2_display_EVecLengthMismatch">EVecLengthMismatch</a>);
 
-    <b>while</b> (len &gt; 0) {
-        <a href="display.md#0x2_display_set_internal">set_internal</a>(d, *<a href="_borrow">vector::borrow</a>(&fields, len), *<a href="_borrow">vector::borrow</a>(&values, len));
-        len = len - 1;
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; 0) {
+        <a href="display.md#0x2_display_set_internal">set_internal</a>(d, *<a href="_borrow">vector::borrow</a>(&fields, i), *<a href="_borrow">vector::borrow</a>(&values, i));
+        i = i + 1;
     };
 }
 </code></pre>
