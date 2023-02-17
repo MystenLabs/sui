@@ -74,11 +74,12 @@ pub(crate) struct ObjectRuntimeState {
     events: Vec<(StructTag, Value)>,
 }
 
-struct LocalProtocolConfig {
-    max_num_deleted_move_object_ids: usize,
-    max_num_event_emit: u64,
-    max_num_new_move_object_ids: usize,
-    max_num_transfered_move_object_ids: usize,
+pub(crate) struct LocalProtocolConfig {
+    pub(crate) max_num_deleted_move_object_ids: usize,
+    pub(crate) max_num_event_emit: u64,
+    pub(crate) max_num_new_move_object_ids: usize,
+    pub(crate) max_num_transfered_move_object_ids: usize,
+    pub(crate) max_event_emit_size: u64,
 }
 
 impl LocalProtocolConfig {
@@ -88,6 +89,7 @@ impl LocalProtocolConfig {
             max_num_event_emit: constants.max_num_event_emit(),
             max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
             max_num_transfered_move_object_ids: constants.max_num_transfered_move_object_ids(),
+            max_event_emit_size: constants.max_event_emit_size(),
         }
     }
 }
@@ -102,7 +104,7 @@ pub struct ObjectRuntime<'a> {
     // whether or not this TX is gas metered
     is_metered: bool,
 
-    constants: LocalProtocolConfig,
+    pub(crate) constants: LocalProtocolConfig,
 }
 
 pub enum TransferResult {

@@ -110,6 +110,9 @@ pub struct ProtocolConfig {
     /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
     max_num_transfered_move_object_ids: Option<usize>,
 
+    /// Maximum size of a Move user event. Enforced by the VM during execution.
+    max_event_emit_size: Option<u64>,
+
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
     /// Base cost for any Sui transaction
@@ -249,6 +252,9 @@ impl ProtocolConfig {
         self.max_num_transfered_move_object_ids
             .expect(CONSTANT_ERR_MSG)
     }
+    pub fn max_event_emit_size(&self) -> u64 {
+        self.max_event_emit_size.expect(CONSTANT_ERR_MSG)
+    }
     pub fn base_tx_cost_fixed(&self) -> u64 {
         self.base_tx_cost_fixed.expect(CONSTANT_ERR_MSG)
     }
@@ -378,6 +384,7 @@ impl ProtocolConfig {
                 max_num_new_move_object_ids: Some(2048),
                 max_num_deleted_move_object_ids: Some(2048),
                 max_num_transfered_move_object_ids: Some(2048),
+                max_event_emit_size: Some(256 * 1024),
                 base_tx_cost_fixed: Some(110_000),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
