@@ -75,7 +75,7 @@ module sui::display {
         d
     }
 
-    /// Create an empty Display object. It can either be shared empty of filled
+    /// Create an empty Display object. It can either be shared empty or filled
     /// with data right away via cheaper `set_owned` method.
     public fun empty<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
         assert!(is_package<T>(pub), ENotOwner);
