@@ -17,7 +17,7 @@ type StakeTxnCardProps = {
 // For now show the amount
 export function UnStakeTxnCard({ amount }: StakeTxnCardProps) {
     return (
-        <div className="flex flex-col w-full items-center divide-y divide-solid divide-steel/20 divide-x-0 gap-3.5">
+        <>
             {amount && (
                 <TxnAmount
                     amount={amount}
@@ -25,6 +25,6 @@ export function UnStakeTxnCard({ amount }: StakeTxnCardProps) {
                     label="Unstake"
                 />
             )}
-        </div>
+        </>
     );
 }
