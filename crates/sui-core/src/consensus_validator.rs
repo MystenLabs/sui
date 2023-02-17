@@ -209,7 +209,7 @@ mod tests {
             .into_iter()
             .map(|mut cert| {
                 // set it to an all-zero user signature
-                cert.tx_signature =
+                cert.tx_signatures[0] =
                     GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
                         Ed25519SuiSignature::default(),
                     ));

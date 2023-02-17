@@ -1141,10 +1141,10 @@ async fn test_execute_signed_tx() -> Result<(), anyhow::Error> {
     let mut txns = make_transactions_with_wallet_context(context, 1).await;
     let txn = txns.swap_remove(0);
 
-    let (tx_data, signature) = txn.to_tx_bytes_and_signature();
+    let (tx_data, signatures) = txn.to_tx_bytes_and_signatures();
     SuiClientCommands::ExecuteSignedTx {
         tx_bytes: tx_data.encoded(),
-        signature: signature.encoded(),
+        signatures: signatures.into_iter().map(|s| s.encoded()).collect(),
     }
     .execute(context)
     .await?;

@@ -679,6 +679,18 @@ pub trait TransactionExecutionApi {
         /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
+
+    // TODO: migrate above two rpc calls to this one eventually.
+    #[method(name = "submitTransaction")]
+    async fn submit_transaction(
+        &self,
+        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+        tx_bytes: Base64,
+        /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
+        signatures: Vec<Base64>,
+        /// The request type
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse>;
 }
 
 pub fn cap_page_limit(limit: Option<usize>) -> usize {

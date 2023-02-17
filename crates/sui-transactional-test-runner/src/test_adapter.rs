@@ -582,7 +582,7 @@ impl<'a> SuiTestAdapter<'a> {
             &PROTOCOL_CONSTANTS,
         );
         let transaction_data = transaction.into_inner().into_data().intent_message.value;
-        let signer = transaction_data.signer();
+        let signer = transaction_data.sender();
         let gas = transaction_data.gas();
         let (
             inner,

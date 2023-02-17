@@ -68,7 +68,7 @@ pub struct MultiSig {
     #[serde_as(as = "SuiBitmap")]
     bitmap: RoaringBitmap,
     /// The public key encoded with each public key with its signature scheme used along with the corresponding weight.
-    multisig_pk: MultiSigPublicKey,
+    pub multisig_pk: MultiSigPublicKey,
     /// A bytes representation of [struct MultiSig]. This helps with implementing [trait AsRef<[u8]>].
     #[serde(skip)]
     bytes: OnceCell<Vec<u8>>,
