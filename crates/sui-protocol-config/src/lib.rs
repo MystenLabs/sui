@@ -20,16 +20,18 @@ impl ProtocolVersion {
     // use a protocol version that is actually supported by the binary.
     pub const MIN: Self = Self(MIN_PROTOCOL_VERSION);
 
-    #[cfg(not(msim))]
     pub const MAX: Self = Self(MAX_PROTOCOL_VERSION);
+
+    #[cfg(not(msim))]
+    const MAX_ALLOWED: Self = Self::MAX;
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
-    pub const MAX: Self = Self(MAX_PROTOCOL_VERSION + 1);
+    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
         assert!(v >= Self::MIN.0, "{:?}", v);
-        assert!(v <= Self::MAX.0, "{:?}", v);
+        assert!(v <= Self::MAX_ALLOWED.0, "{:?}", v);
         Self(v)
     }
 
@@ -377,7 +379,7 @@ impl ProtocolConfig {
     pub fn get_for_version(version: ProtocolVersion) -> Self {
         // ProtocolVersion can be deserialized so we need to check it here as well.
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
-        assert!(version.0 <= ProtocolVersion::MAX.0, "{:?}", version);
+        assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
         Self::get_for_version_impl(version)
     }
@@ -416,7 +418,7 @@ impl ProtocolConfig {
         #[cfg(msim)]
         {
             // populate the fake simulator version # with a different base tx cost.
-            if version == ProtocolVersion::MAX {
+            if version == ProtocolVersion::MAX_ALLOWED {
                 let mut config = Self::get_for_version_impl(version - 1);
                 config.base_tx_cost_fixed = Some(config.base_tx_cost_fixed() + 1000);
                 return config;
