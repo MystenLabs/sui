@@ -30,6 +30,12 @@ impl ProtocolVersion {
     pub fn as_u64(&self) -> u64 {
         self.0
     }
+
+    // For serde deserialization - we don't define a Default impl because there isn't a single
+    // universally appropriate default value.
+    pub fn max() -> Self {
+        Self::MAX
+    }
 }
 
 /// Constants that change the behavior of the protocol.
